@@ -23,8 +23,10 @@ jobs:
         image: redis
     steps:
       - uses: actions/checkout@v2
+      - name: "Install redis stuff"
+        run: apt install -y redis-tools
       - name: "Ping redis"
-        run: redis-cli ping
+        run: redis-cli -h redis ping
       - name: "Make Catch dir"
         run: mkdir -p /usr/local/include/catch
       - name: "Install Catch"
