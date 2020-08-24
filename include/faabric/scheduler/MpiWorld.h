@@ -1,6 +1,6 @@
 #pragma once
 
-#include <faasmpi/mpi.h>
+#include <faabric/faasmpi/mpi.h>
 
 #include <thread>
 #include <proto/faabric.pb.h>

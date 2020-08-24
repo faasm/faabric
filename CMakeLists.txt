@@ -13,10 +13,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
+set(FAASMPI_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/faasmpi)
 
 # Include directories
 include_directories(
         ${FAABRIC_INCLUDE_DIR}
+        ${FAASMPI_INCLUDE_DIR}
         ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
 )
 
@@ -25,6 +27,8 @@ add_subdirectory(src/redis)
 add_subdirectory(src/scheduler)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
+
+add_subdirectory(faasmpi)
 
 add_library(faabric faabric.cpp)
 

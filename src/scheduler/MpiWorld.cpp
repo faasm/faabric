@@ -1,6 +1,6 @@
 #include "MpiWorld.h"
 
-#include <faasmpi/mpi.h>
+#include <faabric/faasmpi/mpi.h>
 
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>

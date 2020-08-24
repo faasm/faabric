@@ -3,7 +3,6 @@
 
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faasmpi/mpi.h>
 #include <faabric/util/random.h>
 
 using namespace faabric::scheduler;
