@@ -69,9 +69,9 @@ namespace faabric::util {
 
     std::vector<std::string> getArgvForMessage(const faabric::Message &msg);
 
-    class InvalidFunctionException : public faabric::util::FaasmException {
+    class InvalidFunctionException : public faabric::util::FaabricException {
     public:
-        explicit InvalidFunctionException(std::string message): FaasmException(std::move(message)) {
+        explicit InvalidFunctionException(std::string message): FaabricException(std::move(message)) {
 
         }
     };

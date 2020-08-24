@@ -22,16 +22,16 @@ namespace faabric::util {
 
     bool isWasm(const std::vector<uint8_t> &bytes);
 
-    class FileNotFoundAtUrlException : public faabric::util::FaasmException {
+    class FileNotFoundAtUrlException : public faabric::util::FaabricException {
     public:
-        explicit FileNotFoundAtUrlException(std::string message): FaasmException(std::move(message)) {
+        explicit FileNotFoundAtUrlException(std::string message): FaabricException(std::move(message)) {
 
         }
     };
 
-    class FileAtUrlIsDirectoryException : public faabric::util::FaasmException {
+    class FileAtUrlIsDirectoryException : public faabric::util::FaabricException {
     public:
-        explicit FileAtUrlIsDirectoryException(std::string message): FaasmException(std::move(message)) {
+        explicit FileAtUrlIsDirectoryException(std::string message): FaabricException(std::move(message)) {
 
         }
     };

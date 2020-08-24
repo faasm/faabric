@@ -12,7 +12,7 @@ extern "C" {
 #define MPI_ERR_OTHER 1
 
 /**
- * Custom Faasm MPI implementation
+ * Custom Faabric MPI implementation
  * Official MPI spec: https://www.mpi-forum.org/docs/
  * Open MPI repo: https://github.com/open-mpi/ompi
  * You can probably find a version of mpi.h somewhere on your system, e.g. /usr/local/include/mpi.h

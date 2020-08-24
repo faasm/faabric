@@ -4,9 +4,9 @@
 #include <string>
 
 namespace faabric::util {
-    class FaasmException : public std::exception {
+    class FaabricException : public std::exception {
     public:
-        explicit FaasmException(std::string message) : _message(std::move(message)) {
+        explicit FaabricException(std::string message) : _message(std::move(message)) {
 
         }
 

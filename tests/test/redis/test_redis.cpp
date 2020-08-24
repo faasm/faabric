@@ -22,9 +22,9 @@ namespace tests {
         const std::string VALUE_B = "val b";
         const std::string VALUE_C = "val c";
 
-        const std::vector<uint8_t> BYTES_A = util::stringToBytes(VALUE_A);
-        const std::vector<uint8_t> BYTES_B = util::stringToBytes(VALUE_B);
-        const std::vector<uint8_t> BYTES_C = util::stringToBytes(VALUE_C);
+        const std::vector<uint8_t> BYTES_A = faabric::util::stringToBytes(VALUE_A);
+        const std::vector<uint8_t> BYTES_B = faabric::util::stringToBytes(VALUE_B);
+        const std::vector<uint8_t> BYTES_C = faabric::util::stringToBytes(VALUE_C);
 
         SECTION("Test ping") {
             // Will throw exception if something is wrong
@@ -69,7 +69,7 @@ namespace tests {
 
         SECTION("Test enqueue/ dequeue bytes") {
             // Enqueue some values
-            std::vector<uint8_t> bytesA = util::stringToBytes(VALUE_A);
+            std::vector<uint8_t> bytesA = faabric::util::stringToBytes(VALUE_A);
             redisQueue.enqueueBytes(QUEUE_NAME, BYTES_A);
             redisQueue.enqueueBytes(QUEUE_NAME, BYTES_B);
             redisQueue.enqueueBytes(QUEUE_NAME, BYTES_C);
@@ -143,17 +143,17 @@ namespace tests {
             std::string key = "setrange_test";
 
             std::string initialValue = "hello there world!";
-            std::vector<uint8_t> bytesValue = util::stringToBytes(initialValue);
+            std::vector<uint8_t> bytesValue = faabric::util::stringToBytes(initialValue);
             redisQueue.set(key, bytesValue);
 
             REQUIRE(redisQueue.get(key) == bytesValue);
 
             std::string replacement = "hello";
-            std::vector<uint8_t> replacementBytes = util::stringToBytes(replacement);
+            std::vector<uint8_t> replacementBytes = faabric::util::stringToBytes(replacement);
             redisQueue.setRange(key, 6, replacementBytes.data(), replacementBytes.size());
 
             std::string expected = "hello hello world!";
-            std::vector<uint8_t> expectedBytes = util::stringToBytes(expected);
+            std::vector<uint8_t> expectedBytes = faabric::util::stringToBytes(expected);
             REQUIRE(redisQueue.get(key) == expectedBytes);
         }
 
@@ -161,7 +161,7 @@ namespace tests {
             std::string key = "getrange_test";
 
             std::string initialValue = "get this string!";
-            std::vector<uint8_t> bytesValue = util::stringToBytes(initialValue);
+            std::vector<uint8_t> bytesValue = faabric::util::stringToBytes(initialValue);
             redisQueue.set(key, bytesValue);
 
             REQUIRE(redisQueue.get(key) == bytesValue);
@@ -172,7 +172,7 @@ namespace tests {
             std::vector<uint8_t> actualBytes(buffer, buffer + 3);
 
             std::string expected = "thi";
-            std::vector<uint8_t> expectedBytes = util::stringToBytes(expected);
+            std::vector<uint8_t> expectedBytes = faabric::util::stringToBytes(expected);
             REQUIRE(actualBytes == expectedBytes);
         }
 
@@ -180,7 +180,7 @@ namespace tests {
             std::string key = "short_range_test";
 
             std::string val = "this is the value";
-            std::vector<uint8_t> bytesValue = util::stringToBytes(val);
+            std::vector<uint8_t> bytesValue = faabric::util::stringToBytes(val);
             redisQueue.set(key, bytesValue);
 
             uint8_t buffer[3];
@@ -218,7 +218,7 @@ namespace tests {
         redisState.set(keyA, valueA);
 
         std::string valueB = "barbaz";
-        redisState.set(keyB, util::stringToBytes(valueB));
+        redisState.set(keyB, faabric::util::stringToBytes(valueB));
 
         REQUIRE(redisState.strlen(keyA) == valueA.size());
         REQUIRE(redisState.strlen(keyB) == valueB.size());
@@ -534,10 +534,10 @@ namespace tests {
         std::string stringC = "   cccc    9999  ";
         std::string stringD = "  dd    ";
 
-        const std::vector<uint8_t> bytesA = util::stringToBytes(stringA);
-        const std::vector<uint8_t> bytesB = util::stringToBytes(stringB);
-        const std::vector<uint8_t> bytesC = util::stringToBytes(stringC);
-        const std::vector<uint8_t> bytesD = util::stringToBytes(stringD);
+        const std::vector<uint8_t> bytesA = faabric::util::stringToBytes(stringA);
+        const std::vector<uint8_t> bytesB = faabric::util::stringToBytes(stringB);
+        const std::vector<uint8_t> bytesC = faabric::util::stringToBytes(stringC);
+        const std::vector<uint8_t> bytesD = faabric::util::stringToBytes(stringD);
 
         // Enqueue different length strings
         redisQueue.enqueueBytes(key, bytesA);

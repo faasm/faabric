@@ -88,8 +88,8 @@ namespace tests {
         const std::string actualStrInput = newFuncCall.inputdata();
         const std::string actualStrOutput = newFuncCall.outputdata();
 
-        const std::vector<uint8_t> actualBytesInput = util::stringToBytes(actualStrInput);
-        const std::vector<uint8_t> actualBytesOutput = util::stringToBytes(actualStrOutput);
+        const std::vector<uint8_t> actualBytesInput = faabric::util::stringToBytes(actualStrInput);
+        const std::vector<uint8_t> actualBytesOutput = faabric::util::stringToBytes(actualStrOutput);
 
         REQUIRE(inputData == actualBytesInput);
         REQUIRE(outputData == actualBytesOutput);

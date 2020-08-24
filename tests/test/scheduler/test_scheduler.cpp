@@ -408,23 +408,26 @@ namespace tests {
         REQUIRE(msgWithHops.hops() == 6);
     }
 
-    TEST_CASE("Test faaslet removes itself from warm set when sharing") {
+    TEST_CASE("Test removed from warm set when sharing") {
         cleanFaabric();
         Scheduler &sch = scheduler::getScheduler();
         sch.setTestMode(true);
 
-        std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+        std::string thisHost = sch.getThisHost();
         std::string otherHost = "192.168.111.23";
         faabric::Message msg = faabric::util::messageFactory("demo", "chain_simple");
+        const std::string warmSetName = sch.getFunctionWarmSetName(msg);
+
+        // Sanity check
+        Redis &redis = redis::Redis::getQueue();
+        REQUIRE(!redis.sismember(warmSetName, thisHost));
 
         // Add both to the global set
-        Redis &redis = redis::Redis::getQueue();
         redis.sadd(AVAILABLE_HOST_SET, thisHost);
         redis.sadd(AVAILABLE_HOST_SET, otherHost);
 
         // Add a call and make sure we're in the warm set
         sch.callFunction(msg);
-        const std::string warmSetName = sch.getFunctionWarmSetName(msg);
         REQUIRE(redis.sismember(warmSetName, thisHost));
 
         // Now saturate up to the point we're about to fail over
@@ -599,7 +602,7 @@ namespace tests {
         faabric::Message callB = faabric::util::messageFactory("user a", "function a2");
         faabric::Message callC = faabric::util::messageFactory("user b", "function b1");
 
-        util::SystemConfig &conf = util::getSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         int originalMaxInFlightRatio = conf.maxInFlightRatio;
         int originalMaxFaaslet = conf.maxFaaslets;
         int originalMaxFaasletsPerFunction = conf.maxFaasletsPerFunction;
@@ -714,7 +717,7 @@ namespace tests {
         std::string funcName = "my func";
         std::string userName = "some user";
         std::string inputData = "blahblah";
-        faabric::Message call = util::messageFactory(userName, funcName);
+        faabric::Message call = faabric::util::messageFactory(userName, funcName);
         call.set_inputdata(inputData);
 
         sch.setFunctionResult(call);
@@ -752,7 +755,7 @@ namespace tests {
             waiterThreads.emplace_back([nWaiterMessages] {
                 Scheduler &sch = scheduler::getScheduler();
 
-                faabric::Message msg = util::messageFactory("demo", "echo");
+                faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
                 // Put invocation on local queue and await global result
                 for (int m = 0; m < nWaiterMessages; m++) {
@@ -767,7 +770,7 @@ namespace tests {
             workerThreads.emplace_back([nWorkerMessages] {
                 Scheduler &sch = scheduler::getScheduler();
 
-                faabric::Message dummyMsg = util::messageFactory("demo", "echo");
+                faabric::Message dummyMsg = faabric::util::messageFactory("demo", "echo");
                 const std::shared_ptr<InMemoryMessageQueue> &queue = sch.getFunctionQueue(dummyMsg);
 
                 // Listen to local queue, set result on global bus
@@ -802,18 +805,18 @@ namespace tests {
         std::string expectedOutput;
         int expectedReturnValue = 0;
         faabric::Message_MessageType expectedType;
-        std::string expectedHost = util::getSystemConfig().endpointHost;
+        std::string expectedHost = faabric::util::getSystemConfig().endpointHost;
 
         faabric::Message msg;
         SECTION("Running") {
-            msg = util::messageFactory("demo", "echo");
+            msg = faabric::util::messageFactory("demo", "echo");
             expectedReturnValue = 0;
             expectedType = faabric::Message_MessageType_EMPTY;
             expectedHost = "";
         }
 
         SECTION("Failure") {
-            msg = util::messageFactory("demo", "echo");
+            msg = faabric::util::messageFactory("demo", "echo");
 
             expectedOutput = "I have failed";
             msg.set_outputdata(expectedOutput);
@@ -825,7 +828,7 @@ namespace tests {
         }
 
         SECTION("Success") {
-            msg = util::messageFactory("demo", "echo");
+            msg = faabric::util::messageFactory("demo", "echo");
 
             expectedOutput = "I have succeeded";
             msg.set_outputdata(expectedOutput);
@@ -851,7 +854,7 @@ namespace tests {
         redis::Redis &redis = redis::Redis::getQueue();
 
         // Create a message
-        faabric::Message msg = util::messageFactory("demo", "echo");
+        faabric::Message msg = faabric::util::messageFactory("demo", "echo");
         faabric::Message expected = msg;
         expected.set_executedhost(util::getSystemConfig().endpointHost);
 
@@ -875,7 +878,7 @@ namespace tests {
 
         scheduler::Scheduler &sch = scheduler::getScheduler();
 
-        faabric::Message msg = util::messageFactory("demo", "echo");
+        faabric::Message msg = faabric::util::messageFactory("demo", "echo");
         unsigned int chainedMsgIdA = 1234;
         unsigned int chainedMsgIdB = 5678;
         unsigned int chainedMsgIdC = 9876;

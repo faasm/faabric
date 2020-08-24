@@ -11,13 +11,13 @@ using namespace scheduler;
 
 namespace tests {
     TEST_CASE("Test execution graph", "[scheduler]") {
-        faabric::Message msgA = util::messageFactory("demo", "echo");
-        faabric::Message msgB1 = util::messageFactory("demo", "echo");
-        faabric::Message msgB2 = util::messageFactory("demo", "echo");
-        faabric::Message msgC1 = util::messageFactory("demo", "echo");
-        faabric::Message msgC2 = util::messageFactory("demo", "echo");
-        faabric::Message msgC3 = util::messageFactory("demo", "echo");
-        faabric::Message msgD = util::messageFactory("demo", "echo");
+        faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
+        faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
+        faabric::Message msgB2 = faabric::util::messageFactory("demo", "echo");
+        faabric::Message msgC1 = faabric::util::messageFactory("demo", "echo");
+        faabric::Message msgC2 = faabric::util::messageFactory("demo", "echo");
+        faabric::Message msgC3 = faabric::util::messageFactory("demo", "echo");
+        faabric::Message msgD = faabric::util::messageFactory("demo", "echo");
 
         // Set all execution results
         scheduler::Scheduler &sch = scheduler::getScheduler();

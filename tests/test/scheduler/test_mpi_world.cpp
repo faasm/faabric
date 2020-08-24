@@ -25,7 +25,7 @@ namespace tests {
         sch.setTestMode(true);
 
         // Create the world
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -48,14 +48,14 @@ namespace tests {
 
         // Check that this host is registered as the master
         const std::string actualHost = world.getHostForRank(0);
-        REQUIRE(actualHost == util::getSystemConfig().endpointHost);
+        REQUIRE(actualHost == faabric::util::getSystemConfig().endpointHost);
     }
 
     TEST_CASE("Test world loading from state", "[mpi]") {
         cleanFaabric();
 
         // Create a world
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld worldA;
         worldA.create(msg, worldId, worldSize);
 
@@ -74,11 +74,11 @@ namespace tests {
 
         // Note, we deliberately make the host names different lengths,
         // shorter than the buffer
-        std::string hostA = util::randomString(MPI_HOST_STATE_LEN - 5);
-        std::string hostB = util::randomString(MPI_HOST_STATE_LEN - 10);
+        std::string hostA = faabric::util::randomString(MPI_HOST_STATE_LEN - 5);
+        std::string hostB = faabric::util::randomString(MPI_HOST_STATE_LEN - 10);
 
         // Create a world
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld worldA;
         worldA.overrideHost(hostA);
         worldA.create(msg, worldId, worldSize);
@@ -122,7 +122,7 @@ namespace tests {
     TEST_CASE("Test send and recv on same host", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -167,7 +167,7 @@ namespace tests {
     TEST_CASE("Test async send and recv", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -208,14 +208,14 @@ namespace tests {
         usleep(1000 * 100);
 
         // Set up the world on this host
-        faabric::Message msg = util::messageFactory(user, func);
+        faabric::Message msg = faabric::util::messageFactory(user, func);
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(worldSize);
 
         scheduler::MpiWorld &localWorld = getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
 
         // Set up a world on the "remote" host
-        std::string otherHost = util::randomString(MPI_HOST_STATE_LEN - 3);
+        std::string otherHost = faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
         scheduler::MpiWorld remoteWorld;
         remoteWorld.overrideHost(otherHost);
         remoteWorld.initialiseFromState(msg, worldId);
@@ -259,7 +259,7 @@ namespace tests {
     TEST_CASE("Test send/recv message with no data", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -303,7 +303,7 @@ namespace tests {
     TEST_CASE("Test recv with partial data", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -330,7 +330,7 @@ namespace tests {
     TEST_CASE("Test probe", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -378,10 +378,10 @@ namespace tests {
     TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]") {
         cleanFaabric();
 
-        std::string hostA = util::randomString(MPI_HOST_STATE_LEN - 5);
-        std::string hostB = util::randomString(MPI_HOST_STATE_LEN - 3);
+        std::string hostA = faabric::util::randomString(MPI_HOST_STATE_LEN - 5);
+        std::string hostB = faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld worldA;
         worldA.overrideHost(hostA);
         worldA.create(msg, worldId, worldSize);
@@ -411,7 +411,7 @@ namespace tests {
     TEST_CASE("Check sending to invalid rank", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -423,7 +423,7 @@ namespace tests {
     TEST_CASE("Check sending to unregistered rank", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         world.create(msg, worldId, worldSize);
 
@@ -444,7 +444,7 @@ namespace tests {
 
         int thisWorldSize = 6;
 
-        faabric::Message msg = util::messageFactory(user, func);
+        faabric::Message msg = faabric::util::messageFactory(user, func);
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(thisWorldSize);
 
@@ -723,7 +723,7 @@ namespace tests {
     TEST_CASE("Test reduce", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         int thisWorldSize = 5;
         world.create(msg, worldId, thisWorldSize);
@@ -800,7 +800,7 @@ namespace tests {
     TEST_CASE("Test gather and allgather", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         int thisWorldSize = 5;
         int root = 3;
@@ -896,7 +896,7 @@ namespace tests {
     TEST_CASE("Test all-to-all", "[mpi]") {
         cleanFaabric();
 
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         scheduler::MpiWorld world;
         int thisWorldSize = 4;
         world.create(msg, worldId, thisWorldSize);
@@ -945,7 +945,7 @@ namespace tests {
 
         std::string otherHost = "192.168.9.2";
 
-        faabric::Message msg = util::messageFactory(user, func);
+        faabric::Message msg = faabric::util::messageFactory(user, func);
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(worldSize);
 

@@ -58,7 +58,7 @@ namespace tests {
 
         const char *user = "mpi";
         const char *func = "hellompi";
-        const faabric::Message &msg = util::messageFactory(user, func);
+        const faabric::Message &msg = faabric::util::messageFactory(user, func);
         int worldId = 123;
         int worldSize = 2;
 

@@ -6,7 +6,6 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/config.h>
 #include <faabric/state/State.h>
-#include <faasm/state.h>
 #include <faabric/util/state.h>
 
 #include <sys/mman.h>
@@ -26,13 +25,13 @@ namespace tests {
     static void setUpStateMode(const std::string &newMode) {
         cleanFaabric();
 
-        util::SystemConfig &conf = util::getSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         originalStateMode = conf.stateMode;
         conf.stateMode = newMode;
     }
 
     static void resetStateMode() {
-        util::getSystemConfig().stateMode = originalStateMode;
+        faabric::util::getSystemConfig().stateMode = originalStateMode;
     }
 
     static std::shared_ptr<StateKeyValue> setupKV(size_t size) {
@@ -94,7 +93,7 @@ namespace tests {
         REQUIRE(actual == values);
 
         // Check that the underlying key in Redis isn't changed
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
         REQUIRE(redisState.get(actualKey).empty());
 
         kv->pushFull();
@@ -121,7 +120,7 @@ namespace tests {
         // Get and check
         std::vector<uint8_t> actual(10);
         kv->get(actual.data());
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
         REQUIRE(actual == values);
 
             REQUIRE(redisState.get(actualKey) == values);
@@ -168,7 +167,7 @@ namespace tests {
         globalState.forceClearAll(false);
         
         // Check it's in Redis
-        std::string actualKey = util::keyForUser(user, key);
+        std::string actualKey = faabric::util::keyForUser(user, key);
         REQUIRE(redisState.get(actualKey) == values);
         
         // Access a chunk and check it's implicitly pulled
@@ -204,7 +203,7 @@ namespace tests {
 
         // Update expectation
         values.at(0) = 8;
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
 
         // Check in redis
             REQUIRE(redisState.get(actualKey) == values);
@@ -221,7 +220,7 @@ namespace tests {
 
         redis::Redis &redisState = redis::Redis::getState();
         auto kv = setupKV(20);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
         const char *key = actualKey.c_str();
 
         // Set up and push
@@ -276,7 +275,7 @@ namespace tests {
         long nDoubles = 20;
         long nBytes = nDoubles * sizeof(double);
         auto kv = setupKV(nBytes);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
         const char *key = actualKey.c_str();
 
         // Set up both with zeroes initiall
@@ -326,7 +325,7 @@ namespace tests {
 
         redis::Redis &redisState = redis::Redis::getState();
         auto kv = setupKV(5);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
 
         // Set up and push
         std::vector<uint8_t> values = {0, 1, 2, 3, 4};
@@ -387,7 +386,7 @@ namespace tests {
         kvData->pushFull();
 
         // Check round trip
-        std::string actualKey = util::keyForUser(kvData->user, kvData->key);
+        std::string actualKey = faabric::util::keyForUser(kvData->user, kvData->key);
         std::vector<uint8_t> actualBytes = redisState.get(actualKey);
         auto actualDoublePtr = reinterpret_cast<double*>(actualBytes.data());
         std::vector<double> actualDoubles(actualDoublePtr, actualDoublePtr + 4);
@@ -402,8 +401,8 @@ namespace tests {
         // Mask two as having changed and push with mask
         uint8_t *maskBytePtr = kvMask->get();
         auto maskIntPtr = reinterpret_cast<unsigned int *>(maskBytePtr);
-        faasm::maskDouble(maskIntPtr, 1);
-        faasm::maskDouble(maskIntPtr, 3);
+        faabric::util::maskDouble(maskIntPtr, 1);
+        faabric::util::maskDouble(maskIntPtr, 3);
 
         kvData->flagDirty();
         kvData->pushPartialMask(kvMask);
@@ -430,7 +429,7 @@ namespace tests {
         setUpStateMode("redis");
 
         auto kv = setupKV(4);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
 
         std::vector<uint8_t> values = {0, 1, 2, 3};
 
@@ -459,7 +458,7 @@ namespace tests {
         redis::Redis &redisState = redis::Redis::getState();
 
         auto kv = setupKV(4);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
 
         std::vector<uint8_t> values = {0, 1, 2, 3};
         kv->set(values.data());
@@ -488,7 +487,7 @@ namespace tests {
         // Set up the KV
         int length = 5;
         auto kv = setupKV(length);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
 
         // Write value direct to redis
         std::vector<uint8_t> value = {0, 1, 2, 3, 4};
@@ -496,7 +495,7 @@ namespace tests {
         redisState.set(actualKey, value.data(), length);
 
         // Try to map the kv
-        void *mappedRegion = mmap(nullptr, util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        void *mappedRegion = mmap(nullptr, faabric::util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         kv->mapSharedMemory(mappedRegion, 0, 1);
 
         // Get to ensure the value is present
@@ -515,7 +514,7 @@ namespace tests {
 
         auto kv = setupKV(6);
         REQUIRE(kv->size() == 6);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
 
         // Set up value in Redis
         redis::Redis &redisState = redis::Redis::getState();
@@ -541,7 +540,7 @@ namespace tests {
 
         redis::Redis &redisState = redis::Redis::getState();
         auto kv = setupKV(5);
-        std::string actualKey = util::keyForUser(kv->user, kv->key);
+        std::string actualKey = faabric::util::keyForUser(kv->user, kv->key);
 
         // Push some data and check
         std::vector<uint8_t> values = {0, 1, 2, 3, 4};

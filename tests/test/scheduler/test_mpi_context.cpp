@@ -12,7 +12,7 @@ namespace tests {
     TEST_CASE("Check world creation", "[mpi]") {
         cleanFaabric();
 
-        faabric::Message msg = util::messageFactory("mpi", "hellompi");
+        faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
         msg.set_mpiworldsize(10);
 
         MpiContext c;
@@ -39,7 +39,7 @@ namespace tests {
         cleanFaabric();
 
         // Create message with non-zero rank
-        faabric::Message msg = util::messageFactory("mpi", "hellompi");
+        faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
         msg.set_mpirank(2);
         msg.set_mpiworldsize(10);
 
@@ -52,11 +52,11 @@ namespace tests {
         cleanFaabric();
 
         // Create message with non-zero rank
-        faabric::Message msg = util::messageFactory("mpi", "hellompi");
+        faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
         msg.set_mpirank(0);
 
         // Set a new world size
-        util::SystemConfig &conf = util::getSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         int origSize = conf.defaultMpiWorldSize;
         int defaultWorldSize = 12;
         conf.defaultMpiWorldSize = defaultWorldSize;
@@ -88,9 +88,9 @@ namespace tests {
     TEST_CASE("Check joining world", "[mpi]") {
         cleanFaabric();
 
-        const std::string expectedHost = util::getSystemConfig().endpointHost;
+        const std::string expectedHost = faabric::util::getSystemConfig().endpointHost;
         
-        faabric::Message msgA = util::messageFactory("mpi", "hellompi");
+        faabric::Message msgA = faabric::util::messageFactory("mpi", "hellompi");
         int worldSize = 6;
         msgA.set_mpiworldsize(worldSize);
 

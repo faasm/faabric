@@ -1,6 +1,7 @@
 #include "faabric_utils.h"
 
 #include <faabric/state/InMemoryStateKeyValue.h>
+#include <faabric/util/logging.h>
 
 using namespace state;
 
@@ -45,13 +46,10 @@ namespace tests {
         // junk IP.
 
         serverThread = std::thread([this] {
-            const std::shared_ptr<spdlog::logger> &logger = util::getLogger();
-
-            // Make sure any emulated state actions use this remote state
-            setEmulatorState(&remoteState);
+            const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
             // Override the host endpoint for the server thread. Must be localhost
-            util::getSystemConfig().endpointHost = LOCALHOST;
+            faabric::util::getSystemConfig().endpointHost = LOCALHOST;
 
             // Master the dummy data in this thread
             if(!dummyData.empty()) {

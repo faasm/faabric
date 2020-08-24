@@ -42,7 +42,7 @@ namespace faabric::scheduler {
     }
 
     void Scheduler::addHostToWarmSet(const std::string &funcStr) {
-        const std::string &warmSetName = getFunctionWarmSetNameFromStr(funcStr);
+        std::string warmSetName = getFunctionWarmSetNameFromStr(funcStr);
         redis::Redis &redis = redis::Redis::getQueue();
         redis.sadd(warmSetName, thisHost);
     }

@@ -6,10 +6,10 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/config.h>
 #include <faabric/state/State.h>
-#include <sys/mman.h>
-#include <emulator/emulator.h>
-#include <faasm/state.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
+
+#include <sys/mman.h>
+#include <faabric/util/state.h>
 
 using namespace state;
 
@@ -23,14 +23,14 @@ namespace tests {
         const std::string stateKey = "state_key_" + std::to_string(staticCount);
 
         // Set state remotely
-        server.dummyUser = getEmulatorUser();
+        server.dummyUser = "demo";
         server.dummyKey = stateKey;
         server.dummyData = values;
     }
 
     static std::shared_ptr<StateKeyValue> setupKV(size_t size) {
         // We have to make sure emulator is using the right user
-        const std::string user = getEmulatorUser();
+        const std::string user = "demo";
 
         staticCount++;
         const std::string stateKey = "state_key_" + std::to_string(staticCount);
@@ -272,7 +272,7 @@ namespace tests {
         // Set a chunk offset
         std::vector<uint8_t> update = {8, 8, 8};
 
-        long offset = util::HOST_PAGE_SIZE - 2;
+        long offset = faabric::util::HOST_PAGE_SIZE - 2;
         REQUIRE_THROWS(kv->setChunk(offset, update.data(), 3));
     }
 
@@ -322,7 +322,7 @@ namespace tests {
 
         // Create another local KV of same size
         State &state = getGlobalState();
-        auto maskKv = state.getKV(getEmulatorUser(), "dummy_mask", stateSize);
+        auto maskKv = state.getKV("demo", "dummy_mask", stateSize);
 
         // Set up value locally
         const std::shared_ptr<state::StateKeyValue> &localKv = server.getLocalKv();
@@ -356,8 +356,8 @@ namespace tests {
         // Mask two as having changed and push with mask
         uint8_t *maskBytePtr = maskKv->get();
         auto maskIntPtr = reinterpret_cast<unsigned int *>(maskBytePtr);
-        faasm::maskDouble(maskIntPtr, 1);
-        faasm::maskDouble(maskIntPtr, 3);
+        faabric::util::maskDouble(maskIntPtr, 1);
+        faabric::util::maskDouble(maskIntPtr, 3);
 
         localKv->flagDirty();
         localKv->pushPartialMask(maskKv);
@@ -459,7 +459,7 @@ namespace tests {
 
         // Set up the KV
         State &s = getGlobalState();
-        auto kv = s.getKV(getEmulatorUser(), "mapping_test", 5);
+        auto kv = s.getKV("demo", "mapping_test", 5);
         std::vector<uint8_t> value = {0, 1, 2, 3, 4};
         kv->set(value.data());
 
@@ -469,7 +469,7 @@ namespace tests {
         sharedRegion[2] = 5;
 
         // Map some shared memory areas
-        int memSize = 2 * util::HOST_PAGE_SIZE;
+        int memSize = 2 * faabric::util::HOST_PAGE_SIZE;
         void *mappedRegionA = mmap(nullptr, memSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         auto byteRegionA = static_cast<uint8_t *>(mappedRegionA);
         kv->mapSharedMemory(mappedRegionA, 0, 2);
@@ -520,7 +520,7 @@ namespace tests {
         remoteKv->set(values.data());
 
         // Map the KV locally
-        void *mappedRegion = mmap(nullptr, util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        void *mappedRegion = mmap(nullptr, faabric::util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         const std::shared_ptr<state::StateKeyValue> &localKv = server.getLocalKv();
         localKv->mapSharedMemory(mappedRegion, 0, 1);
 
@@ -543,12 +543,12 @@ namespace tests {
         // Set up the KV
         std::vector<uint8_t> values = {0, 1, 2, 3, 4, 5, 6};
         State &s = getGlobalState();
-        auto kv = s.getKV(getEmulatorUser(), "mapping_small_test", values.size());
+        auto kv = s.getKV("demo", "mapping_small_test", values.size());
         kv->set(values.data());
 
         // Map a single page of host memory
-        void *mappedRegionA = mmap(nullptr, util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        void *mappedRegionB = mmap(nullptr, util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        void *mappedRegionA = mmap(nullptr, faabric::util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        void *mappedRegionB = mmap(nullptr, faabric::util::HOST_PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
         // Map them to small chunks of the shared memory
         kv->mapSharedMemory(mappedRegionA, 0, 1);
@@ -582,10 +582,10 @@ namespace tests {
 
     TEST_CASE("Test mapping bigger uninitialized shared memory offsets", "[state]") {
         // Define some mapping larger than a page
-        size_t mappingSize = 3 * util::HOST_PAGE_SIZE;
+        size_t mappingSize = 3 * faabric::util::HOST_PAGE_SIZE;
 
         // Set up a larger total value full of ones
-        size_t totalSize = (10 * util::HOST_PAGE_SIZE) + 15;
+        size_t totalSize = (10 * faabric::util::HOST_PAGE_SIZE) + 15;
         std::vector<uint8_t> values(totalSize, 1);
 
         // Set up remote server
@@ -609,8 +609,8 @@ namespace tests {
         auto byteRegionB = static_cast<uint8_t *>(mappedRegionB);
 
         // Get direct pointers to these chunks (will implicitly pull)
-        size_t offsetA = (6 * util::HOST_PAGE_SIZE);
-        size_t offsetB = (2 * util::HOST_PAGE_SIZE);
+        size_t offsetA = (6 * faabric::util::HOST_PAGE_SIZE);
+        size_t offsetB = (2 * faabric::util::HOST_PAGE_SIZE);
         uint8_t *chunkA = localKv->getChunk(offsetA, 10);
         uint8_t *chunkB = localKv->getChunk(offsetB, 10);
 
@@ -655,12 +655,12 @@ namespace tests {
         std::shared_ptr<StateKeyValue> kv;
 
         SECTION("Sizeless") {
-            kv = s.getKV(getEmulatorUser(), "appending_test");
+            kv = s.getKV("demo", "appending_test");
         }
 
         SECTION("With size") {
             std::vector<uint8_t> values(1, 0);
-            kv = s.getKV(getEmulatorUser(), "appending_test", values.size());
+            kv = s.getKV("demo", "appending_test", values.size());
             kv->set(values.data());
         }
 
@@ -838,7 +838,7 @@ namespace tests {
 
     TEST_CASE("Test pulling disjoint chunks of the same value which share pages", "[state]") {
         // Set up state
-        size_t valueSize = 20 * util::HOST_PAGE_SIZE + 123;
+        size_t valueSize = 20 * faabric::util::HOST_PAGE_SIZE + 123;
         std::vector<uint8_t> values(valueSize, 1);
         DummyStateServer server;
         setUpDummyServer(server, values);
@@ -847,8 +847,8 @@ namespace tests {
         server.start();
 
         // Set up two chunks both from the same page of memory but not overlapping
-        long offsetA = 2 * util::HOST_PAGE_SIZE + 10;
-        long offsetB = 2 * util::HOST_PAGE_SIZE + 20;
+        long offsetA = 2 * faabric::util::HOST_PAGE_SIZE + 10;
+        long offsetB = 2 * faabric::util::HOST_PAGE_SIZE + 20;
         long lenA = 5;
         long lenB = 10;
 
@@ -862,7 +862,7 @@ namespace tests {
         localKv->getChunk(offsetB, actualB.data(), lenB);
 
         // Check the local KV has been initialised to the right size
-        REQUIRE(localKv->getSharedMemorySize() == 21 * util::HOST_PAGE_SIZE);
+        REQUIRE(localKv->getSharedMemorySize() == 21 * faabric::util::HOST_PAGE_SIZE);
 
         // Check both chunks are as expected
         REQUIRE(actualA == expectedA);

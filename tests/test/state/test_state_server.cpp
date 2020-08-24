@@ -24,13 +24,13 @@ namespace tests {
     static std::string originalStateMode;
 
     static void setUpStateMode() {
-        util::SystemConfig &conf = util::getSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         originalStateMode = conf.stateMode;
         cleanFaabric();
     }
 
     static void resetStateMode() {
-        util::getSystemConfig().stateMode = originalStateMode;
+        faabric::util::getSystemConfig().stateMode = originalStateMode;
     }
 
     std::shared_ptr<InMemoryStateKeyValue> getKv(const std::string &user, const std::string &key, size_t stateSize) {
@@ -55,7 +55,7 @@ namespace tests {
         auto kvB = getKv(userA, keyB, dataA.size());
 
         // Prepare a key-value with same key but different data (for pushing)
-        std::string thisIP = util::getSystemConfig().endpointHost;
+        std::string thisIP = faabric::util::getSystemConfig().endpointHost;
         auto kvADuplicate = InMemoryStateKeyValue(userA, keyA, dataB.size(), thisIP);
         kvADuplicate.set(dataB.data());
 
