@@ -13,6 +13,7 @@ jobs:
   tests:
     runs-on: ubuntu-18.04
     env:
+      HOST_TYPE: ci
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
