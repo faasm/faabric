@@ -4,11 +4,15 @@ RUN apt-get update
 RUN apt-get install -y software-properties-common
 
 RUN apt install -y \
-   build-essential \
    autoconf \
+   build-essential \
+   git \
+   libhiredis-dev \
    libtool \
-   pkg-config \
+   libboost-filesystem-dev \
+   libcurl4-openssl-dev \
    ninja-build \
+   pkg-config \
    wget
 
 # Latest cmake
@@ -18,7 +22,6 @@ RUN wget -q -O cmake-linux.sh https://github.com/Kitware/CMake/releases/download
 RUN sh cmake-linux.sh -- --skip-license --prefix=/usr/local
 
 # gRPC, protobuf etc.
-RUN apt install git -y
 RUN git clone --recurse-submodules -b v1.31.0 https://github.com/grpc/grpc
 WORKDIR /setup/grpc/cmake/build
 RUN cmake -GNinja \
@@ -45,10 +48,6 @@ RUN cmake -GNinja \
     -DCMAKE_INSTALL_PREFIX=/usr/local \
     ..
 RUN ninja install
-
-# hiredis
-RUN apt install -y libhiredis-dev libcurl4-openssl-dev
-RUN apt install -y libboost-filesystem-dev 
 
 # Tidy up
 WORKDIR /
