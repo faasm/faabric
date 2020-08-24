@@ -54,30 +54,30 @@ namespace tests {
         conf.functionDir = orig;
     }
 
-    TEST_CASE("Test valid function check returns false for invalid function", "[util]") {
-        // Check false for uninitialised call
-        faabric::Message invalidCall;
-        REQUIRE(!faabric::util::isValidFunction(invalidCall));
-
-        // Check false for call initialised with invalid values
-        invalidCall.set_user("foo");
-        invalidCall.set_function("bar");
-        REQUIRE(!faabric::util::isValidFunction(invalidCall));
-
-        // Check false for call with valid user but invalid function
-        invalidCall.set_user("demo");
-        invalidCall.set_function("bar");
-        REQUIRE(!faabric::util::isValidFunction(invalidCall));
-    }
-
-    TEST_CASE("Test valid function check returns true for valid function", "[util]") {
-        // Check true for valid call
-        faabric::Message validCall;
-        validCall.set_user("demo");
-        validCall.set_function("echo");
-
-        REQUIRE(faabric::util::isValidFunction(validCall));
-    }
+//    TEST_CASE("Test valid function check returns false for invalid function", "[util]") {
+//        // Check false for uninitialised call
+//        faabric::Message invalidCall;
+//        REQUIRE(!faabric::util::isValidFunction(invalidCall));
+//
+//        // Check false for call initialised with invalid values
+//        invalidCall.set_user("foo");
+//        invalidCall.set_function("bar");
+//        REQUIRE(!faabric::util::isValidFunction(invalidCall));
+//
+//        // Check false for call with valid user but invalid function
+//        invalidCall.set_user("demo");
+//        invalidCall.set_function("bar");
+//        REQUIRE(!faabric::util::isValidFunction(invalidCall));
+//    }
+//
+//    TEST_CASE("Test valid function check returns true for valid function", "[util]") {
+//        // Check true for valid call
+//        faabric::Message validCall;
+//        validCall.set_user("demo");
+//        validCall.set_function("echo");
+//
+//        REQUIRE(faabric::util::isValidFunction(validCall));
+//    }
 
     TEST_CASE("Test adding id to message", "[util]") {
         faabric::Message msgA;

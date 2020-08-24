@@ -18,15 +18,15 @@ namespace tests {
         REQUIRE(actual == bytesIn);
     }
 
-    TEST_CASE("Test reading from a URL", "[util]") {
-        std::string localPath = "/usr/local/code/faasm/LICENSE.md";
-        std::string url = "https://raw.githubusercontent.com/lsds/faasm/master/LICENSE.md";
-
-        std::vector<uint8_t> expectedBytes = faabric::util::readFileToBytes(localPath);
-        std::vector<uint8_t> actualBytes = faabric::util::readFileFromUrl(url);
-
-        REQUIRE(actualBytes == expectedBytes);
-    }
+//    TEST_CASE("Test reading from a URL", "[util]") {
+//        std::string localPath = "/usr/local/code/faasm/LICENSE.md";
+//        std::string url = "https://raw.githubusercontent.com/lsds/faasm/master/LICENSE.md";
+//
+//        std::vector<uint8_t> expectedBytes = faabric::util::readFileToBytes(localPath);
+//        std::vector<uint8_t> actualBytes = faabric::util::readFileFromUrl(url);
+//
+//        REQUIRE(actualBytes == expectedBytes);
+//    }
 
     TEST_CASE("Test reading from bad URLs", "[util]") {
         std::string url;
