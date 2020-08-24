@@ -12,7 +12,32 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-18.04
+    env:
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faabric/base:0.0.1
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
     steps:
       - uses: actions/checkout@v2
-      - uses: ./.github/actions/tests-container
+      - name: "Make Catch dir"
+        run: mkdir -p /usr/local/include/catch
+      - name: "Install Catch"
+        run: >
+          wget -q -O /usr/local/include/catch/catch.hpp
+          https://raw.githubusercontent.com/catchorg/Catch2/master/single_include/catch2/catch.hpp
+      - name: "Set up build"
+        run: >
+          cmake
+          -GNinja
+          -DCMAKE_BUILD_TYPE=Release
+          ..
+      - name: "Build tests"
+        run: cmake --build . --target faabric_tests
+      - name: "Run tests"
+        run: ./bin/faabric_tests
 

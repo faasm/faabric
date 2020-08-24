@@ -1,7 +1,0 @@
-name: Faabric tests
-
-description: Runs tests in the test Docker container
-runs:
-  using: "docker"
-  image: "/docker/test.dockerfile"
-
