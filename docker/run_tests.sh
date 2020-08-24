@@ -7,4 +7,7 @@ REDIS_CONF=/code/docker/redis.conf
 redis-server $REDIS_CONF
 sleep 1s
 
-exec "$@"
+# Run the tests
+pushd /code/build
+./bin/faabric_tests
+popd

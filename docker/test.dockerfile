@@ -9,6 +9,7 @@ RUN wget -q \
 # Install Redis
 RUN apt install -y redis redis-tools
 
+# Build tests
 COPY . /code
 
 WORKDIR /code/build
@@ -19,8 +20,7 @@ RUN cmake \
 
 RUN cmake --build . --target faabric_tests
 
-# Entrypoint
-RUN chmod +x /code/docker/test_entrypoint.sh
-ENTRYPOINT /code/docker/test_entrypoint.sh
+# Test runner
+RUN chmod +x /code/docker/run_tests.sh
+CMD /code/docker/run_tests.sh
 
-CMD ./bin/faabric_tests
