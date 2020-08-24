@@ -46,6 +46,10 @@ RUN cmake -GNinja \
     ..
 RUN ninja install
 
+# hiredis
+RUN apt install -y libhiredis-dev libcurl4-openssl-dev
+RUN apt install -y libboost-filesystem-dev 
+
 # Tidy up
 WORKDIR /
 RUN rm -r /setup
