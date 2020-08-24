@@ -17,17 +17,6 @@ namespace tests {
         REQUIRE(actual == inputStr);
     }
     
-    TEST_CASE("Test string splitting", "[util]") {
-        std::string strA = "  one string";
-        std::string strB = "another string with other stuff  ";
-
-        std::vector<std::string> expectedA = {"one", "string"};
-        std::vector<std::string> expectedB = {"another", "string", "with", "other", "stuff"};
-
-        REQUIRE(splitString(strA, ' ') == expectedA);
-        REQUIRE(splitString(strB, ' ') == expectedB);
-    }
-
     TEST_CASE("Test is all whitespace", "[util]") {
         REQUIRE(isAllWhitespace("    "));
         REQUIRE(!isAllWhitespace("  s  "));

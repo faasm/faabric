@@ -6,10 +6,14 @@ Messaging and state layer for distributed serverless applications.
 
 ### Dependencies
 
+The following dependencies cannot be installed with `apt`:
+
 - gRPC and Protobuf - https://grpc.io/docs/languages/cpp/quickstart/ 
 - RapidJSON - https://rapidjson.org/
 - spdlog - https://github.com/gabime/spdlog
 - catch (for testing) - https://github.com/catchorg/Catch2 
+
+See the [base Dockerfile](docker/base.dockerfile) for all the dependencies.
 
 ### CMake
 
