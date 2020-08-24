@@ -1,4 +1,5 @@
 from os.path import join, exists
+from subprocess import run
 
 from invoke import task, Failure
 
@@ -28,9 +29,10 @@ def build(ctx, c, nocache=False, push=False):
                                                                                     this_version,
                                                                                     dockerfile)
         print(cmd)
-        ctx.run(cmd, env={
+        run(cmd, shell=True, check=True, env={
             "DOCKER_BUILDKIT": "1"
         })
 
         if push:
-            ctx.run("docker push faabric/{}:{}".format(container, this_version))
+            run("docker push faabric/{}:{}".format(container, this_version),
+                shell=True, check=True)
