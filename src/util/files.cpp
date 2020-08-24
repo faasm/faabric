@@ -111,10 +111,10 @@ namespace faabric::util {
         }
 
         if (out.str() == "IS_DIR") {
-            throw faabric::utilFileAtUrlIsDirectoryException(url + " is a directory");
+            throw faabric::util::FileAtUrlIsDirectoryException(url + " is a directory");
         }
 
-        return faabric::utilstringToBytes(out.str());
+        return faabric::util::stringToBytes(out.str());
     }
 
     bool isWasm(const std::vector<uint8_t> &bytes) {

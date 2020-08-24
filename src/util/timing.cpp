@@ -3,33 +3,33 @@
 #include <faabric/util/logging.h>
 
 namespace faabric::util {
-    faabric::utilTimePoint startTimer() {
-        faabric::utilClock &clock = faabric::utilgetGlobalClock();
+    faabric::util::TimePoint startTimer() {
+        faabric::util::Clock &clock = faabric::util::getGlobalClock();
         return clock.now();
     }
 
-    long getTimeDiffNanos(const faabric::utilTimePoint &begin) {
-        faabric::utilClock &clock = faabric::utilgetGlobalClock();
+    long getTimeDiffNanos(const faabric::util::TimePoint &begin) {
+        faabric::util::Clock &clock = faabric::util::getGlobalClock();
         return clock.timeDiffNano(clock.now(), begin);
     }
 
-    long getTimeDiffMicros(const faabric::utilTimePoint &begin) {
-        faabric::utilClock &clock = faabric::utilgetGlobalClock();
-        faabric::utilTimePoint end = clock.now();
+    long getTimeDiffMicros(const faabric::util::TimePoint &begin) {
+        faabric::util::Clock &clock = faabric::util::getGlobalClock();
+        faabric::util::TimePoint end = clock.now();
 
         long micros = clock.timeDiffMicro(end, begin);
         return micros;
     }
 
-    double getTimeDiffMillis(const faabric::utilTimePoint &begin) {
+    double getTimeDiffMillis(const faabric::util::TimePoint &begin) {
         long micros = getTimeDiffMicros(begin);
         double millis = ((double) micros) / 1000;
         return millis;
     }
 
-    void logEndTimer(const std::string &label, const faabric::utilTimePoint &begin) {
+    void logEndTimer(const std::string &label, const faabric::util::TimePoint &begin) {
         double millis = getTimeDiffMillis(begin);
-        const std::shared_ptr<spdlog::logger> &l = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &l = faabric::util::getLogger();
         l->trace("TIME = {:.2f}ms ({})", millis, label);
     }
 

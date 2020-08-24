@@ -9,14 +9,14 @@ using namespace faabric::util;
 namespace tests {
 
     TEST_CASE("Test rounding down offsets to page size", "[memory]") {
-        REQUIRE(faabric::utilalignOffsetDown(2 * faabric::utilHOST_PAGE_SIZE) == 2 * faabric::utilHOST_PAGE_SIZE);
-        REQUIRE(faabric::utilalignOffsetDown(2 * faabric::utilHOST_PAGE_SIZE + 25) == 2 * faabric::utilHOST_PAGE_SIZE);
+        REQUIRE(faabric::util::alignOffsetDown(2 * faabric::util::HOST_PAGE_SIZE) == 2 * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(faabric::util::alignOffsetDown(2 * faabric::util::HOST_PAGE_SIZE + 25) == 2 * faabric::util::HOST_PAGE_SIZE);
 
-        REQUIRE(faabric::utilalignOffsetDown(0) == 0);
-        REQUIRE(faabric::utilalignOffsetDown(22) == 0);
+        REQUIRE(faabric::util::alignOffsetDown(0) == 0);
+        REQUIRE(faabric::util::alignOffsetDown(22) == 0);
 
-        REQUIRE(faabric::utilalignOffsetDown(867 * faabric::utilHOST_PAGE_SIZE) == 867 * faabric::utilHOST_PAGE_SIZE);
-        REQUIRE(faabric::utilalignOffsetDown(867 * faabric::utilHOST_PAGE_SIZE - 1) == 866 * faabric::utilHOST_PAGE_SIZE);
+        REQUIRE(faabric::util::alignOffsetDown(867 * faabric::util::HOST_PAGE_SIZE) == 867 * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(faabric::util::alignOffsetDown(867 * faabric::util::HOST_PAGE_SIZE - 1) == 866 * faabric::util::HOST_PAGE_SIZE);
     }
 
     TEST_CASE("Check CoW memory mapping", "[memory]") {
@@ -156,14 +156,14 @@ namespace tests {
         REQUIRE(actual.originalOffset == 0);
         REQUIRE(actual.originalLength == 10);
         REQUIRE(actual.nBytesOffset == 0);
-        REQUIRE(actual.nBytesLength == faabric::utilHOST_PAGE_SIZE);
+        REQUIRE(actual.nBytesLength == faabric::util::HOST_PAGE_SIZE);
         REQUIRE(actual.nPagesOffset == 0);
         REQUIRE(actual.nPagesLength == 1);
         REQUIRE(actual.offsetRemainder == 0);
     }
 
     TEST_CASE("Test aligned memory chunks near page boundaries", "[util]") {
-        long originalOffset = 2 * faabric::utilHOST_PAGE_SIZE - 1;
+        long originalOffset = 2 * faabric::util::HOST_PAGE_SIZE - 1;
         long originalLength = 3;
 
         AlignedChunk actual = getPageAlignedChunk(originalOffset, originalLength);
@@ -171,36 +171,36 @@ namespace tests {
         REQUIRE(actual.originalLength == originalLength);
         REQUIRE(actual.nPagesOffset == 1);
         REQUIRE(actual.nPagesLength == 2);
-        REQUIRE(actual.nBytesOffset == 1 * faabric::utilHOST_PAGE_SIZE);
-        REQUIRE(actual.nBytesLength == 2 * faabric::utilHOST_PAGE_SIZE);
-        REQUIRE(actual.offsetRemainder == faabric::utilHOST_PAGE_SIZE - 1);
+        REQUIRE(actual.nBytesOffset == 1 * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(actual.nBytesLength == 2 * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(actual.offsetRemainder == faabric::util::HOST_PAGE_SIZE - 1);
     }
 
     TEST_CASE("Test large offset memory chunk", "[util]") {
-        long originalOffset = 2 * faabric::utilHOST_PAGE_SIZE + 33;
-        long originalLength = 5 * faabric::utilHOST_PAGE_SIZE + 123;
+        long originalOffset = 2 * faabric::util::HOST_PAGE_SIZE + 33;
+        long originalLength = 5 * faabric::util::HOST_PAGE_SIZE + 123;
 
         AlignedChunk actual = getPageAlignedChunk(originalOffset, originalLength);
         REQUIRE(actual.originalOffset == originalOffset);
         REQUIRE(actual.originalLength == originalLength);
         REQUIRE(actual.nPagesOffset == 2);
         REQUIRE(actual.nPagesLength == 6);
-        REQUIRE(actual.nBytesOffset == 2 * faabric::utilHOST_PAGE_SIZE);
-        REQUIRE(actual.nBytesLength == 6 * faabric::utilHOST_PAGE_SIZE);
+        REQUIRE(actual.nBytesOffset == 2 * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(actual.nBytesLength == 6 * faabric::util::HOST_PAGE_SIZE);
         REQUIRE(actual.offsetRemainder == 33);
     }
 
     TEST_CASE("Test already aligned memory chunk", "[util]") {
-        long originalOffset = 10 * faabric::utilHOST_PAGE_SIZE;
-        long originalLength = 5 * faabric::utilHOST_PAGE_SIZE;
+        long originalOffset = 10 * faabric::util::HOST_PAGE_SIZE;
+        long originalLength = 5 * faabric::util::HOST_PAGE_SIZE;
 
         AlignedChunk actual = getPageAlignedChunk(originalOffset, originalLength);
         REQUIRE(actual.originalOffset == originalOffset);
         REQUIRE(actual.originalLength == originalLength);
         REQUIRE(actual.nPagesOffset == 10);
         REQUIRE(actual.nPagesLength == 5);
-        REQUIRE(actual.nBytesOffset == 10 * faabric::utilHOST_PAGE_SIZE);
-        REQUIRE(actual.nBytesLength == 5 * faabric::utilHOST_PAGE_SIZE);
+        REQUIRE(actual.nBytesOffset == 10 * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(actual.nBytesLength == 5 * faabric::util::HOST_PAGE_SIZE);
         REQUIRE(actual.offsetRemainder == 0);
     }
 }

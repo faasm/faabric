@@ -9,10 +9,10 @@ namespace tests {
 
         // Write to the file
         std::vector<uint8_t> bytesIn = {0, 1, 2, 10, 20};
-        faabric::utilwriteBytesToFile(dummyFile, bytesIn);
+        faabric::util::writeBytesToFile(dummyFile, bytesIn);
 
         // Read in
-        std::vector<uint8_t> actual = faabric::utilreadFileToBytes(dummyFile);
+        std::vector<uint8_t> actual = faabric::util::readFileToBytes(dummyFile);
 
         // Check they match
         REQUIRE(actual == bytesIn);
@@ -22,8 +22,8 @@ namespace tests {
         std::string localPath = "/usr/local/code/faasm/LICENSE.md";
         std::string url = "https://raw.githubusercontent.com/lsds/faasm/master/LICENSE.md";
 
-        std::vector<uint8_t> expectedBytes = faabric::utilreadFileToBytes(localPath);
-        std::vector<uint8_t> actualBytes = faabric::utilreadFileFromUrl(url);
+        std::vector<uint8_t> expectedBytes = faabric::util::readFileToBytes(localPath);
+        std::vector<uint8_t> actualBytes = faabric::util::readFileFromUrl(url);
 
         REQUIRE(actualBytes == expectedBytes);
     }
@@ -47,8 +47,8 @@ namespace tests {
 
         bool exceptionThrown = false;
         try {
-            faabric::utilreadFileFromUrl(url);
-        } catch (faabric::utilFileNotFoundAtUrlException &ex) {
+            faabric::util::readFileFromUrl(url);
+        } catch (faabric::util::FileNotFoundAtUrlException &ex) {
             exceptionThrown = true;
         }
         REQUIRE(exceptionThrown);

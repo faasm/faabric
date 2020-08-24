@@ -16,10 +16,10 @@ static std::mutex gidMx;
 namespace faabric::util {
     unsigned int generateGid() {
         if (gidKeyHash == 0) {
-            faabric::utilUniqueLock lock(gidMx);
+            faabric::util::UniqueLock lock(gidMx);
             if (gidKeyHash == 0) {
                 // Generate random hash
-                std::string gidKey = faabric::utilrandomString(GID_LEN);
+                std::string gidKey = faabric::util::randomString(GID_LEN);
                 gidKeyHash = std::hash<std::string>{}(gidKey);
             }
         }

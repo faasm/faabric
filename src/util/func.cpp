@@ -20,7 +20,7 @@ namespace faabric::util {
     const static std::string confFile = "conf.json";
     
     std::string getRootUrl() {
-        std::string rootUrl = faabric::utilgetEnvVar("FILESERVER_URL", "");
+        std::string rootUrl = faabric::util::getEnvVar("FILESERVER_URL", "");
         if (rootUrl.empty()) {
             throw std::runtime_error("Fileserver URL not set");
         }
@@ -103,12 +103,12 @@ namespace faabric::util {
     }
 
     boost::filesystem::path getFunctionDir(const faabric::Message &msg, bool create = true) {
-        SystemConfig &conf = faabric::utilgetSystemConfig();
+        SystemConfig &conf = faabric::util::getSystemConfig();
         return _doGetDir(conf.functionDir, msg, create);
     }
 
     boost::filesystem::path getObjectDir(const faabric::Message &msg, bool create = true) {
-        SystemConfig &conf = faabric::utilgetSystemConfig();
+        SystemConfig &conf = faabric::util::getSystemConfig();
         return _doGetDir(conf.objectFileDir, msg, create);
     }
 
@@ -153,7 +153,7 @@ namespace faabric::util {
     std::string getPythonFunctionFile(const faabric::Message &msg) {
         // Python functions are stored as shared files to make it easier to
         // share them through the system
-        return _doGetPythonFunctionFile(msg, faabric::utilgetSystemConfig().sharedFilesStorageDir, true);
+        return _doGetPythonFunctionFile(msg, faabric::util::getSystemConfig().sharedFilesStorageDir, true);
     }
 
     std::string getPythonFunctionFileSharedPath(const faabric::Message &msg) {
@@ -164,7 +164,7 @@ namespace faabric::util {
     std::string getPythonRuntimeFunctionFile(const faabric::Message &msg) {
         // This is the path where the file is placed at runtime to be
         // accessible to the function
-        return _doGetPythonFunctionFile(msg, faabric::utilgetSystemConfig().runtimeFilesDir, true);
+        return _doGetPythonFunctionFile(msg, faabric::util::getSystemConfig().runtimeFilesDir, true);
     }
 
     std::string getFunctionFile(const faabric::Message &msg) {
@@ -202,7 +202,7 @@ namespace faabric::util {
 
         // Work out the final destination for the object file. This will be the
         // object path with the directory of the original file appended
-        faabric::utilSystemConfig &conf = faabric::utilgetSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         boost::filesystem::path objPath(conf.objectFileDir);
         objPath.append(directory);
 
@@ -217,7 +217,7 @@ namespace faabric::util {
     }
 
     std::string getSharedFileFile(const std::string &path) {
-        SystemConfig &conf = faabric::utilgetSystemConfig();
+        SystemConfig &conf = faabric::util::getSystemConfig();
 
         boost::filesystem::path p(conf.sharedFilesStorageDir);
         p.append(path);
@@ -281,13 +281,13 @@ namespace faabric::util {
             messageId = msg.id();
         } else {
             // Generate a random ID
-            messageId = faabric::utilgenerateGid();
+            messageId = faabric::util::generateGid();
             msg.set_id(messageId);
         }
 
         // Set the timestamp if it doesn't have one
         if(msg.timestamp() <= 0) {
-            Clock &clock = faabric::utilgetGlobalClock();
+            Clock &clock = faabric::util::getGlobalClock();
             msg.set_timestamp(clock.epochMillis());
         }
 

@@ -162,7 +162,7 @@ namespace faabric::redis {
         redisReply* dequeueBase(const std::string &queueName, int timeout);
     };
 
-    class RedisNoResponseException : public faabric::utilFaasmException {
+    class RedisNoResponseException : public faabric::util::FaasmException {
     public:
         explicit RedisNoResponseException(std::string message): FaasmException(std::move(message)) {
 

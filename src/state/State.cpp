@@ -13,7 +13,7 @@ using namespace faabric::util;
 
 namespace faabric::state {
     State &getGlobalState() {
-        static State s(faabric::utilgetSystemConfig().endpointHost);
+        static State s(faabric::util::getSystemConfig().endpointHost);
         return s;
     }
 
@@ -22,7 +22,7 @@ namespace faabric::state {
     }
 
     void State::forceClearAll(bool global) {
-        std::string stateMode = faabric::utilgetSystemConfig().stateMode;
+        std::string stateMode = faabric::util::getSystemConfig().stateMode;
         if (stateMode == "redis") {
             RedisStateKeyValue::clearAll(global);
         } else if (stateMode == "inmemory") {
@@ -31,7 +31,7 @@ namespace faabric::state {
             throw std::runtime_error("Unrecognised state mode: " + stateMode);
         }
 
-        faabric::utilSharedLock sharedLock(mapMutex);
+        faabric::util::SharedLock sharedLock(mapMutex);
         kvMap.clear();
     }
 
@@ -40,11 +40,11 @@ namespace faabric::state {
             throw std::runtime_error("Attempting to access state with empty user");
         }
 
-        std::string lookupKey = faabric::utilkeyForUser(user, keyIn);
+        std::string lookupKey = faabric::util::keyForUser(user, keyIn);
 
         // See if we have the value locally
         {
-            faabric::utilSharedLock sharedLock(mapMutex);
+            faabric::util::SharedLock sharedLock(mapMutex);
             if (kvMap.count(lookupKey) > 0) {
                 return kvMap[lookupKey]->size();
             }
@@ -60,7 +60,7 @@ namespace faabric::state {
 
         // Get from remote
         // TODO - cache this?
-        std::string stateMode = faabric::utilgetSystemConfig().stateMode;
+        std::string stateMode = faabric::util::getSystemConfig().stateMode;
         if (stateMode == "redis") {
             return RedisStateKeyValue::getStateSizeFromRemote(user, keyIn);
         } else if (stateMode == "inmemory") {
@@ -71,7 +71,7 @@ namespace faabric::state {
     }
 
     void State::deleteKV(const std::string &userIn, const std::string &keyIn) {
-        std::string stateMode = faabric::utilgetSystemConfig().stateMode;
+        std::string stateMode = faabric::util::getSystemConfig().stateMode;
         if (stateMode == "redis") {
             RedisStateKeyValue::deleteFromRemote(userIn, keyIn);
         } else if (stateMode == "inmemory") {
@@ -85,7 +85,7 @@ namespace faabric::state {
 
     void State::deleteKVLocally(const std::string &userIn, const std::string &keyIn) {
         FullLock fullLock(mapMutex);
-        std::string lookupKey = faabric::utilkeyForUser(userIn, keyIn);
+        std::string lookupKey = faabric::util::keyForUser(userIn, keyIn);
         kvMap.erase(lookupKey);
     }
 
@@ -106,7 +106,7 @@ namespace faabric::state {
             );
         }
 
-        std::string lookupKey = faabric::utilkeyForUser(user, key);
+        std::string lookupKey = faabric::util::keyForUser(user, key);
 
         // See if we have locally
         {
@@ -130,7 +130,7 @@ namespace faabric::state {
         }
 
         // Create new KV
-        std::string stateMode = faabric::utilgetSystemConfig().stateMode;
+        std::string stateMode = faabric::util::getSystemConfig().stateMode;
         if (stateMode == "redis") {
             if (sizeless) {
                 auto kv = new RedisStateKeyValue(user, key);

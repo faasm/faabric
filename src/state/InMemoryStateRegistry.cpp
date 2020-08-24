@@ -33,13 +33,13 @@ namespace faabric::state {
             const std::string &thisIP,
             bool claim
     ) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
-        std::string lookupKey = faabric::utilkeyForUser(user, key);
+        std::string lookupKey = faabric::util::keyForUser(user, key);
 
         // See if we already have the master
         {
-            faabric::utilSharedLock lock(masterMapMutex);
+            faabric::util::SharedLock lock(masterMapMutex);
             if (masterMap.count(lookupKey) > 0) {
                 return masterMap[lookupKey];
             }
@@ -48,7 +48,7 @@ namespace faabric::state {
         // No master found, need to establish
 
         // Acquire lock
-        faabric::utilFullLock lock(masterMapMutex);
+        faabric::util::FullLock lock(masterMapMutex);
 
         // Double check condition
         if (masterMap.count(lookupKey) > 0) {
@@ -81,7 +81,7 @@ namespace faabric::state {
             // Check there's still no master, if so, claim
             masterIPBytes = redis.get(masterKey);
             if (masterIPBytes.empty()) {
-                masterIPBytes = faabric::utilstringToBytes(thisIP);
+                masterIPBytes = faabric::util::stringToBytes(thisIP);
                 redis.set(masterKey, masterIPBytes);
             }
 
@@ -89,7 +89,7 @@ namespace faabric::state {
         }
 
         // Cache the result locally
-        std::string masterIP = faabric::utilbytesToString(masterIPBytes);
+        std::string masterIP = faabric::util::bytesToString(masterIPBytes);
         logger->debug("Caching master for {} as {} (this host {})", lookupKey, masterIP, thisIP);
 
         masterMap[lookupKey] = masterIP;
@@ -104,7 +104,7 @@ namespace faabric::state {
 
         // Sanity check that the master is *not* this machine
         if (masterIP == thisIP) {
-            faabric::utilgetLogger()->error("Attempting to pull state size on master ({}/{} on {})", userIn, keyIn, thisIP);
+            faabric::util::getLogger()->error("Attempting to pull state size on master ({}/{} on {})", userIn, keyIn, thisIP);
             throw std::runtime_error("Attempting to pull state size on master");
         }
 
@@ -112,7 +112,7 @@ namespace faabric::state {
     }
 
     void InMemoryStateRegistry::clear() {
-        faabric::utilFullLock lock(masterMapMutex);
+        faabric::util::FullLock lock(masterMapMutex);
         masterMap.clear();
     }
 

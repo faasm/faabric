@@ -6,7 +6,7 @@
 #include <queue>
 
 namespace faabric::util {
-    class QueueTimeoutException : public faabric::utilFaasmException {
+    class QueueTimeoutException : public faabric::util::FaasmException {
     public:
         explicit QueueTimeoutException(std::string message): FaasmException(std::move(message)) {
 

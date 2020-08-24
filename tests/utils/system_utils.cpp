@@ -10,7 +10,7 @@
 
 namespace tests {
     void cleanFaabric() {
-        faabric::utilSystemConfig &conf = faabric::utilgetSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
 
         // Clear out Redis
         redis::Redis::getState().flushAll();

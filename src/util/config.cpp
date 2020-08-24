@@ -69,7 +69,7 @@ namespace faabric::util {
 
         if (endpointHost.empty()) {
             // Get the IP for this host
-            endpointHost = faabric::utilgetPrimaryIPForThisHost(endpointInterface);
+            endpointHost = faabric::util::getPrimaryIPForThisHost(endpointInterface);
         }
     }
 

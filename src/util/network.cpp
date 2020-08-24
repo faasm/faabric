@@ -58,9 +58,9 @@ namespace faabric::util {
 
             if (interface.empty()) {
                 // If interface not specified, attempt to work it out
-                if (faabric::utilstartsWith(ifaceName, "eth") ||
-                    faabric::utilstartsWith(ifaceName, "wl") ||
-                    faabric::utilstartsWith(ifaceName, "en")
+                if (faabric::util::startsWith(ifaceName, "eth") ||
+                    faabric::util::startsWith(ifaceName, "wl") ||
+                    faabric::util::startsWith(ifaceName, "en")
                         ) {
                     ipAddress = addressBuffer;
                     break;

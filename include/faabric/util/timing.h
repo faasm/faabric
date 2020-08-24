@@ -4,23 +4,23 @@
 #include <string>
 
 #ifdef TRACE_ALL
-#define PROF_START(name) const faabric::utilTimePoint name = faabric::utilstartTimer();
-#define PROF_END(name) faabric::utillogEndTimer(#name, name);
+#define PROF_START(name) const faabric::util::TimePoint name = faabric::util::startTimer();
+#define PROF_END(name) faabric::util::logEndTimer(#name, name);
 #else
 #define PROF_START(name)
 #define PROF_END(name)
 #endif
 
 namespace faabric::util {
-    faabric::utilTimePoint startTimer();
+    faabric::util::TimePoint startTimer();
 
-    long getTimeDiffNanos(const faabric::utilTimePoint &begin);
+    long getTimeDiffNanos(const faabric::util::TimePoint &begin);
 
-    long getTimeDiffMicros(const faabric::utilTimePoint &begin);
+    long getTimeDiffMicros(const faabric::util::TimePoint &begin);
 
-    double getTimeDiffMillis(const faabric::utilTimePoint &begin);
+    double getTimeDiffMillis(const faabric::util::TimePoint &begin);
 
-    void logEndTimer(const std::string &label, const faabric::utilTimePoint &begin);
+    void logEndTimer(const std::string &label, const faabric::util::TimePoint &begin);
 
     uint64_t timespecToNanos(struct timespec *nativeTimespec);
 

@@ -15,7 +15,7 @@
 namespace faabric::state {
     RedisStateKeyValue::RedisStateKeyValue(const std::string &userIn, const std::string &keyIn, size_t sizeIn)
             : StateKeyValue(userIn, keyIn, sizeIn),
-              joinedKey(faabric::utilkeyForUser(user, key)) {
+              joinedKey(faabric::util::keyForUser(user, key)) {
 
     };
 
@@ -25,12 +25,12 @@ namespace faabric::state {
     };
 
     size_t RedisStateKeyValue::getStateSizeFromRemote(const std::string &userIn, const std::string &keyIn) {
-        std::string actualKey = faabric::utilkeyForUser(userIn, keyIn);
+        std::string actualKey = faabric::util::keyForUser(userIn, keyIn);
         return redis::Redis::getState().strlen(actualKey);
     }
 
     void RedisStateKeyValue::deleteFromRemote(const std::string &userIn, const std::string &keyIn) {
-        std::string actualKey = faabric::utilkeyForUser(userIn, keyIn);
+        std::string actualKey = faabric::util::keyForUser(userIn, keyIn);
         redis::Redis::getState().del(actualKey);
     }
 
@@ -43,12 +43,12 @@ namespace faabric::state {
     // TODO - the remote locking here is quite primitive since we ignore the fact threads can run
     // on the same machine. Redis is also aware of scheduling and so we could optimise this.
     void RedisStateKeyValue::lockGlobal() {
-        faabric::utilFullLock lock(valueMutex);
+        faabric::util::FullLock lock(valueMutex);
         lastRemoteLockId = waitOnRedisRemoteLock(joinedKey);
     }
 
     void RedisStateKeyValue::unlockGlobal() {
-        faabric::utilFullLock lock(valueMutex);
+        faabric::util::FullLock lock(valueMutex);
         redis::Redis::getState().releaseLock(joinedKey, lastRemoteLockId);
     }
 

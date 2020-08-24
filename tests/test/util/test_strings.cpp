@@ -8,10 +8,10 @@ namespace tests {
     TEST_CASE("Test bytes to string round trip", "[util]") {
         std::string inputStr = "abcdefghijkl12345";
 
-        const std::vector<uint8_t> bytes = faabric::utilstringToBytes(inputStr);
+        const std::vector<uint8_t> bytes = faabric::util::stringToBytes(inputStr);
         REQUIRE(bytes.size() == inputStr.size());
 
-        std::string actual = faabric::utilbytesToString(bytes);
+        std::string actual = faabric::util::bytesToString(bytes);
         REQUIRE(actual.size() == inputStr.size());
 
         REQUIRE(actual == inputStr);

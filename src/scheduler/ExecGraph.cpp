@@ -31,7 +31,7 @@ namespace faabric::scheduler {
         std::stringstream res;
 
         // Add the message
-        res << "{ \"msg\": " << faabric::utilmessageToJson(node.msg);
+        res << "{ \"msg\": " << faabric::util::messageToJson(node.msg);
 
         // Add the children
         if (!node.children.empty()) {

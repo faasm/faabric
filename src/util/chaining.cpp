@@ -30,9 +30,9 @@ namespace faabric::util {
         std::string url = "http://" + host + ":" + std::to_string(port);
         // std::string url = "http://faasm-" + cleanedFuncName + ".faasm.svc.cluster.local";
 
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
-        const std::string funcStr = faabric::utilfuncToString(msg, true);
-        int callTimeoutMs = faabric::utilgetSystemConfig().chainedCallTimeout;
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
+        const std::string funcStr = faabric::util::funcToString(msg, true);
+        int callTimeoutMs = faabric::util::getSystemConfig().chainedCallTimeout;
         
         void *curl = curl_easy_init();
 
@@ -52,7 +52,7 @@ namespace faabric::util {
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 
         // Add the message as JSON
-        const std::string msgJson = faabric::utilmessageToJson(msg);
+        const std::string msgJson = faabric::util::messageToJson(msg);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, msgJson.c_str());
         curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, -1L);
 

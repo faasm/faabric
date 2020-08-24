@@ -12,8 +12,8 @@
 
 
 namespace faabric::scheduler {
-    MpiWorld::MpiWorld() : id(-1), size(-1), thisHost(faabric::utilgetSystemConfig().endpointHost),
-                           creationTime(faabric::utilstartTimer()) {
+    MpiWorld::MpiWorld() : id(-1), size(-1), thisHost(faabric::util::getSystemConfig().endpointHost),
+                           creationTime(faabric::util::startTimer()) {
 
     }
 
@@ -70,7 +70,7 @@ namespace faabric::scheduler {
         // (size - 1) new functions starting with rank 1
         scheduler::Scheduler &sch = scheduler::getScheduler();
         for (int i = 1; i < size; i++) {
-            faabric::Message msg = faabric::utilmessageFactory(user, function);
+            faabric::Message msg = faabric::util::messageFactory(user, function);
             msg.set_ismpi(true);
             msg.set_mpiworldid(id);
             msg.set_mpirank(i);
@@ -117,7 +117,7 @@ namespace faabric::scheduler {
 
     void MpiWorld::registerRank(int rank) {
         {
-            faabric::utilFullLock lock(worldMutex);
+            faabric::util::FullLock lock(worldMutex);
             rankHostMap[rank] = thisHost;
         }
 
@@ -134,7 +134,7 @@ namespace faabric::scheduler {
     std::string MpiWorld::getHostForRank(int rank) {
         // Pull from state if not present
         if (rankHostMap.count(rank) == 0) {
-            faabric::utilFullLock lock(worldMutex);
+            faabric::util::FullLock lock(worldMutex);
 
             if (rankHostMap.count(rank) == 0) {
                 auto buffer = new uint8_t[MPI_HOST_STATE_LEN];
@@ -164,7 +164,7 @@ namespace faabric::scheduler {
     int MpiWorld::doISendRecv(int sendRank, int recvRank, const uint8_t *sendBuffer, uint8_t *recvBuffer,
                               faasmpi_datatype_t *dataType, int count) {
 
-        int requestId = (int) faabric::utilgenerateGid();
+        int requestId = (int) faabric::util::generateGid();
 
         // Spawn a thread to do the work
         asyncThreadMap.insert(
@@ -184,14 +184,14 @@ namespace faabric::scheduler {
 
     void MpiWorld::send(int sendRank, int recvRank, const uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
                         faabric::MPIMessage::MPIMessageType messageType) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         if (recvRank > this->size - 1) {
             throw std::runtime_error(fmt::format("Rank {} bigger than world size {}", recvRank, this->size));
         }
 
         // Generate a message ID
-        int msgId = (int) faabric::utilgenerateGid();
+        int msgId = (int) faabric::util::generateGid();
 
         // Create the message
         faabric::MPIMessage m;
@@ -232,7 +232,7 @@ namespace faabric::scheduler {
 
     void MpiWorld::broadcast(int sendRank, const uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
                              faabric::MPIMessage::MPIMessageType messageType) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
         logger->trace("MPI - bcast {} -> all", sendRank);
 
         for (int r = 0; r < size; r++) {
@@ -248,7 +248,7 @@ namespace faabric::scheduler {
 
     void checkSendRecvMatch(faasmpi_datatype_t *sendType, int sendCount, faasmpi_datatype_t *recvType, int recvCount) {
         if (sendType->id != recvType->id && sendCount == recvCount) {
-            const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+            const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
             logger->error("Must match type/ count (send {}:{}, recv {}:{})",
                           sendType->id, sendCount, recvType->id, recvCount);
             throw std::runtime_error("Mismatching send/ recv");
@@ -258,7 +258,7 @@ namespace faabric::scheduler {
     void MpiWorld::scatter(int sendRank, int recvRank,
                            const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
                            uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
         size_t sendOffset = sendCount * sendType->size;
@@ -288,7 +288,7 @@ namespace faabric::scheduler {
     void
     MpiWorld::gather(int sendRank, int recvRank, const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
                      uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
         size_t sendOffset = sendCount * sendType->size;
@@ -360,7 +360,7 @@ namespace faabric::scheduler {
     void MpiWorld::recv(int sendRank, int recvRank,
                         uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
                         MPI_Status *status, faabric::MPIMessage::MPIMessageType messageType) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         // Listen to the in-memory queue for this rank and message type
         logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
@@ -397,7 +397,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::awaitAsyncRequest(int requestId) {
-        faabric::utilgetLogger()->trace("MPI - await {}", requestId);
+        faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
         if (asyncThreadMap.count(requestId) == 0) {
             throw std::runtime_error("Attempting to await unrecognised async request: " + std::to_string(requestId));
@@ -412,7 +412,7 @@ namespace faabric::scheduler {
 
     void MpiWorld::reduce(int sendRank, int recvRank, uint8_t *sendBuffer, uint8_t *recvBuffer,
                           faasmpi_datatype_t *datatype, int count, faasmpi_op_t *operation) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         // If we're the receiver, await inputs
         if (sendRank == recvRank) {
@@ -558,7 +558,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::barrier(int thisRank) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         if (thisRank == 0) {
             // This is the root, hence just does the waiting
@@ -584,7 +584,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::enqueueMessage(faabric::MPIMessage &msg) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         if (msg.worldid() != id) {
             logger->error("Queueing message not meant for this world (msg={}, this={})", msg.worldid(), id);
@@ -605,7 +605,7 @@ namespace faabric::scheduler {
 
         std::string key = std::to_string(sendRank) + "_" + std::to_string(recvRank);
         if (localQueueMap.count(key) == 0) {
-            faabric::utilFullLock lock(worldMutex);
+            faabric::util::FullLock lock(worldMutex);
 
             if (localQueueMap.count(key) == 0) {
                 auto mq = new InMemoryMpiQueue();
@@ -683,7 +683,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::checkRankOnThisHost(int rank) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         // Check if we know about this rank on this host
         if (rankHostMap.count(rank) == 0) {
@@ -706,13 +706,13 @@ namespace faabric::scheduler {
 
         // Add pointer to map
         {
-            faabric::utilFullLock lock(worldMutex);
+            faabric::util::FullLock lock(worldMutex);
             windowPointerMap[key] = windowPtr;
         }
     }
 
     double MpiWorld::getWTime() {
-        double t = faabric::utilgetTimeDiffMillis(creationTime);
+        double t = faabric::util::getTimeDiffMillis(creationTime);
         return t / 1000.0;
     }
 

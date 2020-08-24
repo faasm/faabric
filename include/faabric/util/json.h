@@ -8,7 +8,7 @@ namespace faabric::util {
 
     faabric::Message jsonToMessage(const std::string &jsonIn);
 
-    class JsonFieldNotFound : public faabric::utilFaasmException {
+    class JsonFieldNotFound : public faabric::util::FaasmException {
     public:
         explicit JsonFieldNotFound(std::string message): FaasmException(std::move(message)) {
 

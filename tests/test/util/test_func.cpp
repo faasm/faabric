@@ -9,7 +9,7 @@ using namespace boost::filesystem;
 
 namespace tests {
     TEST_CASE("Test message factory", "[util]") {
-        const faabric::Message msg = faabric::utilmessageFactory("demo", "echo");
+        const faabric::Message msg = faabric::util::messageFactory("demo", "echo");
         REQUIRE(msg.user() == "demo");
         REQUIRE(msg.function() == "echo");
         REQUIRE(msg.id() > 0);
@@ -18,7 +18,7 @@ namespace tests {
     }
 
     TEST_CASE("Test retrieving function paths", "[util]") {
-        faabric::utilSystemConfig &conf = faabric::utilgetSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
 
         std::string funcName = "beta";
 
@@ -44,7 +44,7 @@ namespace tests {
         path funcFile = funcDir;
         funcFile.append("function.wasm");
 
-        const std::string actual = faabric::utilgetFunctionFile(call);
+        const std::string actual = faabric::util::getFunctionFile(call);
 
         // Check directory has been created and function file is as expected
         REQUIRE(exists(funcDir));
@@ -57,17 +57,17 @@ namespace tests {
     TEST_CASE("Test valid function check returns false for invalid function", "[util]") {
         // Check false for uninitialised call
         faabric::Message invalidCall;
-        REQUIRE(!faabric::utilisValidFunction(invalidCall));
+        REQUIRE(!faabric::util::isValidFunction(invalidCall));
 
         // Check false for call initialised with invalid values
         invalidCall.set_user("foo");
         invalidCall.set_function("bar");
-        REQUIRE(!faabric::utilisValidFunction(invalidCall));
+        REQUIRE(!faabric::util::isValidFunction(invalidCall));
 
         // Check false for call with valid user but invalid function
         invalidCall.set_user("demo");
         invalidCall.set_function("bar");
-        REQUIRE(!faabric::utilisValidFunction(invalidCall));
+        REQUIRE(!faabric::util::isValidFunction(invalidCall));
     }
 
     TEST_CASE("Test valid function check returns true for valid function", "[util]") {
@@ -76,7 +76,7 @@ namespace tests {
         validCall.set_user("demo");
         validCall.set_function("echo");
 
-        REQUIRE(faabric::utilisValidFunction(validCall));
+        REQUIRE(faabric::util::isValidFunction(validCall));
     }
 
     TEST_CASE("Test adding id to message", "[util]") {
@@ -91,8 +91,8 @@ namespace tests {
         REQUIRE(msgB.resultkey().empty());
         REQUIRE(msgB.statuskey().empty());
 
-        faabric::utilsetMessageId(msgA);
-        faabric::utilsetMessageId(msgB);
+        faabric::util::setMessageId(msgA);
+        faabric::util::setMessageId(msgB);
 
         REQUIRE(msgA.id() > 0);
         REQUIRE(msgB.id() > 0);
@@ -111,13 +111,13 @@ namespace tests {
 
     TEST_CASE("Test adding ID to message with an existing ID") {
         faabric::Message msg;
-        faabric::utilsetMessageId(msg);
+        faabric::util::setMessageId(msg);
 
         int originalId = msg.id();
         std::string originalStatusKey = msg.statuskey();
         std::string originalResultKey = msg.resultkey();
 
-        faabric::utilsetMessageId(msg);
+        faabric::util::setMessageId(msg);
         int afterId = msg.id();
         std::string afterStatusKey = msg.statuskey();
         std::string afterResultKey = msg.resultkey();
@@ -140,18 +140,18 @@ namespace tests {
             long expectedTimestamp = 999888;
             msg.set_timestamp(expectedTimestamp);
 
-            faabric::utilsetMessageId(msg);
+            faabric::util::setMessageId(msg);
             REQUIRE(msg.timestamp() == expectedTimestamp);
         }
 
         SECTION("Zero existing timestamp") {
             msg.set_timestamp(0);
-            faabric::utilsetMessageId(msg);
+            faabric::util::setMessageId(msg);
             REQUIRE(msg.timestamp() > baselineTimestamp);
         }
 
         SECTION("No existing timestamp") {
-            faabric::utilsetMessageId(msg);
+            faabric::util::setMessageId(msg);
             REQUIRE(msg.timestamp() > baselineTimestamp);
         }
     }
@@ -163,16 +163,16 @@ namespace tests {
         msg.set_statuskey("");
         msg.set_resultkey("");
 
-        faabric::utilsetMessageId(msg);
-        REQUIRE(msg.statuskey() == faabric::utilstatusKeyFromMessageId(msgId));
-        REQUIRE(msg.resultkey() == faabric::utilresultKeyFromMessageId(msgId));
+        faabric::util::setMessageId(msg);
+        REQUIRE(msg.statuskey() == faabric::util::statusKeyFromMessageId(msgId));
+        REQUIRE(msg.resultkey() == faabric::util::resultKeyFromMessageId(msgId));
     }
 
     TEST_CASE("Test creating async response") {
-        faabric::Message msg = faabric::utilmessageFactory("foo", "bar");
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
 
         const std::string expected = std::to_string(msg.id());
-        const std::string actual = faabric::utilbuildAsyncResponse(msg);
+        const std::string actual = faabric::util::buildAsyncResponse(msg);
 
         REQUIRE(expected == actual);
     }

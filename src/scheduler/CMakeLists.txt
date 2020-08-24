@@ -2,7 +2,7 @@ include_directories(${FAABRIC_INCLUDE_DIR}/faabric/scheduler)
 
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/scheduler/*.h")
 
-set(LIB_FILES
+add_library(scheduler
         ExecGraph.cpp
         FunctionCallClient.cpp
         FunctionCallServer.cpp
@@ -13,5 +13,4 @@ set(LIB_FILES
         ${HEADERS}
 )
 
-faasm_private_lib(scheduler "${LIB_FILES}")
 target_link_libraries(scheduler faasmpi redis)

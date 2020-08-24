@@ -69,7 +69,7 @@ namespace faabric::state {
                 request.set_chunksize(chunk.length);
 
                 if (!stream->Write(request)) {
-                    faabric::utilgetLogger()->error("Failed to request {}/{} ({} -> {})", user, key, chunk.offset,
+                    faabric::util::getLogger()->error("Failed to request {}/{} ({} -> {})", user, key, chunk.offset,
                                              chunk.offset + chunk.length);
                     break;
                 }
@@ -118,7 +118,7 @@ namespace faabric::state {
         size_t offset = 0;
         for (auto &value : response.values()) {
             if (offset > length) {
-                faabric::utilgetLogger()->error("Buffer not large enough for appended data (offset={}, length={})", offset,
+                faabric::util::getLogger()->error("Buffer not large enough for appended data (offset={}, length={})", offset,
                                          length);
                 throw std::runtime_error("Buffer not large enough for appended data");
             }

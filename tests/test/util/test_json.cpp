@@ -47,14 +47,14 @@ namespace tests {
             msg.set_inputdata(bytes.data(), bytes.size());
         }
 
-        faabric::utilsetMessageId(msg);
+        faabric::util::setMessageId(msg);
 
         REQUIRE(msg.id() > 0);
         REQUIRE(msg.timestamp() > 0);
 
-        std::string jsonString = faabric::utilmessageToJson(msg);
+        std::string jsonString = faabric::util::messageToJson(msg);
 
-        faabric::Message actual = faabric::utiljsonToMessage(jsonString);
+        faabric::Message actual = faabric::util::jsonToMessage(jsonString);
 
         checkMessageEquality(msg, actual);
     }

@@ -6,6 +6,6 @@ using namespace faabric::util;
 namespace tests {
 
     TEST_CASE("Test creating key for user", "[util]") {
-        REQUIRE(faabric::utilkeyForUser("foo", "bar") == "foo_bar");
+        REQUIRE(faabric::util::keyForUser("foo", "bar") == "foo_bar");
     }
 }

@@ -16,7 +16,7 @@ namespace faabric::util {
         logger = spdlog::stderr_color_mt("console");
 
         // Work out log level from environment
-        SystemConfig &conf = faabric::utilgetSystemConfig();
+        SystemConfig &conf = faabric::util::getSystemConfig();
         if(conf.logLevel == "debug") {
             spdlog::set_level(spdlog::level::debug);
         }

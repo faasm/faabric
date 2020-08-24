@@ -22,7 +22,7 @@ namespace tests {
         std::unordered_set<std::string> s;
 
         // Should return empty string if nothing
-        REQUIRE(faabric::utilrandomStringFromSet(s).empty());
+        REQUIRE(faabric::util::randomStringFromSet(s).empty());
 
         s.insert("foo");
         s.insert("bar");
@@ -31,7 +31,7 @@ namespace tests {
 
         std::unordered_set<std::string> actual;
         for(int i = 0; i < 1000; i++) {
-            actual.insert(faabric::utilrandomStringFromSet(s));
+            actual.insert(faabric::util::randomStringFromSet(s));
         }
 
         REQUIRE(actual.size() == 4);

@@ -23,7 +23,7 @@ namespace faabric::state {
     StateKeyValue::StateKeyValue(const std::string &userIn, const std::string &keyIn, size_t sizeIn) :
             user(userIn),
             key(keyIn),
-            logger(faabric::utilgetLogger()),
+            logger(faabric::util::getLogger()),
             valueSize(sizeIn) {
 
         if (sizeIn > 0) {
@@ -183,7 +183,7 @@ namespace faabric::state {
     }
 
     void StateKeyValue::flagDirty() {
-        faabric::utilSharedLock lock(valueMutex);
+        faabric::util::SharedLock lock(valueMutex);
         isDirty = true;
     }
 
@@ -195,7 +195,7 @@ namespace faabric::state {
     void StateKeyValue::flagChunkDirty(long offset, long len) {
         checkSizeConfigured();
 
-        faabric::utilSharedLock lock(valueMutex);
+        faabric::util::SharedLock lock(valueMutex);
         markDirtyChunk(offset, len);
     }
 
@@ -226,8 +226,8 @@ namespace faabric::state {
         FullLock lock(valueMutex);
 
         // Ensure the underlying memory is allocated
-        size_t offset = pagesOffset * faabric::utilHOST_PAGE_SIZE;
-        size_t length = nPages * faabric::utilHOST_PAGE_SIZE;
+        size_t offset = pagesOffset * faabric::util::HOST_PAGE_SIZE;
+        size_t length = nPages * faabric::util::HOST_PAGE_SIZE;
         allocateChunk(offset, length);
 
         // Add a mapping of the relevant pages of shared memory onto the new region
@@ -350,7 +350,7 @@ namespace faabric::state {
         }
 
         // Get full lock for complete push
-        faabric::utilFullLock fullLock(valueMutex);
+        faabric::util::FullLock fullLock(valueMutex);
 
         // Double check condition
         if (!isDirty) {
@@ -369,14 +369,14 @@ namespace faabric::state {
 
         // Drop out if we already have the data and we don't care about updating
         {
-            faabric::utilSharedLock lock(valueMutex);
+            faabric::util::SharedLock lock(valueMutex);
             if (lazy && fullyPulled) {
                 return;
             }
         }
 
         // Unique lock on the whole value
-        faabric::utilFullLock lock(valueMutex);
+        faabric::util::FullLock lock(valueMutex);
 
         // Check again if we need to do this
         if (lazy && fullyPulled) {
@@ -403,14 +403,14 @@ namespace faabric::state {
 
         // Drop out if we already have the data and we don't care about updating
         {
-            faabric::utilSharedLock lock(valueMutex);
+            faabric::util::SharedLock lock(valueMutex);
             if (lazy && isChunkPulled(offset, length)) {
                 return;
             }
         }
 
         // Unique lock
-        faabric::utilFullLock lock(valueMutex);
+        faabric::util::FullLock lock(valueMutex);
 
         // Check condition again
         if (lazy && isChunkPulled(offset, length)) {
@@ -435,7 +435,7 @@ namespace faabric::state {
 
         // We need a full lock while doing this, mainly to ensure no other threads start
         // the same process
-        faabric::utilFullLock lock(valueMutex);
+        faabric::util::FullLock lock(valueMutex);
 
         // Double check condition
         if (!isDirty) {
@@ -468,7 +468,7 @@ namespace faabric::state {
         uint32_t remoteLockId = redis.acquireLock(redisKey, REMOTE_LOCK_TIMEOUT_SECS);
         unsigned int retryCount = 0;
         while (remoteLockId == 0) {
-            const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+            const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
             logger->debug("Waiting on remote lock for {} (loop {})", redisKey, retryCount);
 
             if (retryCount >= REMOTE_LOCK_MAX_RETRIES) {

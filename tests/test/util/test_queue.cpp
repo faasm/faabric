@@ -4,7 +4,7 @@
 
 using namespace faabric::util;
 
-typedef faabric::utilQueue<int> IntQueue;
+typedef faabric::util::Queue<int> IntQueue;
 
 namespace tests {
     TEST_CASE("Test queue operations", "[util]") {

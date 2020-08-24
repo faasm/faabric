@@ -13,17 +13,17 @@ namespace faabric::scheduler {
 
     scheduler::MpiWorld &MpiWorldRegistry::createWorld(const faabric::Message &msg, int worldId, std::string hostOverride) {
         if(worldMap.count(worldId) > 0) {
-            faabric::utilgetLogger()->error("World {} already exists", worldId);
+            faabric::util::getLogger()->error("World {} already exists", worldId);
             throw std::runtime_error("World already exists");
         }
 
-        faabric::utilSystemConfig &conf = faabric::utilgetSystemConfig();
+        faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         int worldSize = msg.mpiworldsize();
         if(worldSize <= 0) {
             worldSize = conf.defaultMpiWorldSize;
         }
 
-        faabric::utilFullLock lock(registryMutex);
+        faabric::util::FullLock lock(registryMutex);
         MpiWorld &world = worldMap[worldId];
 
         if(!hostOverride.empty()) {
@@ -38,7 +38,7 @@ namespace faabric::scheduler {
     MpiWorld &MpiWorldRegistry::getOrInitialiseWorld(const faabric::Message &msg, int worldId) {
         // Create world locally if not exists
         if(worldMap.count(worldId) == 0) {
-            faabric::utilFullLock lock(registryMutex);
+            faabric::util::FullLock lock(registryMutex);
             if(worldMap.count(worldId) == 0) {
                 MpiWorld &world = worldMap[worldId];
                 world.initialiseFromState(msg, worldId);
@@ -50,7 +50,7 @@ namespace faabric::scheduler {
 
     MpiWorld &MpiWorldRegistry::getWorld(int worldId) {
         if(worldMap.count(worldId) == 0) {
-            faabric::utilgetLogger()->error("World {} not initialised", worldId);
+            faabric::util::getLogger()->error("World {} not initialised", worldId);
             throw std::runtime_error("World not initialised");
         }
 
@@ -58,7 +58,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorldRegistry::clear() {
-        faabric::utilFullLock lock(registryMutex);
+        faabric::util::FullLock lock(registryMutex);
         worldMap.clear();
     }
 }

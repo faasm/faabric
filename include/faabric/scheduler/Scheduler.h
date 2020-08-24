@@ -93,7 +93,7 @@ namespace faabric::scheduler {
     private:
         std::string thisHost;
 
-        faabric::utilSystemConfig &conf;
+        faabric::util::SystemConfig &conf;
 
         std::shared_ptr<InMemoryMessageQueue> bindQueue;
 

@@ -5,7 +5,7 @@
 #include "faabric_utils.h"
 
 int main(int argc, char *argv[]) {
-    faabric::utilinitLogging();
+    faabric::util::initLogging();
 
     int result = Catch::Session().run(argc, argv);
 

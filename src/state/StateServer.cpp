@@ -27,7 +27,7 @@ namespace faabric::state {
 
         // Start it
         server = builder.BuildAndStart();
-        faabric::utilgetLogger()->info("State server listening on {}", serverAddr);
+        faabric::util::getLogger()->info("State server listening on {}", serverAddr);
 
         server->Wait();
     }
@@ -39,7 +39,7 @@ namespace faabric::state {
         // Iterate through streamed requests
         faabric::StateChunkRequest request;
         while (stream->Read(&request)) {
-            faabric::utilgetLogger()->debug(
+            faabric::util::getLogger()->debug(
                     "Pull {}/{} ({}->{})",
                     request.user(), request.key(),
                     request.offset(), request.offset() + request.chunksize()
@@ -77,7 +77,7 @@ namespace faabric::state {
 
         faabric::StatePart request;
         while (reader->Read(&request)) {
-            faabric::utilgetLogger()->debug(
+            faabric::util::getLogger()->debug(
                     "Push {}/{} ({}->{})",
                     request.user(), request.key(),
                     request.offset(), request.offset() + request.data().size()
@@ -102,7 +102,7 @@ namespace faabric::state {
             ServerContext *context,
             const faabric::StateRequest *request,
             faabric::StateSizeResponse *response) {
-        faabric::utilgetLogger()->debug("Size {}/{}", request->user(), request->key());
+        faabric::util::getLogger()->debug("Size {}/{}", request->user(), request->key());
         KV_FROM_REQUEST(request)
         response->set_user(kv->user);
         response->set_key(kv->key);
@@ -115,7 +115,7 @@ namespace faabric::state {
             ServerContext *context,
             const faabric::StateRequest *request,
             faabric::StateResponse *response) {
-        faabric::utilgetLogger()->debug("Append {}/{}", request->user(), request->key());
+        faabric::util::getLogger()->debug("Append {}/{}", request->user(), request->key());
         KV_FROM_REQUEST(request)
 
         auto data = BYTES_CONST(request->data().c_str());
@@ -132,7 +132,7 @@ namespace faabric::state {
             ServerContext *context,
             const ::faabric::StateRequest *request,
             faabric::StateResponse *response) {
-        faabric::utilgetLogger()->debug("Clear appended {}/{}", request->user(), request->key());
+        faabric::util::getLogger()->debug("Clear appended {}/{}", request->user(), request->key());
 
         KV_FROM_REQUEST(request)
 
@@ -145,7 +145,7 @@ namespace faabric::state {
             grpc::ServerContext *context,
             const ::faabric::StateAppendedRequest *request,
             faabric::StateAppendedResponse *response) {
-        faabric::utilgetLogger()->debug("Pull appended {}/{}", request->user(), request->key());
+        faabric::util::getLogger()->debug("Pull appended {}/{}", request->user(), request->key());
 
         KV_FROM_REQUEST(request)
 
@@ -165,7 +165,7 @@ namespace faabric::state {
             grpc::ServerContext *context,
             const faabric::StateRequest *request,
             faabric::StateResponse *response) {
-        faabric::utilgetLogger()->debug("Lock {}/{}", request->user(), request->key());
+        faabric::util::getLogger()->debug("Lock {}/{}", request->user(), request->key());
 
         KV_FROM_REQUEST(request)
         kv->lockWrite();
@@ -177,7 +177,7 @@ namespace faabric::state {
             grpc::ServerContext *context,
             const faabric::StateRequest *request,
             faabric::StateResponse *response) {
-        faabric::utilgetLogger()->debug("Unlock {}/{}", request->user(), request->key());
+        faabric::util::getLogger()->debug("Unlock {}/{}", request->user(), request->key());
 
         KV_FROM_REQUEST(request)
         kv->unlockWrite();
@@ -188,7 +188,7 @@ namespace faabric::state {
     Status StateServer::Delete(grpc::ServerContext *context, const faabric::StateRequest *request,
                                faabric::StateResponse *response) {
 
-        faabric::utilgetLogger()->debug("Delete {}/{}", request->user(), request->key());
+        faabric::util::getLogger()->debug("Delete {}/{}", request->user(), request->key());
 
         state.deleteKV(request->user(), request->key());
 

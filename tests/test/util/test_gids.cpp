@@ -21,8 +21,8 @@ namespace tests {
         for (int i = 0; i < nThreads; i++) {
             threads.emplace_back(std::thread([&generated, &mx, nLoops] {
                 for (int j = 0; j < nLoops; j++) {
-                    faabric::utilUniqueLock lock(mx);
-                    generated.push_back(faabric::utilgenerateGid());
+                    faabric::util::UniqueLock lock(mx);
+                    generated.push_back(faabric::util::generateGid());
                 }
             }));
         }
@@ -39,7 +39,7 @@ namespace tests {
         std::set<unsigned int> uniques;
         for (auto g : generated) {
             if (uniques.count(g) > 0) {
-                const std::shared_ptr<spdlog::logger> &logger = faabric::utilgetLogger();
+                const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
                 logger->error("Found duplicate gid - {}", g);
                 FAIL();
             } else {

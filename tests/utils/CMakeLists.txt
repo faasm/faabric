@@ -8,7 +8,7 @@ set(LIB_FILES
         faabric_utils.h
         )
 
-faasm_private_lib(faabric_test_utils "${LIB_FILES}")
+add_library(faabric_test_utils "${LIB_FILES}")
 
 target_link_libraries(faabric_test_utils
     catch

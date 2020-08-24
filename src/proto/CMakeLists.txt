@@ -42,17 +42,11 @@ include_directories(${FAABRIC_INCLUDE_DIR}/faabric/proto/)
 
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/proto/*.h")
 
-set(LIB_FILES
+add_library(proto
         RPCServer.cpp
         ${HEADERS}
         ${OUTPUT_FILES}
         )
-
-if (FAASM_BUILD_TYPE STREQUAL "native-tools")
-    faasm_public_lib(proto "${LIB_FILES}")
-else ()
-    faasm_private_lib(proto "${LIB_FILES}")
-endif ()
 
 target_link_libraries(proto PRIVATE
         ${Protobuf_LIBRARIES}

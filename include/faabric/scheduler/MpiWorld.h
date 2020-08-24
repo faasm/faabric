@@ -8,7 +8,7 @@
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 
 namespace faabric::scheduler {
-    typedef faabric::utilQueue<faabric::MPIMessage> InMemoryMpiQueue;
+    typedef faabric::util::Queue<faabric::MPIMessage> InMemoryMpiQueue;
 
     struct MpiWorldState {
         int worldSize;
@@ -108,7 +108,7 @@ namespace faabric::scheduler {
         int id;
         int size;
         std::string thisHost;
-        faabric::utilTimePoint creationTime;
+        faabric::util::TimePoint creationTime;
 
         std::shared_mutex worldMutex;
 
