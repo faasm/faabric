@@ -20,8 +20,7 @@ RUN cmake \
 RUN cmake --build . --target faabric_tests
 
 # Entrypoint
-COPY docker/test_entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-ENTRYPOINT /entrypoint.sh
+RUN chmod +x /code/docker/test_entrypoint.sh
+ENTRYPOINT /code/docker/test_entrypoint.sh
 
 CMD ./bin/faabric_tests
