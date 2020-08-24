@@ -1,6 +1,7 @@
 # Faabric
 
-Messaging and state layer for distributed serverless applications.
+Faabric provides collective communication and state to build distributed 
+applications from serverless functions. 
 
 ## Build
 

@@ -45,4 +45,3 @@ jobs:
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: build
-
