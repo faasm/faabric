@@ -1,20 +1,9 @@
 #include <faabric/util/string_tools.h>
 
 #include <string>
-#include <boost/algorithm/string.hpp>
+#include <algorithm>
 
 namespace faabric::util {
-    std::vector<std::string> splitString(const std::string &input, char delimiter) {
-        std::vector<std::string> results;
-
-        // Create a trimmed copy
-        std::string copy(input);
-        boost::trim(copy);
-
-        boost::split(results, copy, [delimiter](char c) { return c == delimiter; });
-
-        return results;
-    }
 
     bool isAllWhitespace(const std::string &input) {
         return std::all_of(input.begin(), input.end(), isspace);
