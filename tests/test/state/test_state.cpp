@@ -5,13 +5,14 @@
 #include <faabric/redis/Redis.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/config.h>
+#include <faabric/state/DummyStateServer.h>
 #include <faabric/state/State.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 
 #include <sys/mman.h>
 #include <faabric/util/state.h>
 
-using namespace state;
+using namespace faabric::state;
 
 namespace tests {
     static int staticCount = 0;
