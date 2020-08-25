@@ -1,10 +1,10 @@
 from invoke import Collection
 
 from . import build
-from . import containers
+from . import container
 
 ns = Collection(
     build,
-    containers,
+    container,
 )
 
