@@ -7,6 +7,7 @@
 #include <faabric/util/config.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/util/network.h>
 
 using namespace scheduler;
 

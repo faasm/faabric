@@ -5,8 +5,6 @@
 #include <faabric/state/State.h>
 #include <faabric/state/StateServer.h>
 
-#define LOCALHOST "127.0.0.1"
-
 using namespace faabric;
 
 namespace tests {

@@ -3,6 +3,7 @@
 
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/util/random.h>
+#include <faabric/util/network.h>
 #include <faabric/faasmpi/mpi.h>
 #include <faabric/util/bytes.h>
 #include <faabric/scheduler/Scheduler.h>
