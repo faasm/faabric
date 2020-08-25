@@ -1,4 +1,4 @@
-# Faabric
+# Faabric [![Tests](https://github.com/Shillaker/faabric/workflows/Faabric%20tests/badge.svg)]
 
 Faabric provides collective communication and state to build distributed 
 applications from serverless functions. 
