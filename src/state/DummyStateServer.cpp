@@ -1,12 +1,11 @@
-#include "faabric_utils.h"
+#include "DummyStateServer.h"
 
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/network.h>
 
-using namespace state;
 
-namespace tests {
+namespace faabric::state {
     DummyStateServer::DummyStateServer():remoteState(LOCALHOST),
     stateServer(remoteState) {
 

@@ -5,6 +5,7 @@ include_directories(
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/state/*.h")
 
 add_library(state
+        DummyStateServer.cpp
         InMemoryStateKeyValue.cpp
         InMemoryStateRegistry.cpp
         State.cpp
