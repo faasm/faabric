@@ -4,7 +4,7 @@
 
 #include <faabric/util/config.h>
 #include <faabric/state/State.h>
-#include <faabric/state/StateServer.h>
+#include <faabric/state/DummyStateServer.h>
 #include <faabric/state/StateClient.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/util/bytes.h>
