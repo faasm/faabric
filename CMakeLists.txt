@@ -7,6 +7,27 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Protobuf/ grpc config
+# See the example in the gRPC repo here:                                         
+# https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/CMakeLists.txt
+include(FindProtobuf)
+set(protobuf_MODULE_COMPATIBLE TRUE)                                            
+                                                                                 
+find_package(Protobuf REQUIRED)                                                  
+message(STATUS "Using protobuf  \                                                
+    ${PROTOBUF_LIBRARY} \                                                        
+    ${PROTOBUF_PROTOC_LIBRARY} \                                                 
+    ${PROTOBUF_PROTOC_EXECUTABLE} \                                              
+")                                                                               
+                                                                                 
+find_package(gRPC CONFIG REQUIRED)                                               
+message(STATUS "Using gRPC ${gRPC_VERSION}")                                     
+                                                                                 
+include_directories(${PROTOBUF_INCLUDE_DIR})                                     
+                                                                                 
+set(PROTOC_EXE /usr/local/bin/protoc)                                            
+set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)                                  
+
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -30,7 +51,7 @@ add_subdirectory(src/util)
 
 add_subdirectory(faasmpi)
 
-add_library(faabric faabric.cpp)
+add_library(faabric SHARED faabric.cpp)
 
 target_link_libraries(faabric
         proto

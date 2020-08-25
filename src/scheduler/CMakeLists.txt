@@ -3,6 +3,7 @@ include_directories(${FAABRIC_INCLUDE_DIR}/faabric/scheduler)
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/scheduler/*.h")
 
 add_library(scheduler
+        SHARED
         ExecGraph.cpp
         FunctionCallClient.cpp
         FunctionCallServer.cpp
