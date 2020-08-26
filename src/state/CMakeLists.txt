@@ -4,8 +4,7 @@ include_directories(
 
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/state/*.h")
 
-add_library(state
-        SHARED
+set(LIB_FILES
         DummyStateServer.cpp
         InMemoryStateKeyValue.cpp
         InMemoryStateRegistry.cpp
@@ -15,6 +14,8 @@ add_library(state
         StateServer.cpp
         RedisStateKeyValue.cpp
         ${HEADERS}
-    )
+        )
+
+faabric_private_lib(state "${LIB_FILES}")
 
 target_link_libraries(state proto redis)

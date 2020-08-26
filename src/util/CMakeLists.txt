@@ -4,8 +4,7 @@ find_package(RapidJSON)
 
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/util/*.h")
 
-add_library(util
-        SHARED
+set(LIB_FILES
         barrier.cpp
         bytes.cpp
         chaining.cpp
@@ -26,6 +25,8 @@ add_library(util
         timing.cpp
         ${HEADERS}
         )
+
+faabric_private_lib(util "${LIB_FILES}")
 
 target_link_libraries(
         util
