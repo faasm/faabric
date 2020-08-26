@@ -17,22 +17,14 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faabric/base:0.0.2
+      image: faabric/base:0.0.3
     services:
       redis:
         image: redis
     steps:
       - uses: actions/checkout@v2
-      - name: "Install redis stuff"
-        run: apt install -y redis-tools
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      - name: "Make Catch dir"
-        run: mkdir -p /usr/local/include/catch
-      - name: "Install Catch"
-        run: >
-          wget -q -O /usr/local/include/catch/catch.hpp
-          https://raw.githubusercontent.com/catchorg/Catch2/master/single_include/catch2/catch.hpp
       - name: "Create build dir"
         run: mkdir build
       - name: "Set up build"

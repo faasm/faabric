@@ -49,6 +49,13 @@ RUN cmake -GNinja \
     ..
 RUN ninja install
 
+# Redis
+RUN apt install -y redis-tools
+
+# Catch
+WORKDIR /usr/local/include/catch
+RUN wget -q -O catch.hpp https://raw.githubusercontent.com/catchorg/Catch2/master/single_include/catch2/catch.hpp
+
 # Tidy up
 WORKDIR /
 RUN rm -r /setup
