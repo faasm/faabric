@@ -1,11 +1,33 @@
 cmake_minimum_required(VERSION 3.13.0)
 project(faabric)
 
+option(FAABRIC_STATIC_LIBS "Statically link Faabric libs" ON)
+option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
+
 # Top-level CMake config
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Library funcs
+if (FAABRIC_STATIC_LIBS)
+    function(faabric_public_lib lib_name lib_deps)
+        add_library(${lib_name} STATIC ${lib_deps})
+    endfunction()
+    function(faabric_private_lib lib_name lib_deps)
+        add_library(${lib_name} STATIC ${lib_deps})
+    endfunction()
+else ()
+    function(faabric_public_lib lib_name lib_deps)
+        add_library(${lib_name} SHARED ${lib_deps})
+    endfunction()
+    function(faabric_private_lib lib_name lib_deps)
+        add_library(${lib_name} STATIC ${lib_deps})
+        target_compile_options(${lib_name} PRIVATE "-fPIC")
+    endfunction()
+endif ()
+
 
 # Protobuf/ grpc config
 # See the example in the gRPC repo here:                                         
@@ -51,7 +73,7 @@ add_subdirectory(src/util)
 
 add_subdirectory(faasmpi)
 
-add_library(faabric SHARED faabric.cpp)
+faabric_public_lib(faabric faabric.cpp)
 
 target_link_libraries(faabric
         proto

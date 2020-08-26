@@ -20,12 +20,17 @@ include_directories(${FAABRIC_INCLUDE_DIR}/faabric/proto/)
 
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/proto/*.h")
 
-add_library(proto
-        SHARED
+set(LIB_FILES
         RPCServer.cpp
         ${HEADERS}
         ${OUTPUT_FILES}
         )
+
+if(FAABRIC_STATIC_LIBS)
+    faabric_private_lib(proto "${LIB_FILES}")
+else()
+    faabric_public_lib(proto "${LIB_FILES}")
+endif()
 
 target_link_libraries(proto
         ${Protobuf_LIBRARIES}
