@@ -63,6 +63,7 @@ include_directories(
         ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
 )
 
+add_subdirectory(src/endpoint)
 add_subdirectory(src/mpi)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
