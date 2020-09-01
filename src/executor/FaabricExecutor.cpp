@@ -1,6 +1,7 @@
 #include "FaabricExecutor.h"
 
 #include <faabric/util/config.h>
+#include <faabric/state/State.h>
 
 
 namespace faabric::executor {
@@ -16,6 +17,22 @@ namespace faabric::executor {
 
         // Listen to bind queue by default
         currentQueue = scheduler.getBindQueue();
+    }
+
+    void FaabricExecutor::flush() {
+        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
+        logger->warn("Flushing host {}", faabric::util::getSystemConfig().endpointHost);
+
+        // Clear out any cached state
+        faabric::state::getGlobalState().forceClearAll(false);
+
+        // Reset scheduler
+        faabric::scheduler::Scheduler &sch = faabric::scheduler::getScheduler();
+        sch.clear();
+        sch.addHostToGlobalSet();
+
+        // Hook
+        this->postFlush();
     }
 
     void FaabricExecutor::bindToFunction(const faabric::Message &msg, bool force) {
