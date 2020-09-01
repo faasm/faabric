@@ -1,6 +1,6 @@
 #include "MpiWorld.h"
 
-#include <faabric/faasmpi/mpi.h>
+#include <faabric/mpi/mpi.h>
 
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
@@ -157,12 +157,12 @@ namespace faabric::scheduler {
         return rankHostMap[rank];
     }
 
-    int MpiWorld::isend(int sendRank, int recvRank, const uint8_t *buffer, faasmpi_datatype_t *dataType, int count) {
+    int MpiWorld::isend(int sendRank, int recvRank, const uint8_t *buffer, faabric_datatype_t *dataType, int count) {
         return doISendRecv(sendRank, recvRank, buffer, nullptr, dataType, count);
     }
 
     int MpiWorld::doISendRecv(int sendRank, int recvRank, const uint8_t *sendBuffer, uint8_t *recvBuffer,
-                              faasmpi_datatype_t *dataType, int count) {
+                              faabric_datatype_t *dataType, int count) {
 
         int requestId = (int) faabric::util::generateGid();
 
@@ -182,7 +182,7 @@ namespace faabric::scheduler {
         return requestId;
     }
 
-    void MpiWorld::send(int sendRank, int recvRank, const uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
+    void MpiWorld::send(int sendRank, int recvRank, const uint8_t *buffer, faabric_datatype_t *dataType, int count,
                         faabric::MPIMessage::MPIMessageType messageType) {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
@@ -230,7 +230,7 @@ namespace faabric::scheduler {
         }
     }
 
-    void MpiWorld::broadcast(int sendRank, const uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
+    void MpiWorld::broadcast(int sendRank, const uint8_t *buffer, faabric_datatype_t *dataType, int count,
                              faabric::MPIMessage::MPIMessageType messageType) {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
         logger->trace("MPI - bcast {} -> all", sendRank);
@@ -246,7 +246,7 @@ namespace faabric::scheduler {
         }
     }
 
-    void checkSendRecvMatch(faasmpi_datatype_t *sendType, int sendCount, faasmpi_datatype_t *recvType, int recvCount) {
+    void checkSendRecvMatch(faabric_datatype_t *sendType, int sendCount, faabric_datatype_t *recvType, int recvCount) {
         if (sendType->id != recvType->id && sendCount == recvCount) {
             const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
             logger->error("Must match type/ count (send {}:{}, recv {}:{})",
@@ -256,8 +256,8 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::scatter(int sendRank, int recvRank,
-                           const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                           uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount) {
+                           const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                           uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount) {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
@@ -286,8 +286,8 @@ namespace faabric::scheduler {
     }
 
     void
-    MpiWorld::gather(int sendRank, int recvRank, const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                     uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount) {
+    MpiWorld::gather(int sendRank, int recvRank, const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                     uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount) {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
@@ -333,8 +333,8 @@ namespace faabric::scheduler {
         }
     }
 
-    void MpiWorld::allGather(int rank, const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                             uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount) {
+    void MpiWorld::allGather(int rank, const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                             uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount) {
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
         int root = 0;
@@ -353,12 +353,12 @@ namespace faabric::scheduler {
         }
     }
 
-    int MpiWorld::irecv(int sendRank, int recvRank, uint8_t *buffer, faasmpi_datatype_t *dataType, int count) {
+    int MpiWorld::irecv(int sendRank, int recvRank, uint8_t *buffer, faabric_datatype_t *dataType, int count) {
         return doISendRecv(sendRank, recvRank, nullptr, buffer, dataType, count);
     }
 
     void MpiWorld::recv(int sendRank, int recvRank,
-                        uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
+                        uint8_t *buffer, faabric_datatype_t *dataType, int count,
                         MPI_Status *status, faabric::MPIMessage::MPIMessageType messageType) {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
@@ -411,7 +411,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::reduce(int sendRank, int recvRank, uint8_t *sendBuffer, uint8_t *recvBuffer,
-                          faasmpi_datatype_t *datatype, int count, faasmpi_op_t *operation) {
+                          faabric_datatype_t *datatype, int count, faabric_op_t *operation) {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         // If we're the receiver, await inputs
@@ -443,15 +443,15 @@ namespace faabric::scheduler {
                     recv(r, recvRank, rankData, datatype, count, nullptr, faabric::MPIMessage::REDUCE);
                 }
 
-                if (operation->id == faasmpi_op_sum.id) {
-                    if (datatype->id == FAASMPI_INT) {
+                if (operation->id == faabric_op_sum.id) {
+                    if (datatype->id == FAABRIC_INT) {
                         auto recvBufferCast = reinterpret_cast<int *>(recvBuffer);
                         auto rankDataCast = reinterpret_cast<int *>(rankData);
 
                         for (int slot = 0; slot < count; slot++) {
                             recvBufferCast[slot] += rankDataCast[slot];
                         }
-                    } else if (datatype->id == FAASMPI_DOUBLE) {
+                    } else if (datatype->id == FAABRIC_DOUBLE) {
                         auto recvBufferCast = reinterpret_cast<double *>(recvBuffer);
                         auto rankDataCast = reinterpret_cast<double *>(rankData);
 
@@ -461,15 +461,15 @@ namespace faabric::scheduler {
                     } else {
                         throw std::runtime_error("Unsupported type for sum reduction");
                     }
-                } else if (operation->id == faasmpi_op_max.id) {
-                    if (datatype->id == FAASMPI_INT) {
+                } else if (operation->id == faabric_op_max.id) {
+                    if (datatype->id == FAABRIC_INT) {
                         auto recvBufferCast = reinterpret_cast<int *>(recvBuffer);
                         auto rankDataCast = reinterpret_cast<int *>(rankData);
 
                         for (int slot = 0; slot < count; slot++) {
                             recvBufferCast[slot] = std::max(recvBufferCast[slot], rankDataCast[slot]);
                         }
-                    } else if (datatype->id == FAASMPI_DOUBLE) {
+                    } else if (datatype->id == FAABRIC_DOUBLE) {
                         auto recvBufferCast = reinterpret_cast<double *>(recvBuffer);
                         auto rankDataCast = reinterpret_cast<double *>(rankData);
 
@@ -494,8 +494,8 @@ namespace faabric::scheduler {
         }
     }
 
-    void MpiWorld::allReduce(int rank, uint8_t *sendBuffer, uint8_t *recvBuffer, faasmpi_datatype_t *datatype,
-                             int count, faasmpi_op_t *operation) {
+    void MpiWorld::allReduce(int rank, uint8_t *sendBuffer, uint8_t *recvBuffer, faabric_datatype_t *datatype,
+                             int count, faabric_op_t *operation) {
         // Rank 0 coordinates the allreduce operation
         if (rank == 0) {
             // Run the standard reduce
@@ -512,8 +512,8 @@ namespace faabric::scheduler {
         }
     }
 
-    void MpiWorld::allToAll(int rank, uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                            uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount) {
+    void MpiWorld::allToAll(int rank, uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                            uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount) {
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
         size_t sendOffset = sendCount * sendType->size;
@@ -551,7 +551,7 @@ namespace faabric::scheduler {
         const std::shared_ptr<InMemoryMpiQueue> &queue = getLocalQueue(sendRank, recvRank);
         faabric::MPIMessage m = queue->peek();
 
-        faasmpi_datatype_t *datatype = getFaasmDatatypeFromId(m.type());
+        faabric_datatype_t *datatype = getFaasmDatatypeFromId(m.type());
         status->bytesSize = m.count() * datatype->size;
         status->MPI_ERROR = 0;
         status->MPI_SOURCE = m.sender();
@@ -616,8 +616,8 @@ namespace faabric::scheduler {
         return localQueueMap[key];
     }
 
-    void MpiWorld::rmaGet(int sendRank, faasmpi_datatype_t *sendType, int sendCount,
-                          uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount) {
+    void MpiWorld::rmaGet(int sendRank, faabric_datatype_t *sendType, int sendCount,
+                          uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount) {
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
         // Get the state value that relates to this window
@@ -635,8 +635,8 @@ namespace faabric::scheduler {
         kv->get(recvBuffer);
     }
 
-    void MpiWorld::rmaPut(int sendRank, uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                          int recvRank, faasmpi_datatype_t *recvType, int recvCount) {
+    void MpiWorld::rmaPut(int sendRank, uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                          int recvRank, faabric_datatype_t *recvType, int recvCount) {
         checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
 
         // Get the state value for the window to write to
@@ -659,7 +659,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::synchronizeRmaWrite(const faabric::MPIMessage &msg, bool isRemote) {
-        faasmpi_datatype_t *datatype = getFaasmDatatypeFromId(msg.type());
+        faabric_datatype_t *datatype = getFaasmDatatypeFromId(msg.type());
         int winSize = msg.count() * datatype->size;
         const std::string key = getWindowStateKey(id, msg.destination(), winSize);
 
@@ -695,7 +695,7 @@ namespace faabric::scheduler {
         }
     }
 
-    void MpiWorld::createWindow(const faasmpi_win_t *window, uint8_t *windowPtr) {
+    void MpiWorld::createWindow(const faabric_win_t *window, uint8_t *windowPtr) {
         const std::string key = getWindowStateKey(id, window->rank, window->size);
         state::State &state = state::getGlobalState();
         const std::shared_ptr<state::StateKeyValue> windowKv = state.getKV(user, key, window->size);

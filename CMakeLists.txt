@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.13.0)
 project(faabric)
 
+option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
 option(FAABRIC_STATIC_LIBS "Statically link Faabric libs" ON)
 option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
 
@@ -27,7 +28,6 @@ else ()
         target_compile_options(${lib_name} PRIVATE "-fPIC")
     endfunction()
 endif ()
-
 
 # Protobuf/ grpc config
 # See the example in the gRPC repo here:                                         
@@ -56,22 +56,21 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
-set(FAASMPI_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/faasmpi)
 
 # Include directories
 include_directories(
         ${FAABRIC_INCLUDE_DIR}
-        ${FAASMPI_INCLUDE_DIR}
         ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
 )
 
+add_subdirectory(src/mpi)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
 add_subdirectory(src/scheduler)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
+add_subdirectory(src/wasm)
 
-add_subdirectory(faasmpi)
 
 faabric_public_lib(faabric faabric.cpp)
 

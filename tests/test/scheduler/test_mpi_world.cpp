@@ -4,7 +4,7 @@
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/util/random.h>
 #include <faabric/util/network.h>
-#include <faabric/faasmpi/mpi.h>
+#include <faabric/mpi/mpi.h>
 #include <faabric/util/bytes.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/macros.h>
@@ -111,7 +111,7 @@ namespace tests {
         REQUIRE(actualMessage.count() == data.size());
         REQUIRE(actualMessage.destination() == destRank);
         REQUIRE(actualMessage.sender() == senderRank);
-        REQUIRE(actualMessage.type() == FAASMPI_INT);
+        REQUIRE(actualMessage.type() == FAABRIC_INT);
 
         // Check data
         auto *rawInts = reinterpret_cast<const int *>(actualMessage.buffer().c_str());
@@ -282,7 +282,7 @@ namespace tests {
             // Check message content
             faabric::MPIMessage actualMessage = world.getLocalQueue(rankA1, rankA2)->dequeue();
             REQUIRE(actualMessage.count() == 0);
-            REQUIRE(actualMessage.type() == FAASMPI_INT);
+            REQUIRE(actualMessage.type() == FAABRIC_INT);
 
             // Check no extra data in state
             REQUIRE(state.getKVCount() == 4);
@@ -976,7 +976,7 @@ namespace tests {
         int bufferSize = dataCount * sizeof(int);
 
         // Create a window
-        faasmpi_win_t winA1{
+        faabric_win_t winA1{
                 .worldId=localWorld.getId(),
                 .rank = rankA1,
                 .size = bufferSize,
