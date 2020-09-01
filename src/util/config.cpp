@@ -37,9 +37,9 @@ namespace faabric::util {
 
         // Scheduling
         noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
-        maxFaaslets = this->getSystemConfIntParam("MAX_FAASLETS", "5");
+        maxNodes = this->getSystemConfIntParam("MAX_NODES", "5");
         maxInFlightRatio = this->getSystemConfIntParam("MAX_IN_FLIGHT_RATIO", "1");
-        maxFaasletsPerFunction = this->getSystemConfIntParam("MAX_FAASLETS_PER_FUNCTION", "5");
+        maxNodesPerFunction = this->getSystemConfIntParam("MAX_NODES_PER_FUNCTION", "5");
 
         // Threading
         threadMode = getEnvVar("THREAD_MODE", "local");
@@ -106,9 +106,9 @@ namespace faabric::util {
 
         logger->info("--- Scheduling ---");
         logger->info("NO_SCHEDULER               {}", noScheduler);
-        logger->info("MAX_FAASLETS               {}", maxFaaslets);
+        logger->info("MAX_NODES               {}", maxNodes);
         logger->info("MAX_IN_FLIGHT_RATIO        {}", maxInFlightRatio);
-        logger->info("MAX_FAASLETS_PER_FUNCTION  {}", maxFaasletsPerFunction);
+        logger->info("MAX_NODES_PER_FUNCTION  {}", maxNodesPerFunction);
 
         logger->info("--- Threading ---");
         logger->info("THREAD_MODE                {}", threadMode);

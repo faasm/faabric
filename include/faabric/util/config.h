@@ -31,10 +31,10 @@ namespace faabric::util {
         std::string redisPort;
 
         // Scheduling
-        int maxFaaslets;
+        int maxNodes;
         int noScheduler;
         int maxInFlightRatio;
-        int maxFaasletsPerFunction;
+        int maxNodesPerFunction;
 
         // Threading
         std::string threadMode;

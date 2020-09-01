@@ -25,7 +25,7 @@ struct faabric_op_t faabric_op_bor{.id=FAABRIC_OP_BOR};
 struct faabric_op_t faabric_op_maxloc{.id=FAABRIC_OP_MAXLOC};
 struct faabric_op_t faabric_op_minloc{.id=FAABRIC_OP_MINLOC};
 
-faabric_datatype_t *getFaasmDatatypeFromId(int datatypeId) {
+faabric_datatype_t *getFaabricDatatypeFromId(int datatypeId) {
     switch (datatypeId) {
         case FAABRIC_INT:
             return MPI_INT;

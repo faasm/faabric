@@ -6,10 +6,7 @@
 #include <signal.h>
 
 
-namespace endpoint {
-    Endpoint::Endpoint(int portIn, int threadCountIn) : port(portIn), threadCount(threadCountIn) {
-    }
-
+namespace faabric::endpoint {
     void Endpoint::start() {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
@@ -55,5 +52,4 @@ namespace endpoint {
 
         httpEndpoint.shutdown();
     }
-
 }

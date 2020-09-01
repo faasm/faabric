@@ -28,7 +28,6 @@ namespace faabric::util {
         }
 
         std::string url = "http://" + host + ":" + std::to_string(port);
-        // std::string url = "http://faasm-" + cleanedFuncName + ".faasm.svc.cluster.local";
 
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
         const std::string funcStr = faabric::util::funcToString(msg, true);
@@ -43,8 +42,9 @@ namespace faabric::util {
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, callTimeoutMs);
 
-        // Add header for knative calls. Unfortunately we need to replace underscores with hyphens
-        std::string knativeHeader = "Host: faasm-" + cleanedFuncName + ".faasm.example.com";
+        // Add header for knative calls. Ignored on other platforms
+        // Note: need to replace underscores with hyphens
+        std::string knativeHeader = "Host: faabric-" + cleanedFuncName + ".faabric.example.com";
 
         struct curl_slist *chunk = nullptr;
         chunk = curl_slist_append(chunk, "Content-type: application/json");

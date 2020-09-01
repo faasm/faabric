@@ -9,7 +9,7 @@
 
 #include <shared_mutex>
 
-#define AVAILABLE_HOST_SET "available_faaslets"
+#define AVAILABLE_HOST_SET "available_nodes"
 
 namespace faabric::scheduler {
     // Note - default opinion when zero initialised should be maybe
@@ -35,7 +35,7 @@ namespace faabric::scheduler {
 
         void notifyCallFinished(const faabric::Message &msg);
 
-        void notifyFaasletFinished(const faabric::Message &msg);
+        void notifyNodeFinished(const faabric::Message &msg);
 
         std::shared_ptr<InMemoryMessageQueue> getBindQueue();
 
@@ -45,9 +45,9 @@ namespace faabric::scheduler {
 
         void clear();
 
-        long getFunctionWarmFaasletCount(const faabric::Message &msg);
+        long getFunctionWarmNodeCount(const faabric::Message &msg);
 
-        long getTotalWarmFaasletCount();
+        long getTotalWarmNodeCount();
 
         double getFunctionInFlightRatio(const faabric::Message &msg);
 
@@ -99,7 +99,7 @@ namespace faabric::scheduler {
 
         std::shared_mutex mx;
         std::unordered_map<std::string, std::shared_ptr<InMemoryMessageQueue>> queueMap;
-        std::unordered_map<std::string, long> faasletCountMap;
+        std::unordered_map<std::string, long> nodeCountMap;
         std::unordered_map<std::string, long> inFlightCountMap;
         std::unordered_map<std::string, SchedulerOpinion> opinionMap;
         bool _hasHostCapacity = true;
@@ -115,9 +115,9 @@ namespace faabric::scheduler {
 
         void decrementInFlightCount(const faabric::Message &msg);
 
-        void incrementWarmFaasletCount(const faabric::Message &msg);
+        void incrementWarmNodeCount(const faabric::Message &msg);
 
-        void decrementWarmFaasletCount(const faabric::Message &msg);
+        void decrementWarmNodeCount(const faabric::Message &msg);
 
         int getFunctionMaxInFlightRatio(const faabric::Message &msg);
 

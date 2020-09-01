@@ -72,10 +72,14 @@ add_subdirectory(src/state)
 add_subdirectory(src/util)
 add_subdirectory(src/wasm)
 
+# Examples
+add_subdirectory(examples/hello)
 
+# Wrapper library
 faabric_public_lib(faabric faabric.cpp)
 
 target_link_libraries(faabric
+        endpoint
         proto
         redis
         scheduler

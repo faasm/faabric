@@ -3,8 +3,10 @@
 #include <pistache/http.h>
 #include <pistache/endpoint.h>
 #include <faabric/util/config.h>
+#include <proto/faabric.pb.h>
 
-namespace endpoint {
+
+namespace faabric::endpoint {
     class Endpoint {
     public:
         Endpoint() = default;
