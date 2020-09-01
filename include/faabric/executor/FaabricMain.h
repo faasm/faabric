@@ -8,14 +8,15 @@
 namespace faabric::executor {
     class FaabricMain {
     public:
-        FaabricMain();
+        explicit FaabricMain(faabric::executor::FaabricPool &poolIn);
 
         void startBackground();
 
         void shutdown();
     private:
         faabric::util::SystemConfig &conf;
-        faabric::executor::FaabricPool pool;
         faabric::scheduler::Scheduler &scheduler;
+
+        faabric::executor::FaabricPool &pool;
     };
 }

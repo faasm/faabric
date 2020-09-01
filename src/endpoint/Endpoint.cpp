@@ -7,6 +7,9 @@
 
 
 namespace faabric::endpoint {
+    Endpoint::Endpoint(int portIn, int threadCountIn): port(portIn), threadCount(threadCountIn) {
+    }
+
     void Endpoint::start() {
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 

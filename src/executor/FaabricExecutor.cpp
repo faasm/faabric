@@ -72,6 +72,9 @@ namespace faabric::executor {
     }
 
     void FaabricExecutor::finishCall(faabric::Message &msg, bool success, const std::string &errorMsg) {
+        // Hook
+        this->preFinishCall(msg, success, errorMsg);
+
         const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
 
         const std::string funcStr = faabric::util::funcToString(msg, true);
@@ -92,8 +95,6 @@ namespace faabric::executor {
 
         // Increment the execution counter
         executionCount++;
-
-        this->postFinishCall(msg, success, errorMsg);
     }
 
     void FaabricExecutor::run() {
@@ -181,4 +182,29 @@ namespace faabric::executor {
         this->finishCall(call, success, errorMessage);
         return errorMessage;
     }
+
+    // ------------------------------------------
+    // HOOKS
+    // ------------------------------------------
+
+    bool FaabricExecutor::doExecute(faabric::Message &msg) {
+        return true;
+    }
+
+    void FaabricExecutor::postBind(const faabric::Message &msg, bool force) {
+
+    }
+
+    void FaabricExecutor::preFinishCall(faabric::Message &call, bool success, const std::string &errorMsg) {
+
+    }
+
+    void FaabricExecutor::postFinish() {
+
+    }
+
+    void FaabricExecutor::postFlush() {
+
+    }
+
 }

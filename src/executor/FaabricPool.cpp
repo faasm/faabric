@@ -57,13 +57,13 @@ namespace faabric::executor {
 
                 // Spawn thread to execute function
                 poolThreads.emplace_back(std::thread([this, threadIdx] {
-                    FaabricExecutor w(threadIdx);
+                    std::unique_ptr<FaabricExecutor> executor = createExecutor(threadIdx);
 
                     // Worker will now run for a long time
-                    w.run();
+                    executor.get()->run();
 
                     // Handle thread finishing
-                    threadTokenPool.releaseToken(w.threadIdx);
+                    threadTokenPool.releaseToken(executor.get()->threadIdx);
                 }));
             }
 

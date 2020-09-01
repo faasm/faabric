@@ -10,6 +10,8 @@ namespace faabric::executor {
     public:
         explicit FaabricExecutor(int threadIdxIn);
 
+        virtual ~FaabricExecutor() { }
+
         void bindToFunction(const faabric::Message &msg, bool force = false);
 
         void run();
@@ -28,11 +30,11 @@ namespace faabric::executor {
 
         const int threadIdx;
     protected:
-        virtual void postBind(const faabric::Message &msg, bool force);
-
         virtual bool doExecute(faabric::Message &msg);
 
-        virtual void postFinishCall(faabric::Message &call, bool success, const std::string &errorMsg);
+        virtual void postBind(const faabric::Message &msg, bool force);
+
+        virtual void preFinishCall(faabric::Message &call, bool success, const std::string &errorMsg);
 
         virtual void postFinish();
 

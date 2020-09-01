@@ -3,8 +3,12 @@
 #include <faabric/executor/FaabricMain.h>
 #include <faabric/endpoint/FaabricEndpoint.h>
 
-using namespace faabric::endpoint;
 using namespace faabric::executor;
+
+FAABRIC_EXECUTOR() {
+    faabric::util::getLogger()->debug("Executing {}/{}", msg.user(), msg.function());
+    return true;
+}
 
 int main() {
     faabric::util::initLogging();
@@ -15,12 +19,13 @@ int main() {
 
     // Start the worker pool
     logger->info("Starting faaslet pool in the background");
-    FaabricMain w;
+    _Pool p(5);
+    FaabricMain w(p);
     w.startBackground();
 
     // Start endpoint (will also have multiple threads)
     logger->info("Starting endpoint");
-    FaabricEndpoint endpoint;
+    faabric::endpoint::FaabricEndpoint endpoint;
     endpoint.start();
 
     logger->info("Shutting down endpoint");

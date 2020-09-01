@@ -5,9 +5,10 @@
 
 
 namespace faabric::executor {
-    FaabricMain::FaabricMain() : conf(faabric::util::getSystemConfig()),
-                               pool(conf.maxNodes),
-                               scheduler(faabric::scheduler::getScheduler()) {
+    FaabricMain::FaabricMain(faabric::executor::FaabricPool &poolIn) :
+            conf(faabric::util::getSystemConfig()),
+            scheduler(faabric::scheduler::getScheduler()),
+            pool(poolIn) {
 
     }
 
