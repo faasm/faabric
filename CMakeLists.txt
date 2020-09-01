@@ -64,6 +64,7 @@ include_directories(
 )
 
 add_subdirectory(src/endpoint)
+add_subdirectory(src/executor)
 add_subdirectory(src/mpi)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
@@ -80,6 +81,7 @@ faabric_public_lib(faabric faabric.cpp)
 
 target_link_libraries(faabric
         endpoint
+        executor
         proto
         redis
         scheduler

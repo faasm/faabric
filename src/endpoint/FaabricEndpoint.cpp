@@ -2,7 +2,7 @@
 #include "FaabricEndpoint.h"
 
 
-namespace endpoint {
+namespace faabric::endpoint {
     FaabricEndpoint::FaabricEndpoint() : Endpoint() {
     }
 

@@ -6,7 +6,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/redis/Redis.h>
 
-namespace endpoint {
+namespace faabric::endpoint {
     void FaabricEndpointHandler::onTimeout(const Pistache::Http::Request &request, Pistache::Http::ResponseWriter writer) {
         writer.send(Pistache::Http::Code::No_Content);
     }

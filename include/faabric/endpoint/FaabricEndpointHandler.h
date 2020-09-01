@@ -3,7 +3,7 @@
 #include <pistache/http.h>
 #include <proto/faabric.pb.h>
 
-namespace endpoint {
+namespace faabric::endpoint {
     class FaabricEndpointHandler : public Pistache::Http::Handler {
     public:
         HTTP_PROTOTYPE(FaabricEndpointHandler)

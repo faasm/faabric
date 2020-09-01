@@ -3,9 +3,7 @@
 #include <faabric/endpoint/Endpoint.h>
 #include <faabric/util/config.h>
 
-using namespace faabric::endpoint;
-
-namespace endpoint {
+namespace faabric::endpoint {
     class FaabricEndpoint : public Endpoint {
     public:
         FaabricEndpoint();
