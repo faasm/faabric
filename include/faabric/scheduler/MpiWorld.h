@@ -1,6 +1,6 @@
 #pragma once
 
-#include <faabric/faasmpi/mpi.h>
+#include <faabric/mpi/mpi.h>
 
 #include <thread>
 #include <proto/faabric.pb.h>
@@ -43,54 +43,54 @@ namespace faabric::scheduler {
         void enqueueMessage(faabric::MPIMessage &msg);
 
         void send(int sendRank, int recvRank,
-                  const uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
+                  const uint8_t *buffer, faabric_datatype_t *dataType, int count,
                   faabric::MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL);
 
         int isend(int sendRank, int recvRank,
-                   const uint8_t *buffer, faasmpi_datatype_t *dataType, int count);
+                   const uint8_t *buffer, faabric_datatype_t *dataType, int count);
 
         void broadcast(int sendRank,
-                       const uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
+                       const uint8_t *buffer, faabric_datatype_t *dataType, int count,
                        faabric::MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL);
 
         void recv(int sendRank, int recvRank,
-                  uint8_t *buffer, faasmpi_datatype_t *dataType, int count,
+                  uint8_t *buffer, faabric_datatype_t *dataType, int count,
                   MPI_Status *status, faabric::MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL);
 
         int irecv(int sendRank, int recvRank,
-                   uint8_t *buffer, faasmpi_datatype_t *dataType, int count);
+                   uint8_t *buffer, faabric_datatype_t *dataType, int count);
 
         void awaitAsyncRequest(int requestId);
 
         void scatter(int sendRank, int recvRank,
-                     const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                     uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount);
+                     const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                     uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
 
         void gather(int sendRank, int recvRank,
-                    const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                    uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount);
+                    const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                    uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
 
-        void allGather(int rank, const uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                       uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount);
+        void allGather(int rank, const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                       uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
 
         void reduce(int sendRank, int recvRank, uint8_t *sendBuffer, uint8_t *recvBuffer,
-                    faasmpi_datatype_t *datatype, int count, faasmpi_op_t *operation);
+                    faabric_datatype_t *datatype, int count, faabric_op_t *operation);
 
-        void allReduce(int rank, uint8_t *sendBuffer, uint8_t *recvBuffer, faasmpi_datatype_t *datatype, int count,
-                       faasmpi_op_t *operation);
+        void allReduce(int rank, uint8_t *sendBuffer, uint8_t *recvBuffer, faabric_datatype_t *datatype, int count,
+                       faabric_op_t *operation);
 
-        void allToAll(int rank, uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                      uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount);
+        void allToAll(int rank, uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                      uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
 
         void probe(int sendRank, int recvRank, MPI_Status *status);
 
         void barrier(int thisRank);
 
-        void rmaGet(int sendRank, faasmpi_datatype_t *sendType, int sendCount,
-                    uint8_t *recvBuffer, faasmpi_datatype_t *recvType, int recvCount);
+        void rmaGet(int sendRank, faabric_datatype_t *sendType, int sendCount,
+                    uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
 
-        void rmaPut(int sendRank, uint8_t *sendBuffer, faasmpi_datatype_t *sendType, int sendCount,
-                    int recvRank, faasmpi_datatype_t *recvType, int recvCount);
+        void rmaPut(int sendRank, uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
+                    int recvRank, faabric_datatype_t *recvType, int recvCount);
 
         std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
 
@@ -98,7 +98,7 @@ namespace faabric::scheduler {
 
         void overrideHost(const std::string &newHost);
 
-        void createWindow(const faasmpi_win_t *window, uint8_t *windowPtr);
+        void createWindow(const faabric_win_t *window, uint8_t *windowPtr);
 
         void synchronizeRmaWrite(const faabric::MPIMessage &msg, bool isRemote);
 
@@ -130,7 +130,7 @@ namespace faabric::scheduler {
         void checkRankOnThisHost(int rank);
 
         int doISendRecv(int sendRank, int recvRank, const uint8_t *sendBuffer, uint8_t *recvBuffer,
-                         faasmpi_datatype_t *dataType, int count);
+                         faabric_datatype_t *dataType, int count);
 
         void pushToState();
     };

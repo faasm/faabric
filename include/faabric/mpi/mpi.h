@@ -15,7 +15,6 @@ extern "C" {
  * Custom Faabric MPI implementation
  * Official MPI spec: https://www.mpi-forum.org/docs/
  * Open MPI repo: https://github.com/open-mpi/ompi
- * You can probably find a version of mpi.h somewhere on your system, e.g. /usr/local/include/mpi.h
  */
 
 #define MPI_MAX_OBJECT_NAME 128
@@ -27,7 +26,7 @@ extern "C" {
  * NOTE - be careful when passing these structs to and from WebAssembly. Any datatypes
  * with *different* sizes in 32-/64-bit space need to be translated carefully
  */
-struct faasmpi_status_public_t {
+struct faabric_status_public_t {
     // These MPI_XXX fields are defined in the spec
     int MPI_SOURCE;
     int MPI_TAG;
@@ -38,24 +37,24 @@ struct faasmpi_status_public_t {
 };
 
 // Open MPI version: https://github.com/open-mpi/ompi/blob/master/ompi/datatype/ompi_datatype.h
-struct faasmpi_datatype_t {
+struct faabric_datatype_t {
     int id;
     int size;
 };
 
 // Open MPI version: https://github.com/open-mpi/ompi/blob/master/ompi/communicator/communicator.h
-struct faasmpi_communicator_t {
+struct faabric_communicator_t {
     int id;
 };
 
 // Open MPI version: https://github.com/open-mpi/ompi/blob/master/ompi/message/message.h
-struct faasmpi_message_t {
+struct faabric_message_t {
     int id;
 };
 
 // Open MPI version: https://github.com/open-mpi/ompi/blob/master/ompi/win/win.h
 // TODO - can we globally uniquely identify a window from its world, rank and size?
-struct faasmpi_win_t {
+struct faabric_win_t {
     int worldId;
     int rank;
     int size;
@@ -63,19 +62,19 @@ struct faasmpi_win_t {
     int dispUnit;
 };
 
-struct faasmpi_op_t {
+struct faabric_op_t {
     int id;
 };
 
-struct faasmpi_info_t {
+struct faabric_info_t {
     int id;
 };
 
-struct faasmpi_request_t {
+struct faabric_request_t {
     int _unused;
 };
 
-struct faasmpi_group_t {
+struct faabric_group_t {
     int id;
 };
 
@@ -83,87 +82,87 @@ struct faasmpi_group_t {
  * User-facing constants
  */
 // MPI_Comms
-#define FAASMPI_COMM_WORLD 1
-extern struct faasmpi_communicator_t faasmpi_comm_world;
-#define MPI_COMM_WORLD &faasmpi_comm_world
+#define FAABRIC_COMM_WORLD 1
+extern struct faabric_communicator_t faabric_comm_world;
+#define MPI_COMM_WORLD &faabric_comm_world
 
 // Simple datatypes
-#define FAASMPI_INT 1
-#define FAASMPI_LONG 2
-#define FAASMPI_LONG_LONG_INT 3
-#define FAASMPI_FLOAT 4
-#define FAASMPI_DOUBLE 5
-#define FAASMPI_CHAR 6
-extern struct faasmpi_datatype_t faasmpi_type_int;
-extern struct faasmpi_datatype_t faasmpi_type_long;
-extern struct faasmpi_datatype_t faasmpi_type_long_long_int;
-extern struct faasmpi_datatype_t faasmpi_type_float;
-extern struct faasmpi_datatype_t faasmpi_type_double;
-extern struct faasmpi_datatype_t faasmpi_type_char;
-#define MPI_INT &faasmpi_type_int
-#define MPI_LONG &faasmpi_type_long
-#define MPI_LONG_LONG_INT &faasmpi_type_long_long_int
-#define MPI_FLOAT &faasmpi_type_float
-#define MPI_DOUBLE &faasmpi_type_double
-#define MPI_CHAR &faasmpi_type_char
+#define FAABRIC_INT 1
+#define FAABRIC_LONG 2
+#define FAABRIC_LONG_LONG_INT 3
+#define FAABRIC_FLOAT 4
+#define FAABRIC_DOUBLE 5
+#define FAABRIC_CHAR 6
+extern struct faabric_datatype_t faabric_type_int;
+extern struct faabric_datatype_t faabric_type_long;
+extern struct faabric_datatype_t faabric_type_long_long_int;
+extern struct faabric_datatype_t faabric_type_float;
+extern struct faabric_datatype_t faabric_type_double;
+extern struct faabric_datatype_t faabric_type_char;
+#define MPI_INT &faabric_type_int
+#define MPI_LONG &faabric_type_long
+#define MPI_LONG_LONG_INT &faabric_type_long_long_int
+#define MPI_FLOAT &faabric_type_float
+#define MPI_DOUBLE &faabric_type_double
+#define MPI_CHAR &faabric_type_char
 
 // MPI 2.2 datatypes
-#define FAASMPI_UINT64_T 10
-extern struct faasmpi_datatype_t faasmpi_type_uint64;
-#define MPI_UINT64_T &faasmpi_type_uint64
+#define FAABRIC_UINT64_T 10
+extern struct faabric_datatype_t faabric_type_uint64;
+#define MPI_UINT64_T &faabric_type_uint64
 
-struct faasmpi_datatype_t *getFaasmDatatypeFromId(int datatypeId);
+struct faabric_datatype_t *getFaasmDatatypeFromId(int datatypeId);
 
 // MPI flags
 // These are special pointers passed in place of normal buffers to signify
 // special operations (e.g. in-place manipulations). We make the pointers
 // themselves equal to a specific integer so that they can be identified.
-#define FAASMPI_BOTTOM 1
-#define FAASMPI_IN_PLACE 2
-#define MPI_BOTTOM (void*) FAASMPI_BOTTOM
-#define MPI_IN_PLACE (void*) FAASMPI_IN_PLACE
+#define FAABRIC_BOTTOM 1
+#define FAABRIC_IN_PLACE 2
+#define MPI_BOTTOM (void*) FAABRIC_BOTTOM
+#define MPI_IN_PLACE (void*) FAABRIC_IN_PLACE
 
 // MPI_Infos
-#define FAASMPI_INFO_NULL 1
-extern struct faasmpi_info_t faasmpi_info_null;
-#define MPI_INFO_NULL &faasmpi_info_null
+#define FAABRIC_INFO_NULL 1
+extern struct faabric_info_t faabric_info_null;
+#define MPI_INFO_NULL &faabric_info_null
 
 // Misc limits
 #define MPI_MAX_PROCESSOR_NAME 256
 
 // MPI_Ops
-#define FAASMPI_OP_MAX    1
-#define FAASMPI_OP_MIN    2
-#define FAASMPI_OP_SUM    3
-#define FAASMPI_OP_PROD   4
-#define FAASMPI_OP_LAND   5
-#define FAASMPI_OP_LOR    6
-#define FAASMPI_OP_BAND   7
-#define FAASMPI_OP_BOR    8
-#define FAASMPI_OP_MAXLOC 9
-#define FAASMPI_OP_MINLOC 10
+#define FAABRIC_OP_MAX    1
+#define FAABRIC_OP_MIN    2
+#define FAABRIC_OP_SUM    3
+#define FAABRIC_OP_PROD   4
+#define FAABRIC_OP_LAND   5
+#define FAABRIC_OP_LOR    6
+#define FAABRIC_OP_BAND   7
+#define FAABRIC_OP_BOR    8
+#define FAABRIC_OP_MAXLOC 9
+#define FAABRIC_OP_MINLOC 10
 
-extern struct faasmpi_op_t faasmpi_op_max;
-extern struct faasmpi_op_t faasmpi_op_min;
-extern struct faasmpi_op_t faasmpi_op_sum;
-extern struct faasmpi_op_t faasmpi_op_prod;
-extern struct faasmpi_op_t faasmpi_op_land;
-extern struct faasmpi_op_t faasmpi_op_lor;
-extern struct faasmpi_op_t faasmpi_op_band;
-extern struct faasmpi_op_t faasmpi_op_bor;
-extern struct faasmpi_op_t faasmpi_op_maxloc;
-extern struct faasmpi_op_t faasmpi_op_minloc;
+extern struct faabric_op_t faabric_op_max;
+extern struct faabric_op_t faabric_op_min;
+extern struct faabric_op_t faabric_op_sum;
+extern struct faabric_op_t faabric_op_prod;
+extern struct faabric_op_t faabric_op_land;
+extern struct faabric_op_t faabric_op_lor;
+extern struct faabric_op_t faabric_op_band;
+extern struct faabric_op_t faabric_op_bor;
+extern struct faabric_op_t faabric_op_maxloc;
+extern struct faabric_op_t faabric_op_minloc;
 
-#define MPI_MAX &faasmpi_op_max
-#define MPI_MIN &faasmpi_op_min
-#define MPI_SUM &faasmpi_op_sum
-#define MPI_PROD &faasmpi_op_prod
-#define MPI_LAND &faasmpi_op_land
-#define MPI_LOR &faasmpi_op_lor
-#define MPI_BAND &faasmpi_op_band
-#define MPI_BOR &faasmpi_op_bor
-#define MPI_MAXLOC &faasmpi_op_maxloc
-#define MPI_MINLOC &faasmpi_op_minloc
+#define MPI_MAX &faabric_op_max
+#define MPI_MIN &faabric_op_min
+#define MPI_SUM &faabric_op_sum
+#define MPI_PROD &faabric_op_prod
+#define MPI_LAND &faabric_op_land
+#define MPI_LOR &faabric_op_lor
+#define MPI_BAND &faabric_op_band
+#define MPI_BOR &faabric_op_bor
+#define MPI_MAXLOC &faabric_op_maxloc
+#define MPI_MINLOC &faabric_op_minloc
 
 // MPI_Statuses
 #define MPI_STATUS_IGNORE ((MPI_Status *) (0))
@@ -179,15 +178,15 @@ extern struct faasmpi_op_t faasmpi_op_minloc;
 /*
  * User-facing types
  */
-typedef struct faasmpi_op_t *MPI_Op;
-typedef struct faasmpi_communicator_t *MPI_Comm;
-typedef struct faasmpi_datatype_t *MPI_Datatype;
-typedef struct faasmpi_status_public_t MPI_Status;
-typedef struct faasmpi_message_t *MPI_Message;
-typedef struct faasmpi_info_t *MPI_Info;
-typedef struct faasmpi_request_t *MPI_Request;
-typedef struct faasmpi_group_t *MPI_Group;
-typedef struct faasmpi_win_t *MPI_Win;
+typedef struct faabric_op_t *MPI_Op;
+typedef struct faabric_communicator_t *MPI_Comm;
+typedef struct faabric_datatype_t *MPI_Datatype;
+typedef struct faabric_status_public_t MPI_Status;
+typedef struct faabric_message_t *MPI_Message;
+typedef struct faabric_info_t *MPI_Info;
+typedef struct faabric_request_t *MPI_Request;
+typedef struct faabric_group_t *MPI_Group;
+typedef struct faabric_win_t *MPI_Win;
 typedef ptrdiff_t MPI_Aint;
 
 /*
