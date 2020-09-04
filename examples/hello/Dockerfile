@@ -1,1 +1,0 @@
-FROM faabric/base:0.0.3
