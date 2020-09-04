@@ -45,15 +45,3 @@ def r(ctx, target):
         shell=True,
     )
 
-
-@task
-def test(ctx, name, debug=False):
-    test_exe = join(_BUILD_DIR, "bin", "tests")
-
-    cmd = [
-        test_exe,
-        "-r console",
-        name,
-    ]
-
-    run(" ".join(cmd), shell=True, cwd=PROJ_ROOT)

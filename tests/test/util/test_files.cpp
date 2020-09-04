@@ -1,3 +1,4 @@
+#include "faabric/util/config.h"
 #include <catch/catch.hpp>
 #include <faabric/util/files.h>
 
@@ -19,6 +20,13 @@ namespace tests {
     }
 
     TEST_CASE("Test reading from a URL", "[util]") {
+        auto conf = faabric::util::getSystemConfig();
+
+        // Skip if we're in CI
+        if(conf.hostType == "ci") {
+            SUCCEED();
+        }
+
         std::string localPath = "/usr/local/code/faabric/LICENSE.md";
         std::string url = "https://raw.githubusercontent.com/Shillaker/faabric/master/LICENSE.md";
 
@@ -54,3 +62,4 @@ namespace tests {
         REQUIRE(exceptionThrown);
     }
 }
+
