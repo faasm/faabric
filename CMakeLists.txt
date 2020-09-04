@@ -84,6 +84,8 @@ target_link_libraries(faabric
         )
 
 # Tests
-add_library(catch INTERFACE)
-add_subdirectory(tests/test)
-add_subdirectory(tests/utils)
+if(FAABRIC_BUILD_TESTS)
+    add_library(catch INTERFACE)
+    add_subdirectory(tests/test)
+    add_subdirectory(tests/utils)
+endif()
