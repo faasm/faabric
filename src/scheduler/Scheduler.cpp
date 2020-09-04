@@ -70,7 +70,7 @@ namespace faabric::scheduler {
         bindQueue->reset();
 
         // Reset all state
-        faasletCountMap.clear();
+        nodeCountMap.clear();
         inFlightCountMap.clear();
         opinionMap.clear();
         _hasHostCapacity = true;
@@ -93,22 +93,22 @@ namespace faabric::scheduler {
         }
     }
 
-    long Scheduler::getFunctionWarmFaasletCount(const faabric::Message &msg) {
+    long Scheduler::getFunctionWarmNodeCount(const faabric::Message &msg) {
         std::string funcStr = faabric::util::funcToString(msg, false);
-        return faasletCountMap[funcStr];
+        return nodeCountMap[funcStr];
     }
 
     double Scheduler::getFunctionInFlightRatio(const faabric::Message &msg) {
         std::string funcStr = faabric::util::funcToString(msg, false);
 
-        long faasletCount = faasletCountMap[funcStr];
+        long nodeCount = nodeCountMap[funcStr];
         long inFlightCount = getFunctionInFlightCount(msg);
 
-        if (faasletCount == 0) {
+        if (nodeCount == 0) {
             return 0;
         }
 
-        return ((double) inFlightCount) / faasletCount;
+        return ((double) inFlightCount) / nodeCount;
     }
 
     int Scheduler::getFunctionMaxInFlightRatio(const faabric::Message &msg) {
@@ -144,9 +144,9 @@ namespace faabric::scheduler {
         decrementInFlightCount(msg);
     }
 
-    void Scheduler::notifyFaasletFinished(const faabric::Message &msg) {
+    void Scheduler::notifyNodeFinished(const faabric::Message &msg) {
         faabric::util::FullLock lock(mx);
-        decrementWarmFaasletCount(msg);
+        decrementWarmNodeCount(msg);
     }
 
     std::string Scheduler::getFunctionWarmSetName(const faabric::Message &msg) {
@@ -163,7 +163,7 @@ namespace faabric::scheduler {
     }
 
     Scheduler &getScheduler() {
-        // This is *global* and must be shared across faaslets
+        // This is *global* and must be shared across nodes
         static Scheduler scheduler;
         return scheduler;
     }
@@ -231,9 +231,9 @@ namespace faabric::scheduler {
         PROF_END(scheduleCall)
     }
 
-    long Scheduler::getTotalWarmFaasletCount() {
+    long Scheduler::getTotalWarmNodeCount() {
         long totalCount = 0;
-        for (auto p : faasletCountMap) {
+        for (auto p : nodeCountMap) {
             totalCount += p.second;
         }
 
@@ -262,13 +262,13 @@ namespace faabric::scheduler {
         SchedulerOpinion currentOpinion = opinionMap[funcStr];
 
         // Check per-function limits
-        long faasletCount = getFunctionWarmFaasletCount(msg);
-        bool hasWarmFaaslets = faasletCount > 0;
-        bool hasFunctionCapacity = faasletCount < conf.maxFaasletsPerFunction;
+        long nodeCount = getFunctionWarmNodeCount(msg);
+        bool hasWarmNodes = nodeCount > 0;
+        bool hasFunctionCapacity = nodeCount < conf.maxNodesPerFunction;
 
         // Check the overall host capacity
-        long totalFaasletCount = getTotalWarmFaasletCount();
-        _hasHostCapacity = totalFaasletCount < conf.maxFaaslets;
+        long totalNodeCount = getTotalWarmNodeCount();
+        _hasHostCapacity = totalNodeCount < conf.maxNodes;
 
         // Check the in-flight ratio
         double inFlightRatio = getFunctionInFlightRatio(msg);
@@ -285,11 +285,11 @@ namespace faabric::scheduler {
             } else {
                 newOpinion = SchedulerOpinion::NO;
             }
-        } else if (hasWarmFaaslets) {
-            // If we've not breached the in-flight ratio and we have some warm faaslets, it's YES
+        } else if (hasWarmNodes) {
+            // If we've not breached the in-flight ratio and we have some warm nodes, it's YES
             newOpinion = SchedulerOpinion::YES;
         } else if (!_hasHostCapacity) {
-            // If we have no warm faaslets and no host capacity, it's NO
+            // If we have no warm nodes and no host capacity, it's NO
             newOpinion = SchedulerOpinion::NO;
         } else {
             // In all other scenarios it's MAYBE
@@ -302,13 +302,13 @@ namespace faabric::scheduler {
             std::string currentOpinionStr = opinionStr(currentOpinion);
 
             logger->debug(
-                    "{} updating {} from {} to {} (faaslets={} ({}), IF ratio={} ({}))",
+                    "{} updating {} from {} to {} (nodes={} ({}), IF ratio={} ({}))",
                     thisHost,
                     funcStr,
                     currentOpinionStr,
                     newOpinionStr,
-                    faasletCount,
-                    conf.maxFaasletsPerFunction,
+                    nodeCount,
+                    conf.maxNodesPerFunction,
                     inFlightRatio,
                     maxInFlightRatio
             );
@@ -430,22 +430,22 @@ namespace faabric::scheduler {
         // Check ratios
         double inFlightRatio = getFunctionInFlightRatio(msg);
         int maxInFlightRatio = getFunctionMaxInFlightRatio(msg);
-        long nFaaslets = getFunctionWarmFaasletCount(msg);
-        logger->debug("{} IF ratio = {} (max {}) faaslets = {}", funcStr, inFlightRatio, maxInFlightRatio, nFaaslets);
+        long nNodes = getFunctionWarmNodeCount(msg);
+        logger->debug("{} IF ratio = {} (max {}) nodes = {}", funcStr, inFlightRatio, maxInFlightRatio, nNodes);
 
-        // If we have no faaslets OR if we've got faaslets and are over the in-flight ratio
+        // If we have no nodes OR if we've got nodes and are over the in-flight ratio
         // and have capacity, then we need to scale up
         bool needToScale = false;
-        needToScale |= (nFaaslets == 0);
-        needToScale |= (inFlightRatio > maxInFlightRatio && nFaaslets < conf.maxFaasletsPerFunction);
+        needToScale |= (nNodes == 0);
+        needToScale |= (inFlightRatio > maxInFlightRatio && nNodes < conf.maxNodesPerFunction);
 
         if (needToScale) {
-            logger->debug("Scaling up {} to {} faaslets", funcStr, nFaaslets + 1);
+            logger->debug("Scaling up {} to {} nodes", funcStr, nNodes + 1);
 
-            // Increment faaslet count here
-            incrementWarmFaasletCount(msg);
+            // Increment node count here
+            incrementWarmNodeCount(msg);
 
-            // Send bind message (i.e. request a faaslet)
+            // Send bind message (i.e. request a node)
             faabric::Message bindMsg = faabric::util::messageFactory(msg.user(), msg.function());
             bindMsg.set_type(faabric::Message_MessageType_BIND);
             bindMsg.set_ispython(msg.ispython());
@@ -467,16 +467,16 @@ namespace faabric::scheduler {
         updateOpinion(msg);
     }
 
-    void Scheduler::incrementWarmFaasletCount(const faabric::Message &msg) {
+    void Scheduler::incrementWarmNodeCount(const faabric::Message &msg) {
         std::string funcStr = faabric::util::funcToString(msg, false);
-        faasletCountMap[funcStr]++;
+        nodeCountMap[funcStr]++;
 
         updateOpinion(msg);
     }
 
-    void Scheduler::decrementWarmFaasletCount(const faabric::Message &msg) {
+    void Scheduler::decrementWarmNodeCount(const faabric::Message &msg) {
         const std::string funcStr = faabric::util::funcToString(msg, false);
-        faasletCountMap[funcStr] = std::max(faasletCountMap[funcStr] - 1, 0L);
+        nodeCountMap[funcStr] = std::max(nodeCountMap[funcStr] - 1, 0L);
 
         updateOpinion(msg);
     }

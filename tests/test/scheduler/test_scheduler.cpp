@@ -60,13 +60,13 @@ namespace tests {
         int originalMaxInFlightRatio = conf.maxInFlightRatio;
         conf.maxInFlightRatio = 8;
 
-        SECTION("Test faaslet finishing and host removal") {
+        SECTION("Test node finishing and host removal") {
             // Sanity check to see that the host is in the global set but not the set for the function
             std::string funcSet = sch.getFunctionWarmSetName(call);
             REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
             REQUIRE(!redis.sismember(funcSet, thisHost));
 
-            // Call the function enough to get multiple faaslets set up
+            // Call the function enough to get multiple nodes set up
             int requiredCalls = (conf.maxInFlightRatio * 2) - 3;
             for (int i = 0; i < requiredCalls; i++) {
                 sch.callFunction(call);
@@ -77,24 +77,24 @@ namespace tests {
             REQUIRE(sch.getFunctionInFlightCount(call) == requiredCalls);
             REQUIRE(sch.getBindQueue()->size() == 2);
 
-            // Notify that a faaslet has finished. Check that the  count decremented by one and faaslet is still member of function set
-            sch.notifyFaasletFinished(call);
+            // Notify that a node has finished. Check that the  count decremented by one and node is still member of function set
+            sch.notifyNodeFinished(call);
             REQUIRE(redis.sismember(funcSet, thisHost));
             REQUIRE(sch.getFunctionInFlightCount(call) == requiredCalls);
-            REQUIRE(sch.getFunctionWarmFaasletCount(call) == 1);
+            REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
 
-            // Notify that another faaslet has finished, check count is decremented and host removed from function set
+            // Notify that another node has finished, check count is decremented and host removed from function set
             // (but still in global set)
-            sch.notifyFaasletFinished(call);
+            sch.notifyNodeFinished(call);
             REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
             REQUIRE(!redis.sismember(funcSet, thisHost));
             REQUIRE(sch.getFunctionInFlightCount(call) == requiredCalls);
-            REQUIRE(sch.getFunctionWarmFaasletCount(call) == 0);
+            REQUIRE(sch.getFunctionWarmNodeCount(call) == 0);
         }
 
-        SECTION("Test calling function with no faaslets sends bind message") {
+        SECTION("Test calling function with no nodes sends bind message") {
             REQUIRE(sch.getFunctionInFlightCount(call) == 0);
-            REQUIRE(sch.getFunctionWarmFaasletCount(call) == 0);
+            REQUIRE(sch.getFunctionWarmNodeCount(call) == 0);
 
             // Call the function
             sch.callFunction(call);
@@ -120,7 +120,7 @@ namespace tests {
             callB.set_user("demo");
             callB.set_function("x2");
 
-            // Add a faaslet host to the global set
+            // Add a node host to the global set
             redis.sadd(AVAILABLE_HOST_SET, "192.168.3.45");
 
             // Call each function
@@ -129,9 +129,9 @@ namespace tests {
 
             // Check that calls are queued
             REQUIRE(sch.getFunctionInFlightCount(callA) == 1);
-            REQUIRE(sch.getFunctionWarmFaasletCount(callA) == 1);
+            REQUIRE(sch.getFunctionWarmNodeCount(callA) == 1);
             REQUIRE(sch.getFunctionInFlightCount(callB) == 1);
-            REQUIRE(sch.getFunctionWarmFaasletCount(callB) == 1);
+            REQUIRE(sch.getFunctionWarmNodeCount(callB) == 1);
             REQUIRE(sch.getBindQueue()->size() == 2);
 
             // Check that bind messages have been sent
@@ -150,11 +150,11 @@ namespace tests {
             redis.flushAll();
         }
 
-        SECTION("Test calling function with existing faaslets does not send bind message") {
-            // Call the function and check faaslet count is incremented while bind message sent
+        SECTION("Test calling function with existing nodes does not send bind message") {
+            // Call the function and check node count is incremented while bind message sent
             sch.callFunction(call);
             REQUIRE(sch.getFunctionInFlightCount(call) == 1);
-            REQUIRE(sch.getFunctionWarmFaasletCount(call) == 1);
+            REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
             REQUIRE(sch.getBindQueue()->size() == 1);
 
             // Call the function again
@@ -162,7 +162,7 @@ namespace tests {
 
             // Check function call has been added, but no new bind messages
             REQUIRE(sch.getFunctionInFlightCount(call) == 2);
-            REQUIRE(sch.getFunctionWarmFaasletCount(call) == 1);
+            REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
             REQUIRE(sch.getBindQueue()->size() == 1);
 
             redis.flushAll();
@@ -193,10 +193,10 @@ namespace tests {
         SECTION("Test counts can't go below zero") {
             faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
-            sch.notifyFaasletFinished(msg);
-            sch.notifyFaasletFinished(msg);
-            sch.notifyFaasletFinished(msg);
-            REQUIRE(sch.getFunctionWarmFaasletCount(msg) == 0);
+            sch.notifyNodeFinished(msg);
+            sch.notifyNodeFinished(msg);
+            sch.notifyNodeFinished(msg);
+            REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
 
             sch.notifyCallFinished(msg);
             sch.notifyCallFinished(msg);
@@ -210,7 +210,7 @@ namespace tests {
 
             SECTION("Test function which breaches in-flight ratio but has no capacity fails over") {
                 // Make calls up to just below the limit
-                int nCalls = (conf.maxFaasletsPerFunction * conf.maxInFlightRatio) - 1;
+                int nCalls = (conf.maxNodesPerFunction * conf.maxInFlightRatio) - 1;
                 for (int i = 0; i < nCalls; i++) {
                     sch.callFunction(call);
                 }
@@ -218,10 +218,10 @@ namespace tests {
                 // Check we're still the best option
                 REQUIRE(sch.getBestHostForFunction(call) == thisHost);
 
-                // Check local faaslets requested
+                // Check local nodes requested
                 auto bindQueue = sch.getBindQueue();
-                REQUIRE(bindQueue->size() == conf.maxFaasletsPerFunction);
-                REQUIRE(sch.getFunctionWarmFaasletCount(call) == conf.maxFaasletsPerFunction);
+                REQUIRE(bindQueue->size() == conf.maxNodesPerFunction);
+                REQUIRE(sch.getFunctionWarmNodeCount(call) == conf.maxNodesPerFunction);
 
                 // Check calls have been queued
                 REQUIRE(sch.getFunctionInFlightCount(call) == nCalls);
@@ -249,8 +249,8 @@ namespace tests {
                 REQUIRE(sharedMessages[1].second == otherCallB.id());
                 
                 // Check not added to local queues
-                REQUIRE(bindQueue->size() == conf.maxFaasletsPerFunction);
-                REQUIRE(sch.getFunctionWarmFaasletCount(call) == conf.maxFaasletsPerFunction);
+                REQUIRE(bindQueue->size() == conf.maxNodesPerFunction);
+                REQUIRE(sch.getFunctionWarmNodeCount(call) == conf.maxNodesPerFunction);
                 REQUIRE(sch.getFunctionInFlightCount(call) == nCalls + 1);
 
                 redis.flushAll();
@@ -301,9 +301,9 @@ namespace tests {
             }
 
             SECTION("Test current host chosen when already warm even if alternatives") {
-                // Ensure a warm faaslet exists on this host
+                // Ensure a warm node exists on this host
                 sch.callFunction(call);
-                REQUIRE(sch.getFunctionWarmFaasletCount(call) == 1);
+                REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
 
                 // Check this host is in the warm set
                 const std::string warmSet = sch.getFunctionWarmSetName(call);
@@ -333,10 +333,10 @@ namespace tests {
 
         faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         int maxInFlightRatio = conf.maxInFlightRatio;
-        int maxFaaslets = conf.maxFaasletsPerFunction;
+        int maxNodes = conf.maxNodesPerFunction;
 
         // Add calls to saturate the first host
-        int requiredCalls = maxInFlightRatio * maxFaaslets;
+        int requiredCalls = maxInFlightRatio * maxNodes;
         for (int i = 0; i < requiredCalls; i++) {
             faabric::Message msgA = faabric::util::messageFactory("demo", "chain_simple");
             sch.callFunction(msgA);
@@ -385,7 +385,7 @@ namespace tests {
 
         // Add calls to saturate the first host
         faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
-        int requiredCalls = conf.maxInFlightRatio * conf.maxFaasletsPerFunction;
+        int requiredCalls = conf.maxInFlightRatio * conf.maxNodesPerFunction;
         for (int i = 0; i < requiredCalls; i++) {
             sch.callFunction(msg);
         }
@@ -432,7 +432,7 @@ namespace tests {
 
         // Now saturate up to the point we're about to fail over
         faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
-        int requiredCalls = conf.maxInFlightRatio * conf.maxFaasletsPerFunction - 2;
+        int requiredCalls = conf.maxInFlightRatio * conf.maxNodesPerFunction - 2;
         for (int i = 0; i < requiredCalls; i++) {
             sch.callFunction(msg);
         }
@@ -455,12 +455,12 @@ namespace tests {
         faabric::Message msg = faabric::util::messageFactory("demo", "chain_simple");
 
         // Initial conditions
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == 0);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
         REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
 
-        // Check calling function first adds another faaslet
+        // Check calling function first adds another node
         sch.callFunction(msg);
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == 1);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == 1);
         REQUIRE(sch.getFunctionInFlightCount(msg) == 1);
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
     }
@@ -472,22 +472,22 @@ namespace tests {
 
         // Check opinion is maybe initially
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::MAYBE);
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == 0);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
 
         // Call one function and make sure opinion is YES
         sch.callFunction(msg);
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == 1);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == 1);
         REQUIRE(sch.getFunctionInFlightCount(msg) == 1);
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
 
         // Notify finished with call
         sch.notifyCallFinished(msg);
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == 1);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == 1);
         REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
     }
 
-    TEST_CASE("Test opinion still YES when nothing in flight and at max faaslets", "[scheduler]") {
+    TEST_CASE("Test opinion still YES when nothing in flight and at max nodes", "[scheduler]") {
         cleanFaabric();
         faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         Scheduler &sch = scheduler::getScheduler();
@@ -495,14 +495,14 @@ namespace tests {
 
         // Check opinion is maybe initially
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::MAYBE);
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == 0);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
 
         // Saturate and make sure opinion is NO
-        int nCalls = conf.maxFaasletsPerFunction * conf.maxInFlightRatio;
+        int nCalls = conf.maxNodesPerFunction * conf.maxInFlightRatio;
         for (int i = 0; i < nCalls; i++) {
             sch.callFunction(msg);
         }
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == conf.maxFaasletsPerFunction);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == conf.maxNodesPerFunction);
         REQUIRE(sch.getFunctionInFlightCount(msg) == nCalls);
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::NO);
 
@@ -510,7 +510,7 @@ namespace tests {
         for (int i = 0; i < nCalls; i++) {
             sch.notifyCallFinished(msg);
         }
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == conf.maxFaasletsPerFunction);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == conf.maxNodesPerFunction);
         REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
     }
@@ -520,39 +520,39 @@ namespace tests {
 
         faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         int originalInFlight = conf.maxInFlightRatio;
-        int originalFaasletsPerFunc = conf.maxFaasletsPerFunction;
+        int originalNodesPerFunc = conf.maxNodesPerFunction;
 
         // Set up known params
         int inFlightRatio = 2;
-        int faasletsPerFunc = 4;
+        int nodesPerFunc = 4;
         conf.maxInFlightRatio = inFlightRatio;
-        conf.maxFaasletsPerFunction = faasletsPerFunc;
+        conf.maxNodesPerFunction = nodesPerFunc;
 
         faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
         msg.set_ismpi(true);
 
         Scheduler &sch = getScheduler();
 
-        // Max in-flight ratio should be 1, hence one faaslet created per call
+        // Max in-flight ratio should be 1, hence one node created per call
         for (int i = 0; i < inFlightRatio; i++) {
             sch.callFunction(msg);
         }
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == inFlightRatio);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == inFlightRatio);
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
 
-        // Saturate up to max faaslets
-        int remainingCalls = faasletsPerFunc - inFlightRatio;
+        // Saturate up to max nodes
+        int remainingCalls = nodesPerFunc - inFlightRatio;
         for (int i = 0; i < remainingCalls; i++) {
             sch.callFunction(msg);
         }
 
         // Check scheduler no longer accepting calls
-        REQUIRE(sch.getFunctionWarmFaasletCount(msg) == faasletsPerFunc);
+        REQUIRE(sch.getFunctionWarmNodeCount(msg) == nodesPerFunc);
         REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::NO);
 
         // Reset conf
         conf.maxInFlightRatio = originalInFlight;
-        conf.maxFaasletsPerFunction = originalFaasletsPerFunc;
+        conf.maxNodesPerFunction = originalNodesPerFunc;
     }
 
     TEST_CASE("Check test mode", "[scheduler]") {
@@ -587,7 +587,7 @@ namespace tests {
         }
     }
 
-    TEST_CASE("Test max Faaslet limit with multiple functions", "[scheduler]") {
+    TEST_CASE("Test max Node limit with multiple functions", "[scheduler]") {
         cleanFaabric();
 
         Scheduler &sch = scheduler::getScheduler();
@@ -604,11 +604,11 @@ namespace tests {
 
         faabric::util::SystemConfig &conf = faabric::util::getSystemConfig();
         int originalMaxInFlightRatio = conf.maxInFlightRatio;
-        int originalMaxFaaslet = conf.maxFaaslets;
-        int originalMaxFaasletsPerFunction = conf.maxFaasletsPerFunction;
+        int originalMaxNode = conf.maxNodes;
+        int originalMaxNodesPerFunction = conf.maxNodesPerFunction;
 
-        conf.maxFaaslets = 10;
-        conf.maxFaasletsPerFunction = 6;
+        conf.maxNodes = 10;
+        conf.maxNodesPerFunction = 6;
         conf.maxInFlightRatio = 1;
 
         // Make other host available
@@ -628,7 +628,7 @@ namespace tests {
         }
 
         // Check that all functions are now YES
-        REQUIRE(sch.getTotalWarmFaasletCount() == 9);
+        REQUIRE(sch.getTotalWarmNodeCount() == 9);
         REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::YES);
@@ -639,7 +639,7 @@ namespace tests {
         REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::NO);
         REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::YES);
-        REQUIRE(sch.getTotalWarmFaasletCount() == 10);
+        REQUIRE(sch.getTotalWarmNodeCount() == 10);
         REQUIRE(!sch.hasHostCapacity());
 
         // Check that no sharing has been done yet
@@ -654,28 +654,28 @@ namespace tests {
         REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::NO);
         REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::NO);
         REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-        REQUIRE(sch.getTotalWarmFaasletCount() == 10);
+        REQUIRE(sch.getTotalWarmNodeCount() == 10);
         REQUIRE(sch.getRecordedMessagesShared().size() == 3);
         REQUIRE(!sch.hasHostCapacity());
 
         // Notify that a call has finished
         sch.notifyCallFinished(callA);
 
-        // Check that, while the host still has no extra faaslet capacity
+        // Check that, while the host still has no extra node capacity
         // this function can still be executed
         REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::NO);
         REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-        REQUIRE(sch.getTotalWarmFaasletCount() == 10);
+        REQUIRE(sch.getTotalWarmNodeCount() == 10);
         REQUIRE(!sch.hasHostCapacity());
 
         REQUIRE(sch.getBestHostForFunction(callA) == thisHost);
         REQUIRE(sch.getBestHostForFunction(callB) == otherHost);
         REQUIRE(sch.getBestHostForFunction(callC) == otherHost);
 
-        // Notify that a couple of faaslets have finished
-        sch.notifyFaasletFinished(callA);
-        sch.notifyFaasletFinished(callB);
+        // Notify that a couple of nodes have finished
+        sch.notifyNodeFinished(callA);
+        sch.notifyNodeFinished(callB);
         REQUIRE(sch.hasHostCapacity());
 
         // Check that now the host has capacity and we can execute another function
@@ -683,13 +683,13 @@ namespace tests {
         REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-        REQUIRE(sch.getTotalWarmFaasletCount() == 8);
+        REQUIRE(sch.getTotalWarmNodeCount() == 8);
 
         sch.callFunction(callB);
         REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-        REQUIRE(sch.getTotalWarmFaasletCount() == 9);
+        REQUIRE(sch.getTotalWarmNodeCount() == 9);
         REQUIRE(sch.hasHostCapacity());
 
         // Another call will breach the host limit again
@@ -697,12 +697,12 @@ namespace tests {
         REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::NO);
         REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
         REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-        REQUIRE(sch.getTotalWarmFaasletCount() == 10);
+        REQUIRE(sch.getTotalWarmNodeCount() == 10);
         REQUIRE(!sch.hasHostCapacity());
 
         // Tidy up
-        conf.maxFaaslets = originalMaxFaaslet;
-        conf.maxFaasletsPerFunction = originalMaxFaasletsPerFunction;
+        conf.maxNodes = originalMaxNode;
+        conf.maxNodesPerFunction = originalMaxNodesPerFunction;
         conf.maxInFlightRatio = originalMaxInFlightRatio;
     }
 

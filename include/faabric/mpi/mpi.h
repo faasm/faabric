@@ -1,5 +1,5 @@
-#ifndef FAASM_MPI_H
-#define FAASM_MPI_H
+#ifndef FAABRIC_MPI_H
+#define FAABRIC_MPI_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -111,7 +111,7 @@ extern struct faabric_datatype_t faabric_type_char;
 extern struct faabric_datatype_t faabric_type_uint64;
 #define MPI_UINT64_T &faabric_type_uint64
 
-struct faabric_datatype_t *getFaasmDatatypeFromId(int datatypeId);
+struct faabric_datatype_t *getFaabricDatatypeFromId(int datatypeId);
 
 // MPI flags
 // These are special pointers passed in place of normal buffers to signify

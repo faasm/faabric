@@ -32,9 +32,9 @@ namespace tests {
         REQUIRE(conf.redisPort == "6379");
 
         REQUIRE(conf.noScheduler == 0);
-        REQUIRE(conf.maxFaaslets == 5);
+        REQUIRE(conf.maxNodes == 5);
         REQUIRE(conf.maxInFlightRatio == 1);
-        REQUIRE(conf.maxFaasletsPerFunction == 5);
+        REQUIRE(conf.maxNodesPerFunction == 5);
 
         REQUIRE(conf.threadMode == "local");
         REQUIRE(conf.ompThreadPoolSize == 0);
@@ -65,9 +65,9 @@ namespace tests {
         std::string redisPort = setEnvVar("REDIS_PORT", "1234");
 
         std::string noScheduler = setEnvVar("NO_SCHEDULER", "1");
-        std::string threads = setEnvVar("MAX_FAASLETS", "50");
+        std::string threads = setEnvVar("MAX_NODES", "50");
         std::string inFlightRatio = setEnvVar("MAX_IN_FLIGHT_RATIO", "8888");
-        std::string workers = setEnvVar("MAX_FAASLETS_PER_FUNCTION", "7777");
+        std::string workers = setEnvVar("MAX_NODES_PER_FUNCTION", "7777");
 
         std::string threadMode = setEnvVar("THREAD_MODE", "threadfoo");
         std::string ompPoolSize = setEnvVar("OMP_THREAD_POOL_SIZE", "1234");
@@ -103,9 +103,9 @@ namespace tests {
         REQUIRE(conf.redisPort == "1234");
 
         REQUIRE(conf.noScheduler == 1);
-        REQUIRE(conf.maxFaaslets == 50);
+        REQUIRE(conf.maxNodes == 50);
         REQUIRE(conf.maxInFlightRatio == 8888);
-        REQUIRE(conf.maxFaasletsPerFunction == 7777);
+        REQUIRE(conf.maxNodesPerFunction == 7777);
 
         REQUIRE(conf.threadMode == "threadfoo");
         REQUIRE(conf.ompThreadPoolSize == 1234);
@@ -140,9 +140,9 @@ namespace tests {
         setEnvVar("REDIS_PORT", redisPort);
 
         setEnvVar("NO_SCHEDULER", noScheduler);
-        setEnvVar("MAX_FAASLETS", threads);
+        setEnvVar("MAX_NODES", threads);
         setEnvVar("MAX_IN_FLIGHT_RATIO", inFlightRatio);
-        setEnvVar("MAX_FAASLETS_PER_FUNCTION", workers);
+        setEnvVar("MAX_NODES_PER_FUNCTION", workers);
 
         setEnvVar("THREAD_MODE", threadMode);
         setEnvVar("OMP_THREAD_POOL_SIZE", threadMode);

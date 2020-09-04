@@ -10,6 +10,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Library funcs
 if (FAABRIC_STATIC_LIBS)
@@ -34,8 +35,8 @@ endif ()
 # https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/CMakeLists.txt
 include(FindProtobuf)
 set(protobuf_MODULE_COMPATIBLE TRUE)                                            
-                                                                                 
 find_package(Protobuf REQUIRED)                                                  
+
 message(STATUS "Using protobuf  \                                                
     ${PROTOBUF_LIBRARY} \                                                        
     ${PROTOBUF_PROTOC_LIBRARY} \                                                 
@@ -63,6 +64,8 @@ include_directories(
         ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
 )
 
+add_subdirectory(src/endpoint)
+add_subdirectory(src/executor)
 add_subdirectory(src/mpi)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
@@ -71,10 +74,12 @@ add_subdirectory(src/state)
 add_subdirectory(src/util)
 add_subdirectory(src/wasm)
 
-
+# Wrapper library
 faabric_public_lib(faabric faabric.cpp)
 
 target_link_libraries(faabric
+        endpoint
+        executor
         proto
         redis
         scheduler

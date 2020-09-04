@@ -551,7 +551,7 @@ namespace faabric::scheduler {
         const std::shared_ptr<InMemoryMpiQueue> &queue = getLocalQueue(sendRank, recvRank);
         faabric::MPIMessage m = queue->peek();
 
-        faabric_datatype_t *datatype = getFaasmDatatypeFromId(m.type());
+        faabric_datatype_t *datatype = getFaabricDatatypeFromId(m.type());
         status->bytesSize = m.count() * datatype->size;
         status->MPI_ERROR = 0;
         status->MPI_SOURCE = m.sender();
@@ -659,7 +659,7 @@ namespace faabric::scheduler {
     }
 
     void MpiWorld::synchronizeRmaWrite(const faabric::MPIMessage &msg, bool isRemote) {
-        faabric_datatype_t *datatype = getFaasmDatatypeFromId(msg.type());
+        faabric_datatype_t *datatype = getFaabricDatatypeFromId(msg.type());
         int winSize = msg.count() * datatype->size;
         const std::string key = getWindowStateKey(id, msg.destination(), winSize);
 

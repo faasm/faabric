@@ -56,6 +56,19 @@ RUN apt install -y redis-tools
 WORKDIR /usr/local/include/catch
 RUN wget -q -O catch.hpp https://raw.githubusercontent.com/catchorg/Catch2/master/single_include/catch2/catch.hpp
 
+# Pistache
+WORKDIR /setup
+RUN  git clone https://github.com/oktal/pistache.git
+WORKDIR /setup/pistache
+RUN git submodule update --init
+WORKDIR /setup/pistache/build
+RUN cmake -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    ..
+RUN ninja
+RUN ninja install
+
 # Tidy up
 WORKDIR /
 RUN rm -r /setup
