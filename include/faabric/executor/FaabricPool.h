@@ -66,5 +66,3 @@ public:                                                                 \
 };                                                                      \
 bool _execFunc(faabric::Message &msg)                                   \
 
-// Macro for running the executor
-#define RUN_FAABRIC_EXECUTOR()     \
