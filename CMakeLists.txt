@@ -74,6 +74,8 @@ add_subdirectory(src/state)
 add_subdirectory(src/util)
 add_subdirectory(src/wasm)
 
+add_subdirectory(examples)
+
 # Wrapper library
 faabric_public_lib(faabric faabric.cpp)
 

@@ -13,6 +13,3 @@ faabric_private_lib(executor "${LIB_FILES}")
 
 target_link_libraries(executor scheduler)
 
-add_executable(faabric_runner faabric_runner.cpp)
-
-target_link_libraries(faabric_runner executor state endpoint)
