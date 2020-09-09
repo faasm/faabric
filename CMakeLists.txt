@@ -72,7 +72,6 @@ add_subdirectory(src/redis)
 add_subdirectory(src/scheduler)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
-add_subdirectory(src/wasm)
 
 add_subdirectory(examples)
 
@@ -95,3 +94,4 @@ if(FAABRIC_BUILD_TESTS)
     add_subdirectory(tests/test)
     add_subdirectory(tests/utils)
 endif()
+

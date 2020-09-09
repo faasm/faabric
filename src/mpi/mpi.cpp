@@ -1,5 +1,6 @@
-#include <stdexcept>
 #include "faabric/mpi/mpi.h"
+
+#include <stdexcept>
 
 struct faabric_communicator_t faabric_comm_world{.id=FAABRIC_COMM_WORLD};
 
@@ -43,3 +44,4 @@ faabric_datatype_t *getFaabricDatatypeFromId(int datatypeId) {
             throw std::runtime_error("Unrecognised datatype ID\n");
     }
 }
+
