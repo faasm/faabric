@@ -83,33 +83,73 @@ struct faabric_group_t {
  */
 // MPI_Comms
 #define FAABRIC_COMM_WORLD 1
+#define FAABRIC_COMM_NULL 2
 extern struct faabric_communicator_t faabric_comm_world;
+extern struct faabric_communicator_t faabric_comm_null;
 #define MPI_COMM_WORLD &faabric_comm_world
+#define MPI_COMM_NULL &faabric_comm_null
+
+// Communicator types
+enum {                                                               
+ MPI_COMM_TYPE_SHARED,                                              
+};                                                                   
 
 // Simple datatypes
-#define FAABRIC_INT 1
-#define FAABRIC_LONG 2
-#define FAABRIC_LONG_LONG_INT 3
-#define FAABRIC_FLOAT 4
-#define FAABRIC_DOUBLE 5
-#define FAABRIC_CHAR 6
+#define FAABRIC_INT8 1
+#define FAABRIC_INT16 2
+#define FAABRIC_INT32 3
+#define FAABRIC_INT 4 
+#define FAABRIC_INT64 5
+#define FAABRIC_UINT8 6
+#define FAABRIC_UINT16 7
+#define FAABRIC_UINT32 8
+#define FAABRIC_UINT 9
+#define FAABRIC_UINT64 10
+#define FAABRIC_LONG 11
+#define FAABRIC_LONG_LONG_INT 12
+#define FAABRIC_FLOAT 13
+#define FAABRIC_DOUBLE 14
+#define FAABRIC_CHAR 15
+#define FAABRIC_C_BOOL 16
+#define FAABRIC_BYTE 17
+#define FAABRIC_DATATYPE_NULL 18
+extern struct faabric_datatype_t faabric_type_int8;
+extern struct faabric_datatype_t faabric_type_int16;
+extern struct faabric_datatype_t faabric_type_int32;
 extern struct faabric_datatype_t faabric_type_int;
+extern struct faabric_datatype_t faabric_type_int64;
+extern struct faabric_datatype_t faabric_type_uint8;
+extern struct faabric_datatype_t faabric_type_uint16;
+extern struct faabric_datatype_t faabric_type_uint32;
+extern struct faabric_datatype_t faabric_type_uint;
+extern struct faabric_datatype_t faabric_type_uint64;
 extern struct faabric_datatype_t faabric_type_long;
 extern struct faabric_datatype_t faabric_type_long_long_int;
 extern struct faabric_datatype_t faabric_type_float;
 extern struct faabric_datatype_t faabric_type_double;
 extern struct faabric_datatype_t faabric_type_char;
+extern struct faabric_datatype_t faabric_type_c_bool;
+extern struct faabric_datatype_t faabric_type_byte;
+extern struct faabric_datatype_t faabric_type_null;
+#define MPI_INT8_T &faabric_type_int8 
+#define MPI_INT16_T &faabric_type_int16 
+#define MPI_INT32_T &faabric_type_int32
 #define MPI_INT &faabric_type_int
+#define MPI_INT64_T &faabric_type_int64 
+#define MPI_UINT8_T &faabric_type_uint8 
+#define MPI_UINT16_T &faabric_type_uint16
+#define MPI_UINT32_T &faabric_type_uint32
+#define MPI_UINT_T &faabric_type_uint
+#define MPI_UINT64_T &faabric_type_uint64
 #define MPI_LONG &faabric_type_long
 #define MPI_LONG_LONG_INT &faabric_type_long_long_int
 #define MPI_FLOAT &faabric_type_float
 #define MPI_DOUBLE &faabric_type_double
 #define MPI_CHAR &faabric_type_char
+#define MPI_C_BOOL &faabric_type_c_bool
+#define MPI_BYTE &faabric_type_byte
+#define MPI_DATATYPE_NULL &faabric_type_null
 
-// MPI 2.2 datatypes
-#define FAABRIC_UINT64_T 10
-extern struct faabric_datatype_t faabric_type_uint64;
-#define MPI_UINT64_T &faabric_type_uint64
 
 struct faabric_datatype_t *getFaabricDatatypeFromId(int datatypeId);
 
@@ -141,6 +181,7 @@ extern struct faabric_info_t faabric_info_null;
 #define FAABRIC_OP_BOR    8
 #define FAABRIC_OP_MAXLOC 9
 #define FAABRIC_OP_MINLOC 10
+#define FAABRIC_OP_NULL   11
 
 extern struct faabric_op_t faabric_op_max;
 extern struct faabric_op_t faabric_op_min;
@@ -152,6 +193,7 @@ extern struct faabric_op_t faabric_op_band;
 extern struct faabric_op_t faabric_op_bor;
 extern struct faabric_op_t faabric_op_maxloc;
 extern struct faabric_op_t faabric_op_minloc;
+extern struct faabric_op_t faabric_op_null;
 
 #define MPI_MAX &faabric_op_max
 #define MPI_MIN &faabric_op_min
@@ -163,6 +205,7 @@ extern struct faabric_op_t faabric_op_minloc;
 #define MPI_BOR &faabric_op_bor
 #define MPI_MAXLOC &faabric_op_maxloc
 #define MPI_MINLOC &faabric_op_minloc
+#define MPI_OP_NULL &faabric_op_null
 
 // MPI_Statuses
 #define MPI_STATUS_IGNORE ((MPI_Status *) (0))
@@ -174,6 +217,14 @@ extern struct faabric_op_t faabric_op_minloc;
 #define MPI_WIN_DISP_UNIT 3
 #define MPI_WIN_CREATE_FLAVOR 4
 #define MPI_WIN_MODEL 5
+
+// MPI Threads
+enum {                                                                          
+    MPI_THREAD_SINGLE,                                                            
+    MPI_THREAD_FUNNELED,                                                          
+    MPI_THREAD_SERIALIZED,                                                        
+    MPI_THREAD_MULTIPLE                                                           
+};                
 
 /*
  * User-facing types
@@ -190,9 +241,18 @@ typedef struct faabric_win_t *MPI_Win;
 typedef ptrdiff_t MPI_Aint;
 
 /*
+ * User-defined functions
+ */
+typedef void (MPI_User_function)(void *, void *, int *, MPI_Datatype *);
+
+/*
  * User-facing functions
  */
 int MPI_Init(int *argc, char ***argv);
+
+int MPI_Initialized(int *flag);
+
+int MPI_Finalized(int *flag);
 
 int MPI_Finalize(void);
 
@@ -200,9 +260,11 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
 
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status);
 
-int MPI_Comm_rank(MPI_Comm comm, int *rank);
-
-int MPI_Comm_size(MPI_Comm comm, int *size);
+int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                int dest, int sendtag,
+                void *recvbuf, int recvcount, MPI_Datatype recvtype,
+                int source, int recvtag,
+                MPI_Comm comm, MPI_Status *status);
 
 int MPI_Abort(MPI_Comm comm, int errorcode);
 
@@ -222,9 +284,17 @@ int MPI_Gather(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
                void *recvbuf, int recvcount, MPI_Datatype recvtype,
                int root, MPI_Comm comm);
 
+int MPI_Gatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                void *recvbuf, const int *recvcounts, const int *displs,
+                MPI_Datatype recvtype, int root, MPI_Comm comm);
+
 int MPI_Allgather(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
                   void *recvbuf, int recvcount, MPI_Datatype recvtype,
                   MPI_Comm comm);
+
+int MPI_Allgatherv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
+                   void *recvbuf, const int *recvcounts, const int *displs,
+                   MPI_Datatype recvtype, MPI_Comm comm);
 
 int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype,
                MPI_Op op, int root, MPI_Comm comm);
@@ -238,9 +308,16 @@ int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
 
 int MPI_Type_size(MPI_Datatype type, int *size);
 
+int MPI_Type_free(MPI_Datatype *datatype);
+
 int MPI_Alloc_mem(MPI_Aint size, MPI_Info info, void *baseptr);
 
 int MPI_Win_fence(int assert, MPI_Win win);
+
+int MPI_Win_allocate_shared(MPI_Aint size, int disp_unit, MPI_Info info, MPI_Comm comm,
+                            void *baseptr, MPI_Win * win);
+
+int MPI_Win_shared_query(MPI_Win win, int rank, MPI_Aint *size, int *disp_unit, void *baseptr);
 
 int MPI_Get(void *origin_addr, int origin_count,
             MPI_Datatype origin_datatype, int target_rank,
@@ -280,11 +357,35 @@ int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm);
 
 int MPI_Comm_group(MPI_Comm comm, MPI_Group *group);
 
+int MPI_Comm_dup(MPI_Comm comm, MPI_Comm * newcomm);
+
 int MPI_Group_incl(MPI_Group group, int n, const int ranks[], MPI_Group *newgroup);
+
+int MPI_Comm_rank(MPI_Comm comm, int *rank);
+
+int MPI_Comm_size(MPI_Comm comm, int *size);
+
+int MPI_Comm_create_group(MPI_Comm comm, MPI_Group group, int tag, MPI_Comm *newcomm);
+
+int MPI_Comm_free(MPI_Comm *comm);
+
+int MPI_Comm_split_type(MPI_Comm comm, int split_type, int key, MPI_Info info, MPI_Comm *newcomm);
+
+int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm);
+
+int MPI_Group_free(MPI_Group *group);
 
 int MPI_Alltoallv(const void *sendbuf, const int sendcounts[], const int sdispls[],
                   MPI_Datatype sendtype, void *recvbuf, const int recvcounts[],
                   const int rdispls[], MPI_Datatype recvtype, MPI_Comm comm);
+
+int MPI_Query_thread(int *provided);
+
+int MPI_Init_thread(int *argc, char ***argv, int required, int *provided);
+
+int MPI_Op_create(MPI_User_function *user_fn, int commute, MPI_Op *op);
+
+int MPI_Op_free(MPI_Op *op);
 
 #ifdef __cplusplus
 }
