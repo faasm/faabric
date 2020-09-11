@@ -1,8 +1,7 @@
-#include "MpiWorld.h"
-
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/MpiWorld.h>
 #include <faabric/state/State.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
@@ -459,6 +458,7 @@ namespace faabric::scheduler {
                             recvBufferCast[slot] += rankDataCast[slot];
                         }
                     } else {
+                        logger->error("Unsupported type for sum reduction (datatype={})", datatype->id);
                         throw std::runtime_error("Unsupported type for sum reduction");
                     }
                 } else if (operation->id == faabric_op_max.id) {
