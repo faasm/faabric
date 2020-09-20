@@ -3,6 +3,11 @@
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
+#if(FAASM_SGX)
+namespace sgx {
+    extern void checkSgxSetup();
+}
+#endif
 
 namespace faabric::executor {
     FaabricMain::FaabricMain(faabric::executor::FaabricPool &poolIn) :
@@ -16,6 +21,11 @@ namespace faabric::executor {
         scheduler.addHostToGlobalSet();
 
         conf.print();
+
+#if(FAASM_SGX)
+        // Check for SGX capability and create shared enclave
+        sgx::checkSgxSetup();
+#endif
 
         // Start thread pool in background
         pool.startThreadPool();
