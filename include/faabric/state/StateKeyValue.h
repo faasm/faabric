@@ -1,8 +1,8 @@
 #pragma once
 
+#include <faabric/redis/Redis.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/exception.h>
-#include <faabric/redis/Redis.h>
 
 #include <atomic>
 #include <chrono>
@@ -12,162 +12,169 @@
 #include <unordered_map>
 #include <vector>
 
-
 constexpr int REMOTE_LOCK_TIMEOUT_SECS(1);
 constexpr int REMOTE_LOCK_MAX_RETRIES(100);
 
 #define STATE_STREAMING_CHUNK_SIZE (64 * 1024)
 
-
 namespace faabric::state {
-    class StateChunk {
-    public:
-        StateChunk(long offsetIn, size_t lengthIn, uint8_t *dataIn) : offset(offsetIn), length(lengthIn),
-                                                                      data(dataIn) {
+class StateChunk
+{
+  public:
+    StateChunk(long offsetIn, size_t lengthIn, uint8_t* dataIn)
+      : offset(offsetIn)
+      , length(lengthIn)
+      , data(dataIn)
+    {}
 
-        }
+    StateChunk(long offsetIn, std::vector<uint8_t>& data)
+      : offset(offsetIn)
+      , length(data.size())
+      , data(data.data())
+    {}
 
-        StateChunk(long offsetIn, std::vector<uint8_t> &data) : offset(offsetIn), length(data.size()),
-                                                                      data(data.data()) {
+    long offset;
+    size_t length;
 
-        }
+    // Note - this pointer will always refer to chunks of the underlying
+    // state, so does not need to be deleted
+    uint8_t* data;
+};
 
-        long offset;
-        size_t length;
+class StateKeyValue
+{
+  public:
+    StateKeyValue(const std::string& userIn,
+                  const std::string& keyIn,
+                  size_t sizeIn);
 
-        // Note - this pointer will always refer to chunks of the underlying
-        // state, so does not need to be deleted
-        uint8_t *data;
-    };
+    StateKeyValue(const std::string& userIn, const std::string& keyIn);
 
+    const std::string user;
 
-    class StateKeyValue {
-    public:
-        StateKeyValue(const std::string &userIn, const std::string &keyIn, size_t sizeIn);
+    const std::string key;
 
-        StateKeyValue(const std::string &userIn, const std::string &keyIn);
+    static uint32_t waitOnRedisRemoteLock(const std::string& redisKey);
 
-        const std::string user;
+    void get(uint8_t* buffer);
 
-        const std::string key;
+    uint8_t* get();
 
-        static uint32_t waitOnRedisRemoteLock(const std::string &redisKey);
+    void getChunk(long offset, uint8_t* buffer, size_t length);
 
-        void get(uint8_t *buffer);
+    uint8_t* getChunk(long offset, long len);
 
-        uint8_t *get();
+    std::vector<StateChunk> getAllChunks();
 
-        void getChunk(long offset, uint8_t *buffer, size_t length);
+    void set(const uint8_t* buffer);
 
-        uint8_t *getChunk(long offset, long len);
+    void setChunk(long offset, const uint8_t* buffer, size_t length);
 
-        std::vector<StateChunk> getAllChunks();
+    void append(const uint8_t* buffer, size_t length);
 
-        void set(const uint8_t *buffer);
+    void getAppended(uint8_t* buffer, size_t length, long nValues);
 
-        void setChunk(long offset, const uint8_t *buffer, size_t length);
+    void clearAppended();
 
-        void append(const uint8_t *buffer, size_t length);
+    void mapSharedMemory(void* destination, long pagesOffset, long nPages);
 
-        void getAppended(uint8_t *buffer, size_t length, long nValues);
+    void unmapSharedMemory(void* mappedAddr);
 
-        void clearAppended();
+    void pull();
 
-        void mapSharedMemory(void *destination, long pagesOffset, long nPages);
+    void pushPartial();
 
-        void unmapSharedMemory(void *mappedAddr);
+    void pushPartialMask(const std::shared_ptr<StateKeyValue>& maskKv);
 
-        void pull();
+    void lockRead();
 
-        void pushPartial();
+    void unlockRead();
 
-        void pushPartialMask(const std::shared_ptr<StateKeyValue> &maskKv);
+    void lockWrite();
 
-        void lockRead();
+    void unlockWrite();
 
-        void unlockRead();
+    void flagDirty();
 
-        void lockWrite();
+    void flagChunkDirty(long offset, long len);
 
-        void unlockWrite();
+    size_t size() const;
 
-        void flagDirty();
+    size_t getSharedMemorySize() const;
 
-        void flagChunkDirty(long offset, long len);
+    void pushFull();
 
-        size_t size() const;
+    virtual void lockGlobal() = 0;
 
-        size_t getSharedMemorySize() const;
+    virtual void unlockGlobal() = 0;
 
-        void pushFull();
+  protected:
+    const std::shared_ptr<spdlog::logger> logger;
 
-        virtual void lockGlobal() = 0;
+    std::shared_mutex valueMutex;
 
-        virtual void unlockGlobal() = 0;
+    size_t valueSize;
+    size_t sharedMemSize;
 
-    protected:
-        const std::shared_ptr<spdlog::logger> logger;
+    void* sharedMemory = nullptr;
 
-        std::shared_mutex valueMutex;
+    void doSet(const uint8_t* data);
 
-        size_t valueSize;
-        size_t sharedMemSize;
+    void doSetChunk(long offset, const uint8_t* buffer, size_t length);
 
-        void *sharedMemory = nullptr;
+    virtual void pullFromRemote() = 0;
 
-        void doSet(const uint8_t *data);
+    virtual void pullChunkFromRemote(long offset, size_t length) = 0;
 
-        void doSetChunk(long offset, const uint8_t *buffer, size_t length);
+    virtual void pushToRemote() = 0;
 
-        virtual void pullFromRemote() = 0;
+    virtual void appendToRemote(const uint8_t* data, size_t length) = 0;
 
-        virtual void pullChunkFromRemote(long offset, size_t length) = 0;
+    virtual void pullAppendedFromRemote(uint8_t* data,
+                                        size_t length,
+                                        long nValues) = 0;
 
-        virtual void pushToRemote() = 0;
+    virtual void clearAppendedFromRemote() = 0;
 
-        virtual void appendToRemote(const uint8_t *data, size_t length) = 0;
+    virtual void pushPartialToRemote(
+      const std::vector<StateChunk>& dirtyChunks) = 0;
 
-        virtual void pullAppendedFromRemote(uint8_t *data, size_t length, long nValues) = 0;
+  private:
+    // Flags for tracking allocation and initial pull
+    std::atomic<bool> fullyAllocated = false;
+    std::atomic<bool> fullyPulled = false;
+    void* pulledMask = nullptr;
+    void* dirtyMask = nullptr;
+    bool isDirty = false;
 
-        virtual void clearAppendedFromRemote() = 0;
+    void zeroDirtyMask();
 
-        virtual void pushPartialToRemote(const std::vector<StateChunk> &dirtyChunks) = 0;
+    void configureSize();
 
-    private:
-        // Flags for tracking allocation and initial pull
-        std::atomic<bool> fullyAllocated = false;
-        std::atomic<bool> fullyPulled = false;
-        void *pulledMask = nullptr;
-        void *dirtyMask = nullptr;
-        bool isDirty = false;
+    void checkSizeConfigured();
 
-        void zeroDirtyMask();
+    void markDirtyChunk(long offset, long len);
 
-        void configureSize();
+    bool isChunkPulled(long offset, size_t length);
 
-        void checkSizeConfigured();
+    void allocateChunk(long offset, size_t length);
 
-        void markDirtyChunk(long offset, long len);
+    void reserveStorage();
 
-        bool isChunkPulled(long offset, size_t length);
+    void doPull(bool lazy);
 
-        void allocateChunk(long offset, size_t length);
+    void doPullChunk(bool lazy, long offset, size_t length);
 
-        void reserveStorage();
+    void doPushPartial(const uint8_t* dirtyMaskBytes);
 
-        void doPull(bool lazy);
+    std::vector<StateChunk> getDirtyChunks(const uint8_t* dirtyMaskBytes);
+};
 
-        void doPullChunk(bool lazy, long offset, size_t length);
-
-        void doPushPartial(const uint8_t *dirtyMaskBytes);
-
-        std::vector<StateChunk> getDirtyChunks(const uint8_t *dirtyMaskBytes);
-    };
-
-    class StateKeyValueException : public std::runtime_error {
-    public:
-        explicit StateKeyValueException(const std::string &message) : runtime_error(message) {
-
-        }
-    };
+class StateKeyValueException : public std::runtime_error
+{
+  public:
+    explicit StateKeyValueException(const std::string& message)
+      : runtime_error(message)
+    {}
+};
 }

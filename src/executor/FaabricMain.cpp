@@ -3,36 +3,36 @@
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
-
 namespace faabric::executor {
-    FaabricMain::FaabricMain(faabric::executor::FaabricPool &poolIn) :
-            conf(faabric::util::getSystemConfig()),
-            scheduler(faabric::scheduler::getScheduler()),
-            pool(poolIn) {
+FaabricMain::FaabricMain(faabric::executor::FaabricPool& poolIn)
+  : conf(faabric::util::getSystemConfig())
+  , scheduler(faabric::scheduler::getScheduler())
+  , pool(poolIn)
+{}
 
-    }
+void FaabricMain::startBackground()
+{
+    scheduler.addHostToGlobalSet();
 
-    void FaabricMain::startBackground() {
-        scheduler.addHostToGlobalSet();
+    conf.print();
 
-        conf.print();
+    // Start thread pool in background
+    pool.startThreadPool();
 
-        // Start thread pool in background
-        pool.startThreadPool();
+    // In-memory state
+    pool.startStateServer();
 
-        // In-memory state
-        pool.startStateServer();
+    // Work sharing
+    pool.startFunctionCallServer();
+}
 
-        // Work sharing
-        pool.startFunctionCallServer();
-    }
+void FaabricMain::shutdown()
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    logger->info("Removing from global working set");
 
-    void FaabricMain::shutdown() {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
-        logger->info("Removing from global working set");
+    scheduler.clear();
 
-        scheduler.clear();
-
-        pool.shutdown();
-    }
+    pool.shutdown();
+}
 }

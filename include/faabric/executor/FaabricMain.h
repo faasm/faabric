@@ -6,17 +6,19 @@
 #include <faabric/util/config.h>
 
 namespace faabric::executor {
-    class FaabricMain {
-    public:
-        explicit FaabricMain(faabric::executor::FaabricPool &poolIn);
+class FaabricMain
+{
+  public:
+    explicit FaabricMain(faabric::executor::FaabricPool& poolIn);
 
-        void startBackground();
+    void startBackground();
 
-        void shutdown();
-    private:
-        faabric::util::SystemConfig &conf;
-        faabric::scheduler::Scheduler &scheduler;
+    void shutdown();
 
-        faabric::executor::FaabricPool &pool;
-    };
+  private:
+    faabric::util::SystemConfig& conf;
+    faabric::scheduler::Scheduler& scheduler;
+
+    faabric::executor::FaabricPool& pool;
+};
 }

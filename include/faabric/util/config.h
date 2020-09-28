@@ -9,70 +9,71 @@
 #define STATUS_KEY_EXPIRY 300000
 
 namespace faabric::util {
-    class SystemConfig {
+class SystemConfig
+{
 
-    public:
-        // System
-        std::string hostType;
-        std::string functionStorage;
-        std::string fileserverUrl;
-        std::string serialisation;
-        std::string cgroupMode;
-        std::string netNsMode;
-        std::string logLevel;
-        std::string pythonPreload;
-        std::string captureStdout;
-        std::string stateMode;
-        std::string wasmVm;
+  public:
+    // System
+    std::string hostType;
+    std::string functionStorage;
+    std::string fileserverUrl;
+    std::string serialisation;
+    std::string cgroupMode;
+    std::string netNsMode;
+    std::string logLevel;
+    std::string pythonPreload;
+    std::string captureStdout;
+    std::string stateMode;
+    std::string wasmVm;
 
-        // Redis
-        std::string redisStateHost;
-        std::string redisQueueHost;
-        std::string redisPort;
+    // Redis
+    std::string redisStateHost;
+    std::string redisQueueHost;
+    std::string redisPort;
 
-        // Scheduling
-        int maxNodes;
-        int noScheduler;
-        int maxInFlightRatio;
-        int maxNodesPerFunction;
+    // Scheduling
+    int maxNodes;
+    int noScheduler;
+    int maxInFlightRatio;
+    int maxNodesPerFunction;
 
-        // Threading
-        std::string threadMode;
-        int ompThreadPoolSize;
+    // Threading
+    std::string threadMode;
+    int ompThreadPoolSize;
 
-        // Worker-related timeouts
-        int globalMessageTimeout;
-        int unboundTimeout;
-        int boundTimeout;
-        int chainedCallTimeout;
+    // Worker-related timeouts
+    int globalMessageTimeout;
+    int unboundTimeout;
+    int boundTimeout;
+    int chainedCallTimeout;
 
-        // Filesystem storage
-        std::string functionDir;
-        std::string objectFileDir;
-        std::string runtimeFilesDir;
-        std::string sharedFilesDir;
-        std::string sharedFilesStorageDir;
+    // Filesystem storage
+    std::string functionDir;
+    std::string objectFileDir;
+    std::string runtimeFilesDir;
+    std::string sharedFilesDir;
+    std::string sharedFilesStorageDir;
 
-        // MPI
-        int defaultMpiWorldSize;
+    // MPI
+    int defaultMpiWorldSize;
 
-        // Endpoint
-        std::string endpointInterface;
-        std::string endpointHost;
-        int endpointPort;
-        int endpointNumThreads;
+    // Endpoint
+    std::string endpointInterface;
+    std::string endpointHost;
+    int endpointPort;
+    int endpointNumThreads;
 
-        SystemConfig();
+    SystemConfig();
 
-        void print();
+    void print();
 
-        void reset();
+    void reset();
 
-    private:
-        int getSystemConfIntParam(const char *name, const char *defaultValue);
+  private:
+    int getSystemConfIntParam(const char* name, const char* defaultValue);
 
-        void initialise();
-    };
+    void initialise();
+};
 
-    SystemConfig &getSystemConfig();
+SystemConfig& getSystemConfig();
 }

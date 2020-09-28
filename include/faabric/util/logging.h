@@ -3,7 +3,7 @@
 #include <spdlog/spdlog.h>
 
 namespace faabric::util {
-    void initLogging();
+void initLogging();
 
-    std::shared_ptr<spdlog::logger> getLogger();
+std::shared_ptr<spdlog::logger> getLogger();
 }

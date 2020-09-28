@@ -1,11 +1,12 @@
 #include <faabric/util/logging.h>
 
-#include <faabric/executor/FaabricMain.h>
 #include <faabric/endpoint/FaabricEndpoint.h>
+#include <faabric/executor/FaabricMain.h>
 
 using namespace faabric::executor;
 
-FAABRIC_EXECUTOR() {
+FAABRIC_EXECUTOR()
+{
     auto logger = faabric::util::getLogger();
 
     logger->info("Hello world!");
@@ -14,9 +15,10 @@ FAABRIC_EXECUTOR() {
     return true;
 }
 
-int main() {
+int main()
+{
     faabric::util::initLogging();
-    const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Start the worker pool
     logger->info("Starting faaslet pool in the background");
@@ -34,4 +36,3 @@ int main() {
 
     return EXIT_SUCCESS;
 }
-

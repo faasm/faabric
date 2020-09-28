@@ -1,11 +1,11 @@
 #pragma once
 
-#include <grpcpp/client_context.h>
 #include <grpcpp/channel.h>
+#include <grpcpp/client_context.h>
 #include <grpcpp/support/channel_arguments.h>
 
-#include <proto/faabric.pb.h>
 #include <proto/faabric.grpc.pb.h>
+#include <proto/faabric.pb.h>
 
 using namespace grpc;
 
@@ -14,17 +14,18 @@ using grpc::ClientContext;
 using grpc::Status;
 
 namespace faabric::scheduler {
-    class FunctionCallClient {
-    public:
-        explicit FunctionCallClient(const std::string &hostIn);
+class FunctionCallClient
+{
+  public:
+    explicit FunctionCallClient(const std::string& hostIn);
 
-        const std::string host;
+    const std::string host;
 
-        std::shared_ptr<Channel> channel;
-        std::unique_ptr<faabric::FunctionRPCService::Stub> stub;
+    std::shared_ptr<Channel> channel;
+    std::unique_ptr<faabric::FunctionRPCService::Stub> stub;
 
-        void shareFunctionCall(const faabric::Message &call);
+    void shareFunctionCall(const faabric::Message& call);
 
-        void sendMPIMessage(const faabric::MPIMessage &msg);
-    };
+    void sendMPIMessage(const faabric::MPIMessage& msg);
+};
 }

@@ -3,5 +3,5 @@
 #include <string>
 
 namespace faabric::util {
-    unsigned int generateGid();
+unsigned int generateGid();
 }

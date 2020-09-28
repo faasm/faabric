@@ -1,122 +1,127 @@
 #include <catch/catch.hpp>
 
-#include <proto/faabric.pb.h>
 #include <faabric/util/bytes.h>
 #include <faabric_utils.h>
+#include <proto/faabric.pb.h>
 
 namespace tests {
-    std::vector<uint8_t> createInput(int start, int length) {
-        std::vector<uint8_t> result;
-        result.reserve((unsigned long) length);
+std::vector<uint8_t> createInput(int start, int length)
+{
+    std::vector<uint8_t> result;
+    result.reserve((unsigned long)length);
 
-        for (int i = start; i < start + length; i++) {
-            result.emplace_back((uint8_t) i);
-        }
-
-        return result;
+    for (int i = start; i < start + length; i++) {
+        result.emplace_back((uint8_t)i);
     }
 
-    TEST_CASE("Test protobuf classes", "[proto]") {
-        faabric::Message funcCall;
+    return result;
+}
 
-        std::string user = "foobar user";
-        std::string func = "foobar func";
-        std::string resultKey = "dummy result";
-        int returnValue = 123;
+TEST_CASE("Test protobuf classes", "[proto]")
+{
+    faabric::Message funcCall;
 
-        std::string pyUser = "python user";
-        std::string pyFunc = "python func";
-        std::string pyEntry = "python entry";
+    std::string user = "foobar user";
+    std::string func = "foobar func";
+    std::string resultKey = "dummy result";
+    int returnValue = 123;
 
-        std::vector<uint8_t> inputData = createInput(0, 100);
-        std::vector<uint8_t> outputData = createInput(120, 50);
+    std::string pyUser = "python user";
+    std::string pyFunc = "python func";
+    std::string pyEntry = "python entry";
 
-        std::string cmdline = "some cmdline args";
+    std::vector<uint8_t> inputData = createInput(0, 100);
+    std::vector<uint8_t> outputData = createInput(120, 50);
 
-        funcCall.set_user(user);
-        funcCall.set_function(func);
-        funcCall.set_resultkey(resultKey);
-        funcCall.set_returnvalue(returnValue);
+    std::string cmdline = "some cmdline args";
 
-        funcCall.set_pythonuser(pyUser);
-        funcCall.set_pythonfunction(pyFunc);
-        funcCall.set_pythonentry(pyEntry);
+    funcCall.set_user(user);
+    funcCall.set_function(func);
+    funcCall.set_resultkey(resultKey);
+    funcCall.set_returnvalue(returnValue);
 
-        funcCall.set_inputdata(inputData.data(), 100);
-        funcCall.set_outputdata(outputData.data(), 50);
+    funcCall.set_pythonuser(pyUser);
+    funcCall.set_pythonfunction(pyFunc);
+    funcCall.set_pythonentry(pyEntry);
 
-        funcCall.set_isasync(true);
-        funcCall.set_ispython(true);
-        funcCall.set_istypescript(true);
-        funcCall.set_isstatusrequest(true);
-        funcCall.set_isflushrequest(true);
+    funcCall.set_inputdata(inputData.data(), 100);
+    funcCall.set_outputdata(outputData.data(), 50);
 
-        funcCall.set_type(faabric::Message_MessageType_BIND);
+    funcCall.set_isasync(true);
+    funcCall.set_ispython(true);
+    funcCall.set_istypescript(true);
+    funcCall.set_isstatusrequest(true);
+    funcCall.set_isflushrequest(true);
 
-        funcCall.set_cmdline(cmdline);
+    funcCall.set_type(faabric::Message_MessageType_BIND);
 
-        REQUIRE(funcCall.type() == faabric::Message_MessageType_BIND);
-        REQUIRE(user == funcCall.user());
-        REQUIRE(func == funcCall.function());
-        REQUIRE(resultKey == funcCall.resultkey());
-        REQUIRE(returnValue == funcCall.returnvalue());
+    funcCall.set_cmdline(cmdline);
 
-        // Check serialisation round trip
-        std::string serialised = funcCall.SerializeAsString();
+    REQUIRE(funcCall.type() == faabric::Message_MessageType_BIND);
+    REQUIRE(user == funcCall.user());
+    REQUIRE(func == funcCall.function());
+    REQUIRE(resultKey == funcCall.resultkey());
+    REQUIRE(returnValue == funcCall.returnvalue());
 
-        faabric::Message newFuncCall;
-        newFuncCall.ParseFromString(serialised);
+    // Check serialisation round trip
+    std::string serialised = funcCall.SerializeAsString();
 
-        REQUIRE(user == newFuncCall.user());
-        REQUIRE(func == newFuncCall.function());
-        REQUIRE(resultKey == newFuncCall.resultkey());
-        REQUIRE(faabric::Message_MessageType_BIND == newFuncCall.type());
+    faabric::Message newFuncCall;
+    newFuncCall.ParseFromString(serialised);
 
-        REQUIRE(pyUser == newFuncCall.pythonuser());
-        REQUIRE(pyFunc == newFuncCall.pythonfunction());
-        REQUIRE(pyEntry == newFuncCall.pythonentry());
+    REQUIRE(user == newFuncCall.user());
+    REQUIRE(func == newFuncCall.function());
+    REQUIRE(resultKey == newFuncCall.resultkey());
+    REQUIRE(faabric::Message_MessageType_BIND == newFuncCall.type());
 
-        REQUIRE(newFuncCall.isasync());
-        REQUIRE(newFuncCall.ispython());
-        REQUIRE(newFuncCall.istypescript());
-        REQUIRE(newFuncCall.isstatusrequest());
-        REQUIRE(newFuncCall.isflushrequest());
+    REQUIRE(pyUser == newFuncCall.pythonuser());
+    REQUIRE(pyFunc == newFuncCall.pythonfunction());
+    REQUIRE(pyEntry == newFuncCall.pythonentry());
 
-        REQUIRE(cmdline == newFuncCall.cmdline());
+    REQUIRE(newFuncCall.isasync());
+    REQUIRE(newFuncCall.ispython());
+    REQUIRE(newFuncCall.istypescript());
+    REQUIRE(newFuncCall.isstatusrequest());
+    REQUIRE(newFuncCall.isflushrequest());
 
-        // Check input/ output data
-        const std::string actualStrInput = newFuncCall.inputdata();
-        const std::string actualStrOutput = newFuncCall.outputdata();
+    REQUIRE(cmdline == newFuncCall.cmdline());
 
-        const std::vector<uint8_t> actualBytesInput = faabric::util::stringToBytes(actualStrInput);
-        const std::vector<uint8_t> actualBytesOutput = faabric::util::stringToBytes(actualStrOutput);
+    // Check input/ output data
+    const std::string actualStrInput = newFuncCall.inputdata();
+    const std::string actualStrOutput = newFuncCall.outputdata();
 
-        REQUIRE(inputData == actualBytesInput);
-        REQUIRE(outputData == actualBytesOutput);
-    }
+    const std::vector<uint8_t> actualBytesInput =
+      faabric::util::stringToBytes(actualStrInput);
+    const std::vector<uint8_t> actualBytesOutput =
+      faabric::util::stringToBytes(actualStrOutput);
 
-    TEST_CASE("Test protobuf byte handling", "[proto]") {
-        // One message with null terminators, one without
-        faabric::Message msgA;
-        std::vector<uint8_t> bytesA = {0, 0, 1, 1, 0, 0, 2, 2};
-        msgA.set_inputdata(bytesA.data(), bytesA.size());
+    REQUIRE(inputData == actualBytesInput);
+    REQUIRE(outputData == actualBytesOutput);
+}
 
-        faabric::Message msgB;
-        std::vector<uint8_t> bytesB = {1, 1, 1, 1, 1, 1, 2, 2};
-        msgB.set_inputdata(bytesB.data(), bytesB.size());
+TEST_CASE("Test protobuf byte handling", "[proto]")
+{
+    // One message with null terminators, one without
+    faabric::Message msgA;
+    std::vector<uint8_t> bytesA = { 0, 0, 1, 1, 0, 0, 2, 2 };
+    msgA.set_inputdata(bytesA.data(), bytesA.size());
 
-        std::string serialisedA = msgA.SerializeAsString();
-        std::string serialisedB = msgB.SerializeAsString();
+    faabric::Message msgB;
+    std::vector<uint8_t> bytesB = { 1, 1, 1, 1, 1, 1, 2, 2 };
+    msgB.set_inputdata(bytesB.data(), bytesB.size());
 
-        REQUIRE(serialisedA.size() == serialisedB.size());
+    std::string serialisedA = msgA.SerializeAsString();
+    std::string serialisedB = msgB.SerializeAsString();
 
-        faabric::Message newMsgA;
-        newMsgA.ParseFromString(serialisedA);
+    REQUIRE(serialisedA.size() == serialisedB.size());
 
-        faabric::Message newMsgB;
-        newMsgB.ParseFromString(serialisedB);
+    faabric::Message newMsgA;
+    newMsgA.ParseFromString(serialisedA);
 
-        checkMessageEquality(msgA, newMsgA);
-        checkMessageEquality(msgB, newMsgB);
-    }
+    faabric::Message newMsgB;
+    newMsgB.ParseFromString(serialisedB);
+
+    checkMessageEquality(msgA, newMsgA);
+    checkMessageEquality(msgB, newMsgB);
+}
 }

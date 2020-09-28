@@ -2,65 +2,74 @@
 
 #include <vector>
 
-
 namespace faabric::util {
 
-    std::vector<uint8_t> stringToBytes(const std::string &str) {
-        if (str.empty()) {
-            std::vector<uint8_t> empty;
-            return empty;
-        }
-
-        // Get raw data as byte pointer
-        const char *cstr = str.c_str();
-        auto *rawBytes = reinterpret_cast<const uint8_t *>(cstr);
-
-        // Wrap in bytes vector
-        std::vector<uint8_t> actual(rawBytes, rawBytes + str.length());
-        return actual;
+std::vector<uint8_t> stringToBytes(const std::string& str)
+{
+    if (str.empty()) {
+        std::vector<uint8_t> empty;
+        return empty;
     }
 
-    void trimTrailingZeros(std::vector<uint8_t> &vectorIn) {
-        long i = vectorIn.size() - 1;
+    // Get raw data as byte pointer
+    const char* cstr = str.c_str();
+    auto* rawBytes = reinterpret_cast<const uint8_t*>(cstr);
 
-        while (i >= 0 && vectorIn.at((unsigned long) i) == 0) {
-            i--;
-        }
+    // Wrap in bytes vector
+    std::vector<uint8_t> actual(rawBytes, rawBytes + str.length());
+    return actual;
+}
 
-        if (i < 0) {
-            vectorIn.clear();
-        } else {
-            vectorIn.resize((unsigned long) i + 1);
-        }
+void trimTrailingZeros(std::vector<uint8_t>& vectorIn)
+{
+    long i = vectorIn.size() - 1;
+
+    while (i >= 0 && vectorIn.at((unsigned long)i) == 0) {
+        i--;
     }
 
-    int safeCopyToBuffer(const std::vector<uint8_t> &dataIn, uint8_t *buffer, int bufferLen) {
-        int dataSize = (int) dataIn.size();
+    if (i < 0) {
+        vectorIn.clear();
+    } else {
+        vectorIn.resize((unsigned long)i + 1);
+    }
+}
 
-        if (bufferLen <= 0) {
-            return dataSize;
-        }
+int safeCopyToBuffer(const std::vector<uint8_t>& dataIn,
+                     uint8_t* buffer,
+                     int bufferLen)
+{
+    int dataSize = (int)dataIn.size();
 
-        return safeCopyToBuffer(dataIn.data(), dataIn.size(), buffer, bufferLen);
+    if (bufferLen <= 0) {
+        return dataSize;
     }
 
-    int safeCopyToBuffer(const uint8_t *dataIn, int dataLen, uint8_t *buffer, int bufferLen) {
-        if (dataLen == 0) {
-            return 0;
-        }
+    return safeCopyToBuffer(dataIn.data(), dataIn.size(), buffer, bufferLen);
+}
 
-        // Truncate date being copied into a short buffer
-        int copyLen = std::min(dataLen, bufferLen);
-        std::copy(dataIn, dataIn + copyLen, buffer);
-
-        return copyLen;
+int safeCopyToBuffer(const uint8_t* dataIn,
+                     int dataLen,
+                     uint8_t* buffer,
+                     int bufferLen)
+{
+    if (dataLen == 0) {
+        return 0;
     }
 
-    std::string bytesToString(const std::vector<uint8_t> &bytes) {
-        unsigned long byteLen = bytes.size();
-        const char *charPtr = reinterpret_cast<const char *>(bytes.data());
-        const std::string result = std::string(charPtr, charPtr + byteLen);
+    // Truncate date being copied into a short buffer
+    int copyLen = std::min(dataLen, bufferLen);
+    std::copy(dataIn, dataIn + copyLen, buffer);
 
-        return result;
-    }
+    return copyLen;
+}
+
+std::string bytesToString(const std::vector<uint8_t>& bytes)
+{
+    unsigned long byteLen = bytes.size();
+    const char* charPtr = reinterpret_cast<const char*>(bytes.data());
+    const std::string result = std::string(charPtr, charPtr + byteLen);
+
+    return result;
+}
 }

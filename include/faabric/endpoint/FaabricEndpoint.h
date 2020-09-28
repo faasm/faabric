@@ -4,12 +4,13 @@
 #include <faabric/util/config.h>
 
 namespace faabric::endpoint {
-    class FaabricEndpoint : public Endpoint {
-    public:
-        FaabricEndpoint();
+class FaabricEndpoint : public Endpoint
+{
+  public:
+    FaabricEndpoint();
 
-        FaabricEndpoint(int port, int threadCount);
+    FaabricEndpoint(int port, int threadCount);
 
-        std::shared_ptr<Pistache::Http::Handler> getHandler() override;
-    };
+    std::shared_ptr<Pistache::Http::Handler> getHandler() override;
+};
 }
