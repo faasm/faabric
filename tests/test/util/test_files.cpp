@@ -25,7 +25,7 @@ namespace tests {
         // Skip if we're in CI
         if(conf.hostType != "ci") {
             std::string localPath = "/usr/local/code/faabric/LICENSE.md";
-            std::string url = "https://raw.githubusercontent.com/Shillaker/faabric/master/LICENSE.md";
+            std::string url = "https://raw.githubusercontent.com/faasm/faabric/master/LICENSE.md";
 
             std::vector<uint8_t> expectedBytes = faabric::util::readFileToBytes(localPath);
             std::vector<uint8_t> actualBytes = faabric::util::readFileFromUrl(url);
