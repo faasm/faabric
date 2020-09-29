@@ -34,7 +34,11 @@ def cmake(ctx, clean=False):
 
 @task
 def cc(ctx, target):
-    run("cmake --build . --target {}".format(target), cwd=_BUILD_DIR, shell=True)
+    run(
+        "cmake --build . --target {}".format(target),
+        cwd=_BUILD_DIR,
+        shell=True,
+    )
 
 
 @task
@@ -44,4 +48,3 @@ def r(ctx, target):
         cwd=_BIN_DIR,
         shell=True,
     )
-

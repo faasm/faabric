@@ -4,6 +4,6 @@
 #include <faabric/util/queue.h>
 
 namespace faabric::scheduler {
-    typedef faabric::util::Queue<faabric::Message> InMemoryMessageQueue;
-    typedef std::pair<std::string, InMemoryMessageQueue *> InMemoryMessageQueuePair;
+typedef faabric::util::Queue<faabric::Message> InMemoryMessageQueue;
+typedef std::pair<std::string, InMemoryMessageQueue*> InMemoryMessageQueuePair;
 }

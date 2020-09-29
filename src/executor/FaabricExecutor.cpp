@@ -1,210 +1,222 @@
 #include "FaabricExecutor.h"
 
-#include <faabric/util/config.h>
 #include <faabric/state/State.h>
-
+#include <faabric/util/config.h>
 
 namespace faabric::executor {
-    FaabricExecutor::FaabricExecutor(int threadIdxIn) :
-            threadIdx(threadIdxIn),
-            scheduler(faabric::scheduler::getScheduler()) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
+FaabricExecutor::FaabricExecutor(int threadIdxIn)
+  : threadIdx(threadIdxIn)
+  , scheduler(faabric::scheduler::getScheduler())
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
-        // Set an ID for this Faaslet
-        id = faabric::util::getSystemConfig().endpointHost + "_" + std::to_string(threadIdx);
+    // Set an ID for this Faaslet
+    id = faabric::util::getSystemConfig().endpointHost + "_" +
+         std::to_string(threadIdx);
 
-        logger->debug("Starting worker thread {}", id);
+    logger->debug("Starting worker thread {}", id);
 
-        // Listen to bind queue by default
-        currentQueue = scheduler.getBindQueue();
-    }
+    // Listen to bind queue by default
+    currentQueue = scheduler.getBindQueue();
+}
 
-    void FaabricExecutor::flush() {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
-        logger->warn("Flushing host {}", faabric::util::getSystemConfig().endpointHost);
+void FaabricExecutor::flush()
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    logger->warn("Flushing host {}",
+                 faabric::util::getSystemConfig().endpointHost);
 
-        // Clear out any cached state
-        faabric::state::getGlobalState().forceClearAll(false);
+    // Clear out any cached state
+    faabric::state::getGlobalState().forceClearAll(false);
 
-        // Reset scheduler
-        faabric::scheduler::Scheduler &sch = faabric::scheduler::getScheduler();
-        sch.clear();
-        sch.addHostToGlobalSet();
+    // Reset scheduler
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.clear();
+    sch.addHostToGlobalSet();
 
-        // Hook
-        this->postFlush();
-    }
+    // Hook
+    this->postFlush();
+}
 
-    void FaabricExecutor::bindToFunction(const faabric::Message &msg, bool force) {
-        // If already bound, will be an error, unless forced to rebind to the same message
-        if (_isBound) {
-            if (force) {
-                if (msg.user() != boundMessage.user() || msg.function() != boundMessage.function()) {
-                    throw std::runtime_error("Cannot force bind to a different function");
-                }
-            } else {
-                throw std::runtime_error("Cannot bind worker thread more than once");
+void FaabricExecutor::bindToFunction(const faabric::Message& msg, bool force)
+{
+    // If already bound, will be an error, unless forced to rebind to the same
+    // message
+    if (_isBound) {
+        if (force) {
+            if (msg.user() != boundMessage.user() ||
+                msg.function() != boundMessage.function()) {
+                throw std::runtime_error(
+                  "Cannot force bind to a different function");
             }
+        } else {
+            throw std::runtime_error(
+              "Cannot bind worker thread more than once");
         }
-
-        boundMessage = msg;
-        _isBound = true;
-
-        // Get queue from the scheduler
-        currentQueue = scheduler.getFunctionQueue(msg);
-
-        // Hook
-        this->postBind(msg, force);
     }
 
-    bool FaabricExecutor::isBound() {
-        return _isBound;
+    boundMessage = msg;
+    _isBound = true;
+
+    // Get queue from the scheduler
+    currentQueue = scheduler.getFunctionQueue(msg);
+
+    // Hook
+    this->postBind(msg, force);
+}
+
+bool FaabricExecutor::isBound()
+{
+    return _isBound;
+}
+
+void FaabricExecutor::finish()
+{
+    if (_isBound) {
+        // Notify scheduler if this thread was bound to a function
+        scheduler.notifyNodeFinished(boundMessage);
     }
 
-    void FaabricExecutor::finish() {
-        if (_isBound) {
-            // Notify scheduler if this thread was bound to a function
-            scheduler.notifyNodeFinished(boundMessage);
-        }
+    // Hook
+    this->postFinish();
+}
 
-        // Hook
-        this->postFinish();
+void FaabricExecutor::finishCall(faabric::Message& msg,
+                                 bool success,
+                                 const std::string& errorMsg)
+{
+    // Hook
+    this->preFinishCall(msg, success, errorMsg);
+
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+
+    const std::string funcStr = faabric::util::funcToString(msg, true);
+    logger->info("Finished {}", funcStr);
+    if (!success) {
+        msg.set_outputdata(errorMsg);
     }
 
-    void FaabricExecutor::finishCall(faabric::Message &msg, bool success, const std::string &errorMsg) {
-        // Hook
-        this->preFinishCall(msg, success, errorMsg);
+    fflush(stdout);
 
-        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
+    // Notify the scheduler *before* setting the result. Calls awaiting
+    // the result will carry on blocking
+    scheduler.notifyCallFinished(msg);
 
-        const std::string funcStr = faabric::util::funcToString(msg, true);
-        logger->info("Finished {}", funcStr);
-        if (!success) {
-            msg.set_outputdata(errorMsg);
-        }
+    // Set result
+    logger->debug("Setting function result for {}", funcStr);
+    scheduler.setFunctionResult(msg);
 
-        fflush(stdout);
+    // Increment the execution counter
+    executionCount++;
+}
 
-        // Notify the scheduler *before* setting the result. Calls awaiting
-        // the result will carry on blocking
-        scheduler.notifyCallFinished(msg);
+void FaabricExecutor::run()
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
-        // Set result
-        logger->debug("Setting function result for {}", funcStr);
-        scheduler.setFunctionResult(msg);
+    // Wait for next message
+    while (true) {
+        try {
+            logger->debug("{} waiting for next message", this->id);
+            std::string errorMessage = this->processNextMessage();
 
-        // Increment the execution counter
-        executionCount++;
-    }
-
-    void FaabricExecutor::run() {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
-
-        // Wait for next message
-        while (true) {
-            try {
-                logger->debug("{} waiting for next message", this->id);
-                std::string errorMessage = this->processNextMessage();
-
-                // Drop out if there's some issue
-                if (!errorMessage.empty()) {
-                    break;
-                }
-            }
-            catch (faabric::util::QueueTimeoutException &e) {
-                // At this point we've received no message, so die off
-                logger->debug("{} got no messages. Finishing", this->id);
+            // Drop out if there's some issue
+            if (!errorMessage.empty()) {
                 break;
             }
+        } catch (faabric::util::QueueTimeoutException& e) {
+            // At this point we've received no message, so die off
+            logger->debug("{} got no messages. Finishing", this->id);
+            break;
         }
-
-        this->finish();
     }
 
-    std::string FaabricExecutor::processNextMessage() {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
+    this->finish();
+}
 
-        // Work out which timeout
-        int timeoutMs;
-        faabric::util::SystemConfig conf = faabric::util::getSystemConfig();
-        if (_isBound) {
-            timeoutMs = conf.boundTimeout;
-        } else {
-            timeoutMs = conf.unboundTimeout;
-        }
+std::string FaabricExecutor::processNextMessage()
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
-        faabric::Message msg = currentQueue->dequeue(timeoutMs);
-
-        std::string errorMessage;
-        if (msg.isflushrequest()) {
-            flush();
-
-        } else if (msg.type() == faabric::Message_MessageType_BIND) {
-            const std::string funcStr = faabric::util::funcToString(msg, false);
-            logger->info("{} binding to {}", id, funcStr);
-
-            try {
-                this->bindToFunction(msg);
-            } catch (faabric::util::InvalidFunctionException &e) {
-                errorMessage = "Invalid function: " + funcStr;
-            }
-        } else {
-            // Do the actual execution
-            errorMessage = this->executeCall(msg);
-        }
-
-        return errorMessage;
+    // Work out which timeout
+    int timeoutMs;
+    faabric::util::SystemConfig conf = faabric::util::getSystemConfig();
+    if (_isBound) {
+        timeoutMs = conf.boundTimeout;
+    } else {
+        timeoutMs = conf.unboundTimeout;
     }
 
-    std::string FaabricExecutor::executeCall(faabric::Message &call) {
-        const std::shared_ptr<spdlog::logger> &logger = faabric::util::getLogger();
+    faabric::Message msg = currentQueue->dequeue(timeoutMs);
 
-        const std::string funcStr = faabric::util::funcToString(call, true);
-        logger->info("Faaslet executing {}", funcStr);
+    std::string errorMessage;
+    if (msg.isflushrequest()) {
+        flush();
 
-        // Create and execute the module
-        bool success;
-        std::string errorMessage;
+    } else if (msg.type() == faabric::Message_MessageType_BIND) {
+        const std::string funcStr = faabric::util::funcToString(msg, false);
+        logger->info("{} binding to {}", id, funcStr);
+
         try {
-            success = this->doExecute(call);
+            this->bindToFunction(msg);
+        } catch (faabric::util::InvalidFunctionException& e) {
+            errorMessage = "Invalid function: " + funcStr;
         }
-        catch (const std::exception &e) {
-            errorMessage = "Error: " + std::string(e.what());
-            logger->error(errorMessage);
-            success = false;
-            call.set_returnvalue(1);
-        }
-
-        if (!success && errorMessage.empty()) {
-            errorMessage = "Call failed (return value=" + std::to_string(call.returnvalue()) + ")";
-        }
-
-        this->finishCall(call, success, errorMessage);
-        return errorMessage;
+    } else {
+        // Do the actual execution
+        errorMessage = this->executeCall(msg);
     }
 
-    // ------------------------------------------
-    // HOOKS
-    // ------------------------------------------
+    return errorMessage;
+}
 
-    bool FaabricExecutor::doExecute(faabric::Message &msg) {
-        return true;
+std::string FaabricExecutor::executeCall(faabric::Message& call)
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+
+    const std::string funcStr = faabric::util::funcToString(call, true);
+    logger->info("Faaslet executing {}", funcStr);
+
+    // Create and execute the module
+    bool success;
+    std::string errorMessage;
+    try {
+        success = this->doExecute(call);
+    } catch (const std::exception& e) {
+        errorMessage = "Error: " + std::string(e.what());
+        logger->error(errorMessage);
+        success = false;
+        call.set_returnvalue(1);
     }
 
-    void FaabricExecutor::postBind(const faabric::Message &msg, bool force) {
-
+    if (!success && errorMessage.empty()) {
+        errorMessage =
+          "Call failed (return value=" + std::to_string(call.returnvalue()) +
+          ")";
     }
 
-    void FaabricExecutor::preFinishCall(faabric::Message &call, bool success, const std::string &errorMsg) {
+    this->finishCall(call, success, errorMessage);
+    return errorMessage;
+}
 
-    }
+// ------------------------------------------
+// HOOKS
+// ------------------------------------------
 
-    void FaabricExecutor::postFinish() {
+bool FaabricExecutor::doExecute(faabric::Message& msg)
+{
+    return true;
+}
 
-    }
+void FaabricExecutor::postBind(const faabric::Message& msg, bool force) {}
 
-    void FaabricExecutor::postFlush() {
+void FaabricExecutor::preFinishCall(faabric::Message& call,
+                                    bool success,
+                                    const std::string& errorMsg)
+{}
 
-    }
+void FaabricExecutor::postFinish() {}
+
+void FaabricExecutor::postFlush() {}
 
 }

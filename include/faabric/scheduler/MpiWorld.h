@@ -2,136 +2,199 @@
 
 #include <faabric/mpi/mpi.h>
 
-#include <thread>
-#include <proto/faabric.pb.h>
-#include <faabric/state/StateKeyValue.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
+#include <faabric/state/StateKeyValue.h>
+#include <proto/faabric.pb.h>
+#include <thread>
 
 namespace faabric::scheduler {
-    typedef faabric::util::Queue<faabric::MPIMessage> InMemoryMpiQueue;
+typedef faabric::util::Queue<faabric::MPIMessage> InMemoryMpiQueue;
 
-    struct MpiWorldState {
-        int worldSize;
-    };
+struct MpiWorldState
+{
+    int worldSize;
+};
 
-    std::string getWorldStateKey(int worldId);
+std::string getWorldStateKey(int worldId);
 
-    std::string getRankStateKey(int worldId, int rankId);
+std::string getRankStateKey(int worldId, int rankId);
 
-    class MpiWorld {
-    public:
-        MpiWorld();
+class MpiWorld
+{
+  public:
+    MpiWorld();
 
-        void create(const faabric::Message &call, int newId, int newSize);
+    void create(const faabric::Message& call, int newId, int newSize);
 
-        void initialiseFromState(const faabric::Message &msg, int worldId);
+    void initialiseFromState(const faabric::Message& msg, int worldId);
 
-        void registerRank(int rank);
+    void registerRank(int rank);
 
-        std::string getHostForRank(int rank);
+    std::string getHostForRank(int rank);
 
-        std::string getUser();
+    std::string getUser();
 
-        std::string getFunction();
+    std::string getFunction();
 
-        int getId();
+    int getId();
 
-        int getSize();
+    int getSize();
 
-        void destroy();
+    void destroy();
 
-        void enqueueMessage(faabric::MPIMessage &msg);
+    void enqueueMessage(faabric::MPIMessage& msg);
 
-        void send(int sendRank, int recvRank,
-                  const uint8_t *buffer, faabric_datatype_t *dataType, int count,
-                  faabric::MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL);
+    void send(int sendRank,
+              int recvRank,
+              const uint8_t* buffer,
+              faabric_datatype_t* dataType,
+              int count,
+              faabric::MPIMessage::MPIMessageType messageType =
+                faabric::MPIMessage::NORMAL);
 
-        int isend(int sendRank, int recvRank,
-                   const uint8_t *buffer, faabric_datatype_t *dataType, int count);
+    int isend(int sendRank,
+              int recvRank,
+              const uint8_t* buffer,
+              faabric_datatype_t* dataType,
+              int count);
 
-        void broadcast(int sendRank,
-                       const uint8_t *buffer, faabric_datatype_t *dataType, int count,
-                       faabric::MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL);
+    void broadcast(int sendRank,
+                   const uint8_t* buffer,
+                   faabric_datatype_t* dataType,
+                   int count,
+                   faabric::MPIMessage::MPIMessageType messageType =
+                     faabric::MPIMessage::NORMAL);
 
-        void recv(int sendRank, int recvRank,
-                  uint8_t *buffer, faabric_datatype_t *dataType, int count,
-                  MPI_Status *status, faabric::MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL);
+    void recv(int sendRank,
+              int recvRank,
+              uint8_t* buffer,
+              faabric_datatype_t* dataType,
+              int count,
+              MPI_Status* status,
+              faabric::MPIMessage::MPIMessageType messageType =
+                faabric::MPIMessage::NORMAL);
 
-        int irecv(int sendRank, int recvRank,
-                   uint8_t *buffer, faabric_datatype_t *dataType, int count);
+    int irecv(int sendRank,
+              int recvRank,
+              uint8_t* buffer,
+              faabric_datatype_t* dataType,
+              int count);
 
-        void awaitAsyncRequest(int requestId);
+    void awaitAsyncRequest(int requestId);
 
-        void scatter(int sendRank, int recvRank,
-                     const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
-                     uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
+    void scatter(int sendRank,
+                 int recvRank,
+                 const uint8_t* sendBuffer,
+                 faabric_datatype_t* sendType,
+                 int sendCount,
+                 uint8_t* recvBuffer,
+                 faabric_datatype_t* recvType,
+                 int recvCount);
 
-        void gather(int sendRank, int recvRank,
-                    const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
-                    uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
+    void gather(int sendRank,
+                int recvRank,
+                const uint8_t* sendBuffer,
+                faabric_datatype_t* sendType,
+                int sendCount,
+                uint8_t* recvBuffer,
+                faabric_datatype_t* recvType,
+                int recvCount);
 
-        void allGather(int rank, const uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
-                       uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
+    void allGather(int rank,
+                   const uint8_t* sendBuffer,
+                   faabric_datatype_t* sendType,
+                   int sendCount,
+                   uint8_t* recvBuffer,
+                   faabric_datatype_t* recvType,
+                   int recvCount);
 
-        void reduce(int sendRank, int recvRank, uint8_t *sendBuffer, uint8_t *recvBuffer,
-                    faabric_datatype_t *datatype, int count, faabric_op_t *operation);
+    void reduce(int sendRank,
+                int recvRank,
+                uint8_t* sendBuffer,
+                uint8_t* recvBuffer,
+                faabric_datatype_t* datatype,
+                int count,
+                faabric_op_t* operation);
 
-        void allReduce(int rank, uint8_t *sendBuffer, uint8_t *recvBuffer, faabric_datatype_t *datatype, int count,
-                       faabric_op_t *operation);
+    void allReduce(int rank,
+                   uint8_t* sendBuffer,
+                   uint8_t* recvBuffer,
+                   faabric_datatype_t* datatype,
+                   int count,
+                   faabric_op_t* operation);
 
-        void allToAll(int rank, uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
-                      uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
+    void allToAll(int rank,
+                  uint8_t* sendBuffer,
+                  faabric_datatype_t* sendType,
+                  int sendCount,
+                  uint8_t* recvBuffer,
+                  faabric_datatype_t* recvType,
+                  int recvCount);
 
-        void probe(int sendRank, int recvRank, MPI_Status *status);
+    void probe(int sendRank, int recvRank, MPI_Status* status);
 
-        void barrier(int thisRank);
+    void barrier(int thisRank);
 
-        void rmaGet(int sendRank, faabric_datatype_t *sendType, int sendCount,
-                    uint8_t *recvBuffer, faabric_datatype_t *recvType, int recvCount);
+    void rmaGet(int sendRank,
+                faabric_datatype_t* sendType,
+                int sendCount,
+                uint8_t* recvBuffer,
+                faabric_datatype_t* recvType,
+                int recvCount);
 
-        void rmaPut(int sendRank, uint8_t *sendBuffer, faabric_datatype_t *sendType, int sendCount,
-                    int recvRank, faabric_datatype_t *recvType, int recvCount);
+    void rmaPut(int sendRank,
+                uint8_t* sendBuffer,
+                faabric_datatype_t* sendType,
+                int sendCount,
+                int recvRank,
+                faabric_datatype_t* recvType,
+                int recvCount);
 
-        std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
+    std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
 
-        long getLocalQueueSize(int sendRank, int recvRank);
+    long getLocalQueueSize(int sendRank, int recvRank);
 
-        void overrideHost(const std::string &newHost);
+    void overrideHost(const std::string& newHost);
 
-        void createWindow(const faabric_win_t *window, uint8_t *windowPtr);
+    void createWindow(const faabric_win_t* window, uint8_t* windowPtr);
 
-        void synchronizeRmaWrite(const faabric::MPIMessage &msg, bool isRemote);
+    void synchronizeRmaWrite(const faabric::MPIMessage& msg, bool isRemote);
 
-        double getWTime();
+    double getWTime();
 
-    private:
-        int id;
-        int size;
-        std::string thisHost;
-        faabric::util::TimePoint creationTime;
+  private:
+    int id;
+    int size;
+    std::string thisHost;
+    faabric::util::TimePoint creationTime;
 
-        std::shared_mutex worldMutex;
+    std::shared_mutex worldMutex;
 
-        std::string user;
-        std::string function;
+    std::string user;
+    std::string function;
 
-        std::shared_ptr<state::StateKeyValue> stateKV;
-        std::unordered_map<int, std::string> rankHostMap;
+    std::shared_ptr<state::StateKeyValue> stateKV;
+    std::unordered_map<int, std::string> rankHostMap;
 
-        std::unordered_map<std::string, uint8_t *> windowPointerMap;
+    std::unordered_map<std::string, uint8_t*> windowPointerMap;
 
-        std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>> localQueueMap;
-        std::unordered_map<int, std::thread> asyncThreadMap;
+    std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
+      localQueueMap;
+    std::unordered_map<int, std::thread> asyncThreadMap;
 
-        void setUpStateKV();
+    void setUpStateKV();
 
-        std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
+    std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
-        void checkRankOnThisHost(int rank);
+    void checkRankOnThisHost(int rank);
 
-        int doISendRecv(int sendRank, int recvRank, const uint8_t *sendBuffer, uint8_t *recvBuffer,
-                         faabric_datatype_t *dataType, int count);
+    int doISendRecv(int sendRank,
+                    int recvRank,
+                    const uint8_t* sendBuffer,
+                    uint8_t* recvBuffer,
+                    faabric_datatype_t* dataType,
+                    int count);
 
-        void pushToState();
-    };
+    void pushToState();
+};
 }

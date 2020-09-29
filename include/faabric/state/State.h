@@ -2,38 +2,45 @@
 
 #include "StateKeyValue.h"
 
-#include <string>
 #include <shared_mutex>
-
+#include <string>
 
 namespace faabric::state {
-    class State {
-    public:
-        explicit State(std::string thisIPIn);
+class State
+{
+  public:
+    explicit State(std::string thisIPIn);
 
-        size_t getStateSize(const std::string &user, const std::string &keyIn);
+    size_t getStateSize(const std::string& user, const std::string& keyIn);
 
-        std::shared_ptr<StateKeyValue> getKV(const std::string &user, const std::string &key, size_t size);
+    std::shared_ptr<StateKeyValue> getKV(const std::string& user,
+                                         const std::string& key,
+                                         size_t size);
 
-        std::shared_ptr<StateKeyValue> getKV(const std::string &user, const std::string &key);
+    std::shared_ptr<StateKeyValue> getKV(const std::string& user,
+                                         const std::string& key);
 
-        void forceClearAll(bool global);
+    void forceClearAll(bool global);
 
-        void deleteKV(const std::string &userIn, const std::string &keyIn);
+    void deleteKV(const std::string& userIn, const std::string& keyIn);
 
-        void deleteKVLocally(const std::string &userIn, const std::string &keyIn);
+    void deleteKVLocally(const std::string& userIn, const std::string& keyIn);
 
-        size_t getKVCount();
+    size_t getKVCount();
 
-        std::string getThisIP();
-    private:
-        const std::string thisIP;
+    std::string getThisIP();
 
-        std::unordered_map<std::string, std::shared_ptr<StateKeyValue>> kvMap;
-        std::shared_mutex mapMutex;
+  private:
+    const std::string thisIP;
 
-        std::shared_ptr<StateKeyValue> doGetKV(const std::string &user, const std::string &key, bool sizeless, size_t size);
-    };
+    std::unordered_map<std::string, std::shared_ptr<StateKeyValue>> kvMap;
+    std::shared_mutex mapMutex;
 
-    State &getGlobalState();
+    std::shared_ptr<StateKeyValue> doGetKV(const std::string& user,
+                                           const std::string& key,
+                                           bool sizeless,
+                                           size_t size);
+};
+
+State& getGlobalState();
 }

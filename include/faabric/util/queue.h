@@ -1,98 +1,101 @@
 #pragma once
 
-#include "locks.h"
 #include "exception.h"
+#include "locks.h"
 
 #include <queue>
 
 namespace faabric::util {
-    class QueueTimeoutException : public faabric::util::FaabricException {
-    public:
-        explicit QueueTimeoutException(std::string message): FaabricException(std::move(message)) {
+class QueueTimeoutException : public faabric::util::FaabricException
+{
+  public:
+    explicit QueueTimeoutException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
 
-        }
-    };
+template<typename T>
+class Queue
+{
+  public:
+    void enqueue(T value)
+    {
+        UniqueLock lock(mx);
 
-    template<typename T>
-    class Queue {
-    public:
-        void enqueue(T value) {
-            UniqueLock lock(mx);
+        mq.push(value);
 
-            mq.push(value);
+        cv.notify_one();
+    }
 
-            cv.notify_one();
-        }
+    T doDequeue(long timeoutMs, bool pop)
+    {
+        UniqueLock lock(mx);
 
-        T doDequeue(long timeoutMs, bool pop) {
-            UniqueLock lock(mx);
+        while (mq.empty()) {
+            if (timeoutMs > 0) {
+                std::cv_status returnVal =
+                  cv.wait_for(lock, std::chrono::milliseconds(timeoutMs));
 
-            while (mq.empty()) {
-                if (timeoutMs > 0) {
-                    std::cv_status returnVal = cv.wait_for(lock, std::chrono::milliseconds(timeoutMs));
-
-                    // Work out if this has returned due to timeout expiring
-                    if (returnVal == std::cv_status::timeout) {
-                        throw QueueTimeoutException("Queue timeout");
-                    }
-                } else {
-                    cv.wait(lock);
+                // Work out if this has returned due to timeout expiring
+                if (returnVal == std::cv_status::timeout) {
+                    throw QueueTimeoutException("Queue timeout");
                 }
+            } else {
+                cv.wait(lock);
             }
-
-            T value = mq.front();
-            if(pop) {
-                mq.pop();
-            }
-
-            return value;
         }
 
-        T peek(long timeoutMs = 0) {
-            return doDequeue(timeoutMs, false);
+        T value = mq.front();
+        if (pop) {
+            mq.pop();
         }
 
-        T dequeue(long timeoutMs = 0) {
-            return doDequeue(timeoutMs, true);
-        }
+        return value;
+    }
 
-        long size() {
-            UniqueLock lock(mx);
-            return mq.size();
-        }
+    T peek(long timeoutMs = 0) { return doDequeue(timeoutMs, false); }
 
-        void reset() {
-            UniqueLock lock(mx);
+    T dequeue(long timeoutMs = 0) { return doDequeue(timeoutMs, true); }
 
-            std::queue<T> empty;
-            std::swap(mq, empty);
-        }
+    long size()
+    {
+        UniqueLock lock(mx);
+        return mq.size();
+    }
 
-    private:
-        std::queue<T> mq;
-        std::condition_variable cv;
-        std::mutex mx;
-    };
+    void reset()
+    {
+        UniqueLock lock(mx);
 
+        std::queue<T> empty;
+        std::swap(mq, empty);
+    }
 
-    class TokenPool {
-    public:
-        explicit TokenPool(int nTokens);
+  private:
+    std::queue<T> mq;
+    std::condition_variable cv;
+    std::mutex mx;
+};
 
-        int getToken();
+class TokenPool
+{
+  public:
+    explicit TokenPool(int nTokens);
 
-        void releaseToken(int token);
+    int getToken();
 
-        void reset();
+    void releaseToken(int token);
 
-        int size();
+    void reset();
 
-        int taken();
+    int size();
 
-        int free();
+    int taken();
 
-    private:
-        int _size;
-        Queue<int> queue;
-    };
+    int free();
+
+  private:
+    int _size;
+    Queue<int> queue;
+};
 }

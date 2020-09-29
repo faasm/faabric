@@ -4,22 +4,24 @@
 #include <proto/faabric.pb.h>
 
 namespace faabric::scheduler {
-    class MpiContext {
-    public:
-        MpiContext();
+class MpiContext
+{
+  public:
+    MpiContext();
 
-        void createWorld(const faabric::Message &msg);
+    void createWorld(const faabric::Message& msg);
 
-        void joinWorld(const faabric::Message &msg);
+    void joinWorld(const faabric::Message& msg);
 
-        bool getIsMpi();
+    bool getIsMpi();
 
-        int getWorldId();
+    int getWorldId();
 
-        int getRank();
-    private:
-        bool isMpi;
-        int rank;
-        int worldId;
-    };
+    int getRank();
+
+  private:
+    bool isMpi;
+    int rank;
+    int worldId;
+};
 }

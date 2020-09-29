@@ -2,44 +2,52 @@
 
 #include "StateKeyValue.h"
 
+#include <faabric/redis/Redis.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/locks.h>
-#include <faabric/redis/Redis.h>
-
 
 namespace faabric::state {
-    class RedisStateKeyValue final : public StateKeyValue {
-    public:
-        RedisStateKeyValue(const std::string &userIn, const std::string &keyIn, size_t sizeIn);
+class RedisStateKeyValue final : public StateKeyValue
+{
+  public:
+    RedisStateKeyValue(const std::string& userIn,
+                       const std::string& keyIn,
+                       size_t sizeIn);
 
-        RedisStateKeyValue(const std::string &userIn, const std::string &keyIn);
+    RedisStateKeyValue(const std::string& userIn, const std::string& keyIn);
 
-        static size_t getStateSizeFromRemote(const std::string &userIn, const std::string &keyIn);
+    static size_t getStateSizeFromRemote(const std::string& userIn,
+                                         const std::string& keyIn);
 
-        static void deleteFromRemote(const std::string &userIn, const std::string &keyIn);
+    static void deleteFromRemote(const std::string& userIn,
+                                 const std::string& keyIn);
 
-        static void clearAll(bool global);
-    private:
-        const std::string joinedKey;
+    static void clearAll(bool global);
 
-        uint32_t lastRemoteLockId = 0;
+  private:
+    const std::string joinedKey;
 
-        void lockGlobal() override;
+    uint32_t lastRemoteLockId = 0;
 
-        void unlockGlobal() override;
+    void lockGlobal() override;
 
-        void pullFromRemote() override;
+    void unlockGlobal() override;
 
-        void pullChunkFromRemote(long offset, size_t length) override;
+    void pullFromRemote() override;
 
-        void pushToRemote() override;
+    void pullChunkFromRemote(long offset, size_t length) override;
 
-        void pushPartialToRemote(const std::vector<StateChunk> &dirtyChunks) override;
+    void pushToRemote() override;
 
-        void appendToRemote(const uint8_t *data, size_t length) override;
+    void pushPartialToRemote(
+      const std::vector<StateChunk>& dirtyChunks) override;
 
-        void pullAppendedFromRemote(uint8_t *data, size_t length, long nValues) override;
+    void appendToRemote(const uint8_t* data, size_t length) override;
 
-        void clearAppendedFromRemote() override;
-    };
+    void pullAppendedFromRemote(uint8_t* data,
+                                size_t length,
+                                long nValues) override;
+
+    void clearAppendedFromRemote() override;
+};
 }

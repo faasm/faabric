@@ -6,50 +6,57 @@
 #include <faabric/util/logging.h>
 
 namespace faabric::executor {
-    class FaabricExecutor {
-    public:
-        explicit FaabricExecutor(int threadIdxIn);
+class FaabricExecutor
+{
+  public:
+    explicit FaabricExecutor(int threadIdxIn);
 
-        virtual ~FaabricExecutor() { }
+    virtual ~FaabricExecutor() {}
 
-        void bindToFunction(const faabric::Message &msg, bool force = false);
+    void bindToFunction(const faabric::Message& msg, bool force = false);
 
-        void run();
+    void run();
 
-        bool isBound();
+    bool isBound();
 
-        virtual std::string processNextMessage();
+    virtual std::string processNextMessage();
 
-        std::string executeCall(faabric::Message &call);
+    std::string executeCall(faabric::Message& call);
 
-        void finish();
+    void finish();
 
-        void flush();
+    void flush();
 
-        std::string id;
+    std::string id;
 
-        const int threadIdx;
-    protected:
-        virtual bool doExecute(faabric::Message &msg);
+    const int threadIdx;
 
-        virtual void postBind(const faabric::Message &msg, bool force);
+  protected:
+    virtual bool doExecute(faabric::Message& msg);
 
-        virtual void preFinishCall(faabric::Message &call, bool success, const std::string &errorMsg);
+    virtual void postBind(const faabric::Message& msg, bool force);
 
-        virtual void postFinish();
+    virtual void preFinishCall(faabric::Message& call,
+                               bool success,
+                               const std::string& errorMsg);
 
-        virtual void postFlush();
+    virtual void postFinish();
 
-        bool _isBound = false;
+    virtual void postFlush();
 
-        faabric::scheduler::Scheduler &scheduler;
+    bool _isBound = false;
 
-        std::shared_ptr<faabric::scheduler::InMemoryMessageQueue> currentQueue;
+    faabric::scheduler::Scheduler& scheduler;
 
-        int executionCount = 0;
-    private:
-        faabric::Message boundMessage;
+    std::shared_ptr<faabric::scheduler::InMemoryMessageQueue> currentQueue;
 
-        void finishCall(faabric::Message &msg, bool success, const std::string &errorMsg);
-    };
+    int executionCount = 0;
+
+  private:
+    faabric::Message boundMessage;
+
+    void finishCall(faabric::Message& msg,
+                    bool success,
+                    const std::string& errorMsg);
+};
 }

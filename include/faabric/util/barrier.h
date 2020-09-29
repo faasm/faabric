@@ -1,24 +1,26 @@
 #pragma once
 
-#include <mutex>
 #include <condition_variable>
+#include <mutex>
 
 namespace faabric::util {
 
-    class Barrier {
-    public:
-        explicit Barrier(int count);
+class Barrier
+{
+  public:
+    explicit Barrier(int count);
 
-        void wait();
+    void wait();
 
-        int getSlotCount();
+    int getSlotCount();
 
-        int getUseCount();
-    private:
-        int threadCount;
-        int slotCount;
-        int uses;
-        std::mutex mx;
-        std::condition_variable cv;
-    };
+    int getUseCount();
+
+  private:
+    int threadCount;
+    int slotCount;
+    int uses;
+    std::mutex mx;
+    std::condition_variable cv;
+};
 }
