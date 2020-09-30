@@ -19,13 +19,15 @@ jobs:
       redis:
         image: redis
     steps:
+      # --- Formatting checks ---
       - uses: actions/checkout@v2
       - name: "Python formatting check"
         run: black --check .
-      - name: "C/C++ run formatting"
+      - name: "Run C/C++ formatting"
         run: ./bin/run_clang_format.sh .
-      - name: "Check if there are any changes"
+      - name: "Check C/C++ formatting changes"
         run: git diff --exit-code
+      # --- Set-up and build ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Create build dir"
@@ -40,6 +42,7 @@ jobs:
       - name: "Build tests"
         run: cmake --build . --target faabric_tests
         working-directory: build
+      # --- Tests ---
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: build

@@ -5,6 +5,7 @@ RUN apt-get install -y software-properties-common
 
 RUN apt install -y \
    autoconf \
+   clang-format-10 \
    build-essential \
    git \
    libhiredis-dev \
@@ -12,10 +13,10 @@ RUN apt install -y \
    libboost-filesystem-dev \
    libcurl4-openssl-dev \
    ninja-build \
-   pkg-config \
-   wget \
    python3-dev \
-   python3-pip
+   python3-pip \
+   pkg-config \
+   wget
 
 # Python deps
 RUN pip3 install black
