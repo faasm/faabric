@@ -2,12 +2,9 @@ name: Tests
 
 on:
   push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
-      - docker
+    branches: [master]
+  pull_request: 
+    branches: [master]
 
 jobs:
   tests:
@@ -17,12 +14,20 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faabric/base:0.0.3
+      image: faabric/base:0.0.4
     services:
       redis:
         image: redis
     steps:
+      # --- Formatting checks ---
       - uses: actions/checkout@v2
+      - name: "Python formatting check"
+        run: ./bin/check_black.sh
+      - name: "Run C/C++ formatting"
+        run: ./bin/run_clang_format.sh 
+      - name: "Check C/C++ formatting changes"
+        run: git diff --exit-code
+      # --- Set-up and build ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Create build dir"
@@ -37,6 +42,7 @@ jobs:
       - name: "Build tests"
         run: cmake --build . --target faabric_tests
         working-directory: build
+      # --- Tests ---
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: build

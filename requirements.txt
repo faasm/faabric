@@ -1,4 +1,5 @@
 ansible
+black
 docker
 invoke
 redis
