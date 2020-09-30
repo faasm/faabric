@@ -58,7 +58,7 @@ def push(ctx):
 
     for container in IMAGES:
         cmd = "docker push faabric/{}:{}".format(container, this_version)
-        
+
         print(cmd)
         run(
             cmd,
