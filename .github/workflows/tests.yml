@@ -2,12 +2,9 @@ name: Tests
 
 on:
   push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
-      - docker
+    branches: [master]
+  pull_request: 
+    branches: [master]
 
 jobs:
   tests:
@@ -17,12 +14,18 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faabric/base:0.0.3
+      image: faabric/base:0.0.4
     services:
       redis:
         image: redis
     steps:
       - uses: actions/checkout@v2
+      - name: "Python formatting check"
+        run: black --check .
+      - name: "C/C++ run formatting"
+        run: ./bin/run_clang_format.sh .
+      - name: "Check if there are any changes"
+        run: git diff --exit-code
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Create build dir"

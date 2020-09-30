@@ -21,7 +21,7 @@ See the [base Dockerfile](docker/base.dockerfile) for all the dependencies.
 
 Use of Clang and Ninja is recommended.
 
-```
+```bash
 mkdir build
 cd build
 cmake -DCMAKE_C_COMPILER=clang \
@@ -30,5 +30,29 @@ cmake -DCMAKE_C_COMPILER=clang \
   -DCMAKE_BUILD_TYPE=Release \
   ..
 ninja
+```
+
+## CLI
+
+To set up the CLI:
+
+```bash
+source workon.sh
+pip install -r requirements.txt
+```
+
+## Docker
+
+To build the Docker Faabric Docker containers, run:
+
+```bash
+# Build locally
+inv container.build
+
+# Push
+inv container.push
+
+# Build locally and push (requires permissions)
+inv container.build --push
 ```
 

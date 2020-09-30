@@ -6,14 +6,19 @@ from invoke import task, Failure
 from tasks.util.env import get_version, PROJ_ROOT
 
 
-@task(iterable=["c"])
-def build(ctx, c, nocache=False, push=False):
+IMAGES = [
+    "base",
+]
+
+
+@task
+def build(ctx, nocache=False, push=False):
     """
-    Build container images
+    Build current version of container images
     """
     this_version = get_version()
 
-    for container in c:
+    for container in IMAGES:
         tag_name = "faabric/{}:{}".format(container, this_version)
 
         if nocache:
@@ -27,15 +32,36 @@ def build(ctx, c, nocache=False, push=False):
         if not exists(dockerfile):
             raise Failure("Invalid container: {}".format(container))
 
-        cmd = "docker build {} -t {} --build-arg FAABRIC_VERSION={} -f {} .".format(
-            no_cache_str, tag_name, this_version, dockerfile
-        )
-        print(cmd)
-        run(cmd, shell=True, check=True, env={"DOCKER_BUILDKIT": "1"})
+        build_cmd = [
+            "docker build",
+            no_cache_str,
+            "-t {}".format(tag_name),
+            "--build-arg FAABRIC_VERSION={}".format(this_version),
+            "-f {}".format(dockerfile),
+            ".",
+        ]
+        build_cmd = " ".join(build_cmd)
+
+        print(build_cmd)
+        run(build_cmd, shell=True, check=True, env={"DOCKER_BUILDKIT": "1"})
 
         if push:
-            run(
-                "docker push faabric/{}:{}".format(container, this_version),
-                shell=True,
-                check=True,
-            )
+            push(ctx)
+
+
+@task
+def push(ctx):
+    """
+    Push current version of container images
+    """
+    this_version = get_version()
+
+    for container in IMAGES:
+        cmd = "docker push faabric/{}:{}".format(container, this_version)
+        
+        print(cmd)
+        run(
+            cmd,
+            shell=True,
+            check=True,
+        )
