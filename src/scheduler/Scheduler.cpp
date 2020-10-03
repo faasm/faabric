@@ -94,12 +94,12 @@ namespace faabric::scheduler {
     }
 
     long Scheduler::getFunctionWarmNodeCount(const faabric::Message &msg) {
-        std::string funcStr = faabric::util::funcToString(msg, false);
+        std::string funcStr = faabric::util::funcToString(msg, false, true);
         return nodeCountMap[funcStr];
     }
 
     double Scheduler::getFunctionInFlightRatio(const faabric::Message &msg) {
-        std::string funcStr = faabric::util::funcToString(msg, false);
+        std::string funcStr = faabric::util::funcToString(msg, false, true);
 
         long nodeCount = nodeCountMap[funcStr];
         long inFlightCount = getFunctionInFlightCount(msg);
@@ -121,12 +121,12 @@ namespace faabric::scheduler {
     }
 
     long Scheduler::getFunctionInFlightCount(const faabric::Message &msg) {
-        const std::string funcStr = faabric::util::funcToString(msg, false);
+        const std::string funcStr = faabric::util::funcToString(msg, false, true);
         return inFlightCountMap[funcStr];
     }
 
     std::shared_ptr<InMemoryMessageQueue> Scheduler::getFunctionQueue(const faabric::Message &msg) {
-        std::string funcStr = faabric::util::funcToString(msg, false);
+        std::string funcStr = faabric::util::funcToString(msg, false, true);
 
         // This will be called from within something holding the lock
         if (queueMap.count(funcStr) == 0) {
@@ -150,7 +150,7 @@ namespace faabric::scheduler {
     }
 
     std::string Scheduler::getFunctionWarmSetName(const faabric::Message &msg) {
-        std::string funcStr = faabric::util::funcToString(msg, false);
+        std::string funcStr = faabric::util::funcToString(msg, false, true);
         return this->getFunctionWarmSetNameFromStr(funcStr);
     }
 
@@ -190,7 +190,7 @@ namespace faabric::scheduler {
         }
 
         bool executedLocally = true;
-        const std::string funcStrWithId = faabric::util::funcToString(msg, true);
+        const std::string funcStrWithId = faabric::util::funcToString(msg, true, true);
         if (bestHost == thisHost) {
             // Run locally if we're the best choice
             logger->debug("Executing {} locally", funcStrWithId);
@@ -258,7 +258,7 @@ namespace faabric::scheduler {
 
     void Scheduler::updateOpinion(const faabric::Message &msg) {
         // Note this function is lock-free, should be called when lock held
-        const std::string funcStr = faabric::util::funcToString(msg, false);
+        const std::string funcStr = faabric::util::funcToString(msg, false, true);
         SchedulerOpinion currentOpinion = opinionMap[funcStr];
 
         // Check per-function limits
@@ -345,7 +345,7 @@ namespace faabric::scheduler {
     }
 
     SchedulerOpinion Scheduler::getLatestOpinion(const faabric::Message &msg) {
-        const std::string funcStr = funcToString(msg, false);
+        const std::string funcStr = funcToString(msg, false, true);
         return opinionMap[funcStr];
     }
 
@@ -354,12 +354,12 @@ namespace faabric::scheduler {
 
         // If we're ignoring the scheduling, just put it on this host regardless
         if (conf.noScheduler == 1) {
-            logger->debug("Ignoring scheduler and queueing {} locally", faabric::util::funcToString(msg, true));
+            logger->debug("Ignoring scheduler and queueing {} locally", faabric::util::funcToString(msg, true, true));
             return thisHost;
         }
 
         // Accept if we have capacity
-        const std::string funcStrNoId = faabric::util::funcToString(msg, false);
+        const std::string funcStrNoId = faabric::util::funcToString(msg, false, true);
         SchedulerOpinion thisOpinion = opinionMap[funcStrNoId];
         if (thisOpinion == SchedulerOpinion::YES) {
             return thisHost;
@@ -424,7 +424,7 @@ namespace faabric::scheduler {
         const std::shared_ptr <spdlog::logger> logger = faabric::util::getLogger();
 
         // Increment the in-flight count
-        const std::string funcStr = faabric::util::funcToString(msg, false);
+        const std::string funcStr = faabric::util::funcToString(msg, false, true);
         inFlightCountMap[funcStr]++;
 
         // Check ratios
@@ -452,6 +452,7 @@ namespace faabric::scheduler {
             bindMsg.set_istypescript(msg.istypescript());
             bindMsg.set_pythonuser(msg.pythonuser());
             bindMsg.set_pythonfunction(msg.pythonfunction());
+            bindMsg.set_issgx(msg.issgx());
 
             this->enqueueMessage(bindMsg);
         }
@@ -461,21 +462,21 @@ namespace faabric::scheduler {
     }
 
     void Scheduler::decrementInFlightCount(const faabric::Message &msg) {
-        const std::string funcStr = faabric::util::funcToString(msg, false);
+        const std::string funcStr = faabric::util::funcToString(msg, false, true);
         inFlightCountMap[funcStr] = std::max(inFlightCountMap[funcStr] - 1, 0L);
 
         updateOpinion(msg);
     }
 
     void Scheduler::incrementWarmNodeCount(const faabric::Message &msg) {
-        std::string funcStr = faabric::util::funcToString(msg, false);
+        std::string funcStr = faabric::util::funcToString(msg, false, true);
         nodeCountMap[funcStr]++;
 
         updateOpinion(msg);
     }
 
     void Scheduler::decrementWarmNodeCount(const faabric::Message &msg) {
-        const std::string funcStr = faabric::util::funcToString(msg, false);
+        const std::string funcStr = faabric::util::funcToString(msg, false, true);
         nodeCountMap[funcStr] = std::max(nodeCountMap[funcStr] - 1, 0L);
 
         updateOpinion(msg);

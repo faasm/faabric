@@ -51,7 +51,7 @@ namespace faabric::util {
 
     bool isValidFunction(const faabric::Message &msg);
 
-    std::string funcToString(const faabric::Message &msg, bool includeId);
+    std::string funcToString(const faabric::Message &msg, bool includeId, bool includeSGX = false);
 
     unsigned int setMessageId(faabric::Message &msg);
 

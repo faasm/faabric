@@ -239,11 +239,15 @@ namespace faabric::util {
         return inputData;
     }
 
-    std::string funcToString(const faabric::Message &msg, bool includeId) {
+    std::string funcToString(const faabric::Message &msg, bool includeId, bool includeSGX) {
         std::string str = msg.user() + "/" + msg.function();
 
         if (includeId) {
             str += ":" + std::to_string(msg.id());
+        }
+
+        if(includeSGX) {
+            str += ":" + std::to_string(msg.issgx());
         }
         return str;
     }
