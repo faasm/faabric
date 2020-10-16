@@ -28,6 +28,8 @@ set(LIB_FILES
 
 faabric_private_lib(util "${LIB_FILES}")
 
+add_dependencies(util spdlog)
+
 target_link_libraries(
         util
         proto

@@ -9,7 +9,7 @@ set(LIB_FILES
 
 faabric_private_lib(faabric_test_utils "${LIB_FILES}")
 
+add_dependencies(faabric_test_utils catch)
 target_link_libraries(faabric_test_utils
-    catch
     faabric
 )

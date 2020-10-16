@@ -7,7 +7,7 @@ from invoke import task
 
 from tasks.util.env import PROJ_ROOT
 
-
+_INSTALL_PREFIX = join(PROJ_ROOT, "install")
 _BUILD_DIR = join(PROJ_ROOT, "build", "cmake")
 _BIN_DIR = join(_BUILD_DIR, "bin")
 
@@ -23,6 +23,7 @@ def cmake(ctx, clean=False):
     cmd = [
         "cmake",
         "-GNinja",
+        "-DCMAKE_INSTALL_PREFIX={}".format(_INSTALL_PREFIX),
         "-DCMAKE_BUILD_TYPE=Debug",
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
         "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
