@@ -1,5 +1,5 @@
 #include "faabric_utils.h"
-#include <catch/catch.hpp>
+#include <catch2/catch.hpp>
 
 #include <faabric/mpi/mpi.h>
 #include <faabric/scheduler/FunctionCallServer.h>

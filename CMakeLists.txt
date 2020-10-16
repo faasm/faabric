@@ -57,22 +57,22 @@ set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 
 # Third party
 set(EXTERNAL_INSTALL_DIR ${CMAKE_CURRENT_LIST_DIR}/install)
-include_directories(${EXTERNAL_INSTALL_DIR}/include)
+# include_directories(${EXTERNAL_INSTALL_DIR}/include)
 
-ExternalProject_Add(cereal
+ExternalProject_Add(cereal_ext
     GIT_REPOSITORY "https://github.com/USCiLab/cereal"
     GIT_TAG "v1.3.0"
     CMAKE_ARGS "-DJUST_INSTALL_CEREAL=1"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${EXTERNAL_INSTALL_DIR}"
 )
 
-ExternalProject_Add(pistache
+ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/oktal/pistache.git"
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${EXTERNAL_INSTALL_DIR}"
 )
 
-ExternalProject_Add(rapidjson
+ExternalProject_Add(rapidjson_ext
     GIT_REPOSITORY "https://github.com/Tencent/rapidjson"
     GIT_TAG "2ce91b823c8b4504b9c40f99abf00917641cef6c"
     CMAKE_ARGS "-DRAPIDJSON_BUILD_DOC=OFF \
@@ -81,14 +81,14 @@ ExternalProject_Add(rapidjson
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${EXTERNAL_INSTALL_DIR}"
 )
 
-ExternalProject_Add(spdlog
+ExternalProject_Add(spdlog_ext
     GIT_REPOSITORY "https://github.com/gabime/spdlog"
     GIT_TAG "v1.8.0"  
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${EXTERNAL_INSTALL_DIR}"
 )
 
 if(FAABRIC_BUILD_TESTS)
-    ExternalProject_Add(catch
+    ExternalProject_Add(catch_ext
         GIT_REPOSITORY "https://github.com/catchorg/Catch2"
         GIT_TAG "v2.13.2"
         CMAKE_ARGS "-DCATCH_INSTALL_DOCS=OFF \
