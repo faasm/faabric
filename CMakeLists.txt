@@ -51,6 +51,12 @@ include_directories(${PROTOBUF_INCLUDE_DIR})
 set(PROTOC_EXE /usr/local/bin/protoc)                                            
 set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)                                  
 
+# Third party
+ExternalProject_Add(pistache
+    GIT_REPOSITORY "https://github.com/oktal/pistache.git"
+    GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
+)
+
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

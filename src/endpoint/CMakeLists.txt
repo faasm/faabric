@@ -11,4 +11,5 @@ set(LIB_FILES
 
 faabric_private_lib(endpoint "${LIB_FILES}")
 
-target_link_libraries(endpoint pistache pthread util)
+add_dependencies(endpoint pistache)
+target_link_libraries(endpoint pthread util)
