@@ -1,5 +1,9 @@
 build/
 
+# Clang
+.clangd
+compile_commands.json
+
 # Ansible
 *.retry
 
