@@ -41,3 +41,8 @@ RUN cmake -GNinja \
     ../..
 RUN ninja install
 
+# Tidy up
+WORKDIR /
+RUN rm -r /setup
+RUN apt-get clean autoclean
+RUN apt-get autoremove

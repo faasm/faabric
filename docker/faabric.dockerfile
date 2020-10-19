@@ -15,10 +15,4 @@ RUN cmake \
     ..
 RUN ninja faabric_tests 
 
-# Tidy up
-WORKDIR /
-RUN rm -r /setup
-RUN apt-get clean autoclean
-RUN apt-get autoremove
-
 CMD /bin/bash
