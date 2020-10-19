@@ -48,8 +48,8 @@ set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 
 # Include directories
 include_directories(
-        ${FAABRIC_INCLUDE_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
+    ${FAABRIC_INCLUDE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
 )
 
 add_subdirectory(src/endpoint)
@@ -82,3 +82,26 @@ if(FAABRIC_BUILD_TESTS)
     add_subdirectory(tests/utils)
 endif()
 
+# Installation step
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# Install all headers from subdirectories but preserve the dir structure
+function(lib_headers libname) 
+    file(GLOB LIB_HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/${libname}/*.h") 
+    set_target_properties(${libname} PROPERTIES PUBLIC_HEADER "${LIB_HEADERS}")
+    install(TARGETS ${libname}
+        PUBLIC_HEADER DESTINATION include/faabric/${libname}
+        )
+endfunction(lib_headers)
+
+lib_headers(endpoint)
+lib_headers(executor)
+lib_headers(proto)
+lib_headers(redis)
+lib_headers(scheduler)
+lib_headers(state)
+lib_headers(util)
+
+install(TARGETS faabric)

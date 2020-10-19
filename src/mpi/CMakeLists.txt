@@ -24,13 +24,16 @@ set_target_properties(faabricmpi
 
 if(FAASM_BUILD_TYPE STREQUAL "wasm")
     set(LIB_DIRECTORY ${CMAKE_SYSROOT}/lib/wasm32-wasi)
+    set(HEADER_DEST ${CMAKE_SYSROOT}/include/faabric/mpi)
+    
+    install(TARGETS faabricmpi
+        ARCHIVE DESTINATION ${LIB_DIRECTORY}
+        LIBRARY DESTINATION ${LIB_DIRECTORY}
+        PUBLIC_HEADER DESTINATION ${HEADER_DEST}
+    )
 else()
-    set(LIB_DIRECTORY ${CMAKE_SYSROOT}/lib)
+    install(TARGETS faabricmpi
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include/faabric/mpi
+    )
 endif()
-
-install(TARGETS faabricmpi
-    ARCHIVE DESTINATION ${LIB_DIRECTORY}
-    LIBRARY DESTINATION ${LIB_DIRECTORY}
-    PUBLIC_HEADER DESTINATION ${CMAKE_SYSROOT}/include/faabric/mpi
-)
 

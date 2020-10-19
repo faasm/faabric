@@ -7,9 +7,9 @@ from invoke import task
 
 from tasks.util.env import PROJ_ROOT
 
-_INSTALL_PREFIX = join(PROJ_ROOT, "install")
 _BUILD_DIR = join(PROJ_ROOT, "build", "cmake")
 _BIN_DIR = join(_BUILD_DIR, "bin")
+_INSTALL_PREFIX = join(_BUILD_DIR, "install")
 
 
 @task
@@ -35,6 +35,9 @@ def cmake(ctx, clean=False):
 
 @task
 def cc(ctx, target):
+    """
+    Compile the given target
+    """
     run(
         "cmake --build . --target {}".format(target),
         cwd=_BUILD_DIR,
@@ -43,7 +46,22 @@ def cc(ctx, target):
 
 
 @task
+def install(ctx, target):
+    """
+    Install the given target
+    """
+    run(
+        "ninja install {}".format(target),
+        cwd=_BUILD_DIR,
+        shell=True,
+    )
+
+
+@task
 def r(ctx, target):
+    """
+    Run the given target
+    """
     run(
         "./{}".format(target),
         cwd=_BIN_DIR,
