@@ -15,6 +15,7 @@ def _get_docker_tag(img_name):
 
 def _do_container_build(name, nocache=False, push=False):
     tag_name = _get_docker_tag(name)
+    ver = get_version()
 
     if nocache:
         no_cache_str = "--no-cache"
@@ -28,6 +29,7 @@ def _do_container_build(name, nocache=False, push=False):
         no_cache_str,
         "-t {}".format(tag_name),
         "-f {}".format(dockerfile),
+        "--build-arg FAABRIC_VERSION={}".format(ver),
         ".",
     ]
     build_cmd = " ".join(build_cmd)

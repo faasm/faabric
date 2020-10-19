@@ -1,11 +1,13 @@
 FROM faasm/grpc-root:0.0.5
+ARG FAABRIC_VERSION
 
 # Redis
 RUN apt install -y redis-tools
 
 # Build the code
-WORKDIR /code/faabric
-COPY . .
+WORKDIR /code
+RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
+
 WORKDIR /code/faabric/build
 RUN cmake \
     -GNinja \
