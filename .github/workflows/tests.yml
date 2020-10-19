@@ -35,10 +35,11 @@ jobs:
         run: ./bin/run_clang_format.sh 
       - name: "Check C/C++ formatting changes"
         run: git diff --exit-code
-      # --- Set-up and build ---
+      # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      - name: "Rerun build set-up"
+      # --- Build ---
+      - name: "Configure build"
         run: >
           cmake
           -GNinja
