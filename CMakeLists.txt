@@ -82,11 +82,6 @@ if(FAABRIC_BUILD_TESTS)
     add_subdirectory(tests/utils)
 endif()
 
-# Installation step
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
 # Install all headers from subdirectories but preserve the dir structure
 function(lib_headers libname) 
     file(GLOB LIB_HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/${libname}/*.h") 
