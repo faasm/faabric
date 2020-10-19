@@ -7,15 +7,9 @@ applications from serverless functions.
 
 ### Dependencies
 
-The following dependencies cannot be installed with `apt`:
-
-- gRPC and Protobuf - https://grpc.io/docs/languages/cpp/quickstart/ 
-- RapidJSON - https://rapidjson.org/
-- spdlog - https://github.com/gabime/spdlog
-- pistache - https://github.com/oktal/pistache
-- catch (for testing) - https://github.com/catchorg/Catch2 
-
-See the [base Dockerfile](docker/base.dockerfile) for all the dependencies.
+The only external dependency _not_ installed through CMake is `gRPC` which
+should be installed according to the instructions
+[here](https://grpc.io/docs/languages/cpp/quickstart/).
 
 ### CMake
 

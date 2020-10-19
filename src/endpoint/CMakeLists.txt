@@ -11,5 +11,6 @@ set(LIB_FILES
 
 faabric_private_lib(endpoint "${LIB_FILES}")
 
-add_dependencies(endpoint pistache)
+add_dependencies(endpoint pistache_ext)
+target_link_directories(endpoint PUBLIC ${THIRD_PARTY_INSTALL_DIR}/lib)
 target_link_libraries(endpoint pistache pthread util)

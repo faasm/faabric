@@ -1,4 +1,5 @@
 FROM ubuntu:20.04
+ARG FAABRIC_VERSION
 
 RUN apt-get update
 RUN apt-get install -y software-properties-common
@@ -24,7 +25,10 @@ RUN pip3 install black
 # Latest cmake
 RUN apt remove --purge --auto-remove cmake
 WORKDIR /setup
-RUN wget -q -O cmake-linux.sh https://github.com/Kitware/CMake/releases/download/v3.18.2/cmake-3.18.2-Linux-x86_64.sh
+RUN wget -q -O \
+    cmake-linux.sh \
+    https://github.com/Kitware/CMake/releases/download/v3.18.2/cmake-3.18.2-Linux-x86_64.sh
+
 RUN sh cmake-linux.sh -- --skip-license --prefix=/usr/local
 
 # gRPC, protobuf etc.
@@ -37,43 +41,21 @@ RUN cmake -GNinja \
     ../..
 RUN ninja install
 
-# spdlog
-WORKDIR /setup
-RUN git clone https://github.com/gabime/spdlog.git
-WORKDIR /setup/spdlog/build
-RUN cmake -GNinja \
-    -DCMAKE_INSTALL_PREFIX=/usr/local \
-    ..
-RUN ninja install
-
-# RapidJSON
-WORKDIR /setup
-RUN git clone https://github.com/Tencent/rapidjson.git
-WORKDIR /setup/rapidjson/build
-RUN cmake -GNinja \
-    -DCMAKE_INSTALL_PREFIX=/usr/local \
-    ..
-RUN ninja install
-
 # Redis
 RUN apt install -y redis-tools
 
-# Catch
-WORKDIR /usr/local/include/catch
-RUN wget -q -O catch.hpp https://raw.githubusercontent.com/catchorg/Catch2/master/single_include/catch2/catch.hpp
-
-# Pistache
-WORKDIR /setup
-RUN  git clone https://github.com/oktal/pistache.git
-WORKDIR /setup/pistache
-RUN git submodule update --init
-WORKDIR /setup/pistache/build
-RUN cmake -G Ninja \
+# Build the code
+WORKDIR /code
+RUN git clone https://github.com/faasm/faabric
+WORKDIR /code/faabric
+RUN git checkout ${FAABRIC_VERSION}
+WORKDIR /code/faabric/build
+RUN cmake \
+    -GNinja \
+    -DCMAKE_CXX_COMPILER=/usr/bin/clang++-10 \
+    -DCMAKE_C_COMPILER=/usr/bin/clang-10 \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr/local \
     ..
-RUN ninja
-RUN ninja install
 
 # Tidy up
 WORKDIR /
