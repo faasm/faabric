@@ -4,17 +4,19 @@ ARG FAABRIC_VERSION
 # Redis
 RUN apt install -y redis-tools
 
-# Build the code
+# Put the code in place
 WORKDIR /code
 RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
 
-WORKDIR /code/faabric/build
+# Build the code
+WORKDIR /build/faabric
 RUN cmake \
     -GNinja \
     -DCMAKE_CXX_COMPILER=/usr/bin/clang++-10 \
     -DCMAKE_C_COMPILER=/usr/bin/clang-10 \
     -DCMAKE_BUILD_TYPE=Release \
-    ..
-RUN ninja faabric_tests 
+    /code/faabric
+
+RUN ninja faabric
 
 CMD /bin/bash
