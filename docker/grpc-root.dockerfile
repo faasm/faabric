@@ -41,25 +41,3 @@ RUN cmake -GNinja \
     ../..
 RUN ninja install
 
-# Redis
-RUN apt install -y redis-tools
-
-# Build the code
-WORKDIR /code/faabric
-COPY . .
-WORKDIR /code/faabric/build
-RUN cmake \
-    -GNinja \
-    -DCMAKE_CXX_COMPILER=/usr/bin/clang++-10 \
-    -DCMAKE_C_COMPILER=/usr/bin/clang-10 \
-    -DCMAKE_BUILD_TYPE=Release \
-    ..
-RUN ninja faabric_tests 
-
-# Tidy up
-WORKDIR /
-RUN rm -r /setup
-RUN apt-get clean autoclean
-RUN apt-get autoremove
-
-CMD /bin/bash

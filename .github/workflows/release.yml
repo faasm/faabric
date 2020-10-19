@@ -28,6 +28,6 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          file: Dockerfile
+          file: docker/faabric.dockerfile
           context: .
           tags: faasm/faabric:${{ env.TAG_VERSION }}

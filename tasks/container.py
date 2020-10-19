@@ -1,26 +1,33 @@
 from subprocess import run
+from os.path import join
 
 from invoke import task
+from tasks.util.env import get_version, PROJ_ROOT
 
-from tasks.util.env import get_docker_tag
+FAABRIC_IMAGE_NAME = "faabric"
+GRPC_IMAGE_NAME = "grpc-root"
 
 
-@task
-def build(ctx, nocache=False, push=False):
-    """
-    Build current version of container
-    """
-    tag_name = get_docker_tag()
+def _get_docker_tag(img_name):
+    ver = get_version()
+    return "faasm/{}:{}".format(img_name, ver)
+
+
+def _do_container_build(name, nocache=False, push=False):
+    tag_name = _get_docker_tag(name)
 
     if nocache:
         no_cache_str = "--no-cache"
     else:
         no_cache_str = ""
 
+    dockerfile = join(PROJ_ROOT, "docker", "{}.dockerfile".format(name))
+
     build_cmd = [
         "docker build",
         no_cache_str,
         "-t {}".format(tag_name),
+        "-f {}".format(dockerfile),
         ".",
     ]
     build_cmd = " ".join(build_cmd)
@@ -29,17 +36,44 @@ def build(ctx, nocache=False, push=False):
     run(build_cmd, shell=True, check=True, env={"DOCKER_BUILDKIT": "1"})
 
     if push:
-        push(ctx)
+        _do_push(name)
+
+
+def _do_push(name):
+    tag_name = _get_docker_tag(name)
+
+    cmd = "docker push {}".format(tag_name)
+    print(cmd)
+    run(cmd, shell=True, check=True)
+
+
+@task
+def build(ctx, nocache=False, push=False):
+    """
+    Build current version of faasm container
+    """
+    _do_container_build(FAABRIC_IMAGE_NAME)
+
+
+@task
+def build_grpc(ctx, nocache=False, push=False):
+    """
+    Build current base gRPC container
+    """
+    _do_container_build(GRPC_IMAGE_NAME)
 
 
 @task
 def push(ctx):
     """
-    Push current version of container images
+    Push current version of container
     """
-    tag_name = get_docker_tag()
+    _do_push(FAABRIC_IMAGE_NAME)
 
-    cmd = "docker push {}".format(tag_name)
 
-    print(cmd)
-    run(cmd, shell=True, check=True)
+@task
+def push_grpc(ctx):
+    """
+    Push current version of gRPC container
+    """
+    _do_push(GRPC_IMAGE_NAME)
