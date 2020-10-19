@@ -54,7 +54,7 @@ def build(ctx, nocache=False, push=False):
     """
     Build current version of faasm container
     """
-    _do_container_build(FAABRIC_IMAGE_NAME)
+    _do_container_build(FAABRIC_IMAGE_NAME, nocache=nocache, push=push)
 
 
 @task
@@ -62,7 +62,7 @@ def build_grpc(ctx, nocache=False, push=False):
     """
     Build current base gRPC container
     """
-    _do_container_build(GRPC_IMAGE_NAME)
+    _do_container_build(GRPC_IMAGE_NAME, nocache=nocache, push=push)
 
 
 @task
