@@ -47,11 +47,11 @@ jobs:
           -DCMAKE_C_COMPILER=/usr/bin/clang-10
           -DCMAKE_BUILD_TYPE=Release
           ..
-        working-directory: build
+        working-directory: /build/faabric
       - name: "Build tests"
         run: ninja faabric_tests
-        working-directory: build
+        working-directory: /build/faabric
       # --- Tests ---
       - name: "Run tests"
         run: ./bin/faabric_tests
-        working-directory: build
+        working-directory: /build/faabric
