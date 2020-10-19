@@ -5,7 +5,6 @@ PROJ_ROOT = dirname(dirname(dirname(realpath(__file__))))
 ANSIBLE_ROOT = join(PROJ_ROOT, "ansible")
 
 
-
 def get_version():
     ver_file = join(PROJ_ROOT, "VERSION")
 
