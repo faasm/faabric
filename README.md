@@ -18,9 +18,10 @@ Use of Clang and Ninja is recommended.
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_C_COMPILER=clang \
-  -DCMAKE_CXX_COMPILER=clang++ \
+cmake \
   -GNinja \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_BUILD_TYPE=Release \
   ..
 ninja
@@ -46,7 +47,7 @@ inv container.build
 # Push
 inv container.push
 
-# Build locally and push (requires permissions)
+# Build locally and push
 inv container.build --push
 ```
 
