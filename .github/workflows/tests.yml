@@ -14,7 +14,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.0.4
+      image: faasm/faabric:0.0.5
     defaults:
       run:
         working-directory: /code/faabric
