@@ -2,7 +2,7 @@ from subprocess import run
 
 from invoke import task
 
-from tasks.util.env import get_version
+from tasks.util.env import get_docker_tag
 
 
 @task
@@ -10,9 +10,7 @@ def build(ctx, nocache=False, push=False):
     """
     Build current version of container
     """
-    this_version = get_version()
-
-    tag_name = "faabric/base:{}".format(this_version)
+    tag_name = get_docker_tag()
 
     if nocache:
         no_cache_str = "--no-cache"
@@ -23,7 +21,6 @@ def build(ctx, nocache=False, push=False):
         "docker build",
         no_cache_str,
         "-t {}".format(tag_name),
-        "--build-arg FAABRIC_VERSION={}".format(this_version),
         ".",
     ]
     build_cmd = " ".join(build_cmd)
@@ -40,13 +37,9 @@ def push(ctx):
     """
     Push current version of container images
     """
-    this_version = get_version()
+    tag_name = get_docker_tag()
 
-    cmd = "docker push faabric/base:{}".format(this_version)
+    cmd = "docker push {}".format(tag_name)
 
     print(cmd)
-    run(
-        cmd,
-        shell=True,
-        check=True,
-    )
+    run(cmd, shell=True, check=True)

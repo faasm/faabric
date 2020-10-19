@@ -1,4 +1,4 @@
-# Faabric ![Faabric tests](https://github.com/faasm/faabric/workflows/Tests/badge.svg) ![License](https://img.shields.io/github/license/faasm/faabric.svg)
+# Faabric [![Faabric tests](https://github.com/faasm/faabric/workflows/Tests/badge.svg?branch=master)](https://github.com/faasm/faabric/actions) [![License](https://img.shields.io/github/license/faasm/faabric.svg)](https://github.com/faasm/faabric/blob/master/LICENSE.md) 
 
 Faabric provides collective communication and state to build distributed 
 applications from serverless functions. 

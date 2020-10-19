@@ -14,7 +14,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faabric/base:0.0.4
+      image: faasm/faabric:0.0.4
     defaults:
       run:
         working-directory: /code/faabric
@@ -37,17 +37,17 @@ jobs:
       # --- Set-up and build ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      - name: "Create build dir"
-        run: mkdir build
-      - name: "Set up build"
+      - name: "Rerun build set-up"
         run: >
           cmake
           -GNinja
+          -DCMAKE_CXX_COMPILER=/usr/bin/clang++-10 
+          -DCMAKE_C_COMPILER=/usr/bin/clang-10
           -DCMAKE_BUILD_TYPE=Release
           ..
         working-directory: build
       - name: "Build tests"
-        run: cmake --build . --target faabric_tests
+        run: ninja faabric_tests
         working-directory: build
       # --- Tests ---
       - name: "Run tests"

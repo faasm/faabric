@@ -1,5 +1,4 @@
 FROM ubuntu:20.04
-ARG FAABRIC_VERSION
 
 RUN apt-get update
 RUN apt-get install -y software-properties-common
@@ -44,11 +43,12 @@ RUN ninja install
 # Redis
 RUN apt install -y redis-tools
 
+# Compiler
+RUN apt install -y clang-10
+
 # Build the code
-WORKDIR /code
-RUN git clone https://github.com/faasm/faabric
 WORKDIR /code/faabric
-RUN git checkout ${FAABRIC_VERSION}
+COPY . .
 WORKDIR /code/faabric/build
 RUN cmake \
     -GNinja \
@@ -56,6 +56,7 @@ RUN cmake \
     -DCMAKE_C_COMPILER=/usr/bin/clang-10 \
     -DCMAKE_BUILD_TYPE=Release \
     ..
+RUN ninja faabric_tests 
 
 # Tidy up
 WORKDIR /
