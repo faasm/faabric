@@ -18,5 +18,6 @@ RUN cmake \
     /code/faabric
 
 RUN ninja faabric
+RUN ninja faabric_tests
 
 CMD /bin/bash
