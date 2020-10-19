@@ -5,6 +5,7 @@ RUN apt-get install -y software-properties-common
 
 RUN apt install -y \
    autoconf \
+   clang-10 \
    clang-format-10 \
    build-essential \
    git \
@@ -42,9 +43,6 @@ RUN ninja install
 
 # Redis
 RUN apt install -y redis-tools
-
-# Compiler
-RUN apt install -y clang-10
 
 # Build the code
 WORKDIR /code/faabric

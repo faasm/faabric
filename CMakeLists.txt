@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.13.0)
 project(faabric)
 
-include(FindGit)
-find_package(Git)
-include (ExternalProject)
-
 option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
 option(FAABRIC_STATIC_LIBS "Statically link Faabric libs" ON)
 option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)

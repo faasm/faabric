@@ -1,7 +1,6 @@
 include(FindGit)
 find_package(Git)
 include (ExternalProject)
-include (FetchContent)
 
 include_directories(${THIRD_PARTY_INSTALL_DIR}/include)
 
