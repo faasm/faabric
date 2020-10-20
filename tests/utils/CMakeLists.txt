@@ -1,5 +1,3 @@
-include_directories(${CMAKE_CURRENT_LIST_DIR})
-
 set(LIB_FILES
     exec_graph_utils.cpp
     message_utils.cpp
@@ -10,7 +8,5 @@ set(LIB_FILES
 faabric_private_lib(faabric_test_utils "${LIB_FILES}")
 
 add_dependencies(faabric_test_utils catch_ext)
-
-target_link_libraries(faabric_test_utils
-    faabric
-)
+target_include_directories(faabric_test_utils PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+target_link_libraries(faabric_test_utils faabric)
