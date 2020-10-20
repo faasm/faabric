@@ -5,9 +5,9 @@ RUN apt-get install -y software-properties-common
 
 RUN apt install -y \
    autoconf \
+   build-essential \
    clang-10 \
    clang-format-10 \
-   build-essential \
    git \
    libhiredis-dev \
    libtool \
