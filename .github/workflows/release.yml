@@ -9,6 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: "Get the code"
+        uses: actions/checkout@v2
       - name: "Get tag version"
         run: echo "TAG_VERSION=${GITHUB_REF#refs/tags/v*}" >> $GITHUB_ENV
       - name: "Print tag version"
