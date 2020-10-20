@@ -1,5 +1,5 @@
 #include "faabric/util/config.h"
-#include <catch/catch.hpp>
+#include <catch2/catch.hpp>
 #include <faabric/util/files.h>
 
 using namespace faabric::util;

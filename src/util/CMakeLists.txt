@@ -28,6 +28,9 @@ set(LIB_FILES
 
 faabric_private_lib(util "${LIB_FILES}")
 
+add_dependencies(util spdlog_ext)
+add_dependencies(util rapidjson_ext)
+
 target_link_libraries(
         util
         proto

@@ -1,13 +1,13 @@
 from invoke import Collection
 
-from . import build
 from . import call
 from . import container
 from . import dev
+from . import git
 
 ns = Collection(
-    build,
     call,
     container,
     dev,
+    git,
 )

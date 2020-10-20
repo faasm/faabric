@@ -8,41 +8,50 @@ on:
 
 jobs:
   tests:
-    runs-on: ubuntu-20.04
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
     env:
       HOST_TYPE: ci
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faabric/base:0.0.4
+      image: faasm/faabric:0.0.10
+    defaults:
+      run:
+        working-directory: /code/faabric
     services:
       redis:
         image: redis
     steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
       # --- Formatting checks ---
-      - uses: actions/checkout@v2
       - name: "Python formatting check"
         run: ./bin/check_black.sh
       - name: "Run C/C++ formatting"
         run: ./bin/run_clang_format.sh 
       - name: "Check C/C++ formatting changes"
         run: git diff --exit-code
-      # --- Set-up and build ---
+      # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      - name: "Create build dir"
-        run: mkdir build
-      - name: "Set up build"
+      # --- Build ---
+      - name: "Configure build"
         run: >
           cmake
           -GNinja
+          -DCMAKE_CXX_COMPILER=/usr/bin/clang++-10 
+          -DCMAKE_C_COMPILER=/usr/bin/clang-10
           -DCMAKE_BUILD_TYPE=Release
-          ..
-        working-directory: build
+          /code/faabric
+        working-directory: /build/faabric
       - name: "Build tests"
-        run: cmake --build . --target faabric_tests
-        working-directory: build
+        run: ninja faabric_tests
+        working-directory: /build/faabric
       # --- Tests ---
       - name: "Run tests"
         run: ./bin/faabric_tests
-        working-directory: build
+        working-directory: /build/faabric

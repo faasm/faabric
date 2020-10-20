@@ -32,6 +32,8 @@ else()
     faabric_public_lib(proto "${LIB_FILES}")
 endif()
 
+add_dependencies(proto spdlog_ext)
+
 target_link_libraries(proto
         ${Protobuf_LIBRARIES}
         gRPC::grpc++

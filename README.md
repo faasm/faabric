@@ -1,4 +1,4 @@
-# Faabric ![Faabric tests](https://github.com/faasm/faabric/workflows/Tests/badge.svg) ![License](https://img.shields.io/github/license/faasm/faabric.svg)
+# Faabric [![Faabric tests](https://github.com/faasm/faabric/workflows/Tests/badge.svg?branch=master)](https://github.com/faasm/faabric/actions) [![License](https://img.shields.io/github/license/faasm/faabric.svg)](https://github.com/faasm/faabric/blob/master/LICENSE.md) 
 
 Faabric provides collective communication and state to build distributed 
 applications from serverless functions. 
@@ -7,15 +7,9 @@ applications from serverless functions.
 
 ### Dependencies
 
-The following dependencies cannot be installed with `apt`:
-
-- gRPC and Protobuf - https://grpc.io/docs/languages/cpp/quickstart/ 
-- RapidJSON - https://rapidjson.org/
-- spdlog - https://github.com/gabime/spdlog
-- pistache - https://github.com/oktal/pistache
-- catch (for testing) - https://github.com/catchorg/Catch2 
-
-See the [base Dockerfile](docker/base.dockerfile) for all the dependencies.
+The only external dependency _not_ installed through CMake is `gRPC` which
+should be installed according to the instructions
+[here](https://grpc.io/docs/languages/cpp/quickstart/).
 
 ### CMake
 
@@ -24,9 +18,10 @@ Use of Clang and Ninja is recommended.
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_C_COMPILER=clang \
-  -DCMAKE_CXX_COMPILER=clang++ \
+cmake \
   -GNinja \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_BUILD_TYPE=Release \
   ..
 ninja
@@ -52,7 +47,7 @@ inv container.build
 # Push
 inv container.push
 
-# Build locally and push (requires permissions)
+# Build locally and push
 inv container.build --push
 ```
 
