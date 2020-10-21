@@ -76,7 +76,10 @@ target_link_libraries(faabric
         util
         )
 
-target_include_directories(faabric PUBLIC ${FAABRIC_INCLUDE_DIR})
+target_include_directories(faabric PUBLIC 
+    ${FAABRIC_INCLUDE_DIR}
+    ${THIRD_PARTY_INSTALL_DIR}/include
+)
 
 # Tests
 if(FAABRIC_BUILD_TESTS)
