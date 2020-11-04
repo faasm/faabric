@@ -280,6 +280,11 @@ std::string funcToString(const faabric::Message& msg, bool includeId)
     if (includeId) {
         str += ":" + std::to_string(msg.id());
     }
+
+    if (msg.issgx()) {
+        str += ":sgx"
+    }
+
     return str;
 }
 

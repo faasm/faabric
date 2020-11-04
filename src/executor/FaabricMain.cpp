@@ -19,6 +19,9 @@ void FaabricMain::startBackground()
     // Start thread pool in background
     pool.startThreadPool();
 
+    // Start thread pool in background
+    pool.startThreadPool();
+
     // In-memory state
     pool.startStateServer();
 
