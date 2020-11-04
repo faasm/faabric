@@ -36,4 +36,3 @@ void FaabricMain::shutdown()
     pool.shutdown();
 }
 }
-
