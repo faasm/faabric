@@ -282,7 +282,7 @@ std::string funcToString(const faabric::Message& msg, bool includeId)
     }
 
     if (msg.issgx()) {
-        str += ":sgx"
+        str += ":sgx";
     }
 
     return str;
