@@ -141,6 +141,7 @@ extern "C"
     extern struct faabric_datatype_t faabric_type_uint;
     extern struct faabric_datatype_t faabric_type_uint64;
     extern struct faabric_datatype_t faabric_type_long;
+    extern struct faabric_datatype_t faabric_type_long_long;
     extern struct faabric_datatype_t faabric_type_long_long_int;
     extern struct faabric_datatype_t faabric_type_float;
     extern struct faabric_datatype_t faabric_type_double;
@@ -159,6 +160,7 @@ extern "C"
 #define MPI_UINT_T &faabric_type_uint
 #define MPI_UINT64_T &faabric_type_uint64
 #define MPI_LONG &faabric_type_long
+#define MPI_LONG_LONG &faabric_type_long_long
 #define MPI_LONG_LONG_INT &faabric_type_long_long_int
 #define MPI_FLOAT &faabric_type_float
 #define MPI_DOUBLE &faabric_type_double

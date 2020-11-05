@@ -54,6 +54,10 @@ struct faabric_datatype_t faabric_type_long
 {
     .id = FAABRIC_LONG, .size = sizeof(long)
 };
+struct faabric_datatype_t faabric_type_long_long
+{
+    .id = FAABRIC_LONG_LONG, .size = sizeof(long long)
+};
 struct faabric_datatype_t faabric_type_long_long_int
 {
     .id = FAABRIC_LONG_LONG_INT, .size = sizeof(long long int)
