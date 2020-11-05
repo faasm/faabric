@@ -123,13 +123,14 @@ extern "C"
 #define FAABRIC_UINT 9
 #define FAABRIC_UINT64 10
 #define FAABRIC_LONG 11
-#define FAABRIC_LONG_LONG_INT 12
-#define FAABRIC_FLOAT 13
-#define FAABRIC_DOUBLE 14
-#define FAABRIC_CHAR 15
-#define FAABRIC_C_BOOL 16
-#define FAABRIC_BYTE 17
-#define FAABRIC_DATATYPE_NULL 18
+#define FAABRIC_LONG_LONG 12
+#define FAABRIC_LONG_LONG_INT 13
+#define FAABRIC_FLOAT 14
+#define FAABRIC_DOUBLE 15
+#define FAABRIC_CHAR 16
+#define FAABRIC_C_BOOL 17
+#define FAABRIC_BYTE 18
+#define FAABRIC_DATATYPE_NULL 19
     extern struct faabric_datatype_t faabric_type_int8;
     extern struct faabric_datatype_t faabric_type_int16;
     extern struct faabric_datatype_t faabric_type_int32;

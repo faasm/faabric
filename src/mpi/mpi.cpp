@@ -159,6 +159,8 @@ faabric_datatype_t* getFaabricDatatypeFromId(int datatypeId)
             return MPI_UINT64_T;
         case FAABRIC_LONG:
             return MPI_LONG;
+        case FAABRIC_LONG_LONG:
+            return MPI_LONG_LONG;
         case FAABRIC_LONG_LONG_INT:
             return MPI_LONG_LONG_INT;
         case FAABRIC_FLOAT:
