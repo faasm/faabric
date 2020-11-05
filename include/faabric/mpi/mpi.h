@@ -478,6 +478,10 @@ extern "C"
 
     int MPI_Wait(MPI_Request* request, MPI_Status* status);
 
+    int MPI_Waitall(int count,
+                    MPI_Request array_of_requests[],
+                    MPI_Status* array_of_statuses);
+
     int MPI_Waitany(int count,
                     MPI_Request array_of_requests[],
                     int* index,
