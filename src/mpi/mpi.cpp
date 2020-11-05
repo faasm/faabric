@@ -76,7 +76,7 @@ struct faabric_datatype_t faabric_type_double_int
     .id = FAABRIC_DOUBLE_INT, .size = sizeof(struct {
                                   double a;
                                   int b;
-                              })
+                              } c)
 };
 struct faabric_datatype_t faabric_type_char
 {
