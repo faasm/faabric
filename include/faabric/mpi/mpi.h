@@ -127,10 +127,11 @@ extern "C"
 #define FAABRIC_LONG_LONG_INT 13
 #define FAABRIC_FLOAT 14
 #define FAABRIC_DOUBLE 15
-#define FAABRIC_CHAR 16
-#define FAABRIC_C_BOOL 17
-#define FAABRIC_BYTE 18
-#define FAABRIC_DATATYPE_NULL 19
+#define FAABRIC_DOUBLE_INT 16
+#define FAABRIC_CHAR 17
+#define FAABRIC_C_BOOL 18
+#define FAABRIC_BYTE 19
+#define FAABRIC_DATATYPE_NULL 20
     extern struct faabric_datatype_t faabric_type_int8;
     extern struct faabric_datatype_t faabric_type_int16;
     extern struct faabric_datatype_t faabric_type_int32;
@@ -146,6 +147,7 @@ extern "C"
     extern struct faabric_datatype_t faabric_type_long_long_int;
     extern struct faabric_datatype_t faabric_type_float;
     extern struct faabric_datatype_t faabric_type_double;
+    extern struct faabric_datatype_t faabric_type_double_int;
     extern struct faabric_datatype_t faabric_type_char;
     extern struct faabric_datatype_t faabric_type_c_bool;
     extern struct faabric_datatype_t faabric_type_byte;
@@ -165,6 +167,7 @@ extern "C"
 #define MPI_LONG_LONG_INT &faabric_type_long_long_int
 #define MPI_FLOAT &faabric_type_float
 #define MPI_DOUBLE &faabric_type_double
+#define MPI_DOUBLE_INT &faabric_type_double_int
 #define MPI_CHAR &faabric_type_char
 #define MPI_C_BOOL &faabric_type_c_bool
 #define MPI_BYTE &faabric_type_byte

@@ -71,6 +71,13 @@ struct faabric_datatype_t faabric_type_double
 {
     .id = FAABRIC_DOUBLE, .size = sizeof(double)
 };
+struct faabric_datatype_t faabric_type_double_int
+{
+    .id = FAABRIC_DOUBLE_INT, .size = sizeof(struct {
+                                  double a;
+                                  int b;
+                              })
+};
 struct faabric_datatype_t faabric_type_char
 {
     .id = FAABRIC_CHAR, .size = sizeof(char)
@@ -167,6 +174,8 @@ faabric_datatype_t* getFaabricDatatypeFromId(int datatypeId)
             return MPI_FLOAT;
         case FAABRIC_DOUBLE:
             return MPI_DOUBLE;
+        case FAABRIC_DOUBLE_INT:
+            return MPI_DOUBLE_INT;
         case FAABRIC_CHAR:
             return MPI_CHAR;
         case FAABRIC_BYTE:
