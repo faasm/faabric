@@ -380,6 +380,13 @@ extern "C"
                       MPI_Op op,
                       MPI_Comm comm);
 
+    int MPI_Scan(const void* sendbuf,
+                 void* recvbuf,
+                 int count,
+                 MPI_Datatype datatype,
+                 MPI_Op op,
+                 MPI_Comm comm);
+
     int MPI_Alltoall(const void* sendbuf,
                      int sendcount,
                      MPI_Datatype sendtype,
