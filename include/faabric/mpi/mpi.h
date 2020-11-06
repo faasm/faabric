@@ -463,6 +463,8 @@ extern "C"
 
     int MPI_Free_mem(void* base);
 
+    int MPI_Request_free(MPI_Request* request);
+
     int MPI_Type_contiguous(int count,
                             MPI_Datatype oldtype,
                             MPI_Datatype* newtype);
