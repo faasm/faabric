@@ -189,6 +189,9 @@ extern "C"
     extern struct faabric_info_t faabric_info_null;
 #define MPI_INFO_NULL &faabric_info_null
 
+// Misc constants
+#define MPI_ANY_SOURCE -1
+
 // Misc limits
 #define MPI_MAX_PROCESSOR_NAME 256
 
