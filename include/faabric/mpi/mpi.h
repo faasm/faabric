@@ -419,6 +419,27 @@ extern "C"
                      MPI_Datatype recvtype,
                      MPI_Comm comm);
 
+    int MPI_Cart_create(MPI_Comm old_comm,
+                        int ndims,
+                        const int dims[],
+                        const int periods[],
+                        int reorder,
+                        MPI_Comm* comm);
+
+    int MPI_Cart_rank(MPI_Comm comm, int coords[], int* rank);
+
+    int MPI_Cart_get(MPI_Comm comm,
+                     int maxdims,
+                     int dims[],
+                     int periods[],
+                     int coords[]);
+
+    int MPI_Cart_shift(MPI_Comm comm,
+                       int direction,
+                       int disp,
+                       int* rank_source,
+                       int* rank_dest);
+
     int MPI_Type_size(MPI_Datatype type, int* size);
 
     int MPI_Type_free(MPI_Datatype* datatype);
