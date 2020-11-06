@@ -262,6 +262,7 @@ extern "C"
     typedef struct faabric_group_t* MPI_Group;
     typedef struct faabric_win_t* MPI_Win;
     typedef ptrdiff_t MPI_Aint;
+    typedef long MPI_Offset;
 
     /*
      * User-defined functions
