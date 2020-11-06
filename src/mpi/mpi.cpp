@@ -71,12 +71,17 @@ struct faabric_datatype_t faabric_type_double
 {
     .id = FAABRIC_DOUBLE, .size = sizeof(double)
 };
+/* Data structure for double/int.
+ * https://github.com/lammps/lammps/blob/584943fc928351bc29f41a132aee3586e0a2286a/src/STUBS/mpi.c#L26
+ */
+struct _mpi_double_int
+{
+    double value;
+    int proc;
+};
 struct faabric_datatype_t faabric_type_double_int
 {
-    .id = FAABRIC_DOUBLE_INT, .size = sizeof(struct {
-                                  double a;
-                                  int b;
-                              } c)
+    .id = FAABRIC_DOUBLE_INT, .size = sizeof(struct _mpi_double_int)
 };
 struct faabric_datatype_t faabric_type_char
 {
