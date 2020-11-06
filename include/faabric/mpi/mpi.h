@@ -280,6 +280,8 @@ extern "C"
 
     int MPI_Initialized(int* flag);
 
+    int MPI_Get_version(int* version, int* subversion);
+
     int MPI_Finalized(int* flag);
 
     int MPI_Finalize(void);
