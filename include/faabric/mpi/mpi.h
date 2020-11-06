@@ -286,6 +286,13 @@ extern "C"
                  int tag,
                  MPI_Comm comm);
 
+    int MPI_Rsend(const void* buf,
+                  int count,
+                  MPI_Datatype datatype,
+                  int dest,
+                  int tag,
+                  MPI_Comm comm);
+
     int MPI_Recv(void* buf,
                  int count,
                  MPI_Datatype datatype,
