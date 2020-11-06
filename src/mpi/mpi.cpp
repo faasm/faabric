@@ -7,6 +7,10 @@ struct faabric_communicator_t faabric_comm_world
 {
     .id = FAABRIC_COMM_WORLD
 };
+struct faabric_communicator_t faabric_comm_null
+{
+    .id = FAABRIC_COMM_NULL
+};
 
 struct faabric_datatype_t faabric_type_int8
 {
