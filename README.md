@@ -1,53 +1,81 @@
 # Faabric [![Faabric tests](https://github.com/faasm/faabric/workflows/Tests/badge.svg?branch=master)](https://github.com/faasm/faabric/actions) [![License](https://img.shields.io/github/license/faasm/faabric.svg)](https://github.com/faasm/faabric/blob/master/LICENSE.md) 
 
-Faabric provides collective communication and state to build distributed 
-applications from serverless functions. 
+Faabric is a messaging and state layer for serverless applications.
 
-## Build
+## Building and Development
 
-### Dependencies
+You can build Faabric natively or using the containerised environment.
+
+### Containerised (recommended)
+
+Run the following:
+
+```bash
+./bin/cli.sh
+```
+
+This container has everything you need, and the script will also mount your 
+current checkout of the code. This means you can just run the following:
+
+```bash
+# Build the tests
+inv dev.cc faabric_tests
+
+# Run the tests
+faabric_tests
+```
+
+### Native
 
 The only external dependency _not_ installed through CMake is `gRPC` which
 should be installed according to the instructions
 [here](https://grpc.io/docs/languages/cpp/quickstart/).
 
-### CMake
-
-Use of Clang and Ninja is recommended.
+Use of Clang and Ninja is recommended. From the root of this project you can
+run:
 
 ```bash
 mkdir build
 cd build
+
 cmake \
   -GNinja \
   -DCMAKE_C_COMPILER=clang \
   -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_BUILD_TYPE=Release \
   ..
+
 ninja
 ```
 
-## CLI
-
-To set up the CLI:
+You can also run the CLI with:
 
 ```bash
-source workon.sh
+# Set up env
+export FAABRIC_BUILD_DIR=<some dir>
+source bin/workon.sh
+
+# Install requirements
 pip install -r requirements.txt
+
+# Build Faabric
+inv dev.cc faabric
 ```
 
-## Docker
+## Building images
 
 To build the Docker Faabric Docker containers, run:
 
 ```bash
-# Build locally
+source bin/workon.sh
+
+# Build
 inv container.build
 
 # Push
 inv container.push
 
-# Build locally and push
+# Build and push
 inv container.build --push
 ```
 

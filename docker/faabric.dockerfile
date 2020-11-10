@@ -20,7 +20,6 @@ RUN cmake \
     -DCMAKE_BUILD_TYPE=Release \
     /code/faabric
 
-RUN ninja faabric
-RUN ninja faabric_tests
+RUN cmake --build . --target faabric faabric_tests
 
 CMD /bin/bash

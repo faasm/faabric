@@ -1,21 +1,23 @@
 #!/bin/bash
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-pushd ${THIS_DIR} >> /dev/null
+PROJ_ROOT=${THIS_DIR}/..
+pushd ${PROJ_ROOT}>>/dev/null
 
 # ----------------------------
 # Virtualenv
 # ----------------------------
 
 if [ ! -d "venv" ]; then
-    python3 -m venv venv --system-site-packages
+    python3 -m venv venv 
 fi
 
 export VIRTUAL_ENV_DISABLE_PROMPT=1
 source venv/bin/activate
 
 # ----------------------------
-# Invoke tab-completion (http://docs.pyinvoke.org/en/stable/invoke.html#shell-tab-completion)
+# Invoke tab-completion
+# (http://docs.pyinvoke.org/en/stable/invoke.html#shell-tab-completion)
 # ----------------------------
 
 _complete_invoke() {
@@ -31,10 +33,28 @@ if [ "$(ps -o comm= -p $$)" = "zsh" ]; then
 fi
 complete -F _complete_invoke -o default invoke inv
 
-# -----------------------------
-# Terminal
-# -----------------------------
+# ----------------------------
+# Environment vars
+# ----------------------------
+
+VERSION_FILE=${PROJ_ROOT}/VERSION
+export FAABRIC_ROOT=$(pwd)
+export FAABRIC_VERSION=$(cat ${VERSION_FILE})
 
 export PS1="(faabric) $PS1"
+
+export PATH=/build/faabric/bin:${PATH}
+
+# -----------------------------
+# Splash
+# -----------------------------
+
+echo ""
+echo "----------------------------------"
+echo "Faabric CLI"
+echo "Version: ${FAABRIC_VERSION}"
+echo "Project root: $(pwd)"
+echo "----------------------------------"
+echo ""
 
 popd >> /dev/null

@@ -8,20 +8,20 @@ PROJ_ROOT=${THIS_DIR}/..
 pushd ${PROJ_ROOT} > /dev/null
 
 # See if someone has specified a CLI image through an environment variable
-if [[ -z "${CLI_IMAGE}" ]]; then
+if [[ -z "${FAABRIC_CLI_IMAGE}" ]]; then
     # Prepare the default version
     VERSION=$(cat VERSION)
     DEFAULT_IMAGE=faasm/faabric-cli:${VERSION}
 
     # Take the script argument if provided, else use the default
-    export CLI_IMAGE=${1:-${DEFAULT_IMAGE}}
+    export FAABRIC_CLI_IMAGE=${1:-${DEFAULT_IMAGE}}
 fi
 
-echo "Running Faabric CLI (${CLI_IMAGE})"
+echo "Running Faabric CLI (${FAABRIC_CLI_IMAGE})"
 
 INNER_SHELL=${SHELL:-"/bin/bash"}
 
-export COMPOSE_PROJECT_NAME="faasm-dev"
+export COMPOSE_PROJECT_NAME="faabric-dev"
 
 ## Run shell in CLI container
 # If service not running, bring it up first.

@@ -1,5 +1,5 @@
 ARG FAABRIC_VERSION
-FROM faasm/faabric-cli:$FAABRIC_VERSION
+FROM faasm/faabric:$FAABRIC_VERSION
 
 SHELL ["/bin/bash", "-c"]
 
@@ -14,3 +14,8 @@ WORKDIR /code/faabric
 COPY requirements.txt .
 RUN pip3 install -r requirements.txt
 
+ENV TERM xterm-256color
+
+# Prepare bashrc
+RUN echo ". /code/faabric/bin/workon.sh" >> ~/.bashrc
+CMD ["/bin/bash", "-l"]

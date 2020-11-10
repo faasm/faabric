@@ -11,15 +11,8 @@ TEST_CASE("Test default system config initialisation", "[util]")
     SystemConfig conf;
     conf.reset();
 
-    // CI has to override some stuff
-    if (conf.hostType == "ci") {
-        REQUIRE(conf.redisStateHost == "redis");
-        REQUIRE(conf.redisQueueHost == "redis");
-    } else {
-        REQUIRE(conf.redisStateHost == "localhost");
-        REQUIRE(conf.redisQueueHost == "localhost");
-        REQUIRE(conf.hostType == "default");
-    }
+    REQUIRE(conf.redisStateHost == "redis");
+    REQUIRE(conf.redisQueueHost == "redis");
 
     REQUIRE(conf.cgroupMode == "on");
     REQUIRE(conf.functionStorage == "local");

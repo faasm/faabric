@@ -1,0 +1,22 @@
+version: "3"
+
+services:
+  redis:
+    image: redis
+
+  cli:
+    image: ${FAABRIC_CLI_IMAGE}
+    volumes:
+        - ..:/code/faabric
+        - ../build:/build/faabric
+    working_dir: /code/faabric
+    stdin_open: true
+    tty: true
+    privileged: true
+    environment:
+      - FUNCTION_STORAGE=local
+      - LOG_LEVEL=debug
+      - REDIS_STATE_HOST=redis
+      - REDIS_QUEUE_HOST=redis
+    depends_on:
+      - redis
