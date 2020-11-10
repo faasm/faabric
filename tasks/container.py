@@ -5,6 +5,7 @@ from invoke import task
 from tasks.util.env import get_version, PROJ_ROOT
 
 FAABRIC_IMAGE_NAME = "faabric"
+FAABRIC_CLI_IMAGE_NAME = "faabric-cli"
 GRPC_IMAGE_NAME = "grpc-root"
 
 
@@ -52,9 +53,17 @@ def _do_push(name):
 @task
 def build(ctx, nocache=False, push=False):
     """
-    Build current version of faasm container
+    Build current version of faabric container
     """
     _do_container_build(FAABRIC_IMAGE_NAME, nocache=nocache, push=push)
+
+
+@task
+def build_cli(ctx, nocache=False, push=False):
+    """
+    Build current version of faabric CLI container
+    """
+    _do_container_build(FAABRIC_CLI_IMAGE_NAME, nocache=nocache, push=push)
 
 
 @task
@@ -68,9 +77,17 @@ def build_grpc(ctx, nocache=False, push=False):
 @task
 def push(ctx):
     """
-    Push current version of container
+    Push current version of faabric container
     """
     _do_push(FAABRIC_IMAGE_NAME)
+
+
+@task
+def push_cli(ctx):
+    """
+    Push current version of faabric CLI container
+    """
+    _do_push(FAABRIC_CLI_IMAGE_NAME)
 
 
 @task
