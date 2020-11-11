@@ -24,7 +24,6 @@ TEST_CASE("Test reading from a URL", "[util]")
 {
     auto conf = faabric::util::getSystemConfig();
 
-    // Skip if we're in CI
     std::string localPath = "/code/faabric/LICENSE.md";
     std::string url =
       "https://raw.githubusercontent.com/faasm/faabric/master/LICENSE.md";
