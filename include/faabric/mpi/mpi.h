@@ -191,6 +191,7 @@ extern "C"
 
 // Misc constants
 #define MPI_ANY_SOURCE -1
+#define MPI_UNDEFINED -1
 
 // Misc limits
 #define MPI_MAX_PROCESSOR_NAME 256
