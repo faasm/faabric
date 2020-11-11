@@ -1,19 +1,24 @@
-from os import makedirs
+from os import makedirs, environ
 from shutil import rmtree
 from os.path import join, exists
 from subprocess import run
 
-from invoke import task
-
 from tasks.util.env import PROJ_ROOT
 
-_BUILD_DIR = join(PROJ_ROOT, "build", "cmake")
+from invoke import task
+
+_BUILD_DIR = environ.get("FAABRIC_BUILD_DIR")
+_BUILD_DIR = _BUILD_DIR if _BUILD_DIR else "/build/faabric"
+
 _BIN_DIR = join(_BUILD_DIR, "bin")
 _INSTALL_PREFIX = join(_BUILD_DIR, "install")
 
 
 @task
 def cmake(ctx, clean=False):
+    """
+    Configures the build
+    """
     if clean and exists(_BUILD_DIR):
         rmtree(_BUILD_DIR)
 
@@ -27,7 +32,7 @@ def cmake(ctx, clean=False):
         "-DCMAKE_BUILD_TYPE=Debug",
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
         "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
-        "../..",
+        PROJ_ROOT,
     ]
 
     run(" ".join(cmd), shell=True, cwd=_BUILD_DIR)

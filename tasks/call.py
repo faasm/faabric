@@ -4,6 +4,9 @@ from invoke import task
 
 @task
 def call(ctx, user, func, data=None, host="localhost"):
+    """
+    Calls a function using the HTTP API
+    """
     msg = {
         "user": user,
         "function": func,
