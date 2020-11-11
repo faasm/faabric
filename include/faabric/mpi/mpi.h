@@ -195,6 +195,7 @@ extern "C"
 
 // Misc limits
 #define MPI_MAX_PROCESSOR_NAME 256
+#define MPI_CART_MAX_DIMENSIONS 2
 
 // MPI_Ops
 #define FAABRIC_OP_MAX 1
