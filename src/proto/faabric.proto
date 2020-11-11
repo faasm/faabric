@@ -50,7 +50,6 @@ message MPIMessage {
 message Message {
     string user = 1;
     string function = 2;
-    int32 idx = 3;
     string snapshotKey = 4;
     int32 snapshotSize = 5;
     int32 funcPtr = 6;
@@ -88,8 +87,6 @@ message Message {
     string pythonUser = 25;
     string pythonFunction = 26;
     string pythonEntry = 27;
-
-    int32 coldStartInterval = 28;
 
     bool isMpi = 29;
     int32 mpiWorldId = 30;

@@ -22,101 +22,138 @@ std::string messageToJson(const faabric::Message& msg)
     d.AddMember("function",
                 Value(msg.function().c_str(), msg.function().size(), a).Move(),
                 a);
-    d.AddMember("index", msg.idx(), a);
     d.AddMember("hops", msg.hops(), a);
-    if (!msg.executedhost().empty())
+
+    if (!msg.executedhost().empty()) {
         d.AddMember(
           "exec_host",
           Value(msg.executedhost().c_str(), msg.executedhost().size(), a)
             .Move(),
           a);
-    if (msg.finishtimestamp() > 0)
+    }
+
+    if (msg.finishtimestamp() > 0) {
         d.AddMember("finished", msg.finishtimestamp(), a);
+    }
 
-    if (msg.timestamp() > 0)
+    if (msg.timestamp() > 0) {
         d.AddMember("timestamp", msg.timestamp(), a);
+    }
 
-    if (!msg.snapshotkey().empty())
+    if (!msg.snapshotkey().empty()) {
         d.AddMember(
           "snapshot_key",
           Value(msg.snapshotkey().c_str(), msg.snapshotkey().size(), a).Move(),
           a);
-    if (msg.snapshotsize() > 0)
-        d.AddMember("snapshot_size", msg.snapshotsize(), a);
-    if (msg.funcptr() > 0)
-        d.AddMember("func_ptr", msg.funcptr(), a);
+    }
 
-    if (!msg.pythonuser().empty())
+    if (msg.snapshotsize() > 0) {
+        d.AddMember("snapshot_size", msg.snapshotsize(), a);
+    }
+
+    if (msg.funcptr() > 0) {
+        d.AddMember("func_ptr", msg.funcptr(), a);
+    }
+
+    if (!msg.pythonuser().empty()) {
         d.AddMember(
           "py_user",
           Value(msg.pythonuser().c_str(), msg.pythonuser().size(), a).Move(),
           a);
-    if (!msg.pythonfunction().empty())
+    }
+
+    if (!msg.pythonfunction().empty()) {
         d.AddMember(
           "py_func",
           Value(msg.pythonfunction().c_str(), msg.pythonfunction().size(), a)
             .Move(),
           a);
-    if (!msg.pythonentry().empty())
+    }
+
+    if (!msg.pythonentry().empty()) {
         d.AddMember(
           "py_entry",
           Value(msg.pythonentry().c_str(), msg.pythonentry().size(), a).Move(),
           a);
+    }
 
-    if (!msg.inputdata().empty())
+    if (!msg.inputdata().empty()) {
         d.AddMember(
           "input_data",
           Value(msg.inputdata().c_str(), msg.inputdata().size(), a).Move(),
           a);
-    if (!msg.outputdata().empty())
+    }
+
+    if (!msg.outputdata().empty()) {
         d.AddMember(
           "output_data",
           Value(msg.outputdata().c_str(), msg.outputdata().size(), a).Move(),
           a);
+    }
 
-    if (msg.isasync())
+    if (msg.isasync()) {
         d.AddMember("async", msg.isasync(), a);
-    if (msg.ispython())
-        d.AddMember("python", msg.ispython(), a);
-    if (msg.istypescript())
-        d.AddMember("typescript", msg.istypescript(), a);
-    if (msg.isstatusrequest())
-        d.AddMember("status", msg.isstatusrequest(), a);
-    if (msg.isexecgraphrequest())
-        d.AddMember("exec_graph", msg.isexecgraphrequest(), a);
-    if (msg.isflushrequest())
-        d.AddMember("flush", msg.isflushrequest(), a);
+    }
 
-    if (!msg.resultkey().empty())
+    if (msg.ispython()) {
+        d.AddMember("python", msg.ispython(), a);
+    }
+
+    if (msg.istypescript()) {
+        d.AddMember("typescript", msg.istypescript(), a);
+    }
+
+    if (msg.isstatusrequest()) {
+        d.AddMember("status", msg.isstatusrequest(), a);
+    }
+
+    if (msg.isexecgraphrequest()) {
+        d.AddMember("exec_graph", msg.isexecgraphrequest(), a);
+    }
+
+    if (msg.isflushrequest()) {
+        d.AddMember("flush", msg.isflushrequest(), a);
+    }
+
+    if (!msg.resultkey().empty()) {
         d.AddMember(
           "result_key",
           Value(msg.resultkey().c_str(), msg.resultkey().size()).Move(),
           a);
-    if (!msg.statuskey().empty())
+    }
+
+    if (!msg.statuskey().empty()) {
         d.AddMember(
           "status_key",
           Value(msg.statuskey().c_str(), msg.statuskey().size()).Move(),
           a);
+    }
 
-    if (msg.coldstartinterval() > 0)
-        d.AddMember("cold_start_interval", msg.coldstartinterval(), a);
-
-    if (msg.ismpi())
+    if (msg.ismpi()) {
         d.AddMember("mpi", msg.ismpi(), a);
-    if (msg.mpiworldid() > 0)
-        d.AddMember("mpi_world_id", msg.mpiworldid(), a);
-    if (msg.mpirank() > 0)
-        d.AddMember("mpi_rank", msg.mpirank(), a);
-    if (msg.mpiworldsize() > 0)
-        d.AddMember("mpi_world_size", msg.mpiworldsize(), a);
+    }
 
-    if (!msg.cmdline().empty())
+    if (msg.mpiworldid() > 0) {
+        d.AddMember("mpi_world_id", msg.mpiworldid(), a);
+    }
+
+    if (msg.mpirank() > 0) {
+        d.AddMember("mpi_rank", msg.mpirank(), a);
+    }
+
+    if (msg.mpiworldsize() > 0) {
+        d.AddMember("mpi_world_size", msg.mpiworldsize(), a);
+    }
+
+    if (!msg.cmdline().empty()) {
         d.AddMember("cmdline",
                     Value(msg.cmdline().c_str(), msg.cmdline().size()).Move(),
                     a);
+    }
 
-    if (msg.issgx())
+    if (msg.issgx()) {
         d.AddMember("sgx", msg.issgx(), a);
+    }
 
     StringBuffer sb;
     Writer<StringBuffer> writer(sb);
@@ -197,7 +234,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_id(getIntFromJson(d, "id", 0));
     msg.set_user(getStringFromJson(d, "user", ""));
     msg.set_function(getStringFromJson(d, "function", ""));
-    msg.set_idx(getIntFromJson(d, "index", 0));
     msg.set_hops(getIntFromJson(d, "hops", 0));
     msg.set_executedhost(getStringFromJson(d, "exec_host", ""));
     msg.set_finishtimestamp(getInt64FromJson(d, "finished", 0));
@@ -222,8 +258,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
 
     msg.set_resultkey(getStringFromJson(d, "result_key", ""));
     msg.set_statuskey(getStringFromJson(d, "status_key", ""));
-
-    msg.set_coldstartinterval(getIntFromJson(d, "cold_start_interval", 0));
 
     msg.set_type(faabric::Message_MessageType_CALL);
 

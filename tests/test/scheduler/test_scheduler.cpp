@@ -58,7 +58,6 @@ TEST_CASE("Test scheduler operations", "[scheduler]")
       faabric::util::messageFactory("user a", "function a");
     faabric::Message chainedCall =
       faabric::util::messageFactory("user a", "function a");
-    chainedCall.set_idx(3);
 
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     int originalMaxInFlightRatio = conf.maxInFlightRatio;

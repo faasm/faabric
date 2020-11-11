@@ -12,7 +12,6 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     faabric::Message msg;
     msg.set_user("user 1");
     msg.set_function("great function");
-    msg.set_idx(50);
     msg.set_hops(34);
     msg.set_executedhost("blah.host.blah");
     msg.set_finishtimestamp(123456543);
@@ -27,8 +26,6 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     msg.set_isstatusrequest(true);
     msg.set_isexecgraphrequest(true);
     msg.set_isflushrequest(true);
-
-    msg.set_coldstartinterval(4);
 
     msg.set_ismpi(true);
     msg.set_mpiworldid(1234);
@@ -77,9 +74,8 @@ TEST_CASE("Test get JSON property from JSON string", "[util]")
 TEST_CASE("Test with raw string literals", "[util]")
 {
     const faabric::Message& msg =
-      jsonToMessage(R"({"user": "foo", "function": "bar", "index": 2})");
+      jsonToMessage(R"({"user": "foo", "function": "bar"})");
     REQUIRE(msg.user() == "foo");
     REQUIRE(msg.function() == "bar");
-    REQUIRE(msg.idx() == 2);
 }
 }
