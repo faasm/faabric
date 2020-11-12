@@ -10,7 +10,6 @@ void checkMessageEquality(const faabric::Message& msgA,
 
     REQUIRE(msgA.user() == msgB.user());
     REQUIRE(msgA.function() == msgB.function());
-    REQUIRE(msgA.idx() == msgB.idx());
     REQUIRE(msgA.hops() == msgB.hops());
     REQUIRE(msgA.executedhost() == msgB.executedhost());
     REQUIRE(msgA.finishtimestamp() == msgB.finishtimestamp());
@@ -37,7 +36,6 @@ void checkMessageEquality(const faabric::Message& msgA,
 
     REQUIRE(msgA.resultkey() == msgB.resultkey());
     REQUIRE(msgA.statuskey() == msgB.statuskey());
-    REQUIRE(msgA.coldstartinterval() == msgB.coldstartinterval());
     REQUIRE(msgA.type() == msgB.type());
 
     REQUIRE(msgA.ismpi() == msgB.ismpi());
