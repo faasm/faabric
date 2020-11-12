@@ -71,12 +71,19 @@ configuration.
 Once done, commit and push, then run:
 
 ```bash
+source bin/workon.sh
 inv git.tag
 ```
 
 This will trigger the release build in Github Actions which will build all the
 containers. Once that's complete, create a PR from your branch and make sure the
 tests pass as normal.
+
+If you want to overwrite a tag, you can run:
+
+```bash
+inv git.tag --force
+```
 
 ### Building images manually
 
