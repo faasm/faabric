@@ -62,9 +62,28 @@ pip install -r requirements.txt
 inv dev.cc faabric
 ```
 
-## Building images
+## Releasing
 
-To build the Docker Faabric Docker containers, run:
+Create a new branch, then find and replace the current version with the relevant 
+bumped version. Currently it's held in `VERSION` and the Github Actions 
+configuration.
+
+Once done, commit and push, then run:
+
+```bash
+inv git.tag
+```
+
+This will trigger the release build in Github Actions which will build all the
+containers. Once that's complete, create a PR from your branch and make sure the
+tests pass as normal.
+
+### Building images manually
+
+Containers are built with Github Actions, so you should only need to build them
+yourself when diagnosing issues.
+
+To build the main container, run:
 
 ```bash
 source bin/workon.sh
