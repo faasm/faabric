@@ -32,4 +32,11 @@ jobs:
           context: .
           tags: faasm/faabric:${{ env.TAG_VERSION }}
           build-args: FAABRIC_VERSION=${{ env.TAG_VERSION }}
-
+      - name: "Build Faabric CLI container"
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          file: docker/faabric-cli.dockerfile
+          context: .
+          tags: faasm/faabric-cli:${{ env.TAG_VERSION }}
+          build-args: FAABRIC_VERSION=${{ env.TAG_VERSION }}
