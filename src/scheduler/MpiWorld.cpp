@@ -601,7 +601,8 @@ void MpiWorld::reduce(int sendRank,
                         recvBufferCast[slot] += rankDataCast[slot];
                     }
                 } else if (datatype->id == FAABRIC_LONG_LONG) {
-                    auto recvBufferCast = reinterpret_cast<long long*>(recvBuffer);
+                    auto recvBufferCast =
+                      reinterpret_cast<long long*>(recvBuffer);
                     auto rankDataCast = reinterpret_cast<long long*>(rankData);
 
                     for (int slot = 0; slot < count; slot++) {
