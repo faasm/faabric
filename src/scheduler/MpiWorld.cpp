@@ -750,6 +750,36 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
     }
 }
 
+void MpiWorld::scan(int rank,
+                    uint8_t* sendBuffer,
+                    uint8_t* recvBuffer,
+                    faabric_datatype_t* datatype,
+                    int count,
+                    faabric_op_t* operation)
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    logger->trace("MPI - scan");
+    // If rank 0, just copy send into recv
+    // Otherwise,
+    // - Receive values from previous process, and reduce
+    bool isInPlace = sendBuffer == recvBuffer;
+    if (rank == 0) {
+        if (!isInPlace) {
+            recvBuffer = sendBuffer;
+        }
+    } else {
+        // Receive the previous reduce result
+        rankData = new uint8_t[bufferSize];
+        recv(rank - 1, rank, rankData datatype, count, nullptr);
+        operate();
+    }
+
+    // Send result to next process
+    if (rank < (size - 1)) {
+        send(rank, rank + 1, sendBuffer, datatype, count);
+    }
+}
+
 void MpiWorld::allToAll(int rank,
                         uint8_t* sendBuffer,
                         faabric_datatype_t* sendType,

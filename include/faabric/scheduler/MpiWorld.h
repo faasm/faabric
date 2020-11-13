@@ -133,6 +133,13 @@ class MpiWorld
                    uint8_t* inBuffer,
                    uint8_t* resultBuffer);
 
+    void scan(int rank,
+              uint8_t* sendBuffer,
+              uint8_t* recvBuffer,
+              faabric_datatype_t* datatype,
+              int count,
+              faabric_op_t* operation);
+
     void allToAll(int rank,
                   uint8_t* sendBuffer,
                   faabric_datatype_t* sendType,
