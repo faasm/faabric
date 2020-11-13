@@ -757,6 +757,7 @@ void MpiWorld::scan(int rank,
                     int count,
                     faabric_op_t* operation)
 {
+    /*
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     logger->trace("MPI - scan");
     // If rank 0, just copy send into recv
@@ -778,6 +779,7 @@ void MpiWorld::scan(int rank,
     if (rank < (size - 1)) {
         send(rank, rank + 1, sendBuffer, datatype, count);
     }
+    */
 }
 
 void MpiWorld::allToAll(int rank,
