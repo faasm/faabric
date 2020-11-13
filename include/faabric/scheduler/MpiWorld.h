@@ -44,6 +44,8 @@ class MpiWorld
 
     void enqueueMessage(faabric::MPIMessage& msg);
 
+    void getCartesianRank(int rank, int* dims, int* periods, int* coords);
+
     void send(int sendRank,
               int recvRank,
               const uint8_t* buffer,
