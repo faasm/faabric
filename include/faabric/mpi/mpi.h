@@ -123,13 +123,15 @@ extern "C"
 #define FAABRIC_UINT 9
 #define FAABRIC_UINT64 10
 #define FAABRIC_LONG 11
-#define FAABRIC_LONG_LONG_INT 12
-#define FAABRIC_FLOAT 13
-#define FAABRIC_DOUBLE 14
-#define FAABRIC_CHAR 15
-#define FAABRIC_C_BOOL 16
-#define FAABRIC_BYTE 17
-#define FAABRIC_DATATYPE_NULL 18
+#define FAABRIC_LONG_LONG 12
+#define FAABRIC_LONG_LONG_INT 13
+#define FAABRIC_FLOAT 14
+#define FAABRIC_DOUBLE 15
+#define FAABRIC_DOUBLE_INT 16
+#define FAABRIC_CHAR 17
+#define FAABRIC_C_BOOL 18
+#define FAABRIC_BYTE 19
+#define FAABRIC_DATATYPE_NULL 20
     extern struct faabric_datatype_t faabric_type_int8;
     extern struct faabric_datatype_t faabric_type_int16;
     extern struct faabric_datatype_t faabric_type_int32;
@@ -141,9 +143,11 @@ extern "C"
     extern struct faabric_datatype_t faabric_type_uint;
     extern struct faabric_datatype_t faabric_type_uint64;
     extern struct faabric_datatype_t faabric_type_long;
+    extern struct faabric_datatype_t faabric_type_long_long;
     extern struct faabric_datatype_t faabric_type_long_long_int;
     extern struct faabric_datatype_t faabric_type_float;
     extern struct faabric_datatype_t faabric_type_double;
+    extern struct faabric_datatype_t faabric_type_double_int;
     extern struct faabric_datatype_t faabric_type_char;
     extern struct faabric_datatype_t faabric_type_c_bool;
     extern struct faabric_datatype_t faabric_type_byte;
@@ -159,9 +163,11 @@ extern "C"
 #define MPI_UINT_T &faabric_type_uint
 #define MPI_UINT64_T &faabric_type_uint64
 #define MPI_LONG &faabric_type_long
+#define MPI_LONG_LONG &faabric_type_long_long
 #define MPI_LONG_LONG_INT &faabric_type_long_long_int
 #define MPI_FLOAT &faabric_type_float
 #define MPI_DOUBLE &faabric_type_double
+#define MPI_DOUBLE_INT &faabric_type_double_int
 #define MPI_CHAR &faabric_type_char
 #define MPI_C_BOOL &faabric_type_c_bool
 #define MPI_BYTE &faabric_type_byte
@@ -183,8 +189,13 @@ extern "C"
     extern struct faabric_info_t faabric_info_null;
 #define MPI_INFO_NULL &faabric_info_null
 
+// Misc constants
+#define MPI_ANY_SOURCE -1
+#define MPI_UNDEFINED -1
+
 // Misc limits
 #define MPI_MAX_PROCESSOR_NAME 256
+#define MPI_CART_MAX_DIMENSIONS 2
 
 // MPI_Ops
 #define FAABRIC_OP_MAX 1
@@ -256,6 +267,8 @@ extern "C"
     typedef struct faabric_group_t* MPI_Group;
     typedef struct faabric_win_t* MPI_Win;
     typedef ptrdiff_t MPI_Aint;
+    typedef int MPI_Fint;
+    typedef long MPI_Offset;
 
     /*
      * User-defined functions
@@ -269,6 +282,8 @@ extern "C"
 
     int MPI_Initialized(int* flag);
 
+    int MPI_Get_version(int* version, int* subversion);
+
     int MPI_Finalized(int* flag);
 
     int MPI_Finalize(void);
@@ -279,6 +294,13 @@ extern "C"
                  int dest,
                  int tag,
                  MPI_Comm comm);
+
+    int MPI_Rsend(const void* buf,
+                  int count,
+                  MPI_Datatype datatype,
+                  int dest,
+                  int tag,
+                  MPI_Comm comm);
 
     int MPI_Recv(void* buf,
                  int count,
@@ -370,12 +392,26 @@ extern "C"
                    int root,
                    MPI_Comm comm);
 
+    int MPI_Reduce_scatter(const void* sendbuf,
+                           void* recvbuf,
+                           const int* recvcounts,
+                           MPI_Datatype datatype,
+                           MPI_Op op,
+                           MPI_Comm comm);
+
     int MPI_Allreduce(const void* sendbuf,
                       void* recvbuf,
                       int count,
                       MPI_Datatype datatype,
                       MPI_Op op,
                       MPI_Comm comm);
+
+    int MPI_Scan(const void* sendbuf,
+                 void* recvbuf,
+                 int count,
+                 MPI_Datatype datatype,
+                 MPI_Op op,
+                 MPI_Comm comm);
 
     int MPI_Alltoall(const void* sendbuf,
                      int sendcount,
@@ -384,6 +420,27 @@ extern "C"
                      int recvcount,
                      MPI_Datatype recvtype,
                      MPI_Comm comm);
+
+    int MPI_Cart_create(MPI_Comm old_comm,
+                        int ndims,
+                        const int dims[],
+                        const int periods[],
+                        int reorder,
+                        MPI_Comm* comm);
+
+    int MPI_Cart_rank(MPI_Comm comm, int coords[], int* rank);
+
+    int MPI_Cart_get(MPI_Comm comm,
+                     int maxdims,
+                     int dims[],
+                     int periods[],
+                     int coords[]);
+
+    int MPI_Cart_shift(MPI_Comm comm,
+                       int direction,
+                       int disp,
+                       int* rank_source,
+                       int* rank_dest);
 
     int MPI_Type_size(MPI_Datatype type, int* size);
 
@@ -442,6 +499,8 @@ extern "C"
 
     int MPI_Free_mem(void* base);
 
+    int MPI_Request_free(MPI_Request* request);
+
     int MPI_Type_contiguous(int count,
                             MPI_Datatype oldtype,
                             MPI_Datatype* newtype);
@@ -468,11 +527,24 @@ extern "C"
 
     int MPI_Wait(MPI_Request* request, MPI_Status* status);
 
+    int MPI_Waitall(int count,
+                    MPI_Request array_of_requests[],
+                    MPI_Status* array_of_statuses);
+
+    int MPI_Waitany(int count,
+                    MPI_Request array_of_requests[],
+                    int* index,
+                    MPI_Status* status);
+
     int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm* newcomm);
 
     int MPI_Comm_group(MPI_Comm comm, MPI_Group* group);
 
     int MPI_Comm_dup(MPI_Comm comm, MPI_Comm* newcomm);
+
+    MPI_Fint MPI_Comm_c2f(MPI_Comm comm);
+
+    MPI_Comm MPI_Comm_f2c(MPI_Fint comm);
 
     int MPI_Group_incl(MPI_Group group,
                        int n,

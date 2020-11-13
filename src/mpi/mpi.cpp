@@ -7,6 +7,10 @@ struct faabric_communicator_t faabric_comm_world
 {
     .id = FAABRIC_COMM_WORLD
 };
+struct faabric_communicator_t faabric_comm_null
+{
+    .id = FAABRIC_COMM_NULL
+};
 
 struct faabric_datatype_t faabric_type_int8
 {
@@ -54,6 +58,10 @@ struct faabric_datatype_t faabric_type_long
 {
     .id = FAABRIC_LONG, .size = sizeof(long)
 };
+struct faabric_datatype_t faabric_type_long_long
+{
+    .id = FAABRIC_LONG_LONG, .size = sizeof(long long)
+};
 struct faabric_datatype_t faabric_type_long_long_int
 {
     .id = FAABRIC_LONG_LONG_INT, .size = sizeof(long long int)
@@ -66,6 +74,18 @@ struct faabric_datatype_t faabric_type_float
 struct faabric_datatype_t faabric_type_double
 {
     .id = FAABRIC_DOUBLE, .size = sizeof(double)
+};
+/* Data structure for double/int.
+ * https://github.com/lammps/lammps/blob/584943fc928351bc29f41a132aee3586e0a2286a/src/STUBS/mpi.c#L26
+ */
+struct _mpi_double_int
+{
+    double value;
+    int proc;
+};
+struct faabric_datatype_t faabric_type_double_int
+{
+    .id = FAABRIC_DOUBLE_INT, .size = sizeof(struct _mpi_double_int)
 };
 struct faabric_datatype_t faabric_type_char
 {
@@ -155,12 +175,16 @@ faabric_datatype_t* getFaabricDatatypeFromId(int datatypeId)
             return MPI_UINT64_T;
         case FAABRIC_LONG:
             return MPI_LONG;
+        case FAABRIC_LONG_LONG:
+            return MPI_LONG_LONG;
         case FAABRIC_LONG_LONG_INT:
             return MPI_LONG_LONG_INT;
         case FAABRIC_FLOAT:
             return MPI_FLOAT;
         case FAABRIC_DOUBLE:
             return MPI_DOUBLE;
+        case FAABRIC_DOUBLE_INT:
+            return MPI_DOUBLE_INT;
         case FAABRIC_CHAR:
             return MPI_CHAR;
         case FAABRIC_BYTE:

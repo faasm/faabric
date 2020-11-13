@@ -600,6 +600,14 @@ void MpiWorld::reduce(int sendRank,
                     for (int slot = 0; slot < count; slot++) {
                         recvBufferCast[slot] += rankDataCast[slot];
                     }
+                } else if (datatype->id == FAABRIC_LONG_LONG) {
+                    auto recvBufferCast =
+                      reinterpret_cast<long long*>(recvBuffer);
+                    auto rankDataCast = reinterpret_cast<long long*>(rankData);
+
+                    for (int slot = 0; slot < count; slot++) {
+                        recvBufferCast[slot] += rankDataCast[slot];
+                    }
                 } else {
                     logger->error(
                       "Unsupported type for sum reduction (datatype={})",
