@@ -1,7 +1,30 @@
 #!/bin/bash
 
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-PROJ_ROOT=${THIS_DIR}/..
+# ----------------------------
+# Container-specific settings
+# ----------------------------
+
+MODE="undetected"
+if [[ -z "$FAABRIC_DOCKER" ]]; then
+
+    THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+    if [ "$(ps -o comm= -p $$)" = "zsh" ]; then
+        THIS_DIR="$( cd "$( dirname "${ZSH_ARGZERO}" )" >/dev/null 2>&1 && pwd )"
+    fi
+    PROJ_ROOT="${THIS_DIR}/.."
+
+    # Normal terminal
+    MODE="terminal"
+else
+    # Running inside the container, we know the project root
+    PROJ_ROOT="/code/faabric"
+
+    # Use containerised redis
+    alias redis-cli="redis-cli -h redis"
+
+    MODE="container"
+fi
+
 pushd ${PROJ_ROOT}>>/dev/null
 
 # ----------------------------
@@ -54,6 +77,7 @@ echo "----------------------------------"
 echo "Faabric CLI"
 echo "Version: ${FAABRIC_VERSION}"
 echo "Project root: $(pwd)"
+echo "Mode: ${MODE}"
 echo "----------------------------------"
 echo ""
 
