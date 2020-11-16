@@ -585,61 +585,7 @@ void MpiWorld::reduce(int sendRank,
                      faabric::MPIMessage::REDUCE);
             }
 
-            if (operation->id == faabric_op_sum.id) {
-                if (datatype->id == FAABRIC_INT) {
-                    auto recvBufferCast = reinterpret_cast<int*>(recvBuffer);
-                    auto rankDataCast = reinterpret_cast<int*>(rankData);
-
-                    for (int slot = 0; slot < count; slot++) {
-                        recvBufferCast[slot] += rankDataCast[slot];
-                    }
-                } else if (datatype->id == FAABRIC_DOUBLE) {
-                    auto recvBufferCast = reinterpret_cast<double*>(recvBuffer);
-                    auto rankDataCast = reinterpret_cast<double*>(rankData);
-
-                    for (int slot = 0; slot < count; slot++) {
-                        recvBufferCast[slot] += rankDataCast[slot];
-                    }
-                } else if (datatype->id == FAABRIC_LONG_LONG) {
-                    auto recvBufferCast =
-                      reinterpret_cast<long long*>(recvBuffer);
-                    auto rankDataCast = reinterpret_cast<long long*>(rankData);
-
-                    for (int slot = 0; slot < count; slot++) {
-                        recvBufferCast[slot] += rankDataCast[slot];
-                    }
-                } else {
-                    logger->error(
-                      "Unsupported type for sum reduction (datatype={})",
-                      datatype->id);
-                    throw std::runtime_error(
-                      "Unsupported type for sum reduction");
-                }
-            } else if (operation->id == faabric_op_max.id) {
-                if (datatype->id == FAABRIC_INT) {
-                    auto recvBufferCast = reinterpret_cast<int*>(recvBuffer);
-                    auto rankDataCast = reinterpret_cast<int*>(rankData);
-
-                    for (int slot = 0; slot < count; slot++) {
-                        recvBufferCast[slot] =
-                          std::max(recvBufferCast[slot], rankDataCast[slot]);
-                    }
-                } else if (datatype->id == FAABRIC_DOUBLE) {
-                    auto recvBufferCast = reinterpret_cast<double*>(recvBuffer);
-                    auto rankDataCast = reinterpret_cast<double*>(rankData);
-
-                    for (int slot = 0; slot < count; slot++) {
-                        recvBufferCast[slot] =
-                          std::max(recvBufferCast[slot], rankDataCast[slot]);
-                    }
-                } else {
-                    throw std::runtime_error(
-                      "Unsupported type for max reduction");
-                }
-            } else {
-                throw std::runtime_error(
-                  "Not yet implemented reduce operation");
-            }
+            op_reduce(operation, datatype, count, rankData, recvBuffer);
 
             if (r != recvRank) {
                 delete[] rankData;
