@@ -46,6 +46,8 @@ class MpiWorld
 
     void getCartesianRank(int rank, int* dims, int* periods, int* coords);
 
+    void getRankFromCoords(int* rank, int* coords);
+
     void send(int sendRank,
               int recvRank,
               const uint8_t* buffer,
