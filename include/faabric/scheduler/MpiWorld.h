@@ -123,6 +123,12 @@ class MpiWorld
                    int count,
                    faabric_op_t* operation);
 
+    void op_reduce(faabric_op_t* operation,
+                   faabric_datatype_t* datatype,
+                   int count,
+                   uint8_t* inBuffer,
+                   uint8_t* resultBuffer);
+
     void allToAll(int rank,
                   uint8_t* sendBuffer,
                   faabric_datatype_t* sendType,
