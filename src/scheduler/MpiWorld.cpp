@@ -190,13 +190,13 @@ void MpiWorld::getCartesianRank(int rank, int* dims, int* periods, int* coords)
     int sideLength = static_cast<int>(std::floor(std::sqrt(this->size)));
     int nprocs = sideLength * sideLength;
     if (rank >= nprocs) {
-        for (uint8_t i = 0; i < MPI_CART_MAX_DIMENSIONS; i++) {
+        for (int i = 0; i < MPI_CART_MAX_DIMENSIONS; i++) {
             dims[i] = sideLength;
             periods[i] = 0;
             coords[i] = MPI_UNDEFINED;
         }
     } else {
-        for (uint8_t i = 0; i < MPI_CART_MAX_DIMENSIONS; i++) {
+        for (int i = 0; i < MPI_CART_MAX_DIMENSIONS; i++) {
             nprocs /= sideLength;
             dims[i] = sideLength;
             periods[i] = 0;
@@ -212,8 +212,7 @@ void MpiWorld::getRankFromCoords(int* rank, int* coords)
     int prank = 0;
     int factor = 1;
 
-    int i = MPI_CART_MAX_DIMENSIONS - 1;
-    for (; i >= 0; --i) {
+    for (int i = MPI_CART_MAX_DIMENSIONS - 1; i >= 0; --i) {
         if (coords[i] == MPI_UNDEFINED) {
             throw std::runtime_error(
               "Cartesian rank with undefined coordinates.");
