@@ -108,6 +108,56 @@ TEST_CASE("Test registering a rank", "[mpi]")
     REQUIRE(worldB.getHostForRank(rankB) == hostB);
 }
 
+TEST_CASE("Test cartesian communicator", "[mpi]")
+{
+    cleanFaabric();
+
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    // 5 processes create a 2x2 grid with one left MPI_UNDEFINED
+    msg.set_mpiworldsize(5);
+    MpiWorld& world =
+      getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+
+    std::vector<int> dims(2, -1);
+    std::vector<int> periods(2, 0);
+    std::vector<int> coords(2, -1);
+
+    SECTION("Create cartesian coordinates")
+    {
+        // Check it works well for a rank within the grid
+        for (int i = 0; i < 4; i++) {
+            std::vector<int> required = { i / 2, i % 2 };
+            world.getCartesianRank(
+              i, dims.data(), periods.data(), coords.data());
+            REQUIRE(required == coords);
+        }
+
+        // Or MPI_UNDEFINED otherwise
+        std::vector<int> required = { MPI_UNDEFINED, MPI_UNDEFINED };
+        world.getCartesianRank(4, dims.data(), periods.data(), coords.data());
+        REQUIRE(required == coords);
+    }
+
+    SECTION("Get rank from cartesian coordinates")
+    {
+        // Check it works for defined processes
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 2; j++) {
+                std::vector<int> coords = { i, j };
+                int rank;
+                int expected = i * 2 + j;
+                world.getRankFromCoords(&rank, coords.data());
+                REQUIRE(rank == expected);
+            }
+        }
+
+        // Check it throws exception if MPI_UNDEFINED
+        std::vector<int> coords = { MPI_UNDEFINED, MPI_UNDEFINED };
+        int rank;
+        REQUIRE_THROWS(world.getRankFromCoords(&rank, coords.data()));
+    }
+}
+
 void checkMessage(faabric::MPIMessage& actualMessage,
                   int senderRank,
                   int destRank,
