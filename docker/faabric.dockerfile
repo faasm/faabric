@@ -4,6 +4,9 @@ ARG FAABRIC_VERSION
 # Note - the version of grpc-root here can be quite behind as it's rebuilt very
 # rarely
 
+# Flag to say we're in a container
+ENV FAABRIC_DOCKER="on"
+
 # Redis
 RUN apt install -y redis-tools
 
