@@ -954,6 +954,137 @@ TEST_CASE("Test reduce", "[mpi]")
     }
 }
 
+TEST_CASE("Test operator reduce", "[mpi]")
+{
+    cleanFaabric();
+
+    const faabric::Message& msg = faabric::util::messageFactory(user, func);
+    scheduler::MpiWorld world;
+    int thisWorldSize = 5;
+    world.create(msg, worldId, thisWorldSize);
+
+    // Register the ranks
+    for (int r = 1; r < thisWorldSize; r++) {
+        world.registerRank(r);
+    }
+
+    SECTION("Sum")
+    {
+        SECTION("Integers")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 1, 1, 1 };
+            std::vector<int> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_SUM,
+                            MPI_INT,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Doubles")
+        {
+            std::vector<double> input = { 1, 1, 1 };
+            std::vector<double> output = { 1, 1, 1 };
+            std::vector<double> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_SUM,
+                            MPI_DOUBLE,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Long long")
+        {
+            std::vector<long long> input = { 1, 1, 1 };
+            std::vector<long long> output = { 1, 1, 1 };
+            std::vector<long long> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_SUM,
+                            MPI_LONG_LONG,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Unsupported type")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 1, 1, 1 };
+            std::vector<int> expected = { 2, 2, 2 };
+
+            REQUIRE_THROWS(world.op_reduce(MPI_SUM,
+                                           MPI_DATATYPE_NULL,
+                                           3,
+                                           (uint8_t*)input.data(),
+                                           (uint8_t*)output.data()));
+        }
+    }
+
+    SECTION("Max")
+    {
+        SECTION("Integers")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 2, 2, 2 };
+            std::vector<int> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_MAX,
+                            MPI_INT,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Doubles")
+        {
+            std::vector<double> input = { 2, 2, 2 };
+            std::vector<double> output = { 1, 1, 1 };
+            std::vector<double> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_MAX,
+                            MPI_DOUBLE,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Long long")
+        {
+            std::vector<long long> input = { 2, 2, 2 };
+            std::vector<long long> output = { 1, 1, 1 };
+            std::vector<long long> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_MAX,
+                            MPI_LONG_LONG,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Unsupported type")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 1, 1, 1 };
+            std::vector<int> expected = { 2, 2, 2 };
+
+            REQUIRE_THROWS(world.op_reduce(MPI_MAX,
+                                           MPI_DATATYPE_NULL,
+                                           3,
+                                           (uint8_t*)input.data(),
+                                           (uint8_t*)output.data()));
+        }
+    }
+}
+
 TEST_CASE("Test gather and allgather", "[mpi]")
 {
     cleanFaabric();
