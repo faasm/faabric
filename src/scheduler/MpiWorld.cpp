@@ -757,29 +757,47 @@ void MpiWorld::scan(int rank,
                     int count,
                     faabric_op_t* operation)
 {
-    /*
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    auto logger = faabric::util::getLogger();
     logger->trace("MPI - scan");
-    // If rank 0, just copy send into recv
-    // Otherwise,
-    // - Receive values from previous process, and reduce
-    bool isInPlace = sendBuffer == recvBuffer;
-    if (rank == 0) {
-        if (!isInPlace) {
-            recvBuffer = sendBuffer;
-        }
-    } else {
-        // Receive the previous reduce result
-        rankData = new uint8_t[bufferSize];
-        recv(rank - 1, rank, rankData datatype, count, nullptr);
-        operate();
+
+    if (rank > this->size - 1) {
+        throw std::runtime_error(
+          fmt::format("Rank {} bigger than world size {}", rank, this->size));
     }
 
-    // Send result to next process
-    if (rank < (size - 1)) {
-        send(rank, rank + 1, sendBuffer, datatype, count);
+    bool isInPlace = sendBuffer == recvBuffer;
+
+    // Scan performs an inclusive prefix reduction, so our input values
+    // need also to be considered.
+    size_t bufferSize = datatype->size * count;
+    if (!isInPlace) {
+        memcpy(recvBuffer, sendBuffer, bufferSize);
     }
-    */
+
+    if (rank > 0) {
+        // Receive the current accumulated value
+        auto currentAcc = new uint8_t[bufferSize];
+        recv(rank - 1,
+             rank,
+             currentAcc,
+             datatype,
+             count,
+             nullptr,
+             faabric::MPIMessage::SCAN);
+        // Reduce with our own value
+        op_reduce(operation, datatype, count, currentAcc, recvBuffer);
+        delete[] currentAcc;
+    }
+
+    // If not the last process, send to the next one
+    if (rank < this->size - 1) {
+        send(rank,
+             rank + 1,
+             recvBuffer,
+             MPI_INT,
+             count,
+             faabric::MPIMessage::SCAN);
+    }
 }
 
 void MpiWorld::allToAll(int rank,
