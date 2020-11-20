@@ -1266,6 +1266,71 @@ TEST_CASE("Test gather and allgather", "[mpi]")
     }
 }
 
+TEST_CASE("Test scan", "[mpi]")
+{
+    cleanFaabric();
+
+    const faabric::Message& msg = faabric::util::messageFactory(user, func);
+    scheduler::MpiWorld world;
+    int thisWorldSize = 5;
+    int count = 3;
+    world.create(msg, worldId, thisWorldSize);
+
+    // Register the ranks
+    for (int r = 1; r < thisWorldSize; r++) {
+        world.registerRank(r);
+    }
+
+    // Prepare input data
+    std::vector<std::vector<int>> rankData(thisWorldSize,
+                                           std::vector<int>(count));
+    for (int r = 0; r < thisWorldSize; r++) {
+        for (int i = 0; i < count; i++) {
+            rankData[r][i] = r * 10 + i;
+        }
+    }
+
+    // Prepare expected values
+    std::vector<std::vector<int>> expected(thisWorldSize,
+                                           std::vector<int>(count));
+    for (int r = 0; r < thisWorldSize; r++) {
+        for (int i = 0; i < count; i++) {
+            if (r == 0) {
+                expected[r][i] = rankData[r][i];
+            } else {
+                expected[r][i] = expected[r - 1][i] + rankData[r][i];
+            }
+        }
+    }
+
+    bool inPlace;
+    SECTION("In place") { inPlace = true; }
+    SECTION("Not in place") { inPlace = false; }
+
+    // Run the scan operation
+    std::vector<std::vector<int>> result(thisWorldSize,
+                                         std::vector<int>(count));
+    for (int r = 0; r < thisWorldSize; r++) {
+        if (inPlace) {
+            world.scan(r,
+                       BYTES(rankData[r].data()),
+                       BYTES(rankData[r].data()),
+                       MPI_INT,
+                       count,
+                       MPI_SUM);
+            REQUIRE(rankData[r] == expected[r]);
+        } else {
+            world.scan(r,
+                       BYTES(rankData[r].data()),
+                       BYTES(result[r].data()),
+                       MPI_INT,
+                       count,
+                       MPI_SUM);
+            REQUIRE(result[r] == expected[r]);
+        }
+    }
+}
+
 TEST_CASE("Test all-to-all", "[mpi]")
 {
     cleanFaabric();

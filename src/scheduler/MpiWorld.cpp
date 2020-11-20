@@ -750,6 +750,56 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
     }
 }
 
+void MpiWorld::scan(int rank,
+                    uint8_t* sendBuffer,
+                    uint8_t* recvBuffer,
+                    faabric_datatype_t* datatype,
+                    int count,
+                    faabric_op_t* operation)
+{
+    auto logger = faabric::util::getLogger();
+    logger->trace("MPI - scan");
+
+    if (rank > this->size - 1) {
+        throw std::runtime_error(
+          fmt::format("Rank {} bigger than world size {}", rank, this->size));
+    }
+
+    bool isInPlace = sendBuffer == recvBuffer;
+
+    // Scan performs an inclusive prefix reduction, so our input values
+    // need also to be considered.
+    size_t bufferSize = datatype->size * count;
+    if (!isInPlace) {
+        memcpy(recvBuffer, sendBuffer, bufferSize);
+    }
+
+    if (rank > 0) {
+        // Receive the current accumulated value
+        auto currentAcc = new uint8_t[bufferSize];
+        recv(rank - 1,
+             rank,
+             currentAcc,
+             datatype,
+             count,
+             nullptr,
+             faabric::MPIMessage::SCAN);
+        // Reduce with our own value
+        op_reduce(operation, datatype, count, currentAcc, recvBuffer);
+        delete[] currentAcc;
+    }
+
+    // If not the last process, send to the next one
+    if (rank < this->size - 1) {
+        send(rank,
+             rank + 1,
+             recvBuffer,
+             MPI_INT,
+             count,
+             faabric::MPIMessage::SCAN);
+    }
+}
+
 void MpiWorld::allToAll(int rank,
                         uint8_t* sendBuffer,
                         faabric_datatype_t* sendType,
