@@ -86,6 +86,16 @@ class MpiWorld
 
     void awaitAsyncRequest(int requestId);
 
+    void sendRecv(uint8_t* sendBuffer,
+                  int sendcount,
+                  faabric_datatype_t* sendDataType,
+                  int recvRank,
+                  uint8_t* recvBuffer,
+                  int recvCount,
+                  faabric_datatype_t* recvDataType,
+                  int sendRank,
+                  MPI_Status* status);
+
     void scatter(int sendRank,
                  int recvRank,
                  const uint8_t* sendBuffer,

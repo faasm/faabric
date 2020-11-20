@@ -35,6 +35,7 @@ message MPIMessage {
         ALLREDUCE = 8;
         ALLTOALL = 9;
         RMA_WRITE = 10;
+        SENDRECV = 11;
     };
 
     MPIMessageType messageType = 1;

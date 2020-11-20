@@ -229,6 +229,65 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
     }
 }
 
+TEST_CASE("Test sendrecv", "[mpi]")
+{
+    cleanFaabric();
+
+    auto msg = faabric::util::messageFactory(user, func);
+    scheduler::MpiWorld world;
+    world.create(msg, worldId, worldSize);
+
+    // Register two ranks
+    int rankA = 1;
+    int rankB = 2;
+    world.registerRank(rankA);
+    world.registerRank(rankB);
+
+    // Prepare data
+    MPI_Status status{};
+    std::vector<int> messageDataAB = { 0, 1, 2 };
+    std::vector<int> messageDataBA = { 3, 2, 1, 0 };
+
+    // sendRecv is blocking, so we run two threads.
+    // Run sendrecv from A
+    std::vector<std::thread> threads;
+    threads.emplace_back([&] {
+        std::vector<int> recvBufferA(messageDataBA.size(), 0);
+        world.sendRecv(BYTES(messageDataAB.data()),
+                       messageDataAB.size(),
+                       MPI_INT,
+                       rankB,
+                       BYTES(recvBufferA.data()),
+                       messageDataBA.size(),
+                       MPI_INT,
+                       rankA,
+                       &status);
+        // Test integrity of results
+        REQUIRE(recvBufferA == messageDataBA);
+    });
+    // Run sendrecv from B
+    threads.emplace_back([&] {
+        std::vector<int> recvBufferB(messageDataAB.size(), 0);
+        world.sendRecv(BYTES(messageDataBA.data()),
+                       messageDataBA.size(),
+                       MPI_INT,
+                       rankA,
+                       BYTES(recvBufferB.data()),
+                       messageDataAB.size(),
+                       MPI_INT,
+                       rankB,
+                       &status);
+        // Test integrity of results
+        REQUIRE(recvBufferB == messageDataAB);
+    });
+    // Wait for both to finish
+    for (auto& t : threads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+}
+
 TEST_CASE("Test async send and recv", "[mpi]")
 {
     cleanFaabric();

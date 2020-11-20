@@ -312,6 +312,43 @@ void MpiWorld::send(int sendRank,
     }
 }
 
+void MpiWorld::sendRecv(uint8_t* sendBuffer,
+                        int sendCount,
+                        faabric_datatype_t* sendDataType,
+                        int recvRank,
+                        uint8_t* recvBuffer,
+                        int recvCount,
+                        faabric_datatype_t* recvDataType,
+                        int sendRank,
+                        MPI_Status* status)
+{
+    auto logger = faabric::util::getLogger();
+    logger->trace("MPI - Sendrecv");
+
+    if (recvRank > this->size - 1) {
+        throw std::runtime_error(fmt::format(
+          "Receive rank {} bigger than world size {}", recvRank, this->size));
+    }
+    if (sendRank > this->size - 1) {
+        throw std::runtime_error(fmt::format(
+          "Send rank {} bigger than world size {}", sendRank, this->size));
+    }
+
+    // Post async recv
+    int recvId = irecv(recvRank, sendRank, recvBuffer, recvDataType, recvCount);
+    // Then send the message
+    // TODO change MPIMessage to MPIMessage::SENDRECV. This requires a change
+    // in the signature of doISendRecv.
+    send(sendRank,
+         recvRank,
+         sendBuffer,
+         sendDataType,
+         sendCount,
+         faabric::MPIMessage::NORMAL);
+    // And wait
+    awaitAsyncRequest(recvId);
+}
+
 void MpiWorld::broadcast(int sendRank,
                          const uint8_t* buffer,
                          faabric_datatype_t* dataType,
