@@ -60,7 +60,9 @@ class MpiWorld
               int recvRank,
               const uint8_t* buffer,
               faabric_datatype_t* dataType,
-              int count);
+              int count,
+              faabric::MPIMessage::MPIMessageType messageType =
+                faabric::MPIMessage::NORMAL);
 
     void broadcast(int sendRank,
                    const uint8_t* buffer,
@@ -82,7 +84,9 @@ class MpiWorld
               int recvRank,
               uint8_t* buffer,
               faabric_datatype_t* dataType,
-              int count);
+              int count,
+              faabric::MPIMessage::MPIMessageType messageType =
+                faabric::MPIMessage::NORMAL);
 
     void awaitAsyncRequest(int requestId);
 
@@ -220,7 +224,9 @@ class MpiWorld
                     const uint8_t* sendBuffer,
                     uint8_t* recvBuffer,
                     faabric_datatype_t* dataType,
-                    int count);
+                    int count,
+                    faabric::MPIMessage::MPIMessageType messageType =
+                      faabric::MPIMessage::NORMAL);
 
     void pushToState();
 };

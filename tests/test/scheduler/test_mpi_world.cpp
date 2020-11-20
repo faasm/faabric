@@ -227,6 +227,19 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
         REQUIRE(status.MPI_SOURCE == rankA1);
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
+
+    SECTION("Test recv with type missmatch")
+    {
+        // Receive a message from a different type
+        auto buffer = new int[messageData.size()];
+        REQUIRE_THROWS(world.recv(rankA1,
+                                  rankA2,
+                                  BYTES(buffer),
+                                  MPI_INT,
+                                  messageData.size(),
+                                  nullptr,
+                                  faabric::MPIMessage::SENDRECV));
+    }
 }
 
 TEST_CASE("Test sendrecv", "[mpi]")

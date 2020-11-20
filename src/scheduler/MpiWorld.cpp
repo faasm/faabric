@@ -227,9 +227,11 @@ int MpiWorld::isend(int sendRank,
                     int recvRank,
                     const uint8_t* buffer,
                     faabric_datatype_t* dataType,
-                    int count)
+                    int count,
+                    faabric::MPIMessage::MPIMessageType messageType)
 {
-    return doISendRecv(sendRank, recvRank, buffer, nullptr, dataType, count);
+    return doISendRecv(
+      sendRank, recvRank, buffer, nullptr, dataType, count, messageType);
 }
 
 int MpiWorld::doISendRecv(int sendRank,
@@ -237,7 +239,8 @@ int MpiWorld::doISendRecv(int sendRank,
                           const uint8_t* sendBuffer,
                           uint8_t* recvBuffer,
                           faabric_datatype_t* dataType,
-                          int count)
+                          int count,
+                          faabric::MPIMessage::MPIMessageType messageType)
 {
 
     int requestId = (int)faabric::util::generateGid();
@@ -245,13 +248,26 @@ int MpiWorld::doISendRecv(int sendRank,
     // Spawn a thread to do the work
     asyncThreadMap.insert(std::pair<int, std::thread>(
       requestId,
-      [this, sendRank, recvRank, sendBuffer, recvBuffer, dataType, count] {
+      [this,
+       sendRank,
+       recvRank,
+       sendBuffer,
+       recvBuffer,
+       dataType,
+       count,
+       messageType] {
           // Do the operation (i.e. the underlying synchronous send/ receive)
           if (recvBuffer == nullptr) {
-              this->send(sendRank, recvRank, sendBuffer, dataType, count);
+              this->send(
+                sendRank, recvRank, sendBuffer, dataType, count, messageType);
           } else {
-              this->recv(
-                sendRank, recvRank, recvBuffer, dataType, count, nullptr);
+              this->recv(sendRank,
+                         recvRank,
+                         recvBuffer,
+                         dataType,
+                         count,
+                         nullptr,
+                         messageType);
           }
       }));
 
@@ -335,16 +351,19 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
     }
 
     // Post async recv
-    int recvId = irecv(recvRank, sendRank, recvBuffer, recvDataType, recvCount);
+    int recvId = irecv(recvRank,
+                       sendRank,
+                       recvBuffer,
+                       recvDataType,
+                       recvCount,
+                       faabric::MPIMessage::SENDRECV);
     // Then send the message
-    // TODO change MPIMessage to MPIMessage::SENDRECV. This requires a change
-    // in the signature of doISendRecv.
     send(sendRank,
          recvRank,
          sendBuffer,
          sendDataType,
          sendCount,
-         faabric::MPIMessage::NORMAL);
+         faabric::MPIMessage::SENDRECV);
     // And wait
     awaitAsyncRequest(recvId);
 }
@@ -553,9 +572,11 @@ int MpiWorld::irecv(int sendRank,
                     int recvRank,
                     uint8_t* buffer,
                     faabric_datatype_t* dataType,
-                    int count)
+                    int count,
+                    faabric::MPIMessage::MPIMessageType messageType)
 {
-    return doISendRecv(sendRank, recvRank, nullptr, buffer, dataType, count);
+    return doISendRecv(
+      sendRank, recvRank, nullptr, buffer, dataType, count, messageType);
 }
 
 void MpiWorld::recv(int sendRank,
