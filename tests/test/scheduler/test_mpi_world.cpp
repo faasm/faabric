@@ -1090,64 +1090,6 @@ TEST_CASE("Test operator reduce", "[mpi]")
         world.registerRank(r);
     }
 
-    SECTION("Sum")
-    {
-        SECTION("Integers")
-        {
-            std::vector<int> input = { 1, 1, 1 };
-            std::vector<int> output = { 1, 1, 1 };
-            std::vector<int> expected = { 2, 2, 2 };
-
-            world.op_reduce(MPI_SUM,
-                            MPI_INT,
-                            3,
-                            (uint8_t*)input.data(),
-                            (uint8_t*)output.data());
-            REQUIRE(output == expected);
-        }
-
-        SECTION("Doubles")
-        {
-            std::vector<double> input = { 1, 1, 1 };
-            std::vector<double> output = { 1, 1, 1 };
-            std::vector<double> expected = { 2, 2, 2 };
-
-            world.op_reduce(MPI_SUM,
-                            MPI_DOUBLE,
-                            3,
-                            (uint8_t*)input.data(),
-                            (uint8_t*)output.data());
-            REQUIRE(output == expected);
-        }
-
-        SECTION("Long long")
-        {
-            std::vector<long long> input = { 1, 1, 1 };
-            std::vector<long long> output = { 1, 1, 1 };
-            std::vector<long long> expected = { 2, 2, 2 };
-
-            world.op_reduce(MPI_SUM,
-                            MPI_LONG_LONG,
-                            3,
-                            (uint8_t*)input.data(),
-                            (uint8_t*)output.data());
-            REQUIRE(output == expected);
-        }
-
-        SECTION("Unsupported type")
-        {
-            std::vector<int> input = { 1, 1, 1 };
-            std::vector<int> output = { 1, 1, 1 };
-            std::vector<int> expected = { 2, 2, 2 };
-
-            REQUIRE_THROWS(world.op_reduce(MPI_SUM,
-                                           MPI_DATATYPE_NULL,
-                                           3,
-                                           (uint8_t*)input.data(),
-                                           (uint8_t*)output.data()));
-        }
-    }
-
     SECTION("Max")
     {
         SECTION("Integers")
@@ -1196,9 +1138,122 @@ TEST_CASE("Test operator reduce", "[mpi]")
         {
             std::vector<int> input = { 1, 1, 1 };
             std::vector<int> output = { 1, 1, 1 };
-            std::vector<int> expected = { 2, 2, 2 };
 
             REQUIRE_THROWS(world.op_reduce(MPI_MAX,
+                                           MPI_DATATYPE_NULL,
+                                           3,
+                                           (uint8_t*)input.data(),
+                                           (uint8_t*)output.data()));
+        }
+    }
+
+    SECTION("Min")
+    {
+        SECTION("Integers")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 2, 2, 2 };
+            std::vector<int> expected = { 1, 1, 1 };
+
+            world.op_reduce(MPI_MIN,
+                            MPI_INT,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Doubles")
+        {
+            std::vector<double> input = { 2, 2, 2 };
+            std::vector<double> output = { 1, 1, 1 };
+            std::vector<double> expected = { 1, 1, 1 };
+
+            world.op_reduce(MPI_MIN,
+                            MPI_DOUBLE,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Long long")
+        {
+            std::vector<long long> input = { 2, 2, 2 };
+            std::vector<long long> output = { 1, 1, 1 };
+            std::vector<long long> expected = { 1, 1, 1 };
+
+            world.op_reduce(MPI_MIN,
+                            MPI_LONG_LONG,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Unsupported type")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 1, 1, 1 };
+
+            REQUIRE_THROWS(world.op_reduce(MPI_MIN,
+                                           MPI_DATATYPE_NULL,
+                                           3,
+                                           (uint8_t*)input.data(),
+                                           (uint8_t*)output.data()));
+        }
+    }
+
+    SECTION("Sum")
+    {
+        SECTION("Integers")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 1, 1, 1 };
+            std::vector<int> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_SUM,
+                            MPI_INT,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Doubles")
+        {
+            std::vector<double> input = { 1, 1, 1 };
+            std::vector<double> output = { 1, 1, 1 };
+            std::vector<double> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_SUM,
+                            MPI_DOUBLE,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Long long")
+        {
+            std::vector<long long> input = { 1, 1, 1 };
+            std::vector<long long> output = { 1, 1, 1 };
+            std::vector<long long> expected = { 2, 2, 2 };
+
+            world.op_reduce(MPI_SUM,
+                            MPI_LONG_LONG,
+                            3,
+                            (uint8_t*)input.data(),
+                            (uint8_t*)output.data());
+            REQUIRE(output == expected);
+        }
+
+        SECTION("Unsupported type")
+        {
+            std::vector<int> input = { 1, 1, 1 };
+            std::vector<int> output = { 1, 1, 1 };
+
+            REQUIRE_THROWS(world.op_reduce(MPI_SUM,
                                            MPI_DATATYPE_NULL,
                                            3,
                                            (uint8_t*)input.data(),
