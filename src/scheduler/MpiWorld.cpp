@@ -804,6 +804,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
             throw std::runtime_error("Unsupported type for max reduction");
         }
     } else {
+        logger->error("Reduce operation not implemented: {}", operation->id);
         throw std::runtime_error("Not yet implemented reduce operation");
     }
 }
