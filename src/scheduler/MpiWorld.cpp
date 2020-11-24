@@ -748,7 +748,67 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
 
     logger->trace(
       "MPI - reduce op: {} datatype {}", operation->id, datatype->id);
-    if (operation->id == faabric_op_sum.id) {
+    if (operation->id == faabric_op_max.id) {
+        if (datatype->id == FAABRIC_INT) {
+            auto inBufferCast = reinterpret_cast<int*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<int*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::max(outBufferCast[slot], inBufferCast[slot]);
+            }
+        } else if (datatype->id == FAABRIC_DOUBLE) {
+            auto inBufferCast = reinterpret_cast<double*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<double*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::max(outBufferCast[slot], inBufferCast[slot]);
+            }
+        } else if (datatype->id == FAABRIC_LONG_LONG) {
+            auto inBufferCast = reinterpret_cast<long long*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<long long*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::max(outBufferCast[slot], inBufferCast[slot]);
+            }
+        } else {
+            logger->error("Unsupported type for max reduction (datatype={})",
+                          datatype->id);
+            throw std::runtime_error("Unsupported type for max reduction");
+        }
+    } else if (operation->id == faabric_op_min.id) {
+        if (datatype->id == FAABRIC_INT) {
+            auto inBufferCast = reinterpret_cast<int*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<int*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::min(outBufferCast[slot], inBufferCast[slot]);
+            }
+        } else if (datatype->id == FAABRIC_DOUBLE) {
+            auto inBufferCast = reinterpret_cast<double*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<double*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::min(outBufferCast[slot], inBufferCast[slot]);
+            }
+        } else if (datatype->id == FAABRIC_LONG_LONG) {
+            auto inBufferCast = reinterpret_cast<long long*>(inBuffer);
+            auto outBufferCast = reinterpret_cast<long long*>(outBuffer);
+
+            for (int slot = 0; slot < count; slot++) {
+                outBufferCast[slot] =
+                  std::min(outBufferCast[slot], inBufferCast[slot]);
+            }
+        } else {
+            logger->error("Unsupported type for min reduction (datatype={})",
+                          datatype->id);
+            throw std::runtime_error("Unsupported type for min reduction");
+        }
+    } else if (operation->id == faabric_op_sum.id) {
         if (datatype->id == FAABRIC_INT) {
             auto inBufferCast = reinterpret_cast<int*>(inBuffer);
             auto outBufferCast = reinterpret_cast<int*>(outBuffer);
@@ -775,35 +835,8 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                           datatype->id);
             throw std::runtime_error("Unsupported type for sum reduction");
         }
-    } else if (operation->id == faabric_op_max.id) {
-        if (datatype->id == FAABRIC_INT) {
-            auto inBufferCast = reinterpret_cast<int*>(inBuffer);
-            auto outBufferCast = reinterpret_cast<int*>(outBuffer);
-
-            for (int slot = 0; slot < count; slot++) {
-                outBufferCast[slot] =
-                  std::max(outBufferCast[slot], inBufferCast[slot]);
-            }
-        } else if (datatype->id == FAABRIC_DOUBLE) {
-            auto inBufferCast = reinterpret_cast<double*>(inBuffer);
-            auto outBufferCast = reinterpret_cast<double*>(outBuffer);
-
-            for (int slot = 0; slot < count; slot++) {
-                outBufferCast[slot] =
-                  std::max(outBufferCast[slot], inBufferCast[slot]);
-            }
-        } else if (datatype->id == FAABRIC_LONG_LONG) {
-            auto inBufferCast = reinterpret_cast<long long*>(inBuffer);
-            auto outBufferCast = reinterpret_cast<long long*>(outBuffer);
-
-            for (int slot = 0; slot < count; slot++) {
-                outBufferCast[slot] =
-                  std::max(outBufferCast[slot], inBufferCast[slot]);
-            }
-        } else {
-            throw std::runtime_error("Unsupported type for max reduction");
-        }
     } else {
+        logger->error("Reduce operation not implemented: {}", operation->id);
         throw std::runtime_error("Not yet implemented reduce operation");
     }
 }
