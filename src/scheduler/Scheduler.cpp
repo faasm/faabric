@@ -509,6 +509,7 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
         bindMsg.set_istypescript(msg.istypescript());
         bindMsg.set_pythonuser(msg.pythonuser());
         bindMsg.set_pythonfunction(msg.pythonfunction());
+        bindMsg.set_issgx(msg.issgx());
 
         this->enqueueMessage(bindMsg);
     }
