@@ -119,10 +119,14 @@ TEST_CASE("Test scheduler operations", "[scheduler]")
 
     SECTION("Test sending bind messages")
     {
-        // Set up calls
+        // Set up calls with values for the important bind fields
         faabric::Message callA;
-        callA.set_user("demo");
-        callA.set_function("echo");
+        callA.set_user("python");
+        callA.set_function("py_func");
+        callA.set_ispython(true);
+        callA.set_pythonfunction("baz");
+        callA.set_pythonuser("foobar");
+        callA.set_issgx(true);
 
         faabric::Message callB;
         callB.set_user("demo");
@@ -150,10 +154,18 @@ TEST_CASE("Test scheduler operations", "[scheduler]")
         REQUIRE(bindA.user() == callA.user());
         REQUIRE(bindA.function() == callA.function());
         REQUIRE(bindA.type() == faabric::Message_MessageType_BIND);
+        REQUIRE(bindA.ispython());
+        REQUIRE(bindA.pythonuser() == "foobar");
+        REQUIRE(bindA.pythonfunction() == "baz");
+        REQUIRE(bindA.issgx());
 
         REQUIRE(bindB.user() == callB.user());
         REQUIRE(bindB.function() == callB.function());
         REQUIRE(bindB.type() == faabric::Message_MessageType_BIND);
+        REQUIRE(!bindB.ispython());
+        REQUIRE(bindB.pythonuser().empty());
+        REQUIRE(bindB.pythonfunction().empty());
+        REQUIRE(!bindB.issgx());
 
         redis.flushAll();
     }
