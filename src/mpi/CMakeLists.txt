@@ -22,7 +22,8 @@ set_target_properties(faabricmpi
     PROPERTIES PUBLIC_HEADER "${PUBLIC_HEADERS}"
     )
 
-if(FAASM_BUILD_TYPE STREQUAL "wasm")
+if(CMAKE_SYSTEM_NAME STREQUAL "Wasm")
+    message(STATUS "Faabric MPI WebAssembly build")
     set(LIB_DIRECTORY ${CMAKE_SYSROOT}/lib/wasm32-wasi)
     
     install(TARGETS faabricmpi
@@ -31,6 +32,7 @@ if(FAASM_BUILD_TYPE STREQUAL "wasm")
         PUBLIC_HEADER DESTINATION ${CMAKE_SYSROOT}/include/faabric/mpi
     )
 else()
+    message(STATUS "Faabric MPI native build")
     install(TARGETS faabricmpi
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include/faabric/mpi
     )
