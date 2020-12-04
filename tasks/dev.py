@@ -15,7 +15,7 @@ _INSTALL_PREFIX = join(_BUILD_DIR, "install")
 
 
 @task
-def cmake(ctx, clean=False):
+def cmake(ctx, clean=False, shared=False):
     """
     Configures the build
     """
@@ -30,6 +30,7 @@ def cmake(ctx, clean=False):
         "-GNinja",
         "-DCMAKE_INSTALL_PREFIX={}".format(_INSTALL_PREFIX),
         "-DCMAKE_BUILD_TYPE=Debug",
+        "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
         "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
         PROJ_ROOT,
