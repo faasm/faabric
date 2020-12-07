@@ -12,7 +12,6 @@ RUN apt install -y \
    libhiredis-dev \
    libtool \
    libboost-filesystem-dev \
-   libcurl4-openssl-dev \
    ninja-build \
    python3-dev \
    python3-pip \
