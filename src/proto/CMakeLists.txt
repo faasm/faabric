@@ -26,10 +26,10 @@ set(LIB_FILES
         ${OUTPUT_FILES}
         )
 
-if(FAABRIC_STATIC_LIBS)
-    faabric_private_lib(proto "${LIB_FILES}")
-else()
+if(BUILD_SHARED_LIBS)
     faabric_public_lib(proto "${LIB_FILES}")
+else()
+    faabric_private_lib(proto "${LIB_FILES}")
 endif()
 
 add_dependencies(proto spdlog_ext)
