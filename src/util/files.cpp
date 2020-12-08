@@ -1,13 +1,19 @@
 #include "files.h"
 #include "bytes.h"
+#include "logging.h"
+#include "pistache/async.h"
+#include "pistache/http_header.h"
 
-#include <curl/curl.h>
-#include <curl/easy.h>
+#include <pistache/client.h>
+#include <pistache/http.h>
+#include <pistache/net.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <string>
 
 #define HTTP_FILE_TIMEOUT 20000
 
@@ -69,58 +75,47 @@ size_t writeDataCallback(void* ptr, size_t size, size_t nmemb, void* stream)
 
 std::vector<uint8_t> readFileFromUrl(const std::string& url)
 {
-    return readFileFromUrlWithHeader(url, "");
+    return readFileFromUrlWithHeader(url, nullptr);
 }
 
-std::vector<uint8_t> readFileFromUrlWithHeader(const std::string& url,
-                                               const std::string& header)
+std::vector<uint8_t> readFileFromUrlWithHeader(
+  const std::string& url,
+  const std::shared_ptr<Http::Header::Header>& header)
 {
+    auto logger = faabric::util::getLogger();
 
-    void* curl = curl_easy_init();
+    Http::Client client;
+    client.init();
+
+    auto rb = client.get(url);
+
+    if (header != nullptr) {
+        rb.header(header);
+    }
+
+    Async::Promise<Http::Response> resp = rb.send();
 
     std::stringstream out;
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeDataCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, HTTP_FILE_TIMEOUT);
+    resp.then(
+      [&](Http::Response response) {
+          if (response.code() == Http::Code::Ok) {
+              auto body = response.body();
+              out << body;
+          } else {
+              logger->error(
+                "Failed request to {}, code = {}", url, response.code());
+          }
+      },
+      [&](std::exception_ptr exc) {
+          PrintException excPrinter;
+          excPrinter(exc);
+      });
 
-    // Add header
-    if (!header.empty()) {
-        struct curl_slist* chunk = nullptr;
-        chunk = curl_slist_append(chunk, header.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-    }
+    Async::Barrier<Http::Response> barrier(resp);
+    std::chrono::milliseconds timeout(HTTP_FILE_TIMEOUT);
+    barrier.wait_for(timeout);
 
-    // Make the request
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
-    // Check response is OK
-    if (res != CURLE_OK) {
-        std::string msg =
-          std::string("Unable to get file due to curl error ") + url;
-        throw FileNotFoundAtUrlException(msg);
-    }
-
-    // Check response code
-    long http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (http_code > 200) {
-        std::string msg = "Unable to get file " + url +
-                          " response code: " + std::to_string(http_code);
-        throw FileNotFoundAtUrlException(msg);
-    }
-
-    // Check there's something in the response
-    if (out.str().empty()) {
-        std::string msg = "Empty response for file " + url;
-        throw FileNotFoundAtUrlException(msg);
-    }
-
-    if (out.str() == "IS_DIR") {
-        throw faabric::util::FileAtUrlIsDirectoryException(url +
-                                                           " is a directory");
-    }
+    client.shutdown();
 
     return faabric::util::stringToBytes(out.str());
 }

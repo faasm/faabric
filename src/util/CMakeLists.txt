@@ -7,7 +7,6 @@ file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/util/*.h")
 set(LIB_FILES
         barrier.cpp
         bytes.cpp
-        chaining.cpp
         config.cpp
         clock.cpp
         environment.cpp
@@ -34,9 +33,6 @@ add_dependencies(util rapidjson_ext)
 target_link_libraries(
         util
         proto
-        ssl
-        curl
-        crypto
         boost_system
         boost_filesystem
 )

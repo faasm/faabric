@@ -26,7 +26,7 @@ TEST_CASE("Test reading from a URL", "[util]")
 
     std::string localPath = "/code/faabric/LICENSE.md";
     std::string url =
-      "https://raw.githubusercontent.com/faasm/faabric/master/LICENSE.md";
+      "raw.githubusercontent.com/faasm/faabric/master/LICENSE.md";
 
     std::vector<uint8_t> expectedBytes =
       faabric::util::readFileToBytes(localPath);
@@ -42,17 +42,17 @@ TEST_CASE("Test reading from bad URLs", "[util]")
 
     SECTION("Invalid URL")
     {
-        url = "https://www.aklskafkjdfkh.com/foo.txt";
+        url = "www.aklskafkjdfkh.com/foo.txt";
         expectedMessage = "Unable to get file due to curl error " + url;
     }
     SECTION("500 error")
     {
-        url = "https://httpstat.us/500";
+        url = "httpstat.us/500";
         expectedMessage = "Unable to get file " + url + " response code: 500";
     }
     SECTION("203 code")
     {
-        url = "https://httpstat.us/203";
+        url = "httpstat.us/203";
         expectedMessage = "Unable to get file " + url + " response code: 203";
     }
 
