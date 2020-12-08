@@ -7,6 +7,12 @@ include_directories(${THIRD_PARTY_INSTALL_DIR}/include)
 # Protobuf/ grpc config
 # See the example in the gRPC repo here:                                         
 # https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/CMakeLists.txt
+if(BUILD_SHARED_LIBS)
+    set(Protobuf_USE_STATIC_LIBS OFF)
+else()
+    set(Protobuf_USE_STATIC_LIBS ON)
+endif()
+
 include(FindProtobuf)
 set(protobuf_MODULE_COMPATIBLE TRUE)                                            
 find_package(Protobuf REQUIRED)                                                  

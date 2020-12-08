@@ -1,15 +1,13 @@
 #include "files.h"
 #include "bytes.h"
+#include "logging.h"
 
-#include <curl/curl.h>
-#include <curl/easy.h>
-
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
-
-#define HTTP_FILE_TIMEOUT 20000
+#include <string>
 
 namespace faabric::util {
 std::string readFileToString(const std::string& path)
@@ -65,64 +63,6 @@ size_t writeDataCallback(void* ptr, size_t size, size_t nmemb, void* stream)
     std::string data((const char*)ptr, (size_t)size * nmemb);
     *((std::stringstream*)stream) << data;
     return size * nmemb;
-}
-
-std::vector<uint8_t> readFileFromUrl(const std::string& url)
-{
-    return readFileFromUrlWithHeader(url, "");
-}
-
-std::vector<uint8_t> readFileFromUrlWithHeader(const std::string& url,
-                                               const std::string& header)
-{
-
-    void* curl = curl_easy_init();
-
-    std::stringstream out;
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeDataCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &out);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, HTTP_FILE_TIMEOUT);
-
-    // Add header
-    if (!header.empty()) {
-        struct curl_slist* chunk = nullptr;
-        chunk = curl_slist_append(chunk, header.c_str());
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
-    }
-
-    // Make the request
-    CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
-    // Check response is OK
-    if (res != CURLE_OK) {
-        std::string msg =
-          std::string("Unable to get file due to curl error ") + url;
-        throw FileNotFoundAtUrlException(msg);
-    }
-
-    // Check response code
-    long http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-    if (http_code > 200) {
-        std::string msg = "Unable to get file " + url +
-                          " response code: " + std::to_string(http_code);
-        throw FileNotFoundAtUrlException(msg);
-    }
-
-    // Check there's something in the response
-    if (out.str().empty()) {
-        std::string msg = "Empty response for file " + url;
-        throw FileNotFoundAtUrlException(msg);
-    }
-
-    if (out.str() == "IS_DIR") {
-        throw faabric::util::FileAtUrlIsDirectoryException(url +
-                                                           " is a directory");
-    }
-
-    return faabric::util::stringToBytes(out.str());
 }
 
 bool isWasm(const std::vector<uint8_t>& bytes)

@@ -12,7 +12,6 @@ RUN apt install -y \
    libhiredis-dev \
    libtool \
    libboost-filesystem-dev \
-   libcurl4-openssl-dev \
    ninja-build \
    python3-dev \
    python3-pip \
@@ -32,10 +31,22 @@ RUN wget -q -O \
 RUN sh cmake-linux.sh -- --skip-license --prefix=/usr/local
 
 # gRPC, protobuf etc.
+# Static libs
 RUN git clone --recurse-submodules -b v1.31.0 https://github.com/grpc/grpc
-WORKDIR /setup/grpc/cmake/build
+WORKDIR /setup/grpc/cmake/build-static
 RUN cmake -GNinja \
     -DgRPC_INSTALL=ON \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DgRPC_BUILD_TESTS=OFF \
+    -DCMAKE_INSTALL_PREFIX=/usr/local \
+    ../..
+RUN ninja install
+
+# Shared libs
+WORKDIR /setup/grpc/cmake/build-shared
+RUN cmake -GNinja \
+    -DgRPC_INSTALL=ON \
+    -DBUILD_SHARED_LIBS=ON \
     -DgRPC_BUILD_TESTS=OFF \
     -DCMAKE_INSTALL_PREFIX=/usr/local \
     ../..
