@@ -52,15 +52,6 @@ RUN cmake -GNinja \
     ../..
 RUN ninja install
 
-# Libcurl
-#WORKDIR /setup
-#RUN wget https://curl.se/download/curl-7.73.0.tar.gz
-#RUN tar -xf curl-7.73.0.tar.gz
-#WORKDIR /setup/curl-7.73.0
-#RUN ./configure --prefix=/usr/local
-#RUN make
-#RUN make install
-
 # Tidy up
 WORKDIR /
 RUN rm -r /setup

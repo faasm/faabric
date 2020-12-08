@@ -27,8 +27,6 @@ std::vector<uint8_t> readFileFromUrlWithHeader(
   const std::string& url,
   const std::shared_ptr<Http::Header::Header>& header)
 {
-    auto logger = faabric::util::getLogger();
-
     Http::Client client;
     client.init();
 
@@ -38,6 +36,7 @@ std::vector<uint8_t> readFileFromUrlWithHeader(
         rb.header(header);
     }
 
+    // Set up the request and callbacks
     Async::Promise<Http::Response> resp =
       rb.timeout(std::chrono::milliseconds(HTTP_FILE_TIMEOUT)).send();
 
@@ -60,13 +59,14 @@ std::vector<uint8_t> readFileFromUrlWithHeader(
           success = false;
       });
 
+    // Make calls synchronous
     Async::Barrier<Http::Response> barrier(resp);
     std::chrono::milliseconds timeout(HTTP_FILE_TIMEOUT);
     barrier.wait_for(timeout);
 
     client.shutdown();
 
-    // Check there's something in the response
+    // Check the response
     if (!success) {
         std::string msg =
           fmt::format("Error reading file from {} ({})", url, respCode);
@@ -74,9 +74,7 @@ std::vector<uint8_t> readFileFromUrlWithHeader(
     } else if (out.str().empty()) {
         std::string msg = "Empty response for file " + url;
         throw FileNotFoundAtUrlException(msg);
-    }
-
-    if (out.str() == "IS_DIR") {
+    } else if (out.str() == IS_DIR_RESPONSE) {
         throw faabric::util::FileAtUrlIsDirectoryException(url +
                                                            " is a directory");
     }

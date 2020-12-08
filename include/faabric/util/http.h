@@ -1,9 +1,9 @@
 #pragma once
 
 #include "exception.h"
+#include <pistache/http_header.h>
 #include <string>
 #include <vector>
-#include <pistache/http_header.h>
 
 #define FILE_PATH_HEADER "FilePath"
 #define EMPTY_FILE_RESPONSE "Empty response"
@@ -15,8 +15,9 @@ using namespace Pistache;
 namespace faabric::util {
 std::vector<uint8_t> readFileFromUrl(const std::string& url);
 
-std::vector<uint8_t> readFileFromUrlWithHeader(const std::string& url,
-        const std::shared_ptr<Http::Header::Header> &header);
+std::vector<uint8_t> readFileFromUrlWithHeader(
+  const std::string& url,
+  const std::shared_ptr<Http::Header::Header>& header);
 
 class FileNotFoundAtUrlException : public faabric::util::FaabricException
 {
