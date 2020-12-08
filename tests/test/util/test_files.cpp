@@ -1,10 +1,28 @@
+#include "faabric/util/bytes.h"
 #include "faabric/util/config.h"
 #include <catch2/catch.hpp>
+
 #include <faabric/util/files.h>
+#include <pistache/client.h>
+#include <pistache/endpoint.h>
+#include <pistache/http.h>
 
 using namespace faabric::util;
 
+#define DUMMY_CONTENTS "blahblahblahblah"
+
 namespace tests {
+
+struct DummyHandler : public Http::Handler
+{
+    HTTP_PROTOTYPE(DummyHandler)
+
+    void onRequest(const Http::Request&, Http::ResponseWriter writer) override
+    {
+        writer.send(Http::Code::Ok, DUMMY_CONTENTS);
+    }
+};
+
 TEST_CASE("Test writing to a file", "[util]")
 {
     std::string dummyFile = "/tmp/faasmTest1.txt";
@@ -24,15 +42,25 @@ TEST_CASE("Test reading from a URL", "[util]")
 {
     auto conf = faabric::util::getSystemConfig();
 
-    std::string localPath = "/code/faabric/LICENSE.md";
-    std::string url =
-      "raw.githubusercontent.com/faasm/faabric/master/LICENSE.md";
+    // Start a dummy server
+    const Pistache::Address address("localhost", Pistache::Port(0));
 
-    std::vector<uint8_t> expectedBytes =
-      faabric::util::readFileToBytes(localPath);
+    Http::Endpoint server(address);
+    auto flags = Tcp::Options::ReuseAddr;
+    auto serverOpts = Http::Endpoint::options().flags(flags);
+    server.init(serverOpts);
+    server.setHandler(Http::make_handler<DummyHandler>());
+    server.serveThreaded();
+
+    const std::string url = "localhost:" + server.getPort().toString();
+
     std::vector<uint8_t> actualBytes = faabric::util::readFileFromUrl(url);
+    std::vector<uint8_t> expectedBytes =
+      faabric::util::stringToBytes(DUMMY_CONTENTS);
 
     REQUIRE(actualBytes == expectedBytes);
+
+    server.shutdown();
 }
 
 TEST_CASE("Test reading from bad URLs", "[util]")
