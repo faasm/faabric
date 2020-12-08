@@ -13,6 +13,7 @@ set(LIB_FILES
         files.cpp
         func.cpp
         gids.cpp
+        http.cpp
         json.cpp
         logging.cpp
         memory.cpp
