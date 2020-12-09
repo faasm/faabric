@@ -1,17 +1,17 @@
-from os import makedirs, environ
+from os import makedirs
 from shutil import rmtree
-from os.path import join, exists
+from os.path import exists
 from subprocess import run
 
-from tasks.util.env import PROJ_ROOT
+from tasks.util.env import (
+    PROJ_ROOT,
+    FAABRIC_SHARED_BUILD_DIR,
+    FAABRIC_STATIC_BUILD_DIR,
+    FAABRIC_INSTALL_PREFIX,
+    FAABRIC_BIN_DIR,
+)
 
 from invoke import task
-
-_BUILD_DIR = environ.get("FAABRIC_BUILD_DIR")
-_BUILD_DIR = _BUILD_DIR if _BUILD_DIR else "/build/faabric"
-
-_BIN_DIR = join(_BUILD_DIR, "bin")
-_INSTALL_PREFIX = join(_BUILD_DIR, "install")
 
 
 @task
@@ -19,16 +19,20 @@ def cmake(ctx, clean=False, shared=False):
     """
     Configures the build
     """
-    if clean and exists(_BUILD_DIR):
-        rmtree(_BUILD_DIR)
+    build_dir = (
+        FAABRIC_SHARED_BUILD_DIR if shared else FAABRIC_STATIC_BUILD_DIR
+    )
 
-    if not exists(_BUILD_DIR):
-        makedirs(_BUILD_DIR)
+    if clean and exists(build_dir):
+        rmtree(build_dir)
+
+    if not exists(build_dir):
+        makedirs(build_dir)
 
     cmd = [
         "cmake",
         "-GNinja",
-        "-DCMAKE_INSTALL_PREFIX={}".format(_INSTALL_PREFIX),
+        "-DCMAKE_INSTALL_PREFIX={}".format(FAABRIC_INSTALL_PREFIX),
         "-DCMAKE_BUILD_TYPE=Debug",
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
@@ -36,29 +40,37 @@ def cmake(ctx, clean=False, shared=False):
         PROJ_ROOT,
     ]
 
-    run(" ".join(cmd), shell=True, cwd=_BUILD_DIR)
+    run(" ".join(cmd), shell=True, cwd=build_dir)
 
 
 @task
-def cc(ctx, target):
+def cc(ctx, target, shared=False):
     """
     Compile the given target
     """
+    build_dir = (
+        FAABRIC_SHARED_BUILD_DIR if shared else FAABRIC_STATIC_BUILD_DIR
+    )
+
     run(
         "cmake --build . --target {}".format(target),
-        cwd=_BUILD_DIR,
+        cwd=build_dir,
         shell=True,
     )
 
 
 @task
-def install(ctx, target):
+def install(ctx, target, shared=False):
     """
     Install the given target
     """
+    build_dir = (
+        FAABRIC_SHARED_BUILD_DIR if shared else FAABRIC_STATIC_BUILD_DIR
+    )
+
     run(
         "ninja install {}".format(target),
-        cwd=_BUILD_DIR,
+        cwd=build_dir,
         shell=True,
     )
 
@@ -70,6 +82,6 @@ def r(ctx, target):
     """
     run(
         "./{}".format(target),
-        cwd=_BIN_DIR,
+        cwd=FAABRIC_BIN_DIR,
         shell=True,
     )

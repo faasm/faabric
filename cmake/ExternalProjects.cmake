@@ -2,7 +2,7 @@ include(FindGit)
 find_package(Git)
 include (ExternalProject)
 
-include_directories(${THIRD_PARTY_INSTALL_DIR}/include)
+include_directories(${CMAKE_INSTALL_PREFIX}/include)
 
 # Protobuf/ grpc config
 # See the example in the gRPC repo here:                                         
@@ -35,7 +35,7 @@ set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/oktal/pistache.git"
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${THIRD_PARTY_INSTALL_DIR}"
+    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 
 # RapidJSON
@@ -45,14 +45,14 @@ ExternalProject_Add(rapidjson_ext
     CMAKE_ARGS "-DRAPIDJSON_BUILD_DOC=OFF \
         -DRAPIDJSON_BUILD_EXAMPLES=OFF \
         -DRAPIDJSON_BUILD_TESTS=OFF"
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${THIRD_PARTY_INSTALL_DIR}"
+    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 
 # spdlog
 ExternalProject_Add(spdlog_ext
     GIT_REPOSITORY "https://github.com/gabime/spdlog"
     GIT_TAG "v1.8.0"  
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${THIRD_PARTY_INSTALL_DIR}"
+    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 
 if(FAABRIC_BUILD_TESTS)
@@ -62,7 +62,7 @@ if(FAABRIC_BUILD_TESTS)
         GIT_TAG "v2.13.2"
         CMAKE_ARGS "-DCATCH_INSTALL_DOCS=OFF \
             -DCATCH_INSTALL_EXTRAS=OFF"
-        CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${THIRD_PARTY_INSTALL_DIR}"
+        CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
     )
 endif()
 

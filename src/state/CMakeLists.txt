@@ -16,6 +16,6 @@ set(LIB_FILES
         ${HEADERS}
         )
 
-faabric_private_lib(state "${LIB_FILES}")
+faabric_lib(state "${LIB_FILES}")
 
 target_link_libraries(state proto redis)
