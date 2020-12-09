@@ -273,6 +273,7 @@ TEST_CASE("Test sendrecv", "[mpi]")
                        BYTES(recvBufferA.data()),
                        messageDataBA.size(),
                        MPI_INT,
+                       rankB,
                        rankA,
                        &status);
         // Test integrity of results
@@ -288,12 +289,61 @@ TEST_CASE("Test sendrecv", "[mpi]")
                        BYTES(recvBufferB.data()),
                        messageDataAB.size(),
                        MPI_INT,
+                       rankA,
                        rankB,
                        &status);
         // Test integrity of results
         REQUIRE(recvBufferB == messageDataAB);
     });
     // Wait for both to finish
+    for (auto& t : threads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+}
+
+TEST_CASE("Test ring sendrecv", "[mpi]")
+{
+    cleanFaabric();
+
+    auto msg = faabric::util::messageFactory(user, func);
+    scheduler::MpiWorld world;
+    world.create(msg, worldId, worldSize);
+
+    // Register five processes (0 already registered)
+    std::vector<int> ranks = { 0, 1, 2, 3, 4 };
+    for (int i = 1; i < ranks.size(); i++) {
+        world.registerRank(ranks[i]);
+    }
+
+    // Prepare data
+    MPI_Status status{};
+
+    // Run shift operator. In a ring, send to right receive from left.
+    std::vector<std::thread> threads;
+    for (int i = 0; i < ranks.size(); i++) {
+        int rank = ranks[i];
+        int left = rank > 0 ? rank - 1 : ranks.size() - 1;
+        int right = (rank + 1) % ranks.size();
+        threads.emplace_back([&, left, right, i] {
+            int recvData = -1;
+            int rank = ranks[i];
+            world.sendRecv(BYTES(&rank),
+                           1,
+                           MPI_INT,
+                           right,
+                           BYTES(&recvData),
+                           1,
+                           MPI_INT,
+                           left,
+                           ranks[i],
+                           &status);
+            // Test integrity of results
+            REQUIRE(recvData == left);
+        });
+    }
+    // Wait for all threads to finish
     for (auto& t : threads) {
         if (t.joinable()) {
             t.join();
