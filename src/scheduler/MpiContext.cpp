@@ -3,7 +3,7 @@
 
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 namespace faabric::scheduler {
 MpiContext::MpiContext()

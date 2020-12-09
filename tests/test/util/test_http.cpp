@@ -1,6 +1,6 @@
 #include "faabric/util/bytes.h"
 #include "faabric/util/config.h"
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 #include <faabric/util/http.h>
 #include <pistache/client.h>

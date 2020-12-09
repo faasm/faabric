@@ -40,19 +40,17 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build ---
-      - name: "Configure build"
-        run: >
-          cmake
-          -GNinja
-          -DCMAKE_CXX_COMPILER=/usr/bin/clang++-10 
-          -DCMAKE_C_COMPILER=/usr/bin/clang-10
-          -DCMAKE_BUILD_TYPE=Release
-          /code/faabric
-        working-directory: /build/faabric
+      - name: "Run cmake"
+        run: inv dev.cmake
       - name: "Build tests"
-        run: ninja faabric_tests
-        working-directory: /build/faabric
+        run: inv dev.cc faabric_tests
+      - name: "Build Faabric library"
+        run: inv dev.cc faabric
+      - name: "Install Faabric library"
+        run: inv dev.install faabric
+      - name: "Build examples"
+        run: inv examples
       # --- Tests ---
       - name: "Run tests"
         run: ./bin/faabric_tests
-        working-directory: /build/faabric
+        working-directory: /build/faabric/static

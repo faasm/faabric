@@ -1,5 +1,5 @@
 #include "faabric_utils.h"
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/Scheduler.h>

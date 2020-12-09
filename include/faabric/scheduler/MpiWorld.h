@@ -4,7 +4,7 @@
 
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/state/StateKeyValue.h>
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.pb.h>
 #include <thread>
 
 namespace faabric::scheduler {

@@ -3,7 +3,7 @@
 #include <faabric/util/config.h>
 #include <pistache/endpoint.h>
 #include <pistache/http.h>
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 namespace faabric::endpoint {
 class Endpoint

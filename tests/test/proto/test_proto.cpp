@@ -1,8 +1,8 @@
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 #include <faabric/util/bytes.h>
 #include <faabric_utils.h>
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 namespace tests {
 std::vector<uint8_t> createInput(int start, int length)

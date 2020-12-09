@@ -1,6 +1,6 @@
 #pragma once
 
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>

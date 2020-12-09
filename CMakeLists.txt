@@ -37,10 +37,7 @@ include(cmake/ExternalProjects.cmake)
 set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 
 # Include directories
-include_directories(
-    ${FAABRIC_INCLUDE_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
-)
+include_directories(${FAABRIC_INCLUDE_DIR})
 
 add_subdirectory(src/endpoint)
 add_subdirectory(src/executor)

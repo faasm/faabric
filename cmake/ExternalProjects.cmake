@@ -2,8 +2,6 @@ include(FindGit)
 find_package(Git)
 include (ExternalProject)
 
-include_directories(${CMAKE_INSTALL_PREFIX}/include)
-
 # Protobuf/ grpc config
 # See the example in the gRPC repo here:                                         
 # https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/CMakeLists.txt
@@ -37,6 +35,8 @@ ExternalProject_Add(pistache_ext
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
+ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
+include_directories(${SOURCE_DIR}/include)
 
 # RapidJSON
 ExternalProject_Add(rapidjson_ext
@@ -47,6 +47,8 @@ ExternalProject_Add(rapidjson_ext
         -DRAPIDJSON_BUILD_TESTS=OFF"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
+ExternalProject_Get_Property(rapidjson_ext SOURCE_DIR)
+include_directories(${SOURCE_DIR}/include)
 
 # spdlog
 ExternalProject_Add(spdlog_ext
@@ -54,6 +56,8 @@ ExternalProject_Add(spdlog_ext
     GIT_TAG "v1.8.0"  
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
+ExternalProject_Get_Property(spdlog_ext SOURCE_DIR)
+include_directories(${SOURCE_DIR}/include)
 
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)
@@ -64,5 +68,7 @@ if(FAABRIC_BUILD_TESTS)
             -DCATCH_INSTALL_EXTRAS=OFF"
         CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
     )
+    ExternalProject_Get_Property(catch_ext SOURCE_DIR)
+    include_directories(${SOURCE_DIR}/include)
 endif()
 
