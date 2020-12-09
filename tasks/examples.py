@@ -11,9 +11,12 @@ from invoke import task
 EXAMPLES_DIR = join(PROJ_ROOT, "examples")
 BUILD_DIR = join(EXAMPLES_DIR, "build")
 
+INCLUDE_DIR = "{}/include".format(FAABRIC_INSTALL_PREFIX)
+LIB_DIR = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
+
 
 @task(default=True)
-def build(ctx, clean=False, shared=False):
+def build(ctx, clean=False):
     """
     Builds the examples
     """
@@ -23,16 +26,6 @@ def build(ctx, clean=False, shared=False):
     if not exists(BUILD_DIR):
         makedirs(BUILD_DIR)
 
-    include_dir = "{}/include".format(FAABRIC_INSTALL_PREFIX)
-    lib_dir = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
-
-    shell_env = copy(environ)
-    shell_env.update(
-        {
-            "LD_LIBRARY_PATH": lib_dir,
-        }
-    )
-
     # Cmake
     run(
         " ".join(
@@ -40,8 +33,8 @@ def build(ctx, clean=False, shared=False):
                 "cmake",
                 "-GNinja",
                 "-DCMAKE_BUILD_TYPE=Release",
-                "-DCMAKE_CXX_FLAGS=-I{}".format(include_dir),
-                "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
+                "-DCMAKE_CXX_FLAGS=-I{}".format(INCLUDE_DIR),
+                "-DCMAKE_EXE_LINKER_FLAGS=-L{}".format(LIB_DIR),
                 "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
                 "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
                 EXAMPLES_DIR,
@@ -49,7 +42,6 @@ def build(ctx, clean=False, shared=False):
         ),
         shell=True,
         cwd=BUILD_DIR,
-        env=shell_env,
     )
 
     # Build
@@ -57,5 +49,24 @@ def build(ctx, clean=False, shared=False):
         "cmake --build . --target all_examples",
         cwd=BUILD_DIR,
         shell=True,
-        env=shell_env,
     )
+
+
+@task
+def execute(ctx, example):
+    """
+    Runs the given example
+    """
+    exe_path = join(BUILD_DIR, example)
+
+    if not exists(exe_path):
+        raise RuntimeError("Did not find {} as expected".format(exe_path))
+
+    shell_env = copy(environ)
+    shell_env.update(
+        {
+            "LD_LIBRARY_PATH": LIB_DIR,
+        }
+    )
+
+    run(exe_path, env=shell_env, shell=True)

@@ -9,20 +9,27 @@ ENV FAABRIC_DOCKER="on"
 
 # Redis
 RUN apt install -y redis-tools
+    libpython3-dev \
+    python3-dev \
+    python3-pip \
+    python3-venv
+
 
 # Put the code in place
 WORKDIR /code
 RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
 
-# Build the code
-WORKDIR /build/faabric
-RUN cmake \
-    -GNinja \
-    -DCMAKE_CXX_COMPILER=/usr/bin/clang++-10 \
-    -DCMAKE_C_COMPILER=/usr/bin/clang-10 \
-    -DCMAKE_BUILD_TYPE=Release \
-    /code/faabric
+WORKDIR /code/faabric
+RUN pip3 install -r requirements.txt
 
-RUN cmake --build . --target faabric faabric_tests
+# Static build
+RUN inv dev.cmake
+RUN inv dev.cc faabric
+RUN inv dev.cc faabric_tests
+
+# Shared build
+RUN inv dev.cmake --shared
+RUN inv dev.cc faabric --shared
+RUN inv dev.install faabric --shared
 
 CMD /bin/bash

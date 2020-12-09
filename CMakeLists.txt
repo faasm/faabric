@@ -68,14 +68,15 @@ add_library(faabric
     $<TARGET_OBJECTS:util_obj>
 )
 
+add_dependencies(faabric pistache_ext)
+
 target_link_libraries(faabric
-    endpoint
-    executor
-    proto
-    redis
-    scheduler
-    state
-    util
+    ${Protobuf_LIBRARIES}
+    gRPC::grpc++
+    gRPC::grpc++_reflection
+    hiredis
+    boost_system
+    boost_filesystem
     )
 
 target_include_directories(faabric PUBLIC 

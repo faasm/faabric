@@ -39,24 +39,25 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      # --- Build ---
+      # --- Tests build ---
       - name: "Run cmake static"
         run: inv dev.cmake
-      - name: "Run cmake shared"
-        run: inv dev.cmake --shared
-      - name: "Build tests"
-        run: inv dev.cc faabric_tests
       - name: "Build Faabric static library"
         run: inv dev.cc faabric
-      - name: "Build Faabric shared library"
-        run: inv dev.cc faabric --shared
-      - name: "Install Faabric static library"
-        run: inv dev.install faabric
-      - name: "Install Faabric shared library"
-        run: inv dev.install faabric --shared
-      - name: "Build examples"
-        run: inv examples
+      - name: "Build tests"
+        run: inv dev.cc faabric_tests
       # --- Tests ---
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static
+      # --- Examples ---
+      - name: "Run cmake shared"
+        run: inv dev.cmake --shared
+      - name: "Build Faabric shared library"
+        run: inv dev.cc faabric --shared
+      - name: "Install Faabric shared library"
+        run: inv dev.install faabric --shared
+      - name: "Build examples"
+        run: inv examples
+      - name: "Run example to check"
+        run: inv examples.execute check
