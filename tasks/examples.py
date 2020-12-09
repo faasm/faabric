@@ -1,6 +1,7 @@
-from os import makedirs
+from os import makedirs, environ
 from shutil import rmtree
 from os.path import join, exists
+from copy import copy
 from subprocess import run
 
 from tasks.util.env import PROJ_ROOT, FAABRIC_INSTALL_PREFIX
@@ -23,6 +24,14 @@ def build(ctx, clean=False, shared=False):
         makedirs(BUILD_DIR)
 
     include_dir = "{}/include".format(FAABRIC_INSTALL_PREFIX)
+    lib_dir = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
+
+    shell_env = copy(environ)
+    shell_env.update(
+        {
+            "LD_LIBRARY_PATH": lib_dir,
+        }
+    )
 
     # Cmake
     run(
@@ -40,6 +49,7 @@ def build(ctx, clean=False, shared=False):
         ),
         shell=True,
         cwd=BUILD_DIR,
+        env=shell_env,
     )
 
     # Build
@@ -47,4 +57,5 @@ def build(ctx, clean=False, shared=False):
         "cmake --build . --target all_examples",
         cwd=BUILD_DIR,
         shell=True,
+        env=shell_env,
     )

@@ -69,6 +69,6 @@ if(FAABRIC_BUILD_TESTS)
         CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
     )
     ExternalProject_Get_Property(catch_ext SOURCE_DIR)
-    include_directories(${SOURCE_DIR}/include)
+    include_directories(${CMAKE_INSTALL_PREFIX}/include/catch2)
 endif()
 
