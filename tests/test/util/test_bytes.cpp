@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 #include <faabric/util/bytes.h>
 
 using namespace faabric::util;

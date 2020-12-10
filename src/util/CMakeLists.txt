@@ -26,7 +26,7 @@ set(LIB_FILES
         ${HEADERS}
         )
 
-faabric_private_lib(util "${LIB_FILES}")
+faabric_lib(util "${LIB_FILES}")
 
 add_dependencies(util spdlog_ext)
 add_dependencies(util rapidjson_ext)

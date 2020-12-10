@@ -3,8 +3,8 @@
 #include "State.h"
 
 #include <faabric/proto/RPCServer.h>
-#include <proto/faabric.grpc.pb.h>
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.grpc.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 using namespace grpc;
 

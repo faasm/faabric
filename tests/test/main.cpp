@@ -1,7 +1,8 @@
 #define CATCH_CONFIG_RUNNER
 
+#include <catch.hpp>
+
 #include "faabric_utils.h"
-#include <catch2/catch.hpp>
 #include <faabric/util/logging.h>
 
 int main(int argc, char* argv[])

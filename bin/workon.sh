@@ -66,7 +66,7 @@ export FAABRIC_VERSION=$(cat ${VERSION_FILE})
 
 export PS1="(faabric) $PS1"
 
-export PATH=/build/faabric/bin:${PATH}
+export PATH=/build/faabric/static/bin:${PATH}
 
 # -----------------------------
 # Splash

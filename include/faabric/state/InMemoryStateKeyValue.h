@@ -4,8 +4,8 @@
 #include "StateClient.h"
 #include "StateKeyValue.h"
 
-#include <proto/faabric.grpc.pb.h>
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.grpc.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 #include <faabric/util/clock.h>
 

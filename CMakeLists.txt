@@ -13,26 +13,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Compile comamnds for clang tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Third party deps
-set(THIRD_PARTY_INSTALL_DIR ${CMAKE_BINARY_DIR}/third-party)
-
 # Library funcs
-if (BUILD_SHARED_LIBS)
-    function(faabric_public_lib lib_name lib_deps)
-        add_library(${lib_name} SHARED ${lib_deps})
-    endfunction()
-    function(faabric_private_lib lib_name lib_deps)
-        add_library(${lib_name} STATIC ${lib_deps})
+function(faabric_lib lib_name lib_deps)
+    add_library(${lib_name} ${lib_deps})
+
+    add_library(${lib_name}_obj OBJECT ${lib_deps})
+
+    if(BUILD_SHARED_LIBS)
         target_compile_options(${lib_name} PRIVATE "-fPIC")
-    endfunction()
-else ()
-    function(faabric_public_lib lib_name lib_deps)
-        add_library(${lib_name} STATIC ${lib_deps})
-    endfunction()
-    function(faabric_private_lib lib_name lib_deps)
-        add_library(${lib_name} STATIC ${lib_deps})
-    endfunction()
-endif ()
+        target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
+    endif()    
+endfunction()
 
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -46,10 +37,7 @@ include(cmake/ExternalProjects.cmake)
 set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 
 # Include directories
-include_directories(
-    ${FAABRIC_INCLUDE_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/src # Required for protobuf
-)
+include_directories(${FAABRIC_INCLUDE_DIR})
 
 add_subdirectory(src/endpoint)
 add_subdirectory(src/executor)
@@ -60,24 +48,40 @@ add_subdirectory(src/scheduler)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
 
-add_subdirectory(examples)
+# Wrapper library - note we want to include all the targets in this library, not
+# just link it superficially
+if(BUILD_SHARED_LIBS) 
+    set(FAABRIC_LIB_TYPE SHARED)
+else()
+    set(FAABRIC_LIB_TYPE STATIC)
+endif()
 
-# Wrapper library
-faabric_public_lib(faabric faabric.cpp)
+add_library(faabric 
+    ${FAABRIC_LIB_TYPE}
+    faabric.cpp
+    $<TARGET_OBJECTS:endpoint_obj>
+    $<TARGET_OBJECTS:executor_obj>
+    $<TARGET_OBJECTS:proto_obj>
+    $<TARGET_OBJECTS:redis_obj>
+    $<TARGET_OBJECTS:scheduler_obj>
+    $<TARGET_OBJECTS:state_obj>
+    $<TARGET_OBJECTS:util_obj>
+)
+
+add_dependencies(faabric pistache_ext)
 
 target_link_libraries(faabric
-        endpoint
-        executor
-        proto
-        redis
-        scheduler
-        state
-        util
-        )
+    ${Protobuf_LIBRARIES}
+    gRPC::grpc++
+    gRPC::grpc++_reflection
+    hiredis
+    boost_system
+    boost_filesystem
+    )
 
 target_include_directories(faabric PUBLIC 
     ${FAABRIC_INCLUDE_DIR}
-    ${THIRD_PARTY_INSTALL_DIR}/include
+    ${CMAKE_INSTALL_PREFIX}/include
 )
 
 # Tests
