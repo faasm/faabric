@@ -8,7 +8,6 @@ from tasks.util.env import (
     FAABRIC_SHARED_BUILD_DIR,
     FAABRIC_STATIC_BUILD_DIR,
     FAABRIC_INSTALL_PREFIX,
-    FAABRIC_BIN_DIR,
 )
 
 from invoke import task
@@ -71,17 +70,5 @@ def install(ctx, target, shared=False):
     run(
         "ninja install {}".format(target),
         cwd=build_dir,
-        shell=True,
-    )
-
-
-@task
-def r(ctx, target):
-    """
-    Run the given target
-    """
-    run(
-        "./{}".format(target),
-        cwd=FAABRIC_BIN_DIR,
         shell=True,
     )

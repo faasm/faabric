@@ -66,14 +66,34 @@ jobs:
       # --- Tests build ---
       - name: "Run cmake static"
         run: inv dev.cmake
-      - name: "Build Faabric static library"
-        run: inv dev.cc faabric
       - name: "Build tests"
         run: inv dev.cc faabric_tests
       # --- Tests ---
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static
+
+  examples:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.0.15
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
       # --- Examples ---
       - name: "Run cmake shared"
         run: inv dev.cmake --shared
