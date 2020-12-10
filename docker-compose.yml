@@ -7,8 +7,10 @@ services:
   cli:
     image: ${FAABRIC_CLI_IMAGE}
     volumes:
-        - .:/code/faabric
-        - ./build:/build/faabric
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker
+      - .:/code/faabric
+      - ./build:/build/faabric
     working_dir: /code/faabric
     stdin_open: true
     tty: true
