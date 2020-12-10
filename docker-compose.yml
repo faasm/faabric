@@ -7,8 +7,8 @@ services:
   cli:
     image: ${FAABRIC_CLI_IMAGE}
     volumes:
-        - ..:/code/faabric
-        - ../build:/build/faabric
+        - .:/code/faabric
+        - ./build:/build/faabric
     working_dir: /code/faabric
     stdin_open: true
     tty: true
