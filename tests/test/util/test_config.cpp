@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>

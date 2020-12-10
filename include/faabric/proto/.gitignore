@@ -1,0 +1,2 @@
+# Protobuf/ gRPC output
+*.pb.h

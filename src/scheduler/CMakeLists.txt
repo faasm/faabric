@@ -13,6 +13,6 @@ set(LIB_FILES
         ${HEADERS}
         )
 
-faabric_private_lib(scheduler "${LIB_FILES}")
+faabric_lib(scheduler "${LIB_FILES}")
 
 target_link_libraries(scheduler faabricmpi redis)

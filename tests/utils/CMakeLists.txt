@@ -5,8 +5,9 @@ set(LIB_FILES
     faabric_utils.h
     )
 
-faabric_private_lib(faabric_test_utils "${LIB_FILES}")
+add_library(faabric_test_utils "${LIB_FILES}")
 
 add_dependencies(faabric_test_utils catch_ext)
 target_include_directories(faabric_test_utils PUBLIC ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(faabric_test_utils faabric)
+
+target_link_libraries(faabric_test_utils state endpoint scheduler)

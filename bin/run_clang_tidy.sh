@@ -2,7 +2,7 @@
 
 set -e
 
-BUILD_PATH=/build/faabric/
+BUILD_PATH=/build/faabric/static/
 CONFIG=${FAABRIC_ROOT}/.clang-tidy
 
 FILES=$(git ls-files {src,tests}/{"*.h","*.cpp","*.c"})

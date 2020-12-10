@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch.hpp>
 
 #include <boost/filesystem.hpp>
 #include <faabric/util/clock.h>

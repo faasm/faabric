@@ -1,7 +1,7 @@
 #pragma once
 
 #include "exception.h"
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 namespace faabric::util {
 std::string messageToJson(const faabric::Message& msg);

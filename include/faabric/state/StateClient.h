@@ -7,8 +7,8 @@
 #include <grpcpp/client_context.h>
 #include <grpcpp/support/channel_arguments.h>
 
-#include <proto/faabric.grpc.pb.h>
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.grpc.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 using namespace grpc;
 

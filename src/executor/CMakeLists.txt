@@ -9,7 +9,7 @@ set(LIB_FILES
         ${HEADERS}
         )
 
-faabric_private_lib(executor "${LIB_FILES}")
+faabric_lib(executor "${LIB_FILES}")
 
 target_link_libraries(executor scheduler)
 

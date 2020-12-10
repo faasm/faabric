@@ -1,7 +1,7 @@
 #pragma once
 
 #include "exception.h"
-#include <proto/faabric.pb.h>
+#include <faabric/proto/faabric.pb.h>
 #include <string>
 #include <vector>
 

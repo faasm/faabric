@@ -11,7 +11,7 @@ pushd ${PROJ_ROOT} > /dev/null
 if [[ -z "${FAABRIC_CLI_IMAGE}" ]]; then
     # Prepare the default version
     VERSION=$(cat VERSION)
-    DEFAULT_IMAGE=faasm/faabric-cli:${VERSION}
+    DEFAULT_IMAGE=faasm/faabric:${VERSION}
 
     # Take the script argument if provided, else use the default
     export FAABRIC_CLI_IMAGE=${1:-${DEFAULT_IMAGE}}
