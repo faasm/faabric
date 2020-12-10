@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ExecGraph.h"
-#include "InMemoryMessageQueue.h"
+#include <faabric/scheduler/ExecGraph.h>
+#include <faabric/scheduler/InMemoryMessageQueue.h>
 
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>

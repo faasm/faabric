@@ -1,4 +1,4 @@
-#include "InMemoryStateKeyValue.h"
+#include <faabric/state/InMemoryStateKeyValue.h>
 
 #include <cstdio>
 

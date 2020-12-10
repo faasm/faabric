@@ -1,4 +1,4 @@
-#include "Scheduler.h"
+#include <faabric/scheduler/Scheduler.h>
 
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>

@@ -19,12 +19,14 @@ function(add_example example_name)
     target_link_libraries(${example_name}
         ${FAABRIC_LIBS}
         pistache
+        protobuf
         )
     
     set(ALL_EXAMPLES ${ALL_EXAMPLES} ${example_name} PARENT_SCOPE)   
 endfunction()
 
 add_example(check)
+add_example(mpi_helloworld)
 add_example(server)
 
 add_custom_target(all_examples DEPENDS ${ALL_EXAMPLES})

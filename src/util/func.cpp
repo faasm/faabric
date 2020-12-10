@@ -1,4 +1,4 @@
-#include "func.h"
+#include <faabric/util/func.h>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>

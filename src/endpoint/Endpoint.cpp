@@ -1,4 +1,4 @@
-#include "faabric/endpoint/Endpoint.h"
+#include <faabric/endpoint/Endpoint.h>
 
 #include <faabric/util/logging.h>
 #include <pistache/endpoint.h>

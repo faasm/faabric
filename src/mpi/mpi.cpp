@@ -1,7 +1,10 @@
-#include "faabric/mpi/mpi.h"
+#include <faabric/mpi/mpi.h>
+#include <faabric/util/logging.h>
 
 #include <stdexcept>
 #include <stdint.h>
+
+#include <stdio.h>
 
 struct faabric_communicator_t faabric_comm_world
 {
@@ -192,4 +195,46 @@ faabric_datatype_t* getFaabricDatatypeFromId(int datatypeId)
         default:
             throw std::runtime_error("Unrecognised datatype ID\n");
     }
+}
+
+// MPI Function Definitions
+// TODO mimick OpenMPI Dir structure
+// https://github.com/open-mpi/ompi/tree/master/ompi/mca
+
+int MPI_Init(int* argc, char*** argv)
+{
+    // auto logger = faabric::util::getLogger();
+    // logger->debug("MPI_Init");
+    printf("MPI_Init\n");
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Finalize(void)
+{
+    // auto logger = faabric::util::getLogger();
+    // logger->debug("MPI_Finalize");
+    printf("MPI_Finalize\n");
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Comm_rank(MPI_Comm comm, int* rank)
+{
+    // auto logger = faabric::util::getLogger();
+    // logger->debug("MPI_Comm_rank");
+    printf("MPI_Comm_rank\n");
+
+    *rank = 1337;
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Comm_size(MPI_Comm comm, int* size)
+{
+    printf("MPI_Comm_size\n");
+
+    *size = 7331;
+
+    return MPI_SUCCESS;
 }

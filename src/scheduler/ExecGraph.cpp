@@ -1,4 +1,4 @@
-#include "ExecGraph.h"
+#include <faabric/scheduler/ExecGraph.h>
 
 #include <faabric/util/json.h>
 #include <sstream>

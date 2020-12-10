@@ -1,5 +1,5 @@
-#include "FunctionCallServer.h"
-#include "MpiWorldRegistry.h"
+#include <faabric/scheduler/FunctionCallServer.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
 
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>

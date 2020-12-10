@@ -1,5 +1,5 @@
-#include "FaabricEndpoint.h"
-#include "FaabricEndpointHandler.h"
+#include <faabric/endpoint/FaabricEndpoint.h>
+#include <faabric/endpoint/FaabricEndpointHandler.h>
 
 namespace faabric::endpoint {
 FaabricEndpoint::FaabricEndpoint()

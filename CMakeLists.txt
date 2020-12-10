@@ -13,17 +13,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Compile comamnds for clang tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Library funcs
-function(faabric_lib lib_name lib_deps)
-    add_library(${lib_name} ${lib_deps})
-
-    add_library(${lib_name}_obj OBJECT ${lib_deps})
-
-    if(BUILD_SHARED_LIBS)
-        target_compile_options(${lib_name} PRIVATE "-fPIC")
-        target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
-    endif()    
-endfunction()
+# Global include dir
+set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -33,11 +24,34 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # External libraries
 include(cmake/ExternalProjects.cmake)
 
-# Global include dir
-set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
+# Library funcs
+function(faabric_lib lib_name lib_deps)
+    # "Normal" library used for linking internally
+    add_library(${lib_name} ${lib_deps})
+    target_include_directories(${lib_name} 
+        PUBLIC ${FAABRIC_INCLUDE_DIR}
+        PUBLIC ${PISTACHE_INCLUDE_DIR}
+        PUBLIC ${SPDLOG_INCLUDE_DIR}
+        PUBLIC ${RAPIDJSON_INCLUDE_DIR}
+        )
 
-# Include directories
-include_directories(${FAABRIC_INCLUDE_DIR})
+    # Object library for bundling everything together (should have the same
+    # include dirs and dependencies as the normal library)
+    add_library(${lib_name}_obj OBJECT ${lib_deps})
+    target_include_directories(${lib_name}_obj 
+        PUBLIC ${FAABRIC_INCLUDE_DIR}
+        PUBLIC ${PISTACHE_INCLUDE_DIR}
+        PUBLIC ${SPDLOG_INCLUDE_DIR}
+        PUBLIC ${RAPIDJSON_INCLUDE_DIR}
+        )
+
+    target_link_libraries(${lib_name}_obj ${lib_name})
+
+    if(BUILD_SHARED_LIBS)
+        target_compile_options(${lib_name} PRIVATE "-fPIC")
+        target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
+    endif()    
+endfunction()
 
 add_subdirectory(src/endpoint)
 add_subdirectory(src/executor)
@@ -48,8 +62,8 @@ add_subdirectory(src/scheduler)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
 
-# Wrapper library - note we want to include all the targets in this library, not
-# just link it superficially
+# Wrapper library - note we want to include all the _object_ targets in this 
+# library to ensure it's all bundled in together
 if(BUILD_SHARED_LIBS) 
     set(FAABRIC_LIB_TYPE SHARED)
 else()
@@ -68,7 +82,7 @@ add_library(faabric
     $<TARGET_OBJECTS:util_obj>
 )
 
-add_dependencies(faabric pistache_ext)
+add_dependencies(faabric pistache_ext spdlog_ext)
 
 target_link_libraries(faabric
     ${Protobuf_LIBRARIES}

@@ -4,6 +4,10 @@
 
 set(PB_HEADER "${CMAKE_CURRENT_BINARY_DIR}/faabric.pb.h")
 set(GRPC_HEADER "${CMAKE_CURRENT_BINARY_DIR}/faabric.grpc.pb.h")
+
+set(PB_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric.pb.h")
+set(GRPC_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric.grpc.pb.h")
+
 set(PB_SRC "${CMAKE_CURRENT_BINARY_DIR}/faabric.pb.cc")
 set(GRPC_SRC "${CMAKE_CURRENT_BINARY_DIR}/faabric.grpc.pb.cc")
 
@@ -18,19 +22,37 @@ add_custom_command(
     DEPENDS faabric.proto
 )
 
+# Copy the generated headers into place
+add_custom_command(
+    OUTPUT "${PB_HEADER_COPIED}"
+    DEPENDS "${PB_HEADER}"
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${PB_HEADER}
+    ${FAABRIC_INCLUDE_DIR}/faabric/proto/
+    )
+
+add_custom_command(
+    OUTPUT "${GRPC_HEADER_COPIED}"
+    DEPENDS "${GRPC_HEADER}"
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${GRPC_HEADER}
+    ${FAABRIC_INCLUDE_DIR}/faabric/proto/
+    )
+
 # ----------------------------------------------
 # Faabric wrapper library
 # ----------------------------------------------
 
-include_directories(${FAABRIC_INCLUDE_DIR}/faabric/proto/)
-
-file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/proto/*.h")
+set(HEADERS
+    ${FAABRIC_INCLUDE_DIR}/faabric/proto/macros.h
+    ${FAABRIC_INCLUDE_DIR}/faabric/proto/RPCServer.h
+    ${PB_HEADER_COPIED}
+    ${GRPC_HEADER_COPIED}
+    )
 
 set(LIB_FILES
     RPCServer.cpp
     ${HEADERS}
-    ${PB_HEADER}
-    ${GRPC_HEADER}
     ${PB_SRC}
     ${GRPC_SRC}
     )
@@ -45,15 +67,3 @@ target_link_libraries(proto
     gRPC::grpc++_reflection
     )
 
-# Copy the generated headers into place
-add_custom_command(TARGET proto POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy 
-    ${PB_HEADER}
-    ${FAABRIC_INCLUDE_DIR}/faabric/proto/
-    )
-
-add_custom_command(TARGET proto POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy 
-    ${GRPC_HEADER}
-    ${FAABRIC_INCLUDE_DIR}/faabric/proto/
-    )

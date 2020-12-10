@@ -1,4 +1,4 @@
-#include "FaabricEndpointHandler.h"
+#include <faabric/endpoint/FaabricEndpointHandler.h>
 
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/Scheduler.h>

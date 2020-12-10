@@ -1,5 +1,3 @@
-include_directories(${FAABRIC_INCLUDE_DIR}/faabric/scheduler)
-
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/scheduler/*.h")
 
 set(LIB_FILES

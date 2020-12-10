@@ -1,4 +1,4 @@
-#include "clock.h"
+#include <faabric/util/clock.h>
 
 namespace faabric::util {
 Clock& getGlobalClock()

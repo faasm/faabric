@@ -1,4 +1,4 @@
-#include "StateServer.h"
+#include <faabric/state/StateServer.h>
 
 #include <faabric/proto/macros.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
