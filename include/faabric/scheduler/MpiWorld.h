@@ -93,11 +93,12 @@ class MpiWorld
     void sendRecv(uint8_t* sendBuffer,
                   int sendcount,
                   faabric_datatype_t* sendDataType,
-                  int recvRank,
+                  int sendRank,
                   uint8_t* recvBuffer,
                   int recvCount,
                   faabric_datatype_t* recvDataType,
-                  int sendRank,
+                  int recvRank,
+                  int myRank,
                   MPI_Status* status);
 
     void scatter(int sendRank,
