@@ -1,7 +1,7 @@
 #pragma once
 
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
 
 namespace faabric::scheduler {
 class MpiContext

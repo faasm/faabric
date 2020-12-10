@@ -1,9 +1,9 @@
 #pragma once
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/util/config.h>
 #include <pistache/endpoint.h>
 #include <pistache/http.h>
-#include <faabric/proto/faabric.pb.h>
 
 namespace faabric::endpoint {
 class Endpoint

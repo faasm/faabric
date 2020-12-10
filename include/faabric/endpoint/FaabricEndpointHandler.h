@@ -1,7 +1,7 @@
 #pragma once
 
-#include <pistache/http.h>
 #include <faabric/proto/faabric.pb.h>
+#include <pistache/http.h>
 
 namespace faabric::endpoint {
 class FaabricEndpointHandler : public Pistache::Http::Handler

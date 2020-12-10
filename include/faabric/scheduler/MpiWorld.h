@@ -2,9 +2,9 @@
 
 #include <faabric/mpi/mpi.h>
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/state/StateKeyValue.h>
-#include <faabric/proto/faabric.pb.h>
 #include <thread>
 
 namespace faabric::scheduler {
