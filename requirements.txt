@@ -1,5 +1,6 @@
 ansible
 black
 docker
+flake8
 invoke
 redis

@@ -331,15 +331,20 @@ void MpiWorld::send(int sendRank,
 void MpiWorld::sendRecv(uint8_t* sendBuffer,
                         int sendCount,
                         faabric_datatype_t* sendDataType,
-                        int recvRank,
+                        int sendRank,
                         uint8_t* recvBuffer,
                         int recvCount,
                         faabric_datatype_t* recvDataType,
-                        int sendRank,
+                        int recvRank,
+                        int myRank,
                         MPI_Status* status)
 {
     auto logger = faabric::util::getLogger();
-    logger->trace("MPI - Sendrecv");
+    logger->trace(
+      "MPI - Sendrecv. Rank {}. Sending to: {} - Receiving from: {}",
+      myRank,
+      sendRank,
+      recvRank);
 
     if (recvRank > this->size - 1) {
         throw std::runtime_error(fmt::format(
@@ -352,14 +357,14 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
 
     // Post async recv
     int recvId = irecv(recvRank,
-                       sendRank,
+                       myRank,
                        recvBuffer,
                        recvDataType,
                        recvCount,
                        faabric::MPIMessage::SENDRECV);
     // Then send the message
-    send(sendRank,
-         recvRank,
+    send(myRank,
+         sendRank,
          sendBuffer,
          sendDataType,
          sendCount,

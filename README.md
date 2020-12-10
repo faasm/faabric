@@ -25,6 +25,11 @@ inv dev.cc faabric_tests
 faabric_tests
 ```
 
+To stop the `faabric`-related containers run:
+```bash
+docker-compose down
+```
+
 ### Native
 
 The only external dependency _not_ installed through CMake is `gRPC` which
@@ -65,7 +70,7 @@ inv dev.cc faabric
 ## Releasing
 
 Create a new branch, then find and replace the current version with the relevant 
-bumped version. Currently it's held in `VERSION` and the Github Actions 
+bumped version. Currently it's held in `VERSION`, `.env`, and the Github Actions 
 configuration.
 
 Once done, commit and push, then run:
