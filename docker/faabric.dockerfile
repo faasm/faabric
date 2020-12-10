@@ -8,12 +8,13 @@ ARG FAABRIC_VERSION
 ENV FAABRIC_DOCKER="on"
 
 # Redis
-RUN apt install -y redis-tools
+RUN apt install -y \
+    clang-tidy-10 \
     libpython3-dev \
     python3-dev \
     python3-pip \
-    python3-venv
-
+    python3-venv \
+    redis-tools
 
 # Put the code in place
 WORKDIR /code
@@ -32,4 +33,9 @@ RUN inv dev.cmake --shared
 RUN inv dev.cc faabric --shared
 RUN inv dev.install faabric --shared
 
-CMD /bin/bash
+# CLI setup
+ENV TERM xterm-256color
+SHELL ["/bin/bash", "-c"]
+
+RUN echo ". /code/faabric/bin/workon.sh" >> ~/.bashrc
+CMD ["/bin/bash", "-l"]
