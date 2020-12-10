@@ -1,4 +1,4 @@
-#include "faabric/util/bytes.h"
+#include "faabric/util/bytes.h
 #include "faabric/util/config.h"
 #include <catch2/catch.hpp>
 
@@ -67,7 +67,7 @@ TEST_CASE("Test reading from bad URLs", "[util]")
     bool exceptionThrown = false;
     try {
         faabric::util::readFileFromUrl(url);
-    } catch (faabric::util::FileNotFoundAtUrlException& ex) {
+    } catch (faabric::util::FaabricHttpException& ex) {
         exceptionThrown = true;
         REQUIRE(ex.what() == expectedMessage);
     }

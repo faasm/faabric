@@ -70,13 +70,7 @@ std::vector<uint8_t> readFileFromUrlWithHeader(
     if (!success) {
         std::string msg =
           fmt::format("Error reading file from {} ({})", url, respCode);
-        throw FileNotFoundAtUrlException(msg);
-    } else if (out.str().empty()) {
-        std::string msg = "Empty response for file " + url;
-        throw FileNotFoundAtUrlException(msg);
-    } else if (out.str() == IS_DIR_RESPONSE) {
-        throw faabric::util::FileAtUrlIsDirectoryException(url +
-                                                           " is a directory");
+        throw FaabricHttpException(msg);
     }
 
     return faabric::util::stringToBytes(out.str());
