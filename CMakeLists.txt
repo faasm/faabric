@@ -13,17 +13,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Compile comamnds for clang tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Library funcs
-function(faabric_lib lib_name lib_deps)
-    add_library(${lib_name} ${lib_deps})
-
-    add_library(${lib_name}_obj OBJECT ${lib_deps})
-
-    if(BUILD_SHARED_LIBS)
-        target_compile_options(${lib_name} PRIVATE "-fPIC")
-        target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
-    endif()    
-endfunction()
+# Global include dir
+set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 
 # Output directories
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -33,11 +24,25 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # External libraries
 include(cmake/ExternalProjects.cmake)
 
-# Global include dir
-set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
+# Library funcs
+function(faabric_lib lib_name lib_deps)
+    add_library(${lib_name} ${lib_deps})
 
-# Include directories
-include_directories(${FAABRIC_INCLUDE_DIR})
+    add_library(${lib_name}_obj OBJECT ${lib_deps})
+
+    # Include directories
+    target_include_directories(${lib_name} 
+        PUBLIC ${FAABRIC_INCLUDE_DIR}
+        PUBLIC ${PISTACHE_INCLUDE_DIR}
+        PUBLIC ${SPDLOG_INCLUDE_DIR}
+        PUBLIC ${RAPIDJSON_INCLUDE_DIR}
+        )
+
+    if(BUILD_SHARED_LIBS)
+        target_compile_options(${lib_name} PRIVATE "-fPIC")
+        target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
+    endif()    
+endfunction()
 
 add_subdirectory(src/endpoint)
 add_subdirectory(src/executor)

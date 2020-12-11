@@ -36,7 +36,7 @@ ExternalProject_Add(pistache_ext
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
-include_directories(${SOURCE_DIR}/include)
+set(PISTACHE_INCLUDE_DIR ${SOURCE_DIR}/include)
 
 # RapidJSON
 ExternalProject_Add(rapidjson_ext
@@ -48,7 +48,7 @@ ExternalProject_Add(rapidjson_ext
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 ExternalProject_Get_Property(rapidjson_ext SOURCE_DIR)
-include_directories(${SOURCE_DIR}/include)
+set(RAPIDJSON_INCLUDE_DIR ${SOURCE_DIR}/include)
 
 # spdlog
 ExternalProject_Add(spdlog_ext
@@ -57,7 +57,7 @@ ExternalProject_Add(spdlog_ext
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 ExternalProject_Get_Property(spdlog_ext SOURCE_DIR)
-include_directories(${SOURCE_DIR}/include)
+set(SPDLOG_INCLUDE_DIR ${SOURCE_DIR}/include)
 
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)
