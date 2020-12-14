@@ -25,6 +25,7 @@ add_custom_command(
 # Copy the generated headers into place
 add_custom_command(
     OUTPUT "${PB_HEADER_COPIED}"
+    DEPENDS "${PB_HEADER}"
     COMMAND ${CMAKE_COMMAND} -E copy
     ${PB_HEADER}
     ${FAABRIC_INCLUDE_DIR}/faabric/proto/
@@ -32,6 +33,7 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT "${GRPC_HEADER_COPIED}"
+    DEPENDS "${GRPC_HEADER}"
     COMMAND ${CMAKE_COMMAND} -E copy
     ${GRPC_HEADER}
     ${FAABRIC_INCLUDE_DIR}/faabric/proto/
