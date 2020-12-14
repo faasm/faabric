@@ -26,11 +26,8 @@ include(cmake/ExternalProjects.cmake)
 
 # Library funcs
 function(faabric_lib lib_name lib_deps)
+    # "Normal" library used for linking internally
     add_library(${lib_name} ${lib_deps})
-
-    add_library(${lib_name}_obj OBJECT ${lib_deps})
-
-    # Include directories
     target_include_directories(${lib_name} 
         PUBLIC ${FAABRIC_INCLUDE_DIR}
         PUBLIC ${PISTACHE_INCLUDE_DIR}
@@ -38,12 +35,17 @@ function(faabric_lib lib_name lib_deps)
         PUBLIC ${RAPIDJSON_INCLUDE_DIR}
         )
 
+    # Object library for bundling everything together (should have the same
+    # include dirs and dependencies as the normal library)
+    add_library(${lib_name}_obj OBJECT ${lib_deps})
     target_include_directories(${lib_name}_obj 
         PUBLIC ${FAABRIC_INCLUDE_DIR}
         PUBLIC ${PISTACHE_INCLUDE_DIR}
         PUBLIC ${SPDLOG_INCLUDE_DIR}
         PUBLIC ${RAPIDJSON_INCLUDE_DIR}
         )
+
+    target_link_libraries(${lib_name}_obj ${lib_name})
 
     if(BUILD_SHARED_LIBS)
         target_compile_options(${lib_name} PRIVATE "-fPIC")
@@ -60,8 +62,8 @@ add_subdirectory(src/scheduler)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
 
-# Wrapper library - note we want to include all the targets in this library, not
-# just link it superficially
+# Wrapper library - note we want to include all the _object_ targets in this 
+# library to ensure it's all bundled in together
 if(BUILD_SHARED_LIBS) 
     set(FAABRIC_LIB_TYPE SHARED)
 else()
