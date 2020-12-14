@@ -22,8 +22,6 @@ add_custom_command(
 # Faabric wrapper library
 # ----------------------------------------------
 
-include_directories(${FAABRIC_INCLUDE_DIR}/faabric/proto/)
-
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/proto/*.h")
 
 set(LIB_FILES

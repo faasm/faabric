@@ -38,6 +38,13 @@ function(faabric_lib lib_name lib_deps)
         PUBLIC ${RAPIDJSON_INCLUDE_DIR}
         )
 
+    target_include_directories(${lib_name}_obj 
+        PUBLIC ${FAABRIC_INCLUDE_DIR}
+        PUBLIC ${PISTACHE_INCLUDE_DIR}
+        PUBLIC ${SPDLOG_INCLUDE_DIR}
+        PUBLIC ${RAPIDJSON_INCLUDE_DIR}
+        )
+
     if(BUILD_SHARED_LIBS)
         target_compile_options(${lib_name} PRIVATE "-fPIC")
         target_compile_options(${lib_name}_obj PRIVATE "-fPIC")

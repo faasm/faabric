@@ -1,5 +1,4 @@
-#include "state.h"
-
+#include <faabric/util/state.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::util {

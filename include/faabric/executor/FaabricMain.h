@@ -1,7 +1,6 @@
 #pragma once
 
-#include "FaabricPool.h"
-
+#include <faabric/executor/FaabricPool.h>
 #include <faabric/state/StateServer.h>
 #include <faabric/util/config.h>
 

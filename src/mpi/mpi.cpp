@@ -1,4 +1,4 @@
-#include "faabric/mpi/mpi.h"
+#include <faabric/mpi/mpi.h>
 
 #include <stdexcept>
 #include <stdint.h>

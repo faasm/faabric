@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Scheduler.h"
+#include <faabric/scheduler/Scheduler.h>
 
 #include <faabric/proto/RPCServer.h>
 #include <faabric/proto/faabric.grpc.pb.h>

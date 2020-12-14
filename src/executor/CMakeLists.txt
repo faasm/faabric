@@ -1,5 +1,3 @@
-include_directories(${FAABRIC_INCLUDE_DIR}/faabric/executor)
-
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/executor/*.h")
 
 set(LIB_FILES

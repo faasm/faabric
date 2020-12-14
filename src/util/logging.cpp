@@ -1,5 +1,5 @@
-#include "logging.h"
-#include "config.h"
+#include <faabric/util/logging.h>
+#include <faabric/util/config.h>
 
 #include <spdlog/sinks/stdout_color_sinks.h>
 

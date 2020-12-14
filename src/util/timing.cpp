@@ -1,5 +1,4 @@
-#include "timing.h"
-
+#include <faabric/util/timing.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::util {

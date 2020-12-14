@@ -1,5 +1,5 @@
-#include "MpiContext.h"
-#include "MpiWorldRegistry.h"
+#include <faabric/scheduler/MpiContext.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/util/gids.h>

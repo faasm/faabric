@@ -1,5 +1,5 @@
-#include "barrier.h"
-#include "locks.h"
+#include <faabric/util/barrier.h>
+#include <faabric/util/locks.h>
 
 namespace faabric::util {
 Barrier::Barrier(int count)

@@ -1,5 +1,4 @@
-#include "FaabricMain.h"
-
+#include <faabric/executor/FaabricMain.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 

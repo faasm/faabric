@@ -1,4 +1,4 @@
-#include "MpiWorldRegistry.h"
+#include <faabric/scheduler/MpiWorldRegistry.h>
 
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>

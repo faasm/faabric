@@ -1,6 +1,6 @@
 #pragma once
 
-#include "State.h"
+#include <faabric/state/State.h>
 
 #include <faabric/proto/RPCServer.h>
 #include <faabric/proto/faabric.grpc.pb.h>

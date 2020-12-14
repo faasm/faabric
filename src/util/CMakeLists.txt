@@ -1,5 +1,3 @@
-include_directories(${FAABRIC_INCLUDE_DIR}/faabric/util)
-
 find_package(RapidJSON)
 
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/util/*.h")

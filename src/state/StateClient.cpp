@@ -1,4 +1,4 @@
-#include "StateClient.h"
+#include <faabric/state/StateClient.h>
 
 #include <faabric/proto/macros.h>
 #include <faabric/util/logging.h>

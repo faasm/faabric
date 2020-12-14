@@ -1,7 +1,7 @@
 #pragma once
 
-#include "exception.h"
-#include "locks.h"
+#include <faabric/util/exception.h>
+#include <faabric/util/locks.h>
 
 #include <queue>
 

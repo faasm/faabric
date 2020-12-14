@@ -1,4 +1,4 @@
-#include "StateKeyValue.h"
+#include <faabric/state/StateKeyValue.h>
 
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>

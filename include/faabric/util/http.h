@@ -1,6 +1,6 @@
 #pragma once
 
-#include "exception.h"
+#include <faabric/util/exception.h>
 #include <pistache/http_header.h>
 #include <string>
 #include <vector>

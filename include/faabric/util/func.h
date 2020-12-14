@@ -1,6 +1,6 @@
 #pragma once
 
-#include "exception.h"
+#include <faabric/util/exception.h>
 #include <faabric/proto/faabric.pb.h>
 #include <string>
 #include <vector>

@@ -1,4 +1,4 @@
-#include "gids.h"
+#include <faabric/util/gids.h>
 
 #include <atomic>
 #include <mutex>
