@@ -14,12 +14,18 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 function(add_example example_name)
     add_executable(${example_name} ${example_name}.cpp)
 
-    set(FAABRIC_LIBS libfaabric.so libfaabricmpi.so)
-
     target_link_libraries(${example_name}
-        ${FAABRIC_LIBS}
+        faabric
+        faabricmpi
+        protobuf
+        pthread
         pistache
-        )
+        hiredis
+        grpc++
+        grpc++_reflection
+        boost_system
+        boost_filesystem
+    )
     
     set(ALL_EXAMPLES ${ALL_EXAMPLES} ${example_name} PARENT_SCOPE)   
 endfunction()
