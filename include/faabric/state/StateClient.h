@@ -1,7 +1,7 @@
 #pragma once
 
-#include "InMemoryStateRegistry.h"
-#include "State.h"
+#include <faabric/state/InMemoryStateRegistry.h>
+#include <faabric/state/State.h>
 
 #include <grpcpp/channel.h>
 #include <grpcpp/client_context.h>

@@ -1,4 +1,4 @@
-#include "InMemoryStateRegistry.h"
+#include <faabric/state/InMemoryStateRegistry.h>
 
 #include <vector>
 

@@ -1,4 +1,4 @@
-#include "memory.h"
+#include <faabric/util/memory.h>
 
 #include <cstdint>
 

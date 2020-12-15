@@ -1,4 +1,4 @@
-#include "FaabricExecutor.h"
+#include <faabric/executor/FaabricExecutor.h>
 
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>

@@ -1,4 +1,4 @@
-#include "DummyStateServer.h"
+#include <faabric/state/DummyStateServer.h>
 
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/util/logging.h>

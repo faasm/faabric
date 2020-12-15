@@ -1,4 +1,4 @@
-#include "queue.h"
+#include <faabric/util/queue.h>
 
 namespace faabric::util {
 TokenPool::TokenPool(int nTokens)

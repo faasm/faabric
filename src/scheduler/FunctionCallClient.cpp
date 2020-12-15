@@ -1,4 +1,4 @@
-#include "FunctionCallClient.h"
+#include <faabric/scheduler/FunctionCallClient.h>
 
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>

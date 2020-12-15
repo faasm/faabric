@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StateKeyValue.h"
+#include <faabric/state/StateKeyValue.h>
 
 #include <shared_mutex>
 #include <string>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StateServer.h"
+#include <faabric/state/StateServer.h>
 
 namespace faabric::state {
 class DummyStateServer

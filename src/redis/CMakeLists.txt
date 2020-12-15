@@ -1,5 +1,3 @@
-include_directories(${FAABRIC_INCLUDE_DIR}/faabric/redis)
-
 set(LIB_FILES
         Redis.cpp
         ${FAABRIC_INCLUDE_DIR}/faabric/redis/Redis.h

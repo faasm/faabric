@@ -27,19 +27,22 @@ def build(ctx, clean=False):
         makedirs(BUILD_DIR)
 
     # Cmake
+    cmake_cmd = " ".join(
+        [
+            "cmake",
+            "-GNinja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCMAKE_CXX_FLAGS=-I{}".format(INCLUDE_DIR),
+            "-DCMAKE_EXE_LINKER_FLAGS=-L{}".format(LIB_DIR),
+            "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
+            "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
+            EXAMPLES_DIR,
+        ]
+    )
+    print(cmake_cmd)
+
     run(
-        " ".join(
-            [
-                "cmake",
-                "-GNinja",
-                "-DCMAKE_BUILD_TYPE=Release",
-                "-DCMAKE_CXX_FLAGS=-I{}".format(INCLUDE_DIR),
-                "-DCMAKE_EXE_LINKER_FLAGS=-L{}".format(LIB_DIR),
-                "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
-                "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
-                EXAMPLES_DIR,
-            ]
-        ),
+        cmake_cmd,
         shell=True,
         cwd=BUILD_DIR,
     )
@@ -49,6 +52,7 @@ def build(ctx, clean=False):
         "cmake --build . --target all_examples",
         cwd=BUILD_DIR,
         shell=True,
+        check=True,
     )
 
 
@@ -69,4 +73,4 @@ def execute(ctx, example):
         }
     )
 
-    run(exe_path, env=shell_env, shell=True)
+    run(exe_path, env=shell_env, shell=True, check=True)

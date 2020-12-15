@@ -1,4 +1,4 @@
-#include "RedisStateKeyValue.h"
+#include <faabric/state/RedisStateKeyValue.h>
 
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>

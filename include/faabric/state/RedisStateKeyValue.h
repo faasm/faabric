@@ -1,6 +1,6 @@
 #pragma once
 
-#include "StateKeyValue.h"
+#include <faabric/state/StateKeyValue.h>
 
 #include <faabric/redis/Redis.h>
 #include <faabric/util/clock.h>

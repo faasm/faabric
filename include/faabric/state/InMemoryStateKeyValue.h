@@ -1,8 +1,8 @@
 #pragma once
 
-#include "InMemoryStateRegistry.h"
-#include "StateClient.h"
-#include "StateKeyValue.h"
+#include <faabric/state/InMemoryStateRegistry.h>
+#include <faabric/state/StateClient.h>
+#include <faabric/state/StateKeyValue.h>
 
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>

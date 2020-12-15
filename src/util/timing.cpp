@@ -1,6 +1,5 @@
-#include "timing.h"
-
 #include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
 
 namespace faabric::util {
 faabric::util::TimePoint startTimer()

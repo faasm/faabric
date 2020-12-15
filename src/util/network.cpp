@@ -1,4 +1,4 @@
-#include "network.h"
+#include <faabric/util/network.h>
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>

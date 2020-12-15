@@ -1,6 +1,5 @@
-#include "FaabricPool.h"
-
 #include <faabric/executor/FaabricExecutor.h>
+#include <faabric/executor/FaabricPool.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::executor {
