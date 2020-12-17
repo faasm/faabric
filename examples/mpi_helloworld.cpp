@@ -1,6 +1,8 @@
 #include <faabric/mpi/mpi.h>
 #include <faabric/util/logging.h>
 
+#include <unistd.h>
+
 int main()
 {
     auto logger = faabric::util::getLogger();
@@ -11,7 +13,8 @@ int main()
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
 
-    logger->info("Hello world from rank %i of %i", rank, worldSize);
+    sleep(2);
+    logger->info("Hello world from rank {} of {}", rank, worldSize);
 
     MPI_Finalize();
 

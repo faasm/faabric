@@ -2,7 +2,7 @@ from os import makedirs, environ
 from shutil import rmtree
 from os.path import join, exists
 from copy import copy
-from subprocess import run
+from subprocess import run, Popen
 
 from tasks.util.env import PROJ_ROOT, FAABRIC_INSTALL_PREFIX
 
@@ -13,6 +13,8 @@ BUILD_DIR = join(EXAMPLES_DIR, "build")
 
 INCLUDE_DIR = "{}/include".format(FAABRIC_INSTALL_PREFIX)
 LIB_DIR = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
+
+MPI_DEFAULT_WORLD_SIZE = 5
 
 
 @task(default=True)
@@ -74,3 +76,31 @@ def execute(ctx, example):
     )
 
     run(exe_path, env=shell_env, shell=True, check=True)
+
+
+@task
+def execute_mpi(ctx, example):
+    """
+    Runs an MPI example
+    """
+    exe_path = join(BUILD_DIR, example)
+
+    if not exists(exe_path):
+        raise RuntimeError("Did not find {} as expected".format(exe_path))
+
+    shell_env = copy(environ)
+    shell_env.update(
+        {
+            "LD_LIBRARY_PATH": LIB_DIR,
+        }
+    )
+    if "MPI_WORLD_SIZE" not in environ:
+        shell_env.update({"MPI_WORLD_SIZE": str(MPI_DEFAULT_WORLD_SIZE)})
+
+    # run(exe_path, env=shell_env, shell=True, check=True)
+    procs = [
+        Popen(exe_path, env=shell_env, shell=True)
+        for _ in range(int(environ["MPI_WORLD_SIZE"]))
+    ]
+    for p in procs:
+        p.wait()
