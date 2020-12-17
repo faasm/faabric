@@ -31,6 +31,7 @@ function(add_example example_name)
 endfunction()
 
 add_example(check)
+add_example(mpi_helloworld)
 add_example(server)
 
 add_custom_target(all_examples DEPENDS ${ALL_EXAMPLES})
