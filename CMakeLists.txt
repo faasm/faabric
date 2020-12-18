@@ -86,6 +86,7 @@ add_dependencies(faabric pistache_ext spdlog_ext)
 
 target_link_libraries(faabric
     ${Protobuf_LIBRARIES}
+    faabricmpi
     gRPC::grpc++
     gRPC::grpc++_reflection
     hiredis
