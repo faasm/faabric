@@ -5,6 +5,7 @@
 
 int main()
 {
+    faabric::util::initLogging();
     auto logger = faabric::util::getLogger();
 
     MPI_Init(NULL, NULL);

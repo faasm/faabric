@@ -1,10 +1,33 @@
 #include <faabric/mpi/mpi.h>
+#include <faabric/scheduler/MpiContext.h>
 #include <faabric/util/logging.h>
+
+static thread_local faabric::scheduler::MpiContext executingContext;
+
+faabric::scheduler::MpiWorld& getExecutingWorld()
+{
+    int worldId = executingContext.getWorldId();
+    auto reg = faabric::scheduler::getMpiWorldRegistry();
+    return reg.getOrInitialiseWorld(*getExecutingCall(), worldId);
+}
 
 int MPI_Init(int* argc, char*** argv)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Init");
+
+    faabric::Message* call = getExecutingCall();
+
+    if (call->mpirank() <= 0) {
+        logger->debug("S - MPI_Init (create) {} {}", a, b);
+        executingContext.createWorld(*call);
+    } else {
+        logger->debug("S - MPI_Init (join) {} {}", a, b);
+        executingContext.joinWorld(*call);
+    }
+
+    int thisRank = executingContext.getRank();
+    auto world = getExecutingWorld();
+    world.barrier(thisRank);
 
     return MPI_SUCCESS;
 }

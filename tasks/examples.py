@@ -79,7 +79,7 @@ def execute(ctx, example):
 
 
 @task
-def execute_mpi(ctx, example):
+def execute_mpi(ctx, example, np=MPI_DEFAULT_WORLD_SIZE):
     """
     Runs an MPI example
     """
@@ -94,13 +94,9 @@ def execute_mpi(ctx, example):
             "LD_LIBRARY_PATH": LIB_DIR,
         }
     )
-    if "MPI_WORLD_SIZE" not in environ:
-        shell_env.update({"MPI_WORLD_SIZE": str(MPI_DEFAULT_WORLD_SIZE)})
 
-    # run(exe_path, env=shell_env, shell=True, check=True)
     procs = [
-        Popen(exe_path, env=shell_env, shell=True)
-        for _ in range(int(environ["MPI_WORLD_SIZE"]))
+        Popen(exe_path, env=shell_env, shell=True) for _ in range(np)
     ]
     for p in procs:
         p.wait()
