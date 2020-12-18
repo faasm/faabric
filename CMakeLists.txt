@@ -90,6 +90,7 @@ target_link_libraries(faabric
     gRPC::grpc++
     gRPC::grpc++_reflection
     hiredis
+    pistache
     boost_system
     boost_filesystem
     )
