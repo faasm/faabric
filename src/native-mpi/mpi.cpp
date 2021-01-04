@@ -7,7 +7,7 @@ static thread_local faabric::scheduler::MpiContext executingContext;
 faabric::scheduler::MpiWorld& getExecutingWorld()
 {
     int worldId = executingContext.getWorldId();
-    auto reg = faabric::scheduler::getMpiWorldRegistry();
+    faabric::scheduler::MpiWorldRegistry& reg = faabric::scheduler::getMpiWorldRegistry();
     return reg.getOrInitialiseWorld(*getExecutingCall(), worldId);
 }
 
@@ -26,7 +26,7 @@ int MPI_Init(int* argc, char*** argv)
     }
 
     int thisRank = executingContext.getRank();
-    auto world = getExecutingWorld();
+    faabric::scheduler::MpiWorld& world = getExecutingWorld();
     world.barrier(thisRank);
 
     return MPI_SUCCESS;

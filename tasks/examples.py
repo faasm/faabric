@@ -8,6 +8,8 @@ from tasks.util.env import PROJ_ROOT, FAABRIC_INSTALL_PREFIX
 
 from invoke import task
 
+import requests
+
 EXAMPLES_DIR = join(PROJ_ROOT, "examples")
 BUILD_DIR = join(EXAMPLES_DIR, "build")
 
@@ -95,8 +97,18 @@ def execute_mpi(ctx, example, np=MPI_DEFAULT_WORLD_SIZE):
         }
     )
 
-    procs = [
-        Popen(exe_path, env=shell_env, shell=True) for _ in range(np)
-    ]
+    procs = [Popen(exe_path, env=shell_env, shell=True) for _ in range(np)]
     for p in procs:
         p.wait()
+
+
+@task
+def invoke_mpi(ctx, host="0.0.0.0", port="8080"):
+    """
+    Invoke MPI function through HTTP handler
+    """
+    # The host:port address must match that of the HTTP Endpoint
+    url = "http://{}:{}".format(host, port)
+    msg = {"user": "mpi", "function": "faabric", "mpi_world_size": 1}
+    response = requests.post(url, json=msg, headers=None)
+    print(response.text)
