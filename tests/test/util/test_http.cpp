@@ -23,18 +23,30 @@ struct DummyHandler : public Http::Handler
     }
 };
 
-TEST_CASE("Test reading from a URL", "[util]")
+struct LargeDataHandler : public Http::Handler
 {
-    auto conf = faabric::util::getSystemConfig();
+    HTTP_PROTOTYPE(LargeDataHandler)
 
-    // Start a dummy server
+    void onRequest(const Http::Request&, Http::ResponseWriter writer) override
+    {
+        std::string largeContents(1024 * 1024, 'a');
+        writer.send(Http::Code::Ok, largeContents);
+    }
+};
+
+TEST_CASE("Test reading data from a URL", "[util]")
+{
     const Pistache::Address address("localhost", Pistache::Port(0));
+
+    std::shared_ptr<Http::Handler> handler;
+    SECTION("Small data") { handler = Http::make_handler<DummyHandler>(); }
+//    SECTION("Big data") { handler = Http::make_handler<LargeDataHandler>(); }
 
     Http::Endpoint server(address);
     auto flags = Tcp::Options::ReuseAddr;
     auto serverOpts = Http::Endpoint::options().flags(flags);
     server.init(serverOpts);
-    server.setHandler(Http::make_handler<DummyHandler>());
+    server.setHandler(handler);
     server.serveThreaded();
 
     const std::string url = "localhost:" + server.getPort().toString();

@@ -28,17 +28,27 @@ std::vector<uint8_t> readFileFromUrlWithHeader(
   const std::shared_ptr<Http::Header::Header>& header)
 {
     Http::Client client;
-    client.init();
+    auto opts = Http::Client::options();
+    client.init(opts);
 
-    auto rb = client.get(url);
+    auto requestBuilder = client.get(url);
 
     if (header != nullptr) {
-        rb.header(header);
+        requestBuilder.header(header);
     }
 
+    // auto contentHeader =
+    //   Http::Header::ContentType(MIME(Application, OctetStream));
+    // auto acceptHeader = Http::Header::Accept();
+    // acceptHeader.parseRaw("*/*", sizeof("*/*"));
+
+    // requestBuilder.header<Http::Header::ContentType>(contentHeader);
+    // requestBuilder.header<Http::Header::Accept>(acceptHeader);
+
     // Set up the request and callbacks
-    Async::Promise<Http::Response> resp =
-      rb.timeout(std::chrono::milliseconds(HTTP_FILE_TIMEOUT)).send();
+    auto resp =
+      requestBuilder.timeout(std::chrono::milliseconds(HTTP_FILE_TIMEOUT))
+        .send();
 
     std::stringstream out;
     Http::Code respCode;

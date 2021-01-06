@@ -31,8 +31,8 @@ set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 
 # Pistache 
 ExternalProject_Add(pistache_ext
-    GIT_REPOSITORY "https://github.com/oktal/pistache.git"
-    GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
+    GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"
+    GIT_TAG "5b29016c6343ed2354fa54b0c5f7da2a84930416"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
