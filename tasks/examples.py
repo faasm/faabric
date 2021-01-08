@@ -16,7 +16,8 @@ BUILD_DIR = join(EXAMPLES_DIR, "build")
 INCLUDE_DIR = "{}/include".format(FAABRIC_INSTALL_PREFIX)
 LIB_DIR = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
 
-MPI_DEFAULT_WORLD_SIZE = 5
+FAABRIC_SERVICE_NAME = "cli"
+MPI_DEFAULT_WORLD_SIZE = 1
 
 
 @task(default=True)
@@ -97,9 +98,16 @@ def execute_mpi(ctx, example, np=MPI_DEFAULT_WORLD_SIZE):
         }
     )
 
-    procs = [Popen(exe_path, env=shell_env, shell=True) for _ in range(np)]
-    for p in procs:
-        p.wait()
+    # Start up np - 1 faabric_processes. Note that if there are any other
+    # scaled out processes they will be stopped and removed. Additionally,
+    # running /bin/cli.sh whilst having a scaled out client will stop & remove
+    # them as well.
+    scale_up_cmd = "docker-compose up -d --scale {}={} --no-recreate".format(
+        FAABRIC_SERVICE_NAME, np - 1
+    )
+    run(scale_up_cmd, shell=True, check=True)
+
+    run(exe_path, env=shell_env, shell=True, check=True)
 
 
 @task
@@ -112,3 +120,14 @@ def invoke_mpi(ctx, host="0.0.0.0", port="8080"):
     msg = {"user": "mpi", "function": "faabric", "mpi_world_size": 1}
     response = requests.post(url, json=msg, headers=None)
     print(response.text)
+
+
+@task
+def terminate_mpi(ctx):
+    """
+    Terminate an MPI execution
+    """
+    # This will stop and remove all containers scaled out (i.e. invoked using
+    # the --scale flag) and leave those specified in the docker-compose file.
+    scale_down_cmd = "docker-compose up -d --no-recreate"
+    run(scale_down_cmd, shell=True, check=True)
