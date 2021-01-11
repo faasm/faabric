@@ -20,34 +20,35 @@ class Queue
   public:
     void enqueue(T value)
     {
-        UniqueLock lock(mx);
+        UniqueLock lock(enqueueMutex);
 
         mq.push(value);
 
-        cv.notify_one();
+        enqueueNotifier.notify_one();
     }
 
     T doDequeue(long timeoutMs, bool pop)
     {
-        UniqueLock lock(mx);
+        UniqueLock lock(enqueueMutex);
 
         while (mq.empty()) {
             if (timeoutMs > 0) {
-                std::cv_status returnVal =
-                  cv.wait_for(lock, std::chrono::milliseconds(timeoutMs));
+                std::cv_status returnVal = enqueueNotifier.wait_for(
+                  lock, std::chrono::milliseconds(timeoutMs));
 
                 // Work out if this has returned due to timeout expiring
                 if (returnVal == std::cv_status::timeout) {
-                    throw QueueTimeoutException("Queue timeout");
+                    throw QueueTimeoutException("Timeout waiting for dequeue");
                 }
             } else {
-                cv.wait(lock);
+                enqueueNotifier.wait(lock);
             }
         }
 
         T value = mq.front();
         if (pop) {
             mq.pop();
+            emptyNotifier.notify_one();
         }
 
         return value;
@@ -57,19 +58,34 @@ class Queue
 
     T dequeue(long timeoutMs = 0) { return doDequeue(timeoutMs, true); }
 
-    void waitToEmpty() {
+    void waitToEmpty(long timeoutMs)
+    {
+        UniqueLock lock(enqueueMutex);
 
+        while (!mq.empty()) {
+            if (timeoutMs > 0) {
+                std::cv_status returnVal = emptyNotifier.wait_for(
+                  lock, std::chrono::milliseconds(timeoutMs));
+
+                // Work out if this has returned due to timeout expiring
+                if (returnVal == std::cv_status::timeout) {
+                    throw QueueTimeoutException("Timeout waiting for empty");
+                }
+            } else {
+                emptyNotifier.wait(lock);
+            }
+        }
     }
 
     long size()
     {
-        UniqueLock lock(mx);
+        UniqueLock lock(enqueueMutex);
         return mq.size();
     }
 
     void reset()
     {
-        UniqueLock lock(mx);
+        UniqueLock lock(enqueueMutex);
 
         std::queue<T> empty;
         std::swap(mq, empty);
@@ -77,8 +93,9 @@ class Queue
 
   private:
     std::queue<T> mq;
-    std::condition_variable cv;
-    std::mutex mx;
+    std::condition_variable enqueueNotifier;
+    std::condition_variable emptyNotifier;
+    std::mutex enqueueMutex;
 };
 
 class TokenPool

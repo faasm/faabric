@@ -9,6 +9,7 @@
 #include <faabric/util/timing.h>
 
 #define CHAINED_SET_PREFIX "chained_"
+#define FLUSH_TIMEOUT_MS 10000
 
 using namespace faabric::util;
 
@@ -582,7 +583,7 @@ void Scheduler::flushLocally()
 
     // Wait for flush messages to be consumed, then clear the queues
     for (const auto& p : queueMap) {
-        p.second->waitToEmpty();
+        p.second->waitToEmpty(FLUSH_TIMEOUT_MS);
         p.second->reset();
     }
     queueMap.clear();
