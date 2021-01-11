@@ -603,29 +603,6 @@ void Scheduler::flushLocally()
     }
 }
 
-void Scheduler::preflightPythonCall()
-{
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
-    if (conf.pythonPreload != "on") {
-        logger->info("Not preloading python runtime");
-        return;
-    }
-
-    logger->info("Preparing python runtime");
-
-    faabric::Message msg =
-      faabric::util::messageFactory(PYTHON_USER, PYTHON_FUNC);
-    msg.set_ispython(true);
-    msg.set_pythonuser("python");
-    msg.set_pythonfunction("noop");
-    faabric::util::setMessageId(msg);
-
-    callFunction(msg, true);
-
-    logger->info("Python runtime prepared");
-}
-
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
     redis::Redis& redis = redis::Redis::getQueue();

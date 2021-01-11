@@ -82,9 +82,6 @@ void FaabricPool::startThreadPool()
 
         // Will die gracefully at this point
     });
-
-    // Prepare the python runtime (no-op if not necessary)
-    scheduler.preflightPythonCall();
 }
 
 void FaabricPool::reset()

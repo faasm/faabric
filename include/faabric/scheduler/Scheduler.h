@@ -85,8 +85,6 @@ class Scheduler
 
     void flushLocally();
 
-    void preflightPythonCall();
-
     std::string getMessageStatus(unsigned int messageId);
 
     void setFunctionResult(faabric::Message& msg);
