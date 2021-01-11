@@ -44,7 +44,7 @@ void RPCServer::stop()
     server->Shutdown();
 
     if (_isBackground) {
-        logger->debug("Waiting for server background thread");
+        logger->debug("Waiting for RPC server background thread");
         if (servingThread.joinable()) {
             servingThread.join();
         }

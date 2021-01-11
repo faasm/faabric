@@ -66,6 +66,7 @@ void Scheduler::reset()
     // Remove this host from all the global warm sets
     for (const auto& iter : queueMap) {
         removeHostFromWarmSet(iter.first);
+        iter.second->reset();
     }
     queueMap.clear();
 

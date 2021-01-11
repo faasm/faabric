@@ -30,14 +30,29 @@ TEST_CASE("Test queue operations", "[util]")
     REQUIRE_THROWS(q.dequeue(1));
 }
 
-TEST_CASE("Test wait for empty queue", "[util]")
+TEST_CASE("Test drain queue", "[util]")
+{
+    IntQueue q;
+
+    q.enqueue(1);
+    q.enqueue(2);
+    q.enqueue(3);
+
+    REQUIRE(q.size() == 3);
+
+    q.drain();
+
+    REQUIRE(q.size() == 0);
+}
+
+TEST_CASE("Test wait for draining empty queue", "[util]")
 {
     // Just need to check this doesn't fail
     IntQueue q;
     q.waitToDrain(100);
 }
 
-TEST_CASE("Test wait for queue with elements", "[util]")
+TEST_CASE("Test wait for draining queue with elements", "[util]")
 {
     IntQueue q;
     int nElems = 5;

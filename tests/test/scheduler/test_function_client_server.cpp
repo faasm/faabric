@@ -1,15 +1,15 @@
 #include <catch.hpp>
 
-#include "faabric/redis/Redis.h"
-#include "faabric/scheduler/Scheduler.h"
-#include "faabric/util/func.h"
 #include "faabric_utils.h"
 
+#include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
+#include <faabric/util/func.h>
 #include <faabric/util/network.h>
 
 using namespace scheduler;

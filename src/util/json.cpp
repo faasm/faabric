@@ -1,5 +1,5 @@
-#include "faabric/util/logging.h"
 #include <faabric/util/json.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
 #include <rapidjson/document.h>
@@ -223,8 +223,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
 {
     PROF_START(jsonDecode)
     auto logger = faabric::util::getLogger();
-
-    logger->info(jsonIn.c_str());
 
     MemoryStream ms(jsonIn.c_str(), jsonIn.size());
     Document d;

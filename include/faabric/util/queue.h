@@ -20,7 +20,7 @@ class Queue
   public:
     void enqueue(T value)
     {
-        UniqueLock lock(enqueueMutex);
+        UniqueLock lock(mx);
 
         mq.push(value);
 
@@ -29,7 +29,7 @@ class Queue
 
     T doDequeue(long timeoutMs, bool pop)
     {
-        UniqueLock lock(enqueueMutex);
+        UniqueLock lock(mx);
 
         while (mq.empty()) {
             if (timeoutMs > 0) {
@@ -60,7 +60,7 @@ class Queue
 
     void waitToDrain(long timeoutMs)
     {
-        UniqueLock lock(enqueueMutex);
+        UniqueLock lock(mx);
 
         while (!mq.empty()) {
             if (timeoutMs > 0) {
@@ -79,7 +79,7 @@ class Queue
 
     void drain()
     {
-        UniqueLock lock(enqueueMutex);
+        UniqueLock lock(mx);
 
         while (!mq.empty()) {
             mq.pop();
@@ -88,13 +88,13 @@ class Queue
 
     long size()
     {
-        UniqueLock lock(enqueueMutex);
+        UniqueLock lock(mx);
         return mq.size();
     }
 
     void reset()
     {
-        UniqueLock lock(enqueueMutex);
+        UniqueLock lock(mx);
 
         std::queue<T> empty;
         std::swap(mq, empty);
@@ -104,7 +104,7 @@ class Queue
     std::queue<T> mq;
     std::condition_variable enqueueNotifier;
     std::condition_variable emptyNotifier;
-    std::mutex enqueueMutex;
+    std::mutex mx;
 };
 
 class TokenPool
