@@ -1,4 +1,4 @@
-#include <faabric/mpi/mpi_executor.h>
+#include <faabric/mpi/MpiExecutor.h>
 
 namespace faabric::executor {
 MpiExecutor::MpiExecutor()

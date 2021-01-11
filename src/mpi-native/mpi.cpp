@@ -1,6 +1,12 @@
 #include <faabric/mpi/mpi.h>
+#include <faabric/mpi/MpiExecutor.h>
+
 #include <faabric/scheduler/MpiContext.h>
+#include <faabric/scheduler/MpiWorld.h>
+
 #include <faabric/util/logging.h>
+
+using namespace faabric::executor;
 
 static thread_local faabric::scheduler::MpiContext executingContext;
 

@@ -17,6 +17,7 @@ function(add_example example_name)
     target_link_libraries(${example_name}
         faabric
         faabricmpi
+        faabricmpi_native
         protobuf
         pthread
         pistache
