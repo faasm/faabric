@@ -52,6 +52,18 @@ Status FunctionCallServer::ShareFunction(
     return Status::OK;
 }
 
+Status FunctionCallServer::FlushFunction(
+  ServerContext* context,
+  const faabric::Message* request,
+  faabric::FunctionStatusResponse* response)
+{
+    auto logger = faabric::util::getLogger();
+
+
+
+    return Status::OK;
+}
+
 Status FunctionCallServer::MPICall(ServerContext* context,
                                    const faabric::MPIMessage* request,
                                    faabric::FunctionStatusResponse* response)

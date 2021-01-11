@@ -25,6 +25,8 @@ class FunctionCallClient
     std::unique_ptr<faabric::FunctionRPCService::Stub> stub;
 
     void shareFunctionCall(const faabric::Message& call);
+    
+    void sendFunctionFlush(const faabric::Message& call);
 
     void sendMPIMessage(const faabric::MPIMessage& msg);
 };

@@ -10,6 +10,9 @@ service FunctionRPCService {
     rpc ShareFunction (Message) returns (FunctionStatusResponse) {
     }
 
+    rpc FlushFunction (Message) returns (FunctionStatusResponse) {
+    }
+
     rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
     }
 }

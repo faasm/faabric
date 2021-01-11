@@ -186,7 +186,7 @@ std::shared_ptr<InMemoryMessageQueue> Scheduler::getBindQueue()
 
 Scheduler& getScheduler()
 {
-    // This is *global* and must be shared across nodes
+    // Note that this ref is shared between all executors on the given host
     static Scheduler scheduler;
     return scheduler;
 }
@@ -321,7 +321,7 @@ void Scheduler::updateOpinion(const faabric::Message& msg)
         // nodes, it's YES
         newOpinion = SchedulerOpinion::YES;
     } else if (!_hasHostCapacity) {
-        // If we have no warm nodes and no host capacity, it's NO
+        // If we have no warm executors and no host capacity, it's NO
         newOpinion = SchedulerOpinion::NO;
     } else {
         // In all other scenarios it's MAYBE
@@ -549,21 +549,30 @@ std::string Scheduler::getThisHost()
 
 void Scheduler::broadcastFlush(const faabric::Message& msg)
 {
+    // Get all hosts that are bound to this function
+    std::string funcStr = faabric::util::funcToString(msg, false);
+    const std::string& warmSetName = getFunctionWarmSetNameFromStr(funcStr);
     redis::Redis& redis = redis::Redis::getQueue();
-    std::unordered_set<std::string> allOptions =
-      redis.smembers(AVAILABLE_HOST_SET);
+
+    std::unordered_set<std::string> warmHosts = redis.smembers(warmSetName);
 
     faabric::Message newMessage;
     newMessage.set_user(msg.user());
     newMessage.set_function(msg.function());
     newMessage.set_isflushrequest(true);
 
-    // This is pretty inefficient but flush isn't a particularly important
-    // operation
-    for (auto& otherHost : allOptions) {
+    // Broadcast the flush to all warm hosts
+    for (auto& otherHost : warmHosts) {
         FunctionCallClient c(otherHost);
-        c.shareFunctionCall(newMessage);
+        c.sendFunctionFlush(newMessage);
     }
+
+    // Send flush messages locally
+    flushLocalNodes(msg);
+}
+
+void Scheduler::flushLocalNodes(const faabric::Message& msg) {
+
 }
 
 void Scheduler::preflightPythonCall()
