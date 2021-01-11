@@ -20,9 +20,9 @@ class FunctionCallServer final
                          const faabric::Message* request,
                          faabric::FunctionStatusResponse* response) override;
 
-    Status FlushFunction(ServerContext* context,
-                         const faabric::Message* request,
-                         faabric::FunctionStatusResponse* response) override;
+    Status Flush(ServerContext* context,
+                 const faabric::Message* request,
+                 faabric::FunctionStatusResponse* response) override;
 
     Status MPICall(ServerContext* context,
                    const faabric::MPIMessage* request,

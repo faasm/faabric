@@ -64,12 +64,12 @@ std::string FaabricEndpointHandler::handleFunction(
               sched.getFunctionExecGraph(msg.id());
             responseStr = faabric::scheduler::execGraphToJson(execGraph);
 
-        } else if (msg.isflushrequest()) {
+        } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
             const std::shared_ptr<spdlog::logger>& logger =
               faabric::util::getLogger();
             logger->debug("Broadcasting flush request");
 
-            sched.broadcastFlush(msg);
+            sched.broadcastFlush();
         } else {
             responseStr = executeFunction(msg);
         }

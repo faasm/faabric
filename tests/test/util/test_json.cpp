@@ -25,7 +25,6 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     msg.set_istypescript(true);
     msg.set_isstatusrequest(true);
     msg.set_isexecgraphrequest(true);
-    msg.set_isflushrequest(true);
 
     msg.set_ismpi(true);
     msg.set_mpiworldid(1234);

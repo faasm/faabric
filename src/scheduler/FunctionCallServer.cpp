@@ -52,15 +52,14 @@ Status FunctionCallServer::ShareFunction(
     return Status::OK;
 }
 
-Status FunctionCallServer::FlushFunction(
+Status FunctionCallServer::Flush(
   ServerContext* context,
   const faabric::Message* request,
   faabric::FunctionStatusResponse* response)
 {
     auto logger = faabric::util::getLogger();
 
-    // Flush locally
-    scheduler.flushLocalNodes(*request);
+    scheduler.flushLocally();
 
     return Status::OK;
 }

@@ -1,5 +1,6 @@
 #include <faabric/scheduler/Scheduler.h>
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/state/State.h>
@@ -60,35 +61,12 @@ void Scheduler::removeHostFromWarmSet(const std::string& funcStr)
     redis.srem(warmSetName, thisHost);
 }
 
-void Scheduler::clear()
+void Scheduler::shutdown()
 {
-    // Remove this host from all the global warm sets
-    for (const auto& iter : queueMap) {
-        this->removeHostFromWarmSet(iter.first);
-    }
+    // Clear out locally first
+    flushLocally();
 
-    // Reset host
-    thisHost = faabric::util::getSystemConfig().endpointHost;
-
-    // Clear all queues
-    for (const auto& p : queueMap) {
-        p.second->reset();
-    }
-    queueMap.clear();
-    bindQueue->reset();
-
-    // Reset all state
-    nodeCountMap.clear();
-    inFlightCountMap.clear();
-    opinionMap.clear();
-    _hasHostCapacity = true;
-
-    // Records
-    setTestMode(false);
-    recordedMessagesAll.clear();
-    recordedMessagesLocal.clear();
-    recordedMessagesShared.clear();
-
+    // Remove this host
     this->removeHostFromGlobalSet();
 }
 
@@ -187,7 +165,7 @@ std::shared_ptr<InMemoryMessageQueue> Scheduler::getBindQueue()
 
 Scheduler& getScheduler()
 {
-    // Note that this ref is shared between all executors on the given host
+    // Note that this ref is shared between all nodes on the given host
     static Scheduler scheduler;
     return scheduler;
 }
@@ -322,7 +300,7 @@ void Scheduler::updateOpinion(const faabric::Message& msg)
         // nodes, it's YES
         newOpinion = SchedulerOpinion::YES;
     } else if (!_hasHostCapacity) {
-        // If we have no warm executors and no host capacity, it's NO
+        // If we have no warm nodes and no host capacity, it's NO
         newOpinion = SchedulerOpinion::NO;
     } else {
         // In all other scenarios it's MAYBE
@@ -548,33 +526,27 @@ std::string Scheduler::getThisHost()
     return thisHost;
 }
 
-void Scheduler::broadcastFlush(const faabric::Message& msg)
+void Scheduler::broadcastFlush()
 {
-    // Get all hosts that are bound to this function
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    const std::string& warmSetName = getFunctionWarmSetNameFromStr(funcStr);
+    // Get all hosts
     redis::Redis& redis = redis::Redis::getQueue();
-    std::unordered_set<std::string> warmHosts = redis.smembers(warmSetName);
+    std::unordered_set<std::string> allHosts =
+      redis.smembers(AVAILABLE_HOST_SET);
 
-    // Remove this host
-    warmHosts.erase(thisHost);
+    // Remove this host from the set
+    allHosts.erase(thisHost);
 
-    // Dispatch flush message to all other warm hosts
-    faabric::Message newMessage;
-    newMessage.set_user(msg.user());
-    newMessage.set_function(msg.function());
-    newMessage.set_isflushrequest(true);
-
-    for (auto& otherHost : warmHosts) {
+    // Dispatch flush message to all other hosts
+    for (auto& otherHost : allHosts) {
         FunctionCallClient c(otherHost);
-        c.sendFunctionFlush(newMessage);
+        c.sendFlush();
     }
 
     // Perform flush locally
-    flushLocalNodes(msg);
+    flushLocally();
 }
 
-void Scheduler::flushLocalNodes(const faabric::Message& msg)
+void Scheduler::flushLocally()
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     logger->warn("Flushing host {}",
@@ -583,22 +555,50 @@ void Scheduler::flushLocalNodes(const faabric::Message& msg)
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
 
-    // Reset the scheduler
-    clear();
-    addHostToGlobalSet();
-
-    // Get count of warm executors locally
-    int nLocalWarm = getFunctionWarmNodeCount(msg);
-
-    // Schedule all the flush messages
-    for (int i = 0; i < nLocalWarm; i++) {
-        faabric::Message flushMessage;
-        flushMessage.set_user(msg.user());
-        flushMessage.set_function(msg.function());
-        flushMessage.set_isflushrequest(true);
-
-        enqueueMessage(flushMessage);
+    // Remove this host from all the global warm sets
+    for (const auto& iter : queueMap) {
+        this->removeHostFromWarmSet(iter.first);
     }
+
+    // Ensure host is set correctly
+    thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    // Notify flush of all warm nodes
+    for (const auto& p : nodeCountMap) {
+        if (p.second == 0) {
+            continue;
+        }
+
+        // Get the queue
+        std::shared_ptr<InMemoryMessageQueue> queue = queueMap[p.first];
+
+        // Dispatch a flush message for each warm node
+        for (int i = 0; i < p.second; i++) {
+            faabric::Message msg;
+            msg.set_type(faabric::Message_MessageType_FLUSH);
+            queue->enqueue(msg);
+        }
+    }
+
+    // Wait for flush messages to be consumed, then clear the queues
+    for (const auto& p : queueMap) {
+        p.second->waitToEmpty();
+        p.second->reset();
+    }
+    queueMap.clear();
+    bindQueue->reset();
+
+    // Reset scheduler state
+    nodeCountMap.clear();
+    inFlightCountMap.clear();
+    opinionMap.clear();
+    _hasHostCapacity = true;
+
+    // Records
+    setTestMode(false);
+    recordedMessagesAll.clear();
+    recordedMessagesLocal.clear();
+    recordedMessagesShared.clear();
 }
 
 void Scheduler::preflightPythonCall()

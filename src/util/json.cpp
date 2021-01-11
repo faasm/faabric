@@ -1,3 +1,4 @@
+#include "faabric/util/logging.h"
 #include <faabric/util/json.h>
 #include <faabric/util/timing.h>
 
@@ -17,6 +18,7 @@ std::string messageToJson(const faabric::Message& msg)
     // Need to be explicit with strings here to make a copy _and_ make sure we
     // specify the length to include any null-terminators from bytes
     d.AddMember("id", msg.id(), a);
+    d.AddMember("type", msg.type(), a);
     d.AddMember(
       "user", Value(msg.user().c_str(), msg.user().size(), a).Move(), a);
     d.AddMember("function",
@@ -109,10 +111,6 @@ std::string messageToJson(const faabric::Message& msg)
 
     if (msg.isexecgraphrequest()) {
         d.AddMember("exec_graph", msg.isexecgraphrequest(), a);
-    }
-
-    if (msg.isflushrequest()) {
-        d.AddMember("flush", msg.isflushrequest(), a);
     }
 
     if (!msg.resultkey().empty()) {
@@ -230,6 +228,16 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     d.ParseStream(ms);
 
     faabric::Message msg;
+
+    // Set the message type
+    int msgType = getIntFromJson(d, "type", 0);
+    if (!faabric::Message::MessageType_IsValid(msgType)) {
+        auto logger = faabric::util::getLogger();
+        logger->error("Bad message type: {}", msgType);
+        throw std::runtime_error("Invalid message type");
+    }
+    msg.set_type(static_cast<faabric::Message::MessageType>(msgType));
+
     msg.set_timestamp(getInt64FromJson(d, "timestamp", 0));
     msg.set_id(getIntFromJson(d, "id", 0));
     msg.set_user(getStringFromJson(d, "user", ""));
@@ -254,7 +262,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_istypescript(getBoolFromJson(d, "typescript", false));
     msg.set_isstatusrequest(getBoolFromJson(d, "status", false));
     msg.set_isexecgraphrequest(getBoolFromJson(d, "exec_graph", false));
-    msg.set_isflushrequest(getBoolFromJson(d, "flush", false));
 
     msg.set_resultkey(getStringFromJson(d, "result_key", ""));
     msg.set_statuskey(getStringFromJson(d, "status_key", ""));

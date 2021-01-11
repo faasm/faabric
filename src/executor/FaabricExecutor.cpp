@@ -132,7 +132,7 @@ std::string FaabricExecutor::processNextMessage()
     faabric::Message msg = currentQueue->dequeue(timeoutMs);
 
     std::string errorMessage;
-    if (msg.isflushrequest()) {
+    if (msg.type() == faabric::Message_MessageType_FLUSH) {
         flush();
 
     } else if (msg.type() == faabric::Message_MessageType_BIND) {

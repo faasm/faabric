@@ -26,7 +26,7 @@ void cleanFaabric()
 
     // Reset scheduler
     scheduler::Scheduler& sch = scheduler::getScheduler();
-    sch.clear();
+    sch.shutdown();
     sch.addHostToGlobalSet();
 
     // Reset system config

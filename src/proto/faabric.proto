@@ -10,7 +10,7 @@ service FunctionRPCService {
     rpc ShareFunction (Message) returns (FunctionStatusResponse) {
     }
 
-    rpc FlushFunction (Message) returns (FunctionStatusResponse) {
+    rpc Flush (Message) returns (FunctionStatusResponse) {
     }
 
     rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
@@ -65,6 +65,7 @@ message Message {
         BIND = 1;
         KILL = 2;
         EMPTY = 3;
+        FLUSH = 4;
     }
 
     MessageType type = 8;
@@ -84,7 +85,6 @@ message Message {
     bool isTypescript = 19;
     bool isStatusRequest = 20;
     bool isExecGraphRequest = 21;
-    bool isFlushRequest = 22;
 
     bytes inputData = 23;
     bytes outputData = 24;

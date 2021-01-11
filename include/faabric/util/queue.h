@@ -57,6 +57,10 @@ class Queue
 
     T dequeue(long timeoutMs = 0) { return doDequeue(timeoutMs, true); }
 
+    void waitToEmpty() {
+
+    }
+
     long size()
     {
         UniqueLock lock(mx);

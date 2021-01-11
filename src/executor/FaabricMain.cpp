@@ -30,7 +30,7 @@ void FaabricMain::shutdown()
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     logger->info("Removing from global working set");
 
-    scheduler.clear();
+    scheduler.shutdown();
 
     pool.shutdown();
 }

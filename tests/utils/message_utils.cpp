@@ -27,7 +27,6 @@ void checkMessageEquality(const faabric::Message& msgA,
     REQUIRE(msgA.istypescript() == msgB.istypescript());
     REQUIRE(msgA.isstatusrequest() == msgB.isstatusrequest());
     REQUIRE(msgA.isexecgraphrequest() == msgB.isexecgraphrequest());
-    REQUIRE(msgA.isflushrequest() == msgB.isflushrequest());
 
     REQUIRE(msgA.returnvalue() == msgB.returnvalue());
 
