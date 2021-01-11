@@ -3,7 +3,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/state/State.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/random.h>
 #include <faabric/util/timing.h>
@@ -62,18 +61,37 @@ void Scheduler::removeHostFromWarmSet(const std::string& funcStr)
     redis.srem(warmSetName, thisHost);
 }
 
-void Scheduler::shutdown()
+void Scheduler::reset()
 {
-    // Clear out locally first
-    flushLocally();
+    // Remove this host from all the global warm sets
+    for (const auto& iter : queueMap) {
+        removeHostFromWarmSet(iter.first);
+    }
+    queueMap.clear();
+
+    // Ensure host is set correctly
+    thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    // Clear queues
+    bindQueue->reset();
+
+    // Reset scheduler state
+    nodeCountMap.clear();
+    inFlightCountMap.clear();
+    opinionMap.clear();
+    _hasHostCapacity = true;
 
     // Records
     setTestMode(false);
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
+}
 
-    // Remove this host
+void Scheduler::shutdown()
+{
+    reset();
+
     this->removeHostFromGlobalSet();
 }
 
@@ -556,21 +574,10 @@ void Scheduler::broadcastFlush()
 void Scheduler::flushLocally()
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-    logger->warn("Flushing host {}",
+    logger->info("Flushing host {}",
                  faabric::util::getSystemConfig().endpointHost);
 
-    // Clear out any cached state
-    faabric::state::getGlobalState().forceClearAll(false);
-
-    // Remove this host from all the global warm sets
-    for (const auto& iter : queueMap) {
-        removeHostFromWarmSet(iter.first);
-    }
-
-    // Ensure host is set correctly
-    thisHost = faabric::util::getSystemConfig().endpointHost;
-
-    // Notify flush of all warm nodes
+    // Notify all warm nodes of flush
     for (const auto& p : nodeCountMap) {
         if (p.second == 0) {
             continue;
@@ -593,14 +600,6 @@ void Scheduler::flushLocally()
         p.second->waitToDrain(FLUSH_TIMEOUT_MS);
         p.second->reset();
     }
-    queueMap.clear();
-    bindQueue->reset();
-
-    // Reset scheduler state
-    nodeCountMap.clear();
-    inFlightCountMap.clear();
-    opinionMap.clear();
-    _hasHostCapacity = true;
 }
 
 void Scheduler::preflightPythonCall()

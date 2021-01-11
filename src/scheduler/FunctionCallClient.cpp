@@ -23,7 +23,7 @@ void FunctionCallClient::shareFunctionCall(const faabric::Message& call)
 void FunctionCallClient::sendFlush()
 {
     ClientContext context;
-        
+
     faabric::Message call;
     faabric::FunctionStatusResponse response;
     CHECK_RPC("function_flush", stub->Flush(&context, call, &response));

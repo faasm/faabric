@@ -46,8 +46,10 @@ class Scheduler
 
     std::string getFunctionWarmSetNameFromStr(const std::string& funcStr);
 
+    void reset();
+
     void shutdown();
-    
+
     long getFunctionWarmNodeCount(const faabric::Message& msg);
 
     long getTotalWarmNodeCount();

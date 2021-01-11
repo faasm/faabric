@@ -222,6 +222,9 @@ std::string getStringFromJson(Document& doc,
 faabric::Message jsonToMessage(const std::string& jsonIn)
 {
     PROF_START(jsonDecode)
+    auto logger = faabric::util::getLogger();
+
+    logger->info(jsonIn.c_str());
 
     MemoryStream ms(jsonIn.c_str(), jsonIn.size());
     Document d;
@@ -232,7 +235,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     // Set the message type
     int msgType = getIntFromJson(d, "type", 0);
     if (!faabric::Message::MessageType_IsValid(msgType)) {
-        auto logger = faabric::util::getLogger();
         logger->error("Bad message type: {}", msgType);
         throw std::runtime_error("Invalid message type");
     }
@@ -265,8 +267,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
 
     msg.set_resultkey(getStringFromJson(d, "result_key", ""));
     msg.set_statuskey(getStringFromJson(d, "status_key", ""));
-
-    msg.set_type(faabric::Message_MessageType_CALL);
 
     msg.set_ismpi(getBoolFromJson(d, "mpi", false));
     msg.set_mpiworldid(getIntFromJson(d, "mpi_world_id", 0));
