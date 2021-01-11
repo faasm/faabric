@@ -80,7 +80,7 @@ class Scheduler
     std::string getThisHost();
 
     void broadcastFlush(const faabric::Message& msg);
-    
+
     void flushLocalNodes(const faabric::Message& msg);
 
     void preflightPythonCall();

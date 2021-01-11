@@ -20,24 +20,6 @@ FaabricExecutor::FaabricExecutor(int threadIdxIn)
     currentQueue = scheduler.getBindQueue();
 }
 
-void FaabricExecutor::flush()
-{
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-    logger->warn("Flushing host {}",
-                 faabric::util::getSystemConfig().endpointHost);
-
-    // Clear out any cached state
-    faabric::state::getGlobalState().forceClearAll(false);
-
-    // Reset scheduler
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.clear();
-    sch.addHostToGlobalSet();
-
-    // Hook
-    this->postFlush();
-}
-
 void FaabricExecutor::bindToFunction(const faabric::Message& msg, bool force)
 {
     // If already bound, will be an error, unless forced to rebind to the same
@@ -217,6 +199,6 @@ void FaabricExecutor::preFinishCall(faabric::Message& call,
 
 void FaabricExecutor::postFinish() {}
 
-void FaabricExecutor::postFlush() {}
+void FaabricExecutor::flush() {}
 
 }

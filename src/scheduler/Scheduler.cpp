@@ -2,6 +2,7 @@
 
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/state/State.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/random.h>
 #include <faabric/util/timing.h>
@@ -575,10 +576,29 @@ void Scheduler::broadcastFlush(const faabric::Message& msg)
 
 void Scheduler::flushLocalNodes(const faabric::Message& msg)
 {
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    logger->warn("Flushing host {}",
+                 faabric::util::getSystemConfig().endpointHost);
+
+    // Clear out any cached state
+    faabric::state::getGlobalState().forceClearAll(false);
+
+    // Reset the scheduler
+    clear();
+    addHostToGlobalSet();
+
     // Get count of warm executors locally
     int nLocalWarm = getFunctionWarmNodeCount(msg);
 
-    //
+    // Schedule all the flush messages
+    for (int i = 0; i < nLocalWarm; i++) {
+        faabric::Message flushMessage;
+        flushMessage.set_user(msg.user());
+        flushMessage.set_function(msg.function());
+        flushMessage.set_isflushrequest(true);
+
+        enqueueMessage(flushMessage);
+    }
 }
 
 void Scheduler::preflightPythonCall()
