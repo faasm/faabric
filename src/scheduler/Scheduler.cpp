@@ -67,6 +67,12 @@ void Scheduler::shutdown()
     // Clear out locally first
     flushLocally();
 
+    // Records
+    setTestMode(false);
+    recordedMessagesAll.clear();
+    recordedMessagesLocal.clear();
+    recordedMessagesShared.clear();
+
     // Remove this host
     this->removeHostFromGlobalSet();
 }
@@ -558,7 +564,7 @@ void Scheduler::flushLocally()
 
     // Remove this host from all the global warm sets
     for (const auto& iter : queueMap) {
-        this->removeHostFromWarmSet(iter.first);
+        removeHostFromWarmSet(iter.first);
     }
 
     // Ensure host is set correctly
@@ -594,12 +600,6 @@ void Scheduler::flushLocally()
     inFlightCountMap.clear();
     opinionMap.clear();
     _hasHostCapacity = true;
-
-    // Records
-    setTestMode(false);
-    recordedMessagesAll.clear();
-    recordedMessagesLocal.clear();
-    recordedMessagesShared.clear();
 }
 
 void Scheduler::preflightPythonCall()

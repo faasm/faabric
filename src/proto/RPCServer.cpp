@@ -20,14 +20,14 @@ void RPCServer::start(bool background)
     _isBackground = background;
 
     if (background) {
-        logger->debug("Starting state server in background thread");
+        logger->debug("Starting RPC server in background thread");
         // Run the serving thread in the background. This is necessary to
         // be able to kill it from the main thread.
         servingThread =
           std::thread([this, serverAddr] { doStart(serverAddr); });
 
     } else {
-        logger->debug("Starting state server in this thread");
+        logger->debug("Starting RPC server in this thread");
         doStart(serverAddr);
     }
 }
@@ -36,15 +36,15 @@ void RPCServer::stop()
 {
     const std::shared_ptr<spdlog::logger>& logger = getLogger();
     if (!_started) {
-        logger->info("Not stopping state server, never started");
+        logger->info("Not stopping RPC server, never started");
         return;
     }
 
-    logger->info("State server stopping");
+    logger->info("RPC server stopping");
     server->Shutdown();
 
     if (_isBackground) {
-        logger->debug("Waiting for state server background thread");
+        logger->debug("Waiting for server background thread");
         if (servingThread.joinable()) {
             servingThread.join();
         }

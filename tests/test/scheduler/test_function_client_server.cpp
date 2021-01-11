@@ -1,5 +1,8 @@
 #include <catch.hpp>
 
+#include "faabric/redis/Redis.h"
+#include "faabric/scheduler/Scheduler.h"
+#include "faabric/util/func.h"
 #include "faabric_utils.h"
 
 #include <faabric/scheduler/FunctionCallClient.h>
@@ -101,5 +104,51 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
 
     // Stop the server
     server.stop();
+}
+
+TEST_CASE("Test sending flush message", "[scheduler]")
+{
+    // Start the server
+    ServerContext serverContext;
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Execute a function
+    faabric::Message msg = faabric::util::messageFactory("demo", "hello");
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.callFunction(msg);
+
+    // Empty the queued messages
+    auto bindQueue = sch.getBindQueue();
+    auto functionQueue = sch.getFunctionQueue(msg);
+    bindQueue->dequeue();
+    functionQueue->dequeue();
+
+    // Check the host is present before
+    std::string thisHost = sch.getThisHost();
+    std::string warmSetName = sch.getFunctionWarmSetName(msg);
+    faabric::redis::Redis& redis = faabric::redis::Redis::getQueue();
+    REQUIRE(redis.sismember(warmSetName, thisHost));
+
+    // Background thread to get flush message
+    std::thread t([&functionQueue] {
+        faabric::Message msg = functionQueue->dequeue(1000);
+        REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
+    });
+
+    // Send flush message
+    FunctionCallClient cli(LOCALHOST);
+    cli.sendFlush();
+
+    // Wait for thread to get flush message
+    if (t.joinable()) {
+        t.join();
+    }
+
+    server.stop();
+
+    // Check host has now been removed
+    REQUIRE(!redis.sismember(warmSetName, thisHost));
 }
 }

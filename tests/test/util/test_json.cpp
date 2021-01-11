@@ -10,6 +10,7 @@ namespace tests {
 TEST_CASE("Test message to JSON round trip", "[util]")
 {
     faabric::Message msg;
+    msg.set_type(faabric::Message_MessageType_FLUSH);
     msg.set_user("user 1");
     msg.set_function("great function");
     msg.set_hops(34);
