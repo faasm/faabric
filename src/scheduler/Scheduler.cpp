@@ -553,26 +553,32 @@ void Scheduler::broadcastFlush(const faabric::Message& msg)
     std::string funcStr = faabric::util::funcToString(msg, false);
     const std::string& warmSetName = getFunctionWarmSetNameFromStr(funcStr);
     redis::Redis& redis = redis::Redis::getQueue();
-
     std::unordered_set<std::string> warmHosts = redis.smembers(warmSetName);
 
+    // Remove this host
+    warmHosts.erase(thisHost);
+
+    // Dispatch flush message to all other warm hosts
     faabric::Message newMessage;
     newMessage.set_user(msg.user());
     newMessage.set_function(msg.function());
     newMessage.set_isflushrequest(true);
 
-    // Broadcast the flush to all warm hosts
     for (auto& otherHost : warmHosts) {
         FunctionCallClient c(otherHost);
         c.sendFunctionFlush(newMessage);
     }
 
-    // Send flush messages locally
+    // Perform flush locally
     flushLocalNodes(msg);
 }
 
-void Scheduler::flushLocalNodes(const faabric::Message& msg) {
+void Scheduler::flushLocalNodes(const faabric::Message& msg)
+{
+    // Get count of warm executors locally
+    int nLocalWarm = getFunctionWarmNodeCount(msg);
 
+    //
 }
 
 void Scheduler::preflightPythonCall()

@@ -59,7 +59,8 @@ Status FunctionCallServer::FlushFunction(
 {
     auto logger = faabric::util::getLogger();
 
-
+    // Flush locally
+    scheduler.flushLocalNodes(*request);
 
     return Status::OK;
 }
