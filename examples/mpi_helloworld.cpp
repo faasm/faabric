@@ -5,9 +5,11 @@
 #include <faabric/util/logging.h>
 
 #include <faabric/mpi/mpi.h>
+#include <faabric/mpi/MpiExecutor.h>
 
 #include <unistd.h>
 
+#if 0
 #define FAABRIC_MPI_MAIN()
     using namespace faabric::executor;
 
@@ -27,6 +29,11 @@
         bool doExecute(faabric::Message& msg) override { 
             setExecutingCall(&msg);
             return _execMpiFunc(&msg);
+        }
+
+        bool postFinishCall() override {
+            auto logger = faabric::util::getLogger();
+            logger->debug("Finished MPI execution.");
         }
 
         faabric::Message* getExecutingCall() { return m_executingCall; }
@@ -73,6 +80,9 @@
     }
 
     bool _execMpiFunc(const faabric::Message* msg)
+#endif
+
+using namespace faabric::executor;
 
 FAABRIC_MPI_MAIN()
 {

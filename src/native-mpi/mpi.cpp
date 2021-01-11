@@ -18,10 +18,10 @@ int MPI_Init(int* argc, char*** argv)
     faabric::Message* call = getExecutingCall();
 
     if (call->mpirank() <= 0) {
-        logger->debug("S - MPI_Init (create) {} {}", a, b);
+        logger->debug("S - MPI_Init (create) {} {}");
         executingContext.createWorld(*call);
     } else {
-        logger->debug("S - MPI_Init (join) {} {}", a, b);
+        logger->debug("S - MPI_Init (join) {} {}");
         executingContext.joinWorld(*call);
     }
 
