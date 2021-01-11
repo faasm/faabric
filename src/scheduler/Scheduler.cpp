@@ -576,8 +576,9 @@ void Scheduler::flushLocally()
             continue;
         }
 
-        // Get the queue
+        // Clear any existing messages in the queue
         std::shared_ptr<InMemoryMessageQueue> queue = queueMap[p.first];
+        queue->drain();
 
         // Dispatch a flush message for each warm node
         for (int i = 0; i < p.second; i++) {
@@ -589,7 +590,7 @@ void Scheduler::flushLocally()
 
     // Wait for flush messages to be consumed, then clear the queues
     for (const auto& p : queueMap) {
-        p.second->waitToEmpty(FLUSH_TIMEOUT_MS);
+        p.second->waitToDrain(FLUSH_TIMEOUT_MS);
         p.second->reset();
     }
     queueMap.clear();

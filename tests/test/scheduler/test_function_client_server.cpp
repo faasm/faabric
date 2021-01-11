@@ -17,6 +17,8 @@ using namespace scheduler;
 namespace tests {
 TEST_CASE("Test sending function call", "[scheduler]")
 {
+    cleanFaabric();
+
     // Start the server
     ServerContext serverContext;
     FunctionCallServer server;
@@ -53,6 +55,8 @@ TEST_CASE("Test sending function call", "[scheduler]")
 
 TEST_CASE("Test sending MPI message", "[scheduler]")
 {
+    cleanFaabric();
+
     // Start the server
     ServerContext serverContext;
     FunctionCallServer server;
@@ -108,32 +112,50 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
 
 TEST_CASE("Test sending flush message", "[scheduler]")
 {
+    cleanFaabric();
+
     // Start the server
     ServerContext serverContext;
     FunctionCallServer server;
     server.start();
     usleep(1000 * 100);
 
-    // Execute a function
-    faabric::Message msg = faabric::util::messageFactory("demo", "hello");
+    // Execute a couple of functions
+    faabric::Message msgA = faabric::util::messageFactory("demo", "foo");
+    faabric::Message msgB = faabric::util::messageFactory("demo", "bar");
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.callFunction(msg);
+    sch.callFunction(msgA);
+    sch.callFunction(msgB);
 
     // Empty the queued messages
     auto bindQueue = sch.getBindQueue();
-    auto functionQueue = sch.getFunctionQueue(msg);
+    auto functionQueueA = sch.getFunctionQueue(msgA);
+    auto functionQueueB = sch.getFunctionQueue(msgB);
     bindQueue->dequeue();
-    functionQueue->dequeue();
+    bindQueue->dequeue();
+    functionQueueA->dequeue();
+    functionQueueB->dequeue();
 
-    // Check the host is present before
+    // Check the scheduler is set up
+    REQUIRE(sch.getFunctionWarmNodeCount(msgA) == 1);
+    REQUIRE(sch.getFunctionWarmNodeCount(msgB) == 1);
+
     std::string thisHost = sch.getThisHost();
-    std::string warmSetName = sch.getFunctionWarmSetName(msg);
+    std::string warmSetNameA = sch.getFunctionWarmSetName(msgA);
+    std::string warmSetNameB = sch.getFunctionWarmSetName(msgB);
     faabric::redis::Redis& redis = faabric::redis::Redis::getQueue();
-    REQUIRE(redis.sismember(warmSetName, thisHost));
 
-    // Background thread to get flush message
-    std::thread t([&functionQueue] {
-        faabric::Message msg = functionQueue->dequeue(1000);
+    REQUIRE(redis.sismember(warmSetNameA, thisHost));
+    REQUIRE(redis.sismember(warmSetNameB, thisHost));
+
+    // Background threads to get flush messages
+    std::thread tA([&functionQueueA] {
+        faabric::Message msg = functionQueueA->dequeue(1000);
+        REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
+    });
+
+    std::thread tB([&functionQueueB] {
+        faabric::Message msg = functionQueueB->dequeue(1000);
         REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
     });
 
@@ -142,13 +164,21 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     cli.sendFlush();
 
     // Wait for thread to get flush message
-    if (t.joinable()) {
-        t.join();
+    if (tA.joinable()) {
+        tA.join();
+    }
+
+    if (tB.joinable()) {
+        tB.join();
     }
 
     server.stop();
 
-    // Check host has now been removed
-    REQUIRE(!redis.sismember(warmSetName, thisHost));
+    // Check the scheduler has been flushed
+    REQUIRE(sch.getFunctionWarmNodeCount(msgA) == 0);
+    REQUIRE(sch.getFunctionWarmNodeCount(msgB) == 0);
+
+    REQUIRE(!redis.sismember(warmSetNameA, thisHost));
+    REQUIRE(!redis.sismember(warmSetNameB, thisHost));
 }
 }

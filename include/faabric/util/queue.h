@@ -58,7 +58,7 @@ class Queue
 
     T dequeue(long timeoutMs = 0) { return doDequeue(timeoutMs, true); }
 
-    void waitToEmpty(long timeoutMs)
+    void waitToDrain(long timeoutMs)
     {
         UniqueLock lock(enqueueMutex);
 
@@ -74,6 +74,15 @@ class Queue
             } else {
                 emptyNotifier.wait(lock);
             }
+        }
+    }
+
+    void drain()
+    {
+        UniqueLock lock(enqueueMutex);
+
+        while (!mq.empty()) {
+            mq.pop();
         }
     }
 

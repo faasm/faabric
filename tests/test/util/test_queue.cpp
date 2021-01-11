@@ -34,7 +34,7 @@ TEST_CASE("Test wait for empty queue", "[util]")
 {
     // Just need to check this doesn't fail
     IntQueue q;
-    q.waitToEmpty(100);
+    q.waitToDrain(100);
 }
 
 TEST_CASE("Test wait for queue with elements", "[util]")
@@ -59,7 +59,7 @@ TEST_CASE("Test wait for queue with elements", "[util]")
         }
     });
 
-    q.waitToEmpty(2000);
+    q.waitToDrain(2000);
 
     if (t.joinable()) {
         t.join();
