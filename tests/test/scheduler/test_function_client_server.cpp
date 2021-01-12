@@ -120,6 +120,13 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     server.start();
     usleep(1000 * 100);
 
+    // Set up some state
+    faabric::state::State& state = faabric::state::getGlobalState();
+    state.getKV("demo", "blah", 10);
+    state.getKV("other", "foo", 30);
+
+    REQUIRE(state.getKVCount() == 2);
+
     // Execute a couple of functions
     faabric::Message msgA = faabric::util::messageFactory("demo", "foo");
     faabric::Message msgB = faabric::util::messageFactory("demo", "bar");
@@ -180,5 +187,8 @@ TEST_CASE("Test sending flush message", "[scheduler]")
 
     REQUIRE(!redis.sismember(warmSetNameA, thisHost));
     REQUIRE(!redis.sismember(warmSetNameB, thisHost));
+
+    // Check state has been cleared
+    REQUIRE(state.getKVCount() == 0);
 }
 }
