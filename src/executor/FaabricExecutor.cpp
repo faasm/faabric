@@ -1,3 +1,4 @@
+#include "faabric/util/queue.h"
 #include <faabric/executor/FaabricExecutor.h>
 
 #include <faabric/state/State.h>
@@ -106,6 +107,10 @@ void FaabricExecutor::run()
             if (!errorMessage.empty()) {
                 break;
             }
+        } catch (faabric::util::ExecutorFinishedException& e) {
+            // Executor has notified us it's finished
+            logger->debug("{} finished", this->id);
+            break;
         } catch (faabric::util::QueueTimeoutException& e) {
             // At this point we've received no message, so die off
             logger->debug("{} got no messages. Finishing", this->id);
