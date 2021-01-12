@@ -598,6 +598,7 @@ void Scheduler::flushLocally()
 
     // Wait for flush messages to be consumed, then clear the queues
     for (const auto& p : queueMap) {
+        logger->debug("Waiting for {} to drain on flush", p.first);
         p.second->waitToDrain(FLUSH_TIMEOUT_MS);
         p.second->reset();
     }
