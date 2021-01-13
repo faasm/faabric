@@ -11,11 +11,22 @@ Endpoint::Endpoint(int portIn, int threadCountIn)
   , threadCount(threadCountIn)
 {}
 
-void Endpoint::start()
+void Endpoint::start(bool background)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    auto logger = faabric::util::getLogger();
 
-    logger->info("Starting HTTP endpoint");
+    if (background) {
+        logger->debug("Starting HTTP endpoint in background thread");
+        servingThread = std::thread([this] { doStart(); });
+    } else {
+        logger->debug("Starting HTTP endpoint in this thread");
+        doStart();
+    }
+}
+
+void Endpoint::doStart()
+{
+    auto logger = faabric::util::getLogger();
 
     // Set up signal handler
     sigset_t signals;
