@@ -8,7 +8,7 @@
 
 using namespace faabric::executor;
 
-static thread_local faabric::scheduler::MpiContext executingContext;
+static faabric::scheduler::MpiContext executingContext;
 
 faabric::Message* getExecutingCall()
 {
@@ -29,10 +29,10 @@ int MPI_Init(int* argc, char*** argv)
     faabric::Message* call = getExecutingCall();
 
     if (call->mpirank() <= 0) {
-        logger->debug("S - MPI_Init (create) {} {}");
+        logger->debug("S - MPI_Init (create)");
         executingContext.createWorld(*call);
     } else {
-        logger->debug("S - MPI_Init (join) {} {}");
+        logger->debug("S - MPI_Init (join)");
         executingContext.joinWorld(*call);
     }
 
@@ -48,7 +48,8 @@ int MPI_Comm_rank(MPI_Comm comm, int* rank)
     auto logger = faabric::util::getLogger();
     logger->debug("MPI_Comm_rank");
 
-    *rank = 1337;
+    faabric::Message* call = getExecutingCall();
+    *rank = call->mpirank();
 
     return MPI_SUCCESS;
 }
@@ -58,7 +59,8 @@ int MPI_Comm_size(MPI_Comm comm, int* size)
     auto logger = faabric::util::getLogger();
     logger->debug("MPI_Comm_size");
 
-    *size = 9337;
+    faabric::Message* call = getExecutingCall();
+    *size = call->mpiworldsize();
 
     return MPI_SUCCESS;
 }

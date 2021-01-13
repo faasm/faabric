@@ -1,19 +1,24 @@
 #include <faabric/mpi-native/MpiExecutor.h>
 
+#include <unistd.h>
+
 namespace faabric::executor {
+faabric::Message* executingCall;
+thread_local std::function<bool(faabric::Message*)> mpiFunc;
+
 MpiExecutor::MpiExecutor()
   : FaabricExecutor(0){};
 
 bool MpiExecutor::doExecute(faabric::Message& msg)
 {
     auto logger = faabric::util::getLogger();
-    // TODO sanity check mpi message
-    //faabric::Message& faabric::executor::executingCall = &msg;
+
     faabric::executor::executingCall = &msg;
 
-    // Execute MPI code
-    bool success = _execMpiFunc(&msg);
-    return success;
+    // TODO delete 
+    sleep(10);
+
+    return true;
 }
 
 void MpiExecutor::postFinishCall()
@@ -55,6 +60,6 @@ void SingletonPool::startPool()
     this->startThreadPool();
     this->startStateServer();
     this->startFunctionCallServer();
-    this->endpoint.start();
+    this->endpoint.start(true);
 }
 }

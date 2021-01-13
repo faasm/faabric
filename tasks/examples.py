@@ -103,7 +103,7 @@ def execute_mpi(ctx, example, np=MPI_DEFAULT_WORLD_SIZE):
     # running /bin/cli.sh whilst having a scaled out client will stop & remove
     # them as well.
     scale_up_cmd = "docker-compose up -d --scale {}={} --no-recreate".format(
-        FAABRIC_SERVICE_NAME, np - 1
+        FAABRIC_SERVICE_NAME, np
     )
     run(scale_up_cmd, shell=True, check=True)
 

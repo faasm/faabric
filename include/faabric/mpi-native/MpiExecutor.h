@@ -15,15 +15,14 @@ class MpiExecutor final : public faabric::executor::FaabricExecutor
     bool doExecute(faabric::Message& msg) override;
 
     void postFinishCall() override;
-
-  private:
-    faabric::Message* m_executingCall;
 };
 
 class SingletonPool : public faabric::executor::FaabricPool
 {
   public:
-    explicit SingletonPool();
+    SingletonPool();
+
+    ~SingletonPool();
 
     void startPool();
 
@@ -38,7 +37,5 @@ class SingletonPool : public faabric::executor::FaabricPool
     faabric::endpoint::FaabricEndpoint endpoint;
 };
 
-faabric::Message* getExecutingCall();
+extern faabric::Message* executingCall;
 }
-
-bool _execMpiFunc(const faabric::Message* msg);
