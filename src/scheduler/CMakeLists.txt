@@ -13,4 +13,4 @@ set(LIB_FILES
 
 faabric_lib(scheduler "${LIB_FILES}")
 
-target_link_libraries(scheduler faabricmpi redis)
+target_link_libraries(scheduler state faabricmpi redis)

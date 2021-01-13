@@ -25,7 +25,7 @@ class FaabricExecutor
 
     void finish();
 
-    void flush();
+    virtual void flush();
 
     std::string id;
 
@@ -41,8 +41,6 @@ class FaabricExecutor
                                const std::string& errorMsg);
 
     virtual void postFinish();
-
-    virtual void postFlush();
 
     bool _isBound = false;
 

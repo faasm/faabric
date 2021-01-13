@@ -1,5 +1,6 @@
 #include <faabric/scheduler/Scheduler.h>
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/util/logging.h>
@@ -7,6 +8,7 @@
 #include <faabric/util/timing.h>
 
 #define CHAINED_SET_PREFIX "chained_"
+#define FLUSH_TIMEOUT_MS 10000
 
 using namespace faabric::util;
 
@@ -59,24 +61,22 @@ void Scheduler::removeHostFromWarmSet(const std::string& funcStr)
     redis.srem(warmSetName, thisHost);
 }
 
-void Scheduler::clear()
+void Scheduler::reset()
 {
     // Remove this host from all the global warm sets
     for (const auto& iter : queueMap) {
-        this->removeHostFromWarmSet(iter.first);
-    }
-
-    // Reset host
-    thisHost = faabric::util::getSystemConfig().endpointHost;
-
-    // Clear all queues
-    for (const auto& p : queueMap) {
-        p.second->reset();
+        removeHostFromWarmSet(iter.first);
+        iter.second->reset();
     }
     queueMap.clear();
+
+    // Ensure host is set correctly
+    thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    // Clear queues
     bindQueue->reset();
 
-    // Reset all state
+    // Reset scheduler state
     nodeCountMap.clear();
     inFlightCountMap.clear();
     opinionMap.clear();
@@ -87,6 +87,11 @@ void Scheduler::clear()
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
+}
+
+void Scheduler::shutdown()
+{
+    reset();
 
     this->removeHostFromGlobalSet();
 }
@@ -186,7 +191,7 @@ std::shared_ptr<InMemoryMessageQueue> Scheduler::getBindQueue()
 
 Scheduler& getScheduler()
 {
-    // This is *global* and must be shared across nodes
+    // Note that this ref is shared between all nodes on the given host
     static Scheduler scheduler;
     return scheduler;
 }
@@ -547,46 +552,56 @@ std::string Scheduler::getThisHost()
     return thisHost;
 }
 
-void Scheduler::broadcastFlush(const faabric::Message& msg)
+void Scheduler::broadcastFlush()
 {
+    // Get all hosts
     redis::Redis& redis = redis::Redis::getQueue();
-    std::unordered_set<std::string> allOptions =
+    std::unordered_set<std::string> allHosts =
       redis.smembers(AVAILABLE_HOST_SET);
 
-    faabric::Message newMessage;
-    newMessage.set_user(msg.user());
-    newMessage.set_function(msg.function());
-    newMessage.set_isflushrequest(true);
+    // Remove this host from the set
+    allHosts.erase(thisHost);
 
-    // This is pretty inefficient but flush isn't a particularly important
-    // operation
-    for (auto& otherHost : allOptions) {
+    // Dispatch flush message to all other hosts
+    for (auto& otherHost : allHosts) {
         FunctionCallClient c(otherHost);
-        c.shareFunctionCall(newMessage);
+        c.sendFlush();
     }
+
+    // Perform flush locally
+    flushLocally();
 }
 
-void Scheduler::preflightPythonCall()
+void Scheduler::flushLocally()
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    logger->info("Flushing host {}",
+                 faabric::util::getSystemConfig().endpointHost);
 
-    if (conf.pythonPreload != "on") {
-        logger->info("Not preloading python runtime");
-        return;
+    // Notify all warm nodes of flush
+    for (const auto& p : nodeCountMap) {
+        if (p.second == 0) {
+            continue;
+        }
+
+        // Clear any existing messages in the queue
+        std::shared_ptr<InMemoryMessageQueue> queue = queueMap[p.first];
+        queue->drain();
+
+        // Dispatch a flush message for each warm node
+        for (int i = 0; i < p.second; i++) {
+            faabric::Message msg;
+            msg.set_type(faabric::Message_MessageType_FLUSH);
+            queue->enqueue(msg);
+        }
     }
 
-    logger->info("Preparing python runtime");
-
-    faabric::Message msg =
-      faabric::util::messageFactory(PYTHON_USER, PYTHON_FUNC);
-    msg.set_ispython(true);
-    msg.set_pythonuser("python");
-    msg.set_pythonfunction("noop");
-    faabric::util::setMessageId(msg);
-
-    callFunction(msg, true);
-
-    logger->info("Python runtime prepared");
+    // Wait for flush messages to be consumed, then clear the queues
+    for (const auto& p : queueMap) {
+        logger->debug("Waiting for {} to drain on flush", p.first);
+        p.second->waitToDrain(FLUSH_TIMEOUT_MS);
+        p.second->reset();
+    }
 }
 
 void Scheduler::setFunctionResult(faabric::Message& msg)

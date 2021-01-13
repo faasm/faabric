@@ -51,7 +51,6 @@ TEST_CASE("Test protobuf classes", "[proto]")
     funcCall.set_ispython(true);
     funcCall.set_istypescript(true);
     funcCall.set_isstatusrequest(true);
-    funcCall.set_isflushrequest(true);
 
     funcCall.set_type(faabric::Message_MessageType_BIND);
 
@@ -82,7 +81,6 @@ TEST_CASE("Test protobuf classes", "[proto]")
     REQUIRE(newFuncCall.ispython());
     REQUIRE(newFuncCall.istypescript());
     REQUIRE(newFuncCall.isstatusrequest());
-    REQUIRE(newFuncCall.isflushrequest());
 
     REQUIRE(cmdline == newFuncCall.cmdline());
 

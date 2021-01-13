@@ -35,8 +35,8 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
     REQUIRE(redis.sismember(funcSet, thisHost));
 
-    // Run clear-up
-    s.clear();
+    // Run shutdown
+    s.shutdown();
 
     // After clear-up has run this host should no longer be part of either set
     REQUIRE(!redis.sismember(AVAILABLE_HOST_SET, thisHost));

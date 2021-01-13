@@ -1,3 +1,4 @@
+#include "faabric/util/queue.h"
 #include <faabric/executor/FaabricExecutor.h>
 
 #include <faabric/state/State.h>
@@ -18,24 +19,6 @@ FaabricExecutor::FaabricExecutor(int threadIdxIn)
 
     // Listen to bind queue by default
     currentQueue = scheduler.getBindQueue();
-}
-
-void FaabricExecutor::flush()
-{
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-    logger->warn("Flushing host {}",
-                 faabric::util::getSystemConfig().endpointHost);
-
-    // Clear out any cached state
-    faabric::state::getGlobalState().forceClearAll(false);
-
-    // Reset scheduler
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.clear();
-    sch.addHostToGlobalSet();
-
-    // Hook
-    this->postFlush();
 }
 
 void FaabricExecutor::bindToFunction(const faabric::Message& msg, bool force)
@@ -124,6 +107,10 @@ void FaabricExecutor::run()
             if (!errorMessage.empty()) {
                 break;
             }
+        } catch (faabric::util::ExecutorFinishedException& e) {
+            // Executor has notified us it's finished
+            logger->debug("{} finished", this->id);
+            break;
         } catch (faabric::util::QueueTimeoutException& e) {
             // At this point we've received no message, so die off
             logger->debug("{} got no messages. Finishing", this->id);
@@ -150,7 +137,7 @@ std::string FaabricExecutor::processNextMessage()
     faabric::Message msg = currentQueue->dequeue(timeoutMs);
 
     std::string errorMessage;
-    if (msg.isflushrequest()) {
+    if (msg.type() == faabric::Message_MessageType_FLUSH) {
         flush();
 
     } else if (msg.type() == faabric::Message_MessageType_BIND) {
@@ -217,6 +204,6 @@ void FaabricExecutor::preFinishCall(faabric::Message& call,
 
 void FaabricExecutor::postFinish() {}
 
-void FaabricExecutor::postFlush() {}
+void FaabricExecutor::flush() {}
 
 }

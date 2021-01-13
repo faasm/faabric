@@ -14,6 +14,14 @@ class QueueTimeoutException : public faabric::util::FaabricException
     {}
 };
 
+class ExecutorFinishedException : public faabric::util::FaabricException
+{
+  public:
+    explicit ExecutorFinishedException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
+
 template<typename T>
 class Queue
 {
@@ -24,7 +32,7 @@ class Queue
 
         mq.push(value);
 
-        cv.notify_one();
+        enqueueNotifier.notify_one();
     }
 
     T doDequeue(long timeoutMs, bool pop)
@@ -33,21 +41,22 @@ class Queue
 
         while (mq.empty()) {
             if (timeoutMs > 0) {
-                std::cv_status returnVal =
-                  cv.wait_for(lock, std::chrono::milliseconds(timeoutMs));
+                std::cv_status returnVal = enqueueNotifier.wait_for(
+                  lock, std::chrono::milliseconds(timeoutMs));
 
                 // Work out if this has returned due to timeout expiring
                 if (returnVal == std::cv_status::timeout) {
-                    throw QueueTimeoutException("Queue timeout");
+                    throw QueueTimeoutException("Timeout waiting for dequeue");
                 }
             } else {
-                cv.wait(lock);
+                enqueueNotifier.wait(lock);
             }
         }
 
         T value = mq.front();
         if (pop) {
             mq.pop();
+            emptyNotifier.notify_one();
         }
 
         return value;
@@ -56,6 +65,34 @@ class Queue
     T peek(long timeoutMs = 0) { return doDequeue(timeoutMs, false); }
 
     T dequeue(long timeoutMs = 0) { return doDequeue(timeoutMs, true); }
+
+    void waitToDrain(long timeoutMs)
+    {
+        UniqueLock lock(mx);
+
+        while (!mq.empty()) {
+            if (timeoutMs > 0) {
+                std::cv_status returnVal = emptyNotifier.wait_for(
+                  lock, std::chrono::milliseconds(timeoutMs));
+
+                // Work out if this has returned due to timeout expiring
+                if (returnVal == std::cv_status::timeout) {
+                    throw QueueTimeoutException("Timeout waiting for empty");
+                }
+            } else {
+                emptyNotifier.wait(lock);
+            }
+        }
+    }
+
+    void drain()
+    {
+        UniqueLock lock(mx);
+
+        while (!mq.empty()) {
+            mq.pop();
+        }
+    }
 
     long size()
     {
@@ -73,7 +110,8 @@ class Queue
 
   private:
     std::queue<T> mq;
-    std::condition_variable cv;
+    std::condition_variable enqueueNotifier;
+    std::condition_variable emptyNotifier;
     std::mutex mx;
 };
 

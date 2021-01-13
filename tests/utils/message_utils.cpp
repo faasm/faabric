@@ -7,6 +7,7 @@ void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB)
 {
     REQUIRE(msgA.id() == msgB.id());
+    REQUIRE(msgA.type() == msgB.type());
 
     REQUIRE(msgA.user() == msgB.user());
     REQUIRE(msgA.function() == msgB.function());
@@ -27,7 +28,6 @@ void checkMessageEquality(const faabric::Message& msgA,
     REQUIRE(msgA.istypescript() == msgB.istypescript());
     REQUIRE(msgA.isstatusrequest() == msgB.isstatusrequest());
     REQUIRE(msgA.isexecgraphrequest() == msgB.isexecgraphrequest());
-    REQUIRE(msgA.isflushrequest() == msgB.isflushrequest());
 
     REQUIRE(msgA.returnvalue() == msgB.returnvalue());
 
@@ -36,7 +36,6 @@ void checkMessageEquality(const faabric::Message& msgA,
 
     REQUIRE(msgA.resultkey() == msgB.resultkey());
     REQUIRE(msgA.statuskey() == msgB.statuskey());
-    REQUIRE(msgA.type() == msgB.type());
 
     REQUIRE(msgA.ismpi() == msgB.ismpi());
     REQUIRE(msgA.mpiworldid() == msgB.mpiworldid());

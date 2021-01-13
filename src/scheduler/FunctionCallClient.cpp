@@ -20,6 +20,15 @@ void FunctionCallClient::shareFunctionCall(const faabric::Message& call)
     CHECK_RPC("function_share", stub->ShareFunction(&context, call, &response));
 }
 
+void FunctionCallClient::sendFlush()
+{
+    ClientContext context;
+
+    faabric::Message call;
+    faabric::FunctionStatusResponse response;
+    CHECK_RPC("function_flush", stub->Flush(&context, call, &response));
+}
+
 void FunctionCallClient::sendMPIMessage(const faabric::MPIMessage& msg)
 {
     ClientContext context;

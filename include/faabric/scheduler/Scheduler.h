@@ -46,7 +46,9 @@ class Scheduler
 
     std::string getFunctionWarmSetNameFromStr(const std::string& funcStr);
 
-    void clear();
+    void reset();
+
+    void shutdown();
 
     long getFunctionWarmNodeCount(const faabric::Message& msg);
 
@@ -79,9 +81,9 @@ class Scheduler
 
     std::string getThisHost();
 
-    void broadcastFlush(const faabric::Message& msg);
+    void broadcastFlush();
 
-    void preflightPythonCall();
+    void flushLocally();
 
     std::string getMessageStatus(unsigned int messageId);
 

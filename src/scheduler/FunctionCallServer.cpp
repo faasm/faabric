@@ -1,6 +1,6 @@
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
-
+#include <faabric/state/State.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
@@ -48,6 +48,24 @@ Status FunctionCallServer::ShareFunction(
                   msg.scheduledhost());
 
     scheduler.callFunction(msg);
+
+    return Status::OK;
+}
+
+Status FunctionCallServer::Flush(ServerContext* context,
+                                 const faabric::Message* request,
+                                 faabric::FunctionStatusResponse* response)
+{
+    auto logger = faabric::util::getLogger();
+
+    // Clear out any cached state
+    faabric::state::getGlobalState().forceClearAll(false);
+
+    // Clear the scheduler
+    scheduler.flushLocally();
+
+    // Reset the scheduler
+    scheduler.reset();
 
     return Status::OK;
 }

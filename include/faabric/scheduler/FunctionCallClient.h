@@ -26,6 +26,8 @@ class FunctionCallClient
 
     void shareFunctionCall(const faabric::Message& call);
 
+    void sendFlush();
+
     void sendMPIMessage(const faabric::MPIMessage& msg);
 };
 }
