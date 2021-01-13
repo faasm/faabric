@@ -1,5 +1,5 @@
 #include <faabric/mpi/mpi.h>
-#include <faabric/mpi/MpiExecutor.h>
+#include <faabric/mpi-native/MpiExecutor.h>
 
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorld.h>
@@ -9,6 +9,11 @@
 using namespace faabric::executor;
 
 static thread_local faabric::scheduler::MpiContext executingContext;
+
+faabric::Message* getExecutingCall()
+{
+    return faabric::executor::executingCall;
+}
 
 faabric::scheduler::MpiWorld& getExecutingWorld()
 {

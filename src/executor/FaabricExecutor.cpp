@@ -91,6 +91,9 @@ void FaabricExecutor::finishCall(faabric::Message& msg,
 
     // Increment the execution counter
     executionCount++;
+
+    // Hook
+    this->postFinishCall();
 }
 
 void FaabricExecutor::run()
@@ -201,6 +204,8 @@ void FaabricExecutor::preFinishCall(faabric::Message& call,
                                     bool success,
                                     const std::string& errorMsg)
 {}
+
+void FaabricExecutor::postFinishCall() {}
 
 void FaabricExecutor::postFinish() {}
 

@@ -1,4 +1,4 @@
-#include <faabric/mpi/MpiExecutor.h>
+#include <faabric/mpi-native/MpiExecutor.h>
 
 namespace faabric::executor {
 MpiExecutor::MpiExecutor()
@@ -8,7 +8,8 @@ bool MpiExecutor::doExecute(faabric::Message& msg)
 {
     auto logger = faabric::util::getLogger();
     // TODO sanity check mpi message
-    this->m_executingCall = &msg;
+    //faabric::Message& faabric::executor::executingCall = &msg;
+    faabric::executor::executingCall = &msg;
 
     // Execute MPI code
     bool success = _execMpiFunc(&msg);
@@ -19,15 +20,10 @@ void MpiExecutor::postFinishCall()
 {
     auto logger = faabric::util::getLogger();
     logger->debug("Finished MPI execution.");
-    // TODO close everything
+    // TODO shutdown everything
 }
 
-faabric::Message* MpiExecutor::getExecutingCall()
-{
-    return this->m_executingCall;
-}
-
-SingletonPool()
+SingletonPool::SingletonPool()
   : FaabricPool(1)
   , scheduler(faabric::scheduler::getScheduler())
 {
@@ -43,16 +39,7 @@ SingletonPool()
     conf.print();
 }
 
-void SingletonPool::startPool()
-{
-    // Start singleton thread pool
-    this->startThreadPool();
-    this->startStateServer();
-    this->startFunctionCallServer();
-    this->endpoint.start();
-}
-
-~SingletonPool()
+SingletonPool::~SingletonPool()
 {
     auto logger = faabric::util::getLogger();
 
@@ -60,5 +47,14 @@ void SingletonPool::startPool()
     // scheduler.clear();
     this->shutdown();
     // TODO finish endpoint
+}
+
+void SingletonPool::startPool()
+{
+    // Start singleton thread pool
+    this->startThreadPool();
+    this->startStateServer();
+    this->startFunctionCallServer();
+    this->endpoint.start();
 }
 }
