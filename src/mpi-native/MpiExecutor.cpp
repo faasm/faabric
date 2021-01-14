@@ -4,7 +4,7 @@
 
 namespace faabric::executor {
 faabric::Message* executingCall;
-thread_local std::function<bool(faabric::Message*)> mpiFunc;
+bool mpiFunc();
 
 MpiExecutor::MpiExecutor()
   : FaabricExecutor(0){};
@@ -15,8 +15,11 @@ bool MpiExecutor::doExecute(faabric::Message& msg)
 
     faabric::executor::executingCall = &msg;
 
-    // TODO delete 
-    sleep(10);
+    logger->debug("executor binding to call");
+    logger->debug("msg: {}/{}", msg.user(), msg.function());
+    logger->debug("rank: {}", msg.mpirank());
+
+    bool success = mpiFunc();
 
     return true;
 }
@@ -54,12 +57,12 @@ SingletonPool::~SingletonPool()
     // TODO finish endpoint
 }
 
-void SingletonPool::startPool()
+void SingletonPool::startPool(bool background)
 {
     // Start singleton thread pool
     this->startThreadPool();
     this->startStateServer();
     this->startFunctionCallServer();
-    this->endpoint.start(true);
+    this->endpoint.start(background);
 }
 }

@@ -24,7 +24,7 @@ class SingletonPool : public faabric::executor::FaabricPool
 
     ~SingletonPool();
 
-    void startPool();
+    void startPool(bool background);
 
   protected:
     std::unique_ptr<FaabricExecutor> createExecutor(int threadIdx) override
@@ -38,4 +38,5 @@ class SingletonPool : public faabric::executor::FaabricPool
 };
 
 extern faabric::Message* executingCall;
+extern bool __attribute__((weak)) mpiFunc();
 }
