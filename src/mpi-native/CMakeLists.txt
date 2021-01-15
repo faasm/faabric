@@ -32,7 +32,7 @@ set_target_properties(faabricmpi_native
 target_link_libraries(faabricmpi_native 
     faabric
     faabricmpi
-    /build/faabric/install/lib/libpistache.so
+    pistache
 )
 
 install(TARGETS faabricmpi_native

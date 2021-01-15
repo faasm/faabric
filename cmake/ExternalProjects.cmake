@@ -30,6 +30,7 @@ set(PROTOC_EXE /usr/local/bin/protoc)
 set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)                                  
 
 # Pistache 
+link_directories(${CMAKE_INSTALL_PREFIX}/lib)
 ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/oktal/pistache.git"
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"

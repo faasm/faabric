@@ -28,7 +28,7 @@ inv dev.install faabricmpi_native --shared
 To run an example, run this command _outside_ the container:
 ```bash
 # The --clean flag re-creates _all_ containers
-inv mpi.execute mpi_helloworld --clean --np 5
+inv mpi.execute mpi_helloworld --np 5 --clean
 ```
 
 To clean the cluster and set the development one again:
