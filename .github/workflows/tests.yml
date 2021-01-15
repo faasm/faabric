@@ -105,6 +105,10 @@ jobs:
         run: inv dev.cc faabric --shared
       - name: "Install Faabric shared library"
         run: inv dev.install faabric --shared
+      - name: "Build MPI native library"
+        run: inv dev.cc faabricmpi_native --shared
+      - name: "Install MPI native library"
+        run: inv dev.install faabricmpi_native --shared
       - name: "Build examples"
         run: inv examples
       - name: "Run example to check"
