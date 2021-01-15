@@ -1,5 +1,5 @@
-#include <faabric/mpi/mpi.h>
 #include <faabric/mpi-native/MpiExecutor.h>
+#include <faabric/mpi/mpi.h>
 
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorld.h>
@@ -18,7 +18,8 @@ faabric::Message* getExecutingCall()
 faabric::scheduler::MpiWorld& getExecutingWorld()
 {
     int worldId = executingContext.getWorldId();
-    faabric::scheduler::MpiWorldRegistry& reg = faabric::scheduler::getMpiWorldRegistry();
+    faabric::scheduler::MpiWorldRegistry& reg =
+      faabric::scheduler::getMpiWorldRegistry();
     return reg.getOrInitialiseWorld(*getExecutingCall(), worldId);
 }
 

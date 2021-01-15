@@ -5,6 +5,7 @@
 #include <pistache/endpoint.h>
 #include <pistache/http.h>
 
+#include <memory>
 #include <thread>
 
 namespace faabric::endpoint {
@@ -15,15 +16,19 @@ class Endpoint
 
     Endpoint(int port, int threadCount);
 
-    void start(bool background = false);
+    void start(bool background = true);
 
     void doStart();
+
+    void stop();
 
     virtual std::shared_ptr<Pistache::Http::Handler> getHandler() = 0;
 
   private:
+    bool isBackground;
     int port = faabric::util::getSystemConfig().endpointPort;
     int threadCount = faabric::util::getSystemConfig().endpointNumThreads;
     std::thread servingThread;
+    std::unique_ptr<Pistache::Http::Endpoint> httpEndpoint;
 };
 }

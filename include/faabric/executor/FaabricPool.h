@@ -14,7 +14,7 @@ class FaabricPool
 
     void startFunctionCallServer();
 
-    void startThreadPool();
+    void startThreadPool(bool background = true);
 
     void startStateServer();
 

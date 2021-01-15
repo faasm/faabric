@@ -39,7 +39,7 @@ void FaabricPool::startStateServer()
     stateServer.start();
 }
 
-void FaabricPool::startThreadPool()
+void FaabricPool::startThreadPool(bool background)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     logger->info("Starting worker thread pool");
@@ -65,7 +65,11 @@ void FaabricPool::startThreadPool()
                   createExecutor(threadIdx);
 
                 // Worker will now run for a long time
-                executor.get()->run();
+                try {
+                    executor.get()->run();
+                } catch (faabric::util::ExecutorFinishedException& e) {
+                    this->_shutdown = true;
+                }
 
                 // Handle thread finishing
                 threadTokenPool.releaseToken(executor.get()->threadIdx);
@@ -82,6 +86,11 @@ void FaabricPool::startThreadPool()
 
         // Will die gracefully at this point
     });
+
+    // Make the call to startThreadPool blocking
+    if (!background) {
+        poolThread.join();
+    }
 }
 
 void FaabricPool::reset()

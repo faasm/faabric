@@ -46,6 +46,6 @@ inv mpi.clean --force
 
 If at some point you reach an unstable state of the cluster, stop it completely
 using:
-```basg
+```bash
 docker-compose down
 ```

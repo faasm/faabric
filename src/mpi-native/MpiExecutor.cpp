@@ -29,9 +29,12 @@ void MpiExecutor::postFinishCall()
 {
     auto logger = faabric::util::getLogger();
     logger->debug("Finished MPI execution.");
-    // TODO shutdown everything
-    // Stops function server, call server, and thread pool
-    // singletonPool->shutdown();
+    throw faabric::util::ExecutorFinishedException("Finished MPI Execution!");
+}
+
+void MpiExecutor::postFinish()
+{
+    throw faabric::util::ExecutorFinishedException("Finished MPI Execution!");
 }
 
 SingletonPool::SingletonPool()
@@ -46,6 +49,7 @@ SingletonPool::SingletonPool()
     faabric::redis::Redis::getState().ping();
 
     // Add host to the list of global sets and print configuration
+    logger->debug("Adding host to global set");
     this->scheduler.addHostToGlobalSet();
     conf.print();
 }
@@ -54,19 +58,21 @@ SingletonPool::~SingletonPool()
 {
     auto logger = faabric::util::getLogger();
 
-    logger->debug("Destructor for singleton pool.");
-    // scheduler.clear();
-    // Stops function server and call server
-    // this->shutdown();
-    // TODO finish endpoint
+    logger->debug("Destructor for singleton pool");
+    this->shutdown();
+    this->endpoint.stop();
+    this->scheduler.shutdown();
 }
 
 void SingletonPool::startPool(bool background)
 {
+    auto logger = faabric::util::getLogger();
+
     // Start singleton thread pool
-    this->startThreadPool();
+    logger->debug("Starting signleton thread pool");
     this->startStateServer();
     this->startFunctionCallServer();
-    this->endpoint.start(background);
+    this->endpoint.start();
+    this->startThreadPool(false);
 }
 }

@@ -14,6 +14,7 @@ Endpoint::Endpoint(int portIn, int threadCountIn)
 void Endpoint::start(bool background)
 {
     auto logger = faabric::util::getLogger();
+    this->isBackground = background;
 
     if (background) {
         logger->debug("Starting HTTP endpoint in background thread");
@@ -46,23 +47,41 @@ void Endpoint::doStart()
                   .backlog(256)
                   .flags(Pistache::Tcp::Options::ReuseAddr);
 
-    Pistache::Http::Endpoint httpEndpoint(addr);
-    httpEndpoint.init(opts);
+    httpEndpoint = std::make_unique<Pistache::Http::Endpoint>(addr);
+    httpEndpoint->init(opts);
 
     // Configure and start endpoint
-    httpEndpoint.setHandler(this->getHandler());
-    httpEndpoint.serveThreaded();
+    httpEndpoint->setHandler(this->getHandler());
+    httpEndpoint->serveThreaded();
 
-    // Wait for a signal
-    logger->info("Awaiting signal");
-    int signal = 0;
-    int status = sigwait(&signals, &signal);
-    if (status == 0) {
-        logger->info("Received signal: {}", signal);
-    } else {
-        logger->info("Sigwait return value: {}", signal);
+    // Wait for a signal if running in foreground (this blocks execution)
+    if (!isBackground) {
+        logger->info("Awaiting signal");
+        int signal = 0;
+        int status = sigwait(&signals, &signal);
+        if (status == 0) {
+            logger->info("Received signal: {}", signal);
+        } else {
+            logger->info("Sigwait return value: {}", signal);
+        }
+
+        stop();
     }
+}
 
-    httpEndpoint.shutdown();
+void Endpoint::stop()
+{
+    // Shut down the endpoint
+    auto logger = faabric::util::getLogger();
+
+    logger->debug("Shutting down HTTP endpoint");
+    this->httpEndpoint->shutdown();
+
+    if (isBackground) {
+        logger->debug("Waiting for HTTP endpoint background thread");
+        if (servingThread.joinable()) {
+            servingThread.join();
+        }
+    }
 }
 }

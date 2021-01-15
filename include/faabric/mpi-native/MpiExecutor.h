@@ -15,6 +15,8 @@ class MpiExecutor final : public faabric::executor::FaabricExecutor
     bool doExecute(faabric::Message& msg) override;
 
     void postFinishCall() override;
+
+    void postFinish() override;
 };
 
 class SingletonPool : public faabric::executor::FaabricPool
@@ -33,8 +35,8 @@ class SingletonPool : public faabric::executor::FaabricPool
     }
 
   private:
-    faabric::scheduler::Scheduler& scheduler;
     faabric::endpoint::FaabricEndpoint endpoint;
+    faabric::scheduler::Scheduler& scheduler;
 };
 
 extern faabric::Message* executingCall;
