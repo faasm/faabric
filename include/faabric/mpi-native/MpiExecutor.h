@@ -26,7 +26,7 @@ class SingletonPool : public faabric::executor::FaabricPool
 
     ~SingletonPool();
 
-    void startPool(bool background);
+    void startPool();
 
   protected:
     std::unique_ptr<FaabricExecutor> createExecutor(int threadIdx) override

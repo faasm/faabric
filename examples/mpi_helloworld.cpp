@@ -37,7 +37,7 @@ int main(int argc, char** argv)
 
     {
         faabric::executor::SingletonPool p;
-        p.startPool(false);
+        p.startPool();
     }
 
     return 0;

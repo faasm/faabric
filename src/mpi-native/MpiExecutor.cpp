@@ -64,7 +64,7 @@ SingletonPool::~SingletonPool()
     this->scheduler.shutdown();
 }
 
-void SingletonPool::startPool(bool background)
+void SingletonPool::startPool()
 {
     auto logger = faabric::util::getLogger();
 
