@@ -3,8 +3,6 @@
 #include <faabric/mpi-native/MpiExecutor.h>
 #include <faabric/mpi/mpi.h>
 
-#include <unistd.h>
-
 int main(int argc, char** argv)
 {
     auto logger = faabric::util::getLogger();
@@ -16,12 +14,16 @@ int main(int argc, char** argv)
     conf.maxNodesPerFunction = 1;
 
     bool __isRoot;
+    int __worldSize;
     if (argc < 2) {
         logger->debug("Non-root process started");
         __isRoot = false;
+    } else if (argc < 3) {
+        logger->debug("Root process started without specifying world size!");
     } else {
-        logger->debug("Root process started");
+        __worldSize = std::stoi(argv[2]);
         __isRoot = true;
+        logger->debug("MPI World Size: {}", __worldSize);
     }
 
     // Pre-load message to bootstrap execution
@@ -35,7 +37,7 @@ int main(int argc, char** argv)
     p.startPool(false);
 }
 
-bool faabric::executor::mpiFunc()
+int faabric::executor::mpiFunc()
 {
     auto logger = faabric::util::getLogger();
     logger->info("Hello world from Faabric MPI Main!");

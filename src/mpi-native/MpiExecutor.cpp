@@ -1,10 +1,8 @@
 #include <faabric/mpi-native/MpiExecutor.h>
 
-#include <unistd.h>
-
 namespace faabric::executor {
 faabric::Message* executingCall;
-bool mpiFunc();
+int mpiFunc();
 
 MpiExecutor::MpiExecutor()
   : FaabricExecutor(0){};
@@ -15,13 +13,16 @@ bool MpiExecutor::doExecute(faabric::Message& msg)
 
     faabric::executor::executingCall = &msg;
 
-    logger->debug("executor binding to call");
-    logger->debug("msg: {}/{}", msg.user(), msg.function());
-    logger->debug("rank: {}", msg.mpirank());
+    bool success;
+    int error = mpiFunc();
+    if (error) {
+        logger->error("There was an error running the MPI function");
+        success = false;
+    } else {
+        success = true;
+    }
 
-    bool success = mpiFunc();
-
-    return true;
+    return success;
 }
 
 void MpiExecutor::postFinishCall()

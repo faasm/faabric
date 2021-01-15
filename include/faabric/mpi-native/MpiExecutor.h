@@ -38,5 +38,5 @@ class SingletonPool : public faabric::executor::FaabricPool
 };
 
 extern faabric::Message* executingCall;
-extern bool __attribute__((weak)) mpiFunc();
+extern int __attribute__((weak)) mpiFunc();
 }

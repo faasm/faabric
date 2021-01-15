@@ -48,8 +48,7 @@ int MPI_Comm_rank(MPI_Comm comm, int* rank)
     auto logger = faabric::util::getLogger();
     logger->debug("MPI_Comm_rank");
 
-    faabric::Message* call = getExecutingCall();
-    *rank = call->mpirank();
+    *rank = executingContext.getRank();
 
     return MPI_SUCCESS;
 }
