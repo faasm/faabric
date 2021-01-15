@@ -21,6 +21,7 @@ int main(int argc, char** argv)
     } else if (argc < 3) {
         logger->debug("Root process started without specifying world size!");
     } else {
+        logger->debug("Root process started");
         __worldSize = std::stoi(argv[2]);
         __isRoot = true;
         logger->debug("MPI World Size: {}", __worldSize);
@@ -29,7 +30,8 @@ int main(int argc, char** argv)
     // Pre-load message to bootstrap execution
     if (__isRoot) {
         faabric::Message msg = faabric::util::messageFactory("mpi", "exec");
-        msg.set_mpiworldsize(2);
+        //msg.set_mpiworldsize(__worldSize);
+        msg.set_mpiworldsize(__worldSize);
         scheduler.callFunction(msg);
     }
 

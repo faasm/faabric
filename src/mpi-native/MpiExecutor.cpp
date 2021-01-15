@@ -30,6 +30,8 @@ void MpiExecutor::postFinishCall()
     auto logger = faabric::util::getLogger();
     logger->debug("Finished MPI execution.");
     // TODO shutdown everything
+    // Stops function server, call server, and thread pool
+    // singletonPool->shutdown();
 }
 
 SingletonPool::SingletonPool()
@@ -54,7 +56,8 @@ SingletonPool::~SingletonPool()
 
     logger->debug("Destructor for singleton pool.");
     // scheduler.clear();
-    this->shutdown();
+    // Stops function server and call server
+    // this->shutdown();
     // TODO finish endpoint
 }
 

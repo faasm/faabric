@@ -41,3 +41,11 @@ sessions you may have open:
 ```bash
 inv mpi.clean --force
 ```
+
+## Debugging
+
+If at some point you reach an unstable state of the cluster, stop it completely
+using:
+```basg
+docker-compose down
+```
