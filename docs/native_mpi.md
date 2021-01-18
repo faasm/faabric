@@ -21,8 +21,6 @@ inv dev.cc faabricmpi_native --shared
 inv dev.install faabricmpi_native --shared
 ```
 
-## Adapting the source code
-
 ## Running the binary
 
 To run an example, run this command _outside_ the container:

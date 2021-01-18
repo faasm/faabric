@@ -9,7 +9,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/bin/docker:/usr/bin/docker
-      - /usr/local/bin/docker-compose:/usr/bin/docker-compose
       - .:/code/faabric
       - ./build:/build/faabric
     working_dir: /code/faabric

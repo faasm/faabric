@@ -34,7 +34,8 @@ void MpiExecutor::postFinishCall()
 
 void MpiExecutor::postFinish()
 {
-    throw faabric::util::ExecutorFinishedException("Finished MPI Execution!");
+    throw faabric::executor::ExecutorPoolFinishedException(
+      "SingletonPool finished");
 }
 
 SingletonPool::SingletonPool()

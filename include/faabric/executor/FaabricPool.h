@@ -42,6 +42,14 @@ class FaabricPool
     std::thread poolThread;
     std::vector<std::thread> poolThreads;
 };
+
+class ExecutorPoolFinishedException : public faabric::util::FaabricException
+{
+  public:
+    explicit ExecutorPoolFinishedException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
 }
 
 // Macro for quickly defining functions

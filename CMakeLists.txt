@@ -23,6 +23,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # External libraries
 include(cmake/ExternalProjects.cmake)
+# TODO change
+link_directories(${CMAKE_INSTALL_PREFIX}/lib)
 
 # Library funcs
 function(faabric_lib lib_name lib_deps)
@@ -56,7 +58,7 @@ endfunction()
 add_subdirectory(src/endpoint)
 add_subdirectory(src/executor)
 add_subdirectory(src/mpi)
-add_subdirectory(src/mpi-native)
+add_subdirectory(src/mpi_native)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
 add_subdirectory(src/scheduler)

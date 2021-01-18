@@ -67,7 +67,7 @@ void FaabricPool::startThreadPool(bool background)
                 // Worker will now run for a long time
                 try {
                     executor.get()->run();
-                } catch (faabric::util::ExecutorFinishedException& e) {
+                } catch (faabric::executor::ExecutorPoolFinishedException& e) {
                     this->_shutdown = true;
                 }
 
@@ -87,7 +87,7 @@ void FaabricPool::startThreadPool(bool background)
         // Will die gracefully at this point
     });
 
-    // Make the call to startThreadPool blocking
+    // Block if in foreground
     if (!background) {
         poolThread.join();
     }
