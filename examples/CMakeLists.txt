@@ -34,6 +34,7 @@ endfunction()
 add_example(check)
 add_example(mpi_helloworld)
 add_example(mpi_send)
+add_example(mpi_sendrecv)
 add_example(server)
 
 add_custom_target(all_examples DEPENDS ${ALL_EXAMPLES})

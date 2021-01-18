@@ -87,6 +87,7 @@ int faabric::executor::mpiFunc()
             if (receivedNumber != expectedNumber) {
                 printf(
                   "Got unexpected number from rank %i (got %i, expected %i)\n",
+                  r,
                   receivedNumber,
                   expectedNumber);
                 return 1;

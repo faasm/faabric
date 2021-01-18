@@ -47,7 +47,7 @@ int MPI_Init(int* argc, char*** argv)
 int MPI_Comm_rank(MPI_Comm comm, int* rank)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Comm_rank");
+    logger->debug("S - MPI_Comm_rank");
 
     *rank = executingContext.getRank();
 
@@ -57,7 +57,7 @@ int MPI_Comm_rank(MPI_Comm comm, int* rank)
 int MPI_Comm_size(MPI_Comm comm, int* size)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Comm_size");
+    logger->debug("S - MPI_Comm_size");
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
     *size = world.getSize();
@@ -68,7 +68,7 @@ int MPI_Comm_size(MPI_Comm comm, int* size)
 int MPI_Finalize()
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Finalize");
+    logger->debug("S - MPI_Finalize");
 
     return MPI_SUCCESS;
 }
@@ -76,7 +76,7 @@ int MPI_Finalize()
 int MPI_Get_version(int* version, int* subversion)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Get_version");
+    logger->debug("S - MPI_Get_version");
 
     throw std::runtime_error("MPI_Get_version not implemented");
 
@@ -91,11 +91,26 @@ int MPI_Send(const void* buf,
              MPI_Comm comm)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Send {} -> {}", executingContext.getRank(), dest);
+    logger->debug("S - MPI_Send {} -> {}", executingContext.getRank(), dest);
 
     auto& world = getExecutingWorld();
     world.send(
       executingContext.getRank(), dest, (uint8_t*)buf, datatype, count);
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Rsend(const void* buf,
+              int count,
+              MPI_Datatype datatype,
+              int dest,
+              int tag,
+              MPI_Comm comm)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("S - MPI_Rsend {} -> {}", executingContext.getRank(), dest);
+
+    throw std::runtime_error("MPI_Rsend is not implemented");
 
     return MPI_SUCCESS;
 }
@@ -109,7 +124,7 @@ int MPI_Recv(void* buf,
              MPI_Status* status)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Recv {} <- {}", executingContext.getRank(), source);
+    logger->debug("S - MPI_Recv {} <- {}", executingContext.getRank(), source);
 
     auto& world = getExecutingWorld();
     world.recv(source,
@@ -118,6 +133,57 @@ int MPI_Recv(void* buf,
                datatype,
                count,
                status);
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Sendrecv(const void* sendbuf,
+                 int sendcount,
+                 MPI_Datatype sendtype,
+                 int dest,
+                 int sendtag,
+                 void* recvbuf,
+                 int recvcount,
+                 MPI_Datatype recvtype,
+                 int source,
+                 int recvtag,
+                 MPI_Comm comm,
+                 MPI_Status* status)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("S - MPI_Sendrecv {} -> {} and {} <- {}", executingContext.getRank(), dest, executingContext.getRank(), source);
+
+    auto& world = getExecutingWorld();
+    world.sendRecv((uint8_t *) sendbuf,
+                   sendcount,
+                   sendtype,
+                   dest,
+                   (uint8_t *) recvbuf,
+                   recvcount,
+                   recvtype,
+                   source,
+                   executingContext.getRank(),
+                   status);
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Abort(MPI_Comm comm, int errorcode)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("S - MPI_Abort");
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Get_count(const MPI_Status* status,
+                  MPI_Datatype datatype,
+                  int* count)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("S - MPI_Get_count");
+
+    // Implement
 
     return MPI_SUCCESS;
 }
