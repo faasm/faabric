@@ -72,3 +72,52 @@ int MPI_Finalize()
 
     return MPI_SUCCESS;
 }
+
+int MPI_Get_version(int* version, int* subversion)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("MPI_Get_version");
+
+    throw std::runtime_error("MPI_Get_version not implemented");
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Send(const void* buf,
+             int count,
+             MPI_Datatype datatype,
+             int dest,
+             int tag,
+             MPI_Comm comm)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("MPI_Send {} -> {}", executingContext.getRank(), dest);
+
+    auto& world = getExecutingWorld();
+    world.send(
+      executingContext.getRank(), dest, (uint8_t*)buf, datatype, count);
+
+    return MPI_SUCCESS;
+}
+
+int MPI_Recv(void* buf,
+             int count,
+             MPI_Datatype datatype,
+             int source,
+             int tag,
+             MPI_Comm comm,
+             MPI_Status* status)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("MPI_Recv {} <- {}", executingContext.getRank(), source);
+
+    auto& world = getExecutingWorld();
+    world.recv(source,
+               executingContext.getRank(),
+               (uint8_t*)buf,
+               datatype,
+               count,
+               status);
+
+    return MPI_SUCCESS;
+}
