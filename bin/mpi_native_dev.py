@@ -1,11 +1,13 @@
+#!/usr/bin/python3
+
+import argparse
 from copy import copy
 from os import environ
 from os.path import exists, join
 from subprocess import run
 
-from tasks.util.env import PROJ_ROOT, FAABRIC_INSTALL_PREFIX
-
-from invoke import task
+PROJ_ROOT = "/code/faabric"
+FAABRIC_INSTALL_PREFIX = "/build/faabric/install"
 
 EXAMPLES_DIR = join(PROJ_ROOT, "examples")
 BUILD_DIR = join(EXAMPLES_DIR, "build")
@@ -15,7 +17,6 @@ LIB_DIR = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
 
 # As it appears in the docker-compose file
 FAABRIC_WORKER_NAME = "cli"
-MPI_DEFAULT_WORLD_SIZE = 1
 
 
 def _find_mpi_hosts():
@@ -41,8 +42,7 @@ def _find_mpi_hosts():
 
 
 # TODO: eventually move all MPI examples to ./examples/mpi
-@task
-def execute(ctx, example, clean=False, np=MPI_DEFAULT_WORLD_SIZE):
+def execute(example, np, clean=False):
     """
     Runs an MPI example
     """
@@ -90,8 +90,7 @@ def execute(ctx, example, clean=False, np=MPI_DEFAULT_WORLD_SIZE):
     run(exe_cmd, shell=True)
 
 
-@task
-def clean(ctx, force=False):
+def clean(force=False):
     """
     Clean environment from failed deployments
     """
@@ -100,3 +99,16 @@ def clean(ctx, force=False):
     )
     print(docker_cmd)
     run(docker_cmd, shell=True, check=True)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Run MPI in development.')
+    parser.add_argument("example", default="mpi_helloworld")
+    parser.add_argument("--np", type=int, default=3)
+    parser.add_argument("--clean", action="store_true", default=False)
+    args = parser.parse_args()
+    
+    if args.clean:
+        clean()
+    else:
+        print(args.example, args.np)
+        execute(args.example, args.np)
