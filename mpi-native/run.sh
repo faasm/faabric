@@ -7,7 +7,7 @@ PROJ_ROOT=${THIS_DIR}/..
 
 pushd ${PROJ_ROOT} >> /dev/null
 
-source ./docker/mpi-native.env
+source ./mpi-native/mpi-native.env
 
 # Check for command line arguments
 docker-compose \
