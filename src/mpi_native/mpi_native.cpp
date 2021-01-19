@@ -59,7 +59,7 @@ int MPI_Comm_size(MPI_Comm comm, int* size)
     auto logger = faabric::util::getLogger();
     logger->debug("MPI_Comm_size");
 
-    auto& world = getExecutingWorld();
+    faabric::scheduler::MpiWorld& world = getExecutingWorld();
     *size = world.getSize();
 
     return MPI_SUCCESS;

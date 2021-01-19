@@ -61,7 +61,6 @@ SingletonPool::~SingletonPool()
 
     logger->debug("Destructor for singleton pool");
     this->shutdown();
-    this->endpoint.stop();
     this->scheduler.shutdown();
 }
 
@@ -73,7 +72,6 @@ void SingletonPool::startPool()
     logger->debug("Starting signleton thread pool");
     this->startStateServer();
     this->startFunctionCallServer();
-    this->endpoint.start();
     this->startThreadPool(false);
 }
 }

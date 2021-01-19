@@ -16,5 +16,5 @@ Then you may run arbitrary deployments setting the right values in
 
 You may remove all stopped and running container images with:
 ```bash
-docker-compose -f docker/mpi-native-docker-compose.yml --env-file docker/mpi-native.env down
+./bin/clean_mpi_native.sh
 ```
