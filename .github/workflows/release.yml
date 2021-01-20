@@ -32,3 +32,11 @@ jobs:
           context: .
           tags: faasm/faabric:${{ env.TAG_VERSION }}
           build-args: FAABRIC_VERSION=${{ env.TAG_VERSION }}
+      - name: "Build native MPI container"
+        uses: docker/build-push-action@v2
+        with:
+          push: true
+          file: docker/faabric-mpi-native.dockerfile
+          context: .
+          tags: faasm/faabric-mpi-native:${{ env.TAG_VERSION }}
+          build-args: FAABRIC_VERSION=${{ env.TAG_VERSION }}
