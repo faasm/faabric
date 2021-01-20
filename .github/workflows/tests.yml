@@ -113,3 +113,23 @@ jobs:
         run: inv examples
       - name: "Run example to check"
         run: inv examples.execute check
+
+  mpi_native:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        uses: actions/checkout@v2
+      # --- Examples ---
+      - name: "Build docker compose images"
+        run: ./mpi-native/build.sh
+      - name: "Run a sample example"
+        run: ./mpi-native/run.sh

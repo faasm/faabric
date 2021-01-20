@@ -88,3 +88,11 @@ def push_grpc(ctx):
     Push current version of gRPC container
     """
     _do_push(GRPC_IMAGE_NAME)
+
+
+@task
+def push_mpi_native(ctx):
+    """
+    Push current version of gRPC container
+    """
+    _do_push(MPI_NATIVE_IMAGE_NAME)

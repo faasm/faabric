@@ -12,9 +12,9 @@ inv container.build-mpi-native
 ```
 
 Then you may run arbitrary deployments setting the right values in
-`docker/mpi-native.env` and running `./bin/run_mpi_native.sh`.
+`mpi-native/mpi-native.env` and running `./mpi-native/run.sh`.
 
 You may remove all stopped and running container images with:
 ```bash
-./bin/clean_mpi_native.sh
+./mpi-native/clean.sh
 ```

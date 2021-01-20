@@ -14,8 +14,7 @@ RUN apt install -y \
 
 # Put the code in place
 WORKDIR /code
-# RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
-RUN git clone -b standalone-mpi https://github.com/csegarragonz/faabric
+RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
 
 WORKDIR /code/faabric
 

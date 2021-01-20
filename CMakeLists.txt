@@ -23,8 +23,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # External libraries
 include(cmake/ExternalProjects.cmake)
-# TODO change
-link_directories(${CMAKE_INSTALL_PREFIX}/lib)
 
 # Library funcs
 function(faabric_lib lib_name lib_deps)
@@ -85,7 +83,7 @@ add_library(faabric
     $<TARGET_OBJECTS:util_obj>
 )
 
-add_dependencies(faabric pistache_ext spdlog_ext)
+add_dependencies(faabric pistache spdlog_ext)
 
 target_link_libraries(faabric
     ${Protobuf_LIBRARIES}
