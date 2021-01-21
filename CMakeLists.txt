@@ -56,6 +56,7 @@ endfunction()
 add_subdirectory(src/endpoint)
 add_subdirectory(src/executor)
 add_subdirectory(src/mpi)
+add_subdirectory(src/mpi_native)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
 add_subdirectory(src/scheduler)
@@ -82,7 +83,7 @@ add_library(faabric
     $<TARGET_OBJECTS:util_obj>
 )
 
-add_dependencies(faabric pistache_ext spdlog_ext)
+add_dependencies(faabric pistache spdlog_ext)
 
 target_link_libraries(faabric
     ${Protobuf_LIBRARIES}

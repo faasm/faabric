@@ -110,3 +110,9 @@ inv container.push
 inv container.build --push
 ```
 
+## Additional documentation
+
+More detail on some key features and implementations can be found below:
+
+- [Native MPI builds](docs/native_mpi.md) - run native applications against
+Faabric's MPI library.

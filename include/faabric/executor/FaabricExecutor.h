@@ -40,6 +40,8 @@ class FaabricExecutor
                                bool success,
                                const std::string& errorMsg);
 
+    virtual void postFinishCall();
+
     virtual void postFinish();
 
     bool _isBound = false;

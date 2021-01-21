@@ -31,12 +31,18 @@ set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 
 # Pistache 
 ExternalProject_Add(pistache_ext
-    GIT_REPOSITORY "https://github.com/oktal/pistache.git"
+    GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+    BUILD_BYPRODUCTS ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so
 )
 ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
 set(PISTACHE_INCLUDE_DIR ${SOURCE_DIR}/include)
+add_library(pistache SHARED IMPORTED)
+add_dependencies(pistache pistache_ext)
+set_target_properties(pistache
+    PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so
+)
 
 # RapidJSON
 ExternalProject_Add(rapidjson_ext

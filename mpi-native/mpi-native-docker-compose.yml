@@ -1,0 +1,34 @@
+version: "3"
+
+services:
+  redis:
+    image: redis
+
+  worker:
+    image: ${FAABRIC_MPI_NATIVE_IMAGE}
+    entrypoint: /code/faabric/examples/build/${MPI_EXAMPLE}
+    working_dir: /code/faabric
+    privileged: true
+    environment:
+      - LD_LIBRARY_PATH=/usr/local/lib:/build/faabric/install/lib
+      - FUNCTION_STORAGE=local
+      - LOG_LEVEL=debug
+      - REDIS_STATE_HOST=redis
+      - REDIS_QUEUE_HOST=redis
+    depends_on:
+      - redis
+
+  master:
+    image: ${FAABRIC_MPI_NATIVE_IMAGE}
+    entrypoint: ['/code/faabric/examples/build/${MPI_EXAMPLE}', 'master', '${MPI_WORLD_SIZE}']
+    working_dir: /code/faabric
+    privileged: true
+    environment:
+      - LD_LIBRARY_PATH=/usr/local/lib:/build/faabric/install/lib
+      - FUNCTION_STORAGE=local
+      - LOG_LEVEL=debug
+      - REDIS_STATE_HOST=redis
+      - REDIS_QUEUE_HOST=redis
+    depends_on:
+      - redis
+      - worker

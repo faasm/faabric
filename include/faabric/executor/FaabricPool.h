@@ -14,7 +14,7 @@ class FaabricPool
 
     void startFunctionCallServer();
 
-    void startThreadPool();
+    void startThreadPool(bool background = true);
 
     void startStateServer();
 
@@ -41,6 +41,14 @@ class FaabricPool
     std::thread mpiThread;
     std::thread poolThread;
     std::vector<std::thread> poolThreads;
+};
+
+class ExecutorPoolFinishedException : public faabric::util::FaabricException
+{
+  public:
+    explicit ExecutorPoolFinishedException(std::string message)
+      : FaabricException(std::move(message))
+    {}
 };
 }
 

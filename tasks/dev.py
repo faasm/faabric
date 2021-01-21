@@ -39,7 +39,7 @@ def cmake(ctx, clean=False, shared=False):
         PROJ_ROOT,
     ]
 
-    run(" ".join(cmd), shell=True, cwd=build_dir)
+    run(" ".join(cmd), check=True, shell=True, cwd=build_dir)
 
 
 @task
@@ -53,6 +53,7 @@ def cc(ctx, target, shared=False):
 
     run(
         "cmake --build . --target {}".format(target),
+        check=True,
         cwd=build_dir,
         shell=True,
     )
@@ -69,6 +70,7 @@ def install(ctx, target, shared=False):
 
     run(
         "ninja install {}".format(target),
+        check=True,
         cwd=build_dir,
         shell=True,
     )
