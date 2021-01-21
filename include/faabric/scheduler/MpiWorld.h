@@ -40,6 +40,8 @@ class MpiWorld
 
     int getSize();
 
+    void getSizePtr(int* size);
+
     void destroy();
 
     void enqueueMessage(faabric::MPIMessage& msg);

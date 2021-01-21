@@ -1188,6 +1188,11 @@ int MpiWorld::getSize()
     return size;
 }
 
+void MpiWorld::getSizePtr(int* size)
+{
+    *size = this->size;
+}
+
 void MpiWorld::overrideHost(const std::string& newHost)
 {
     thisHost = newHost;

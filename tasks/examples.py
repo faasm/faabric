@@ -31,7 +31,7 @@ def build(ctx, clean=False):
         [
             "cmake",
             "-GNinja",
-            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCMAKE_BUILD_TYPE=Debug",
             "-DCMAKE_CXX_FLAGS=-I{}".format(INCLUDE_DIR),
             "-DCMAKE_EXE_LINKER_FLAGS=-L{}".format(LIB_DIR),
             "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
