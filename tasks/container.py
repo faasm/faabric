@@ -69,7 +69,7 @@ def build_grpc(ctx, nocache=False, push=False):
 @task
 def build_mpi_native(ctx, nocache=False, push=False):
     """
-    Build current MPI native container
+    Build current native MPI container
     """
     _do_container_build(MPI_NATIVE_IMAGE_NAME, nocache=nocache, push=push)
 
@@ -93,6 +93,6 @@ def push_grpc(ctx):
 @task
 def push_mpi_native(ctx):
     """
-    Push current version of gRPC container
+    Push current version of the native MPI container
     """
     _do_push(MPI_NATIVE_IMAGE_NAME)
