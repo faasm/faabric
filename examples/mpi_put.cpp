@@ -1,11 +1,11 @@
-#include <faabric/util/compare.h>
 #include <faabric/mpi/mpi.h>
+#include <faabric/util/compare.h>
 #include <stdio.h>
 
 #define NUM_ELEMENT 4
 
-#include <faabric/util/logging.h>
 #include <faabric/mpi-native/MpiExecutor.h>
+#include <faabric/util/logging.h>
 int main(int argc, char** argv)
 {
     auto logger = faabric::util::getLogger();
@@ -58,7 +58,7 @@ int faabric::executor::mpiFunc()
     size_t elemSize = sizeof(int);
 
     int* sharedData;
-    MPI_Alloc_mem(elemSize * NUM_ELEMENT, MPI_INFO_NULL, (void*) &sharedData);
+    MPI_Alloc_mem(elemSize * NUM_ELEMENT, MPI_INFO_NULL, (void*)&sharedData);
 
     MPI_Win window;
     MPI_Win_create(sharedData,

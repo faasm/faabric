@@ -1,8 +1,8 @@
 #include <faabric/mpi/mpi.h>
 #include <stdio.h>
 
-#include <faabric/util/logging.h>
 #include <faabric/mpi-native/MpiExecutor.h>
+#include <faabric/util/logging.h>
 int main(int argc, char** argv)
 {
     auto logger = faabric::util::getLogger();
@@ -99,8 +99,8 @@ int faabric::executor::mpiFunc()
         int receivedNumber = 0;
 
         // Receive message from master
-        MPI_Recv(&receivedNumber, 1, MPI_INT, 0, 0, MPI_COMM_WORLD,
-                 MPI_STATUS_IGNORE);
+        MPI_Recv(
+          &receivedNumber, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         if (receivedNumber != expectedNumber) {
             printf("Got unexpected number from master (got %i, expected %i)\n",
                    receivedNumber,

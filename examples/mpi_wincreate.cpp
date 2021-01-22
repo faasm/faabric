@@ -1,12 +1,12 @@
-#include <faabric/util/compare.h>
 #include <faabric/mpi/mpi.h>
+#include <faabric/util/compare.h>
 #include <stdio.h>
 #include <string>
 
 #define NUM_ELEMENT 4
 
-#include <faabric/util/logging.h>
 #include <faabric/mpi-native/MpiExecutor.h>
+#include <faabric/util/logging.h>
 int main(int argc, char** argv)
 {
     auto logger = faabric::util::getLogger();
@@ -73,8 +73,8 @@ int faabric::executor::mpiFunc()
     // Check that the memory has not been corrupted (happens when pointer to
     // MPI_Win is handled wrongly)
     if (rank < 3) {
-        bool putDataEqual =
-          faabric::util::compareArrays<int>(sharedData, expectedPutData, NUM_ELEMENT);
+        bool putDataEqual = faabric::util::compareArrays<int>(
+          sharedData, expectedPutData, NUM_ELEMENT);
 
         if (!putDataEqual) {
             printf("Rank %i - stack corrupted by win_create\n", rank);
@@ -100,7 +100,7 @@ int faabric::executor::mpiFunc()
         // Check size of window
         int actualSize;
         baseFlag = 0;
-        MPI_Win_get_attr(window, MPI_WIN_SIZE, (void*) &actualSize, &baseFlag);
+        MPI_Win_get_attr(window, MPI_WIN_SIZE, (void*)&actualSize, &baseFlag);
         if (actualSize != winSize || baseFlag != 1) {
             printf("MPI_WIN_SIZE not as expected (%d != %d (%i))\n",
                    actualSize,
@@ -112,7 +112,8 @@ int faabric::executor::mpiFunc()
         // Check size of window
         int actualDispUnit;
         baseFlag = 0;
-        MPI_Win_get_attr(window, MPI_WIN_DISP_UNIT, (void*) &actualDispUnit, &baseFlag);
+        MPI_Win_get_attr(
+          window, MPI_WIN_DISP_UNIT, (void*)&actualDispUnit, &baseFlag);
         if (actualDispUnit != 1 || baseFlag != 1) {
             printf("MPI_WIN_DISP_UNIT not as expected (%d != %d (%i))\n",
                    actualDispUnit,

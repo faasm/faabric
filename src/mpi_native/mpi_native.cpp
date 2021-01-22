@@ -104,14 +104,14 @@ int MPI_Send(const void* buf,
 {
     auto fptr = &faabric::scheduler::MpiWorld::send;
     callMpiFunc(
-        fmt::format("MPI_Send {} -> {}", executingContext.getRank(), dest),
-        fptr,
-        executingContext.getRank(),
-        dest, 
-        (uint8_t*)buf, 
-        datatype,
-        count,
-        faabric::MPIMessage::NORMAL);
+      fmt::format("MPI_Send {} -> {}", executingContext.getRank(), dest),
+      fptr,
+      executingContext.getRank(),
+      dest,
+      (uint8_t*)buf,
+      datatype,
+      count,
+      faabric::MPIMessage::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -138,15 +138,15 @@ int MPI_Recv(void* buf,
 {
     auto fptr = &faabric::scheduler::MpiWorld::recv;
     callMpiFunc(
-        fmt::format("MPI_Recv {} <- {}", executingContext.getRank(), source),
-        fptr,
-        source,
-        executingContext.getRank(),
-        (uint8_t*)buf, 
-        datatype,
-        count,
-        status,
-        faabric::MPIMessage::NORMAL);
+      fmt::format("MPI_Recv {} <- {}", executingContext.getRank(), source),
+      fptr,
+      source,
+      executingContext.getRank(),
+      (uint8_t*)buf,
+      datatype,
+      count,
+      status,
+      faabric::MPIMessage::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -165,20 +165,22 @@ int MPI_Sendrecv(const void* sendbuf,
                  MPI_Status* status)
 {
     auto fptr = &faabric::scheduler::MpiWorld::sendRecv;
-    callMpiFunc(
-        fmt::format("MPI_Sendrecv {} -> {} and {} <- {}", executingContext.getRank(), dest,
-            executingContext.getRank(), source),
-        fptr,
-        (uint8_t*)sendbuf,
-        sendcount,
-        sendtype,
-        dest,
-        (uint8_t*)recvbuf,
-        recvcount,
-        recvtype,
-        source,
-        executingContext.getRank(),
-        status);
+    callMpiFunc(fmt::format("MPI_Sendrecv {} -> {} and {} <- {}",
+                            executingContext.getRank(),
+                            dest,
+                            executingContext.getRank(),
+                            source),
+                fptr,
+                (uint8_t*)sendbuf,
+                sendcount,
+                sendtype,
+                dest,
+                (uint8_t*)recvbuf,
+                recvcount,
+                recvtype,
+                source,
+                executingContext.getRank(),
+                status);
 
     return MPI_SUCCESS;
 }
@@ -197,7 +199,9 @@ int MPI_Get_count(const MPI_Status* status, MPI_Datatype datatype, int* count)
     logger->debug("S - MPI_Get_count");
 
     if (status->bytesSize % datatype->size != 0) {
-        logger->error("Incomplete message (bytes {}, datatype size {})", status->bytesSize, datatype->size);
+        logger->error("Incomplete message (bytes {}, datatype size {})",
+                      status->bytesSize,
+                      datatype->size);
         return 1;
     }
 
@@ -233,8 +237,8 @@ int MPI_Bcast(void* buffer,
         auto fptr = &faabric::scheduler::MpiWorld::broadcast;
         callMpiFunc(fmt::format("MPI_Bcast {} -> all", rank),
                     fptr,
-                    rank, 
-                    (uint8_t*) buffer,
+                    rank,
+                    (uint8_t*)buffer,
                     datatype,
                     count,
                     faabric::MPIMessage::NORMAL);
@@ -244,7 +248,7 @@ int MPI_Bcast(void* buffer,
                     fptr,
                     root,
                     rank,
-                    (uint8_t*) buffer,
+                    (uint8_t*)buffer,
                     datatype,
                     count,
                     nullptr,
@@ -263,16 +267,17 @@ int MPI_Scatter(const void* sendbuf,
                 MPI_Comm comm)
 {
     auto fptr = &faabric::scheduler::MpiWorld::scatter;
-    callMpiFunc(fmt::format("MPI_Scatter {} -> {}", root, executingContext.getRank()),
-                fptr,
-                root,
-                executingContext.getRank(),
-                (uint8_t*) sendbuf,
-                sendtype,
-                sendcount,
-                (uint8_t*) recvbuf,
-                recvtype,
-                recvcount);
+    callMpiFunc(
+      fmt::format("MPI_Scatter {} -> {}", root, executingContext.getRank()),
+      fptr,
+      root,
+      executingContext.getRank(),
+      (uint8_t*)sendbuf,
+      sendtype,
+      sendcount,
+      (uint8_t*)recvbuf,
+      recvtype,
+      recvcount);
 
     return MPI_SUCCESS;
 }
@@ -295,10 +300,10 @@ int MPI_Gather(const void* sendbuf,
                 fptr,
                 executingContext.getRank(),
                 root,
-                (uint8_t*) sendbuf,
+                (uint8_t*)sendbuf,
                 sendtype,
                 sendcount,
-                (uint8_t*) recvbuf,
+                (uint8_t*)recvbuf,
                 recvtype,
                 recvcount);
 
@@ -321,10 +326,10 @@ int MPI_Allgather(const void* sendbuf,
     callMpiFunc("MPI_Allgather",
                 fptr,
                 executingContext.getRank(),
-                (uint8_t*) sendbuf,
+                (uint8_t*)sendbuf,
                 sendtype,
                 sendcount,
-                (uint8_t*) recvbuf,
+                (uint8_t*)recvbuf,
                 recvtype,
                 recvcount);
 
@@ -362,8 +367,8 @@ int MPI_Reduce(const void* sendbuf,
                 fptr,
                 executingContext.getRank(),
                 root,
-                (uint8_t*) sendbuf,
-                (uint8_t*) recvbuf,
+                (uint8_t*)sendbuf,
+                (uint8_t*)recvbuf,
                 datatype,
                 count,
                 op);
@@ -398,8 +403,8 @@ int MPI_Allreduce(const void* sendbuf,
     callMpiFunc("MPI_Allreduce",
                 fptr,
                 executingContext.getRank(),
-                (uint8_t*) sendbuf,
-                (uint8_t*) recvbuf,
+                (uint8_t*)sendbuf,
+                (uint8_t*)recvbuf,
                 datatype,
                 count,
                 op);
@@ -422,8 +427,8 @@ int MPI_Scan(const void* sendbuf,
     callMpiFunc("MPI_Scan",
                 fptr,
                 executingContext.getRank(),
-                (uint8_t*) sendbuf,
-                (uint8_t*) recvbuf,
+                (uint8_t*)sendbuf,
+                (uint8_t*)recvbuf,
                 datatype,
                 count,
                 op);
@@ -443,10 +448,10 @@ int MPI_Alltoall(const void* sendbuf,
     callMpiFunc("MPI_Alltoall",
                 fptr,
                 executingContext.getRank(),
-                (uint8_t*) sendbuf,
+                (uint8_t*)sendbuf,
                 sendtype,
                 sendcount,
-                (uint8_t*) recvbuf,
+                (uint8_t*)recvbuf,
                 recvtype,
                 recvcount);
 
@@ -483,7 +488,8 @@ int MPI_Cart_get(MPI_Comm comm,
                  int coords[])
 {
     auto fptr = &faabric::scheduler::MpiWorld::getCartesianRank;
-    callMpiFunc("MPI_Cart_get", fptr, executingContext.getRank(), dims, periods, coords);
+    callMpiFunc(
+      "MPI_Cart_get", fptr, executingContext.getRank(), dims, periods, coords);
 
     return MPI_SUCCESS;
 }
@@ -556,7 +562,7 @@ int MPI_Get(void* origin_addr,
                 target_rank,
                 target_datatype,
                 target_count,
-                (uint8_t*) origin_addr,
+                (uint8_t*)origin_addr,
                 origin_datatype,
                 origin_count);
 
@@ -576,7 +582,7 @@ int MPI_Put(const void* origin_addr,
     callMpiFunc("MPI_Put",
                 fptr,
                 executingContext.getRank(),
-                (uint8_t*) origin_addr,
+                (uint8_t*)origin_addr,
                 origin_datatype,
                 origin_count,
                 target_rank,
@@ -610,7 +616,7 @@ int MPI_Win_create(void* base,
     (*win)->dispUnit = disp_unit;
     (*win)->rank = executingContext.getRank();
     (*win)->basePtr = base;
-    world.createWindow(*win, (uint8_t*) base);
+    world.createWindow(*win, (uint8_t*)base);
 
     return MPI_SUCCESS;
 }
@@ -667,9 +673,7 @@ int MPI_Request_free(MPI_Request* request)
     return MPI_SUCCESS;
 }
 
-int MPI_Type_contiguous(int count,
-                        MPI_Datatype oldtype,
-                        MPI_Datatype* newtype)
+int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype* newtype)
 {
     auto logger = faabric::util::getLogger();
     logger->debug("MPI_Type_contiguous");
@@ -767,4 +771,3 @@ int MPI_Init_thread(int* argc, char*** argv, int required, int* provided);
 int MPI_Op_create(MPI_User_function* user_fn, int commute, MPI_Op* op);
 
 int MPI_Op_free(MPI_Op* op);
-
