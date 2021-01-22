@@ -131,5 +131,5 @@ jobs:
       # --- Examples ---
       - name: "Build docker compose images"
         run: ./mpi-native/build.sh
-      - name: "Run a sample example"
-        run: ./mpi-native/run.sh
+      - name: "Run all examples"
+        run: ./mpi-native/run_all.sh
