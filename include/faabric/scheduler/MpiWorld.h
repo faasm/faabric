@@ -196,6 +196,8 @@ class MpiWorld
 
     double getWTime();
 
+    void getWTimePtr(double* t);
+
   private:
     int id;
     int size;

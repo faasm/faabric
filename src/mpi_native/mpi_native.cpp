@@ -689,70 +689,123 @@ int MPI_Type_commit(MPI_Datatype* type)
     return MPI_SUCCESS;
 }
 
+/*
+ * The API call returns a request ID that we can't capture with the function
+ * pointer trick. Thus we don't use it here.
+ */
 int MPI_Isend(const void* buf,
               int count,
               MPI_Datatype datatype,
               int dest,
               int tag,
               MPI_Comm comm,
-              MPI_Request* request);
+              MPI_Request* request)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("MPI_Isend {} -> {}", executingContext.getRank(), dest);
 
+    faabric::scheduler::MpiWorld& world = getExecutingWorld();
+    int requestId = world.isend(
+      executingContext.getRank(), dest, (uint8_t*)buf, datatype, count);
+    (*request)->id = requestId;
+
+    return MPI_SUCCESS;
+}
+
+/*
+ * The API call returns a request ID that we can't capture with the function
+ * pointer trick. Thus we don't use it here.
+ */
 int MPI_Irecv(void* buf,
               int count,
               MPI_Datatype datatype,
               int source,
               int tag,
               MPI_Comm comm,
-              MPI_Request* request);
+              MPI_Request* request)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("MPI_Irecv {} <- {}", executingContext.getRank(), source);
 
-double MPI_Wtime(void);
+    faabric::scheduler::MpiWorld& world = getExecutingWorld();
+    int requestId = world.irecv(
+      source, executingContext.getRank(), (uint8_t*)buf, datatype, count);
+    (*request)->id = requestId;
 
-int MPI_Wait(MPI_Request* request, MPI_Status* status);
+    return MPI_SUCCESS;
+}
+
+double MPI_Wtime()
+{
+    auto fptr = &faabric::scheduler::MpiWorld::getWTimePtr;
+    double time;
+    callMpiFunc("MPI_Wtime", fptr, &time);
+
+    return time;
+}
+
+int MPI_Wait(MPI_Request* request, MPI_Status* status)
+{
+    auto fptr = &faabric::scheduler::MpiWorld::awaitAsyncRequest;
+    callMpiFunc("MPI_Wait", fptr, (*request)->id);
+
+    return MPI_SUCCESS;
+}
 
 int MPI_Waitall(int count,
                 MPI_Request array_of_requests[],
-                MPI_Status* array_of_statuses);
+                MPI_Status* array_of_statuses)
+{
+    notImplemented("MPI_Waitall");
+
+    return MPI_SUCCESS;
+}
 
 int MPI_Waitany(int count,
                 MPI_Request array_of_requests[],
                 int* index,
-                MPI_Status* status);
+                MPI_Status* status)
+{
+    notImplemented("MPI_Waitany");
 
-int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm* newcomm);
+    return MPI_SUCCESS;
+}
 
-int MPI_Comm_group(MPI_Comm comm, MPI_Group* group);
+int MPI_Comm_dup(MPI_Comm comm, MPI_Comm* newcomm)
+{
+    notImplemented("MPI_Comm_dup");
 
-int MPI_Comm_dup(MPI_Comm comm, MPI_Comm* newcomm);
+    return MPI_SUCCESS;
+}
 
-MPI_Fint MPI_Comm_c2f(MPI_Comm comm);
+MPI_Fint MPI_Comm_c2f(MPI_Comm comm)
+{
+    notImplemented("MPI_Comm_c2f");
 
-MPI_Comm MPI_Comm_f2c(MPI_Fint comm);
+    return MPI_SUCCESS;
+}
 
-int MPI_Group_incl(MPI_Group group,
-                   int n,
-                   const int ranks[],
-                   MPI_Group* newgroup);
+MPI_Comm MPI_Comm_f2c(MPI_Fint comm)
+{
+    notImplemented("MPI_Comm_f2c");
 
-int MPI_Comm_rank(MPI_Comm comm, int* rank);
+    return MPI_SUCCESS;
+}
 
-int MPI_Comm_size(MPI_Comm comm, int* size);
+int MPI_Comm_free(MPI_Comm* comm)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("MPI_Comm_free");
 
-int MPI_Comm_create_group(MPI_Comm comm,
-                          MPI_Group group,
-                          int tag,
-                          MPI_Comm* newcomm);
+    return MPI_SUCCESS;
+}
 
-int MPI_Comm_free(MPI_Comm* comm);
+int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm* newcomm)
+{
+    notImplemented("MPI_Comm_split");
 
-int MPI_Comm_split_type(MPI_Comm comm,
-                        int split_type,
-                        int key,
-                        MPI_Info info,
-                        MPI_Comm* newcomm);
-
-int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm* newcomm);
-
-int MPI_Group_free(MPI_Group* group);
+    return MPI_SUCCESS;
+}
 
 int MPI_Alltoallv(const void* sendbuf,
                   const int sendcounts[],
@@ -762,12 +815,23 @@ int MPI_Alltoallv(const void* sendbuf,
                   const int recvcounts[],
                   const int rdispls[],
                   MPI_Datatype recvtype,
-                  MPI_Comm comm);
+                  MPI_Comm comm)
+{
+    notImplemented("MPI_Alltoallv");
 
-int MPI_Query_thread(int* provided);
+    return MPI_SUCCESS;
+}
 
-int MPI_Init_thread(int* argc, char*** argv, int required, int* provided);
+int MPI_Op_create(MPI_User_function* user_fn, int commute, MPI_Op* op)
+{
+    notImplemented("MPI_Op_create");
 
-int MPI_Op_create(MPI_User_function* user_fn, int commute, MPI_Op* op);
+    return MPI_SUCCESS;
+}
 
-int MPI_Op_free(MPI_Op* op);
+int MPI_Op_free(MPI_Op* op)
+{
+    notImplemented("MPI_Op_free");
+
+    return MPI_SUCCESS;
+}

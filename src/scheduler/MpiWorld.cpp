@@ -1168,6 +1168,11 @@ double MpiWorld::getWTime()
     return t / 1000.0;
 }
 
+void MpiWorld::getWTimePtr(double* t)
+{
+    *t = faabric::util::getTimeDiffMillis(creationTime) / 1000.0;
+}
+
 std::string MpiWorld::getUser()
 {
     return user;

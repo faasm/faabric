@@ -90,7 +90,7 @@ extern "C"
 
     struct faabric_request_t
     {
-        int _unused;
+        int id;
     };
 
     struct faabric_group_t
