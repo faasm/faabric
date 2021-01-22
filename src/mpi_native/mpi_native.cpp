@@ -521,11 +521,14 @@ int MPI_Type_free(MPI_Datatype* datatype)
 
 int MPI_Alloc_mem(MPI_Aint size, MPI_Info info, void* baseptr)
 {
+    auto logger = faabric::util::getLogger();
+    logger->debug("MPI_Alloc_mem");
+
     if (info != MPI_INFO_NULL) {
         throw std::runtime_error("Non-null info not supported");
     }
 
-    baseptr = malloc(size);
+    *((void**)baseptr) = malloc(size);
 
     return MPI_SUCCESS;
 }
@@ -591,7 +594,6 @@ int MPI_Win_free(MPI_Win* win)
     return MPI_SUCCESS;
 }
 
-/*
 int MPI_Win_create(void* base,
                    MPI_Aint size,
                    int disp_unit,
@@ -603,11 +605,11 @@ int MPI_Win_create(void* base,
     logger->debug("MPI_Win_create");
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
 
-    (*win)->worldId = world.getId();
+    //(*win)->worldId = world.getId();
     (*win)->size = size;
     (*win)->dispUnit = disp_unit;
     (*win)->rank = executingContext.getRank();
-    (*win)->wasmPtr = (uint8_t*) base;
+    (*win)->basePtr = base;
     world.createWindow(*win, (uint8_t*) base);
 
     return MPI_SUCCESS;
@@ -618,8 +620,8 @@ int MPI_Get_processor_name(char* name, int* resultlen)
     auto logger = faabric::util::getLogger();
     logger->debug("MPI_Get_processor_name");
 
-    const std::string host = faabric::util::getSystemConfig().endpointHost;
-    name = host.c_str();
+    std::string host = faabric::util::getSystemConfig().endpointHost;
+    strncpy(name, host.c_str(), host.length());
     *resultlen = host.length();
 
     return MPI_SUCCESS;
@@ -635,12 +637,12 @@ int MPI_Win_get_attr(MPI_Win win,
 
     *flag = 1;
     if (win_keyval == MPI_WIN_BASE) {
-        attribute_val = (void*) win->wasmPtr;
+        *((void**)attribute_val) = win->basePtr;
     } else {
         if (win_keyval == MPI_WIN_SIZE) {
-            *attribute_val = win->size;
+            *((int*)attribute_val) = win->size;
         } else if (win_keyval == MPI_WIN_DISP_UNIT) {
-            *attribute_val = win->dispUnit;
+            *((int*)attribute_val) = win->dispUnit;
         } else {
             throw std::runtime_error("Unrecofnised window attribute type " +
                                      std::to_string(win_keyval));
@@ -649,7 +651,6 @@ int MPI_Win_get_attr(MPI_Win win,
 
     return MPI_SUCCESS;
 }
-*/
 
 int MPI_Free_mem(void* base)
 {

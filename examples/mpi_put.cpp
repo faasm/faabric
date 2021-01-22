@@ -58,7 +58,7 @@ int faabric::executor::mpiFunc()
     size_t elemSize = sizeof(int);
 
     int* sharedData;
-    MPI_Alloc_mem(elemSize * NUM_ELEMENT, MPI_INFO_NULL, &sharedData);
+    MPI_Alloc_mem(elemSize * NUM_ELEMENT, MPI_INFO_NULL, (void*) &sharedData);
 
     MPI_Win window;
     MPI_Win_create(sharedData,

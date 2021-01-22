@@ -5,29 +5,6 @@
 
 #define NUM_ELEMENT 4
 
-bool checkIntAttr(MPI_Win window,
-                  int attr,
-                  long expected,
-                  const std::string& name)
-{
-    void* resPtr;
-    int flag;
-    MPI_Win_get_attr(window, attr, (void*)&resPtr, &flag);
-
-    MPI_Aint actual = *reinterpret_cast<MPI_Aint*>(resPtr);
-
-    if (actual != expected || flag != 1) {
-        printf("%s not as expected (%li != %li (%i))\n",
-               name.c_str(),
-               actual,
-               expected,
-               flag);
-        return false;
-    }
-
-    return true;
-}
-
 #include <faabric/util/logging.h>
 #include <faabric/mpi-native/MpiExecutor.h>
 int main(int argc, char** argv)
@@ -121,10 +98,26 @@ int faabric::executor::mpiFunc()
         }
 
         // Check size of window
-        if (!checkIntAttr(window, MPI_WIN_SIZE, winSize, "MPI_WIN_SIZE")) {
+        int actualSize;
+        baseFlag = 0;
+        MPI_Win_get_attr(window, MPI_WIN_SIZE, (void*) &actualSize, &baseFlag);
+        if (actualSize != winSize || baseFlag != 1) {
+            printf("MPI_WIN_SIZE not as expected (%d != %d (%i))\n",
+                   actualSize,
+                   winSize,
+                   baseFlag);
             return 1;
         }
-        if (!checkIntAttr(window, MPI_WIN_DISP_UNIT, 1, "MPI_WIN_DISP_UNIT")) {
+
+        // Check size of window
+        int actualDispUnit;
+        baseFlag = 0;
+        MPI_Win_get_attr(window, MPI_WIN_DISP_UNIT, (void*) &actualDispUnit, &baseFlag);
+        if (actualDispUnit != 1 || baseFlag != 1) {
+            printf("MPI_WIN_DISP_UNIT not as expected (%d != %d (%i))\n",
+                   actualDispUnit,
+                   1,
+                   baseFlag);
             return 1;
         }
 
