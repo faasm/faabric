@@ -9,7 +9,7 @@ pushd ${PROJ_ROOT} >> /dev/null
 
 source ./mpi-native/mpi-native.env
 
-for w in $(ls ./examples/*.cpp);
+for w in $(ls ./mpi-native/examples/*.cpp);
 do
     example=$(basename $w ".cpp")
     if [[ $example == mpi_* ]]; then

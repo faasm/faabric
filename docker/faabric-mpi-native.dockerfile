@@ -14,8 +14,7 @@ RUN apt install -y \
 
 # Put the code in place
 WORKDIR /code
-# RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
-RUN git clone -b api-implementation https://github.com/csegarragonz/faabric
+RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
 
 WORKDIR /code/faabric
 
@@ -27,4 +26,4 @@ RUN inv dev.cc faabricmpi_native --shared
 RUN inv dev.install faabricmpi_native --shared
 
 # Build examples
-RUN inv examples.build
+RUN inv examples.build-mpi
