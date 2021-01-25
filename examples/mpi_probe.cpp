@@ -47,42 +47,54 @@ int faabric::executor::mpiFunc()
 {
     MPI_Init(NULL, NULL);
 
+    int maxNumbers = 100;
+    int actualNumbers = 30;
+    auto numbers = new int[maxNumbers];
+
     int rank;
     int worldSize;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
 
-    // Send and receive messages asynchronously in a ring
-    int right = (rank + 1) % worldSize;
-    int maxRank = worldSize - 1;
-    int left = rank > 0 ? rank - 1 : maxRank;
+    if (rank == 0) {
+        // Send a number of values
+        for (int i = 0; i < actualNumbers; i++) {
+            numbers[i] = i;
+        }
 
-    // Asynchronously receive from the left
-    int recvValue = -1;
-    MPI_Request recvRequest;
-    MPI_Irecv(&recvValue, 1, MPI_INT, left, 0, MPI_COMM_WORLD, &recvRequest);
+        MPI_Send(numbers, actualNumbers, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        printf("Sent %i numbers to 1\n", actualNumbers);
+    } else if (rank == 1) {
+        // Probe to get the length of the message
+        MPI_Status statusA;
+        MPI_Probe(0, 0, MPI_COMM_WORLD, &statusA);
 
-    // Asynchronously send to the right
-    int sendValue = rank;
-    MPI_Request sendRequest;
-    MPI_Isend(&sendValue, 1, MPI_INT, right, 0, MPI_COMM_WORLD, &sendRequest);
+        int probeCount;
+        MPI_Get_count(&statusA, MPI_INT, &probeCount);
+        if (probeCount != actualNumbers) {
+            printf("Probe did not return the expected length of message "
+                   "(expected %i, got %i)\n",
+                   actualNumbers,
+                   probeCount);
+            return 1;
+        }
+        printf("Probe gave expected length (%i)\n", probeCount);
 
-    // Wait for both
-    MPI_Wait(&recvRequest, MPI_STATUS_IGNORE);
-    MPI_Wait(&sendRequest, MPI_STATUS_IGNORE);
+        // Receive the message and check
+        MPI_Status statusB;
+        MPI_Recv(numbers, probeCount, MPI_INT, 0, 0, MPI_COMM_WORLD, &statusB);
 
-    // Check the received value is as expected
-    if (recvValue != left) {
-        printf("Rank %i - async not working properly (got %i expected %i)\n",
-               rank,
-               recvValue,
-               left);
-        return 1;
+        for (int i = 0; i < actualNumbers; i++) {
+            if (numbers[i] != i) {
+                printf("Did not get expected value (expected %i but got %i)\n",
+                       i,
+                       numbers[i]);
+                return 1;
+            }
+        }
     }
-    printf("Rank %i - async working properly\n", rank);
 
-    delete sendRequest;
-    delete recvRequest;
+    delete[] numbers;
 
     MPI_Finalize();
 

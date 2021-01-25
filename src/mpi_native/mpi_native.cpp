@@ -596,6 +596,7 @@ int MPI_Win_free(MPI_Win* win)
 {
     auto logger = faabric::util::getLogger();
     logger->debug("MPI_Win_free");
+    free(*win);
 
     return MPI_SUCCESS;
 }
@@ -611,7 +612,8 @@ int MPI_Win_create(void* base,
     logger->debug("MPI_Win_create");
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
 
-    //(*win)->worldId = world.getId();
+    (*win) = (faabric_win_t*)malloc(sizeof(faabric_win_t));
+    (*win)->worldId = world.getId();
     (*win)->size = size;
     (*win)->dispUnit = disp_unit;
     (*win)->rank = executingContext.getRank();
@@ -661,7 +663,7 @@ int MPI_Win_get_attr(MPI_Win win,
 int MPI_Free_mem(void* base)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("MPI_Win_get_attr");
+    logger->debug("MPI_Free_mem");
 
     return MPI_SUCCESS;
 }
@@ -705,6 +707,7 @@ int MPI_Isend(const void* buf,
     logger->debug("MPI_Isend {} -> {}", executingContext.getRank(), dest);
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
+    (*request) = (faabric_request_t*)malloc(sizeof(faabric_request_t));
     int requestId = world.isend(
       executingContext.getRank(), dest, (uint8_t*)buf, datatype, count);
     (*request)->id = requestId;
@@ -728,6 +731,7 @@ int MPI_Irecv(void* buf,
     logger->debug("MPI_Irecv {} <- {}", executingContext.getRank(), source);
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
+    (*request) = (faabric_request_t*)malloc(sizeof(faabric_request_t));
     int requestId = world.irecv(
       source, executingContext.getRank(), (uint8_t*)buf, datatype, count);
     (*request)->id = requestId;

@@ -52,37 +52,46 @@ int faabric::executor::mpiFunc()
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
 
-    // Send and receive messages asynchronously in a ring
-    int right = (rank + 1) % worldSize;
-    int maxRank = worldSize - 1;
-    int left = rank > 0 ? rank - 1 : maxRank;
-
-    // Asynchronously receive from the left
-    int recvValue = -1;
-    MPI_Request recvRequest;
-    MPI_Irecv(&recvValue, 1, MPI_INT, left, 0, MPI_COMM_WORLD, &recvRequest);
-
-    // Asynchronously send to the right
-    int sendValue = rank;
-    MPI_Request sendRequest;
-    MPI_Isend(&sendValue, 1, MPI_INT, right, 0, MPI_COMM_WORLD, &sendRequest);
-
-    // Wait for both
-    MPI_Wait(&recvRequest, MPI_STATUS_IGNORE);
-    MPI_Wait(&sendRequest, MPI_STATUS_IGNORE);
-
-    // Check the received value is as expected
-    if (recvValue != left) {
-        printf("Rank %i - async not working properly (got %i expected %i)\n",
-               rank,
-               recvValue,
-               left);
+    if (worldSize < 4) {
+        printf("Need world size of 3 or more\n");
         return 1;
     }
-    printf("Rank %i - async working properly\n", rank);
 
-    delete sendRequest;
-    delete recvRequest;
+    if (rank == 0) {
+        // Send messages out
+        int out[3] = { 111, 222, 333 };
+        MPI_Send(&out[0], 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        MPI_Send(&out[1], 1, MPI_INT, 2, 0, MPI_COMM_WORLD);
+        MPI_Send(&out[2], 1, MPI_INT, 3, 0, MPI_COMM_WORLD);
+
+        // Get responses out of order
+        int in[3] = { 0, 0, 0 };
+        MPI_Recv(&in[2], 1, MPI_INT, 3, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&in[0], 1, MPI_INT, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&in[1], 1, MPI_INT, 2, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        // Check values
+        if (out[0] != in[0] || out[1] != in[1] || out[2] != in[2]) {
+            printf("Responses not as expected (got [%i, %i, %i], expected [%i, "
+                   "%i, %i]\n",
+                   in[0],
+                   in[1],
+                   in[2],
+                   out[0],
+                   out[1],
+                   out[2]);
+            return 1;
+        } else {
+            printf("MPI order check successful\n");
+        }
+
+    } else if (rank > 0 && rank <= 3) {
+        // Echo message back to master
+        int receivedNumber = 0;
+        MPI_Recv(
+          &receivedNumber, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Send(&receivedNumber, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    }
 
     MPI_Finalize();
 

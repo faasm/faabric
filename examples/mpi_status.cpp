@@ -47,42 +47,44 @@ int faabric::executor::mpiFunc()
 {
     MPI_Init(NULL, NULL);
 
+    const int maxCount = 100;
+    auto numbers = new int[maxCount];
+
     int rank;
     int worldSize;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
 
-    // Send and receive messages asynchronously in a ring
-    int right = (rank + 1) % worldSize;
-    int maxRank = worldSize - 1;
-    int left = rank > 0 ? rank - 1 : maxRank;
+    if (rank == 0) {
+        // Send a number of values
+        const int actualCount = 40;
+        MPI_Send(numbers, actualCount, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        printf("Sent %d numbers to 1\n", actualCount);
+    } else if (rank == 1) {
+        // Receive more than the actual count
+        MPI_Status status;
+        MPI_Recv(numbers, maxCount, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
 
-    // Asynchronously receive from the left
-    int recvValue = -1;
-    MPI_Request recvRequest;
-    MPI_Irecv(&recvValue, 1, MPI_INT, left, 0, MPI_COMM_WORLD, &recvRequest);
+        // After receiving the message, check the status to determine
+        // how many numbers were actually received
+        int expectedCount = 40;
+        int actualCount;
+        MPI_Get_count(&status, MPI_INT, &actualCount);
 
-    // Asynchronously send to the right
-    int sendValue = rank;
-    MPI_Request sendRequest;
-    MPI_Isend(&sendValue, 1, MPI_INT, right, 0, MPI_COMM_WORLD, &sendRequest);
-
-    // Wait for both
-    MPI_Wait(&recvRequest, MPI_STATUS_IGNORE);
-    MPI_Wait(&sendRequest, MPI_STATUS_IGNORE);
-
-    // Check the received value is as expected
-    if (recvValue != left) {
-        printf("Rank %i - async not working properly (got %i expected %i)\n",
-               rank,
-               recvValue,
-               left);
-        return 1;
+        if (actualCount != expectedCount) {
+            printf(
+              "Not expected: asked for %i values, expecting %i, but got %i\n",
+              maxCount,
+              expectedCount,
+              actualCount);
+            return 1;
+        }
+        printf("As expected, asked for %i values but got %i\n",
+               maxCount,
+               actualCount);
     }
-    printf("Rank %i - async working properly\n", rank);
 
-    delete sendRequest;
-    delete recvRequest;
+    delete[] numbers;
 
     MPI_Finalize();
 
