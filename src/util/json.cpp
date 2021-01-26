@@ -160,6 +160,20 @@ std::string messageToJson(const faabric::Message& msg)
     return sb.GetString();
 }
 
+std::string getJsonOutput(const faabric::Message &msg) {
+    Document d;
+    d.SetObject();
+    Document::AllocatorType &a = d.GetAllocator();
+    //std::string result_ = b64encode(msg.result());
+    std::string result_ = "FIXME";
+    d.AddMember("result", Value(result_.c_str(), result_.size(), a).Move(), a);
+    d.AddMember("output_data", Value(msg.outputdata().c_str(), msg.outputdata().size(), a).Move(), a);
+    StringBuffer sb;
+    Writer<StringBuffer> writer(sb);
+    d.Accept(writer);
+    return sb.GetString();
+}
+
 bool getBoolFromJson(Document& doc, const std::string& key, bool dflt)
 {
     Value::MemberIterator it = doc.FindMember(key.c_str());
@@ -274,6 +288,9 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_cmdline(getStringFromJson(d, "cmdline", ""));
 
     msg.set_issgx(getBoolFromJson(d, "sgx", false));
+    msg.set_sid(getStringFromJson(d, "sid", ""));
+    msg.set_tag(getStringFromJson(d, "tag", ""));
+
 
     PROF_END(jsonDecode)
 
