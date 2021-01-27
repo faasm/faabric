@@ -13,6 +13,7 @@
 namespace faabric::util {
 const static std::string pyFile = "function.py";
 const static std::string funcFile = "function.wasm";
+const static std::string encryptedFuncFile = "function.wasm.enc";
 const static std::string symFile = "function.symbols";
 const static std::string objFile = "function.wasm.o";
 const static std::string wamrAotFile = "function.aot";
@@ -202,6 +203,13 @@ std::string getFunctionFile(const faabric::Message& msg)
     return path.string();
 }
 
+std::string getEncryptedFunctionFile(const faabric::Message& msg)
+{
+    auto path = getFunctionDir(msg);
+    path.append(encryptedFuncFile);
+
+    return path.string();
+}
 std::string getFunctionSymbolsFile(const faabric::Message& msg)
 {
     auto path = getFunctionDir(msg);
