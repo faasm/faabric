@@ -26,6 +26,8 @@ set_target_properties(faabricmpi
 if(CMAKE_SYSTEM_NAME STREQUAL "Wasm")
     message(STATUS "Faabric MPI WebAssembly build")
     set(LIB_DIRECTORY ${CMAKE_SYSROOT}/lib/wasm32-wasi)
+
+    add_compile_definitions(__wasm__)
     
     install(TARGETS faabricmpi
         ARCHIVE DESTINATION ${LIB_DIRECTORY}

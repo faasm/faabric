@@ -40,8 +40,6 @@ class MpiWorld
 
     int getSize();
 
-    void getSizePtr(int* size);
-
     void destroy();
 
     void enqueueMessage(faabric::MPIMessage& msg);
@@ -195,8 +193,6 @@ class MpiWorld
     void synchronizeRmaWrite(const faabric::MPIMessage& msg, bool isRemote);
 
     double getWTime();
-
-    void getWTimePtr(double* t);
 
   private:
     int id;

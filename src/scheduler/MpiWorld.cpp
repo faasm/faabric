@@ -1168,11 +1168,6 @@ double MpiWorld::getWTime()
     return t / 1000.0;
 }
 
-void MpiWorld::getWTimePtr(double* t)
-{
-    *t = faabric::util::getTimeDiffMillis(creationTime) / 1000.0;
-}
-
 std::string MpiWorld::getUser()
 {
     return user;
@@ -1191,11 +1186,6 @@ int MpiWorld::getId()
 int MpiWorld::getSize()
 {
     return size;
-}
-
-void MpiWorld::getSizePtr(int* size)
-{
-    *size = this->size;
 }
 
 void MpiWorld::overrideHost(const std::string& newHost)
