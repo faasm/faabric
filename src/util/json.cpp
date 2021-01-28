@@ -6,6 +6,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include <cppcodec/base64_rfc4648.hpp>
+
 using namespace rapidjson;
 
 namespace faabric::util {
@@ -164,8 +166,7 @@ std::string getJsonOutput(const faabric::Message &msg) {
     Document d;
     d.SetObject();
     Document::AllocatorType &a = d.GetAllocator();
-    //std::string result_ = b64encode(msg.result());
-    std::string result_ = "FIXME";
+    std::string result_ = cppcodec::base64_rfc4648::encode(msg.result());
     d.AddMember("result", Value(result_.c_str(), result_.size(), a).Move(), a);
     d.AddMember("output_data", Value(msg.outputdata().c_str(), msg.outputdata().size(), a).Move(), a);
     StringBuffer sb;

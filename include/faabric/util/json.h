@@ -16,6 +16,8 @@ class JsonFieldNotFound : public faabric::util::FaabricException
     {}
 };
 
+std::string getJsonOutput(const faabric::Message &msg);
+
 std::string getValueFromJsonString(const std::string& key,
                                    const std::string& jsonIn);
 }

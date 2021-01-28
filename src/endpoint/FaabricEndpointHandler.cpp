@@ -114,8 +114,7 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
             if (result.result().empty()) {
                 return result.outputdata() + "\n";
             } else {
-                //return faabric::util::getJsonOutput(result);
-                return "FIXME\n";
+                return faabric::util::getJsonOutput(result);
             }
         } catch (faabric::redis::RedisNoResponseException& ex) {
             return "No response from function\n";
