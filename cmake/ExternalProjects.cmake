@@ -65,6 +65,16 @@ ExternalProject_Add(spdlog_ext
 ExternalProject_Get_Property(spdlog_ext SOURCE_DIR)
 set(SPDLOG_INCLUDE_DIR ${SOURCE_DIR}/include)
 
+# cppcodec (for base64)
+ExternalProject_Add(cppcodec_ext
+    GIT_REPOSITORY "https://github.com/tplgy/cppcodec"
+    GIT_TAG "v0.2"
+    CMAKE_ARGS "-DBUILD_TESTING=OFF"
+    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+)
+ExternalProject_Get_Property(cppcodec_ext SOURCE_DIR)
+set(CPPCODEC_INCLUDE_DIR ${SOURCE_DIR}/cppcodec)
+
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)
     ExternalProject_Add(catch_ext
