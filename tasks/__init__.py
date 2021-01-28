@@ -5,6 +5,7 @@ from . import container
 from . import dev
 from . import examples
 from . import git
+from . import mpi_native
 
 ns = Collection(
     call,
@@ -12,4 +13,5 @@ ns = Collection(
     dev,
     examples,
     git,
+    mpi_native,
 )
