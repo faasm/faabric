@@ -47,7 +47,6 @@ int MPI_Init(int* argc, char*** argv)
 
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
-    faabric::util::initMpiLogging(thisRank);
     faabric::util::getLogger("mpi")->debug("MPI_Init");
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();

@@ -7,7 +7,7 @@
 
 int main(int argc, char* argv[])
 {
-    faabric::util::initLogging();
+    //faabric::util::initLogging();
 
     int result = Catch::Session().run(argc, argv);
 
