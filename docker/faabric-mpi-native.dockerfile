@@ -26,4 +26,4 @@ RUN inv dev.cc faabricmpi_native --shared
 RUN inv dev.install faabricmpi_native --shared
 
 # Build examples
-RUN inv examples.build
+RUN inv mpi-native.build-mpi

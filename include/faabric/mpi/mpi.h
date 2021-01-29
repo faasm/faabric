@@ -70,7 +70,11 @@ extern "C"
         int worldId;
         int rank;
         int size;
+#ifdef __wasm__
         int wasmPtr;
+#else
+    void* basePtr;
+#endif
         int dispUnit;
     };
 
@@ -86,7 +90,7 @@ extern "C"
 
     struct faabric_request_t
     {
-        int _unused;
+        int id;
     };
 
     struct faabric_group_t

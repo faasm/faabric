@@ -6,7 +6,7 @@ services:
 
   worker:
     image: ${FAABRIC_MPI_NATIVE_IMAGE}
-    entrypoint: /code/faabric/examples/build/${MPI_EXAMPLE}
+    entrypoint: /code/faabric/mpi-native/examples/build/${MPI_EXAMPLE}
     working_dir: /code/faabric
     privileged: true
     environment:
@@ -20,7 +20,7 @@ services:
 
   master:
     image: ${FAABRIC_MPI_NATIVE_IMAGE}
-    entrypoint: ['/code/faabric/examples/build/${MPI_EXAMPLE}', 'master', '${MPI_WORLD_SIZE}']
+    entrypoint: ['/code/faabric/mpi-native/examples/build/${MPI_EXAMPLE}', 'master', '${MPI_WORLD_SIZE}']
     working_dir: /code/faabric
     privileged: true
     environment:
