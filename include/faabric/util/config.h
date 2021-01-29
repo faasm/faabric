@@ -56,6 +56,8 @@ class SystemConfig
 
     // MPI
     int defaultMpiWorldSize;
+    std::string mpiLogLevel;
+    std::string mpiLogFile;
 
     // Endpoint
     std::string endpointInterface;

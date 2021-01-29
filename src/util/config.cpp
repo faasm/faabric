@@ -69,6 +69,8 @@ void SystemConfig::initialise()
     // MPI
     defaultMpiWorldSize =
       this->getSystemConfIntParam("DEFAULT_MPI_WORLD_SIZE", "5");
+    mpiLogLevel = getEnvVar("MPI_LOG_LEVEL", "on");
+    mpiLogFile = getEnvVar("MPI_LOG_FILE", "logs/faabric_mpi.log");
 
     // Endpoint
     endpointInterface = getEnvVar("ENDPOINT_INTERFACE", "");
