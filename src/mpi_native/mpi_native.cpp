@@ -9,6 +9,7 @@
 using namespace faabric::executor;
 
 static faabric::scheduler::MpiContext executingContext;
+static std::string logName;
 
 faabric::Message* getExecutingCall()
 {
@@ -25,7 +26,7 @@ faabric::scheduler::MpiWorld& getExecutingWorld()
 
 static void notImplemented(const std::string& funcName)
 {
-    auto logger = faabric::util::getLogger("mpi");
+    auto logger = faabric::util::getLogger(logName);
     logger->debug("{}", funcName);
 
     throw std::runtime_error(funcName + " not implemented.");
@@ -47,7 +48,8 @@ int MPI_Init(int* argc, char*** argv)
 
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
-    faabric::util::getLogger("mpi")->debug("MPI_Init");
+    logName = fmt::format("MPI-{}", thisRank);
+    faabric::util::getLogger(logName)->debug("MPI_Init");
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
     world.barrier(thisRank);
@@ -57,7 +59,7 @@ int MPI_Init(int* argc, char*** argv)
 
 int MPI_Comm_rank(MPI_Comm comm, int* rank)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Comm_rank");
+    faabric::util::getLogger(logName)->debug("MPI_Comm_rank");
 
     *rank = executingContext.getRank();
 
@@ -66,7 +68,7 @@ int MPI_Comm_rank(MPI_Comm comm, int* rank)
 
 int MPI_Comm_size(MPI_Comm comm, int* size)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Comm_size");
+    faabric::util::getLogger(logName)->debug("MPI_Comm_size");
     *size = getExecutingWorld().getSize();
 
     return MPI_SUCCESS;
@@ -74,7 +76,7 @@ int MPI_Comm_size(MPI_Comm comm, int* size)
 
 int MPI_Finalize()
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Finalize");
+    faabric::util::getLogger(logName)->debug("MPI_Finalize");
 
     return MPI_SUCCESS;
 }
@@ -93,7 +95,7 @@ int MPI_Send(const void* buf,
              int tag,
              MPI_Comm comm)
 {
-    faabric::util::getLogger("mpi")->debug(
+    faabric::util::getLogger(logName)->debug(
       fmt::format("MPI_Send {} -> {}", executingContext.getRank(), dest));
     getExecutingWorld().send(executingContext.getRank(),
                              dest,
@@ -125,7 +127,7 @@ int MPI_Recv(void* buf,
              MPI_Comm comm,
              MPI_Status* status)
 {
-    faabric::util::getLogger("mpi")->debug(
+    faabric::util::getLogger(logName)->debug(
       fmt::format("MPI_Recv {} <- {}", executingContext.getRank(), source));
     getExecutingWorld().recv(source,
                              executingContext.getRank(),
@@ -151,7 +153,7 @@ int MPI_Sendrecv(const void* sendbuf,
                  MPI_Comm comm,
                  MPI_Status* status)
 {
-    faabric::util::getLogger("mpi")->debug(
+    faabric::util::getLogger(logName)->debug(
       fmt::format("MPI_Sendrecv {} -> {} and {} <- {}",
                   executingContext.getRank(),
                   dest,
@@ -173,7 +175,7 @@ int MPI_Sendrecv(const void* sendbuf,
 
 int MPI_Abort(MPI_Comm comm, int errorcode)
 {
-    auto logger = faabric::util::getLogger("mpi");
+    auto logger = faabric::util::getLogger(logName);
     logger->debug("MPI_Abort");
 
     return MPI_SUCCESS;
@@ -181,7 +183,7 @@ int MPI_Abort(MPI_Comm comm, int errorcode)
 
 int MPI_Get_count(const MPI_Status* status, MPI_Datatype datatype, int* count)
 {
-    auto logger = faabric::util::getLogger("mpi");
+    auto logger = faabric::util::getLogger(logName);
     logger->debug("MPI_Get_count");
 
     if (status->bytesSize % datatype->size != 0) {
@@ -198,7 +200,7 @@ int MPI_Get_count(const MPI_Status* status, MPI_Datatype datatype, int* count)
 
 int MPI_Probe(int source, int tag, MPI_Comm comm, MPI_Status* status)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Probe");
+    faabric::util::getLogger(logName)->debug("MPI_Probe");
     getExecutingWorld().probe(source, executingContext.getRank(), status);
 
     return MPI_SUCCESS;
@@ -206,7 +208,7 @@ int MPI_Probe(int source, int tag, MPI_Comm comm, MPI_Status* status)
 
 int MPI_Barrier(MPI_Comm comm)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Barrier");
+    faabric::util::getLogger(logName)->debug("MPI_Barrier");
     getExecutingWorld().barrier(executingContext.getRank());
 
     return MPI_SUCCESS;
@@ -218,7 +220,7 @@ int MPI_Bcast(void* buffer,
               int root,
               MPI_Comm comm)
 {
-    auto logger = faabric::util::getLogger("mpi");
+    auto logger = faabric::util::getLogger(logName);
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
 
     int rank = executingContext.getRank();
@@ -249,7 +251,7 @@ int MPI_Scatter(const void* sendbuf,
                 int root,
                 MPI_Comm comm)
 {
-    faabric::util::getLogger("mpi")->debug(
+    faabric::util::getLogger(logName)->debug(
       fmt::format("MPI_Scatter {} -> {}", root, executingContext.getRank()));
     getExecutingWorld().scatter(root,
                                 executingContext.getRank(),
@@ -276,7 +278,7 @@ int MPI_Gather(const void* sendbuf,
         sendbuf = recvbuf;
     }
 
-    faabric::util::getLogger("mpi")->debug("MPI_Gather");
+    faabric::util::getLogger(logName)->debug("MPI_Gather");
     getExecutingWorld().gather(executingContext.getRank(),
                                root,
                                (uint8_t*)sendbuf,
@@ -301,7 +303,7 @@ int MPI_Allgather(const void* sendbuf,
         sendbuf = recvbuf;
     }
 
-    faabric::util::getLogger("mpi")->debug("MPI_Allgather");
+    faabric::util::getLogger(logName)->debug("MPI_Allgather");
     getExecutingWorld().allGather(executingContext.getRank(),
                                   (uint8_t*)sendbuf,
                                   sendtype,
@@ -339,7 +341,7 @@ int MPI_Reduce(const void* sendbuf,
         sendbuf = recvbuf;
     }
 
-    faabric::util::getLogger("mpi")->debug("MPI_Reduce");
+    faabric::util::getLogger(logName)->debug("MPI_Reduce");
     getExecutingWorld().reduce(executingContext.getRank(),
                                root,
                                (uint8_t*)sendbuf,
@@ -374,7 +376,7 @@ int MPI_Allreduce(const void* sendbuf,
         sendbuf = recvbuf;
     }
 
-    faabric::util::getLogger("mpi")->debug("MPI_Allreduce");
+    faabric::util::getLogger(logName)->debug("MPI_Allreduce");
     getExecutingWorld().allReduce(executingContext.getRank(),
                                   (uint8_t*)sendbuf,
                                   (uint8_t*)recvbuf,
@@ -396,7 +398,7 @@ int MPI_Scan(const void* sendbuf,
         sendbuf = recvbuf;
     }
 
-    faabric::util::getLogger("mpi")->debug("MPI_Scan");
+    faabric::util::getLogger(logName)->debug("MPI_Scan");
     getExecutingWorld().scan(executingContext.getRank(),
                              (uint8_t*)sendbuf,
                              (uint8_t*)recvbuf,
@@ -415,7 +417,7 @@ int MPI_Alltoall(const void* sendbuf,
                  MPI_Datatype recvtype,
                  MPI_Comm comm)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Alltoall");
+    faabric::util::getLogger(logName)->debug("MPI_Alltoall");
     getExecutingWorld().allToAll(executingContext.getRank(),
                                  (uint8_t*)sendbuf,
                                  sendtype,
@@ -434,7 +436,7 @@ int MPI_Cart_create(MPI_Comm old_comm,
                     int reorder,
                     MPI_Comm* comm)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Cart_create");
+    faabric::util::getLogger(logName)->debug("MPI_Cart_create");
 
     *comm = old_comm;
 
@@ -443,7 +445,7 @@ int MPI_Cart_create(MPI_Comm old_comm,
 
 int MPI_Cart_rank(MPI_Comm comm, int coords[], int* rank)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Cart_rank");
+    faabric::util::getLogger(logName)->debug("MPI_Cart_rank");
     getExecutingWorld().getRankFromCoords(rank, coords);
 
     return MPI_SUCCESS;
@@ -455,7 +457,7 @@ int MPI_Cart_get(MPI_Comm comm,
                  int periods[],
                  int coords[])
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Cart_get");
+    faabric::util::getLogger(logName)->debug("MPI_Cart_get");
     getExecutingWorld().getCartesianRank(
       executingContext.getRank(), dims, periods, coords);
 
@@ -468,7 +470,7 @@ int MPI_Cart_shift(MPI_Comm comm,
                    int* rank_source,
                    int* rank_dest)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Cart_shift");
+    faabric::util::getLogger(logName)->debug("MPI_Cart_shift");
 
     rank_source = rank_dest;
 
@@ -477,7 +479,7 @@ int MPI_Cart_shift(MPI_Comm comm,
 
 int MPI_Type_size(MPI_Datatype type, int* size)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Type_size");
+    faabric::util::getLogger(logName)->debug("MPI_Type_size");
 
     *size = type->size;
 
@@ -493,7 +495,7 @@ int MPI_Type_free(MPI_Datatype* datatype)
 
 int MPI_Alloc_mem(MPI_Aint size, MPI_Info info, void* baseptr)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Alloc_mem");
+    faabric::util::getLogger(logName)->debug("MPI_Alloc_mem");
 
     if (info != MPI_INFO_NULL) {
         throw std::runtime_error("Non-null info not supported");
@@ -506,7 +508,7 @@ int MPI_Alloc_mem(MPI_Aint size, MPI_Info info, void* baseptr)
 
 int MPI_Win_fence(int assert, MPI_Win win)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Win_fence");
+    faabric::util::getLogger(logName)->debug("MPI_Win_fence");
     getExecutingWorld().barrier(executingContext.getRank());
 
     return MPI_SUCCESS;
@@ -521,7 +523,7 @@ int MPI_Get(void* origin_addr,
             MPI_Datatype target_datatype,
             MPI_Win win)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Get");
+    faabric::util::getLogger(logName)->debug("MPI_Get");
     getExecutingWorld().rmaGet(target_rank,
                                target_datatype,
                                target_count,
@@ -541,7 +543,7 @@ int MPI_Put(const void* origin_addr,
             MPI_Datatype target_datatype,
             MPI_Win win)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Put");
+    faabric::util::getLogger(logName)->debug("MPI_Put");
     getExecutingWorld().rmaPut(executingContext.getRank(),
                                (uint8_t*)origin_addr,
                                origin_datatype,
@@ -555,7 +557,7 @@ int MPI_Put(const void* origin_addr,
 
 int MPI_Win_free(MPI_Win* win)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Win_free");
+    faabric::util::getLogger(logName)->debug("MPI_Win_free");
     free(*win);
 
     return MPI_SUCCESS;
@@ -568,7 +570,7 @@ int MPI_Win_create(void* base,
                    MPI_Comm comm,
                    MPI_Win* win)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Win_create");
+    faabric::util::getLogger(logName)->debug("MPI_Win_create");
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
 
     (*win) = (faabric_win_t*)malloc(sizeof(faabric_win_t));
@@ -584,7 +586,7 @@ int MPI_Win_create(void* base,
 
 int MPI_Get_processor_name(char* name, int* resultlen)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Get_processor_name");
+    faabric::util::getLogger(logName)->debug("MPI_Get_processor_name");
 
     std::string host = faabric::util::getSystemConfig().endpointHost;
     strncpy(name, host.c_str(), host.length());
@@ -598,7 +600,7 @@ int MPI_Win_get_attr(MPI_Win win,
                      void* attribute_val,
                      int* flag)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Win_get_attr");
+    faabric::util::getLogger(logName)->debug("MPI_Win_get_attr");
 
     *flag = 1;
     if (win_keyval == MPI_WIN_BASE) {
@@ -619,7 +621,7 @@ int MPI_Win_get_attr(MPI_Win win,
 
 int MPI_Free_mem(void* base)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Free_mem");
+    faabric::util::getLogger(logName)->debug("MPI_Free_mem");
 
     return MPI_SUCCESS;
 }
@@ -633,14 +635,14 @@ int MPI_Request_free(MPI_Request* request)
 
 int MPI_Type_contiguous(int count, MPI_Datatype oldtype, MPI_Datatype* newtype)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Type_contiguous");
+    faabric::util::getLogger(logName)->debug("MPI_Type_contiguous");
 
     return MPI_SUCCESS;
 }
 
 int MPI_Type_commit(MPI_Datatype* type)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Type_commit");
+    faabric::util::getLogger(logName)->debug("MPI_Type_commit");
 
     return MPI_SUCCESS;
 }
@@ -653,7 +655,7 @@ int MPI_Isend(const void* buf,
               MPI_Comm comm,
               MPI_Request* request)
 {
-    faabric::util::getLogger("mpi")->debug(
+    faabric::util::getLogger(logName)->debug(
       "MPI_Isend {} -> {}", executingContext.getRank(), dest);
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
@@ -673,7 +675,7 @@ int MPI_Irecv(void* buf,
               MPI_Comm comm,
               MPI_Request* request)
 {
-    faabric::util::getLogger("mpi")->debug(
+    faabric::util::getLogger(logName)->debug(
       "MPI_Irecv {} <- {}", executingContext.getRank(), source);
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
@@ -687,14 +689,14 @@ int MPI_Irecv(void* buf,
 
 double MPI_Wtime()
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Wtime");
+    faabric::util::getLogger(logName)->debug("MPI_Wtime");
 
     return getExecutingWorld().getWTime();
 }
 
 int MPI_Wait(MPI_Request* request, MPI_Status* status)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Wait");
+    faabric::util::getLogger(logName)->debug("MPI_Wait");
     getExecutingWorld().awaitAsyncRequest((*request)->id);
 
     return MPI_SUCCESS;
@@ -742,7 +744,7 @@ MPI_Comm MPI_Comm_f2c(MPI_Fint comm)
 
 int MPI_Comm_free(MPI_Comm* comm)
 {
-    faabric::util::getLogger("mpi")->debug("MPI_Comm_free");
+    faabric::util::getLogger(logName)->debug("MPI_Comm_free");
 
     return MPI_SUCCESS;
 }
