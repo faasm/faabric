@@ -1,8 +1,8 @@
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
-#include "spdlog/sinks/basic_file_sink.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace faabric::util {
 static std::unordered_map<std::string, std::shared_ptr<spdlog::logger>> loggers;
@@ -51,7 +51,6 @@ static void initLogging(const std::string& name)
 std::shared_ptr<spdlog::logger> getLogger(const std::string& name)
 {
     // Lazy-initialize logger
-    // TODO consider using loggers.contains(<key>) when C++20 support
     if (loggers.count(name) == 0) {
         initLogging(name);
     }

@@ -27,7 +27,7 @@ void SystemConfig::initialise()
     cgroupMode = getEnvVar("CGROUP_MODE", "on");
     netNsMode = getEnvVar("NETNS_MODE", "off");
     logLevel = getEnvVar("LOG_LEVEL", "info");
-    logFile = getEnvVar("LOG_FILE", "on");
+    logFile = getEnvVar("LOG_FILE", "off");
     pythonPreload = getEnvVar("PYTHON_PRELOAD", "off");
     captureStdout = getEnvVar("CAPTURE_STDOUT", "off");
     stateMode = getEnvVar("STATE_MODE", "inmemory");
@@ -110,6 +110,7 @@ void SystemConfig::print()
     logger->info("CGROUP_MODE                {}", cgroupMode);
     logger->info("NETNS_MODE                 {}", netNsMode);
     logger->info("LOG_LEVEL                  {}", logLevel);
+    logger->info("LOG_FILE                   {}", logFile);
     logger->info("PYTHON_PRELOAD             {}", pythonPreload);
     logger->info("CAPTURE_STDOUT             {}", captureStdout);
     logger->info("STATE_MODE                 {}", stateMode);
