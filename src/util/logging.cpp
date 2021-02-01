@@ -40,7 +40,7 @@ static void initLogging(const std::string& name)
 
         // Add custom pattern. See here the formatting options:
         // https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags
-        // <timestamp> [log-level] [logger-name] [rank] <message>
+        // <timestamp> [logger-name] (log-level) <message>
         loggers[name]->set_pattern("%^%D %T [%n] (%l)%$ %v");
     } catch (const spdlog::spdlog_ex& e) {
         throw std::runtime_error(
