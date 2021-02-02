@@ -3,7 +3,6 @@
 
 int main()
 {
-    faabric::util::initLogging();
     auto logger = faabric::util::getLogger();
 
     // Build a message just to check things work

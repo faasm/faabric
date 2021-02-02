@@ -18,6 +18,8 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.functionStorage == "local");
     REQUIRE(conf.fileserverUrl == "");
     REQUIRE(conf.netNsMode == "off");
+    REQUIRE(conf.logLevel == "info");
+    REQUIRE(conf.logFile == "off");
     REQUIRE(conf.pythonPreload == "off");
     REQUIRE(conf.captureStdout == "off");
     REQUIRE(conf.stateMode == "inmemory");
@@ -50,6 +52,8 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string fileserver = setEnvVar("FILESERVER_URL", "www.foo.com");
     std::string cgMode = setEnvVar("CGROUP_MODE", "off");
     std::string nsMode = setEnvVar("NETNS_MODE", "on");
+    std::string logLevel = setEnvVar("LOG_LEVEL", "debug");
+    std::string logFile = setEnvVar("LOG_FILE", "on");
     std::string pythonPre = setEnvVar("PYTHON_PRELOAD", "on");
     std::string captureStdout = setEnvVar("CAPTURE_STDOUT", "on");
     std::string stateMode = setEnvVar("STATE_MODE", "foobar");
@@ -89,6 +93,8 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.fileserverUrl == "www.foo.com");
     REQUIRE(conf.cgroupMode == "off");
     REQUIRE(conf.netNsMode == "on");
+    REQUIRE(conf.logLevel == "debug");
+    REQUIRE(conf.logFile == "on");
     REQUIRE(conf.pythonPreload == "on");
     REQUIRE(conf.captureStdout == "on");
     REQUIRE(conf.stateMode == "foobar");
@@ -126,6 +132,8 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("FILESERVER_URL", fileserver);
     setEnvVar("CGROUP_MODE", cgMode);
     setEnvVar("NETNS_MODE", nsMode);
+    setEnvVar("LOG_LEVEL", logLevel);
+    setEnvVar("LOG_FILE", logFile);
     setEnvVar("PYTHON_PRELOAD", pythonPre);
     setEnvVar("CAPTURE_STDOUT", captureStdout);
     setEnvVar("STATE_MODE", stateMode);

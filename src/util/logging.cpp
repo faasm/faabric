@@ -1,42 +1,60 @@
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
+#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace faabric::util {
-static std::shared_ptr<spdlog::logger> logger;
-static bool isInitialised = false;
+static std::unordered_map<std::string, std::shared_ptr<spdlog::logger>> loggers;
 
-void initLogging()
+static void initLogging(const std::string& name)
 {
-    if (isInitialised) {
-        return;
-    }
-
-    // Initialise the logger
-    logger = spdlog::stderr_color_mt("console");
-
-    // Work out log level from environment
     SystemConfig& conf = faabric::util::getSystemConfig();
-    if (conf.logLevel == "debug") {
-        spdlog::set_level(spdlog::level::debug);
-    } else if (conf.logLevel == "trace") {
-        spdlog::set_level(spdlog::level::trace);
-    } else if (conf.logLevel == "off") {
-        spdlog::set_level(spdlog::level::off);
-    } else {
-        spdlog::set_level(spdlog::level::info);
-    }
 
-    isInitialised = true;
+    // Configure the sink list. By default all loggers _at least_ log to
+    // the console
+    try {
+        std::vector<spdlog::sink_ptr> sinks;
+        auto stdout_sink =
+          std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+        sinks.push_back(stdout_sink);
+
+        // If file logging is set, add an additional file sink
+        if (conf.logFile == "on") {
+            sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(
+              fmt::format("/var/log/faabric/{}.log", name)));
+        }
+
+        // Initialize the logger and set level
+        loggers[name] =
+          std::make_shared<spdlog::logger>(name, sinks.begin(), sinks.end());
+        if (conf.logLevel == "debug") {
+            loggers[name]->set_level(spdlog::level::debug);
+        } else if (conf.logLevel == "trace") {
+            loggers[name]->set_level(spdlog::level::trace);
+        } else if (conf.logLevel == "off") {
+            loggers[name]->set_level(spdlog::level::off);
+        } else {
+            loggers[name]->set_level(spdlog::level::info);
+        }
+
+        // Add custom pattern. See here the formatting options:
+        // https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags
+        // <timestamp> [logger-name] (log-level) <message>
+        loggers[name]->set_pattern("%^%D %T [%n] (%l)%$ %v");
+    } catch (const spdlog::spdlog_ex& e) {
+        throw std::runtime_error(
+          fmt::format("Error initializing {} logger: {}", name, e.what()));
+    }
 }
 
-std::shared_ptr<spdlog::logger> getLogger()
+std::shared_ptr<spdlog::logger> getLogger(const std::string& name)
 {
-    if (!isInitialised) {
-        initLogging();
+    // Lazy-initialize logger
+    if (loggers.count(name) == 0) {
+        initLogging(name);
     }
 
-    return logger;
+    return loggers[name];
 }
 }

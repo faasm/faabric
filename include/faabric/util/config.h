@@ -21,6 +21,7 @@ class SystemConfig
     std::string cgroupMode;
     std::string netNsMode;
     std::string logLevel;
+    std::string logFile;
     std::string pythonPreload;
     std::string captureStdout;
     std::string stateMode;

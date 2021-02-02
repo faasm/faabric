@@ -17,7 +17,6 @@ FAABRIC_EXECUTOR()
 
 int main()
 {
-    faabric::util::initLogging();
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Start the worker pool
