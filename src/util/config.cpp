@@ -32,6 +32,8 @@ void SystemConfig::initialise()
     captureStdout = getEnvVar("CAPTURE_STDOUT", "off");
     stateMode = getEnvVar("STATE_MODE", "inmemory");
     wasmVm = getEnvVar("WASM_VM", "wavm");
+    deltaSnapshotEncoding =
+      getEnvVar("DELTA_SNAPSHOT_ENCODING", "pages=4096;xor;zstd=1");
 
     // Redis
     redisStateHost = getEnvVar("REDIS_STATE_HOST", "localhost");
@@ -107,6 +109,7 @@ void SystemConfig::print()
     logger->info("CAPTURE_STDOUT             {}", captureStdout);
     logger->info("STATE_MODE                 {}", stateMode);
     logger->info("WASM_VM                    {}", wasmVm);
+    logger->info("DELTA_SNAPSHOT_ENCODING    {}", deltaSnapshotEncoding);
 
     logger->info("--- Redis ---");
     logger->info("REDIS_STATE_HOST           {}", redisStateHost);

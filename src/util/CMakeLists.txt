@@ -7,6 +7,7 @@ set(LIB_FILES
         bytes.cpp
         config.cpp
         clock.cpp
+        delta.cpp
         environment.cpp
         files.cpp
         func.cpp
@@ -33,8 +34,9 @@ add_dependencies(util rapidjson_ext)
 add_dependencies(util cppcodec_ext)
 
 target_link_libraries(
-        util
+        util PUBLIC
         proto
         boost_system
         boost_filesystem
+        zstd::libzstd_static
 )

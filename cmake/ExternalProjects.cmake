@@ -1,9 +1,10 @@
 include(FindGit)
 find_package(Git)
 include (ExternalProject)
+include (FetchContent)
 
 # Protobuf/ grpc config
-# See the example in the gRPC repo here:                                         
+# See the example in the gRPC repo here:
 # https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/CMakeLists.txt
 if(BUILD_SHARED_LIBS)
     set(Protobuf_USE_STATIC_LIBS OFF)
@@ -12,22 +13,22 @@ else()
 endif()
 
 include(FindProtobuf)
-set(protobuf_MODULE_COMPATIBLE TRUE)                                            
-find_package(Protobuf REQUIRED)                                                  
+set(protobuf_MODULE_COMPATIBLE TRUE)
+find_package(Protobuf REQUIRED)
 
-message(STATUS "Using protobuf  \                                                
-    ${PROTOBUF_LIBRARY} \                                                        
-    ${PROTOBUF_PROTOC_LIBRARY} \                                                 
-    ${PROTOBUF_PROTOC_EXECUTABLE} \                                              
-")                                                                               
-                                                                                 
-find_package(gRPC CONFIG REQUIRED)                                               
-message(STATUS "Using gRPC ${gRPC_VERSION}")                                     
-                                                                                 
-include_directories(${PROTOBUF_INCLUDE_DIR})                                     
-                                                                                 
-set(PROTOC_EXE /usr/local/bin/protoc)                                            
-set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)                                  
+message(STATUS "Using protobuf  \
+    ${PROTOBUF_LIBRARY} \
+    ${PROTOBUF_PROTOC_LIBRARY} \
+    ${PROTOBUF_PROTOC_EXECUTABLE} \
+")
+
+find_package(gRPC CONFIG REQUIRED)
+message(STATUS "Using gRPC ${gRPC_VERSION}")
+
+include_directories(${PROTOBUF_INCLUDE_DIR})
+
+set(PROTOC_EXE /usr/local/bin/protoc)
+set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 
 # Include FlatBuffers
 # I couldn't get the proper find_package working, so we have this hack now, and
@@ -35,7 +36,7 @@ set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
 set(FLATBUFFERS_FLATC_EXECUTABLE "/usr/local/bin/flatc")
 set(FLATBUFFERS_INCLUDE_DIRS "/usr/local/include/flatbuffers")
 
-# Pistache 
+# Pistache
 ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
@@ -51,9 +52,9 @@ set_target_properties(pistache
 )
 
 # RapidJSON
-set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "") 
-set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "") 
-set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "") 
+set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
+set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
 ExternalProject_Add(rapidjson_ext
     GIT_REPOSITORY "https://github.com/Tencent/rapidjson"
     GIT_TAG "2ce91b823c8b4504b9c40f99abf00917641cef6c"
@@ -65,7 +66,7 @@ set(RAPIDJSON_INCLUDE_DIR ${SOURCE_DIR}/include)
 # spdlog
 ExternalProject_Add(spdlog_ext
     GIT_REPOSITORY "https://github.com/gabime/spdlog"
-    GIT_TAG "v1.8.0"  
+    GIT_TAG "v1.8.0"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 ExternalProject_Get_Property(spdlog_ext SOURCE_DIR)
@@ -81,10 +82,35 @@ ExternalProject_Add(cppcodec_ext
 ExternalProject_Get_Property(cppcodec_ext SOURCE_DIR)
 set(CPPCODEC_INCLUDE_DIR ${SOURCE_DIR})
 
+set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_PROGRAMS OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_SHARED OFF CACHE INTERNAL "")
+set(ZSTD_BUILD_STATIC ON CACHE INTERNAL "")
+set(ZSTD_BUILD_TESTS OFF CACHE INTERNAL "")
+# This means zstd doesn't use threading internally,
+# not that it can't be used in a multithreaded context
+set(ZSTD_MULTITHREAD_SUPPORT OFF CACHE INTERNAL "")
+set(ZSTD_LEGACY_SUPPORT OFF CACHE INTERNAL "")
+set(ZSTD_ZLIB_SUPPORT OFF CACHE INTERNAL "")
+set(ZSTD_LZMA_SUPPORT OFF CACHE INTERNAL "")
+set(ZSTD_LZ4_SUPPORT OFF CACHE INTERNAL "")
+
+FetchContent_Declare(zstd_ext
+    GIT_REPOSITORY "https://github.com/facebook/zstd"
+    GIT_TAG "v1.4.9"
+    SOURCE_SUBDIR "build/cmake"
+)
+
+FetchContent_MakeAvailable(zstd_ext)
+# Work around zstd not declaring its targets properly
+target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
+add_library(zstd::libzstd_static ALIAS libzstd_static)
+
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)
-    set(CATCH_INSTALL_DOCS OFF CACHE INTERNAL "") 
-    set(CATCH_INSTALL_EXTRAS OFF CACHE INTERNAL "") 
+    set(CATCH_INSTALL_DOCS OFF CACHE INTERNAL "")
+    set(CATCH_INSTALL_EXTRAS OFF CACHE INTERNAL "")
 
     ExternalProject_Add(catch_ext
         GIT_REPOSITORY "https://github.com/catchorg/Catch2"
