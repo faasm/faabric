@@ -73,7 +73,7 @@ ExternalProject_Add(cppcodec_ext
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 ExternalProject_Get_Property(cppcodec_ext SOURCE_DIR)
-set(CPPCODEC_INCLUDE_DIR ${SOURCE_DIR}/cppcodec)
+set(CPPCODEC_INCLUDE_DIR ${SOURCE_DIR})
 
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)
