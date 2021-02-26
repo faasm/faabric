@@ -2,9 +2,9 @@
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
-#if(FAASM_SGX)
+#if (FAASM_SGX)
 namespace sgx {
-	    extern void checkSgxSetup();
+extern void checkSgxSetup();
 }
 #endif
 
@@ -21,9 +21,9 @@ void FaabricMain::startBackground()
 
     conf.print();
 
-#if(FAASM_SGX)
-	// Check for SGX capability and create shared enclave
-	sgx::checkSgxSetup();
+#if (FAASM_SGX)
+    // Check for SGX capability and create shared enclave
+    sgx::checkSgxSetup();
 #endif
 
     // Start thread pool in background
