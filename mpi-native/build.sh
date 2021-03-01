@@ -7,7 +7,7 @@ PROJ_ROOT=${THIS_DIR}/..
 
 pushd ${PROJ_ROOT} >> /dev/null
 
-. ./mpi-native/mpi-native.env
+source ./mpi-native/mpi-native.env
 
 docker-compose \
     --file ${COMPOSE_FILE} \

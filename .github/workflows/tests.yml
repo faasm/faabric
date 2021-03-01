@@ -129,6 +129,8 @@ jobs:
       - name: "Fetch ref"
         uses: actions/checkout@v2
       # --- Examples ---
+      - name: "Docker Compose version"
+        run: docker-compose --version
       - name: "Build docker compose images"
         run: ./mpi-native/build.sh
       - name: "Run all examples"
