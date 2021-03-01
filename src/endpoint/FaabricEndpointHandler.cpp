@@ -111,7 +111,11 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
               sch.getFunctionResult(msg.id(), conf.globalMessageTimeout);
             logger->debug("Worker thread {} result {}", tid, funcStr);
 
-            return result.outputdata() + "\n";
+            if (result.sgxresult().empty()) {
+                return result.outputdata() + "\n";
+            } else {
+                return faabric::util::getJsonOutput(result);
+            }
         } catch (faabric::redis::RedisNoResponseException& ex) {
             return "No response from function\n";
         }

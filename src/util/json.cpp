@@ -6,6 +6,8 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
+#include <cppcodec/base64_rfc4648.hpp>
+
 using namespace rapidjson;
 
 namespace faabric::util {
@@ -153,10 +155,57 @@ std::string messageToJson(const faabric::Message& msg)
         d.AddMember("sgx", msg.issgx(), a);
     }
 
+    if (!msg.sgxsid().empty()) {
+        d.AddMember(
+          "sgxsid", Value(msg.sgxsid().c_str(), msg.sgxsid().size()).Move(), a);
+    }
+
+    if (!msg.sgxnonce().empty()) {
+        d.AddMember("sgxnonce",
+                    Value(msg.sgxnonce().c_str(), msg.sgxnonce().size()).Move(),
+                    a);
+    }
+
+    if (!msg.sgxtag().empty()) {
+        d.AddMember(
+          "sgxtag", Value(msg.sgxtag().c_str(), msg.sgxtag().size()).Move(), a);
+    }
+
+    if (!msg.sgxpolicy().empty()) {
+        d.AddMember(
+          "sgxpolicy",
+          Value(msg.sgxpolicy().c_str(), msg.sgxpolicy().size()).Move(),
+          a);
+    }
+
+    if (!msg.sgxresult().empty()) {
+        d.AddMember(
+          "sgxresult",
+          Value(msg.sgxresult().c_str(), msg.sgxresult().size()).Move(),
+          a);
+    }
+
     StringBuffer sb;
     Writer<StringBuffer> writer(sb);
     d.Accept(writer);
 
+    return sb.GetString();
+}
+
+std::string getJsonOutput(const faabric::Message& msg)
+{
+    Document d;
+    d.SetObject();
+    Document::AllocatorType& a = d.GetAllocator();
+    std::string result_ = cppcodec::base64_rfc4648::encode(msg.sgxresult());
+    d.AddMember("result", Value(result_.c_str(), result_.size(), a).Move(), a);
+    d.AddMember(
+      "output_data",
+      Value(msg.outputdata().c_str(), msg.outputdata().size(), a).Move(),
+      a);
+    StringBuffer sb;
+    Writer<StringBuffer> writer(sb);
+    d.Accept(writer);
     return sb.GetString();
 }
 
@@ -274,6 +323,11 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_cmdline(getStringFromJson(d, "cmdline", ""));
 
     msg.set_issgx(getBoolFromJson(d, "sgx", false));
+    msg.set_sgxsid(getStringFromJson(d, "sgxsid", ""));
+    msg.set_sgxnonce(getStringFromJson(d, "sgxnonce", ""));
+    msg.set_sgxtag(getStringFromJson(d, "sgxtag", ""));
+    msg.set_sgxpolicy(getStringFromJson(d, "sgxpolicy", ""));
+    msg.set_sgxresult(getStringFromJson(d, "sgxresult", ""));
 
     PROF_END(jsonDecode)
 

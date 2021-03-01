@@ -108,6 +108,13 @@ message Message {
     string cmdline = 39;
 
     bool isSgx = 40;
+
+    // fields for SGX attesation
+    string sgxSid = 41;
+    string sgxNonce = 42;
+    string sgxTag = 43;
+    bytes sgxPolicy = 44;
+    bytes sgxResult = 45;
 }
 
 // ---------------------------------------------

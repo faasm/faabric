@@ -18,6 +18,9 @@ This container has everything you need, and the script will also mount your
 current checkout of the code. This means you can just run the following:
 
 ```bash
+# Set up the build
+inv dev.cmake
+
 # Build the tests
 inv dev.cc faabric_tests
 

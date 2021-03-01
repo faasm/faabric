@@ -32,6 +32,8 @@ std::string getSharedFileUrl();
 
 std::string getFunctionFile(const faabric::Message& msg);
 
+std::string getEncryptedFunctionFile(const faabric::Message& msg);
+
 std::string getPythonFunctionFile(const faabric::Message& msg);
 
 std::string getPythonFunctionFileSharedPath(const faabric::Message& msg);

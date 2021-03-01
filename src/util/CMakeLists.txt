@@ -28,6 +28,7 @@ faabric_lib(util "${LIB_FILES}")
 
 add_dependencies(util spdlog_ext)
 add_dependencies(util rapidjson_ext)
+add_dependencies(util cppcodec_ext)
 
 target_link_libraries(
         util
