@@ -210,6 +210,7 @@ std::string getEncryptedFunctionFile(const faabric::Message& msg)
 
     return path.string();
 }
+
 std::string getFunctionSymbolsFile(const faabric::Message& msg)
 {
     auto path = getFunctionDir(msg);
