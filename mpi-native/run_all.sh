@@ -13,8 +13,8 @@ for w in $(ls ./mpi-native/examples/*.cpp);
 do
     example=$(basename $w ".cpp")
     if [[ $example == mpi_* ]]; then
-        sed -i '$ d' ${ENV_FILE}
-        echo "MPI_EXAMPLE=${example}" >> ${ENV_FILE}
+        sed -i '$ d' ./mpi-native/${ENV_FILE}
+        echo "MPI_EXAMPLE=${example}" >> ./mpi-native/${ENV_FILE}
         echo "----------------------------------------"
         echo "Running MPI native test:"
         echo "    - MPI_EXAMPLE ${example}"
