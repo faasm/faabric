@@ -83,4 +83,16 @@ TEST_CASE("Test with raw string literals", "[util]")
     REQUIRE(msg.user() == "foo");
     REQUIRE(msg.function() == "bar");
 }
+
+TEST_CASE("Test base64-encoded result", "[util]")
+{
+    faabric::Message msg;
+    msg.set_sgxresult("test tag string");
+    msg.set_outputdata("test output string");
+    std::string encodedOutput = getJsonOutput(msg);
+    REQUIRE(getValueFromJsonString("result", encodedOutput) ==
+            "dGVzdCB0YWcgc3RyaW5n");
+    REQUIRE(getValueFromJsonString("output_data", encodedOutput) ==
+            "test output string");
+}
 }
