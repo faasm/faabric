@@ -110,11 +110,11 @@ message Message {
     bool isSgx = 40;
 
     // fields for SGX attesation
-    string sid = 41;
-    string nonce = 42;
-    string tag = 43;
-    bytes policy = 44;
-    bytes result = 45;
+    string sgxSid = 41;
+    string sgxNonce = 42;
+    string sgxTag = 43;
+    bytes sgxPolicy = 44;
+    bytes sgxResult = 45;
 }
 
 // ---------------------------------------------

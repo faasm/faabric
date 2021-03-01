@@ -111,7 +111,7 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
               sch.getFunctionResult(msg.id(), conf.globalMessageTimeout);
             logger->debug("Worker thread {} result {}", tid, funcStr);
 
-            if (result.result().empty()) {
+            if (result.sgxresult().empty()) {
                 return result.outputdata() + "\n";
             } else {
                 return faabric::util::getJsonOutput(result);
