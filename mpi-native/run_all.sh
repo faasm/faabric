@@ -7,7 +7,7 @@ PROJ_ROOT=${THIS_DIR}/..
 
 pushd ${PROJ_ROOT} >> /dev/null
 
-source ./mpi-native/mpi-native.env
+. ./mpi-native/mpi-native.env
 
 for w in $(ls ./mpi-native/examples/*.cpp);
 do
