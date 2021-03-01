@@ -155,6 +155,36 @@ std::string messageToJson(const faabric::Message& msg)
         d.AddMember("sgx", msg.issgx(), a);
     }
 
+    if (!msg.sgxsid().empty()) {
+        d.AddMember(
+          "sgxsid", Value(msg.sgxsid().c_str(), msg.sgxsid().size()).Move(), a);
+    }
+
+    if (!msg.sgxnonce().empty()) {
+        d.AddMember("sgxnonce",
+                    Value(msg.sgxnonce().c_str(), msg.sgxnonce().size()).Move(),
+                    a);
+    }
+
+    if (!msg.sgxtag().empty()) {
+        d.AddMember(
+          "sgxtag", Value(msg.sgxtag().c_str(), msg.sgxtag().size()).Move(), a);
+    }
+
+    if (!msg.sgxpolicy().empty()) {
+        d.AddMember(
+          "sgxpolicy",
+          Value(msg.sgxpolicy().c_str(), msg.sgxpolicy().size()).Move(),
+          a);
+    }
+
+    if (!msg.sgxresult().empty()) {
+        d.AddMember(
+          "sgxresult",
+          Value(msg.sgxresult().c_str(), msg.sgxresult().size()).Move(),
+          a);
+    }
+
     StringBuffer sb;
     Writer<StringBuffer> writer(sb);
     d.Accept(writer);
@@ -293,8 +323,11 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_cmdline(getStringFromJson(d, "cmdline", ""));
 
     msg.set_issgx(getBoolFromJson(d, "sgx", false));
-    msg.set_sgxsid(getStringFromJson(d, "sid", ""));
-    msg.set_sgxtag(getStringFromJson(d, "tag", ""));
+    msg.set_sgxsid(getStringFromJson(d, "sgxsid", ""));
+    msg.set_sgxnonce(getStringFromJson(d, "sgxnonce", ""));
+    msg.set_sgxtag(getStringFromJson(d, "sgxtag", ""));
+    msg.set_sgxpolicy(getStringFromJson(d, "sgxpolicy", ""));
+    msg.set_sgxresult(getStringFromJson(d, "sgxresult", ""));
 
     PROF_END(jsonDecode)
 

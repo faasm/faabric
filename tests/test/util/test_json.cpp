@@ -35,6 +35,11 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     msg.set_cmdline("some cmdline");
 
     msg.set_issgx(true);
+    msg.set_sgxsid("test sid string");
+    msg.set_sgxnonce("test nonce string");
+    msg.set_sgxtag("test tag string");
+    msg.set_sgxpolicy("test policy string");
+    msg.set_sgxresult("test result string");
 
     SECTION("Dodgy characters") { msg.set_inputdata("[0], %$ 2233 9"); }
 
