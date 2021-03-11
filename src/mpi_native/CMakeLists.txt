@@ -29,8 +29,6 @@ set_target_properties(faabricmpi_native
     PROPERTIES PUBLIC_HEADER "${MPI_NATIVE_HEADERS}"
 )
 
-target_compile_options(faabricmpi_native PRIVATE "-DFAABRIC_NATIVE")
-
 target_link_libraries(faabricmpi_native 
     faabric
     faabricmpi

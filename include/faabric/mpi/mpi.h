@@ -70,11 +70,7 @@ extern "C"
         int worldId;
         int rank;
         int size;
-#ifdef FAABRIC_NATIVE
         void* basePtr;
-#else
-    int wasmPtr;
-#endif
         int dispUnit;
     };
 
