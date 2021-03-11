@@ -34,6 +34,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Wasm")
     )
 else()
     message(STATUS "Faabric MPI native build")
+    target_compile_options(faabricmpi PRIVATE "-DFAABRIC_NATIVE")
     install(TARGETS faabricmpi
         PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_PREFIX}/include/faabric/mpi
     )

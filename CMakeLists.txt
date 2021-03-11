@@ -98,6 +98,11 @@ target_link_libraries(faabric
     boost_filesystem
     )
 
+if(FAABRIC_WASM_BUILD)
+    target_compile_options(faabric PRIVATE "-D__wasm__")
+    target_compile_options(faabric PRIVATE "-DBUILD4WASM")
+endif()
+
 target_include_directories(faabric PUBLIC 
     ${FAABRIC_INCLUDE_DIR}
     ${CMAKE_INSTALL_PREFIX}/include
