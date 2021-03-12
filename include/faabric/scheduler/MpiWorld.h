@@ -188,7 +188,7 @@ class MpiWorld
 
     void overrideHost(const std::string& newHost);
 
-    void createWindow(const faabric_win_t* window, uint8_t* windowPtr);
+    void createWindow(const int winRank, const int winSize, uint8_t* windowPtr);
 
     void synchronizeRmaWrite(const faabric::MPIMessage& msg, bool isRemote);
 

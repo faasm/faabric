@@ -585,7 +585,7 @@ int MPI_Win_create(void* base,
     (*win)->dispUnit = disp_unit;
     (*win)->rank = executingContext.getRank();
     (*win)->basePtr = base;
-    world.createWindow(*win, (uint8_t*)base);
+    world.createWindow((*win)->rank, (*win)->size, (uint8_t*)base);
 
     return MPI_SUCCESS;
 }
