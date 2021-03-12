@@ -1144,12 +1144,14 @@ void MpiWorld::checkRankOnThisHost(int rank)
     }
 }
 
-void MpiWorld::createWindow(const faabric_win_t* window, uint8_t* windowPtr)
+void MpiWorld::createWindow(const int winRank,
+                            const int winSize,
+                            uint8_t* windowPtr)
 {
-    const std::string key = getWindowStateKey(id, window->rank, window->size);
+    const std::string key = getWindowStateKey(id, winRank, winSize);
     state::State& state = state::getGlobalState();
     const std::shared_ptr<state::StateKeyValue> windowKv =
-      state.getKV(user, key, window->size);
+      state.getKV(user, key, winSize);
 
     // Set initial value
     windowKv->set(windowPtr);

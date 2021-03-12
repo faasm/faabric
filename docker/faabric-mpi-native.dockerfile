@@ -5,6 +5,7 @@ ARG FAABRIC_VERSION
 # rarely
 
 # Redis
+RUN apt update
 RUN apt install -y \
     libpython3-dev \
     python3-dev \

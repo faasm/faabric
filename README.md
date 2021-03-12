@@ -73,8 +73,8 @@ inv dev.cc faabric
 ## Releasing
 
 Create a new branch, then find and replace the current version with the relevant 
-bumped version. Currently it's held in `VERSION`, `.env`, and the Github Actions 
-configuration.
+bumped version. Currently it's held in `VERSION`, `.env`,
+`mpi-native/mpi-native.env` and the Github Actions configuration.
 
 Once done, commit and push, then run:
 

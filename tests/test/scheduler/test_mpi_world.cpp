@@ -1603,7 +1603,7 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
         .rank = rankA1,
         .size = bufferSize,
     };
-    localWorld.createWindow(&winA1, BYTES(dataA1.data()));
+    localWorld.createWindow(winA1.rank, winA1.size, BYTES(dataA1.data()));
 
     SECTION("RMA Get from another world")
     {

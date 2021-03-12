@@ -8,6 +8,7 @@ ARG FAABRIC_VERSION
 ENV FAABRIC_DOCKER="on"
 
 # Redis
+RUN apt update
 RUN apt install -y \
     clang-tidy-10 \
     libpython3-dev \
