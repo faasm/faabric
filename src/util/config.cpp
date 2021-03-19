@@ -59,7 +59,7 @@ void SystemConfig::initialise()
       this->getSystemConfIntParam("CHAINED_CALL_TIMEOUT", "300000");
 
     // Filesystem storage
-    functionDir = getEnvVar("FUNC_DIR", "/usr/local/code/faasm/wasm");
+    functionDir = getEnvVar("FUNC_DIR", "/usr/local/faasm/wasm");
     objectFileDir = getEnvVar("OBJ_DIR", "/usr/local/faasm/object");
     runtimeFilesDir =
       getEnvVar("RUNTIME_FILES_DIR", "/usr/local/faasm/runtime_root");
