@@ -10,6 +10,9 @@ service FunctionRPCService {
     rpc ShareFunction (Message) returns (FunctionStatusResponse) {
     }
 
+    rpc ShareFunctions (MultiMessage) returns (FunctionStatusResponse) {
+    }
+
     rpc Flush (Message) returns (FunctionStatusResponse) {
     }
 
@@ -115,6 +118,23 @@ message Message {
     string sgxTag = 43;
     bytes sgxPolicy = 44;
     bytes sgxResult = 45;
+}
+
+message MultiMessage {
+    enum MultiMessageType {
+        THREADS = 0;
+        PROCESSES = 1;
+        FUNCTIONS = 2;
+    }
+
+    MultiMessageType type = 1;
+
+    // Shared snapshot used for threads
+    string snapshotKey = 2;
+    int32 snapshotSize = 3;
+
+    repeated Message messages = 4;
+    repeated int32 returnValues = 5;
 }
 
 // ---------------------------------------------

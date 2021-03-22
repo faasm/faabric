@@ -47,8 +47,6 @@ void SystemConfig::initialise()
 
     // Threading
     threadMode = getEnvVar("THREAD_MODE", "local");
-    ompThreadPoolSize =
-      this->getSystemConfIntParam("OMP_THREAD_POOL_SIZE", "0");
 
     // Worker-related timeouts (all in seconds)
     globalMessageTimeout =
@@ -129,7 +127,6 @@ void SystemConfig::print()
 
     logger->info("--- Threading ---");
     logger->info("THREAD_MODE                {}", threadMode);
-    logger->info("OMP_THREAD_POOL_SIZE       {}", ompThreadPoolSize);
 
     logger->info("--- Timeouts ---");
     logger->info("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);

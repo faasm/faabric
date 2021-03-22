@@ -40,7 +40,6 @@ class SystemConfig
 
     // Threading
     std::string threadMode;
-    int ompThreadPoolSize;
 
     // Worker-related timeouts
     int globalMessageTimeout;

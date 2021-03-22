@@ -33,7 +33,6 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.maxNodesPerFunction == 5);
 
     REQUIRE(conf.threadMode == "local");
-    REQUIRE(conf.ompThreadPoolSize == 0);
 
     REQUIRE(conf.globalMessageTimeout == 60000);
     REQUIRE(conf.boundTimeout == 30000);
@@ -69,7 +68,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string workers = setEnvVar("MAX_NODES_PER_FUNCTION", "7777");
 
     std::string threadMode = setEnvVar("THREAD_MODE", "threadfoo");
-    std::string ompPoolSize = setEnvVar("OMP_THREAD_POOL_SIZE", "1234");
 
     std::string globalTimeout = setEnvVar("GLOBAL_MESSAGE_TIMEOUT", "9876");
     std::string boundTimeout = setEnvVar("BOUND_TIMEOUT", "6666");
@@ -110,7 +108,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.maxNodesPerFunction == 7777);
 
     REQUIRE(conf.threadMode == "threadfoo");
-    REQUIRE(conf.ompThreadPoolSize == 1234);
 
     REQUIRE(conf.globalMessageTimeout == 9876);
     REQUIRE(conf.boundTimeout == 6666);
@@ -149,7 +146,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("MAX_NODES_PER_FUNCTION", workers);
 
     setEnvVar("THREAD_MODE", threadMode);
-    setEnvVar("OMP_THREAD_POOL_SIZE", threadMode);
 
     setEnvVar("GLOBAL_MESSAGE_TIMEOUT", globalTimeout);
     setEnvVar("BOUND_TIMEOUT", boundTimeout);
