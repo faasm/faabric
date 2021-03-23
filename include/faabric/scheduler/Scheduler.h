@@ -12,13 +12,6 @@
 #define AVAILABLE_HOST_SET "available_nodes"
 
 namespace faabric::scheduler {
-// Note - default opinion when zero initialised should be maybe
-enum class SchedulerOpinion
-{
-    MAYBE = 0,
-    YES = 1,
-    NO = 2,
-};
 
 struct Resources
 {
@@ -38,12 +31,18 @@ class Scheduler
     // ----------------------------------
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
-    std::vector<bool> callFunctions(faabric::BatchExecuteRequest& req,
-                                    bool forceLocal = false);
+    std::vector<std::string> callFunctions(faabric::BatchExecuteRequest& req,
+                                           bool forceLocal = false);
 
     void reset();
 
     void shutdown();
+
+    void setTestMode(bool val);
+
+    std::vector<unsigned int> getRecordedMessagesAll();
+
+    std::vector<unsigned int> getRecordedMessagesLocal();
 
     // ----------------------------------
     // Internal API
@@ -73,45 +72,22 @@ class Scheduler
 
     void removeFunctionInFlight();
 
+    void enqueueMessage(const faabric::Message& msg);
     // ----------------------------------
     // Legacy
     // ----------------------------------
-    SchedulerOpinion getLatestOpinion(const faabric::Message& msg);
-
-    std::string getBestHostForFunction(const faabric::Message& msg);
-
-    void enqueueMessage(const faabric::Message& msg);
-
     std::shared_ptr<InMemoryMessageQueue> getFunctionQueue(
       const faabric::Message& msg);
 
     void notifyCallFinished(const faabric::Message& msg);
 
-    void notifyNodeFinished(const faabric::Message& msg);
+    void notifyFaasletFinished(const faabric::Message& msg);
 
     std::shared_ptr<InMemoryMessageQueue> getBindQueue();
-
-    std::string getFunctionWarmSetName(const faabric::Message& msg);
-
-    std::string getFunctionWarmSetNameFromStr(const std::string& funcStr);
-
-    long getFunctionWarmNodeCount(const faabric::Message& msg);
-
-    long getTotalWarmNodeCount();
 
     double getFunctionInFlightRatio(const faabric::Message& msg);
 
     long getFunctionInFlightCount(const faabric::Message& msg);
-
-    void addHostToWarmSet(const std::string& funcStr);
-
-    void removeHostFromWarmSet(const std::string& funcStr);
-
-    void setTestMode(bool val);
-
-    std::vector<unsigned int> getRecordedMessagesAll();
-
-    std::vector<unsigned int> getRecordedMessagesLocal();
 
     std::vector<std::pair<std::string, unsigned int>>
     getRecordedMessagesShared();
@@ -148,9 +124,8 @@ class Scheduler
 
     std::unordered_map<std::string, std::shared_ptr<InMemoryMessageQueue>>
       queueMap;
-    std::unordered_map<std::string, long> nodeCountMap;
-    std::unordered_map<std::string, long> inFlightCountMap;
-    std::unordered_map<std::string, SchedulerOpinion> opinionMap;
+    std::unordered_map<std::string, long> faasletCounts;
+    std::unordered_map<std::string, long> inFlightCounts;
     bool _hasHostCapacity = true;
 
     Resources thisHostResources;
@@ -167,16 +142,11 @@ class Scheduler
 
     void decrementInFlightCount(const faabric::Message& msg);
 
-    void incrementWarmNodeCount(const faabric::Message& msg);
-
-    void decrementWarmNodeCount(const faabric::Message& msg);
-
-    int getFunctionMaxInFlightRatio(const faabric::Message& msg);
-
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 
     int scheduleFunctionsOnHost(const std::string& host,
                                 faabric::BatchExecuteRequest& req,
+                                std::vector<std::string>& records,
                                 int offset);
 };
 

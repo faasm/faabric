@@ -57,7 +57,7 @@ void FaabricExecutor::finish()
 {
     if (_isBound) {
         // Notify scheduler if this thread was bound to a function
-        scheduler.notifyNodeFinished(boundMessage);
+        scheduler.notifyFaasletFinished(boundMessage);
         scheduler.removeBoundExecutor();
     }
 

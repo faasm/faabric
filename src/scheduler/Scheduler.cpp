@@ -29,6 +29,7 @@ Scheduler::Scheduler()
 {
     bindQueue = std::make_shared<InMemoryMessageQueue>();
 
+    // Set up the initial resources
     int cores = faabric::util::getUsableCores();
     thisHostResources.slotsTotal = cores;
     thisHostResources.slotsAvailable = cores;
@@ -52,25 +53,10 @@ void Scheduler::removeHostFromGlobalSet()
     redis.srem(AVAILABLE_HOST_SET, thisHost);
 }
 
-void Scheduler::addHostToWarmSet(const std::string& funcStr)
-{
-    std::string warmSetName = getFunctionWarmSetNameFromStr(funcStr);
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.sadd(warmSetName, thisHost);
-}
-
-void Scheduler::removeHostFromWarmSet(const std::string& funcStr)
-{
-    const std::string& warmSetName = getFunctionWarmSetNameFromStr(funcStr);
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.srem(warmSetName, thisHost);
-}
-
 void Scheduler::reset()
 {
-    // Remove this host from all the global warm sets
+    // Reset queue map
     for (const auto& iter : queueMap) {
-        removeHostFromWarmSet(iter.first);
         iter.second->reset();
     }
     queueMap.clear();
@@ -83,9 +69,8 @@ void Scheduler::reset()
 
     // Reset scheduler state
     thisHostResources = Resources();
-    nodeCountMap.clear();
-    inFlightCountMap.clear();
-    opinionMap.clear();
+    faasletCounts.clear();
+    inFlightCounts.clear();
     _hasHostCapacity = true;
 
     // Records
@@ -112,43 +97,10 @@ void Scheduler::enqueueMessage(const faabric::Message& msg)
     }
 }
 
-long Scheduler::getFunctionWarmNodeCount(const faabric::Message& msg)
-{
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    return nodeCountMap[funcStr];
-}
-
-double Scheduler::getFunctionInFlightRatio(const faabric::Message& msg)
-{
-    std::string funcStr = faabric::util::funcToString(msg, false);
-
-    long nodeCount = nodeCountMap[funcStr];
-    long inFlightCount = getFunctionInFlightCount(msg);
-
-    if (nodeCount == 0) {
-        return 0;
-    }
-
-    return ((double)inFlightCount) / nodeCount;
-}
-
-int Scheduler::getFunctionMaxInFlightRatio(const faabric::Message& msg)
-{
-    int maxInFlightRatio = conf.maxInFlightRatio;
-    if (msg.ismpi()) {
-        faabric::util::getLogger()->debug(
-          "Overriding max in-flight ratio for MPI function ({} -> {})",
-          maxInFlightRatio,
-          1);
-        maxInFlightRatio = 1;
-    }
-    return maxInFlightRatio;
-}
-
 long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
-    return inFlightCountMap[funcStr];
+    return inFlightCounts[funcStr];
 }
 
 std::shared_ptr<InMemoryMessageQueue> Scheduler::getFunctionQueue(
@@ -173,21 +125,11 @@ void Scheduler::notifyCallFinished(const faabric::Message& msg)
     decrementInFlightCount(msg);
 }
 
-void Scheduler::notifyNodeFinished(const faabric::Message& msg)
+void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
-    decrementWarmNodeCount(msg);
-}
-
-std::string Scheduler::getFunctionWarmSetName(const faabric::Message& msg)
-{
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    return this->getFunctionWarmSetNameFromStr(funcStr);
-}
-
-std::string Scheduler::getFunctionWarmSetNameFromStr(const std::string& funcStr)
-{
-    return WARM_SET_PREFIX + funcStr;
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+    faasletCounts[funcStr] = std::max(faasletCounts[funcStr] - 1, 0L);
 }
 
 std::shared_ptr<InMemoryMessageQueue> Scheduler::getBindQueue()
@@ -197,112 +139,160 @@ std::shared_ptr<InMemoryMessageQueue> Scheduler::getBindQueue()
 
 Scheduler& getScheduler()
 {
-    // Note that this ref is shared between all nodes on the given host
+    // Note that this ref is shared between all faaslets on the given host
     static Scheduler scheduler;
     return scheduler;
 }
 
-std::vector<bool> Scheduler::callFunctions(faabric::BatchExecuteRequest& req,
-                                           bool forceLocal)
+std::vector<std::string> Scheduler::callFunctions(
+  faabric::BatchExecuteRequest& req,
+  bool forceLocal)
 {
     auto logger = faabric::util::getLogger();
 
     int nMessages = req.messages_size();
-    std::vector<bool> executed(nMessages, true);
+    std::vector<std::string> executed(nMessages);
+
+    const faabric::Message& firstMsg = req.messages().at(0);
+    std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
     // Handle forced local execution
     if (forceLocal) {
         logger->debug("Executing {} functions locally", nMessages);
 
-        // TODO - make this smarter
-        for (auto m : req.messages()) {
-            callFunction(m, true);
+        for (int i = 0; i < nMessages; i++) {
+            faabric::Message msg = req.messages().at(i);
+            this->enqueueMessage(msg);
+            executed.at(i) = thisHost;
+            incrementInFlightCount(msg);
+            addFunctionInFlight();
+        }
+    } else {
+        // If not forced local, here we need to determine which functions to
+        // execute locally, and which to distribute
+        if (req.masterhost().empty()) {
+            throw std::runtime_error(
+              "Master host for bulk execute cannot be empty");
         }
 
-        return executed;
-    }
+        // TODO - more fine-grained locking
+        // Lock the whole scheduler to be safe
+        faabric::util::FullLock lock(mx);
 
-    // If not forced local, here we need to determine which functions to execute
-    // locally, and which to distribute
+        // If we're not the master host, we need to forward the request back to
+        // the master host. This will only happen if a nested batch execution
+        // happens.
+        if (req.masterhost() != thisHost) {
+            if(isTestMode) {
+                logger->debug("Not forwarding request to master in test mode");
+            } else {
+            FunctionCallClient c(req.masterhost());
+            c.executeFunctions(req);
+            }
 
-    // TODO - more fine-grained locking
-    // Lock the whole scheduler to be safe
-    faabric::util::FullLock lock(mx);
+        } else {
+            // At this point we know we're the master host, and we've not been
+            // asked to force full local execution.
 
-    // Work out how many we can handle locally
-    int slots = thisHostResources.slotsAvailable;
-    int nLocally = std::min<int>(slots, nMessages);
+            // Work out how many we can handle locally
+            int slots = thisHostResources.slotsAvailable;
+            int nLocally = std::min<int>(slots, nMessages);
 
-    // Keep track of what's been done
-    int remainder = nMessages;
-    int nextMsgIdx = 0;
+            // Keep track of what's been done
+            int remainder = nMessages;
+            int nextMsgIdx = 0;
 
-    // Build list of messages to be executed locally
-    for (; nextMsgIdx < nLocally; nextMsgIdx++) {
-        // Flag that this message was not executed
-        executed.at(nextMsgIdx) = false;
-        remainder--;
+            // Build list of messages to be executed locally
+            for (; nextMsgIdx < nLocally; nextMsgIdx++) {
+                // Flag that this message was not executed
+                executed.at(nextMsgIdx) = false;
+                remainder--;
 
-        // Record that there's a function in flight
-        addFunctionInFlight();
-    }
+                // Record that there's a function in flight
+                addFunctionInFlight();
+            }
 
-    // Done if there are none left
-    if (remainder == 0) {
-        return executed;
-    }
+            // If some are left, we need to distribute
+            if (remainder > 0) {
+                // At this point we have a remainder, so we need to distribute
+                // the rest Get the list of registered hosts for this function
+                std::set<std::string>& thisRegisteredHosts =
+                  registeredHosts[funcStr];
 
-    // At this point we have a remainder, so we need to distribute the rest
-    // Get the list of registered hosts for this function
-    const faabric::Message& msg = req.messages().at(0);
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+                // Schedule the remainder on these other hosts
+                std::vector<Resources> registeredResources;
+                for (auto& h : thisRegisteredHosts) {
+                    int nOnThisHost =
+                      scheduleFunctionsOnHost(h, req, executed, nextMsgIdx);
 
-    // Schedule the remainder on these other hosts
-    std::vector<Resources> registeredResources;
-    for (auto& h : thisRegisteredHosts) {
-        int nOnThisHost = scheduleFunctionsOnHost(h, req, nextMsgIdx);
+                    remainder -= nOnThisHost;
+                    if (remainder <= 0) {
+                        break;
+                    }
+                }
+            }
 
-        remainder -= nOnThisHost;
-        if (remainder <= 0) {
-            break;
+            // Now we need to find hosts that aren't already registered for
+            // this function and add them
+            if (remainder > 0) {
+                std::set<std::string>& thisRegisteredHosts =
+                  registeredHosts[funcStr];
+
+                redis::Redis& redis = redis::Redis::getQueue();
+                std::unordered_set<std::string> allHosts =
+                  redis.smembers(AVAILABLE_HOST_SET);
+                for (auto& h : allHosts) {
+                    // Skip if already registered
+                    if (thisRegisteredHosts.find(h) !=
+                        thisRegisteredHosts.end()) {
+                        continue;
+                    }
+
+                    // Schedule functions on this host
+                    int nOnThisHost =
+                      scheduleFunctionsOnHost(h, req, executed, nextMsgIdx);
+                    remainder -= nOnThisHost;
+                    if (remainder <= 0) {
+                        break;
+                    }
+                }
+            }
+
+            // At this point there's no more capacity in the system, so we
+            // just need to execute locally
+            if (remainder > 0) {
+                for (; nextMsgIdx < nMessages; nextMsgIdx++) {
+                    // Flag that this message was not executed
+                    executed.at(nextMsgIdx) = false;
+                }
+            }
         }
     }
 
-    // Done at this point if none left
-    if (remainder <= 0) {
-        return executed;
-    }
+    // Accounting
+    for (int i = 0; i < nMessages; i++) {
+        std::string executedHost = executed.at(i);
+        faabric::Message msg = req.messages().at(i);
 
-    // Now we need to find hosts that aren't already registered for this
-    // function and add them
-    redis::Redis& redis = redis::Redis::getQueue();
-    std::unordered_set<std::string> allHosts =
-      redis.smembers(AVAILABLE_HOST_SET);
-    for (auto& h : allHosts) {
-        // Skip if already registered
-        if (thisRegisteredHosts.find(h) != thisRegisteredHosts.end()) {
-            continue;
+        // Mark if this is the first scheduling decision made on this message
+        if (msg.scheduledhost().empty()) {
+            msg.set_scheduledhost(executedHost);
         }
 
-        // Schedule functions on this host
-        int nOnThisHost = scheduleFunctionsOnHost(h, req, nextMsgIdx);
-        remainder -= nOnThisHost;
-        if (remainder <= 0) {
-            break;
+        if (!executedHost.empty() && executedHost != thisHost) {
+            // Increment the number of hops
+            msg.set_hops(msg.hops() + 1);
         }
-    }
 
-    // Done at this point if none left
-    if (remainder <= 0) {
-        return executed;
-    }
-
-    // At this point there's no more capacity in the system, so we just need to
-    // execute locally
-    for (; nextMsgIdx < nMessages; nextMsgIdx++) {
-        // Flag that this message was not executed
-        executed.at(nextMsgIdx) = false;
+        // Log results if in test mode
+        if (isTestMode) {
+            recordedMessagesAll.push_back(msg.id());
+            if (executedHost.empty() || executedHost == thisHost) {
+                recordedMessagesLocal.push_back(msg.id());
+            } else {
+                recordedMessagesShared.emplace_back(executedHost, msg.id());
+            }
+        }
     }
 
     return executed;
@@ -310,6 +300,7 @@ std::vector<bool> Scheduler::callFunctions(faabric::BatchExecuteRequest& req,
 
 int Scheduler::scheduleFunctionsOnHost(const std::string& host,
                                        faabric::BatchExecuteRequest& req,
+                                       std::vector<std::string> &records,
                                        int offset)
 {
     int nMessages = req.messages_size();
@@ -319,10 +310,10 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
     Resources r = getHostResources(host, nMessages);
     int nOnThisHost = std::min<int>(r.slotsAvailable, remainder);
 
-    // If we've now executed all the functions, we're done
     std::vector<faabric::Message> thisHostMsgs;
     for (int i = offset; i < (offset + nOnThisHost); i++) {
         thisHostMsgs.push_back(req.messages().at(i));
+        records.at(i) = host;
     }
 
     FunctionCallClient c(host);
@@ -340,255 +331,14 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
 
 void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
 {
-    faabric::util::FullLock lock(mx);
-    PROF_START(scheduleCall)
+    faabric::Message msgCopy = msg;
+    std::vector<faabric::Message> msgs = { msg };
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
 
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
-    // Get the best host
-    std::string bestHost;
-    if (forceLocal) {
-        bestHost = thisHost;
-    } else {
-        // Make sure our opinion is up to date
-        updateOpinion(msg);
-        bestHost = this->getBestHostForFunction(msg);
-    }
-
-    // Mark if this is the first scheduling decision made on this message
-    if (msg.scheduledhost().empty()) {
-        msg.set_scheduledhost(bestHost);
-    }
-
-    bool executedLocally = true;
-    const std::string funcStrWithId = faabric::util::funcToString(msg, true);
-    if (bestHost == thisHost) {
-        // Run locally if we're the best choice
-        logger->debug("Executing {} locally", funcStrWithId);
-        this->enqueueMessage(msg);
-
-        incrementInFlightCount(msg);
-        addFunctionInFlight();
-    } else {
-        // Increment the number of hops
-        msg.set_hops(msg.hops() + 1);
-
-        // Share with other host (or just log in test mode)
-        if (isTestMode) {
-            logger->debug("TEST MODE - {} not sharing {} with {} ({} hops)",
-                          thisHost,
-                          funcStrWithId,
-                          bestHost,
-                          msg.hops());
-        } else {
-            logger->debug("Host {} sharing {} with {} ({} hops)",
-                          thisHost,
-                          funcStrWithId,
-                          bestHost,
-                          msg.hops());
-
-            FunctionCallClient c(bestHost);
-            c.shareFunctionCall(msg);
-        }
-
-        executedLocally = false;
-    }
-
-    // Add this message to records if necessary
-    if (isTestMode) {
-        recordedMessagesAll.push_back(msg.id());
-        if (executedLocally) {
-            recordedMessagesLocal.push_back(msg.id());
-        } else {
-            recordedMessagesShared.emplace_back(bestHost, msg.id());
-        }
-    }
-
-    PROF_END(scheduleCall)
-}
-
-long Scheduler::getTotalWarmNodeCount()
-{
-    long totalCount = 0;
-    for (auto p : nodeCountMap) {
-        totalCount += p.second;
-    }
-
-    return totalCount;
-}
-
-std::string opinionStr(const SchedulerOpinion& o)
-{
-    switch (o) {
-        case (SchedulerOpinion::MAYBE): {
-            return "MAYBE";
-        }
-        case (SchedulerOpinion::YES): {
-            return "YES";
-        }
-        case (SchedulerOpinion::NO): {
-            return "NO";
-        }
-        default:
-            return "UNKNOWN";
-    }
-}
-
-void Scheduler::updateOpinion(const faabric::Message& msg)
-{
-    // Note this function is lock-free, should be called when lock held
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    SchedulerOpinion currentOpinion = opinionMap[funcStr];
-
-    // Check per-function limits
-    long nodeCount = getFunctionWarmNodeCount(msg);
-    bool hasWarmNodes = nodeCount > 0;
-    bool hasFunctionCapacity = nodeCount < conf.maxNodesPerFunction;
-
-    // Check the overall host capacity
-    long totalNodeCount = getTotalWarmNodeCount();
-    _hasHostCapacity = totalNodeCount < conf.maxNodes;
-
-    // Check the in-flight ratio
-    double inFlightRatio = getFunctionInFlightRatio(msg);
-    int maxInFlightRatio = getFunctionMaxInFlightRatio(msg);
-    bool isInFlightRatioBreached = inFlightRatio >= maxInFlightRatio;
-
-    SchedulerOpinion newOpinion;
-
-    if (isInFlightRatioBreached) {
-        // If in-flight ratio breached, we need more capacity.
-        // If both the function and host have capacity, it's YES, otherwise NO.
-        if (hasFunctionCapacity && _hasHostCapacity) {
-            newOpinion = SchedulerOpinion::YES;
-        } else {
-            newOpinion = SchedulerOpinion::NO;
-        }
-    } else if (hasWarmNodes) {
-        // If we've not breached the in-flight ratio and we have some warm
-        // nodes, it's YES
-        newOpinion = SchedulerOpinion::YES;
-    } else if (!_hasHostCapacity) {
-        // If we have no warm nodes and no host capacity, it's NO
-        newOpinion = SchedulerOpinion::NO;
-    } else {
-        // In all other scenarios it's MAYBE
-        newOpinion = SchedulerOpinion::MAYBE;
-    }
-
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-    if (newOpinion != currentOpinion) {
-        std::string newOpinionStr = opinionStr(newOpinion);
-        std::string currentOpinionStr = opinionStr(currentOpinion);
-
-        logger->debug(
-          "{} updating {} from {} to {} (nodes={} ({}), IF ratio={} ({}))",
-          thisHost,
-          funcStr,
-          currentOpinionStr,
-          newOpinionStr,
-          nodeCount,
-          conf.maxNodesPerFunction,
-          inFlightRatio,
-          maxInFlightRatio);
-
-        if (newOpinion == SchedulerOpinion::NO) {
-            // Moving to NO means we want to remove ourself from the set for
-            // this function
-            removeHostFromWarmSet(funcStr);
-
-            // If we've also reached this host's capacity, we want to drop out
-            // from all other scheduling decisions
-            if (!_hasHostCapacity) {
-                removeHostFromGlobalSet();
-            }
-        } else if (newOpinion == SchedulerOpinion::MAYBE &&
-                   currentOpinion == SchedulerOpinion::NO) {
-            // Rejoin the global set if we're now a maybe when previously a no
-            addHostToGlobalSet();
-        } else if (newOpinion == SchedulerOpinion::MAYBE &&
-                   currentOpinion == SchedulerOpinion::YES) {
-            // Stay in the global set, but not in the warm if we've gone back to
-            // maybe from yes
-            removeHostFromWarmSet(funcStr);
-        } else if (newOpinion == SchedulerOpinion::YES &&
-                   currentOpinion == SchedulerOpinion::NO) {
-            // Rejoin everything if we're into a yes state from a no
-            addHostToWarmSet(funcStr);
-            addHostToGlobalSet();
-        } else if (newOpinion == SchedulerOpinion::YES &&
-                   currentOpinion == SchedulerOpinion::MAYBE) {
-            // Join the warm set if we've become yes from maybe
-            addHostToWarmSet(funcStr);
-        } else {
-            throw std::logic_error("Should not be able to reach this point");
-        }
-
-        // Finally update the map
-        opinionMap[funcStr] = newOpinion;
-    }
-}
-
-SchedulerOpinion Scheduler::getLatestOpinion(const faabric::Message& msg)
-{
-    const std::string funcStr = funcToString(msg, false);
-    return opinionMap[funcStr];
-}
-
-std::string Scheduler::getBestHostForFunction(const faabric::Message& msg)
-{
-    const std::shared_ptr<spdlog::logger> logger = faabric::util::getLogger();
-
-    // If we're ignoring the scheduling, just put it on this host regardless
-    if (conf.noScheduler == 1) {
-        logger->debug("Ignoring scheduler and queueing {} locally",
-                      faabric::util::funcToString(msg, true));
-        return thisHost;
-    }
-
-    // Accept if we have capacity
-    const std::string funcStrNoId = faabric::util::funcToString(msg, false);
-    SchedulerOpinion thisOpinion = opinionMap[funcStrNoId];
-    if (thisOpinion == SchedulerOpinion::YES) {
-        return thisHost;
-    }
-
-    // Get options from the warm set
-    std::string warmSet = this->getFunctionWarmSetName(msg);
-    redis::Redis& redis = redis::Redis::getQueue();
-    std::unordered_set<std::string> warmOptions = redis.smembers(warmSet);
-
-    // Remove this host from the warm options
-    warmOptions.erase(thisHost);
-
-    // If we have warm options, pick a random one
-    if (!warmOptions.empty()) {
-        return faabric::util::randomStringFromSet(warmOptions);
-    }
-
-    // If there are no other warm options and we're a maybe, accept on this host
-    if (thisOpinion == SchedulerOpinion::MAYBE) {
-        return thisHost;
-    }
-
-    // Now there's no warm options we're rejecting, so check all options
-    std::unordered_set<std::string> allOptions =
-      redis.smembers(AVAILABLE_HOST_SET);
-    allOptions.erase(thisHost);
-
-    if (!allOptions.empty()) {
-        // Pick a random option from all hosts
-        return faabric::util::randomStringFromSet(allOptions);
-    } else {
-        // Give up and try to execute locally
-        double inFlightRatio = getFunctionInFlightRatio(msg);
-        const std::string oStr = opinionStr(thisOpinion);
-        logger->warn("{} overloaded for {}. IF ratio {}, opinion {}",
-                     thisHost,
-                     funcStrNoId,
-                     inFlightRatio,
-                     oStr);
-        return thisHost;
+    // This is a special case of callFunctions
+    std::vector<std::string> executed = callFunctions(req, forceLocal);
+    if (executed.at(0).empty()) {
+        callFunctions(req, true);
     }
 }
 
@@ -624,32 +374,20 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
 
     // Increment the in-flight count
     const std::string funcStr = faabric::util::funcToString(msg, false);
-    inFlightCountMap[funcStr]++;
+    inFlightCounts[funcStr]++;
 
-    // Check ratios
-    double inFlightRatio = getFunctionInFlightRatio(msg);
-    int maxInFlightRatio = getFunctionMaxInFlightRatio(msg);
-    long nNodes = getFunctionWarmNodeCount(msg);
-    logger->debug("{} IF ratio = {} (max {}) nodes = {}",
-                  funcStr,
-                  inFlightRatio,
-                  maxInFlightRatio,
-                  nNodes);
-
-    // If we have no nodes OR if we've got nodes and are over the in-flight
-    // ratio and have capacity, then we need to scale up
-    bool needToScale = false;
-    needToScale |= (nNodes == 0);
-    needToScale |=
-      (inFlightRatio > maxInFlightRatio && nNodes < conf.maxNodesPerFunction);
+    // If we've not got one faaslet per in-flight function, add one
+    int nFaaslets = faasletCounts[funcStr];
+    int inFlightCount = inFlightCounts[funcStr];
+    bool needToScale = nFaaslets < inFlightCount;
 
     if (needToScale) {
-        logger->debug("Scaling up {} to {} nodes", funcStr, nNodes + 1);
+        logger->debug("Scaling up {} to {} faaslet", funcStr, nFaaslets + 1);
 
-        // Increment node count here
-        incrementWarmNodeCount(msg);
+        // Increment faaslet count
+        faasletCounts[funcStr]++;
 
-        // Send bind message (i.e. request a node)
+        // Send bind message (i.e. request a new faaslet bind to this func)
         faabric::Message bindMsg =
           faabric::util::messageFactory(msg.user(), msg.function());
         bindMsg.set_type(faabric::Message_MessageType_BIND);
@@ -661,33 +399,12 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
 
         this->enqueueMessage(bindMsg);
     }
-
-    // Update our opinion
-    updateOpinion(msg);
 }
 
 void Scheduler::decrementInFlightCount(const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
-    inFlightCountMap[funcStr] = std::max(inFlightCountMap[funcStr] - 1, 0L);
-
-    updateOpinion(msg);
-}
-
-void Scheduler::incrementWarmNodeCount(const faabric::Message& msg)
-{
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    nodeCountMap[funcStr]++;
-
-    updateOpinion(msg);
-}
-
-void Scheduler::decrementWarmNodeCount(const faabric::Message& msg)
-{
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    nodeCountMap[funcStr] = std::max(nodeCountMap[funcStr] - 1, 0L);
-
-    updateOpinion(msg);
+    inFlightCounts[funcStr] = std::max(inFlightCounts[funcStr] - 1, 0L);
 }
 
 std::string Scheduler::getThisHost()
@@ -721,8 +438,8 @@ void Scheduler::flushLocally()
     logger->info("Flushing host {}",
                  faabric::util::getSystemConfig().endpointHost);
 
-    // Notify all warm nodes of flush
-    for (const auto& p : nodeCountMap) {
+    // Notify all warm faaslets of flush
+    for (const auto& p : faasletCounts) {
         if (p.second == 0) {
             continue;
         }
@@ -731,7 +448,7 @@ void Scheduler::flushLocally()
         std::shared_ptr<InMemoryMessageQueue> queue = queueMap[p.first];
         queue->drain();
 
-        // Dispatch a flush message for each warm node
+        // Dispatch a flush message for each warm faaslet
         for (int i = 0; i < p.second; i++) {
             faabric::Message msg;
             msg.set_type(faabric::Message_MessageType_FLUSH);

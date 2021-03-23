@@ -318,6 +318,9 @@ faabric::BatchExecuteRequest batchExecFactory(
     unsigned int id = faabric::util::generateGid();
     req.set_id(id);
 
+    // Set master to this host by default
+    req.set_masterhost(faabric::util::getSystemConfig().endpointHost);
+
     return req;
 }
 

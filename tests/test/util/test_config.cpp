@@ -28,11 +28,6 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.redisPort == "6379");
 
     REQUIRE(conf.noScheduler == 0);
-    REQUIRE(conf.maxNodes == 5);
-    REQUIRE(conf.maxInFlightRatio == 1);
-    REQUIRE(conf.maxNodesPerFunction == 5);
-
-    REQUIRE(conf.threadMode == "local");
 
     REQUIRE(conf.globalMessageTimeout == 60000);
     REQUIRE(conf.boundTimeout == 30000);
@@ -63,11 +58,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string redisPort = setEnvVar("REDIS_PORT", "1234");
 
     std::string noScheduler = setEnvVar("NO_SCHEDULER", "1");
-    std::string threads = setEnvVar("MAX_NODES", "50");
-    std::string inFlightRatio = setEnvVar("MAX_IN_FLIGHT_RATIO", "8888");
-    std::string workers = setEnvVar("MAX_NODES_PER_FUNCTION", "7777");
-
-    std::string threadMode = setEnvVar("THREAD_MODE", "threadfoo");
 
     std::string globalTimeout = setEnvVar("GLOBAL_MESSAGE_TIMEOUT", "9876");
     std::string boundTimeout = setEnvVar("BOUND_TIMEOUT", "6666");
@@ -103,11 +93,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.redisPort == "1234");
 
     REQUIRE(conf.noScheduler == 1);
-    REQUIRE(conf.maxNodes == 50);
-    REQUIRE(conf.maxInFlightRatio == 8888);
-    REQUIRE(conf.maxNodesPerFunction == 7777);
-
-    REQUIRE(conf.threadMode == "threadfoo");
 
     REQUIRE(conf.globalMessageTimeout == 9876);
     REQUIRE(conf.boundTimeout == 6666);
@@ -141,11 +126,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("REDIS_PORT", redisPort);
 
     setEnvVar("NO_SCHEDULER", noScheduler);
-    setEnvVar("MAX_NODES", threads);
-    setEnvVar("MAX_IN_FLIGHT_RATIO", inFlightRatio);
-    setEnvVar("MAX_NODES_PER_FUNCTION", workers);
-
-    setEnvVar("THREAD_MODE", threadMode);
 
     setEnvVar("GLOBAL_MESSAGE_TIMEOUT", globalTimeout);
     setEnvVar("BOUND_TIMEOUT", boundTimeout);
