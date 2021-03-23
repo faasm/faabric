@@ -82,6 +82,7 @@ void Scheduler::reset()
     bindQueue->reset();
 
     // Reset scheduler state
+    thisHostResources = Resources();
     nodeCountMap.clear();
     inFlightCountMap.clear();
     opinionMap.clear();
@@ -218,9 +219,6 @@ std::vector<bool> Scheduler::callFunctions(faabric::BatchExecuteRequest& req,
             callFunction(m, true);
         }
 
-        // TODO - Await results
-
-
         return executed;
     }
 
@@ -244,6 +242,9 @@ std::vector<bool> Scheduler::callFunctions(faabric::BatchExecuteRequest& req,
         // Flag that this message was not executed
         executed.at(nextMsgIdx) = false;
         remainder--;
+
+        // Record that there's a function in flight
+        addFunctionInFlight();
     }
 
     // Done if there are none left
@@ -260,26 +261,7 @@ std::vector<bool> Scheduler::callFunctions(faabric::BatchExecuteRequest& req,
     // Schedule the remainder on these other hosts
     std::vector<Resources> registeredResources;
     for (auto& h : thisRegisteredHosts) {
-        Resources r = getHostResources(h, nMessages);
-
-        // TODO - proper bin-packing
-        // Naively allocate first-come first serve
-        int nOnThisHost = std::min<int>(r.slotsAvailable, nMessages);
-
-        // If we've now executed all the functions, we're done
-        std::vector<faabric::Message> thisHostMsgs;
-        for (int i = 0; i < nOnThisHost; i++) {
-            const faabric::Message& msg = req.messages().at(0);
-            thisHostMsgs.push_back(msg);
-
-            nextMsgIdx++;
-            remainder--;
-        }
-
-        FunctionCallClient c(h);
-        faabric::BatchExecuteRequest hostRequest =
-          faabric::util::batchExecFactory(thisHostMsgs);
-        c.executeFunctions(hostRequest);
+        int nOnThisHost = scheduleFunctionsOnHost(h, req, nextMsgIdx);
 
         remainder -= nOnThisHost;
         if (remainder <= 0) {
@@ -287,7 +269,73 @@ std::vector<bool> Scheduler::callFunctions(faabric::BatchExecuteRequest& req,
         }
     }
 
+    // Done at this point if none left
+    if (remainder <= 0) {
+        return executed;
+    }
+
+    // Now we need to find hosts that aren't already registered for this
+    // function and add them
+    redis::Redis& redis = redis::Redis::getQueue();
+    std::unordered_set<std::string> allHosts =
+      redis.smembers(AVAILABLE_HOST_SET);
+    for (auto& h : allHosts) {
+        // Skip if already registered
+        if (thisRegisteredHosts.find(h) != thisRegisteredHosts.end()) {
+            continue;
+        }
+
+        // Schedule functions on this host
+        int nOnThisHost = scheduleFunctionsOnHost(h, req, nextMsgIdx);
+        remainder -= nOnThisHost;
+        if (remainder <= 0) {
+            break;
+        }
+    }
+
+    // Done at this point if none left
+    if (remainder <= 0) {
+        return executed;
+    }
+
+    // At this point there's no more capacity in the system, so we just need to
+    // execute locally
+    for (; nextMsgIdx < nMessages; nextMsgIdx++) {
+        // Flag that this message was not executed
+        executed.at(nextMsgIdx) = false;
+    }
+
     return executed;
+}
+
+int Scheduler::scheduleFunctionsOnHost(const std::string& host,
+                                       faabric::BatchExecuteRequest& req,
+                                       int offset)
+{
+    int nMessages = req.messages_size();
+    int remainder = nMessages - offset;
+
+    // Execute as many as possible to this host
+    Resources r = getHostResources(host, nMessages);
+    int nOnThisHost = std::min<int>(r.slotsAvailable, remainder);
+
+    // If we've now executed all the functions, we're done
+    std::vector<faabric::Message> thisHostMsgs;
+    for (int i = offset; i < (offset + nOnThisHost); i++) {
+        thisHostMsgs.push_back(req.messages().at(i));
+    }
+
+    FunctionCallClient c(host);
+    faabric::BatchExecuteRequest hostRequest =
+      faabric::util::batchExecFactory(thisHostMsgs);
+    hostRequest.set_masterhost(req.masterhost());
+    hostRequest.set_snapshotkey(req.snapshotkey());
+    hostRequest.set_snapshotsize(req.snapshotsize());
+    hostRequest.set_type(req.type());
+
+    c.executeFunctions(hostRequest);
+
+    return nOnThisHost;
 }
 
 void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
@@ -320,6 +368,7 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
         this->enqueueMessage(msg);
 
         incrementInFlightCount(msg);
+        addFunctionInFlight();
     } else {
         // Increment the number of hops
         msg.set_hops(msg.hops() + 1);
@@ -863,8 +912,45 @@ void Scheduler::releaseSlots(int n)
     // Lock to ensure consistency
     faabric::util::FullLock lock(mx);
 
+    // Cap available slots at max
+    thisHostResources.slotsAvailable = std::max<int>(
+      thisHostResources.slotsAvailable + n, thisHostResources.slotsTotal);
+}
+
+void Scheduler::takeSlots(int n)
+{
+    faabric::util::FullLock lock(mx);
+
     // Floor available slots at zero
     thisHostResources.slotsAvailable =
       std::min<int>(thisHostResources.slotsAvailable - n, 0);
+}
+
+void Scheduler::addBoundExecutor()
+{
+    faabric::util::FullLock lock(mx);
+
+    thisHostResources.boundExecutors++;
+}
+
+void Scheduler::removeBoundExecutor()
+{
+    // Floor bound executors at zero
+    thisHostResources.boundExecutors =
+      std::min<int>(thisHostResources.boundExecutors - 1, 0);
+}
+
+void Scheduler::addFunctionInFlight()
+{
+    faabric::util::FullLock lock(mx);
+
+    thisHostResources.callsInFlight++;
+}
+
+void Scheduler::removeFunctionInFlight()
+{
+    // Floor bound executors at zero
+    thisHostResources.callsInFlight =
+      std::min<int>(thisHostResources.callsInFlight - 1, 0);
 }
 }
