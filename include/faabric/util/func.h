@@ -61,6 +61,9 @@ std::string buildAsyncResponse(const faabric::Message& msg);
 faabric::Message messageFactory(const std::string& user,
                                 const std::string& function);
 
+faabric::BatchExecuteRequest batchExecFactory(
+  std::vector<faabric::Message>& msgs);
+
 void convertMessageToPython(faabric::Message& msg);
 
 std::string resultKeyFromMessageId(unsigned int mid);

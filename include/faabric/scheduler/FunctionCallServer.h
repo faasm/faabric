@@ -34,10 +34,10 @@ class FunctionCallServer final
 
     Status ExecuteFunctions(ServerContext* context,
                          const faabric::BatchExecuteRequest* request,
-                         faabric::BatchExecuteResponse* response) override;
+                         faabric::FunctionStatusResponse* response) override;
 
-    Status NotifyCold(ServerContext* context,
-                         const faabric::NotifyColdRequest* request,
+    Status Unregister(ServerContext* context,
+                         const faabric::UnregisterRequest* request,
                          faabric::FunctionStatusResponse* response) override;
 
   protected:

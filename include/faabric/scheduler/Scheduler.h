@@ -20,12 +20,21 @@ enum class SchedulerOpinion
     NO = 2,
 };
 
+struct Resources
+{
+    int slotsTotal;
+    int slotsAvailable;
+};
+
 class Scheduler
 {
   public:
     Scheduler();
 
     void callFunction(faabric::Message& msg, bool forceLocal = false);
+
+    std::vector<bool> callFunctions(faabric::BatchExecuteRequest& req,
+                                   bool forceLocal = false);
 
     SchedulerOpinion getLatestOpinion(const faabric::Message& msg);
 
@@ -98,6 +107,14 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    Resources getThisHostResources();
+    
+    Resources getHostResources(const std::string &host, int slotsNeeded);
+
+    void removeRegisteredHost(const std::string& host,
+                              const faabric::Message& msg);
+
+    void releaseSlots(int n);
   private:
     std::string thisHost;
 
@@ -106,12 +123,16 @@ class Scheduler
     std::shared_ptr<InMemoryMessageQueue> bindQueue;
 
     std::shared_mutex mx;
+
     std::unordered_map<std::string, std::shared_ptr<InMemoryMessageQueue>>
       queueMap;
     std::unordered_map<std::string, long> nodeCountMap;
     std::unordered_map<std::string, long> inFlightCountMap;
     std::unordered_map<std::string, SchedulerOpinion> opinionMap;
     bool _hasHostCapacity = true;
+
+    Resources thisHostResources;
+    std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
     bool isTestMode = false;
     std::vector<unsigned int> recordedMessagesAll;

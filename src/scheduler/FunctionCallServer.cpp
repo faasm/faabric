@@ -84,4 +84,40 @@ Status FunctionCallServer::MPICall(ServerContext* context,
 
     return Status::OK;
 }
+
+Status FunctionCallServer::GetResources(ServerContext* context,
+                                        const faabric::ResourceRequest* request,
+                                        faabric::ResourceResponse* response)
+{
+    // Return this host's resources
+    Resources res = scheduler.getThisHostResources();
+    response->set_slotsavailable(res.slotsAvailable);
+    response->set_slotstotal(res.slotsTotal);
+
+    return Status::OK;
+}
+
+Status FunctionCallServer::ExecuteFunctions(
+  ServerContext* context,
+  const faabric::BatchExecuteRequest* request,
+  faabric::FunctionStatusResponse* response)
+{
+    // TODO - avoiding having to copy the message here
+    faabric::BatchExecuteRequest requestCopy = *request;
+
+    // This host has now been told to execute these functions no matter what
+    scheduler.callFunctions(requestCopy, true);
+
+    return Status::OK;
+}
+
+Status FunctionCallServer::Unregister(ServerContext* context,
+                                      const faabric::UnregisterRequest* request,
+                                      faabric::FunctionStatusResponse* response)
+{
+    // Remove the host from the warm set
+    scheduler.removeRegisteredHost(request->host(), request->function());
+    return Status::OK;
+}
+
 }

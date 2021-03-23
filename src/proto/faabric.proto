@@ -15,18 +15,15 @@ message BatchExecuteRequest {
 
     BatchExecuteType type = 1;
 
-    string masterHost = 2;
+    int32 id = 2;
+    string masterHost = 3;
 
     // Shared snapshot used for threads
-    string snapshotKey = 3;
-    int32 snapshotSize = 4;
+    string snapshotKey = 4;
+    int32 snapshotSize = 5;
 
-    repeated Message messages = 5;
-    repeated int32 returnValues = 6;
-}
-
-message BatchExecuteResponse {
-    repeated int32 returnValues = 1;
+    repeated Message messages = 6;
+    repeated int32 returnValues = 7;
 }
 
 message ResourceRequest {
@@ -35,9 +32,10 @@ message ResourceRequest {
 
 message ResourceResponse {
     int32 slotsAvailable = 1;
+    int32 slotsTotal = 2;
 }
 
-message NotifyColdRequest {
+message UnregisterRequest {
     string host = 1;
     Message function = 2;
 }
@@ -55,10 +53,10 @@ service FunctionRPCService {
     rpc GetResources (ResourceRequest) returns (ResourceResponse) {
     }
 
-    rpc ExecuteFunctions (BatchExecuteRequest) returns (BatchExecuteResponse) {
+    rpc ExecuteFunctions (BatchExecuteRequest) returns (FunctionStatusResponse) {
     }
 
-    rpc NotifyCold (NotifyColdRequest) returns (FunctionStatusResponse) {
+    rpc Unregister (UnregisterRequest) returns (FunctionStatusResponse) {
     }
 }
 
@@ -161,7 +159,6 @@ message Message {
     bytes sgxPolicy = 44;
     bytes sgxResult = 45;
 }
-
 
 // ---------------------------------------------
 // STATE SERVICE

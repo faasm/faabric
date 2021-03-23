@@ -1,8 +1,10 @@
+#include "faabric/util/func.h"
 #include <faabric/scheduler/Scheduler.h>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/random.h>
 #include <faabric/util/timing.h>
@@ -25,8 +27,11 @@ Scheduler::Scheduler()
   , conf(faabric::util::getSystemConfig())
   , isTestMode(false)
 {
-
     bindQueue = std::make_shared<InMemoryMessageQueue>();
+
+    int cores = faabric::util::getUsableCores();
+    thisHostResources.slotsTotal = cores;
+    thisHostResources.slotsAvailable = cores;
 }
 
 void Scheduler::addHostToGlobalSet(const std::string& host)
@@ -194,6 +199,95 @@ Scheduler& getScheduler()
     // Note that this ref is shared between all nodes on the given host
     static Scheduler scheduler;
     return scheduler;
+}
+
+std::vector<bool> Scheduler::callFunctions(faabric::BatchExecuteRequest& req,
+                                           bool forceLocal)
+{
+    auto logger = faabric::util::getLogger();
+
+    int nMessages = req.messages_size();
+    std::vector<bool> executed(nMessages, true);
+
+    // Handle forced local execution
+    if (forceLocal) {
+        logger->debug("Executing {} functions locally", nMessages);
+
+        // TODO - make this smarter
+        for (auto m : req.messages()) {
+            callFunction(m, true);
+        }
+
+        // TODO - Await results
+
+
+        return executed;
+    }
+
+    // If not forced local, here we need to determine which functions to execute
+    // locally, and which to distribute
+
+    // TODO - more fine-grained locking
+    // Lock the whole scheduler to be safe
+    faabric::util::FullLock lock(mx);
+
+    // Work out how many we can handle locally
+    int slots = thisHostResources.slotsAvailable;
+    int nLocally = std::min<int>(slots, nMessages);
+
+    // Keep track of what's been done
+    int remainder = nMessages;
+    int nextMsgIdx = 0;
+
+    // Build list of messages to be executed locally
+    for (; nextMsgIdx < nLocally; nextMsgIdx++) {
+        // Flag that this message was not executed
+        executed.at(nextMsgIdx) = false;
+        remainder--;
+    }
+
+    // Done if there are none left
+    if (remainder == 0) {
+        return executed;
+    }
+
+    // At this point we have a remainder, so we need to distribute the rest
+    // Get the list of registered hosts for this function
+    const faabric::Message& msg = req.messages().at(0);
+    std::string funcStr = faabric::util::funcToString(msg, false);
+    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+
+    // Schedule the remainder on these other hosts
+    std::vector<Resources> registeredResources;
+    for (auto& h : thisRegisteredHosts) {
+        Resources r = getHostResources(h, nMessages);
+
+        // TODO - proper bin-packing
+        // Naively allocate first-come first serve
+        int nOnThisHost = std::min<int>(r.slotsAvailable, nMessages);
+
+        // If we've now executed all the functions, we're done
+        std::vector<faabric::Message> thisHostMsgs;
+        for (int i = 0; i < nOnThisHost; i++) {
+            const faabric::Message& msg = req.messages().at(0);
+            thisHostMsgs.push_back(msg);
+
+            nextMsgIdx++;
+            remainder--;
+        }
+
+        FunctionCallClient c(h);
+        faabric::BatchExecuteRequest hostRequest =
+          faabric::util::batchExecFactory(thisHostMsgs);
+        c.executeFunctions(hostRequest);
+
+        remainder -= nOnThisHost;
+        if (remainder <= 0) {
+            break;
+        }
+    }
+
+    return executed;
 }
 
 void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
@@ -742,5 +836,35 @@ std::unordered_set<unsigned int> Scheduler::getChainedFunctions(
     }
 
     return chainedIds;
+}
+
+Resources Scheduler::getThisHostResources()
+{
+    return thisHostResources;
+}
+
+Resources Scheduler::getHostResources(const std::string& host, int slotsNeeded)
+{
+    // Get the resources for that host
+    faabric::ResourceRequest resourceReq;
+    resourceReq.set_slotsneeded(slotsNeeded);
+    FunctionCallClient c(host);
+    faabric::ResourceResponse resp = c.getResources(resourceReq);
+
+    Resources r;
+    r.slotsAvailable = resp.slotsavailable();
+    r.slotsTotal = resp.slotstotal();
+
+    return r;
+}
+
+void Scheduler::releaseSlots(int n)
+{
+    // Lock to ensure consistency
+    faabric::util::FullLock lock(mx);
+
+    // Floor available slots at zero
+    thisHostResources.slotsAvailable =
+      std::min<int>(thisHostResources.slotsAvailable - n, 0);
 }
 }

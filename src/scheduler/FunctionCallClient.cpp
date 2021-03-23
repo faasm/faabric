@@ -1,3 +1,4 @@
+#include "faabric/proto/faabric.pb.h"
 #include <faabric/scheduler/FunctionCallClient.h>
 
 #include <grpcpp/create_channel.h>
@@ -34,5 +35,31 @@ void FunctionCallClient::sendMPIMessage(const faabric::MPIMessage& msg)
     ClientContext context;
     faabric::FunctionStatusResponse response;
     CHECK_RPC("mpi_message", stub->MPICall(&context, msg, &response));
+}
+
+faabric::ResourceResponse FunctionCallClient::getResources(
+  const faabric::ResourceRequest& req)
+{
+    ClientContext context;
+    faabric::ResourceResponse response;
+    CHECK_RPC("resource_request", stub->GetResources(&context, req, &response));
+
+    return response;
+}
+
+void FunctionCallClient::executeFunctions(
+  const faabric::BatchExecuteRequest& req)
+{
+    ClientContext context;
+    faabric::FunctionStatusResponse response;
+    CHECK_RPC("batch_execute",
+              stub->ExecuteFunctions(&context, req, &response));
+}
+
+void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
+{
+    ClientContext context;
+    faabric::FunctionStatusResponse response;
+    CHECK_RPC("unregister", stub->Unregister(&context, req, &response));
 }
 }
