@@ -29,5 +29,11 @@ class FunctionCallClient
     void sendFlush();
 
     void sendMPIMessage(const faabric::MPIMessage& msg);
+    
+    void getResources(const faabric::ResourceRequest& req);
+
+    void executeFunctions();
+
+    void notifyCold(const faabric::NotifyColdRequest& req);
 };
 }

@@ -196,14 +196,6 @@ Scheduler& getScheduler()
     return scheduler;
 }
 
-void Scheduler::callFunctions(std::vector<faabric::Message>& msgs)
-{
-    // Naive implementation, just call in a loop
-    for (auto& m : msgs) {
-        callFunction(m);
-    }
-};
-
 void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
 {
     faabric::util::FullLock lock(mx);

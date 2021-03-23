@@ -27,8 +27,6 @@ class Scheduler
 
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
-    faabric::MultiMessage callFunctions(std::vector<faabric::Message>& msgs);
-
     SchedulerOpinion getLatestOpinion(const faabric::Message& msg);
 
     std::string getBestHostForFunction(const faabric::Message& msg);

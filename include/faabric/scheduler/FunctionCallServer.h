@@ -28,6 +28,18 @@ class FunctionCallServer final
                    const faabric::MPIMessage* request,
                    faabric::FunctionStatusResponse* response) override;
 
+    Status GetResources(ServerContext* context,
+                         const faabric::ResourceRequest* request,
+                         faabric::ResourceResponse* response) override;
+
+    Status ExecuteFunctions(ServerContext* context,
+                         const faabric::BatchExecuteRequest* request,
+                         faabric::BatchExecuteResponse* response) override;
+
+    Status NotifyCold(ServerContext* context,
+                         const faabric::NotifyColdRequest* request,
+                         faabric::FunctionStatusResponse* response) override;
+
   protected:
     void doStart(const std::string& serverAddr) override;
 

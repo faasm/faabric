@@ -3,20 +3,62 @@ syntax = "proto3";
 package faabric;
 
 // ---------------------------------------------
-// FUNCTION SERVICE
+// FUNCTION SCHEDULING
 // ---------------------------------------------
+
+message BatchExecuteRequest {
+    enum BatchExecuteType {
+        THREADS = 0;
+        PROCESSES = 1;
+        FUNCTIONS = 2;
+    }
+
+    BatchExecuteType type = 1;
+
+    string masterHost = 2;
+
+    // Shared snapshot used for threads
+    string snapshotKey = 3;
+    int32 snapshotSize = 4;
+
+    repeated Message messages = 5;
+    repeated int32 returnValues = 6;
+}
+
+message BatchExecuteResponse {
+    repeated int32 returnValues = 1;
+}
+
+message ResourceRequest {
+    int32 slotsNeeded = 1;
+}
+
+message ResourceResponse {
+    int32 slotsAvailable = 1;
+}
+
+message NotifyColdRequest {
+    string host = 1;
+    Message function = 2;
+}
 
 service FunctionRPCService {
     rpc ShareFunction (Message) returns (FunctionStatusResponse) {
-    }
-
-    rpc ShareFunctions (MultiMessage) returns (FunctionStatusResponse) {
     }
 
     rpc Flush (Message) returns (FunctionStatusResponse) {
     }
 
     rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
+    }
+
+    rpc GetResources (ResourceRequest) returns (ResourceResponse) {
+    }
+
+    rpc ExecuteFunctions (BatchExecuteRequest) returns (BatchExecuteResponse) {
+    }
+
+    rpc NotifyCold (NotifyColdRequest) returns (FunctionStatusResponse) {
     }
 }
 
@@ -120,22 +162,6 @@ message Message {
     bytes sgxResult = 45;
 }
 
-message MultiMessage {
-    enum MultiMessageType {
-        THREADS = 0;
-        PROCESSES = 1;
-        FUNCTIONS = 2;
-    }
-
-    MultiMessageType type = 1;
-
-    // Shared snapshot used for threads
-    string snapshotKey = 2;
-    int32 snapshotSize = 3;
-
-    repeated Message messages = 4;
-    repeated int32 returnValues = 5;
-}
 
 // ---------------------------------------------
 // STATE SERVICE
