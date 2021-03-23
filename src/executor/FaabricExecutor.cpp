@@ -58,7 +58,6 @@ void FaabricExecutor::finish()
     if (_isBound) {
         // Notify scheduler if this thread was bound to a function
         scheduler.notifyFaasletFinished(boundMessage);
-        scheduler.removeBoundExecutor();
     }
 
     // Hook
@@ -85,7 +84,6 @@ void FaabricExecutor::finishCall(faabric::Message& msg,
     // Notify the scheduler *before* setting the result. Calls awaiting
     // the result will carry on blocking
     scheduler.notifyCallFinished(msg);
-    scheduler.removeFunctionInFlight();
 
     // Set result
     logger->debug("Setting function result for {}", funcStr);

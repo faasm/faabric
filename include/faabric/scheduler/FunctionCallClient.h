@@ -30,7 +30,7 @@ class FunctionCallClient
 
     void sendMPIMessage(const faabric::MPIMessage& msg);
 
-    faabric::ResourceResponse getResources(const faabric::ResourceRequest& req);
+    faabric::HostResources getResources(const faabric::ResourceRequest& req);
 
     void executeFunctions(const faabric::BatchExecuteRequest & req);
 

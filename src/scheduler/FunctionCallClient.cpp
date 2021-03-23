@@ -37,11 +37,11 @@ void FunctionCallClient::sendMPIMessage(const faabric::MPIMessage& msg)
     CHECK_RPC("mpi_message", stub->MPICall(&context, msg, &response));
 }
 
-faabric::ResourceResponse FunctionCallClient::getResources(
+faabric::HostResources FunctionCallClient::getResources(
   const faabric::ResourceRequest& req)
 {
     ClientContext context;
-    faabric::ResourceResponse response;
+    faabric::HostResources response;
     CHECK_RPC("resource_request", stub->GetResources(&context, req, &response));
 
     return response;

@@ -13,14 +13,6 @@
 
 namespace faabric::scheduler {
 
-struct Resources
-{
-    int slotsTotal = 0;
-    int slotsAvailable = 0;
-    int boundExecutors = 0;
-    int callsInFlight = 0;
-};
-
 class Scheduler
 {
   public:
@@ -47,16 +39,12 @@ class Scheduler
     // ----------------------------------
     // Internal API
     // ----------------------------------
-    Resources getThisHostResources();
+    faabric::HostResources getThisHostResources();
 
-    Resources getHostResources(const std::string& host, int slotsNeeded);
+    faabric::HostResources getHostResources(const std::string& host);
 
     void removeRegisteredHost(const std::string& host,
                               const faabric::Message& msg);
-
-    void takeSlots(int n);
-
-    void releaseSlots(int n);
 
     void addHostToGlobalSet(const std::string& host);
 
@@ -64,15 +52,6 @@ class Scheduler
 
     void removeHostFromGlobalSet();
 
-    void addBoundExecutor();
-
-    void removeBoundExecutor();
-
-    void addFunctionInFlight();
-
-    void removeFunctionInFlight();
-
-    void enqueueMessage(const faabric::Message& msg);
     // ----------------------------------
     // Legacy
     // ----------------------------------
@@ -128,7 +107,7 @@ class Scheduler
     std::unordered_map<std::string, long> inFlightCounts;
     bool _hasHostCapacity = true;
 
-    Resources thisHostResources;
+    faabric::HostResources thisHostResources;
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
     bool isTestMode = false;
@@ -139,8 +118,6 @@ class Scheduler
     void updateOpinion(const faabric::Message& msg);
 
     void incrementInFlightCount(const faabric::Message& msg);
-
-    void decrementInFlightCount(const faabric::Message& msg);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 

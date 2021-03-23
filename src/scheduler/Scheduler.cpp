@@ -9,18 +9,11 @@
 #include <faabric/util/random.h>
 #include <faabric/util/timing.h>
 
-#define CHAINED_SET_PREFIX "chained_"
 #define FLUSH_TIMEOUT_MS 10000
 
 using namespace faabric::util;
 
 namespace faabric::scheduler {
-const std::string WARM_SET_PREFIX = "w_";
-
-std::string getChainedKey(unsigned int msgId)
-{
-    return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
-}
 
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
@@ -31,8 +24,7 @@ Scheduler::Scheduler()
 
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
-    thisHostResources.slotsTotal = cores;
-    thisHostResources.slotsAvailable = cores;
+    thisHostResources.set_cores(cores);
 }
 
 void Scheduler::addHostToGlobalSet(const std::string& host)
@@ -68,7 +60,7 @@ void Scheduler::reset()
     bindQueue->reset();
 
     // Reset scheduler state
-    thisHostResources = Resources();
+    thisHostResources = faabric::HostResources();
     faasletCounts.clear();
     inFlightCounts.clear();
     _hasHostCapacity = true;
@@ -85,16 +77,6 @@ void Scheduler::shutdown()
     reset();
 
     this->removeHostFromGlobalSet();
-}
-
-void Scheduler::enqueueMessage(const faabric::Message& msg)
-{
-    if (msg.type() == faabric::Message_MessageType_BIND) {
-        bindQueue->enqueue(msg);
-    } else {
-        auto q = this->getFunctionQueue(msg);
-        q->enqueue(msg);
-    }
 }
 
 long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
@@ -122,14 +104,24 @@ std::shared_ptr<InMemoryMessageQueue> Scheduler::getFunctionQueue(
 void Scheduler::notifyCallFinished(const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
-    decrementInFlightCount(msg);
+
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+
+    inFlightCounts[funcStr] = std::max(inFlightCounts[funcStr] - 1, 0L);
+
+    int newInFlight =
+      std::max<int>(thisHostResources.functionsinflight() - 1, 0);
+    thisHostResources.set_functionsinflight(newInFlight);
 }
 
 void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
+
     faasletCounts[funcStr] = std::max(faasletCounts[funcStr] - 1, 0L);
+    int newBoundExecutors = std::max(thisHostResources.boundexecutors() - 1, 0);
+    thisHostResources.set_boundexecutors(newBoundExecutors);
 }
 
 std::shared_ptr<InMemoryMessageQueue> Scheduler::getBindQueue()
@@ -156,16 +148,19 @@ std::vector<std::string> Scheduler::callFunctions(
     const faabric::Message& firstMsg = req.messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
+    auto funcQueue = this->getFunctionQueue(firstMsg);
+
     // Handle forced local execution
     if (forceLocal) {
         logger->debug("Executing {} functions locally", nMessages);
 
         for (int i = 0; i < nMessages; i++) {
             faabric::Message msg = req.messages().at(i);
-            this->enqueueMessage(msg);
-            executed.at(i) = thisHost;
+
+            funcQueue->enqueue(msg);
             incrementInFlightCount(msg);
-            addFunctionInFlight();
+
+            executed.at(i) = thisHost;
         }
     } else {
         // If not forced local, here we need to determine which functions to
@@ -183,20 +178,21 @@ std::vector<std::string> Scheduler::callFunctions(
         // the master host. This will only happen if a nested batch execution
         // happens.
         if (req.masterhost() != thisHost) {
-            if(isTestMode) {
+            if (isTestMode) {
                 logger->debug("Not forwarding request to master in test mode");
             } else {
-            FunctionCallClient c(req.masterhost());
-            c.executeFunctions(req);
+                FunctionCallClient c(req.masterhost());
+                c.executeFunctions(req);
             }
-
         } else {
             // At this point we know we're the master host, and we've not been
             // asked to force full local execution.
 
             // Work out how many we can handle locally
-            int slots = thisHostResources.slotsAvailable;
-            int nLocally = std::min<int>(slots, nMessages);
+            int cores = thisHostResources.cores();
+            int available = cores - thisHostResources.functionsinflight();
+            available = std::max<int>(available, 0);
+            int nLocally = std::min<int>(available, nMessages);
 
             // Keep track of what's been done
             int remainder = nMessages;
@@ -204,12 +200,22 @@ std::vector<std::string> Scheduler::callFunctions(
 
             // Build list of messages to be executed locally
             for (; nextMsgIdx < nLocally; nextMsgIdx++) {
-                // Flag that this message was not executed
-                executed.at(nextMsgIdx) = false;
-                remainder--;
+                faabric::Message msg = req.messages().at(nextMsgIdx);
 
-                // Record that there's a function in flight
-                addFunctionInFlight();
+                if (req.type() == req.THREADS) {
+                    // For threads we don't actually execute the functions,
+                    // leaving the caller to do it
+                    logger->debug("Skipping for local thread execution");
+                } else {
+                    funcQueue->enqueue(msg);
+                    incrementInFlightCount(msg);
+
+                    executed.at(nextMsgIdx) = thisHost;
+                }
+
+                // Record that we've dealt with one
+                remainder--;
+                incrementInFlightCount(msg);
             }
 
             // If some are left, we need to distribute
@@ -220,7 +226,6 @@ std::vector<std::string> Scheduler::callFunctions(
                   registeredHosts[funcStr];
 
                 // Schedule the remainder on these other hosts
-                std::vector<Resources> registeredResources;
                 for (auto& h : thisRegisteredHosts) {
                     int nOnThisHost =
                       scheduleFunctionsOnHost(h, req, executed, nextMsgIdx);
@@ -300,16 +305,22 @@ std::vector<std::string> Scheduler::callFunctions(
 
 int Scheduler::scheduleFunctionsOnHost(const std::string& host,
                                        faabric::BatchExecuteRequest& req,
-                                       std::vector<std::string> &records,
+                                       std::vector<std::string>& records,
                                        int offset)
 {
     int nMessages = req.messages_size();
     int remainder = nMessages - offset;
 
     // Execute as many as possible to this host
-    Resources r = getHostResources(host, nMessages);
-    int nOnThisHost = std::min<int>(r.slotsAvailable, remainder);
+    faabric::HostResources r = getHostResources(host);
+    int available = r.cores() - r.functionsinflight();
 
+    // Drop out if none available
+    if (available < 0) {
+        return 0;
+    }
+
+    int nOnThisHost = std::min<int>(available, remainder);
     std::vector<faabric::Message> thisHostMsgs;
     for (int i = offset; i < (offset + nOnThisHost); i++) {
         thisHostMsgs.push_back(req.messages().at(i));
@@ -331,11 +342,13 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
 
 void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
 {
+    // TODO - avoid this copy
     faabric::Message msgCopy = msg;
     std::vector<faabric::Message> msgs = { msg };
     faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
 
-    // This is a special case of callFunctions
+    // TODO - remove calls to callFunction, instead convert everything to
+    // calling callFunctions directly
     std::vector<std::string> executed = callFunctions(req, forceLocal);
     if (executed.at(0).empty()) {
         callFunctions(req, true);
@@ -370,11 +383,13 @@ bool Scheduler::hasHostCapacity()
 
 void Scheduler::incrementInFlightCount(const faabric::Message& msg)
 {
-    const std::shared_ptr<spdlog::logger> logger = faabric::util::getLogger();
+    auto logger = faabric::util::getLogger();
 
     // Increment the in-flight count
     const std::string funcStr = faabric::util::funcToString(msg, false);
     inFlightCounts[funcStr]++;
+    thisHostResources.set_functionsinflight(
+      thisHostResources.functionsinflight() + 1);
 
     // If we've not got one faaslet per in-flight function, add one
     int nFaaslets = faasletCounts[funcStr];
@@ -386,6 +401,8 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
 
         // Increment faaslet count
         faasletCounts[funcStr]++;
+        thisHostResources.set_boundexecutors(
+          thisHostResources.boundexecutors() + 1);
 
         // Send bind message (i.e. request a new faaslet bind to this func)
         faabric::Message bindMsg =
@@ -397,14 +414,8 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
         bindMsg.set_pythonfunction(msg.pythonfunction());
         bindMsg.set_issgx(msg.issgx());
 
-        this->enqueueMessage(bindMsg);
+        bindQueue->enqueue(msg);
     }
-}
-
-void Scheduler::decrementInFlightCount(const faabric::Message& msg)
-{
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    inFlightCounts[funcStr] = std::max(inFlightCounts[funcStr] - 1, 0L);
 }
 
 std::string Scheduler::getThisHost()
@@ -533,6 +544,71 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
     return msgResult;
 }
 
+std::string Scheduler::getMessageStatus(unsigned int messageId)
+{
+    const faabric::Message result = getFunctionResult(messageId, 0);
+
+    if (result.type() == faabric::Message_MessageType_EMPTY) {
+        return "RUNNING";
+    } else if (result.returnvalue() == 0) {
+        return "SUCCESS: " + result.outputdata();
+    } else {
+        return "FAILED: " + result.outputdata();
+    }
+}
+
+faabric::HostResources Scheduler::getThisHostResources()
+{
+    return thisHostResources;
+}
+
+faabric::HostResources Scheduler::getHostResources(const std::string& host)
+{
+    // Get the resources for that host
+    faabric::ResourceRequest resourceReq;
+    FunctionCallClient c(host);
+
+    faabric::HostResources resp = c.getResources(resourceReq);
+
+    return resp;
+}
+
+// --------------------------------------------
+// EXECUTION GRAPH
+// --------------------------------------------
+
+#define CHAINED_SET_PREFIX "chained_"
+std::string getChainedKey(unsigned int msgId)
+{
+    return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
+}
+
+void Scheduler::logChainedFunction(unsigned int parentMessageId,
+                                   unsigned int chainedMessageId)
+{
+    redis::Redis& redis = redis::Redis::getQueue();
+
+    const std::string& key = getChainedKey(parentMessageId);
+    redis.sadd(key, std::to_string(chainedMessageId));
+    redis.expire(key, STATUS_KEY_EXPIRY);
+}
+
+std::unordered_set<unsigned int> Scheduler::getChainedFunctions(
+  unsigned int msgId)
+{
+    redis::Redis& redis = redis::Redis::getQueue();
+
+    const std::string& key = getChainedKey(msgId);
+    const std::unordered_set<std::string> chainedCalls = redis.smembers(key);
+
+    std::unordered_set<unsigned int> chainedIds;
+    for (auto i : chainedCalls) {
+        chainedIds.insert(std::stoi(i));
+    }
+
+    return chainedIds;
+}
+
 ExecGraph Scheduler::getFunctionExecGraph(unsigned int messageId)
 {
     ExecGraphNode rootNode = getFunctionExecGraphNode(messageId);
@@ -565,109 +641,4 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
     return node;
 }
 
-std::string Scheduler::getMessageStatus(unsigned int messageId)
-{
-    const faabric::Message result = getFunctionResult(messageId, 0);
-
-    if (result.type() == faabric::Message_MessageType_EMPTY) {
-        return "RUNNING";
-    } else if (result.returnvalue() == 0) {
-        return "SUCCESS: " + result.outputdata();
-    } else {
-        return "FAILED: " + result.outputdata();
-    }
-}
-
-void Scheduler::logChainedFunction(unsigned int parentMessageId,
-                                   unsigned int chainedMessageId)
-{
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    const std::string& key = getChainedKey(parentMessageId);
-    redis.sadd(key, std::to_string(chainedMessageId));
-    redis.expire(key, STATUS_KEY_EXPIRY);
-}
-
-std::unordered_set<unsigned int> Scheduler::getChainedFunctions(
-  unsigned int msgId)
-{
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    const std::string& key = getChainedKey(msgId);
-    const std::unordered_set<std::string> chainedCalls = redis.smembers(key);
-
-    std::unordered_set<unsigned int> chainedIds;
-    for (auto i : chainedCalls) {
-        chainedIds.insert(std::stoi(i));
-    }
-
-    return chainedIds;
-}
-
-Resources Scheduler::getThisHostResources()
-{
-    return thisHostResources;
-}
-
-Resources Scheduler::getHostResources(const std::string& host, int slotsNeeded)
-{
-    // Get the resources for that host
-    faabric::ResourceRequest resourceReq;
-    resourceReq.set_slotsneeded(slotsNeeded);
-    FunctionCallClient c(host);
-    faabric::ResourceResponse resp = c.getResources(resourceReq);
-
-    Resources r;
-    r.slotsAvailable = resp.slotsavailable();
-    r.slotsTotal = resp.slotstotal();
-
-    return r;
-}
-
-void Scheduler::releaseSlots(int n)
-{
-    // Lock to ensure consistency
-    faabric::util::FullLock lock(mx);
-
-    // Cap available slots at max
-    thisHostResources.slotsAvailable = std::max<int>(
-      thisHostResources.slotsAvailable + n, thisHostResources.slotsTotal);
-}
-
-void Scheduler::takeSlots(int n)
-{
-    faabric::util::FullLock lock(mx);
-
-    // Floor available slots at zero
-    thisHostResources.slotsAvailable =
-      std::min<int>(thisHostResources.slotsAvailable - n, 0);
-}
-
-void Scheduler::addBoundExecutor()
-{
-    faabric::util::FullLock lock(mx);
-
-    thisHostResources.boundExecutors++;
-}
-
-void Scheduler::removeBoundExecutor()
-{
-    // Floor bound executors at zero
-    thisHostResources.boundExecutors =
-      std::min<int>(thisHostResources.boundExecutors - 1, 0);
-}
-
-void Scheduler::addFunctionInFlight()
-{
-    faabric::util::FullLock lock(mx);
-
-    thisHostResources.callsInFlight++;
-}
-
-void Scheduler::removeFunctionInFlight()
-{
-    // Floor bound executors at zero
-    thisHostResources.callsInFlight =
-      std::min<int>(thisHostResources.callsInFlight - 1, 0);
-}
 }

@@ -27,12 +27,13 @@ message BatchExecuteRequest {
 }
 
 message ResourceRequest {
-    int32 slotsNeeded = 1;
+    int32 empty = 1;
 }
 
-message ResourceResponse {
-    int32 slotsAvailable = 1;
-    int32 slotsTotal = 2;
+message HostResources {
+    int32 cores = 1;
+    int32 functionsInFlight = 2;
+    int32 boundExecutors = 3;
 }
 
 message UnregisterRequest {
@@ -50,7 +51,7 @@ service FunctionRPCService {
     rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
     }
 
-    rpc GetResources (ResourceRequest) returns (ResourceResponse) {
+    rpc GetResources (ResourceRequest) returns (HostResources) {
     }
 
     rpc ExecuteFunctions (BatchExecuteRequest) returns (FunctionStatusResponse) {
