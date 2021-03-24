@@ -25,7 +25,9 @@ static std::vector<std::pair<std::string, faabric::MPIMessage>> mpiMessages;
 static std::vector<std::pair<std::string, faabric::ResourceRequest>>
   resourceRequests;
 
-static faabric::util::Queue<faabric::HostResources> queuedResourceResponses;
+static std::unordered_map<std::string,
+                          faabric::util::Queue<faabric::HostResources>>
+  queuedResourceResponses;
 
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
@@ -63,9 +65,9 @@ getUnregisterRequests()
     return unregisterRequests;
 }
 
-void queueResourceResponse(faabric::HostResources& res)
+void queueResourceResponse(const std::string& host, faabric::HostResources& res)
 {
-    queuedResourceResponses.enqueue(res);
+    queuedResourceResponses[host].enqueue(res);
 }
 
 void clearMockRequests()
@@ -74,8 +76,12 @@ void clearMockRequests()
     batchMessages.clear();
     mpiMessages.clear();
     resourceRequests.clear();
-    queuedResourceResponses.reset();
     unregisterRequests.clear();
+
+    for (auto& p : queuedResourceResponses) {
+        p.second.reset();
+    }
+    queuedResourceResponses.clear();
 }
 
 // -----------------------------------
@@ -129,10 +135,12 @@ faabric::HostResources FunctionCallClient::getResources(
     faabric::HostResources response;
 
     if (faabric::util::isMockMode()) {
+        // Register the request
         resourceRequests.emplace_back(host, req);
 
-        if (queuedResourceResponses.size() > 1) {
-            response = queuedResourceResponses.dequeue();
+        // See if we have a queued response
+        if (queuedResourceResponses[host].size() > 0) {
+            response = queuedResourceResponses[host].dequeue();
         }
     } else {
         ClientContext context;

@@ -33,7 +33,8 @@ getResourceRequests();
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests();
 
-void queueResourceResponse(faabric::HostResources& res);
+void queueResourceResponse(const std::string& host,
+                           faabric::HostResources& res);
 
 void clearMockRequests();
 

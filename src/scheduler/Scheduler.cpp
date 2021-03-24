@@ -262,15 +262,17 @@ std::vector<std::string> Scheduler::callFunctions(
 
             // If some are left, we need to distribute
             if (remainder > 0) {
-                logger->debug("Distributing remaining {} of {} {}",
-                              remainder,
-                              nMessages,
-                              funcStr);
-
                 // At this point we have a remainder, so we need to distribute
                 // the rest Get the list of registered hosts for this function
                 std::unordered_set<std::string>& thisRegisteredHosts =
                   registeredHosts[funcStr];
+
+                logger->debug(
+                  "Distributing to {} registered hosts: {} of {} {}",
+                  thisRegisteredHosts.size(),
+                  remainder,
+                  nMessages,
+                  funcStr);
 
                 // Schedule the remainder on these other hosts
                 for (auto& h : thisRegisteredHosts) {
@@ -291,9 +293,12 @@ std::vector<std::string> Scheduler::callFunctions(
                   registeredHosts[funcStr];
 
                 redis::Redis& redis = redis::Redis::getQueue();
-                std::unordered_set<std::string> allHosts =
-                  redis.smembers(AVAILABLE_HOST_SET);
+                std::unordered_set<std::string> allHosts = getAvailableHosts();
 
+                std::unordered_set<std::string> targetHosts;
+
+                // Build list of target hosts
+                // TODO - do this with set difference
                 for (auto& h : allHosts) {
                     // Skip if already registered
                     if (thisRegisteredHosts.find(h) !=
@@ -301,9 +306,26 @@ std::vector<std::string> Scheduler::callFunctions(
                         continue;
                     }
 
+                    // Skip this host
+                    if (h == thisHost) {
+                        continue;
+                    }
+
+                    targetHosts.insert(h);
+                }
+
+                logger->debug(
+                  "Distributing to {} unregistered hosts: {} of {} {}",
+                  targetHosts.size(),
+                  remainder,
+                  nMessages,
+                  funcStr);
+
+                for (auto& h : targetHosts) {
                     // Schedule functions on this host
                     int nOnThisHost =
                       scheduleFunctionsOnHost(h, req, executed, nextMsgIdx);
+
                     remainder -= nOnThisHost;
 
                     // Register the host if it's exected a function
@@ -325,7 +347,7 @@ std::vector<std::string> Scheduler::callFunctions(
                 logger->warn("No capacity for {}, overloading", funcStr);
                 for (; nextMsgIdx < nMessages; nextMsgIdx++) {
                     // Flag that this message was not executed
-                    executed.at(nextMsgIdx) = false;
+                    executed.at(nextMsgIdx) = "";
                 }
             }
         }
@@ -482,8 +504,7 @@ void Scheduler::broadcastFlush()
 {
     // Get all hosts
     redis::Redis& redis = redis::Redis::getQueue();
-    std::unordered_set<std::string> allHosts =
-      redis.smembers(AVAILABLE_HOST_SET);
+    std::unordered_set<std::string> allHosts = getAvailableHosts();
 
     // Remove this host from the set
     allHosts.erase(thisHost);
