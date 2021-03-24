@@ -24,7 +24,6 @@ TEST_CASE("Test world creation", "[mpi]")
     cleanFaabric();
 
     Scheduler& sch = getScheduler();
-    sch.setTestMode(true);
 
     // Create the world
     const faabric::Message& msg = faabric::util::messageFactory(user, func);

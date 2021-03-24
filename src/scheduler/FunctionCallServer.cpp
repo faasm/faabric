@@ -89,7 +89,6 @@ Status FunctionCallServer::GetResources(ServerContext* context,
                                         const faabric::ResourceRequest* request,
                                         faabric::HostResources* response)
 {
-    // Return this host's resources
     *response = scheduler.getThisHostResources();
 
     return Status::OK;

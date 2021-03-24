@@ -26,9 +26,7 @@ TEST_CASE("Test sending function call", "[scheduler]")
     usleep(1000 * 100);
 
     // Create a message
-    faabric::Message msg;
-    msg.set_user("demo");
-    msg.set_function("echo");
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     msg.set_inputdata("foobarbaz");
 
     // Get the queue for the function
@@ -128,8 +126,8 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     REQUIRE(state.getKVCount() == 2);
 
     // Execute a couple of functions
-    faabric::Message msgA = faabric::util::messageFactory("demo", "foo");
-    faabric::Message msgB = faabric::util::messageFactory("demo", "bar");
+    faabric::Message msgA = faabric::util::messageFactory("dummy", "foo");
+    faabric::Message msgB = faabric::util::messageFactory("dummy", "bar");
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.callFunction(msgA);
     sch.callFunction(msgB);
@@ -138,22 +136,15 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     auto bindQueue = sch.getBindQueue();
     auto functionQueueA = sch.getFunctionQueue(msgA);
     auto functionQueueB = sch.getFunctionQueue(msgB);
+
+    REQUIRE(bindQueue->size() == 2);
+    REQUIRE(functionQueueA->size() == 1);
+    REQUIRE(functionQueueB->size() == 1);
+
     bindQueue->dequeue();
     bindQueue->dequeue();
     functionQueueA->dequeue();
     functionQueueB->dequeue();
-
-    // Check the scheduler is set up
-    REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 1);
-    REQUIRE(sch.getFunctionRegisteredHostCount(msgB) == 1);
-
-    std::string thisHost = sch.getThisHost();
-
-    std::set<std::string> regHostsA = sch.getFunctionRegisteredHosts(msgA);
-    std::set<std::string> regHostsB = sch.getFunctionRegisteredHosts(msgB);
-
-    REQUIRE(regHostsA.find(thisHost) != regHostsA.end());
-    REQUIRE(regHostsB.find(thisHost) != regHostsB.end());
 
     // Background threads to get flush messages
     std::thread tA([&functionQueueA] {
@@ -185,13 +176,40 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msgB) == 0);
 
-    regHostsA = sch.getFunctionRegisteredHosts(msgA);
-    regHostsB = sch.getFunctionRegisteredHosts(msgB);
-
-    REQUIRE(regHostsA.find(thisHost) == regHostsA.end());
-    REQUIRE(regHostsB.find(thisHost) == regHostsB.end());
-
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);
+}
+
+TEST_CASE("Test broadcasting flush message", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    // Add hosts to global set
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    std::string hostA = "alpha";
+    std::string hostB = "beta";
+    std::string hostC = "gamma";
+
+    std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
+
+    sch.addHostToGlobalSet(hostA);
+    sch.addHostToGlobalSet(hostB);
+    sch.addHostToGlobalSet(hostC);
+
+    // Broadcast the flush
+    sch.broadcastFlush();
+
+    // Make sure messages have been sent
+    auto calls = faabric::scheduler::getFlushCalls();
+    REQUIRE(calls.size() == 3);
+
+    std::vector<std::string> actualHosts;
+    for (auto c : calls) {
+        actualHosts.emplace_back(c.first);
+    }
+
+    faabric::util::setMockMode(false);
 }
 }

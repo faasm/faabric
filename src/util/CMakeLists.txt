@@ -21,6 +21,7 @@ set(LIB_FILES
         state.cpp
         string_tools.cpp
         timing.cpp
+        testing.cpp
         ${HEADERS}
         )
 

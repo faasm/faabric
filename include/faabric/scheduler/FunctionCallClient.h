@@ -14,6 +14,32 @@ using grpc::ClientContext;
 using grpc::Status;
 
 namespace faabric::scheduler {
+
+// -----------------------------------
+// Mocking
+// -----------------------------------
+std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls();
+
+std::vector<std::pair<std::string, faabric::Message>> getFlushCalls();
+
+std::vector<std::pair<std::string, faabric::BatchExecuteRequest>>
+getBatchRequests();
+
+std::vector<std::pair<std::string, faabric::MPIMessage>> getMPIMessages();
+
+std::vector<std::pair<std::string, faabric::ResourceRequest>>
+getResourceRequests();
+
+std::vector<std::pair<std::string, faabric::UnregisterRequest>>
+getUnregisterRequests();
+
+void queueResourceResponse(faabric::HostResources &res);
+
+void clearMockRequests();
+
+// -----------------------------------
+// gRPC client
+// -----------------------------------
 class FunctionCallClient
 {
   public:

@@ -8,9 +8,9 @@ package faabric;
 
 message BatchExecuteRequest {
     enum BatchExecuteType {
-        THREADS = 0;
-        PROCESSES = 1;
-        FUNCTIONS = 2;
+        FUNCTIONS = 0;
+        THREADS = 1;
+        PROCESSES = 2;
     }
 
     BatchExecuteType type = 1;

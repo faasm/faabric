@@ -70,8 +70,6 @@ class Scheduler
     // ----------------------------------
     // Testing
     // ----------------------------------
-    void setTestMode(bool val);
-
     std::vector<unsigned int> getRecordedMessagesAll();
 
     std::vector<unsigned int> getRecordedMessagesLocal();
@@ -106,7 +104,6 @@ class Scheduler
     faabric::HostResources thisHostResources;
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
-    bool isTestMode = false;
     std::vector<unsigned int> recordedMessagesAll;
     std::vector<unsigned int> recordedMessagesLocal;
     std::vector<std::pair<std::string, unsigned int>> recordedMessagesShared;
