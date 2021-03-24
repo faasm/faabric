@@ -1,5 +1,6 @@
 #include <catch.hpp>
 
+#include "faabric/proto/faabric.pb.h"
 #include "faabric_utils.h"
 
 #include <faabric/redis/Redis.h>
@@ -211,5 +212,44 @@ TEST_CASE("Test broadcasting flush message", "[scheduler]")
     }
 
     faabric::util::setMockMode(false);
+}
+
+TEST_CASE("Test client batch execution request", "[scheduler]")
+{
+    cleanFaabric();
+
+    // Start the server
+    ServerContext serverContext;
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Set up a load of calls
+    int nCalls = 30;
+    std::vector<faabric::Message> msgs;
+    for (int i = 0; i < nCalls; i++) {
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msgs.emplace_back(msg);
+    }
+
+    // Make the request
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    FunctionCallClient cli(LOCALHOST);
+    cli.executeFunctions(req);
+
+    // Stop the server
+    server.stop();
+
+    faabric::Message m = msgs.at(0);
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    // Check no other hosts have been registered
+    REQUIRE(sch.getFunctionRegisteredHostCount(m) == 0);
+
+    // Check we've got faaslets and in-flight messages
+    REQUIRE(sch.getFunctionInFlightCount(m) == nCalls);
+    REQUIRE(sch.getFunctionFaasletCount(m) == nCalls);
+
+    REQUIRE(sch.getBindQueue()->size() == nCalls);
 }
 }
