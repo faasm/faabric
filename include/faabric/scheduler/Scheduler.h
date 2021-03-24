@@ -36,9 +36,11 @@ class Scheduler
 
     long getFunctionInFlightCount(const faabric::Message& msg);
 
+    long getFunctionFaasletCount(const faabric::Message& msg);
+
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
-    std::set<std::string> getFunctionRegisteredHosts(
+    std::unordered_set<std::string> getFunctionRegisteredHosts(
       const faabric::Message& msg);
 
     void broadcastFlush();
@@ -58,14 +60,20 @@ class Scheduler
 
     std::shared_ptr<InMemoryMessageQueue> getBindQueue();
 
+    std::unordered_set<std::string> getAvailableHosts();
+
     void addHostToGlobalSet();
 
     void addHostToGlobalSet(const std::string& host);
+
+    void removeHostFromGlobalSet(const std::string& host);
 
     void removeRegisteredHost(const std::string& host,
                               const faabric::Message& msg);
 
     faabric::HostResources getThisHostResources();
+
+    void setThisHostResources(faabric::HostResources& res);
 
     // ----------------------------------
     // Testing
@@ -102,7 +110,8 @@ class Scheduler
     std::unordered_map<std::string, long> inFlightCounts;
 
     faabric::HostResources thisHostResources;
-    std::unordered_map<std::string, std::set<std::string>> registeredHosts;
+    std::unordered_map<std::string, std::unordered_set<std::string>>
+      registeredHosts;
 
     std::vector<unsigned int> recordedMessagesAll;
     std::vector<unsigned int> recordedMessagesLocal;

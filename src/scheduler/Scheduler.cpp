@@ -1,14 +1,15 @@
-#include <faabric/scheduler/Scheduler.h>
-#include <faabric/util/func.h>
-
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/random.h>
-#include <faabric/util/timing.h>
 #include <faabric/util/testing.h>
+#include <faabric/util/timing.h>
+
+#include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
 
@@ -27,10 +28,22 @@ Scheduler::Scheduler()
     thisHostResources.set_cores(cores);
 }
 
+std::unordered_set<std::string> Scheduler::getAvailableHosts()
+{
+    redis::Redis& redis = redis::Redis::getQueue();
+    return redis.smembers(AVAILABLE_HOST_SET);
+}
+
 void Scheduler::addHostToGlobalSet(const std::string& host)
 {
     redis::Redis& redis = redis::Redis::getQueue();
     redis.sadd(AVAILABLE_HOST_SET, host);
+}
+
+void Scheduler::removeHostFromGlobalSet(const std::string& host)
+{
+    redis::Redis& redis = redis::Redis::getQueue();
+    redis.srem(AVAILABLE_HOST_SET, host);
 }
 
 void Scheduler::addHostToGlobalSet()
@@ -71,8 +84,7 @@ void Scheduler::shutdown()
 {
     reset();
 
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.srem(AVAILABLE_HOST_SET, thisHost);
+    removeHostFromGlobalSet(thisHost);
 }
 
 long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
@@ -81,13 +93,19 @@ long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
     return inFlightCounts[funcStr];
 }
 
+long Scheduler::getFunctionFaasletCount(const faabric::Message& msg)
+{
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+    return faasletCounts[funcStr];
+}
+
 int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return (int)registeredHosts[funcStr].size();
 }
 
-std::set<std::string> Scheduler::getFunctionRegisteredHosts(
+std::unordered_set<std::string> Scheduler::getFunctionRegisteredHosts(
   const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
@@ -251,7 +269,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
                 // At this point we have a remainder, so we need to distribute
                 // the rest Get the list of registered hosts for this function
-                std::set<std::string>& thisRegisteredHosts =
+                std::unordered_set<std::string>& thisRegisteredHosts =
                   registeredHosts[funcStr];
 
                 // Schedule the remainder on these other hosts
@@ -269,7 +287,7 @@ std::vector<std::string> Scheduler::callFunctions(
             // Now we need to find hosts that aren't already registered for
             // this function and add them
             if (remainder > 0) {
-                std::set<std::string>& thisRegisteredHosts =
+                std::unordered_set<std::string>& thisRegisteredHosts =
                   registeredHosts[funcStr];
 
                 redis::Redis& redis = redis::Redis::getQueue();
@@ -433,7 +451,8 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
     bool needToScale = nFaaslets < inFlightCount;
 
     if (needToScale) {
-        logger->debug("Scaling up {} to {} faaslet", funcStr, nFaaslets + 1);
+        logger->debug(
+          "Scaling {} {}->{} faaslets", funcStr, nFaaslets, nFaaslets + 1);
 
         // Increment faaslet count
         faasletCounts[funcStr]++;
@@ -450,7 +469,7 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
         bindMsg.set_pythonfunction(msg.pythonfunction());
         bindMsg.set_issgx(msg.issgx());
 
-        bindQueue->enqueue(msg);
+        bindQueue->enqueue(bindMsg);
     }
 }
 
@@ -596,6 +615,11 @@ std::string Scheduler::getMessageStatus(unsigned int messageId)
 faabric::HostResources Scheduler::getThisHostResources()
 {
     return thisHostResources;
+}
+
+void Scheduler::setThisHostResources(faabric::HostResources& res)
+{
+    thisHostResources = res;
 }
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
