@@ -4,10 +4,10 @@
 #include "faabric_utils.h"
 
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
-#include <faabric/scheduler/FunctionCallClient.h>
 
 namespace tests {
 void cleanFaabric()
