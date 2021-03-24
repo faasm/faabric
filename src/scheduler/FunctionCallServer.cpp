@@ -87,12 +87,10 @@ Status FunctionCallServer::MPICall(ServerContext* context,
 
 Status FunctionCallServer::GetResources(ServerContext* context,
                                         const faabric::ResourceRequest* request,
-                                        faabric::ResourceResponse* response)
+                                        faabric::HostResources* response)
 {
     // Return this host's resources
-    Resources res = scheduler.getThisHostResources();
-    response->set_slotsavailable(res.slotsAvailable);
-    response->set_slotstotal(res.slotsTotal);
+    *response = scheduler.getThisHostResources();
 
     return Status::OK;
 }

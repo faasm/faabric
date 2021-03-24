@@ -36,6 +36,11 @@ class Scheduler
 
     long getFunctionInFlightCount(const faabric::Message& msg);
 
+    int getFunctionRegisteredHostCount(const faabric::Message& msg);
+
+    std::set<std::string> getFunctionRegisteredHosts(
+      const faabric::Message& msg);
+
     void broadcastFlush();
 
     void flushLocally();
@@ -59,6 +64,8 @@ class Scheduler
 
     void removeRegisteredHost(const std::string& host,
                               const faabric::Message& msg);
+
+    faabric::HostResources getThisHostResources();
 
     // ----------------------------------
     // Testing
@@ -103,8 +110,6 @@ class Scheduler
     std::vector<unsigned int> recordedMessagesAll;
     std::vector<unsigned int> recordedMessagesLocal;
     std::vector<std::pair<std::string, unsigned int>> recordedMessagesShared;
-
-    faabric::HostResources getThisHostResources();
 
     faabric::HostResources getHostResources(const std::string& host);
 

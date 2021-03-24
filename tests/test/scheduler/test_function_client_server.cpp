@@ -144,16 +144,16 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     functionQueueB->dequeue();
 
     // Check the scheduler is set up
-    REQUIRE(sch.getFunctionWarmNodeCount(msgA) == 1);
-    REQUIRE(sch.getFunctionWarmNodeCount(msgB) == 1);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 1);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msgB) == 1);
 
     std::string thisHost = sch.getThisHost();
-    std::string warmSetNameA = sch.getFunctionWarmSetName(msgA);
-    std::string warmSetNameB = sch.getFunctionWarmSetName(msgB);
-    faabric::redis::Redis& redis = faabric::redis::Redis::getQueue();
 
-    REQUIRE(redis.sismember(warmSetNameA, thisHost));
-    REQUIRE(redis.sismember(warmSetNameB, thisHost));
+    std::set<std::string> regHostsA = sch.getFunctionRegisteredHosts(msgA);
+    std::set<std::string> regHostsB = sch.getFunctionRegisteredHosts(msgB);
+
+    REQUIRE(regHostsA.find(thisHost) != regHostsA.end());
+    REQUIRE(regHostsB.find(thisHost) != regHostsB.end());
 
     // Background threads to get flush messages
     std::thread tA([&functionQueueA] {
@@ -182,11 +182,14 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     server.stop();
 
     // Check the scheduler has been flushed
-    REQUIRE(sch.getFunctionWarmNodeCount(msgA) == 0);
-    REQUIRE(sch.getFunctionWarmNodeCount(msgB) == 0);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msgB) == 0);
 
-    REQUIRE(!redis.sismember(warmSetNameA, thisHost));
-    REQUIRE(!redis.sismember(warmSetNameB, thisHost));
+    regHostsA = sch.getFunctionRegisteredHosts(msgA);
+    regHostsB = sch.getFunctionRegisteredHosts(msgB);
+
+    REQUIRE(regHostsA.find(thisHost) == regHostsA.end());
+    REQUIRE(regHostsB.find(thisHost) == regHostsB.end());
 
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);

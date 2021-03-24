@@ -79,6 +79,26 @@ long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
     return inFlightCounts[funcStr];
 }
 
+int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
+{
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+    return (int)registeredHosts[funcStr].size();
+}
+
+std::set<std::string> Scheduler::getFunctionRegisteredHosts(
+  const faabric::Message& msg)
+{
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+    return registeredHosts[funcStr];
+}
+
+void Scheduler::removeRegisteredHost(const std::string& host,
+                                     const faabric::Message& msg)
+{
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+    registeredHosts[funcStr].erase(host);
+}
+
 std::shared_ptr<InMemoryMessageQueue> Scheduler::getFunctionQueue(
   const faabric::Message& msg)
 {

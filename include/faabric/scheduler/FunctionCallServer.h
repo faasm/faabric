@@ -30,7 +30,7 @@ class FunctionCallServer final
 
     Status GetResources(ServerContext* context,
                         const faabric::ResourceRequest* request,
-                        faabric::ResourceResponse* response) override;
+                        faabric::HostResources* response) override;
 
     Status ExecuteFunctions(ServerContext* context,
                             const faabric::BatchExecuteRequest* request,
