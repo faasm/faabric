@@ -1,3 +1,4 @@
+#include "faabric/util/func.h"
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/state/State.h>
@@ -112,6 +113,11 @@ Status FunctionCallServer::Unregister(ServerContext* context,
                                       const faabric::UnregisterRequest* request,
                                       faabric::FunctionStatusResponse* response)
 {
+    std::string funcStr =
+      faabric::util::funcToString(request->function(), false);
+    faabric::util::getLogger()->info(
+      "Unregistering host {} for {}", request->host(), funcStr);
+
     // Remove the host from the warm set
     scheduler.removeRegisteredHost(request->host(), request->function());
     return Status::OK;

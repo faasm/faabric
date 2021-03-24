@@ -1,6 +1,8 @@
 #include <catch.hpp>
 
 #include "faabric/proto/faabric.pb.h"
+#include "faabric/util/environment.h"
+#include "faabric/util/testing.h"
 #include "faabric_utils.h"
 
 #include <faabric/redis/Redis.h>
@@ -251,5 +253,106 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     REQUIRE(sch.getFunctionFaasletCount(m) == nCalls);
 
     REQUIRE(sch.getBindQueue()->size() == nCalls);
+}
+
+TEST_CASE("Test get resources request", "[scheduler]")
+{
+    cleanFaabric();
+
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    int expectedCores;
+    int expectedExecutors;
+    int expectedInFlight;
+
+    SECTION("Override resources") {
+    faabric::HostResources res;
+
+    expectedCores = 10;
+    expectedExecutors = 15;
+    expectedInFlight = 20;
+
+    res.set_boundexecutors(expectedExecutors);
+    res.set_cores(expectedCores);
+    res.set_functionsinflight(expectedInFlight);
+
+    sch.setThisHostResources(res);
+    }
+    SECTION("Default resources") {
+
+    expectedCores = faabric::util::getUsableCores();
+    expectedExecutors = 0;
+    expectedInFlight = 0;
+    }
+
+    // Start the server
+    ServerContext serverContext;
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Make the request
+    faabric::ResourceRequest req;
+    FunctionCallClient cli(LOCALHOST);
+    faabric::HostResources resResponse = cli.getResources(req);
+
+    REQUIRE(resResponse.boundexecutors() == expectedExecutors);
+    REQUIRE(resResponse.cores() == expectedCores);
+    REQUIRE(resResponse.functionsinflight() == expectedInFlight);
+
+    // Stop the server
+    server.stop();
+}
+
+TEST_CASE("Test unregister request", "[scheduler]")
+{
+    cleanFaabric();
+
+    faabric::util::setMockMode(true);
+    std::string otherHost = "other";
+
+    // Remove capacity from this host and add on other
+    faabric::HostResources thisResources;
+    faabric::HostResources otherResources;
+    thisResources.set_cores(0);
+    otherResources.set_cores(5);
+
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.setThisHostResources(thisResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+
+    // Request a function and check the other host is registered
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    sch.addHostToGlobalSet(otherHost);
+    sch.callFunction(msg);
+
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+
+    faabric::util::setMockMode(false);
+    faabric::scheduler::clearMockRequests();
+
+    // Start the server
+    ServerContext serverContext;
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Make the request with a host that's not registered
+    faabric::UnregisterRequest reqA;
+    reqA.set_host("foobar");
+
+    FunctionCallClient cli(LOCALHOST);
+    cli.unregister(reqA);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+
+    // Make the request to unregister the actual host
+    faabric::UnregisterRequest reqB;
+    reqB.set_host(otherHost);
+    *reqB.mutable_function() = msg;
+    cli.unregister(reqB);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+
+    // Stop the server
+    server.stop();
 }
 }

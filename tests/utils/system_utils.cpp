@@ -37,6 +37,7 @@ void cleanFaabric()
     // Set test mode back on and mock mode off
     faabric::util::setTestMode(true);
     faabric::util::setMockMode(false);
+    faabric::scheduler::clearMockRequests();
 
     // Clear out MPI worlds
     scheduler::MpiWorldRegistry& mpiRegistry = scheduler::getMpiWorldRegistry();

@@ -142,6 +142,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     // Check the request to the other host
     REQUIRE(batchRequestOne.second.messages_size() == nCallsOffloadedOne);
+    REQUIRE(batchRequestOne.second.masterhost() == thisHost);
 
     // Clear mocks
     faabric::scheduler::clearMockRequests();
@@ -187,6 +188,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     // Check the request to the other host
     REQUIRE(pTwo.second.messages_size() == nCallsTwo);
+    REQUIRE(pTwo.second.masterhost() == thisHost);
 
     faabric::util::setMockMode(false);
 }
