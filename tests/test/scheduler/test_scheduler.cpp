@@ -58,28 +58,29 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
     // Set up another host
-    std::string hostB = "beta";
-    sch.addHostToGlobalSet(hostB);
+    std::string otherHost = "beta";
+    sch.addHostToGlobalSet(otherHost);
 
-    int nCalls = 10;
-    int coresA = 5;
-    int coresB = 6;
-    int nCallsB = nCalls - coresA;
+    int nCallsOne = 10;
+    int nCallsTwo = 5;
+    int thisCores = 5;
+    int otherCores = 11;
+    int nCallsOffloadedOne = nCallsOne - thisCores;
 
-    faabric::HostResources resA;
-    resA.set_cores(coresA);
+    faabric::HostResources thisResources;
+    thisResources.set_cores(thisCores);
 
-    faabric::HostResources resB;
-    resB.set_cores(coresB);
+    faabric::HostResources otherResources;
+    otherResources.set_cores(otherCores);
 
-    // Prepare host resources
-    sch.setThisHostResources(resA);
-    faabric::scheduler::queueResourceResponse(hostB, resB);
+    // Prepare two resource responses for other host
+    sch.setThisHostResources(thisResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Set up the messages
-    std::vector<faabric::Message> msgs;
-    std::vector<std::string> expectedHosts;
-    for (int i = 0; i < nCalls; i++) {
+    std::vector<faabric::Message> msgsOne;
+    std::vector<std::string> expectedHostsOne;
+    for (int i = 0; i < nCallsOne; i++) {
         faabric::Message msg = faabric::util::messageFactory("foo", "bar");
 
         // Set important bind fields
@@ -88,42 +89,44 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         msg.set_pythonuser("foobar");
         msg.set_issgx(true);
 
-        msgs.push_back(msg);
+        msgsOne.push_back(msg);
 
         // Expect this host to handle up to its number of cores
-        if (i < coresA) {
-            expectedHosts.push_back(thisHost);
+        if (i < thisCores) {
+            expectedHostsOne.push_back(thisHost);
         } else {
-            expectedHosts.push_back(hostB);
+            expectedHostsOne.push_back(otherHost);
         }
     }
 
     // Create the batch request
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    faabric::BatchExecuteRequest reqOne =
+      faabric::util::batchExecFactory(msgsOne);
 
     // Schedule the functions
-    std::vector<std::string> actualHosts = sch.callFunctions(req);
+    std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne);
 
     // Check resource requests have been made to other host
-    auto resRequests = faabric::scheduler::getResourceRequests();
-    REQUIRE(resRequests.size() == 1);
-    REQUIRE(resRequests.at(0).first == hostB);
+    auto resRequestsOne = faabric::scheduler::getResourceRequests();
+    REQUIRE(resRequestsOne.size() == 1);
+    REQUIRE(resRequestsOne.at(0).first == otherHost);
 
     // Check scheduled on expected hosts
-    REQUIRE(actualHosts == expectedHosts);
+    REQUIRE(actualHostsOne == expectedHostsOne);
 
     // Check the scheduler info on this host
-    faabric::Message firstMsg = msgs.at(0);
-    REQUIRE(sch.getFunctionInFlightCount(firstMsg) == coresA);
-    REQUIRE(sch.getFunctionFaasletCount(firstMsg) == coresA);
+    faabric::Message m = msgsOne.at(0);
+    REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+    REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
 
     // Check the bind messages on this host
     auto bindQueue = sch.getBindQueue();
-    REQUIRE(bindQueue->size() == coresA);
-    for (int i = 0; i < coresA; i++) {
+    REQUIRE(bindQueue->size() == thisCores);
+    for (int i = 0; i < thisCores; i++) {
         faabric::Message msg = bindQueue->dequeue();
-        REQUIRE(msg.user() == firstMsg.user());
-        REQUIRE(msg.function() == firstMsg.function());
+
+        REQUIRE(msg.user() == m.user());
+        REQUIRE(msg.function() == m.function());
         REQUIRE(msg.type() == faabric::Message_MessageType_BIND);
         REQUIRE(msg.ispython());
         REQUIRE(msg.pythonuser() == "foobar");
@@ -132,14 +135,58 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     }
 
     // Check the message is dispatched to the other host
-    auto batchRequests = faabric::scheduler::getBatchRequests();
-    REQUIRE(batchRequests.size() == 1);
-    auto p = batchRequests.at(0);
-    REQUIRE(p.first == hostB);
+    auto batchRequestsOne = faabric::scheduler::getBatchRequests();
+    REQUIRE(batchRequestsOne.size() == 1);
+    auto batchRequestOne = batchRequestsOne.at(0);
+    REQUIRE(batchRequestOne.first == otherHost);
 
     // Check the request to the other host
-    faabric::BatchExecuteRequest reqB = p.second;
-    REQUIRE(reqB.messages_size() == nCallsB);
+    REQUIRE(batchRequestOne.second.messages_size() == nCallsOffloadedOne);
+
+    // Clear mocks
+    faabric::scheduler::clearMockRequests();
+
+    // Set up resource response again
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+
+    // Now schedule a second batch and check they're also sent to the other host
+    // (which is now warm)
+    std::vector<faabric::Message> msgsTwo;
+    std::vector<std::string> expectedHostsTwo;
+
+    for (int i = 0; i < nCallsTwo; i++) {
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msgsTwo.push_back(msg);
+        expectedHostsTwo.push_back(otherHost);
+    }
+
+    // Create the batch request
+    faabric::BatchExecuteRequest reqTwo =
+      faabric::util::batchExecFactory(msgsTwo);
+
+    // Schedule the functions
+    std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo);
+
+    // Check resource request made again
+    auto resRequestsTwo = faabric::scheduler::getResourceRequests();
+    REQUIRE(resRequestsTwo.size() == 1);
+    REQUIRE(resRequestsTwo.at(0).first == otherHost);
+
+    // Check scheduled on expected hosts
+    REQUIRE(actualHostsTwo == expectedHostsTwo);
+
+    // Check no other functions have been scheduled on this host
+    REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+    REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+
+    // Check the second message is dispatched to the other host
+    auto batchRequestsTwo = faabric::scheduler::getBatchRequests();
+    REQUIRE(batchRequestsTwo.size() == 1);
+    auto pTwo = batchRequestsTwo.at(0);
+    REQUIRE(pTwo.first == otherHost);
+
+    // Check the request to the other host
+    REQUIRE(pTwo.second.messages_size() == nCallsTwo);
 
     faabric::util::setMockMode(false);
 }
