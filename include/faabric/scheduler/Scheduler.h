@@ -30,61 +30,52 @@ class Scheduler
 
     void shutdown();
 
-    void setTestMode(bool val);
-
-    std::vector<unsigned int> getRecordedMessagesAll();
-
-    std::vector<unsigned int> getRecordedMessagesLocal();
-
-    // ----------------------------------
-    // Internal API
-    // ----------------------------------
-    faabric::HostResources getThisHostResources();
-
-    faabric::HostResources getHostResources(const std::string& host);
-
-    void removeRegisteredHost(const std::string& host,
-                              const faabric::Message& msg);
-
-    void addHostToGlobalSet(const std::string& host);
-
-    void addHostToGlobalSet();
-
-    void removeHostFromGlobalSet();
-
-    // ----------------------------------
-    // Legacy
-    // ----------------------------------
-    std::shared_ptr<InMemoryMessageQueue> getFunctionQueue(
-      const faabric::Message& msg);
-
     void notifyCallFinished(const faabric::Message& msg);
 
     void notifyFaasletFinished(const faabric::Message& msg);
 
-    std::shared_ptr<InMemoryMessageQueue> getBindQueue();
-
-    double getFunctionInFlightRatio(const faabric::Message& msg);
-
     long getFunctionInFlightCount(const faabric::Message& msg);
-
-    std::vector<std::pair<std::string, unsigned int>>
-    getRecordedMessagesShared();
-
-    bool hasHostCapacity();
-
-    std::string getThisHost();
-
+    
     void broadcastFlush();
 
     void flushLocally();
-
+    
     std::string getMessageStatus(unsigned int messageId);
 
     void setFunctionResult(faabric::Message& msg);
 
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
 
+    std::string getThisHost();
+    
+    std::shared_ptr<InMemoryMessageQueue> getFunctionQueue(
+      const faabric::Message& msg);
+
+    std::shared_ptr<InMemoryMessageQueue> getBindQueue();
+
+    void addHostToGlobalSet();
+
+    void addHostToGlobalSet(const std::string& host);
+    
+
+    void removeRegisteredHost(const std::string& host,
+                              const faabric::Message& msg);
+
+    // ----------------------------------
+    // Testing
+    // ----------------------------------
+    void setTestMode(bool val);
+
+    std::vector<unsigned int> getRecordedMessagesAll();
+
+    std::vector<unsigned int> getRecordedMessagesLocal();
+    
+    std::vector<std::pair<std::string, unsigned int>>
+    getRecordedMessagesShared();
+
+    // ----------------------------------
+    // Exec graph
+    // ----------------------------------
     void logChainedFunction(unsigned int parentMessageId,
                             unsigned int chainedMessageId);
 
@@ -105,7 +96,6 @@ class Scheduler
       queueMap;
     std::unordered_map<std::string, long> faasletCounts;
     std::unordered_map<std::string, long> inFlightCounts;
-    bool _hasHostCapacity = true;
 
     faabric::HostResources thisHostResources;
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
@@ -115,7 +105,9 @@ class Scheduler
     std::vector<unsigned int> recordedMessagesLocal;
     std::vector<std::pair<std::string, unsigned int>> recordedMessagesShared;
 
-    void updateOpinion(const faabric::Message& msg);
+    faabric::HostResources getThisHostResources();
+
+    faabric::HostResources getHostResources(const std::string& host);
 
     void incrementInFlightCount(const faabric::Message& msg);
 

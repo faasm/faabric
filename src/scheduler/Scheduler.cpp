@@ -39,12 +39,6 @@ void Scheduler::addHostToGlobalSet()
     redis.sadd(AVAILABLE_HOST_SET, thisHost);
 }
 
-void Scheduler::removeHostFromGlobalSet()
-{
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.srem(AVAILABLE_HOST_SET, thisHost);
-}
-
 void Scheduler::reset()
 {
     // Reset queue map
@@ -63,7 +57,6 @@ void Scheduler::reset()
     thisHostResources = faabric::HostResources();
     faasletCounts.clear();
     inFlightCounts.clear();
-    _hasHostCapacity = true;
 
     // Records
     setTestMode(false);
@@ -76,7 +69,8 @@ void Scheduler::shutdown()
 {
     reset();
 
-    this->removeHostFromGlobalSet();
+    redis::Redis& redis = redis::Redis::getQueue();
+    redis.srem(AVAILABLE_HOST_SET, thisHost);
 }
 
 long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
@@ -374,11 +368,6 @@ std::vector<std::pair<std::string, unsigned int>>
 Scheduler::getRecordedMessagesShared()
 {
     return recordedMessagesShared;
-}
-
-bool Scheduler::hasHostCapacity()
-{
-    return _hasHostCapacity;
 }
 
 void Scheduler::incrementInFlightCount(const faabric::Message& msg)
