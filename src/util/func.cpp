@@ -311,6 +311,7 @@ std::string buildAsyncResponse(const faabric::Message& msg)
 faabric::BatchExecuteRequest batchExecFactory(
   std::vector<faabric::Message>& msgs)
 {
+    // TODO - can we avoid this copy?
     faabric::BatchExecuteRequest req;
     *req.mutable_messages() = { msgs.begin(), msgs.end() };
 

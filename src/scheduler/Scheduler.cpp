@@ -144,6 +144,10 @@ std::vector<std::string> Scheduler::callFunctions(
 
     auto funcQueue = this->getFunctionQueue(firstMsg);
 
+    // TODO - more fine-grained locking. This blocks all functions
+    // Lock the whole scheduler to be safe
+    faabric::util::FullLock lock(mx);
+
     // Handle forced local execution
     if (forceLocal) {
         logger->debug("Executing {} functions locally", nMessages);
@@ -163,10 +167,6 @@ std::vector<std::string> Scheduler::callFunctions(
             throw std::runtime_error(
               "Master host for bulk execute cannot be empty");
         }
-
-        // TODO - more fine-grained locking
-        // Lock the whole scheduler to be safe
-        faabric::util::FullLock lock(mx);
 
         // If we're not the master host, we need to forward the request back to
         // the master host. This will only happen if a nested batch execution
@@ -240,6 +240,7 @@ std::vector<std::string> Scheduler::callFunctions(
                 redis::Redis& redis = redis::Redis::getQueue();
                 std::unordered_set<std::string> allHosts =
                   redis.smembers(AVAILABLE_HOST_SET);
+
                 for (auto& h : allHosts) {
                     // Skip if already registered
                     if (thisRegisteredHosts.find(h) !=
@@ -251,6 +252,13 @@ std::vector<std::string> Scheduler::callFunctions(
                     int nOnThisHost =
                       scheduleFunctionsOnHost(h, req, executed, nextMsgIdx);
                     remainder -= nOnThisHost;
+
+                    // Register the host if it's exected a function
+                    if (nOnThisHost > 0) {
+                        thisRegisteredHosts.insert(h);
+                    }
+
+                    // Stop if we've scheduled all functions
                     if (remainder <= 0) {
                         break;
                     }
@@ -310,7 +318,7 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
     int available = r.cores() - r.functionsinflight();
 
     // Drop out if none available
-    if (available < 0) {
+    if (available <= 0) {
         return 0;
     }
 
@@ -341,12 +349,11 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
     std::vector<faabric::Message> msgs = { msg };
     faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
 
-    // TODO - remove calls to callFunction, instead convert everything to
-    // calling callFunctions directly
-    std::vector<std::string> executed = callFunctions(req, forceLocal);
-    if (executed.at(0).empty()) {
-        callFunctions(req, true);
-    }
+    // Execute as processes to force local execution too
+    req.set_type(req.PROCESSES);
+
+    // Make the call
+    callFunctions(req, forceLocal);
 }
 
 void Scheduler::setTestMode(bool val)

@@ -29,16 +29,16 @@ class FunctionCallServer final
                    faabric::FunctionStatusResponse* response) override;
 
     Status GetResources(ServerContext* context,
-                         const faabric::ResourceRequest* request,
-                         faabric::ResourceResponse* response) override;
+                        const faabric::ResourceRequest* request,
+                        faabric::ResourceResponse* response) override;
 
     Status ExecuteFunctions(ServerContext* context,
-                         const faabric::BatchExecuteRequest* request,
-                         faabric::FunctionStatusResponse* response) override;
+                            const faabric::BatchExecuteRequest* request,
+                            faabric::FunctionStatusResponse* response) override;
 
     Status Unregister(ServerContext* context,
-                         const faabric::UnregisterRequest* request,
-                         faabric::FunctionStatusResponse* response) override;
+                      const faabric::UnregisterRequest* request,
+                      faabric::FunctionStatusResponse* response) override;
 
   protected:
     void doStart(const std::string& serverAddr) override;

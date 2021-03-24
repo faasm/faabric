@@ -32,7 +32,7 @@ class FunctionCallClient
 
     faabric::HostResources getResources(const faabric::ResourceRequest& req);
 
-    void executeFunctions(const faabric::BatchExecuteRequest & req);
+    void executeFunctions(const faabric::BatchExecuteRequest& req);
 
     void unregister(const faabric::UnregisterRequest& req);
 };

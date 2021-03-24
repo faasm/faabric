@@ -35,11 +35,11 @@ class Scheduler
     void notifyFaasletFinished(const faabric::Message& msg);
 
     long getFunctionInFlightCount(const faabric::Message& msg);
-    
+
     void broadcastFlush();
 
     void flushLocally();
-    
+
     std::string getMessageStatus(unsigned int messageId);
 
     void setFunctionResult(faabric::Message& msg);
@@ -47,7 +47,7 @@ class Scheduler
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
 
     std::string getThisHost();
-    
+
     std::shared_ptr<InMemoryMessageQueue> getFunctionQueue(
       const faabric::Message& msg);
 
@@ -56,7 +56,6 @@ class Scheduler
     void addHostToGlobalSet();
 
     void addHostToGlobalSet(const std::string& host);
-    
 
     void removeRegisteredHost(const std::string& host,
                               const faabric::Message& msg);
@@ -69,7 +68,7 @@ class Scheduler
     std::vector<unsigned int> getRecordedMessagesAll();
 
     std::vector<unsigned int> getRecordedMessagesLocal();
-    
+
     std::vector<std::pair<std::string, unsigned int>>
     getRecordedMessagesShared();
 
