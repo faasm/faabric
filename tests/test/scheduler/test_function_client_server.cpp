@@ -265,24 +265,26 @@ TEST_CASE("Test get resources request", "[scheduler]")
     int expectedExecutors;
     int expectedInFlight;
 
-    SECTION("Override resources") {
-    faabric::HostResources res;
+    SECTION("Override resources")
+    {
+        faabric::HostResources res;
 
-    expectedCores = 10;
-    expectedExecutors = 15;
-    expectedInFlight = 20;
+        expectedCores = 10;
+        expectedExecutors = 15;
+        expectedInFlight = 20;
 
-    res.set_boundexecutors(expectedExecutors);
-    res.set_cores(expectedCores);
-    res.set_functionsinflight(expectedInFlight);
+        res.set_boundexecutors(expectedExecutors);
+        res.set_cores(expectedCores);
+        res.set_functionsinflight(expectedInFlight);
 
-    sch.setThisHostResources(res);
+        sch.setThisHostResources(res);
     }
-    SECTION("Default resources") {
+    SECTION("Default resources")
+    {
 
-    expectedCores = faabric::util::getUsableCores();
-    expectedExecutors = 0;
-    expectedInFlight = 0;
+        expectedCores = faabric::util::getUsableCores();
+        expectedExecutors = 0;
+        expectedInFlight = 0;
     }
 
     // Start the server
