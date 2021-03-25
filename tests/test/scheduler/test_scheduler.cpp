@@ -211,7 +211,6 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     // Check the request to the other host
     REQUIRE(batchRequestOne.second.messages_size() == nCallsOffloadedOne);
-    REQUIRE(batchRequestOne.second.masterhost() == thisHost);
 
     // Clear mocks
     faabric::scheduler::clearMockRequests();
@@ -257,7 +256,6 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     // Check the request to the other host
     REQUIRE(pTwo.second.messages_size() == nCallsTwo);
-    REQUIRE(pTwo.second.masterhost() == thisHost);
 
     faabric::util::setMockMode(false);
 }
@@ -303,6 +301,10 @@ TEST_CASE("Test unregistering host", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     faabric::util::setMockMode(false);
+}
+
+TEST_CASE("Test host unregisters", "[scheduler]") {
+
 }
 
 TEST_CASE("Test counts can't go below zero", "[scheduler]")

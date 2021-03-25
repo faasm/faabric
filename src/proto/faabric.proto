@@ -16,7 +16,6 @@ message BatchExecuteRequest {
     BatchExecuteType type = 1;
 
     int32 id = 2;
-    string masterHost = 3;
 
     // Shared snapshot used for threads
     string snapshotKey = 4;
@@ -154,6 +153,8 @@ message Message {
     string sgxTag = 43;
     bytes sgxPolicy = 44;
     bytes sgxResult = 45;
+    
+    string masterHost = 46;
 }
 
 // ---------------------------------------------

@@ -307,6 +307,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     // Make the request with a host that's not registered
     faabric::UnregisterRequest reqA;
     reqA.set_host("foobar");
+    *reqA.mutable_function() = msg;
 
     FunctionCallClient cli(LOCALHOST);
     cli.unregister(reqA);

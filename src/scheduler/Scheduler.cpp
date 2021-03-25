@@ -154,7 +154,33 @@ void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
     faabric::util::FullLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
 
-    faasletCounts[funcStr] = std::max(faasletCounts[funcStr] - 1, 0L);
+    auto logger = faabric::util::getLogger();
+    // Unregister this host if not master and no more faaslets assigned to
+    // this function
+    if (msg.masterhost().empty()) {
+        logger->error("Message {} without master host set", funcStr);
+        throw std::runtime_error("Message without master host");
+    }
+
+    // Update the faaslet count
+    int oldCount = faasletCounts[funcStr];
+    if (oldCount > 0) {
+        int newCount = faasletCounts[funcStr] - 1;
+        faasletCounts[funcStr] = newCount;
+
+        // Unregister if this was the last faaslet for that function
+        bool isMaster = thisHost == msg.masterhost();
+        if (newCount == 0 && !isMaster) {
+            faabric::UnregisterRequest req;
+            req.set_host(thisHost);
+            *req.mutable_function() = msg;
+
+            FunctionCallClient c(msg.masterhost());
+            c.unregister(req);
+        }
+    }
+
+    // Update bound executors on this host
     int newBoundExecutors = std::max(thisHostResources.boundexecutors() - 1, 0);
     thisHostResources.set_boundexecutors(newBoundExecutors);
 }
@@ -180,8 +206,11 @@ std::vector<std::string> Scheduler::callFunctions(
     int nMessages = req.messages_size();
     std::vector<std::string> executed(nMessages);
 
+    // Note, we assume all the messages are for the same function and master
+    // host
     const faabric::Message& firstMsg = req.messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
+    std::string masterHost = firstMsg.masterhost();
 
     auto funcQueue = this->getFunctionQueue(firstMsg);
 
@@ -202,18 +231,10 @@ std::vector<std::string> Scheduler::callFunctions(
             executed.at(i) = thisHost;
         }
     } else {
-        // If not forced local, here we need to determine which functions to
-        // execute locally, and which to distribute
-        if (req.masterhost().empty()) {
-            throw std::runtime_error(
-              "Master host for bulk execute cannot be empty");
-        }
-
         // If we're not the master host, we need to forward the request back to
         // the master host. This will only happen if a nested batch execution
         // happens.
-        if (req.masterhost() != thisHost) {
-            std::string masterHost = req.masterhost();
+        if (masterHost != thisHost) {
             logger->debug("Forwarding {} {} back to master {}",
                           nMessages,
                           funcStr,
@@ -222,7 +243,7 @@ std::vector<std::string> Scheduler::callFunctions(
             if (faabric::util::isTestMode()) {
                 logger->debug("Not forwarding request to master in test mode");
             } else {
-                FunctionCallClient c(req.masterhost());
+                FunctionCallClient c(masterHost);
                 c.executeFunctions(req);
             }
         } else {
@@ -258,7 +279,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
                     executed.at(nextMsgIdx) = thisHost;
                 }
-                
+
                 // Increment the in-flight count regardless (local thread
                 // executors will have to decrement manually)
                 incrementInFlightCount(msg);
@@ -411,7 +432,6 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
     FunctionCallClient c(host);
     faabric::BatchExecuteRequest hostRequest =
       faabric::util::batchExecFactory(thisHostMsgs);
-    hostRequest.set_masterhost(req.masterhost());
     hostRequest.set_snapshotkey(req.snapshotkey());
     hostRequest.set_snapshotsize(req.snapshotsize());
     hostRequest.set_type(req.type());

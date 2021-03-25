@@ -319,9 +319,6 @@ faabric::BatchExecuteRequest batchExecFactory(
     unsigned int id = faabric::util::generateGid();
     req.set_id(id);
 
-    // Set master to this host by default
-    req.set_masterhost(faabric::util::getSystemConfig().endpointHost);
-
     return req;
 }
 
@@ -331,7 +328,11 @@ faabric::Message messageFactory(const std::string& user,
     faabric::Message msg;
     msg.set_user(user);
     msg.set_function(function);
+
     setMessageId(msg);
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    msg.set_masterhost(thisHost);
 
     return msg;
 }
