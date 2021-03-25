@@ -119,6 +119,13 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 {
     cleanFaabric();
 
+    faabric::BatchExecuteRequest::BatchExecuteType execMode;
+    SECTION("Threads") { execMode = faabric::BatchExecuteRequest::THREADS; }
+    SECTION("Processes") { execMode = faabric::BatchExecuteRequest::PROCESSES; }
+    SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
+
+    bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
+
     // Mock everything
     faabric::util::setMockMode(true);
 
@@ -161,7 +168,11 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         msgsOne.push_back(msg);
 
         // Expect this host to handle up to its number of cores
-        if (i < thisCores) {
+        // If in threads mode, expect it _not_ to execute
+        bool isThisHost = i < thisCores;
+        if (isThisHost && isThreads) {
+            expectedHostsOne.push_back("");
+        } else if (isThisHost) {
             expectedHostsOne.push_back(thisHost);
         } else {
             expectedHostsOne.push_back(otherHost);
@@ -171,6 +182,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Create the batch request
     faabric::BatchExecuteRequest reqOne =
       faabric::util::batchExecFactory(msgsOne);
+    reqOne.set_type(execMode);
 
     // Schedule the functions
     std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne);
@@ -183,24 +195,33 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Check scheduled on expected hosts
     REQUIRE(actualHostsOne == expectedHostsOne);
 
-    // Check the scheduler info on this host
     faabric::Message m = msgsOne.at(0);
-    REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
-    REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
 
     // Check the bind messages on this host
     auto bindQueue = sch.getBindQueue();
-    REQUIRE(bindQueue->size() == thisCores);
-    for (int i = 0; i < thisCores; i++) {
-        faabric::Message msg = bindQueue->dequeue();
+    if (isThreads) {
+        // For threads we expect the caller to do the work
+        REQUIRE(bindQueue->size() == 0);
+        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+    } else {
+        // Check the scheduler info on this host
+        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
 
-        REQUIRE(msg.user() == m.user());
-        REQUIRE(msg.function() == m.function());
-        REQUIRE(msg.type() == faabric::Message_MessageType_BIND);
-        REQUIRE(msg.ispython());
-        REQUIRE(msg.pythonuser() == "foobar");
-        REQUIRE(msg.pythonfunction() == "baz");
-        REQUIRE(msg.issgx());
+        // For non-threads we expect faaslets to be created
+        REQUIRE(bindQueue->size() == thisCores);
+        for (int i = 0; i < thisCores; i++) {
+            faabric::Message msg = bindQueue->dequeue();
+
+            REQUIRE(msg.user() == m.user());
+            REQUIRE(msg.function() == m.function());
+            REQUIRE(msg.type() == faabric::Message_MessageType_BIND);
+            REQUIRE(msg.ispython());
+            REQUIRE(msg.pythonuser() == "foobar");
+            REQUIRE(msg.pythonfunction() == "baz");
+            REQUIRE(msg.issgx());
+        }
     }
 
     // Check the message is dispatched to the other host
@@ -232,6 +253,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Create the batch request
     faabric::BatchExecuteRequest reqTwo =
       faabric::util::batchExecFactory(msgsTwo);
+    reqTwo.set_type(execMode);
 
     // Schedule the functions
     std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo);
@@ -246,7 +268,12 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     // Check no other functions have been scheduled on this host
     REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
-    REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+
+    if (isThreads) {
+        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+    } else {
+        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+    }
 
     // Check the second message is dispatched to the other host
     auto batchRequestsTwo = faabric::scheduler::getBatchRequests();
@@ -303,9 +330,7 @@ TEST_CASE("Test unregistering host", "[scheduler]")
     faabric::util::setMockMode(false);
 }
 
-TEST_CASE("Test host unregisters", "[scheduler]") {
-
-}
+TEST_CASE("Test host unregisters", "[scheduler]") {}
 
 TEST_CASE("Test counts can't go below zero", "[scheduler]")
 {
@@ -566,5 +591,33 @@ TEST_CASE("Check logging chained functions", "[scheduler]")
     sch.logChainedFunction(msg.id(), chainedMsgIdC);
     expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+}
+
+TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+
+    std::string otherHost = "other";
+
+    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
+    msg.set_masterhost(otherHost);
+
+    std::vector<faabric::Message> msgs = { msg };
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+
+    std::vector<std::string> expectedHosts = { "" };
+    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    REQUIRE(executedHosts == expectedHosts);
+
+    // Check forwarded to master
+    auto actualReqs = faabric::scheduler::getBatchRequests();
+    REQUIRE(actualReqs.size() == 1);
+    REQUIRE(actualReqs.at(0).first == otherHost);
+    REQUIRE(actualReqs.at(0).second.id() == req.id());
+
+    faabric::util::setMockMode(false);
 }
 }

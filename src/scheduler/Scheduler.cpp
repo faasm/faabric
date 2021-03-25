@@ -211,6 +211,11 @@ std::vector<std::string> Scheduler::callFunctions(
     const faabric::Message& firstMsg = req.messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     std::string masterHost = firstMsg.masterhost();
+    if (masterHost.empty()) {
+        std::string funcStrWithId = faabric::util::funcToString(firstMsg, true);
+        logger->error("Request {} has no master host", funcStrWithId);
+        throw std::runtime_error("Message with no master host");
+    }
 
     auto funcQueue = this->getFunctionQueue(firstMsg);
 
@@ -227,6 +232,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
             funcQueue->enqueue(msg);
             incrementInFlightCount(msg);
+            addFaaslets(msg);
 
             executed.at(i) = thisHost;
         }
@@ -240,12 +246,8 @@ std::vector<std::string> Scheduler::callFunctions(
                           funcStr,
                           masterHost);
 
-            if (faabric::util::isTestMode()) {
-                logger->debug("Not forwarding request to master in test mode");
-            } else {
-                FunctionCallClient c(masterHost);
-                c.executeFunctions(req);
-            }
+            FunctionCallClient c(masterHost);
+            c.executeFunctions(req);
         } else {
             // At this point we know we're the master host, and we've not been
             // asked to force full local execution.
@@ -268,7 +270,10 @@ std::vector<std::string> Scheduler::callFunctions(
             // Build list of messages to be executed locally
             for (; nextMsgIdx < nLocally; nextMsgIdx++) {
                 faabric::Message msg = req.messages().at(nextMsgIdx);
+                
+                // Record that we're executing something
                 remainder--;
+                incrementInFlightCount(msg);
 
                 if (req.type() == req.THREADS) {
                     // For threads we don't actually execute the functions,
@@ -276,13 +281,10 @@ std::vector<std::string> Scheduler::callFunctions(
                     logger->debug("Returning {} x {} local threads");
                 } else {
                     funcQueue->enqueue(msg);
-
                     executed.at(nextMsgIdx) = thisHost;
+                    addFaaslets(msg);
                 }
 
-                // Increment the in-flight count regardless (local thread
-                // executors will have to decrement manually)
-                incrementInFlightCount(msg);
             }
 
             // If some are left, we need to distribute
@@ -473,13 +475,16 @@ Scheduler::getRecordedMessagesShared()
 
 void Scheduler::incrementInFlightCount(const faabric::Message& msg)
 {
-    auto logger = faabric::util::getLogger();
-
-    // Increment the in-flight count
     const std::string funcStr = faabric::util::funcToString(msg, false);
     inFlightCounts[funcStr]++;
     thisHostResources.set_functionsinflight(
       thisHostResources.functionsinflight() + 1);
+}
+
+void Scheduler::addFaaslets(const faabric::Message& msg)
+{
+    auto logger = faabric::util::getLogger();
+    const std::string funcStr = faabric::util::funcToString(msg, false);
 
     // If we've not got one faaslet per in-flight function, add one
     int nFaaslets = faasletCounts[funcStr];
