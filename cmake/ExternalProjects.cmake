@@ -45,12 +45,12 @@ set_target_properties(pistache
 )
 
 # RapidJSON
+set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "") 
+set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "") 
+set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "") 
 ExternalProject_Add(rapidjson_ext
     GIT_REPOSITORY "https://github.com/Tencent/rapidjson"
     GIT_TAG "2ce91b823c8b4504b9c40f99abf00917641cef6c"
-    CMAKE_ARGS "-DRAPIDJSON_BUILD_DOC=OFF \
-        -DRAPIDJSON_BUILD_EXAMPLES=OFF \
-        -DRAPIDJSON_BUILD_TESTS=OFF"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 ExternalProject_Get_Property(rapidjson_ext SOURCE_DIR)
@@ -77,11 +77,12 @@ set(CPPCODEC_INCLUDE_DIR ${SOURCE_DIR})
 
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)
+    set(CATCH_INSTALL_DOCS OFF CACHE INTERNAL "") 
+    set(CATCH_INSTALL_EXTRAS OFF CACHE INTERNAL "") 
+
     ExternalProject_Add(catch_ext
         GIT_REPOSITORY "https://github.com/catchorg/Catch2"
         GIT_TAG "v2.13.2"
-        CMAKE_ARGS "-DCATCH_INSTALL_DOCS=OFF \
-            -DCATCH_INSTALL_EXTRAS=OFF"
         CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
     )
     ExternalProject_Get_Property(catch_ext SOURCE_DIR)

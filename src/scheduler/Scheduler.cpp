@@ -318,7 +318,6 @@ std::vector<std::string> Scheduler::callFunctions(
                 std::unordered_set<std::string>& thisRegisteredHosts =
                   registeredHosts[funcStr];
 
-                redis::Redis& redis = redis::Redis::getQueue();
                 std::unordered_set<std::string> allHosts = getAvailableHosts();
 
                 std::unordered_set<std::string> targetHosts;
@@ -521,7 +520,6 @@ std::string Scheduler::getThisHost()
 void Scheduler::broadcastFlush()
 {
     // Get all hosts
-    redis::Redis& redis = redis::Redis::getQueue();
     std::unordered_set<std::string> allHosts = getAvailableHosts();
 
     // Remove this host from the set
