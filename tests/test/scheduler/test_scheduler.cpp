@@ -14,6 +14,75 @@ using namespace scheduler;
 using namespace redis;
 
 namespace tests {
+TEST_CASE("Test scheduler clear-up", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    std::string otherHost = "other";
+    std::unordered_set<std::string> expectedHosts = { otherHost };
+
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    sch.addHostToGlobalSet(otherHost);
+
+    // Set resources
+    int nCores = 5;
+    faabric::HostResources res;
+    res.set_cores(nCores);
+    sch.setThisHostResources(res);
+
+    // Set resources for other host too
+    faabric::scheduler::queueResourceResponse(otherHost, res);
+
+    // Initial checks
+    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
+    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+
+    faabric::HostResources resCheck = sch.getThisHostResources();
+    REQUIRE(resCheck.cores() == nCores);
+    REQUIRE(resCheck.boundexecutors() == 0);
+    REQUIRE(resCheck.functionsinflight() == 0);
+
+    // Make calls
+    int nCalls = nCores + 1;
+    for (int i = 0; i < nCalls; i++) {
+        sch.callFunction(msg);
+    }
+
+    REQUIRE(sch.getFunctionFaasletCount(msg) == nCores);
+    REQUIRE(sch.getFunctionInFlightCount(msg) == nCores);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+
+    resCheck = sch.getThisHostResources();
+    REQUIRE(resCheck.cores() == nCores);
+    REQUIRE(resCheck.boundexecutors() == nCores);
+    REQUIRE(resCheck.functionsinflight() == nCores);
+
+    // Run shutdown
+    sch.shutdown();
+
+    // Check scheduler has been cleared
+    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
+    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+
+    resCheck = sch.getThisHostResources();
+    int actualCores = faabric::util::getUsableCores();
+    REQUIRE(resCheck.cores() == actualCores);
+    REQUIRE(resCheck.boundexecutors() == 0);
+    REQUIRE(resCheck.functionsinflight() == 0);
+
+    faabric::util::setMockMode(false);
+}
+
 TEST_CASE("Test scheduler available hosts", "[scheduler]")
 {
     cleanFaabric();
@@ -191,5 +260,309 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(pTwo.second.masterhost() == thisHost);
 
     faabric::util::setMockMode(false);
+}
+
+TEST_CASE("Test unregistering host", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    Scheduler& sch = scheduler::getScheduler();
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    std::string otherHost = "foobar";
+    sch.addHostToGlobalSet(otherHost);
+
+    int nCores = 5;
+    faabric::HostResources res;
+    res.set_cores(nCores);
+    sch.setThisHostResources(res);
+
+    // Set up capacity for other host
+    faabric::scheduler::queueResourceResponse(otherHost, res);
+
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    for (int i = 0; i < nCores + 1; i++) {
+        sch.callFunction(msg);
+    }
+
+    // Check other host is added
+    std::unordered_set<std::string> expectedHosts = { otherHost };
+    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+
+    // Remove host for another function and check host isn't removed
+    faabric::Message otherMsg = faabric::util::messageFactory("foo", "qux");
+    sch.removeRegisteredHost(otherHost, otherMsg);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+
+    // Remove host
+    sch.removeRegisteredHost(otherHost, msg);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+
+    faabric::util::setMockMode(false);
+}
+
+TEST_CASE("Test counts can't go below zero", "[scheduler]")
+{
+    cleanFaabric();
+
+    Scheduler& sch = scheduler::getScheduler();
+    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
+
+    sch.notifyFaasletFinished(msg);
+    sch.notifyFaasletFinished(msg);
+    sch.notifyFaasletFinished(msg);
+    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
+
+    sch.notifyCallFinished(msg);
+    sch.notifyCallFinished(msg);
+    sch.notifyCallFinished(msg);
+    sch.notifyCallFinished(msg);
+    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+}
+
+TEST_CASE("Check test mode", "[scheduler]")
+{
+    cleanFaabric();
+
+    Scheduler& sch = scheduler::getScheduler();
+
+    faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
+    faabric::Message msgB = faabric::util::messageFactory("demo", "echo");
+    faabric::Message msgC = faabric::util::messageFactory("demo", "echo");
+
+    bool origTestMode = faabric::util::isTestMode();
+    SECTION("No test mode")
+    {
+        faabric::util::setTestMode(false);
+
+        sch.callFunction(msgA);
+        REQUIRE(sch.getRecordedMessagesAll().empty());
+    }
+
+    SECTION("Test mode")
+    {
+        faabric::util::setTestMode(true);
+
+        sch.callFunction(msgA);
+        sch.callFunction(msgB);
+        sch.callFunction(msgC);
+
+        std::vector<unsigned int> expected = { (unsigned int)msgA.id(),
+                                               (unsigned int)msgB.id(),
+                                               (unsigned int)msgC.id() };
+        std::vector<unsigned int> actual = sch.getRecordedMessagesAll();
+        REQUIRE(actual == expected);
+    }
+
+    faabric::util::setTestMode(origTestMode);
+}
+
+TEST_CASE("Global message queue tests", "[scheduler]")
+{
+    cleanFaabric();
+
+    redis::Redis& redis = redis::Redis::getQueue();
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+
+    // Request function
+    std::string funcName = "my func";
+    std::string userName = "some user";
+    std::string inputData = "blahblah";
+    faabric::Message call = faabric::util::messageFactory(userName, funcName);
+    call.set_inputdata(inputData);
+
+    sch.setFunctionResult(call);
+
+    // Check result has been written to the right key
+    REQUIRE(redis.listLength(call.resultkey()) == 1);
+
+    // Check that some expiry has been set
+    long ttl = redis.getTtl(call.resultkey());
+    REQUIRE(ttl > 10);
+
+    // Check retrieval method gets the same call out again
+    faabric::Message actualCall2 = sch.getFunctionResult(call.id(), 1);
+
+    checkMessageEquality(call, actualCall2);
+}
+
+TEST_CASE("Check multithreaded function results", "[scheduler]")
+{
+    cleanFaabric();
+
+    int nWorkers = 5;
+    int nWorkerMessages = 8;
+
+    int nWaiters = 10;
+    int nWaiterMessages = 4;
+
+    // Sanity check
+    REQUIRE((nWaiters * nWaiterMessages) == (nWorkers * nWorkerMessages));
+
+    std::vector<std::thread> waiterThreads;
+    std::vector<std::thread> workerThreads;
+
+    // Create waiters that will submit messages and await their results
+    for (int i = 0; i < nWaiters; i++) {
+        waiterThreads.emplace_back([nWaiterMessages] {
+            Scheduler& sch = scheduler::getScheduler();
+
+            faabric::Message msg =
+              faabric::util::messageFactory("demo", "echo");
+
+            // Put invocation on local queue and await global result
+            for (int m = 0; m < nWaiterMessages; m++) {
+                const std::shared_ptr<InMemoryMessageQueue>& queue =
+                  sch.getFunctionQueue(msg);
+                queue->enqueue(msg);
+                sch.getFunctionResult(msg.id(), 5000);
+            }
+        });
+    }
+
+    // Create workers that will dequeue messages and set success
+    for (int i = 0; i < nWorkers; i++) {
+        workerThreads.emplace_back([nWorkerMessages] {
+            Scheduler& sch = scheduler::getScheduler();
+
+            faabric::Message dummyMsg =
+              faabric::util::messageFactory("demo", "echo");
+            const std::shared_ptr<InMemoryMessageQueue>& queue =
+              sch.getFunctionQueue(dummyMsg);
+
+            // Listen to local queue, set result on global bus
+            for (int m = 0; m < nWorkerMessages; m++) {
+                faabric::Message msg = queue->dequeue(5000);
+                sch.setFunctionResult(msg);
+            }
+        });
+    }
+
+    // Wait for all the threads to finish
+    for (auto& w : waiterThreads) {
+        if (w.joinable()) {
+            w.join();
+        }
+    }
+
+    for (auto& w : workerThreads) {
+        if (w.joinable()) {
+            w.join();
+        }
+    }
+
+    // If we get here then things work properly
+}
+
+TEST_CASE("Check getting function status", "[scheduler]")
+{
+    cleanFaabric();
+
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+
+    std::string expectedOutput;
+    int expectedReturnValue = 0;
+    faabric::Message_MessageType expectedType;
+    std::string expectedHost = faabric::util::getSystemConfig().endpointHost;
+
+    faabric::Message msg;
+    SECTION("Running")
+    {
+        msg = faabric::util::messageFactory("demo", "echo");
+        expectedReturnValue = 0;
+        expectedType = faabric::Message_MessageType_EMPTY;
+        expectedHost = "";
+    }
+
+    SECTION("Failure")
+    {
+        msg = faabric::util::messageFactory("demo", "echo");
+
+        expectedOutput = "I have failed";
+        msg.set_outputdata(expectedOutput);
+        msg.set_returnvalue(1);
+        sch.setFunctionResult(msg);
+
+        expectedReturnValue = 1;
+        expectedType = faabric::Message_MessageType_CALL;
+    }
+
+    SECTION("Success")
+    {
+        msg = faabric::util::messageFactory("demo", "echo");
+
+        expectedOutput = "I have succeeded";
+        msg.set_outputdata(expectedOutput);
+        msg.set_returnvalue(0);
+        sch.setFunctionResult(msg);
+
+        expectedReturnValue = 0;
+        expectedType = faabric::Message_MessageType_CALL;
+    }
+
+    // Check status when nothing has been written
+    const faabric::Message result = sch.getFunctionResult(msg.id(), 0);
+
+    REQUIRE(result.returnvalue() == expectedReturnValue);
+    REQUIRE(result.type() == expectedType);
+    REQUIRE(result.outputdata() == expectedOutput);
+    REQUIRE(result.executedhost() == expectedHost);
+}
+
+TEST_CASE("Check setting long-lived function status", "[scheduler]")
+{
+    cleanFaabric();
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+    redis::Redis& redis = redis::Redis::getQueue();
+
+    // Create a message
+    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
+    faabric::Message expected = msg;
+    expected.set_executedhost(util::getSystemConfig().endpointHost);
+
+    sch.setFunctionResult(msg);
+
+    std::vector<uint8_t> actual = redis.get(msg.statuskey());
+    REQUIRE(!actual.empty());
+
+    faabric::Message actualMsg;
+    actualMsg.ParseFromArray(actual.data(), (int)actual.size());
+
+    // We can't predict the finish timestamp, so have to manually copy here
+    REQUIRE(actualMsg.finishtimestamp() > 0);
+    expected.set_finishtimestamp(actualMsg.finishtimestamp());
+
+    checkMessageEquality(actualMsg, expected);
+}
+
+TEST_CASE("Check logging chained functions", "[scheduler]")
+{
+    cleanFaabric();
+
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+
+    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
+    unsigned int chainedMsgIdA = 1234;
+    unsigned int chainedMsgIdB = 5678;
+    unsigned int chainedMsgIdC = 9876;
+
+    // Check empty initially
+    REQUIRE(sch.getChainedFunctions(msg.id()).empty());
+
+    // Log and check this shows up in the result
+    sch.logChainedFunction(msg.id(), chainedMsgIdA);
+    std::unordered_set<unsigned int> expected = { chainedMsgIdA };
+    REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+
+    // Log some more and check
+    sch.logChainedFunction(msg.id(), chainedMsgIdA);
+    sch.logChainedFunction(msg.id(), chainedMsgIdB);
+    sch.logChainedFunction(msg.id(), chainedMsgIdC);
+    expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
+    REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 }
 }

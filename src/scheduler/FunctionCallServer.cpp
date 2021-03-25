@@ -29,30 +29,6 @@ void FunctionCallServer::doStart(const std::string& serverAddr)
     server->Wait();
 }
 
-Status FunctionCallServer::ShareFunction(
-  ServerContext* context,
-  const faabric::Message* request,
-  faabric::FunctionStatusResponse* response)
-{
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
-    // TODO - avoiding having to copy the message here
-    faabric::Message msg = *request;
-
-    // This calls the scheduler, which will always attempt
-    // to execute locally. However, if not possible, this will
-    // again share the message, increasing the hops
-    const std::string funcStr = faabric::util::funcToString(msg, true);
-    logger->debug("{} received shared call {} (scheduled for {})",
-                  host,
-                  funcStr,
-                  msg.scheduledhost());
-
-    scheduler.callFunction(msg);
-
-    return Status::OK;
-}
-
 Status FunctionCallServer::Flush(ServerContext* context,
                                  const faabric::Message* request,
                                  faabric::FunctionStatusResponse* response)

@@ -26,7 +26,6 @@ std::string messageToJson(const faabric::Message& msg)
     d.AddMember("function",
                 Value(msg.function().c_str(), msg.function().size(), a).Move(),
                 a);
-    d.AddMember("hops", msg.hops(), a);
 
     if (!msg.executedhost().empty()) {
         d.AddMember(
@@ -291,7 +290,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_id(getIntFromJson(d, "id", 0));
     msg.set_user(getStringFromJson(d, "user", ""));
     msg.set_function(getStringFromJson(d, "function", ""));
-    msg.set_hops(getIntFromJson(d, "hops", 0));
     msg.set_executedhost(getStringFromJson(d, "exec_host", ""));
     msg.set_finishtimestamp(getInt64FromJson(d, "finished", 0));
 

@@ -71,6 +71,7 @@ void Scheduler::reset()
     thisHostResources.set_cores(faabric::util::getUsableCores());
 
     // Reset scheduler state
+    registeredHosts.clear();
     faasletCounts.clear();
     inFlightCounts.clear();
 
@@ -251,13 +252,16 @@ std::vector<std::string> Scheduler::callFunctions(
                 if (req.type() == req.THREADS) {
                     // For threads we don't actually execute the functions,
                     // leaving the caller to do it
-                    logger->debug("Skipping for local thread execution");
+                    logger->debug("Returning {} x {} local threads");
                 } else {
                     funcQueue->enqueue(msg);
-                    incrementInFlightCount(msg);
 
                     executed.at(nextMsgIdx) = thisHost;
                 }
+                
+                // Increment the in-flight count regardless (local thread
+                // executors will have to decrement manually)
+                incrementInFlightCount(msg);
             }
 
             // If some are left, we need to distribute
@@ -357,16 +361,6 @@ std::vector<std::string> Scheduler::callFunctions(
     for (int i = 0; i < nMessages; i++) {
         std::string executedHost = executed.at(i);
         faabric::Message msg = req.messages().at(i);
-
-        // Mark if this is the first scheduling decision made on this message
-        if (msg.scheduledhost().empty()) {
-            msg.set_scheduledhost(executedHost);
-        }
-
-        if (!executedHost.empty() && executedHost != thisHost) {
-            // Increment the number of hops
-            msg.set_hops(msg.hops() + 1);
-        }
 
         // Log results if in test mode
         if (faabric::util::isTestMode()) {

@@ -16,10 +16,6 @@ class FunctionCallServer final
   public:
     FunctionCallServer();
 
-    Status ShareFunction(ServerContext* context,
-                         const faabric::Message* request,
-                         faabric::FunctionStatusResponse* response) override;
-
     Status Flush(ServerContext* context,
                  const faabric::Message* request,
                  faabric::FunctionStatusResponse* response) override;

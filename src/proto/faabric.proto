@@ -42,9 +42,6 @@ message UnregisterRequest {
 }
 
 service FunctionRPCService {
-    rpc ShareFunction (Message) returns (FunctionStatusResponse) {
-    }
-
     rpc Flush (Message) returns (FunctionStatusResponse) {
     }
 
@@ -119,8 +116,6 @@ message Message {
     string resultKey = 11;
     string statusKey = 12;
 
-    string scheduledHost = 13;
-    int32 hops = 14;
     string executedHost = 15;
     int64 finishTimestamp = 16;
 

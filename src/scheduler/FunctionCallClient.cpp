@@ -94,18 +94,6 @@ FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   , stub(faabric::FunctionRPCService::NewStub(channel))
 {}
 
-void FunctionCallClient::shareFunctionCall(const faabric::Message& call)
-{
-    if (faabric::util::isMockMode()) {
-        functionCalls.emplace_back(host, call);
-    } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("function_share",
-                  stub->ShareFunction(&context, call, &response));
-    }
-}
-
 void FunctionCallClient::sendFlush()
 {
     faabric::Message call;
