@@ -120,7 +120,7 @@ class Scheduler
     faabric::HostResources getHostResources(const std::string& host);
 
     void incrementInFlightCount(const faabric::Message& msg);
-    
+
     void addFaaslets(const faabric::Message& msg);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);

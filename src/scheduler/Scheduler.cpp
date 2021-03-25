@@ -270,7 +270,7 @@ std::vector<std::string> Scheduler::callFunctions(
             // Build list of messages to be executed locally
             for (; nextMsgIdx < nLocally; nextMsgIdx++) {
                 faabric::Message msg = req.messages().at(nextMsgIdx);
-                
+
                 // Record that we're executing something
                 remainder--;
                 incrementInFlightCount(msg);
@@ -284,7 +284,6 @@ std::vector<std::string> Scheduler::callFunctions(
                     executed.at(nextMsgIdx) = thisHost;
                     addFaaslets(msg);
                 }
-
             }
 
             // If some are left, we need to distribute
