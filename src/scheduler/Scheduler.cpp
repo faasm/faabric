@@ -225,7 +225,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
     // Handle forced local execution
     if (forceLocal) {
-        logger->debug("Executing {} {} locally", nMessages, funcStr);
+        logger->debug("Executing {} x {} locally", nMessages, funcStr);
 
         for (int i = 0; i < nMessages; i++) {
             faabric::Message msg = req.messages().at(i);
@@ -252,34 +252,43 @@ std::vector<std::string> Scheduler::callFunctions(
             // At this point we know we're the master host, and we've not been
             // asked to force full local execution.
 
-            logger->debug("Scheduling {} x {}", nMessages, funcStr);
-
             // Work out how many we can handle locally
             int cores = thisHostResources.cores();
             int available = cores - thisHostResources.functionsinflight();
             available = std::max<int>(available, 0);
             int nLocally = std::min<int>(available, nMessages);
 
-            logger->debug(
-              "Executing {} of {} {} locally", nLocally, nMessages, funcStr);
-
             // Keep track of what's been done
             int remainder = nMessages;
             int nextMsgIdx = 0;
+            bool isThreads = req.type() == req.THREADS;
+
+            if (isThreads && nLocally > 0) {
+                logger->debug("Returning {} of {} {} for local threads",
+                              nLocally,
+                              nMessages,
+                              funcStr);
+            } else if (nLocally > 0) {
+                logger->debug("Executing {} of {} {} locally",
+                              nLocally,
+                              nMessages,
+                              funcStr);
+            } else {
+                logger->debug("No local capacity, distributing {} x {}",
+                              nMessages,
+                              funcStr);
+            }
 
             // Build list of messages to be executed locally
             for (; nextMsgIdx < nLocally; nextMsgIdx++) {
                 faabric::Message msg = req.messages().at(nextMsgIdx);
 
-                // Record that we're executing something
                 remainder--;
                 incrementInFlightCount(msg);
 
-                if (req.type() == req.THREADS) {
-                    // For threads we don't actually execute the functions,
-                    // leaving the caller to do it
-                    logger->debug("Returning {} x {} local threads");
-                } else {
+                // Provided we're not executing threads, execute the functions
+                // now
+                if (!isThreads) {
                     funcQueue->enqueue(msg);
                     executed.at(nextMsgIdx) = thisHost;
                     addFaaslets(msg);
@@ -292,13 +301,6 @@ std::vector<std::string> Scheduler::callFunctions(
                 // the rest Get the list of registered hosts for this function
                 std::unordered_set<std::string>& thisRegisteredHosts =
                   registeredHosts[funcStr];
-
-                logger->debug(
-                  "Distributing to {} registered hosts: {} of {} {}",
-                  thisRegisteredHosts.size(),
-                  remainder,
-                  nMessages,
-                  funcStr);
 
                 // Schedule the remainder on these other hosts
                 for (auto& h : thisRegisteredHosts) {
@@ -338,13 +340,6 @@ std::vector<std::string> Scheduler::callFunctions(
 
                     targetHosts.insert(h);
                 }
-
-                logger->debug(
-                  "Distributing to {} unregistered hosts: {} of {} {}",
-                  targetHosts.size(),
-                  remainder,
-                  nMessages,
-                  funcStr);
 
                 for (auto& h : targetHosts) {
                     // Schedule functions on this host
