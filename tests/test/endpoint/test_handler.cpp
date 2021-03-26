@@ -14,7 +14,7 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
     cleanFaabric();
 
     // Note - must be async to avoid needing a result
-    faabric::Message call;
+    faabric::Message call = faabric::util::messageFactory("foo", "bar");
     call.set_isasync(true);
     std::string user;
     std::string function;
@@ -23,15 +23,6 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
     {
         user = "demo";
         function = "echo";
-
-        SECTION("With input") { call.set_inputdata("foobar"); }
-        SECTION("No input") {}
-    }
-    SECTION("Typescript")
-    {
-        user = "ts";
-        function = "echo";
-        call.set_istypescript(true);
 
         SECTION("With input") { call.set_inputdata("foobar"); }
         SECTION("No input") {}
