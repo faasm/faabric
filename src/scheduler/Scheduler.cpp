@@ -17,6 +17,11 @@ using namespace faabric::util;
 
 namespace faabric::scheduler {
 
+int decrementAboveZero(int input)
+{
+    return std::max<int>(input - 1, 0);
+}
+
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
@@ -142,10 +147,9 @@ void Scheduler::notifyCallFinished(const faabric::Message& msg)
 
     const std::string funcStr = faabric::util::funcToString(msg, false);
 
-    inFlightCounts[funcStr] = std::max(inFlightCounts[funcStr] - 1, 0L);
+    inFlightCounts[funcStr] = decrementAboveZero(inFlightCounts[funcStr]);
 
-    int newInFlight =
-      std::max<int>(thisHostResources.functionsinflight() - 1, 0);
+    int newInFlight = decrementAboveZero(thisHostResources.functionsinflight());
     thisHostResources.set_functionsinflight(newInFlight);
 }
 
@@ -181,7 +185,8 @@ void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
     }
 
     // Update bound executors on this host
-    int newBoundExecutors = std::max(thisHostResources.boundexecutors() - 1, 0);
+    int newBoundExecutors =
+      decrementAboveZero(thisHostResources.boundexecutors());
     thisHostResources.set_boundexecutors(newBoundExecutors);
 }
 
@@ -325,7 +330,6 @@ std::vector<std::string> Scheduler::callFunctions(
                 std::unordered_set<std::string> targetHosts;
 
                 // Build list of target hosts
-                // TODO - do this with set difference
                 for (auto& h : allHosts) {
                     // Skip if already registered
                     if (thisRegisteredHosts.find(h) !=
