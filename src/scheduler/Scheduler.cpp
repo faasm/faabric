@@ -204,6 +204,7 @@ std::vector<std::string> Scheduler::callFunctions(
     auto logger = faabric::util::getLogger();
 
     int nMessages = req.messages_size();
+    bool isThreads = req.type() == req.THREADS;
     std::vector<std::string> executed(nMessages);
 
     // Note, we assume all the messages are for the same function and master
@@ -261,7 +262,6 @@ std::vector<std::string> Scheduler::callFunctions(
             // Keep track of what's been done
             int remainder = nMessages;
             int nextMsgIdx = 0;
-            bool isThreads = req.type() == req.THREADS;
 
             if (isThreads && nLocally > 0) {
                 logger->debug("Returning {} of {} {} for local threads",
@@ -364,10 +364,19 @@ std::vector<std::string> Scheduler::callFunctions(
             // At this point there's no more capacity in the system, so we
             // just need to execute locally
             if (remainder > 0) {
-                logger->warn("No capacity for {}, overloading", funcStr);
-                for (; nextMsgIdx < nMessages; nextMsgIdx++) {
-                    // Flag that this message was not executed
+                faabric::Message msg = req.messages().at(nextMsgIdx);
+                incrementInFlightCount(msg);
+
+                if (!isThreads) {
+                    logger->warn(
+                      "No capacity for {} thread, returning locally");
                     executed.at(nextMsgIdx) = "";
+                } else {
+                    logger->warn("No capacity for {}, executing locally");
+
+                    funcQueue->enqueue(msg);
+                    executed.at(nextMsgIdx) = thisHost;
+                    addFaaslets(msg);
                 }
             }
         }
