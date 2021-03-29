@@ -364,19 +364,23 @@ std::vector<std::string> Scheduler::callFunctions(
             // At this point there's no more capacity in the system, so we
             // just need to execute locally
             if (remainder > 0) {
-                faabric::Message msg = req.messages().at(nextMsgIdx);
-                incrementInFlightCount(msg);
+                for (; nextMsgIdx < nMessages; nextMsgIdx++) {
+                    faabric::Message msg = req.messages().at(nextMsgIdx);
+                    incrementInFlightCount(msg);
 
-                if (!isThreads) {
-                    logger->warn(
-                      "No capacity for {} thread, returning locally");
-                    executed.at(nextMsgIdx) = "";
-                } else {
-                    logger->warn("No capacity for {}, executing locally");
+                    if (isThreads) {
+                        logger->warn(
+                          "No capacity for {} thread, returning to caller",
+                          funcStr);
+                        executed.at(nextMsgIdx) = "";
+                    } else {
+                        logger->warn("No capacity for {}, executing locally",
+                                     funcStr);
 
-                    funcQueue->enqueue(msg);
-                    executed.at(nextMsgIdx) = thisHost;
-                    addFaaslets(msg);
+                        funcQueue->enqueue(msg);
+                        executed.at(nextMsgIdx) = thisHost;
+                        addFaaslets(msg);
+                    }
                 }
             }
         }

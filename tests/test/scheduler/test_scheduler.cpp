@@ -287,6 +287,65 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     faabric::util::setMockMode(false);
 }
 
+TEST_CASE("Test overloaded scheduler", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    faabric::BatchExecuteRequest::BatchExecuteType execMode;
+    SECTION("Threads") { execMode = faabric::BatchExecuteRequest::THREADS; }
+    SECTION("Processes") { execMode = faabric::BatchExecuteRequest::PROCESSES; }
+    SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
+
+    // Set up this host with very low resources
+    Scheduler& sch = scheduler::getScheduler();
+    std::string thisHost = sch.getThisHost();
+    int nCores = 1;
+    faabric::HostResources res;
+    res.set_cores(nCores);
+    sch.setThisHostResources(res);
+
+    // Set up another host with no resources
+    std::string otherHost = "other";
+    faabric::HostResources resOther;
+    resOther.set_cores(0);
+    faabric::scheduler::queueResourceResponse(otherHost, resOther);
+
+    // Submit more calls than we have capacity for
+    int nCalls = 10;
+    std::vector<faabric::Message> msgs;
+    for (int i = 0; i < nCalls; i++) {
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msgs.push_back(msg);
+    }
+
+    // Submit the request
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    req.set_type(execMode);
+    std::vector<std::string> executedHosts = sch.callFunctions(req);
+
+    // Set up expectations
+    std::vector<std::string> expectedHosts;
+    int expectedBindQueueSize;
+    if (execMode == faabric::BatchExecuteRequest::THREADS) {
+        expectedHosts = std::vector<std::string>(nCalls, "");
+        expectedBindQueueSize = 0;
+    } else {
+        expectedHosts = std::vector<std::string>(nCalls, thisHost);
+        expectedBindQueueSize = nCalls;
+    }
+
+    // Check they're scheduled locally
+    faabric::Message firstMsg = req.messages().at(0);
+    REQUIRE(sch.getBindQueue()->size() == expectedBindQueueSize);
+    REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedBindQueueSize);
+
+    // We expect the in flight count to be incremented regardless
+    REQUIRE(sch.getFunctionInFlightCount(firstMsg) == nCalls);
+
+    faabric::util::setMockMode(false);
+}
+
 TEST_CASE("Test unregistering host", "[scheduler]")
 {
     cleanFaabric();
