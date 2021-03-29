@@ -1,3 +1,4 @@
+#include "faabric/proto/faabric.pb.h"
 #include <faabric/util/func.h>
 
 #include <boost/algorithm/string.hpp>
@@ -307,13 +308,31 @@ std::string buildAsyncResponse(const faabric::Message& msg)
     return std::to_string(msg.id());
 }
 
+faabric::BatchExecuteRequest batchExecFactory(
+  std::vector<faabric::Message>& msgs)
+{
+    // TODO - can we avoid this copy?
+    faabric::BatchExecuteRequest req;
+    *req.mutable_messages() = { msgs.begin(), msgs.end() };
+
+    // Generate a random ID
+    unsigned int id = faabric::util::generateGid();
+    req.set_id(id);
+
+    return req;
+}
+
 faabric::Message messageFactory(const std::string& user,
                                 const std::string& function)
 {
     faabric::Message msg;
     msg.set_user(user);
     msg.set_function(function);
+
     setMessageId(msg);
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    msg.set_masterhost(thisHost);
 
     return msg;
 }

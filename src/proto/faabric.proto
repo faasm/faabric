@@ -3,17 +3,57 @@ syntax = "proto3";
 package faabric;
 
 // ---------------------------------------------
-// FUNCTION SERVICE
+// FUNCTION SCHEDULING
 // ---------------------------------------------
 
-service FunctionRPCService {
-    rpc ShareFunction (Message) returns (FunctionStatusResponse) {
+message BatchExecuteRequest {
+    enum BatchExecuteType {
+        FUNCTIONS = 0;
+        THREADS = 1;
+        PROCESSES = 2;
     }
 
+    BatchExecuteType type = 1;
+
+    int32 id = 2;
+
+    // Shared snapshot used for threads
+    string snapshotKey = 4;
+    int32 snapshotSize = 5;
+
+    repeated Message messages = 6;
+    repeated int32 returnValues = 7;
+}
+
+message ResourceRequest {
+    int32 empty = 1;
+}
+
+message HostResources {
+    int32 cores = 1;
+    int32 functionsInFlight = 2;
+    int32 boundExecutors = 3;
+}
+
+message UnregisterRequest {
+    string host = 1;
+    Message function = 2;
+}
+
+service FunctionRPCService {
     rpc Flush (Message) returns (FunctionStatusResponse) {
     }
 
     rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
+    }
+
+    rpc GetResources (ResourceRequest) returns (HostResources) {
+    }
+
+    rpc ExecuteFunctions (BatchExecuteRequest) returns (FunctionStatusResponse) {
+    }
+
+    rpc Unregister (UnregisterRequest) returns (FunctionStatusResponse) {
     }
 }
 
@@ -75,8 +115,6 @@ message Message {
     string resultKey = 11;
     string statusKey = 12;
 
-    string scheduledHost = 13;
-    int32 hops = 14;
     string executedHost = 15;
     int64 finishTimestamp = 16;
 
@@ -115,6 +153,8 @@ message Message {
     string sgxTag = 43;
     bytes sgxPolicy = 44;
     bytes sgxResult = 45;
+    
+    string masterHost = 46;
 }
 
 // ---------------------------------------------

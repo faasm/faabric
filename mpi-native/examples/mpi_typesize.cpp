@@ -24,10 +24,6 @@ int main(int argc, char** argv)
     auto& scheduler = faabric::scheduler::getScheduler();
     auto& conf = faabric::util::getSystemConfig();
 
-    // Global configuration
-    conf.maxNodes = 1;
-    conf.maxNodesPerFunction = 1;
-
     bool __isRoot;
     int __worldSize;
     if (argc < 2) {

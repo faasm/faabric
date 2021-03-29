@@ -3,8 +3,8 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
-#include <set>
 #include <thread>
+#include <unordered_set>
 
 using namespace faabric::util;
 
@@ -38,7 +38,7 @@ TEST_CASE("Test multithreaded gid generation", "[util]")
 
     // Check that there are no duplicates (if there's a problem there should
     // reliably be several)
-    std::set<unsigned int> uniques;
+    std::unordered_set<unsigned int> uniques;
     for (auto g : generated) {
         if (uniques.count(g) > 0) {
             const std::shared_ptr<spdlog::logger>& logger =

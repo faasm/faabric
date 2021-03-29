@@ -9,77 +9,39 @@
 
 #include <shared_mutex>
 
-#define AVAILABLE_HOST_SET "available_nodes"
+#define AVAILABLE_HOST_SET "available_hosts"
 
 namespace faabric::scheduler {
-// Note - default opinion when zero initialised should be maybe
-enum class SchedulerOpinion
-{
-    MAYBE = 0,
-    YES = 1,
-    NO = 2,
-};
 
 class Scheduler
 {
   public:
     Scheduler();
 
+    // ----------------------------------
+    // External API
+    // ----------------------------------
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
-    SchedulerOpinion getLatestOpinion(const faabric::Message& msg);
-
-    std::string getBestHostForFunction(const faabric::Message& msg);
-
-    void enqueueMessage(const faabric::Message& msg);
-
-    std::shared_ptr<InMemoryMessageQueue> getFunctionQueue(
-      const faabric::Message& msg);
-
-    void notifyCallFinished(const faabric::Message& msg);
-
-    void notifyNodeFinished(const faabric::Message& msg);
-
-    std::shared_ptr<InMemoryMessageQueue> getBindQueue();
-
-    std::string getFunctionWarmSetName(const faabric::Message& msg);
-
-    std::string getFunctionWarmSetNameFromStr(const std::string& funcStr);
+    std::vector<std::string> callFunctions(faabric::BatchExecuteRequest& req,
+                                           bool forceLocal = false);
 
     void reset();
 
     void shutdown();
 
-    long getFunctionWarmNodeCount(const faabric::Message& msg);
+    void notifyCallFinished(const faabric::Message& msg);
 
-    long getTotalWarmNodeCount();
-
-    double getFunctionInFlightRatio(const faabric::Message& msg);
+    void notifyFaasletFinished(const faabric::Message& msg);
 
     long getFunctionInFlightCount(const faabric::Message& msg);
 
-    void addHostToGlobalSet(const std::string& host);
+    long getFunctionFaasletCount(const faabric::Message& msg);
 
-    void addHostToGlobalSet();
+    int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
-    void removeHostFromGlobalSet();
-
-    void addHostToWarmSet(const std::string& funcStr);
-
-    void removeHostFromWarmSet(const std::string& funcStr);
-
-    void setTestMode(bool val);
-
-    std::vector<unsigned int> getRecordedMessagesAll();
-
-    std::vector<unsigned int> getRecordedMessagesLocal();
-
-    std::vector<std::pair<std::string, unsigned int>>
-    getRecordedMessagesShared();
-
-    bool hasHostCapacity();
-
-    std::string getThisHost();
+    std::unordered_set<std::string> getFunctionRegisteredHosts(
+      const faabric::Message& msg);
 
     void broadcastFlush();
 
@@ -91,6 +53,41 @@ class Scheduler
 
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
 
+    std::string getThisHost();
+
+    std::shared_ptr<InMemoryMessageQueue> getFunctionQueue(
+      const faabric::Message& msg);
+
+    std::shared_ptr<InMemoryMessageQueue> getBindQueue();
+
+    std::unordered_set<std::string> getAvailableHosts();
+
+    void addHostToGlobalSet();
+
+    void addHostToGlobalSet(const std::string& host);
+
+    void removeHostFromGlobalSet(const std::string& host);
+
+    void removeRegisteredHost(const std::string& host,
+                              const faabric::Message& msg);
+
+    faabric::HostResources getThisHostResources();
+
+    void setThisHostResources(faabric::HostResources& res);
+
+    // ----------------------------------
+    // Testing
+    // ----------------------------------
+    std::vector<unsigned int> getRecordedMessagesAll();
+
+    std::vector<unsigned int> getRecordedMessagesLocal();
+
+    std::vector<std::pair<std::string, unsigned int>>
+    getRecordedMessagesShared();
+
+    // ----------------------------------
+    // Exec graph
+    // ----------------------------------
     void logChainedFunction(unsigned int parentMessageId,
                             unsigned int chainedMessageId);
 
@@ -106,31 +103,32 @@ class Scheduler
     std::shared_ptr<InMemoryMessageQueue> bindQueue;
 
     std::shared_mutex mx;
+
     std::unordered_map<std::string, std::shared_ptr<InMemoryMessageQueue>>
       queueMap;
-    std::unordered_map<std::string, long> nodeCountMap;
-    std::unordered_map<std::string, long> inFlightCountMap;
-    std::unordered_map<std::string, SchedulerOpinion> opinionMap;
-    bool _hasHostCapacity = true;
+    std::unordered_map<std::string, long> faasletCounts;
+    std::unordered_map<std::string, long> inFlightCounts;
 
-    bool isTestMode = false;
+    faabric::HostResources thisHostResources;
+    std::unordered_map<std::string, std::unordered_set<std::string>>
+      registeredHosts;
+
     std::vector<unsigned int> recordedMessagesAll;
     std::vector<unsigned int> recordedMessagesLocal;
     std::vector<std::pair<std::string, unsigned int>> recordedMessagesShared;
 
-    void updateOpinion(const faabric::Message& msg);
+    faabric::HostResources getHostResources(const std::string& host);
 
     void incrementInFlightCount(const faabric::Message& msg);
 
-    void decrementInFlightCount(const faabric::Message& msg);
-
-    void incrementWarmNodeCount(const faabric::Message& msg);
-
-    void decrementWarmNodeCount(const faabric::Message& msg);
-
-    int getFunctionMaxInFlightRatio(const faabric::Message& msg);
+    void addFaaslets(const faabric::Message& msg);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
+
+    int scheduleFunctionsOnHost(const std::string& host,
+                                faabric::BatchExecuteRequest& req,
+                                std::vector<std::string>& records,
+                                int offset);
 };
 
 Scheduler& getScheduler();

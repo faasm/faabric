@@ -1,6 +1,10 @@
 #include <catch.hpp>
 
-#include "faabric_utils.h"
+#include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/util/func.h>
+#include <faabric/util/testing.h>
+#include <faabric_utils.h>
 
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -13,604 +17,397 @@ namespace tests {
 TEST_CASE("Test scheduler clear-up", "[scheduler]")
 {
     cleanFaabric();
+    faabric::util::setMockMode(true);
 
-    faabric::Message call;
-    call.set_user("some user");
-    call.set_function("some function");
-    std::string funcSet;
+    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
 
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    Redis& redis = Redis::getQueue();
+    std::string otherHost = "other";
+    std::unordered_set<std::string> expectedHosts = { otherHost };
 
-    Scheduler s;
-    funcSet = s.getFunctionWarmSetName(call);
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
-    // Check initial set-up
-    REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
-    REQUIRE(!redis.sismember(funcSet, thisHost));
+    sch.addHostToGlobalSet(otherHost);
 
-    // Call the function and check it's added to the function's warm set
-    s.callFunction(call);
+    // Set resources
+    int nCores = 5;
+    faabric::HostResources res;
+    res.set_cores(nCores);
+    sch.setThisHostResources(res);
 
-    REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
-    REQUIRE(redis.sismember(funcSet, thisHost));
+    // Set resources for other host too
+    faabric::scheduler::queueResourceResponse(otherHost, res);
+
+    // Initial checks
+    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
+    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+
+    faabric::HostResources resCheck = sch.getThisHostResources();
+    REQUIRE(resCheck.cores() == nCores);
+    REQUIRE(resCheck.boundexecutors() == 0);
+    REQUIRE(resCheck.functionsinflight() == 0);
+
+    // Make calls
+    int nCalls = nCores + 1;
+    for (int i = 0; i < nCalls; i++) {
+        sch.callFunction(msg);
+    }
+
+    REQUIRE(sch.getFunctionFaasletCount(msg) == nCores);
+    REQUIRE(sch.getFunctionInFlightCount(msg) == nCores);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+
+    resCheck = sch.getThisHostResources();
+    REQUIRE(resCheck.cores() == nCores);
+    REQUIRE(resCheck.boundexecutors() == nCores);
+    REQUIRE(resCheck.functionsinflight() == nCores);
 
     // Run shutdown
-    s.shutdown();
+    sch.shutdown();
 
-    // After clear-up has run this host should no longer be part of either set
-    REQUIRE(!redis.sismember(AVAILABLE_HOST_SET, thisHost));
-    REQUIRE(!redis.sismember(funcSet, thisHost));
+    // Check scheduler has been cleared
+    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
+    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+
+    resCheck = sch.getThisHostResources();
+    int actualCores = faabric::util::getUsableCores();
+    REQUIRE(resCheck.cores() == actualCores);
+    REQUIRE(resCheck.boundexecutors() == 0);
+    REQUIRE(resCheck.functionsinflight() == 0);
+
+    faabric::util::setMockMode(false);
 }
 
-TEST_CASE("Test scheduler operations", "[scheduler]")
+TEST_CASE("Test scheduler available hosts", "[scheduler]")
 {
     cleanFaabric();
 
-    Scheduler& sch = scheduler::getScheduler();
-    sch.setTestMode(true);
-    Redis& redis = Redis::getQueue();
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    // Set up some available hosts
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    std::string hostA = "hostA";
+    std::string hostB = "hostB";
+    std::string hostC = "hostC";
+
+    sch.addHostToGlobalSet(hostA);
+    sch.addHostToGlobalSet(hostB);
+    sch.addHostToGlobalSet(hostC);
+
+    std::unordered_set<std::string> expectedHosts = {
+        thisHost, hostA, hostB, hostC
+    };
+    std::unordered_set<std::string> actualHosts = sch.getAvailableHosts();
+
+    REQUIRE(actualHosts == expectedHosts);
+
+    sch.removeHostFromGlobalSet(hostB);
+    sch.removeHostFromGlobalSet(hostC);
+
+    expectedHosts = { thisHost, hostA };
+    actualHosts = sch.getAvailableHosts();
+
+    REQUIRE(actualHosts == expectedHosts);
+}
+
+TEST_CASE("Test batch scheduling", "[scheduler]")
+{
+    cleanFaabric();
+
+    faabric::BatchExecuteRequest::BatchExecuteType execMode;
+    SECTION("Threads") { execMode = faabric::BatchExecuteRequest::THREADS; }
+    SECTION("Processes") { execMode = faabric::BatchExecuteRequest::PROCESSES; }
+    SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
+
+    bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
+
+    // Mock everything
+    faabric::util::setMockMode(true);
 
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    std::string otherHostA = "192.168.0.10";
 
-    faabric::Message call =
-      faabric::util::messageFactory("user a", "function a");
-    faabric::Message chainedCall =
-      faabric::util::messageFactory("user a", "function a");
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    int originalMaxInFlightRatio = conf.maxInFlightRatio;
-    conf.maxInFlightRatio = 8;
+    // Set up another host
+    std::string otherHost = "beta";
+    sch.addHostToGlobalSet(otherHost);
 
-    SECTION("Test node finishing and host removal")
-    {
-        // Sanity check to see that the host is in the global set but not the
-        // set for the function
-        std::string funcSet = sch.getFunctionWarmSetName(call);
-        REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
-        REQUIRE(!redis.sismember(funcSet, thisHost));
+    int nCallsOne = 10;
+    int nCallsTwo = 5;
+    int thisCores = 5;
+    int otherCores = 11;
+    int nCallsOffloadedOne = nCallsOne - thisCores;
 
-        // Call the function enough to get multiple nodes set up
-        int requiredCalls = (conf.maxInFlightRatio * 2) - 3;
-        for (int i = 0; i < requiredCalls; i++) {
-            sch.callFunction(call);
-        }
+    faabric::HostResources thisResources;
+    thisResources.set_cores(thisCores);
 
-        // Check host is now part of function's set
-        REQUIRE(redis.sismember(funcSet, thisHost));
-        REQUIRE(sch.getFunctionInFlightCount(call) == requiredCalls);
-        REQUIRE(sch.getBindQueue()->size() == 2);
+    faabric::HostResources otherResources;
+    otherResources.set_cores(otherCores);
 
-        // Notify that a node has finished. Check that the  count decremented by
-        // one and node is still member of function set
-        sch.notifyNodeFinished(call);
-        REQUIRE(redis.sismember(funcSet, thisHost));
-        REQUIRE(sch.getFunctionInFlightCount(call) == requiredCalls);
-        REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
+    // Prepare two resource responses for other host
+    sch.setThisHostResources(thisResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
-        // Notify that another node has finished, check count is decremented and
-        // host removed from function set (but still in global set)
-        sch.notifyNodeFinished(call);
-        REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
-        REQUIRE(!redis.sismember(funcSet, thisHost));
-        REQUIRE(sch.getFunctionInFlightCount(call) == requiredCalls);
-        REQUIRE(sch.getFunctionWarmNodeCount(call) == 0);
-    }
+    // Set up the messages
+    std::vector<faabric::Message> msgsOne;
+    std::vector<std::string> expectedHostsOne;
+    for (int i = 0; i < nCallsOne; i++) {
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
 
-    SECTION("Test calling function with no nodes sends bind message")
-    {
-        REQUIRE(sch.getFunctionInFlightCount(call) == 0);
-        REQUIRE(sch.getFunctionWarmNodeCount(call) == 0);
+        // Set important bind fields
+        msg.set_ispython(true);
+        msg.set_pythonfunction("baz");
+        msg.set_pythonuser("foobar");
+        msg.set_issgx(true);
 
-        // Call the function
-        sch.callFunction(call);
+        msgsOne.push_back(msg);
 
-        // Check function count has increased and bind message sent
-        REQUIRE(sch.getFunctionInFlightCount(call) == 1);
-        REQUIRE(sch.getBindQueue()->size() == 1);
-        faabric::Message actual = sch.getBindQueue()->dequeue();
-
-        REQUIRE(actual.user() == "user a");
-        REQUIRE(actual.function() == "function a");
-
-        redis.flushAll();
-    }
-
-    SECTION("Test sending bind messages")
-    {
-        // Set up calls with values for the important bind fields
-        faabric::Message callA;
-        callA.set_user("python");
-        callA.set_function("py_func");
-        callA.set_ispython(true);
-        callA.set_pythonfunction("baz");
-        callA.set_pythonuser("foobar");
-        callA.set_issgx(true);
-
-        faabric::Message callB;
-        callB.set_user("demo");
-        callB.set_function("x2");
-
-        // Add a node host to the global set
-        redis.sadd(AVAILABLE_HOST_SET, "192.168.3.45");
-
-        // Call each function
-        sch.callFunction(callA);
-        sch.callFunction(callB);
-
-        // Check that calls are queued
-        REQUIRE(sch.getFunctionInFlightCount(callA) == 1);
-        REQUIRE(sch.getFunctionWarmNodeCount(callA) == 1);
-        REQUIRE(sch.getFunctionInFlightCount(callB) == 1);
-        REQUIRE(sch.getFunctionWarmNodeCount(callB) == 1);
-        REQUIRE(sch.getBindQueue()->size() == 2);
-
-        // Check that bind messages have been sent
-        auto bindQueue = sch.getBindQueue();
-        faabric::Message bindA = bindQueue->dequeue();
-        faabric::Message bindB = bindQueue->dequeue();
-
-        REQUIRE(bindA.user() == callA.user());
-        REQUIRE(bindA.function() == callA.function());
-        REQUIRE(bindA.type() == faabric::Message_MessageType_BIND);
-        REQUIRE(bindA.ispython());
-        REQUIRE(bindA.pythonuser() == "foobar");
-        REQUIRE(bindA.pythonfunction() == "baz");
-        REQUIRE(bindA.issgx());
-
-        REQUIRE(bindB.user() == callB.user());
-        REQUIRE(bindB.function() == callB.function());
-        REQUIRE(bindB.type() == faabric::Message_MessageType_BIND);
-        REQUIRE(!bindB.ispython());
-        REQUIRE(bindB.pythonuser().empty());
-        REQUIRE(bindB.pythonfunction().empty());
-        REQUIRE(!bindB.issgx());
-
-        redis.flushAll();
-    }
-
-    SECTION(
-      "Test calling function with existing nodes does not send bind message")
-    {
-        // Call the function and check node count is incremented while bind
-        // message sent
-        sch.callFunction(call);
-        REQUIRE(sch.getFunctionInFlightCount(call) == 1);
-        REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
-        REQUIRE(sch.getBindQueue()->size() == 1);
-
-        // Call the function again
-        sch.callFunction(call);
-
-        // Check function call has been added, but no new bind messages
-        REQUIRE(sch.getFunctionInFlightCount(call) == 2);
-        REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
-        REQUIRE(sch.getBindQueue()->size() == 1);
-
-        redis.flushAll();
-    }
-
-    SECTION(
-      "Test calling function which breaches in-flight ratio sends bind message")
-    {
-        // Saturate up to just below the max in flight
-        auto bindQueue = sch.getBindQueue();
-        int nCalls = conf.maxInFlightRatio;
-        for (int i = 0; i < nCalls; i++) {
-            sch.callFunction(call);
-
-            // Check only one bind message has been sent
-            REQUIRE(bindQueue->size() == 1);
-
-            // Check call queued
-            REQUIRE(sch.getFunctionInFlightCount(call) == i + 1);
-        }
-
-        // Dispatch another and check that a bind message is sent
-        sch.callFunction(call);
-        REQUIRE(bindQueue->size() == 2);
-        REQUIRE(sch.getFunctionInFlightCount(call) == nCalls + 1);
-
-        redis.flushAll();
-    }
-
-    SECTION("Test counts can't go below zero")
-    {
-        faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-
-        sch.notifyNodeFinished(msg);
-        sch.notifyNodeFinished(msg);
-        sch.notifyNodeFinished(msg);
-        REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
-
-        sch.notifyCallFinished(msg);
-        sch.notifyCallFinished(msg);
-        sch.notifyCallFinished(msg);
-        sch.notifyCallFinished(msg);
-        REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
-    }
-
-    SECTION("Host choice checks")
-    {
-        redis.sadd(AVAILABLE_HOST_SET, otherHostA);
-
-        SECTION("Test function which breaches in-flight ratio but has no "
-                "capacity fails over")
-        {
-            // Make calls up to just below the limit
-            int nCalls = (conf.maxNodesPerFunction * conf.maxInFlightRatio) - 1;
-            for (int i = 0; i < nCalls; i++) {
-                sch.callFunction(call);
-            }
-
-            // Check we're still the best option
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
-
-            // Check local nodes requested
-            auto bindQueue = sch.getBindQueue();
-            REQUIRE(bindQueue->size() == conf.maxNodesPerFunction);
-            REQUIRE(sch.getFunctionWarmNodeCount(call) ==
-                    conf.maxNodesPerFunction);
-
-            // Check calls have been queued
-            REQUIRE(sch.getFunctionInFlightCount(call) == nCalls);
-
-            // Make another call and check best host is now different
-            sch.callFunction(call);
-            REQUIRE(sch.getBestHostForFunction(call) != thisHost);
-            REQUIRE(sch.getFunctionInFlightCount(call) == nCalls + 1);
-
-            // Call more and check calls are shared elsewhere
-            faabric::Message otherCallA;
-            faabric::Message otherCallB;
-            otherCallA.set_id(1234);
-            otherCallB.set_id(1235);
-            sch.callFunction(otherCallA);
-            sch.callFunction(otherCallB);
-
-            std::vector<std::pair<std::string, unsigned int>> sharedMessages =
-              sch.getRecordedMessagesShared();
-            REQUIRE(sharedMessages.size() == 2);
-
-            REQUIRE(sharedMessages[0].first == otherHostA);
-            REQUIRE(sharedMessages[0].second == otherCallA.id());
-
-            REQUIRE(sharedMessages[1].first == otherHostA);
-            REQUIRE(sharedMessages[1].second == otherCallB.id());
-
-            // Check not added to local queues
-            REQUIRE(bindQueue->size() == conf.maxNodesPerFunction);
-            REQUIRE(sch.getFunctionWarmNodeCount(call) ==
-                    conf.maxNodesPerFunction);
-            REQUIRE(sch.getFunctionInFlightCount(call) == nCalls + 1);
-
-            redis.flushAll();
-        }
-
-        SECTION("Test scheduler adds host ID to global set when starting up")
-        {
-            REQUIRE(!thisHost.empty());
-            REQUIRE(redis.sismember(AVAILABLE_HOST_SET, thisHost));
-        }
-
-        SECTION("Test current host chosen when no warm alternatives")
-        {
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
-        }
-
-        SECTION("Test other warm option chosen when available")
-        {
-            // Add another host to the warm set for the given function
-            const std::string warmSet = sch.getFunctionWarmSetName(call);
-            redis.sadd(warmSet, otherHostA);
-
-            REQUIRE(sch.getBestHostForFunction(call) == otherHostA);
-        }
-
-        SECTION("Test this host chosen when scheduler off even though warm "
-                "option available")
-        {
-            // Switch off scheduler
-            int originalNoScheduler = conf.noScheduler;
-            conf.noScheduler = 1;
-
-            // Add another host to warm
-            const std::string warmSet = sch.getFunctionWarmSetName(call);
-            redis.sadd(warmSet, otherHostA);
-
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
-
-            conf.noScheduler = originalNoScheduler;
-        }
-
-        SECTION("Test other warm option *not* chosen when in no scheduler mode")
-        {
-            conf.noScheduler = 1;
-
-            // Add another host to the warm set for the given function
-            const std::string warmSet = sch.getFunctionWarmSetName(call);
-            redis.sadd(warmSet, otherHostA);
-
-            // Check it's ignored
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
-
-            conf.noScheduler = 0;
-        }
-
-        SECTION(
-          "Test current host chosen when already warm even if alternatives")
-        {
-            // Ensure a warm node exists on this host
-            sch.callFunction(call);
-            REQUIRE(sch.getFunctionWarmNodeCount(call) == 1);
-
-            // Check this host is in the warm set
-            const std::string warmSet = sch.getFunctionWarmSetName(call);
-            REQUIRE(redis.sismember(warmSet, thisHost));
-
-            // Add another host to the warm set
-            redis.sadd(warmSet, otherHostA);
-
-            // Run a few times to make sure
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
-            REQUIRE(sch.getBestHostForFunction(call) == thisHost);
+        // Expect this host to handle up to its number of cores
+        // If in threads mode, expect it _not_ to execute
+        bool isThisHost = i < thisCores;
+        if (isThisHost && isThreads) {
+            expectedHostsOne.push_back("");
+        } else if (isThisHost) {
+            expectedHostsOne.push_back(thisHost);
+        } else {
+            expectedHostsOne.push_back(otherHost);
         }
     }
 
-    conf.maxInFlightRatio = originalMaxInFlightRatio;
+    // Create the batch request
+    faabric::BatchExecuteRequest reqOne =
+      faabric::util::batchExecFactory(msgsOne);
+    reqOne.set_type(execMode);
+
+    // Schedule the functions
+    std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne);
+
+    // Check resource requests have been made to other host
+    auto resRequestsOne = faabric::scheduler::getResourceRequests();
+    REQUIRE(resRequestsOne.size() == 1);
+    REQUIRE(resRequestsOne.at(0).first == otherHost);
+
+    // Check scheduled on expected hosts
+    REQUIRE(actualHostsOne == expectedHostsOne);
+
+    faabric::Message m = msgsOne.at(0);
+
+    // Check the bind messages on this host
+    auto bindQueue = sch.getBindQueue();
+    if (isThreads) {
+        // For threads we expect the caller to do the work
+        REQUIRE(bindQueue->size() == 0);
+        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+    } else {
+        // Check the scheduler info on this host
+        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+
+        // For non-threads we expect faaslets to be created
+        REQUIRE(bindQueue->size() == thisCores);
+        for (int i = 0; i < thisCores; i++) {
+            faabric::Message msg = bindQueue->dequeue();
+
+            REQUIRE(msg.user() == m.user());
+            REQUIRE(msg.function() == m.function());
+            REQUIRE(msg.type() == faabric::Message_MessageType_BIND);
+            REQUIRE(msg.ispython());
+            REQUIRE(msg.pythonuser() == "foobar");
+            REQUIRE(msg.pythonfunction() == "baz");
+            REQUIRE(msg.issgx());
+        }
+    }
+
+    // Check the message is dispatched to the other host
+    auto batchRequestsOne = faabric::scheduler::getBatchRequests();
+    REQUIRE(batchRequestsOne.size() == 1);
+    auto batchRequestOne = batchRequestsOne.at(0);
+    REQUIRE(batchRequestOne.first == otherHost);
+
+    // Check the request to the other host
+    REQUIRE(batchRequestOne.second.messages_size() == nCallsOffloadedOne);
+
+    // Clear mocks
+    faabric::scheduler::clearMockRequests();
+
+    // Set up resource response again
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+
+    // Now schedule a second batch and check they're also sent to the other host
+    // (which is now warm)
+    std::vector<faabric::Message> msgsTwo;
+    std::vector<std::string> expectedHostsTwo;
+
+    for (int i = 0; i < nCallsTwo; i++) {
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msgsTwo.push_back(msg);
+        expectedHostsTwo.push_back(otherHost);
+    }
+
+    // Create the batch request
+    faabric::BatchExecuteRequest reqTwo =
+      faabric::util::batchExecFactory(msgsTwo);
+    reqTwo.set_type(execMode);
+
+    // Schedule the functions
+    std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo);
+
+    // Check resource request made again
+    auto resRequestsTwo = faabric::scheduler::getResourceRequests();
+    REQUIRE(resRequestsTwo.size() == 1);
+    REQUIRE(resRequestsTwo.at(0).first == otherHost);
+
+    // Check scheduled on expected hosts
+    REQUIRE(actualHostsTwo == expectedHostsTwo);
+
+    // Check no other functions have been scheduled on this host
+    REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+
+    if (isThreads) {
+        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+    } else {
+        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+    }
+
+    // Check the second message is dispatched to the other host
+    auto batchRequestsTwo = faabric::scheduler::getBatchRequests();
+    REQUIRE(batchRequestsTwo.size() == 1);
+    auto pTwo = batchRequestsTwo.at(0);
+    REQUIRE(pTwo.first == otherHost);
+
+    // Check the request to the other host
+    REQUIRE(pTwo.second.messages_size() == nCallsTwo);
+
+    faabric::util::setMockMode(false);
 }
 
-TEST_CASE("Test message recording of scheduling decisions", "[scheduler]")
+TEST_CASE("Test overloaded scheduler", "[scheduler]")
 {
     cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    faabric::BatchExecuteRequest::BatchExecuteType execMode;
+    SECTION("Threads") { execMode = faabric::BatchExecuteRequest::THREADS; }
+    SECTION("Processes") { execMode = faabric::BatchExecuteRequest::PROCESSES; }
+    SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
+
+    // Set up this host with very low resources
     Scheduler& sch = scheduler::getScheduler();
-    sch.setTestMode(true);
-
-    std::string thisHostId = faabric::util::getSystemConfig().endpointHost;
-    std::string otherHostA = "192.168.3.3";
-
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    int maxInFlightRatio = conf.maxInFlightRatio;
-    int maxNodes = conf.maxNodesPerFunction;
-
-    // Add calls to saturate the first host
-    int requiredCalls = maxInFlightRatio * maxNodes;
-    for (int i = 0; i < requiredCalls; i++) {
-        faabric::Message msgA =
-          faabric::util::messageFactory("demo", "chain_simple");
-        sch.callFunction(msgA);
-
-        // Check scheduling info
-        REQUIRE(msgA.scheduledhost() == thisHostId);
-        REQUIRE(msgA.hops() == 0);
-        REQUIRE(msgA.executedhost().empty());
-    }
-
-    // Now add the other host to the warm set and make
-    // sure calls are sent there
-    faabric::Message msgB =
-      faabric::util::messageFactory("demo", "chain_simple");
-    const std::string warmSet = sch.getFunctionWarmSetName(msgB);
-    Redis& redis = redis::Redis::getQueue();
-    redis.sadd(warmSet, otherHostA);
-
-    for (int i = 0; i < 3; i++) {
-        faabric::Message msgC =
-          faabric::util::messageFactory("demo", "chain_simple");
-        unsigned int msgId = 111 + i;
-        msgC.set_id(msgId);
-
-        sch.callFunction(msgC);
-
-        // Check scheduling info
-        REQUIRE(msgC.scheduledhost() == otherHostA);
-        REQUIRE(msgC.hops() == 1);
-        REQUIRE(msgC.executedhost().empty());
-
-        // Check actual message bus
-        std::vector<std::pair<std::string, unsigned int>> actualShared =
-          sch.getRecordedMessagesShared();
-        REQUIRE(actualShared[i].first == otherHostA);
-        REQUIRE(actualShared[i].second == msgId);
-    }
-}
-
-TEST_CASE("Test multiple hops", "[scheduler]")
-{
-    cleanFaabric();
-    Scheduler& sch = scheduler::getScheduler();
-    sch.setTestMode(true);
-
-    std::string thisHostId = faabric::util::getSystemConfig().endpointHost;
-    std::string otherHostA = "192.168.4.5";
-
-    faabric::Message msg =
-      faabric::util::messageFactory("demo", "chain_simple");
-
-    // Add calls to saturate the first host
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    int requiredCalls = conf.maxInFlightRatio * conf.maxNodesPerFunction;
-    for (int i = 0; i < requiredCalls; i++) {
-        sch.callFunction(msg);
-    }
-
-    // Add other host to warm set
-    const std::string warmSet = sch.getFunctionWarmSetName(msg);
-    Redis& redis = redis::Redis::getQueue();
-    redis.sadd(warmSet, otherHostA);
-
-    // Now create a message that's already got a scheduled host and hops
-    faabric::Message msgWithHops =
-      faabric::util::messageFactory("demo", "chain_simple");
-    msgWithHops.set_scheduledhost("Some other host");
-    msgWithHops.set_hops(5);
-
-    // Schedule the call
-    sch.callFunction(msgWithHops);
-
-    // Check host not changes and hops increased
-    REQUIRE(msgWithHops.scheduledhost() == "Some other host");
-    REQUIRE(msgWithHops.hops() == 6);
-}
-
-TEST_CASE("Test removed from warm set when sharing")
-{
-    cleanFaabric();
-    Scheduler& sch = scheduler::getScheduler();
-    sch.setTestMode(true);
-
     std::string thisHost = sch.getThisHost();
-    std::string otherHost = "192.168.111.23";
-    faabric::Message msg =
-      faabric::util::messageFactory("demo", "chain_simple");
-    const std::string warmSetName = sch.getFunctionWarmSetName(msg);
+    int nCores = 1;
+    faabric::HostResources res;
+    res.set_cores(nCores);
+    sch.setThisHostResources(res);
 
-    // Sanity check
-    Redis& redis = redis::Redis::getQueue();
-    REQUIRE(!redis.sismember(warmSetName, thisHost));
+    // Set up another host with no resources
+    std::string otherHost = "other";
+    faabric::HostResources resOther;
+    resOther.set_cores(0);
+    faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
-    // Add both to the global set
-    redis.sadd(AVAILABLE_HOST_SET, thisHost);
-    redis.sadd(AVAILABLE_HOST_SET, otherHost);
+    // Submit more calls than we have capacity for
+    int nCalls = 10;
+    std::vector<faabric::Message> msgs;
+    for (int i = 0; i < nCalls; i++) {
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msgs.push_back(msg);
+    }
 
-    // Add a call and make sure we're in the warm set
-    sch.callFunction(msg);
-    REQUIRE(redis.sismember(warmSetName, thisHost));
+    // Submit the request
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    req.set_type(execMode);
+    std::vector<std::string> executedHosts = sch.callFunctions(req);
 
-    // Now saturate up to the point we're about to fail over
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    int requiredCalls = conf.maxInFlightRatio * conf.maxNodesPerFunction - 2;
-    for (int i = 0; i < requiredCalls; i++) {
+    // Set up expectations
+    std::vector<std::string> expectedHosts;
+    int expectedBindQueueSize;
+    if (execMode == faabric::BatchExecuteRequest::THREADS) {
+        expectedHosts = std::vector<std::string>(nCalls, "");
+        expectedBindQueueSize = 0;
+    } else {
+        expectedHosts = std::vector<std::string>(nCalls, thisHost);
+        expectedBindQueueSize = nCalls;
+    }
+
+    // Check they're scheduled locally
+    faabric::Message firstMsg = req.messages().at(0);
+    REQUIRE(sch.getBindQueue()->size() == expectedBindQueueSize);
+    REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedBindQueueSize);
+
+    // We expect the in flight count to be incremented regardless
+    REQUIRE(sch.getFunctionInFlightCount(firstMsg) == nCalls);
+
+    faabric::util::setMockMode(false);
+}
+
+TEST_CASE("Test unregistering host", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    Scheduler& sch = scheduler::getScheduler();
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    std::string otherHost = "foobar";
+    sch.addHostToGlobalSet(otherHost);
+
+    int nCores = 5;
+    faabric::HostResources res;
+    res.set_cores(nCores);
+    sch.setThisHostResources(res);
+
+    // Set up capacity for other host
+    faabric::scheduler::queueResourceResponse(otherHost, res);
+
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    for (int i = 0; i < nCores + 1; i++) {
         sch.callFunction(msg);
     }
 
-    // Check we're still the best host
-    REQUIRE(sch.getBestHostForFunction(msg) == thisHost);
+    // Check other host is added
+    std::unordered_set<std::string> expectedHosts = { otherHost };
+    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
-    // Add another call, check we're no longer the best
-    sch.callFunction(msg);
-    REQUIRE(sch.getBestHostForFunction(msg) == otherHost);
+    // Remove host for another function and check host isn't removed
+    faabric::Message otherMsg = faabric::util::messageFactory("foo", "qux");
+    sch.removeRegisteredHost(otherHost, otherMsg);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
-    // Make another call and check we're no longer in the warm set
-    sch.callFunction(msg);
-    REQUIRE(!redis.sismember(warmSetName, thisHost));
+    // Remove host
+    sch.removeRegisteredHost(otherHost, msg);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+
+    faabric::util::setMockMode(false);
 }
 
-TEST_CASE("Test awaiting/ finished awaiting", "[scheduler]")
+TEST_CASE("Test host unregisters", "[scheduler]") {}
+
+TEST_CASE("Test counts can't go below zero", "[scheduler]")
 {
     cleanFaabric();
+
     Scheduler& sch = scheduler::getScheduler();
-    faabric::Message msg =
-      faabric::util::messageFactory("demo", "chain_simple");
+    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
-    // Initial conditions
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    sch.notifyFaasletFinished(msg);
+    sch.notifyFaasletFinished(msg);
+    sch.notifyFaasletFinished(msg);
+    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
 
-    // Check calling function first adds another node
-    sch.callFunction(msg);
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == 1);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 1);
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
-}
-
-TEST_CASE("Test opinion still YES when nothing in flight", "[scheduler]")
-{
-    cleanFaabric();
-    Scheduler& sch = scheduler::getScheduler();
-    faabric::Message msg =
-      faabric::util::messageFactory("demo", "chain_simple");
-
-    // Check opinion is maybe initially
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::MAYBE);
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
-
-    // Call one function and make sure opinion is YES
-    sch.callFunction(msg);
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == 1);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 1);
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
-
-    // Notify finished with call
     sch.notifyCallFinished(msg);
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == 1);
+    sch.notifyCallFinished(msg);
+    sch.notifyCallFinished(msg);
+    sch.notifyCallFinished(msg);
     REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
-}
-
-TEST_CASE("Test opinion still YES when nothing in flight and at max nodes",
-          "[scheduler]")
-{
-    cleanFaabric();
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    Scheduler& sch = scheduler::getScheduler();
-    faabric::Message msg =
-      faabric::util::messageFactory("demo", "chain_simple");
-
-    // Check opinion is maybe initially
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::MAYBE);
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == 0);
-
-    // Saturate and make sure opinion is NO
-    int nCalls = conf.maxNodesPerFunction * conf.maxInFlightRatio;
-    for (int i = 0; i < nCalls; i++) {
-        sch.callFunction(msg);
-    }
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == conf.maxNodesPerFunction);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == nCalls);
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::NO);
-
-    // Notify all calls finished
-    for (int i = 0; i < nCalls; i++) {
-        sch.notifyCallFinished(msg);
-    }
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == conf.maxNodesPerFunction);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
-}
-
-TEST_CASE("Test special case scheduling of MPI functions", "[mpi]")
-{
-    cleanFaabric();
-
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    int originalInFlight = conf.maxInFlightRatio;
-    int originalNodesPerFunc = conf.maxNodesPerFunction;
-
-    // Set up known params
-    int inFlightRatio = 2;
-    int nodesPerFunc = 4;
-    conf.maxInFlightRatio = inFlightRatio;
-    conf.maxNodesPerFunction = nodesPerFunc;
-
-    faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
-    msg.set_ismpi(true);
-
-    Scheduler& sch = getScheduler();
-
-    // Max in-flight ratio should be 1, hence one node created per call
-    for (int i = 0; i < inFlightRatio; i++) {
-        sch.callFunction(msg);
-    }
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == inFlightRatio);
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::YES);
-
-    // Saturate up to max nodes
-    int remainingCalls = nodesPerFunc - inFlightRatio;
-    for (int i = 0; i < remainingCalls; i++) {
-        sch.callFunction(msg);
-    }
-
-    // Check scheduler no longer accepting calls
-    REQUIRE(sch.getFunctionWarmNodeCount(msg) == nodesPerFunc);
-    REQUIRE(sch.getLatestOpinion(msg) == SchedulerOpinion::NO);
-
-    // Reset conf
-    conf.maxInFlightRatio = originalInFlight;
-    conf.maxNodesPerFunction = originalNodesPerFunc;
 }
 
 TEST_CASE("Check test mode", "[scheduler]")
@@ -623,19 +420,18 @@ TEST_CASE("Check test mode", "[scheduler]")
     faabric::Message msgB = faabric::util::messageFactory("demo", "echo");
     faabric::Message msgC = faabric::util::messageFactory("demo", "echo");
 
+    bool origTestMode = faabric::util::isTestMode();
     SECTION("No test mode")
     {
-        sch.setTestMode(false);
+        faabric::util::setTestMode(false);
 
         sch.callFunction(msgA);
-        sch.callFunction(msgB);
-        sch.callFunction(msgC);
         REQUIRE(sch.getRecordedMessagesAll().empty());
     }
 
     SECTION("Test mode")
     {
-        sch.setTestMode(true);
+        faabric::util::setTestMode(true);
 
         sch.callFunction(msgA);
         sch.callFunction(msgB);
@@ -647,131 +443,8 @@ TEST_CASE("Check test mode", "[scheduler]")
         std::vector<unsigned int> actual = sch.getRecordedMessagesAll();
         REQUIRE(actual == expected);
     }
-}
 
-TEST_CASE("Test max Node limit with multiple functions", "[scheduler]")
-{
-    cleanFaabric();
-
-    Scheduler& sch = scheduler::getScheduler();
-    sch.setTestMode(true);
-
-    Redis& redis = Redis::getQueue();
-
-    std::string thisHost = sch.getThisHost();
-    std::string otherHost = "192.168.0.10";
-
-    faabric::Message callA =
-      faabric::util::messageFactory("user a", "function a1");
-    faabric::Message callB =
-      faabric::util::messageFactory("user a", "function a2");
-    faabric::Message callC =
-      faabric::util::messageFactory("user b", "function b1");
-
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    int originalMaxInFlightRatio = conf.maxInFlightRatio;
-    int originalMaxNode = conf.maxNodes;
-    int originalMaxNodesPerFunction = conf.maxNodesPerFunction;
-
-    conf.maxNodes = 10;
-    conf.maxNodesPerFunction = 6;
-    conf.maxInFlightRatio = 1;
-
-    // Make other host available
-    redis.sadd(AVAILABLE_HOST_SET, otherHost);
-
-    // Check we're a MAYBE for all functions initially
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::MAYBE);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::MAYBE);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::MAYBE);
-    REQUIRE(sch.hasHostCapacity());
-
-    // Make calls to functions that don't breach per function limits OR host
-    // limits
-    for (int i = 0; i < 3; i++) {
-        sch.callFunction(callA);
-        sch.callFunction(callB);
-        sch.callFunction(callC);
-    }
-
-    // Check that all functions are now YES
-    REQUIRE(sch.getTotalWarmNodeCount() == 9);
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::YES);
-    REQUIRE(sch.hasHostCapacity());
-
-    // Now make a call that will breach the host limit but NOT per function
-    // limit
-    sch.callFunction(callB);
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::NO);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::YES);
-    REQUIRE(sch.getTotalWarmNodeCount() == 10);
-    REQUIRE(!sch.hasHostCapacity());
-
-    // Check that no sharing has been done yet
-    REQUIRE(sch.getRecordedMessagesShared().size() == 0);
-
-    // Now check that subsequent calls are shared even though they still don't
-    // breach per function limits
-    sch.callFunction(callA);
-    sch.callFunction(callB);
-    sch.callFunction(callC);
-
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::NO);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::NO);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-    REQUIRE(sch.getTotalWarmNodeCount() == 10);
-    REQUIRE(sch.getRecordedMessagesShared().size() == 3);
-    REQUIRE(!sch.hasHostCapacity());
-
-    // Notify that a call has finished
-    sch.notifyCallFinished(callA);
-
-    // Check that, while the host still has no extra node capacity
-    // this function can still be executed
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::NO);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-    REQUIRE(sch.getTotalWarmNodeCount() == 10);
-    REQUIRE(!sch.hasHostCapacity());
-
-    REQUIRE(sch.getBestHostForFunction(callA) == thisHost);
-    REQUIRE(sch.getBestHostForFunction(callB) == otherHost);
-    REQUIRE(sch.getBestHostForFunction(callC) == otherHost);
-
-    // Notify that a couple of nodes have finished
-    sch.notifyNodeFinished(callA);
-    sch.notifyNodeFinished(callB);
-    REQUIRE(sch.hasHostCapacity());
-
-    // Check that now the host has capacity and we can execute another function
-    // (other opinions won't have been updated yet)
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-    REQUIRE(sch.getTotalWarmNodeCount() == 8);
-
-    sch.callFunction(callB);
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-    REQUIRE(sch.getTotalWarmNodeCount() == 9);
-    REQUIRE(sch.hasHostCapacity());
-
-    // Another call will breach the host limit again
-    sch.callFunction(callA);
-    REQUIRE(sch.getLatestOpinion(callA) == SchedulerOpinion::NO);
-    REQUIRE(sch.getLatestOpinion(callB) == SchedulerOpinion::YES);
-    REQUIRE(sch.getLatestOpinion(callC) == SchedulerOpinion::NO);
-    REQUIRE(sch.getTotalWarmNodeCount() == 10);
-    REQUIRE(!sch.hasHostCapacity());
-
-    // Tidy up
-    conf.maxNodes = originalMaxNode;
-    conf.maxNodesPerFunction = originalMaxNodesPerFunction;
-    conf.maxInFlightRatio = originalMaxInFlightRatio;
+    faabric::util::setTestMode(origTestMode);
 }
 
 TEST_CASE("Global message queue tests", "[scheduler]")
@@ -829,7 +502,9 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
 
             // Put invocation on local queue and await global result
             for (int m = 0; m < nWaiterMessages; m++) {
-                sch.enqueueMessage(msg);
+                const std::shared_ptr<InMemoryMessageQueue>& queue =
+                  sch.getFunctionQueue(msg);
+                queue->enqueue(msg);
                 sch.getFunctionResult(msg.id(), 5000);
             }
         });
@@ -975,5 +650,33 @@ TEST_CASE("Check logging chained functions", "[scheduler]")
     sch.logChainedFunction(msg.id(), chainedMsgIdC);
     expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+}
+
+TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+
+    std::string otherHost = "other";
+
+    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
+    msg.set_masterhost(otherHost);
+
+    std::vector<faabric::Message> msgs = { msg };
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+
+    std::vector<std::string> expectedHosts = { "" };
+    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    REQUIRE(executedHosts == expectedHosts);
+
+    // Check forwarded to master
+    auto actualReqs = faabric::scheduler::getBatchRequests();
+    REQUIRE(actualReqs.size() == 1);
+    REQUIRE(actualReqs.at(0).first == otherHost);
+    REQUIRE(actualReqs.at(0).second.id() == req.id());
+
+    faabric::util::setMockMode(false);
 }
 }

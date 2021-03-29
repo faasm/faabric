@@ -26,13 +26,19 @@ std::string messageToJson(const faabric::Message& msg)
     d.AddMember("function",
                 Value(msg.function().c_str(), msg.function().size(), a).Move(),
                 a);
-    d.AddMember("hops", msg.hops(), a);
 
     if (!msg.executedhost().empty()) {
         d.AddMember(
           "exec_host",
           Value(msg.executedhost().c_str(), msg.executedhost().size(), a)
             .Move(),
+          a);
+    }
+
+    if (!msg.masterhost().empty()) {
+        d.AddMember(
+          "master_host",
+          Value(msg.masterhost().c_str(), msg.masterhost().size(), a).Move(),
           a);
     }
 
@@ -291,8 +297,8 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_id(getIntFromJson(d, "id", 0));
     msg.set_user(getStringFromJson(d, "user", ""));
     msg.set_function(getStringFromJson(d, "function", ""));
-    msg.set_hops(getIntFromJson(d, "hops", 0));
     msg.set_executedhost(getStringFromJson(d, "exec_host", ""));
+    msg.set_masterhost(getStringFromJson(d, "master_host", ""));
     msg.set_finishtimestamp(getInt64FromJson(d, "finished", 0));
 
     msg.set_snapshotkey(getStringFromJson(d, "snapshot_key", ""));

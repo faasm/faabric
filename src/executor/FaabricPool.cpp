@@ -42,7 +42,7 @@ void FaabricPool::startStateServer()
 void FaabricPool::startThreadPool(bool background)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-    logger->info("Starting worker thread pool");
+    logger->info("Starting executor thread pool");
 
     // Spawn worker threads until we've hit the worker limit, thus creating a
     // pool that will replenish when one releases its token

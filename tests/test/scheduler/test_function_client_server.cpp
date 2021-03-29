@@ -1,7 +1,6 @@
 #include <catch.hpp>
 
-#include "faabric_utils.h"
-
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
@@ -9,49 +8,15 @@
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/network.h>
+#include <faabric/util/testing.h>
+#include <faabric_utils.h>
 
 using namespace scheduler;
 
 namespace tests {
-TEST_CASE("Test sending function call", "[scheduler]")
-{
-    cleanFaabric();
-
-    // Start the server
-    ServerContext serverContext;
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
-
-    // Create a message
-    faabric::Message msg;
-    msg.set_user("demo");
-    msg.set_function("echo");
-    msg.set_inputdata("foobarbaz");
-
-    // Get the queue for the function
-    Scheduler& sch = scheduler::getScheduler();
-    std::shared_ptr<InMemoryMessageQueue> funcQueue = sch.getFunctionQueue(msg);
-
-    // Check queue is empty
-    REQUIRE(funcQueue->size() == 0);
-
-    // Send the message to the server
-    FunctionCallClient client(LOCALHOST);
-    client.shareFunctionCall(msg);
-
-    // Check the message is on the queue
-    REQUIRE(funcQueue->size() == 1);
-    faabric::Message actual = funcQueue->dequeue();
-    REQUIRE(actual.user() == msg.user());
-    REQUIRE(actual.function() == msg.function());
-    REQUIRE(actual.inputdata() == msg.inputdata());
-
-    // Stop the server
-    server.stop();
-}
 
 TEST_CASE("Test sending MPI message", "[scheduler]")
 {
@@ -128,8 +93,8 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     REQUIRE(state.getKVCount() == 2);
 
     // Execute a couple of functions
-    faabric::Message msgA = faabric::util::messageFactory("demo", "foo");
-    faabric::Message msgB = faabric::util::messageFactory("demo", "bar");
+    faabric::Message msgA = faabric::util::messageFactory("dummy", "foo");
+    faabric::Message msgB = faabric::util::messageFactory("dummy", "bar");
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.callFunction(msgA);
     sch.callFunction(msgB);
@@ -138,22 +103,15 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     auto bindQueue = sch.getBindQueue();
     auto functionQueueA = sch.getFunctionQueue(msgA);
     auto functionQueueB = sch.getFunctionQueue(msgB);
+
+    REQUIRE(bindQueue->size() == 2);
+    REQUIRE(functionQueueA->size() == 1);
+    REQUIRE(functionQueueB->size() == 1);
+
     bindQueue->dequeue();
     bindQueue->dequeue();
     functionQueueA->dequeue();
     functionQueueB->dequeue();
-
-    // Check the scheduler is set up
-    REQUIRE(sch.getFunctionWarmNodeCount(msgA) == 1);
-    REQUIRE(sch.getFunctionWarmNodeCount(msgB) == 1);
-
-    std::string thisHost = sch.getThisHost();
-    std::string warmSetNameA = sch.getFunctionWarmSetName(msgA);
-    std::string warmSetNameB = sch.getFunctionWarmSetName(msgB);
-    faabric::redis::Redis& redis = faabric::redis::Redis::getQueue();
-
-    REQUIRE(redis.sismember(warmSetNameA, thisHost));
-    REQUIRE(redis.sismember(warmSetNameB, thisHost));
 
     // Background threads to get flush messages
     std::thread tA([&functionQueueA] {
@@ -182,13 +140,185 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     server.stop();
 
     // Check the scheduler has been flushed
-    REQUIRE(sch.getFunctionWarmNodeCount(msgA) == 0);
-    REQUIRE(sch.getFunctionWarmNodeCount(msgB) == 0);
-
-    REQUIRE(!redis.sismember(warmSetNameA, thisHost));
-    REQUIRE(!redis.sismember(warmSetNameB, thisHost));
+    REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msgB) == 0);
 
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);
+}
+
+TEST_CASE("Test broadcasting flush message", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+
+    // Add hosts to global set
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    std::string hostA = "alpha";
+    std::string hostB = "beta";
+    std::string hostC = "gamma";
+
+    std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
+
+    sch.addHostToGlobalSet(hostA);
+    sch.addHostToGlobalSet(hostB);
+    sch.addHostToGlobalSet(hostC);
+
+    // Broadcast the flush
+    sch.broadcastFlush();
+
+    // Make sure messages have been sent
+    auto calls = faabric::scheduler::getFlushCalls();
+    REQUIRE(calls.size() == 3);
+
+    std::vector<std::string> actualHosts;
+    for (auto c : calls) {
+        actualHosts.emplace_back(c.first);
+    }
+
+    faabric::util::setMockMode(false);
+}
+
+TEST_CASE("Test client batch execution request", "[scheduler]")
+{
+    cleanFaabric();
+
+    // Start the server
+    ServerContext serverContext;
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Set up a load of calls
+    int nCalls = 30;
+    std::vector<faabric::Message> msgs;
+    for (int i = 0; i < nCalls; i++) {
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msgs.emplace_back(msg);
+    }
+
+    // Make the request
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    FunctionCallClient cli(LOCALHOST);
+    cli.executeFunctions(req);
+
+    // Stop the server
+    server.stop();
+
+    faabric::Message m = msgs.at(0);
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    // Check no other hosts have been registered
+    REQUIRE(sch.getFunctionRegisteredHostCount(m) == 0);
+
+    // Check we've got faaslets and in-flight messages
+    REQUIRE(sch.getFunctionInFlightCount(m) == nCalls);
+    REQUIRE(sch.getFunctionFaasletCount(m) == nCalls);
+
+    REQUIRE(sch.getBindQueue()->size() == nCalls);
+}
+
+TEST_CASE("Test get resources request", "[scheduler]")
+{
+    cleanFaabric();
+
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+
+    int expectedCores;
+    int expectedExecutors;
+    int expectedInFlight;
+
+    SECTION("Override resources")
+    {
+        faabric::HostResources res;
+
+        expectedCores = 10;
+        expectedExecutors = 15;
+        expectedInFlight = 20;
+
+        res.set_boundexecutors(expectedExecutors);
+        res.set_cores(expectedCores);
+        res.set_functionsinflight(expectedInFlight);
+
+        sch.setThisHostResources(res);
+    }
+    SECTION("Default resources")
+    {
+        expectedCores = sch.getThisHostResources().cores();
+        expectedExecutors = 0;
+        expectedInFlight = 0;
+    }
+
+    // Start the server
+    ServerContext serverContext;
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Make the request
+    faabric::ResourceRequest req;
+    FunctionCallClient cli(LOCALHOST);
+    faabric::HostResources resResponse = cli.getResources(req);
+
+    REQUIRE(resResponse.boundexecutors() == expectedExecutors);
+    REQUIRE(resResponse.cores() == expectedCores);
+    REQUIRE(resResponse.functionsinflight() == expectedInFlight);
+
+    // Stop the server
+    server.stop();
+}
+
+TEST_CASE("Test unregister request", "[scheduler]")
+{
+    cleanFaabric();
+
+    faabric::util::setMockMode(true);
+    std::string otherHost = "other";
+
+    // Remove capacity from this host and add on other
+    faabric::HostResources thisResources;
+    faabric::HostResources otherResources;
+    thisResources.set_cores(0);
+    otherResources.set_cores(5);
+
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.setThisHostResources(thisResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+
+    // Request a function and check the other host is registered
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    sch.addHostToGlobalSet(otherHost);
+    sch.callFunction(msg);
+
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+
+    faabric::util::setMockMode(false);
+    faabric::scheduler::clearMockRequests();
+
+    // Start the server
+    ServerContext serverContext;
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Make the request with a host that's not registered
+    faabric::UnregisterRequest reqA;
+    reqA.set_host("foobar");
+    *reqA.mutable_function() = msg;
+
+    FunctionCallClient cli(LOCALHOST);
+    cli.unregister(reqA);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
+
+    // Make the request to unregister the actual host
+    faabric::UnregisterRequest reqB;
+    reqB.set_host(otherHost);
+    *reqB.mutable_function() = msg;
+    cli.unregister(reqB);
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+
+    // Stop the server
+    server.stop();
 }
 }

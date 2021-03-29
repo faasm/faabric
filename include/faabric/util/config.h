@@ -33,14 +33,7 @@ class SystemConfig
     std::string redisPort;
 
     // Scheduling
-    int maxNodes;
     int noScheduler;
-    int maxInFlightRatio;
-    int maxNodesPerFunction;
-
-    // Threading
-    std::string threadMode;
-    int ompThreadPoolSize;
 
     // Worker-related timeouts
     int globalMessageTimeout;

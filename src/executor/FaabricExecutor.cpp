@@ -15,7 +15,7 @@ FaabricExecutor::FaabricExecutor(int threadIdxIn)
     id = faabric::util::getSystemConfig().endpointHost + "_" +
          std::to_string(threadIdx);
 
-    logger->debug("Starting worker thread {}", id);
+    logger->debug("Starting executor thread {}", id);
 
     // Listen to bind queue by default
     currentQueue = scheduler.getBindQueue();
@@ -57,7 +57,7 @@ void FaabricExecutor::finish()
 {
     if (_isBound) {
         // Notify scheduler if this thread was bound to a function
-        scheduler.notifyNodeFinished(boundMessage);
+        scheduler.notifyFaasletFinished(boundMessage);
     }
 
     // Hook

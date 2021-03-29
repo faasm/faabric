@@ -13,7 +13,6 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     msg.set_type(faabric::Message_MessageType_FLUSH);
     msg.set_user("user 1");
     msg.set_function("great function");
-    msg.set_hops(34);
     msg.set_executedhost("blah.host.blah");
     msg.set_finishtimestamp(123456543);
 

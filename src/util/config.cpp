@@ -40,15 +40,6 @@ void SystemConfig::initialise()
 
     // Scheduling
     noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
-    maxNodes = this->getSystemConfIntParam("MAX_NODES", "5");
-    maxInFlightRatio = this->getSystemConfIntParam("MAX_IN_FLIGHT_RATIO", "1");
-    maxNodesPerFunction =
-      this->getSystemConfIntParam("MAX_NODES_PER_FUNCTION", "5");
-
-    // Threading
-    threadMode = getEnvVar("THREAD_MODE", "local");
-    ompThreadPoolSize =
-      this->getSystemConfIntParam("OMP_THREAD_POOL_SIZE", "0");
 
     // Worker-related timeouts (all in seconds)
     globalMessageTimeout =
@@ -123,13 +114,6 @@ void SystemConfig::print()
 
     logger->info("--- Scheduling ---");
     logger->info("NO_SCHEDULER               {}", noScheduler);
-    logger->info("MAX_NODES               {}", maxNodes);
-    logger->info("MAX_IN_FLIGHT_RATIO        {}", maxInFlightRatio);
-    logger->info("MAX_NODES_PER_FUNCTION  {}", maxNodesPerFunction);
-
-    logger->info("--- Threading ---");
-    logger->info("THREAD_MODE                {}", threadMode);
-    logger->info("OMP_THREAD_POOL_SIZE       {}", ompThreadPoolSize);
 
     logger->info("--- Timeouts ---");
     logger->info("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);

@@ -16,10 +16,6 @@ class FunctionCallServer final
   public:
     FunctionCallServer();
 
-    Status ShareFunction(ServerContext* context,
-                         const faabric::Message* request,
-                         faabric::FunctionStatusResponse* response) override;
-
     Status Flush(ServerContext* context,
                  const faabric::Message* request,
                  faabric::FunctionStatusResponse* response) override;
@@ -27,6 +23,18 @@ class FunctionCallServer final
     Status MPICall(ServerContext* context,
                    const faabric::MPIMessage* request,
                    faabric::FunctionStatusResponse* response) override;
+
+    Status GetResources(ServerContext* context,
+                        const faabric::ResourceRequest* request,
+                        faabric::HostResources* response) override;
+
+    Status ExecuteFunctions(ServerContext* context,
+                            const faabric::BatchExecuteRequest* request,
+                            faabric::FunctionStatusResponse* response) override;
+
+    Status Unregister(ServerContext* context,
+                      const faabric::UnregisterRequest* request,
+                      faabric::FunctionStatusResponse* response) override;
 
   protected:
     void doStart(const std::string& serverAddr) override;
