@@ -666,7 +666,6 @@ void MpiWorld::reduce(int sendRank,
 
         size_t bufferSize = datatype->size * count;
 
-        // Zero the receive buffer if we're not operating in-place
         bool isInPlace = sendBuffer == recvBuffer;
 
         // If not receiving in-place, initialize the receive buffer to the send
