@@ -1,10 +1,6 @@
 #include <catch.hpp>
 
-#include "faabric/proto/faabric.pb.h"
-#include "faabric/util/environment.h"
-#include "faabric/util/testing.h"
-#include "faabric_utils.h"
-
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
@@ -12,8 +8,11 @@
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/network.h>
+#include <faabric/util/testing.h>
+#include <faabric_utils.h>
 
 using namespace scheduler;
 
@@ -246,8 +245,7 @@ TEST_CASE("Test get resources request", "[scheduler]")
     }
     SECTION("Default resources")
     {
-
-        expectedCores = faabric::util::getUsableCores();
+        expectedCores = sch.getThisHostResources().cores();
         expectedExecutors = 0;
         expectedInFlight = 0;
     }
