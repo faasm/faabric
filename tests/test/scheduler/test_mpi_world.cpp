@@ -1087,6 +1087,24 @@ TEST_CASE("Test reduce", "[mpi]")
             doReduceTest<int>(
               world, root, MPI_MAX, MPI_INT, rankData, expected);
         }
+
+        SECTION("Min operator")
+        {
+            // Initialize rankData to non-zero values. This catches faulty
+            // reduce implementations that always return zero
+            for (int r = 0; r < thisWorldSize; r++) {
+                rankData[r][0] = (r + 1);
+                rankData[r][1] = (r + 1) * 10;
+                rankData[r][2] = (r + 1) * 100;
+            }
+
+            expected[0] = 1;
+            expected[1] = 10;
+            expected[2] = 100;
+
+            doReduceTest<int>(
+              world, root, MPI_MIN, MPI_INT, rankData, expected);
+        }
     }
 
     SECTION("Doubles")
@@ -1122,6 +1140,62 @@ TEST_CASE("Test reduce", "[mpi]")
 
             doReduceTest<double>(
               world, root, MPI_MAX, MPI_DOUBLE, rankData, expected);
+        }
+
+        SECTION("Min operator")
+        {
+            expected[0] = 2.5;
+            expected[1] = 25.0;
+            expected[2] = 250.0;
+
+            doReduceTest<double>(
+              world, root, MPI_MIN, MPI_DOUBLE, rankData, expected);
+        }
+    }
+
+    SECTION("Long long")
+    {
+        std::vector<std::vector<long long>> rankData(thisWorldSize,
+                                                     std::vector<long long>(3));
+        std::vector<long long> expected(3, 0);
+
+        // Prepare rank data
+        for (int r = 0; r < thisWorldSize; r++) {
+            rankData[r][0] = (r + 1);
+            rankData[r][1] = (r + 1) * 10;
+            rankData[r][2] = (r + 1) * 100;
+        }
+
+        SECTION("Sum operator")
+        {
+            for (int r = 0; r < thisWorldSize; r++) {
+                expected[0] += rankData[r][0];
+                expected[1] += rankData[r][1];
+                expected[2] += rankData[r][2];
+            }
+
+            doReduceTest<long long>(
+              world, root, MPI_SUM, MPI_DOUBLE, rankData, expected);
+        }
+
+        SECTION("Max operator")
+        {
+            expected[0] = thisWorldSize;
+            expected[1] = thisWorldSize * 10;
+            expected[2] = thisWorldSize * 100;
+
+            doReduceTest<long long>(
+              world, root, MPI_MAX, MPI_DOUBLE, rankData, expected);
+        }
+
+        SECTION("Min operator")
+        {
+            expected[0] = 1;
+            expected[1] = 10;
+            expected[2] = 100;
+
+            doReduceTest<long long>(
+              world, root, MPI_MIN, MPI_DOUBLE, rankData, expected);
         }
     }
 }
