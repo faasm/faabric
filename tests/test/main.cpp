@@ -8,9 +8,9 @@
 
 int main(int argc, char* argv[])
 {
-    int result = Catch::Session().run(argc, argv);
-
     faabric::util::setTestMode(true);
+
+    int result = Catch::Session().run(argc, argv);
 
     fflush(stdout);
 

@@ -1,13 +1,13 @@
 #include <catch.hpp>
 
-#include "faabric/util/testing.h"
-#include "faabric_utils.h"
-
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
+#include <faabric/util/testing.h>
+#include <faabric_utils.h>
 
 namespace tests {
 void cleanFaabric()
@@ -30,6 +30,11 @@ void cleanFaabric()
     scheduler::Scheduler& sch = scheduler::getScheduler();
     sch.shutdown();
     sch.addHostToGlobalSet();
+
+    // Give scheduler enough resources
+    faabric::HostResources res;
+    res.set_cores(10);
+    sch.setThisHostResources(res);
 
     // Reset system config
     conf.reset();

@@ -9,7 +9,7 @@
 
 #include <shared_mutex>
 
-#define AVAILABLE_HOST_SET "available_nodes"
+#define AVAILABLE_HOST_SET "available_hosts"
 
 namespace faabric::scheduler {
 
