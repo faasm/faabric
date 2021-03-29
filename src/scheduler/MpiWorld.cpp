@@ -674,7 +674,9 @@ void MpiWorld::reduce(int sendRank,
         // like the minimum, or product.
         // If we're receiving from ourselves and in-place, our work is
         // already done and the results are written in the recv buffer
-        memcpy(recvBuffer, sendBuffer, bufferSize);
+        if (!isInPlace) {
+            memcpy(recvBuffer, sendBuffer, bufferSize);
+        }
 
         uint8_t* rankData = new uint8_t[bufferSize];
         for (int r = 0; r < size; r++) {
