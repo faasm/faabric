@@ -9,8 +9,6 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/timing.h>
 
-#include <limits>
-
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
   : id(-1)
