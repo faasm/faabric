@@ -15,6 +15,7 @@ MpiWorld::MpiWorld()
   , size(-1)
   , thisHost(faabric::util::getSystemConfig().endpointHost)
   , creationTime(faabric::util::startTimer())
+  , cartProcsPerDim(2)
 {}
 
 std::string getWorldStateKey(int worldId)
@@ -176,17 +177,60 @@ std::string MpiWorld::getHostForRank(int rank)
     return rankHostMap[rank];
 }
 
-void MpiWorld::getCartesianRank(int rank, int* dims, int* periods, int* coords)
+void MpiWorld::getCartesianRank(int rank,
+                                int maxDims,
+                                const int* dims,
+                                int* periods,
+                                int* coords)
 {
     if (rank > this->size - 1) {
         throw std::runtime_error(
           fmt::format("Rank {} bigger than world size {}", rank, this->size));
     }
+    // Pre-requisite: dims[0] * dims[1] == nprocs
+    // Note: we don't support 3-dim grids
+    if ((dims[0] * dims[1]) != this->size) {
+        throw std::runtime_error(
+          fmt::format("Product of ranks across dimensions not equal to world "
+                      "size, {} x {} != {}",
+                      dims[0],
+                      dims[1],
+                      this->size));
+    }
 
-    // Compute the corresponding rank in a 2-dim grid given the original process
-    // rank.
-    // Note - this operation, when restricted to 2dims is quivalent to:
-    // coords = {rank / sideLength, rank % sideLength}
+    // Store the cartesian dimensions for further use. All ranks have the same
+    // vector.
+    // Note that we could only store one of the two, and derive the other
+    // from the world size.
+    cartProcsPerDim[0] = dims[0];
+    cartProcsPerDim[1] = dims[1];
+
+    // Compute the coordinates in a 2-dim grid of the original process rank.
+    // As input we have a vector containing the number of processes per
+    // dimension (dims).
+    // We have dims[0] x dims[1] = N slots, thus:
+    // - The row is rank % dim
+    // - The column is rank / dim
+    coords[0] = rank % dims[0];
+    coords[1] = rank / dims[0];
+
+    // We don't support periodic grids, so we set periods to 0
+    periods[0] = 0;
+    periods[1] = 0;
+
+    // The remaining dimensions should be 1, and so the coordinate of our rank
+    for (int i = 2; i < maxDims; i++) {
+        if (dims[i] != 1) {
+            throw std::runtime_error(
+              fmt::format("Non-zero number of processes in dimension greater "
+                          "than 2. {} -> {}",
+                          i,
+                          dims[i]));
+        }
+        coords[i] = 1;
+        periods[i] = 0;
+    }
+    /*
     int sideLength = static_cast<int>(std::floor(std::sqrt(this->size)));
     int nprocs = sideLength * sideLength;
     if (rank >= nprocs) {
@@ -203,11 +247,26 @@ void MpiWorld::getCartesianRank(int rank, int* dims, int* periods, int* coords)
             coords[i] = rank / nprocs;
             rank %= nprocs;
         }
-    }
+    }*/
 }
 
 void MpiWorld::getRankFromCoords(int* rank, int* coords)
 {
+    // Note that we only support 2 dim grids. In each dimension we have
+    // cartProcsPerDim[0] and cartProcsPerDim[1] processes respectively.
+
+    // Pre-requisite: cartProcsPerDim[0] * cartProcsPerDim[1] == nprocs
+    if ((cartProcsPerDim[0] * cartProcsPerDim[1]) != this->size) {
+        throw std::runtime_error(fmt::format(
+          "Processors per dimension don't match world size: {} x {} != {}",
+          cartProcsPerDim[0],
+          cartProcsPerDim[1],
+          this->size));
+    }
+
+    // This is the inverse of finding the coordinates for a rank
+    *rank = coords[0] + coords[1] * cartProcsPerDim[0];
+    /*
     int sideLength = static_cast<int>(std::floor(std::sqrt(this->size)));
     int prank = 0;
     int factor = 1;
@@ -221,6 +280,7 @@ void MpiWorld::getRankFromCoords(int* rank, int* coords)
         factor *= sideLength;
     }
     *rank = prank;
+    */
 }
 
 int MpiWorld::isend(int sendRank,
