@@ -666,26 +666,22 @@ void MpiWorld::reduce(int sendRank,
 
         size_t bufferSize = datatype->size * count;
 
-        // Zero the receive buffer if we're not operating in-place
         bool isInPlace = sendBuffer == recvBuffer;
+
+        // If not receiving in-place, initialize the receive buffer to the send
+        // buffer values. This prevents issues when 0-initializing for operators
+        // like the minimum, or product.
+        // If we're receiving from ourselves and in-place, our work is
+        // already done and the results are written in the recv buffer
         if (!isInPlace) {
-            memset(recvBuffer, 0, bufferSize);
+            memcpy(recvBuffer, sendBuffer, bufferSize);
         }
 
+        uint8_t* rankData = new uint8_t[bufferSize];
         for (int r = 0; r < size; r++) {
             // Work out the data for this rank
-            uint8_t* rankData;
-            if (r == recvRank && isInPlace) {
-                // If we're receiving from ourselves and in-place, our work is
-                // already done and the results are written in the recv buffer
-                continue;
-            } else if (r == recvRank) {
-                // If we're receiving from ourselves not in-place, the data for
-                // this rank is just the send buffer
-                rankData = sendBuffer;
-            } else {
-                // If we're receiving from another rank, call recv
-                rankData = new uint8_t[bufferSize];
+            memset(rankData, 0, bufferSize);
+            if (r != recvRank) {
                 recv(r,
                      recvRank,
                      rankData,
@@ -693,14 +689,12 @@ void MpiWorld::reduce(int sendRank,
                      count,
                      nullptr,
                      faabric::MPIMessage::REDUCE);
-            }
 
-            op_reduce(operation, datatype, count, rankData, recvBuffer);
-
-            if (r != recvRank) {
-                delete[] rankData;
+                op_reduce(operation, datatype, count, rankData, recvBuffer);
             }
         }
+
+        delete[] rankData;
 
     } else {
         // Do the sending
@@ -760,7 +754,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
 
             for (int slot = 0; slot < count; slot++) {
                 outBufferCast[slot] =
-                  std::max(outBufferCast[slot], inBufferCast[slot]);
+                  std::max<int>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else if (datatype->id == FAABRIC_DOUBLE) {
             auto inBufferCast = reinterpret_cast<double*>(inBuffer);
@@ -768,7 +762,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
 
             for (int slot = 0; slot < count; slot++) {
                 outBufferCast[slot] =
-                  std::max(outBufferCast[slot], inBufferCast[slot]);
+                  std::max<double>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else if (datatype->id == FAABRIC_LONG_LONG) {
             auto inBufferCast = reinterpret_cast<long long*>(inBuffer);
@@ -776,7 +770,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
 
             for (int slot = 0; slot < count; slot++) {
                 outBufferCast[slot] =
-                  std::max(outBufferCast[slot], inBufferCast[slot]);
+                  std::max<long long>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else {
             logger->error("Unsupported type for max reduction (datatype={})",
@@ -790,7 +784,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
 
             for (int slot = 0; slot < count; slot++) {
                 outBufferCast[slot] =
-                  std::min(outBufferCast[slot], inBufferCast[slot]);
+                  std::min<int>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else if (datatype->id == FAABRIC_DOUBLE) {
             auto inBufferCast = reinterpret_cast<double*>(inBuffer);
@@ -798,7 +792,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
 
             for (int slot = 0; slot < count; slot++) {
                 outBufferCast[slot] =
-                  std::min(outBufferCast[slot], inBufferCast[slot]);
+                  std::min<double>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else if (datatype->id == FAABRIC_LONG_LONG) {
             auto inBufferCast = reinterpret_cast<long long*>(inBuffer);
@@ -806,7 +800,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
 
             for (int slot = 0; slot < count; slot++) {
                 outBufferCast[slot] =
-                  std::min(outBufferCast[slot], inBufferCast[slot]);
+                  std::min<long long>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else {
             logger->error("Unsupported type for min reduction (datatype={})",
