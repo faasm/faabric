@@ -50,13 +50,12 @@ void SystemConfig::initialise()
       this->getSystemConfIntParam("CHAINED_CALL_TIMEOUT", "300000");
 
     // Filesystem storage
-    functionDir = getEnvVar("FUNC_DIR", "/usr/local/faasm/wasm");
-    objectFileDir = getEnvVar("OBJ_DIR", "/usr/local/faasm/object");
-    runtimeFilesDir =
-      getEnvVar("RUNTIME_FILES_DIR", "/usr/local/faasm/runtime_root");
-    sharedFilesDir = getEnvVar("SHARED_FILES_DIR", "/usr/local/faasm/shared");
-    sharedFilesStorageDir =
-      getEnvVar("SHARED_FILES_STORAGE_DIR", "/usr/local/faasm/shared_store");
+    std::string faasmLocalDir = getEnvVar("FAASM_LOCAL_DIR", "/usr/local/faasm");
+    functionDir = fmt::format("{}/{}", faasmLocalDir, "wasm");
+    objectFileDir = fmt::format("{}/{}", faasmLocalDir, "object");
+    runtimeFilesDir = fmt::format("{}/{}", faasmLocalDir, "runtime_root");
+    sharedFilesDir = fmt::format("{}/{}", faasmLocalDir, "shared");
+    sharedFilesStorageDir = fmt::format("{}/{}", faasmLocalDir, "shared_store");
 
     // MPI
     defaultMpiWorldSize =
