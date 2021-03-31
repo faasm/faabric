@@ -227,7 +227,7 @@ void MpiWorld::getCartesianRank(int rank,
                           i,
                           dims[i]));
         }
-        coords[i] = 1;
+        coords[i] = 0;
         periods[i] = 0;
     }
     /*
