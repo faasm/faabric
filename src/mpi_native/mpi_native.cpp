@@ -465,7 +465,7 @@ int MPI_Cart_get(MPI_Comm comm,
 {
     getMpiLogger()->debug("MPI_Cart_get");
     getExecutingWorld().getCartesianRank(
-      executingContext.getRank(), dims, periods, coords);
+      executingContext.getRank(), maxdims, dims, periods, coords);
 
     return MPI_SUCCESS;
 }
