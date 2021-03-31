@@ -52,6 +52,12 @@ class MpiWorld
 
     void getRankFromCoords(int* rank, int* coords);
 
+    void shiftCartesianCoords(int rank,
+                              int direction,
+                              int disp,
+                              int* source,
+                              int* destination);
+
     void send(int sendRank,
               int recvRank,
               const uint8_t* buffer,
