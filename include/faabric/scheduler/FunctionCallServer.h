@@ -36,6 +36,10 @@ class FunctionCallServer final
                       const faabric::UnregisterRequest* request,
                       faabric::FunctionStatusResponse* response) override;
 
+    Status PushSnapshot(ServerContext* context,
+                        const faabric::SnapshotData* request,
+                        faabric::FunctionStatusResponse* response) override;
+
   protected:
     void doStart(const std::string& serverAddr) override;
 

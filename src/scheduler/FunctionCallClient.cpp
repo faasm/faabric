@@ -32,6 +32,9 @@ static std::unordered_map<std::string,
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
+static std::vector<std::pair<std::string, faabric::SnapshotData>>
+  snapshotPushes;
+
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
     return functionCalls;
@@ -70,6 +73,11 @@ void queueResourceResponse(const std::string& host, faabric::HostResources& res)
     queuedResourceResponses[host].enqueue(res);
 }
 
+std::vector<std::pair<std::string, faabric::SnapshotData>> getSnapshotPushes()
+{
+    return snapshotPushes;
+}
+
 void clearMockRequests()
 {
     functionCalls.clear();
@@ -77,6 +85,7 @@ void clearMockRequests()
     mpiMessages.clear();
     resourceRequests.clear();
     unregisterRequests.clear();
+    snapshotPushes.clear();
 
     for (auto& p : queuedResourceResponses) {
         p.second.reset();
@@ -160,6 +169,18 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
         ClientContext context;
         faabric::FunctionStatusResponse response;
         CHECK_RPC("unregister", stub->Unregister(&context, req, &response));
+    }
+}
+
+void FunctionCallClient::pushSnapshot(const faabric::SnapshotData& data)
+{
+    if (faabric::util::isMockMode()) {
+        snapshotPushes.emplace_back(host, data);
+    } else {
+        ClientContext context;
+        faabric::FunctionStatusResponse response;
+        CHECK_RPC("pushSnapshot",
+                  stub->PushSnapshot(&context, data, &response));
     }
 }
 }

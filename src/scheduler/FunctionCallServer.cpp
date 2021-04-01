@@ -1,3 +1,4 @@
+#include "faabric/snapshot/SnapshotRegistry.h"
 #include "faabric/util/func.h"
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
@@ -99,4 +100,29 @@ Status FunctionCallServer::Unregister(ServerContext* context,
     return Status::OK;
 }
 
+Status FunctionCallServer::PushSnapshot(
+  ServerContext* context,
+  const faabric::SnapshotData* request,
+  faabric::FunctionStatusResponse* response)
+{
+    faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
+                                     request->key(),
+                                     request->contents().size());
+
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+    faabric::snapshot::SnapshotData data;
+    data.size = request->contents().size();
+
+    // TODO - Avoid copying. Ideally we'd use release_contents but the request
+    // is const and release_xxx methods are non-const
+    data.data = (uint8_t*)malloc(request->contents().size());
+    std::memcpy(data.data,
+                reinterpret_cast<const uint8_t*>(request->contents().data()),
+                request->contents().size());
+
+    reg.setSnapshot(request->key(), data);
+
+    return Status::OK;
+}
 }

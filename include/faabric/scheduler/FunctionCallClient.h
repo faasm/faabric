@@ -60,5 +60,7 @@ class FunctionCallClient
     void executeFunctions(const faabric::BatchExecuteRequest& req);
 
     void unregister(const faabric::UnregisterRequest& req);
+
+    void pushSnapshot(const faabric::SnapshotData& data);
 };
 }
