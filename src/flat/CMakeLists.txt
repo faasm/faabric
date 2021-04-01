@@ -2,27 +2,18 @@
 # Flatbuffers and gRPC
 # ----------------------------------------------
 
-target_link_libraries(faabric_flat PRIVATE flatbuffers)
-
-target_include_directories(faabric_flat ${FLATBUFFERS_INCLUDE_DIRS}/include)
-
-set(FB_HEADER "${CMAKE_CURRENT_BINARY_DIR}/faabric.fb.h")
+set(FB_HEADER "${CMAKE_CURRENT_BINARY_DIR}/faabric_generated.h")
 set(GRPC_HEADER "${CMAKE_CURRENT_BINARY_DIR}/faabric.grpc.fb.h")
-
-set(FB_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric.fb.h")
-set(GRPC_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric.grpc.fb.h")
-
-set(FB_SRC "${CMAKE_CURRENT_BINARY_DIR}/faabric.fb.cc")
 set(GRPC_SRC "${CMAKE_CURRENT_BINARY_DIR}/faabric.grpc.fb.cc")
 
+set(FB_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric_generated.h")
+set(GRPC_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric.grpc.fb.h")
+
 add_custom_command(
-    OUTPUT "${FB_HEADER}" "${GRPC_HEADER}" "${FB_SRC}" "${GRPC_SRC}"
-    COMMAND ${FLATBUFFERS_FLATC_EXECUTABLE}
-    ARGS --grpc "${CMAKE_CURRENT_BINARY_DIR}"
-    --cpp "${CMAKE_CURRENT_BINARY_DIR}"
-    -I "${CMAKE_CURRENT_LIST_DIR}"
-    faabric.fbs
+    OUTPUT "${FB_HEADER}" "${GRPC_HEADER}" "${GRPC_SRC}"
     DEPENDS faabric.fbs
+    COMMAND ${FLATBUFFERS_FLATC_EXECUTABLE}
+    ARGS --grpc --cpp faabric.fbs
 )
 
 # Copy the generated headers into place
@@ -47,25 +38,24 @@ add_custom_command(
 # ----------------------------------------------
 
 set(HEADERS
-    ${FAABRIC_INCLUDE_DIR}/faabric/proto/macros.h
-    ${FAABRIC_INCLUDE_DIR}/faabric/proto/RPCServer.h
-    ${PB_HEADER_COPIED}
+    ${FAABRIC_INCLUDE_DIR}/faabric/flat/FlatRPCServer.h
+    ${FB_HEADER_COPIED}
     ${GRPC_HEADER_COPIED}
     )
 
 set(LIB_FILES
-    RPCServer.cpp
+    FlatRPCServer.cpp
     ${HEADERS}
-    ${PB_SRC}
     ${GRPC_SRC}
     )
 
-faabric_lib(proto "${LIB_FILES}")
+faabric_lib(flat "${LIB_FILES}")
 
-add_dependencies(proto spdlog_ext)
+add_dependencies(flat spdlog_ext)
 
-target_link_libraries(proto
-    ${Protobuf_LIBRARIES}
+target_include_directories(flat PUBLIC ${FLATBUFFERS_INCLUDE_DIRS})
+
+target_link_libraries(flat
     gRPC::grpc++
     gRPC::grpc++_reflection
     )

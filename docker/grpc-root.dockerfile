@@ -55,9 +55,16 @@ RUN ninja install
 # Flatbuffers
 WORKDIR /setup
 RUN git clone --recurse-submodules -b v1.12.0 https://github.com/google/flatbuffers
-WORKDIR /setup/flatbuffers/cmake/build
+WORKDIR /setup/flatbuffers/cmake/build-static
 RUN cmake -GNinja \
     -DCMAKE_BUILD_TYPE=Release \
+    ../..
+RUN ninja install
+
+WORKDIR /setup/flatbuffers/cmake/build-shared
+RUN cmake -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DFLATBUFFERS_BUILD_SHAREDLIB=ON \
     ../..
 RUN ninja install
 

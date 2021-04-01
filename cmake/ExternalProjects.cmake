@@ -1,6 +1,7 @@
 include(FindGit)
 find_package(Git)
 include (ExternalProject)
+include (FetchContent)
 
 # Protobuf/ grpc config
 # See the example in the gRPC repo here:                                         
@@ -29,11 +30,25 @@ include_directories(${PROTOBUF_INCLUDE_DIR})
 set(PROTOC_EXE /usr/local/bin/protoc)                                            
 set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)                                  
 
-include(FindFlatbuffers)
-find_package(Flatbuffers REQUIRED)
+# Include FlatBuffers
+# I couldn't get the proper find_package working, so we have this hack now
+set(FLATBUFFERS_FLATC_EXECUTABLE "/usr/local/bin/flatc")
+set(FLATBUFFERS_INCLUDE_DIRS "/usr/local/include/flatbuffers")
 
-message(STATUS "Using FlatBuffers with flatc=${FLATBUFFERS_FLATC_EXECUTABLE} \
-    and include dirs=${FLATBUFFERS_INCLUDE_DIRS}")
+# FetchContent_Declare(flatbuffers_ext
+#     GIT_REPOSITORY "https://github.com/google/flatbuffers.git"
+#     GIT_TAG "v1.12.0"
+# )
+# 
+# FetchContent_MakeAvailable(flatbuffers_ext)
+# FetchContent_GetProperties(flatbuffers_ext SOURCE_DIR FLATBUFFERS_SRC_DIR)
+# set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH} ${FLATBUFFERS_SRC_DIR}/CMake")
+
+# include(FindFlatBuffers)
+# find_package(FlatBuffers REQUIRED)
+# message(STATUS "Flatbuffers: ${FLATBUFFERS_FOUND}. \
+#     Using FlatBuffers with flatc=${FLATBUFFERS_FLATC_EXECUTABLE} \
+#     and include dirs=${FLATBUFFERS_INCLUDE_DIRS}")
 
 # Pistache 
 ExternalProject_Add(pistache_ext
