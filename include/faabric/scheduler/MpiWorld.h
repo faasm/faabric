@@ -98,7 +98,7 @@ class MpiWorld
               faabric::MPIMessage::MPIMessageType messageType =
                 faabric::MPIMessage::NORMAL);
 
-    void awaitAsyncRequest(int requestId);
+    void awaitAsyncRequest(int requestId, int myRank);
 
     void sendRecv(uint8_t* sendBuffer,
                   int sendcount,

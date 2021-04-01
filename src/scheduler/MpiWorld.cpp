@@ -320,9 +320,15 @@ int MpiWorld::doISendRecv(int sendRank,
 
     int requestId = (int)faabric::util::generateGid();
 
-    // Spawn a thread to do the work
-    asyncThreadMap.insert(std::pair<int, std::thread>(
-      requestId,
+    int myRank = recvBuffer == nullptr ? sendRank : recvRank;
+
+    if (asyncThreadMap.count(requestId) != 0) {
+        throw std::runtime_error(
+            fmt::format("The requestId ({}) is already in the map!", requestId)
+        );
+    }
+
+    asyncThreadMap[requestId] = std::thread(
       [this,
        sendRank,
        recvRank,
@@ -344,10 +350,17 @@ int MpiWorld::doISendRecv(int sendRank,
                          nullptr,
                          messageType);
           }
-      }));
+      });
 
     if (asyncThreadMap.count(requestId) == 0) {
-        std::cout << "WAT " << requestId << std::endl;
+        if (asyncThreadMap.count(requestId) == 0) {
+            throw std::runtime_error(
+                fmt::format("Just inserted a request ({}) which is not there",
+                    requestId)
+            );
+        } else {
+            throw std::runtime_error("Race condition!");
+        }
     }
 
     return requestId;
@@ -449,7 +462,7 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
          sendCount,
          faabric::MPIMessage::SENDRECV);
     // And wait
-    awaitAsyncRequest(recvId);
+    awaitAsyncRequest(recvId, myRank);
 }
 
 void MpiWorld::broadcast(int sendRank,
@@ -712,37 +725,36 @@ void MpiWorld::recv(int sendRank,
     }
 }
 
-void MpiWorld::awaitAsyncRequest(int requestId)
+static void printAwaitMap(std::unordered_map<int, std::thread>* map)
+{
+    int width = 4;
+    int it = 0;
+    for (auto const& x : *map) {
+        int tid = x.second.joinable() ? 1337 : -1;
+        std::cout << x.first
+                  << ":"
+                  << tid
+                  << "\t";
+        if (++it % width == 0) std::cout << std::endl;
+    }
+}
+
+void MpiWorld::awaitAsyncRequest(int requestId, int myRank)
 {
     faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
-    /*
     if (asyncThreadMap.count(requestId) == 0) {
-        auto it = asyncThreadMap.begin();
-        for (; it != asyncThreadMap.end(); it++) {
-            if (it->first == requestId) {
-                std::cout << "Key is indeed here: " << it->first << std::endl;
-                if (asyncThreadMap.find(requestId) == asyncThreadMap.end()) {
-                    std::cout << "Find == end " << std::endl;
-                }
-                if (it->second.joinable()) {
-                    std::cout << "Thread is joinable!" << std::endl;
-                    it->second.join();
-                    break;
-                }
-            }
+        std::cout << fmt::format("MPI-{}: Attempting to await unrecognised async request: {}",
+          myRank, std::to_string(requestId)) << std::endl;
+        printAwaitMap(&asyncThreadMap);
+        if (asyncThreadMap.count(requestId) == 0) {
+            std::cout << "Still not there" << std::endl;
         }
-        if (it == asyncThreadMap.end()) {
-            std::cout << "Key really is not there: " << requestId << std::endl;
-            throw std::runtime_error(
-              "Attempting to await unrecognised async request: " +
-              std::to_string(requestId));
-        }
-    }*/
-    if (asyncThreadMap.count(requestId) == 0) {
+
         throw std::runtime_error(
-          "Attempting to await unrecognised async request: " +
-          std::to_string(requestId));
+          fmt::format("MPI-{}: Attempting to await unrecognised async request: {}",
+          myRank, std::to_string(requestId))
+        );
     }
 
     // Rejoin the thread doing the async work
@@ -750,7 +762,7 @@ void MpiWorld::awaitAsyncRequest(int requestId)
     if (t.joinable()) {
         t.join();
     } else {
-        std::cout << "WAT: Not joinable?" << std::endl;
+        throw std::runtime_error("Attempting to join an un-joinable thread");
     }
 }
 
