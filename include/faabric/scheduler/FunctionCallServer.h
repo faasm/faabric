@@ -37,7 +37,7 @@ class FunctionCallServer final
                       faabric::FunctionStatusResponse* response) override;
 
     Status PushSnapshot(ServerContext* context,
-                        const faabric::SnapshotData* request,
+                        const faabric::SnapshotPushRequest* request,
                         faabric::FunctionStatusResponse* response) override;
 
   protected:

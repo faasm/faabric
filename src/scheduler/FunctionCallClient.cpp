@@ -32,7 +32,7 @@ static std::unordered_map<std::string,
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
-static std::vector<std::pair<std::string, faabric::SnapshotData>>
+static std::vector<std::pair<std::string, faabric::SnapshotPushRequest>>
   snapshotPushes;
 
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
@@ -73,7 +73,7 @@ void queueResourceResponse(const std::string& host, faabric::HostResources& res)
     queuedResourceResponses[host].enqueue(res);
 }
 
-std::vector<std::pair<std::string, faabric::SnapshotData>> getSnapshotPushes()
+std::vector<std::pair<std::string, faabric::SnapshotPushRequest>> getSnapshotPushes()
 {
     return snapshotPushes;
 }
@@ -172,7 +172,7 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
     }
 }
 
-void FunctionCallClient::pushSnapshot(const faabric::SnapshotData& data)
+void FunctionCallClient::pushSnapshot(const faabric::SnapshotPushRequest& data)
 {
     if (faabric::util::isMockMode()) {
         snapshotPushes.emplace_back(host, data);

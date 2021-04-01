@@ -102,7 +102,7 @@ Status FunctionCallServer::Unregister(ServerContext* context,
 
 Status FunctionCallServer::PushSnapshot(
   ServerContext* context,
-  const faabric::SnapshotData* request,
+  const faabric::SnapshotPushRequest* request,
   faabric::FunctionStatusResponse* response)
 {
     faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
@@ -111,7 +111,8 @@ Status FunctionCallServer::PushSnapshot(
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
-    faabric::snapshot::SnapshotData data;
+
+    faabric::util::SnapshotData data;
     data.size = request->contents().size();
 
     // TODO - Avoid copying. Ideally we'd use release_contents but the request

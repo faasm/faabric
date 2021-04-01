@@ -25,7 +25,7 @@ message BatchExecuteRequest {
     repeated int32 returnValues = 7;
 }
 
-message SnapshotData {
+message SnapshotPushRequest {
     string key = 1;
     bytes contents = 2;
 }
@@ -61,7 +61,7 @@ service FunctionRPCService {
     rpc Unregister (UnregisterRequest) returns (FunctionStatusResponse) {
     }
 
-    rpc PushSnapshot (SnapshotData) returns (FunctionStatusResponse) {
+    rpc PushSnapshot (SnapshotPushRequest) returns (FunctionStatusResponse) {
     }
 }
 

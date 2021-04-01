@@ -6,7 +6,7 @@ namespace faabric::util {
 
 struct SnapshotData
 {
-    size_t size;
-    uint8_t* data;
+    size_t size = 0;
+    uint8_t* data = nullptr;
 };
 }

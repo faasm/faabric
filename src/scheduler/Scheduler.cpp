@@ -1,3 +1,5 @@
+#include "faabric/snapshot/SnapshotRegistry.h"
+#include "faabric/util/snapshot.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
@@ -223,6 +225,26 @@ std::vector<std::string> Scheduler::callFunctions(
         throw std::runtime_error("Message with no master host");
     }
 
+    // For threads/ processes we need to have a snapshot key and be ready to
+    // push the snapshot to other hosts
+    faabric::util::SnapshotData snapshotData;
+    faabric::SnapshotPushRequest snapshotReq;
+    std::string snapshotKey = firstMsg.snapshotkey();
+    bool snapshotNeeded =
+      req.type() == req.THREADS || req.type() == req.PROCESSES;
+    if (snapshotNeeded) {
+        if (snapshotKey.empty()) {
+            logger->error("Empty snapshot key for {}", funcStr);
+            throw std::runtime_error("Empty snapshot key");
+        }
+
+        faabric::snapshot::SnapshotRegistry& reg =
+          faabric::snapshot::getSnapshotRegistry();
+        snapshotData = reg.getSnapshot(snapshotKey);
+
+        snapshotReq.set_allocated_key(&snapshotKey);
+    }
+
     auto funcQueue = this->getFunctionQueue(firstMsg);
 
     // TODO - more fine-grained locking. This blocks all functions
@@ -300,7 +322,7 @@ std::vector<std::string> Scheduler::callFunctions(
                 }
             }
 
-            // If some are left, we need to distribute
+            // If some are left, we need to distribute.
             if (remainder > 0) {
                 // At this point we have a remainder, so we need to distribute
                 // the rest Get the list of registered hosts for this function

@@ -61,6 +61,6 @@ class FunctionCallClient
 
     void unregister(const faabric::UnregisterRequest& req);
 
-    void pushSnapshot(const faabric::SnapshotData& data);
+    void pushSnapshot(const faabric::SnapshotPushRequest& data);
 };
 }
