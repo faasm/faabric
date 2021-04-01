@@ -231,15 +231,6 @@ class MpiWorld
 
     void checkRankOnThisHost(int rank);
 
-    int doISendRecv(int sendRank,
-                    int recvRank,
-                    const uint8_t* sendBuffer,
-                    uint8_t* recvBuffer,
-                    faabric_datatype_t* dataType,
-                    int count,
-                    faabric::MPIMessage::MPIMessageType messageType =
-                      faabric::MPIMessage::NORMAL);
-
     void pushToState();
 };
 }
