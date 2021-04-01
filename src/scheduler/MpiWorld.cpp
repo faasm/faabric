@@ -9,6 +9,8 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/timing.h>
 
+static thread_local std::unordered_map<int, std::thread> asyncThreadMap;
+
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
   : id(-1)
@@ -305,63 +307,30 @@ int MpiWorld::isend(int sendRank,
                     int count,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
-    return doISendRecv(
-      sendRank, recvRank, buffer, nullptr, dataType, count, messageType);
-}
-
-int MpiWorld::doISendRecv(int sendRank,
-                          int recvRank,
-                          const uint8_t* sendBuffer,
-                          uint8_t* recvBuffer,
-                          faabric_datatype_t* dataType,
-                          int count,
-                          faabric::MPIMessage::MPIMessageType messageType)
-{
-
     int requestId = (int)faabric::util::generateGid();
 
-    int myRank = recvBuffer == nullptr ? sendRank : recvRank;
-
-    if (asyncThreadMap.count(requestId) != 0) {
-        throw std::runtime_error(
-            fmt::format("The requestId ({}) is already in the map!", requestId)
-        );
-    }
-
     asyncThreadMap[requestId] = std::thread(
-      [this,
-       sendRank,
-       recvRank,
-       sendBuffer,
-       recvBuffer,
-       dataType,
-       count,
-       messageType] {
-          // Do the operation (i.e. the underlying synchronous send/ receive)
-          if (recvBuffer == nullptr) {
-              this->send(
-                sendRank, recvRank, sendBuffer, dataType, count, messageType);
-          } else {
-              this->recv(sendRank,
-                         recvRank,
-                         recvBuffer,
-                         dataType,
-                         count,
-                         nullptr,
-                         messageType);
-          }
+      [this, sendRank, recvRank, buffer, dataType, count, messageType] {
+          this->send(sendRank, recvRank, buffer, dataType, count, messageType);
       });
 
-    if (asyncThreadMap.count(requestId) == 0) {
-        if (asyncThreadMap.count(requestId) == 0) {
-            throw std::runtime_error(
-                fmt::format("Just inserted a request ({}) which is not there",
-                    requestId)
-            );
-        } else {
-            throw std::runtime_error("Race condition!");
-        }
-    }
+    return requestId;
+}
+
+int MpiWorld::irecv(int sendRank,
+                    int recvRank,
+                    uint8_t* buffer,
+                    faabric_datatype_t* dataType,
+                    int count,
+                    faabric::MPIMessage::MPIMessageType messageType)
+{
+    int requestId = (int)faabric::util::generateGid();
+
+    asyncThreadMap[requestId] = std::thread(
+      [this, sendRank, recvRank, buffer, dataType, count, messageType] {
+          this->recv(
+            sendRank, recvRank, buffer, dataType, count, nullptr, messageType);
+      });
 
     return requestId;
 }
@@ -417,6 +386,55 @@ void MpiWorld::send(int sendRank,
         // TODO - avoid creating a client each time?
         scheduler::FunctionCallClient client(otherHost);
         client.sendMPIMessage(m);
+    }
+}
+
+void MpiWorld::recv(int sendRank,
+                    int recvRank,
+                    uint8_t* buffer,
+                    faabric_datatype_t* dataType,
+                    int count,
+                    MPI_Status* status,
+                    faabric::MPIMessage::MPIMessageType messageType)
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+
+    // Listen to the in-memory queue for this rank and message type
+    logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
+    faabric::MPIMessage m = getLocalQueue(sendRank, recvRank)->dequeue();
+
+    if (messageType != m.messagetype()) {
+        logger->error(
+          "Message types mismatched on {}->{} (expected={}, got={})",
+          sendRank,
+          recvRank,
+          messageType,
+          m.messagetype());
+        throw std::runtime_error("Mismatched message types");
+    }
+
+    if (m.count() > count) {
+        logger->error(
+          "Message too long for buffer (msg={}, buffer={})", m.count(), count);
+        throw std::runtime_error("Message too long");
+    }
+
+    // TODO - avoid copy here
+    // Copy message data
+    if (m.count() > 0) {
+        std::copy(m.buffer().begin(), m.buffer().end(), buffer);
+    }
+
+    // Set status values if required
+    if (status != nullptr) {
+        status->MPI_SOURCE = m.sender();
+        status->MPI_ERROR = MPI_SUCCESS;
+
+        // Note, take the message size here as the receive count may be larger
+        status->bytesSize = m.count() * dataType->size;
+
+        // TODO - thread through tag
+        status->MPI_TAG = -1;
     }
 }
 
@@ -665,104 +683,30 @@ void MpiWorld::allGather(int rank,
     }
 }
 
-int MpiWorld::irecv(int sendRank,
-                    int recvRank,
-                    uint8_t* buffer,
-                    faabric_datatype_t* dataType,
-                    int count,
-                    faabric::MPIMessage::MPIMessageType messageType)
-{
-    return doISendRecv(
-      sendRank, recvRank, nullptr, buffer, dataType, count, messageType);
-}
-
-void MpiWorld::recv(int sendRank,
-                    int recvRank,
-                    uint8_t* buffer,
-                    faabric_datatype_t* dataType,
-                    int count,
-                    MPI_Status* status,
-                    faabric::MPIMessage::MPIMessageType messageType)
-{
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
-    // Listen to the in-memory queue for this rank and message type
-    logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
-    faabric::MPIMessage m = getLocalQueue(sendRank, recvRank)->dequeue();
-
-    if (messageType != m.messagetype()) {
-        logger->error(
-          "Message types mismatched on {}->{} (expected={}, got={})",
-          sendRank,
-          recvRank,
-          messageType,
-          m.messagetype());
-        throw std::runtime_error("Mismatched message types");
-    }
-
-    if (m.count() > count) {
-        logger->error(
-          "Message too long for buffer (msg={}, buffer={})", m.count(), count);
-        throw std::runtime_error("Message too long");
-    }
-
-    // TODO - avoid copy here
-    // Copy message data
-    if (m.count() > 0) {
-        std::copy(m.buffer().begin(), m.buffer().end(), buffer);
-    }
-
-    // Set status values if required
-    if (status != nullptr) {
-        status->MPI_SOURCE = m.sender();
-        status->MPI_ERROR = MPI_SUCCESS;
-
-        // Note, take the message size here as the receive count may be larger
-        status->bytesSize = m.count() * dataType->size;
-
-        // TODO - thread through tag
-        status->MPI_TAG = -1;
-    }
-}
-
-static void printAwaitMap(std::unordered_map<int, std::thread>* map)
-{
-    int width = 4;
-    int it = 0;
-    for (auto const& x : *map) {
-        int tid = x.second.joinable() ? 1337 : -1;
-        std::cout << x.first
-                  << ":"
-                  << tid
-                  << "\t";
-        if (++it % width == 0) std::cout << std::endl;
-    }
-}
-
 void MpiWorld::awaitAsyncRequest(int requestId, int myRank)
 {
     faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
-    if (asyncThreadMap.count(requestId) == 0) {
-        std::cout << fmt::format("MPI-{}: Attempting to await unrecognised async request: {}",
-          myRank, std::to_string(requestId)) << std::endl;
-        printAwaitMap(&asyncThreadMap);
-        if (asyncThreadMap.count(requestId) == 0) {
-            std::cout << "Still not there" << std::endl;
-        }
+    auto it = asyncThreadMap.find(requestId);
 
-        throw std::runtime_error(
-          fmt::format("MPI-{}: Attempting to await unrecognised async request: {}",
-          myRank, std::to_string(requestId))
-        );
+    // Check that outstanding request is in map
+    if (it == asyncThreadMap.end()) {
+        throw std::runtime_error(fmt::format(
+          "MPI-{}: Attempting to await unrecognised async request: {}",
+          myRank,
+          std::to_string(requestId)));
     }
 
     // Rejoin the thread doing the async work
-    std::thread& t = asyncThreadMap[requestId];
+    std::thread& t = it->second;
     if (t.joinable()) {
         t.join();
-    } else {
-        throw std::runtime_error("Attempting to join an un-joinable thread");
+    }
+
+    // Remove the keypair when done
+    // Double check to be extra-sure
+    if (!t.joinable()) {
+        asyncThreadMap.erase(it);
     }
 }
 

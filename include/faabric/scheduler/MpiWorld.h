@@ -222,7 +222,6 @@ class MpiWorld
 
     std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
       localQueueMap;
-    std::unordered_map<int, std::thread> asyncThreadMap;
 
     std::vector<int> cartProcsPerDim;
 
