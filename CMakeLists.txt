@@ -62,6 +62,7 @@ add_subdirectory(src/mpi_native)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
 add_subdirectory(src/scheduler)
+add_subdirectory(src/snapshot)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
 
@@ -81,6 +82,7 @@ add_library(faabric
     $<TARGET_OBJECTS:proto_obj>
     $<TARGET_OBJECTS:redis_obj>
     $<TARGET_OBJECTS:scheduler_obj>
+    $<TARGET_OBJECTS:snapshot_obj>
     $<TARGET_OBJECTS:state_obj>
     $<TARGET_OBJECTS:util_obj>
 )

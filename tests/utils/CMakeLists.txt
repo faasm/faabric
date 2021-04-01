@@ -10,4 +10,4 @@ add_library(faabric_test_utils "${LIB_FILES}")
 add_dependencies(faabric_test_utils catch_ext)
 target_include_directories(faabric_test_utils PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
-target_link_libraries(faabric_test_utils state endpoint scheduler)
+target_link_libraries(faabric_test_utils state snapshot endpoint scheduler)
