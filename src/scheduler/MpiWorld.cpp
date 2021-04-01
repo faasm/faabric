@@ -216,7 +216,7 @@ void MpiWorld::getCartesianRank(int rank,
     periods[0] = 1;
     periods[1] = 1;
 
-    // The remaining dimensions should be 1, and so the coordinate of our rank
+    // The remaining dimensions should be 1, and the coordinate of our rank 0
     for (int i = 2; i < maxDims; i++) {
         if (dims[i] != 1) {
             throw std::runtime_error(

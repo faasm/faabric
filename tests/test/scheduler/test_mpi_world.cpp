@@ -737,8 +737,9 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 
         // Check the host that the root is on
         for (int rank : remoteWorldRanks) {
-            if (rank == remoteRankB)
+            if (rank == remoteRankB) {
                 continue;
+            }
 
             std::vector<int> actual(3, -1);
             remoteWorld.recv(
@@ -870,8 +871,9 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
             }
 
             for (int rank : localWorldRanks) {
-                if (rank == root)
+                if (rank == root) {
                     continue;
+                }
                 localWorld.gather(rank,
                                   root,
                                   BYTES(rankData[rank].data()),
@@ -1000,8 +1002,9 @@ void doReduceTest(scheduler::MpiWorld& world,
     // ---- Reduce ----
     // Call on all but the root first
     for (int r = 0; r < thisWorldSize; r++) {
-        if (r == root)
+        if (r == root) {
             continue;
+        }
         world.reduce(
           r, root, BYTES(rankData[r].data()), nullptr, datatype, 3, op);
     }
