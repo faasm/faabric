@@ -309,10 +309,13 @@ int MpiWorld::isend(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    asyncThreadMap[requestId] = std::thread(
-      [this, sendRank, recvRank, buffer, dataType, count, messageType] {
-          this->send(sendRank, recvRank, buffer, dataType, count, messageType);
-      });
+    asyncThreadMap.emplace(
+      requestId,
+      std::thread(
+        [this, sendRank, recvRank, buffer, dataType, count, messageType] {
+            this->send(
+              sendRank, recvRank, buffer, dataType, count, messageType);
+        }));
 
     return requestId;
 }
@@ -326,11 +329,18 @@ int MpiWorld::irecv(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    asyncThreadMap[requestId] = std::thread(
-      [this, sendRank, recvRank, buffer, dataType, count, messageType] {
-          this->recv(
-            sendRank, recvRank, buffer, dataType, count, nullptr, messageType);
-      });
+    asyncThreadMap.emplace(
+      requestId,
+      std::thread(
+        [this, sendRank, recvRank, buffer, dataType, count, messageType] {
+            this->recv(sendRank,
+                       recvRank,
+                       buffer,
+                       dataType,
+                       count,
+                       nullptr,
+                       messageType);
+        }));
 
     return requestId;
 }
@@ -480,7 +490,7 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
          sendCount,
          faabric::MPIMessage::SENDRECV);
     // And wait
-    awaitAsyncRequest(recvId, myRank);
+    awaitAsyncRequest(recvId);
 }
 
 void MpiWorld::broadcast(int sendRank,
@@ -683,7 +693,7 @@ void MpiWorld::allGather(int rank,
     }
 }
 
-void MpiWorld::awaitAsyncRequest(int requestId, int myRank)
+void MpiWorld::awaitAsyncRequest(int requestId)
 {
     faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
@@ -692,9 +702,7 @@ void MpiWorld::awaitAsyncRequest(int requestId, int myRank)
     // Check that outstanding request is in map
     if (it == asyncThreadMap.end()) {
         throw std::runtime_error(fmt::format(
-          "MPI-{}: Attempting to await unrecognised async request: {}",
-          myRank,
-          std::to_string(requestId)));
+          "Attempting to await unrecognised async request: {}", requestId));
     }
 
     // Rejoin the thread doing the async work
