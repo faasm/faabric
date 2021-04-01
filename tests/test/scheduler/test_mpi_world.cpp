@@ -112,48 +112,94 @@ TEST_CASE("Test cartesian communicator", "[mpi]")
     cleanFaabric();
 
     faabric::Message msg = faabric::util::messageFactory(user, func);
-    // 5 processes create a 2x2 grid with one left MPI_UNDEFINED
-    msg.set_mpiworldsize(5);
+
+    int worldSize;
+    int maxDims = 3;
+    std::vector<int> dims(maxDims);
+    std::vector<int> periods(2, 1);
+    std::vector<std::vector<int>> expectedShift;
+    std::vector<std::vector<int>> expectedCoords;
+
+    // Different grid sizes
+    SECTION("5 x 1 grid")
+    {
+        // 5 processes create a 5x1 grid
+        worldSize = 5;
+        msg.set_mpiworldsize(worldSize);
+        dims = { 5, 1, 1 };
+        expectedCoords = {
+            { 0, 0, 0 }, { 1, 0, 0 }, { 2, 0, 0 }, { 3, 0, 0 }, { 4, 0, 0 },
+        };
+        // We only test for the first three dimensions
+        expectedShift = {
+            { 4, 1, 0, 0, 0, 0 }, { 0, 2, 1, 1, 1, 1 }, { 1, 3, 2, 2, 2, 2 },
+            { 2, 4, 3, 3, 3, 3 }, { 3, 0, 4, 4, 4, 4 },
+        };
+    }
+    SECTION("2 x 2 grid")
+    {
+        // 4 processes create a 2x2 grid
+        worldSize = 4;
+        msg.set_mpiworldsize(worldSize);
+        dims = { 2, 2, 1 };
+        expectedCoords = {
+            { 0, 0, 0 },
+            { 0, 1, 0 },
+            { 1, 0, 0 },
+            { 1, 1, 0 },
+        };
+        // We only test for the first three dimensions
+        expectedShift = {
+            { 2, 2, 1, 1, 0, 0 },
+            { 3, 3, 0, 0, 1, 1 },
+            { 0, 0, 3, 3, 2, 2 },
+            { 1, 1, 2, 2, 3, 3 },
+        };
+    }
+
     MpiWorld& world =
       getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
 
-    std::vector<int> dims(2, -1);
-    std::vector<int> periods(2, 0);
-    std::vector<int> coords(2, -1);
-
-    SECTION("Create cartesian coordinates")
-    {
-        // Check it works well for a rank within the grid
-        for (int i = 0; i < 4; i++) {
-            std::vector<int> required = { i / 2, i % 2 };
-            world.getCartesianRank(
-              i, dims.data(), periods.data(), coords.data());
-            REQUIRE(required == coords);
-        }
-
-        // Or MPI_UNDEFINED otherwise
-        std::vector<int> required = { MPI_UNDEFINED, MPI_UNDEFINED };
-        world.getCartesianRank(4, dims.data(), periods.data(), coords.data());
-        REQUIRE(required == coords);
+    // Get coordinates from rank
+    for (int i = 0; i < worldSize; i++) {
+        std::vector<int> coords(3, -1);
+        world.getCartesianRank(
+          i, maxDims, dims.data(), periods.data(), coords.data());
+        REQUIRE(expectedCoords[i] == coords);
     }
 
-    SECTION("Get rank from cartesian coordinates")
-    {
-        // Check it works for defined processes
-        for (int i = 0; i < 2; i++) {
-            for (int j = 0; j < 2; j++) {
-                std::vector<int> coords = { i, j };
-                int rank;
-                int expected = i * 2 + j;
-                world.getRankFromCoords(&rank, coords.data());
-                REQUIRE(rank == expected);
-            }
+    // Get rank from coordinates
+    for (int i = 0; i < dims[0]; i++) {
+        for (int j = 0; j < dims[1]; j++) {
+            int rank;
+            std::vector<int> coords = { i, j, 0 };
+            int expected =
+              std::find(expectedCoords.begin(), expectedCoords.end(), coords) -
+              expectedCoords.begin();
+            world.getRankFromCoords(&rank, coords.data());
+            REQUIRE(rank == expected);
         }
+    }
 
-        // Check it throws exception if MPI_UNDEFINED
-        std::vector<int> coords = { MPI_UNDEFINED, MPI_UNDEFINED };
-        int rank;
-        REQUIRE_THROWS(world.getRankFromCoords(&rank, coords.data()));
+    // Shift coordinates one unit along each axis
+    for (int i = 0; i < dims[0]; i++) {
+        for (int j = 0; j < dims[1]; j++) {
+            std::vector<int> coords = { i, j, 0 };
+            int rank, src, dst;
+            world.getRankFromCoords(&rank, coords.data());
+            // Test first dimension
+            world.shiftCartesianCoords(rank, 0, 1, &src, &dst);
+            REQUIRE(src == expectedShift[rank][0]);
+            REQUIRE(dst == expectedShift[rank][1]);
+            // Test second dimension
+            world.shiftCartesianCoords(rank, 1, 1, &src, &dst);
+            REQUIRE(src == expectedShift[rank][2]);
+            REQUIRE(dst == expectedShift[rank][3]);
+            // Test third dimension
+            world.shiftCartesianCoords(rank, 2, 1, &src, &dst);
+            REQUIRE(src == expectedShift[rank][4]);
+            REQUIRE(dst == expectedShift[rank][5]);
+        }
     }
 }
 
@@ -691,8 +737,9 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 
         // Check the host that the root is on
         for (int rank : remoteWorldRanks) {
-            if (rank == remoteRankB)
+            if (rank == remoteRankB) {
                 continue;
+            }
 
             std::vector<int> actual(3, -1);
             remoteWorld.recv(
@@ -824,8 +871,9 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
             }
 
             for (int rank : localWorldRanks) {
-                if (rank == root)
+                if (rank == root) {
                     continue;
+                }
                 localWorld.gather(rank,
                                   root,
                                   BYTES(rankData[rank].data()),
@@ -954,8 +1002,9 @@ void doReduceTest(scheduler::MpiWorld& world,
     // ---- Reduce ----
     // Call on all but the root first
     for (int r = 0; r < thisWorldSize; r++) {
-        if (r == root)
+        if (r == root) {
             continue;
+        }
         world.reduce(
           r, root, BYTES(rankData[r].data()), nullptr, datatype, 3, op);
     }

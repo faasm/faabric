@@ -15,6 +15,7 @@ MpiWorld::MpiWorld()
   , size(-1)
   , thisHost(faabric::util::getSystemConfig().endpointHost)
   , creationTime(faabric::util::startTimer())
+  , cartProcsPerDim(2)
 {}
 
 std::string getWorldStateKey(int worldId)
@@ -176,51 +177,125 @@ std::string MpiWorld::getHostForRank(int rank)
     return rankHostMap[rank];
 }
 
-void MpiWorld::getCartesianRank(int rank, int* dims, int* periods, int* coords)
+void MpiWorld::getCartesianRank(int rank,
+                                int maxDims,
+                                const int* dims,
+                                int* periods,
+                                int* coords)
 {
     if (rank > this->size - 1) {
         throw std::runtime_error(
           fmt::format("Rank {} bigger than world size {}", rank, this->size));
     }
+    // Pre-requisite: dims[0] * dims[1] == nprocs
+    // Note: we don't support 3-dim grids
+    if ((dims[0] * dims[1]) != this->size) {
+        throw std::runtime_error(
+          fmt::format("Product of ranks across dimensions not equal to world "
+                      "size, {} x {} != {}",
+                      dims[0],
+                      dims[1],
+                      this->size));
+    }
 
-    // Compute the corresponding rank in a 2-dim grid given the original process
-    // rank.
-    // Note - this operation, when restricted to 2dims is quivalent to:
-    // coords = {rank / sideLength, rank % sideLength}
-    int sideLength = static_cast<int>(std::floor(std::sqrt(this->size)));
-    int nprocs = sideLength * sideLength;
-    if (rank >= nprocs) {
-        for (int i = 0; i < MPI_CART_MAX_DIMENSIONS; i++) {
-            dims[i] = sideLength;
-            periods[i] = 0;
-            coords[i] = MPI_UNDEFINED;
+    // Store the cartesian dimensions for further use. All ranks have the same
+    // vector.
+    // Note that we could only store one of the two, and derive the other
+    // from the world size.
+    this->cartProcsPerDim[0] = dims[0];
+    this->cartProcsPerDim[1] = dims[1];
+
+    // Compute the coordinates in a 2-dim grid of the original process rank.
+    // As input we have a vector containing the number of processes per
+    // dimension (dims).
+    // We have dims[0] x dims[1] = N slots, thus:
+    coords[0] = rank / dims[1];
+    coords[1] = rank % dims[1];
+
+    // LAMMPS always uses periodic grids. So do we.
+    periods[0] = 1;
+    periods[1] = 1;
+
+    // The remaining dimensions should be 1, and the coordinate of our rank 0
+    for (int i = 2; i < maxDims; i++) {
+        if (dims[i] != 1) {
+            throw std::runtime_error(
+              fmt::format("Non-zero number of processes in dimension greater "
+                          "than 2. {} -> {}",
+                          i,
+                          dims[i]));
         }
-    } else {
-        for (int i = 0; i < MPI_CART_MAX_DIMENSIONS; i++) {
-            nprocs /= sideLength;
-            dims[i] = sideLength;
-            periods[i] = 0;
-            coords[i] = rank / nprocs;
-            rank %= nprocs;
-        }
+        coords[i] = 0;
+        periods[i] = 1;
     }
 }
 
 void MpiWorld::getRankFromCoords(int* rank, int* coords)
 {
-    int sideLength = static_cast<int>(std::floor(std::sqrt(this->size)));
-    int prank = 0;
-    int factor = 1;
+    // Note that we only support 2 dim grids. In each dimension we have
+    // cartProcsPerDim[0] and cartProcsPerDim[1] processes respectively.
 
-    for (int i = MPI_CART_MAX_DIMENSIONS - 1; i >= 0; --i) {
-        if (coords[i] == MPI_UNDEFINED) {
-            throw std::runtime_error(
-              "Cartesian rank with undefined coordinates.");
-        }
-        prank += factor * (coords[i] % sideLength);
-        factor *= sideLength;
+    // Pre-requisite: cartProcsPerDim[0] * cartProcsPerDim[1] == nprocs
+    if ((this->cartProcsPerDim[0] * this->cartProcsPerDim[1]) != this->size) {
+        throw std::runtime_error(fmt::format(
+          "Processors per dimension don't match world size: {} x {} != {}",
+          this->cartProcsPerDim[0],
+          this->cartProcsPerDim[1],
+          this->size));
     }
-    *rank = prank;
+
+    // This is the inverse of finding the coordinates for a rank
+    *rank = coords[1] + coords[0] * cartProcsPerDim[1];
+}
+
+void MpiWorld::shiftCartesianCoords(int rank,
+                                    int direction,
+                                    int disp,
+                                    int* source,
+                                    int* destination)
+{
+    // rank: is the process the method is being called from (i.e. me)
+    // source: the rank that reaches me moving <disp> units in <direction>
+    // destination: is the rank I reach moving <disp> units in <direction>
+
+    // Get the coordinates for my rank
+    std::vector<int> coords = { rank / cartProcsPerDim[1],
+                                rank % cartProcsPerDim[1] };
+
+    // Move <disp> units in <direction> forward with periodicity
+    // Note: we always use periodicity and 2 dimensions because LAMMMPS does.
+    std::vector<int> dispCoordsFwd;
+    if (direction == 0) {
+        dispCoordsFwd = { (coords[0] + disp) % cartProcsPerDim[0], coords[1] };
+    } else if (direction == 1) {
+        dispCoordsFwd = { coords[0], (coords[1] + disp) % cartProcsPerDim[1] };
+    } else {
+        dispCoordsFwd = { coords[0], coords[1] };
+    }
+    // If direction >=2 we are in a dimension we don't use, hence we are the
+    // only process, and we always land in our coordinates (due to periodicity)
+
+    // Fill the destination variable
+    getRankFromCoords(destination, dispCoordsFwd.data());
+
+    // Move <disp> units in <direction> backwards with periodicity
+    // Note: as subtracting may yield a negative result, we add a full loop
+    // to prevent taking the modulo of a negative value.
+    std::vector<int> dispCoordsBwd;
+    if (direction == 0) {
+        dispCoordsBwd = { (coords[0] - disp + cartProcsPerDim[0]) %
+                            cartProcsPerDim[0],
+                          coords[1] };
+    } else if (direction == 1) {
+        dispCoordsBwd = { coords[0],
+                          (coords[1] - disp + cartProcsPerDim[1]) %
+                            cartProcsPerDim[1] };
+    } else {
+        dispCoordsBwd = { coords[0], coords[1] };
+    }
+
+    // Fill the source variable
+    getRankFromCoords(source, dispCoordsBwd.data());
 }
 
 int MpiWorld::isend(int sendRank,
