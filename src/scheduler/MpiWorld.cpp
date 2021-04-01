@@ -228,8 +228,6 @@ void MpiWorld::getCartesianRank(int rank,
         coords[i] = 0;
         periods[i] = 1;
     }
-
-    // Sanity check before returning. Check that no rank exceeds the dimensions
 }
 
 void MpiWorld::getRankFromCoords(int* rank, int* coords)
