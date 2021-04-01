@@ -4,7 +4,6 @@
 
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
-#include <faabric/util/snapshot.h>
 
 namespace faabric::executor {
 class FaabricExecutor
@@ -27,8 +26,6 @@ class FaabricExecutor
     void finish();
 
     virtual void flush();
-
-    virtual faabric::util::SnapshotData takeSnapshot();
 
     std::string id;
 

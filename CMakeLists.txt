@@ -80,6 +80,7 @@ add_library(faabric
     faabric.cpp
     $<TARGET_OBJECTS:endpoint_obj>
     $<TARGET_OBJECTS:executor_obj>
+    $<TARGET_OBJECTS:flat_obj>
     $<TARGET_OBJECTS:proto_obj>
     $<TARGET_OBJECTS:redis_obj>
     $<TARGET_OBJECTS:scheduler_obj>

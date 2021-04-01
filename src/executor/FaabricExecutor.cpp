@@ -189,11 +189,6 @@ std::string FaabricExecutor::executeCall(faabric::Message& call)
     return errorMessage;
 }
 
-faabric::util::SnapshotData FaabricExecutor::takeSnapshot()
-{
-    throw std::runtime_error("Take snapshot not implemented");
-}
-
 // ------------------------------------------
 // HOOKS
 // ------------------------------------------
