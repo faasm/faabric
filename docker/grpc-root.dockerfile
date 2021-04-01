@@ -30,9 +30,19 @@ RUN wget -q -O \
 
 RUN sh cmake-linux.sh -- --skip-license --prefix=/usr/local
 
-# gRPC, protobuf etc.
+# -------------------------------------------------------------------
+# gRPC, protobuf, flatbuffers
+#
+# NOTE - the versions of these must be carefully chosen. 
+# At the time of writing, this PR was the most up-to-date:
+# https://github.com/google/flatbuffers/pull/6338
+# 
+# This meant gRPC version 1.36.1 and flatbuffers at this specific commit: 
+# https://github.com/google/flatbuffers/commit/276b1bc342d23142e4b2b9b9fadbf076474deec9
+# -------------------------------------------------------------------
+
 # Static libs
-RUN git clone --recurse-submodules -b v1.31.0 https://github.com/grpc/grpc
+RUN git clone --recurse-submodules -b v1.36.1 https://github.com/grpc/grpc
 WORKDIR /setup/grpc/cmake/build-static
 RUN cmake -GNinja \
     -DgRPC_INSTALL=ON \

@@ -2,16 +2,17 @@
 # Flatbuffers and gRPC
 # ----------------------------------------------
 
-set(FB_HEADER "${CMAKE_CURRENT_BINARY_DIR}/faabric_generated.h")
-set(GRPC_HEADER "${CMAKE_CURRENT_BINARY_DIR}/faabric.grpc.fb.h")
-set(GRPC_SRC "${CMAKE_CURRENT_BINARY_DIR}/faabric.grpc.fb.cc")
+set(FB_HEADER "${CMAKE_CURRENT_LIST_DIR}/faabric_generated.h")
+set(GRPC_HEADER "${CMAKE_CURRENT_LIST_DIR}/faabric.grpc.fb.h")
+set(GRPC_SRC "${CMAKE_CURRENT_LIST_DIR}/faabric.grpc.fb.cc")
 
-set(FB_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric_generated.h")
-set(GRPC_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/proto/faabric.grpc.fb.h")
+set(FB_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/flat/faabric_generated.h")
+set(GRPC_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/flat/faabric.grpc.fb.h")
 
 add_custom_command(
     OUTPUT "${FB_HEADER}" "${GRPC_HEADER}" "${GRPC_SRC}"
     DEPENDS faabric.fbs
+    WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     COMMAND ${FLATBUFFERS_FLATC_EXECUTABLE}
     ARGS --grpc --cpp faabric.fbs
 )
@@ -20,17 +21,17 @@ add_custom_command(
 add_custom_command(
     OUTPUT "${FB_HEADER_COPIED}"
     DEPENDS "${FB_HEADER}"
-    COMMAND ${CMAKE_COMMAND} -E copy
+    COMMAND ${CMAKE_COMMAND} -E rename
     ${FB_HEADER}
-    ${FAABRIC_INCLUDE_DIR}/faabric/flat/
+    ${FB_HEADER_COPIED}
     )
 
 add_custom_command(
     OUTPUT "${GRPC_HEADER_COPIED}"
     DEPENDS "${GRPC_HEADER}"
-    COMMAND ${CMAKE_COMMAND} -E copy
+    COMMAND ${CMAKE_COMMAND} -E rename
     ${GRPC_HEADER}
-    ${FAABRIC_INCLUDE_DIR}/faabric/flat/
+    ${GRPC_HEADER_COPIED}
     )
 
 # ----------------------------------------------
@@ -51,9 +52,13 @@ set(LIB_FILES
 
 faabric_lib(flat "${LIB_FILES}")
 
-add_dependencies(flat spdlog_ext)
+# Allow gRPC generated code to directly import generated headers
+target_include_directories(flat PRIVATE ${FAABRIC_INCLUDE_DIR}/faabric/flat)
 
+# Add include directories for flatbuffers themselves
 target_include_directories(flat PUBLIC ${FLATBUFFERS_INCLUDE_DIRS})
+
+add_dependencies(flat spdlog_ext)
 
 target_link_libraries(flat
     gRPC::grpc++
