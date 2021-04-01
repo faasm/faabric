@@ -125,6 +125,8 @@ jobs:
       redis:
         image: redis
     steps:
+      - name: "Compose version"
+        run: docker-compose --version
       # --- Code update ---
       - name: "Fetch ref"
         uses: actions/checkout@v2

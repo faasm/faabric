@@ -44,9 +44,19 @@ class MpiWorld
 
     void enqueueMessage(faabric::MPIMessage& msg);
 
-    void getCartesianRank(int rank, int* dims, int* periods, int* coords);
+    void getCartesianRank(int rank,
+                          int maxDims,
+                          const int* dims,
+                          int* periods,
+                          int* coords);
 
     void getRankFromCoords(int* rank, int* coords);
+
+    void shiftCartesianCoords(int rank,
+                              int direction,
+                              int disp,
+                              int* source,
+                              int* destination);
 
     void send(int sendRank,
               int recvRank,
@@ -213,6 +223,8 @@ class MpiWorld
     std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
       localQueueMap;
     std::unordered_map<int, std::thread> asyncThreadMap;
+
+    std::vector<int> cartProcsPerDim;
 
     void setUpStateKV();
 
