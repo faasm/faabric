@@ -52,6 +52,15 @@ RUN cmake -GNinja \
     ../..
 RUN ninja install
 
+# Flatbuffers
+WORKDIR /setup
+RUN git clone --recurse-submodules -b v1.12.0 https://github.com/google/flatbuffers
+WORKDIR /setup/flatbuffers/cmake/build
+RUN cmake -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
+    ../..
+RUN ninja install
+
 # Tidy up
 WORKDIR /
 RUN rm -r /setup

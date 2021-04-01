@@ -17,6 +17,8 @@ class FaabricPool
     void startThreadPool(bool background = true);
 
     void startStateServer();
+    
+    void startSnapshotServer();
 
     void reset();
 

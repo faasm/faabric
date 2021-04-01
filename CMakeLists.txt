@@ -57,6 +57,7 @@ endfunction()
 
 add_subdirectory(src/endpoint)
 add_subdirectory(src/executor)
+add_subdirectory(src/flat)
 add_subdirectory(src/mpi)
 add_subdirectory(src/mpi_native)
 add_subdirectory(src/proto)

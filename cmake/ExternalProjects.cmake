@@ -29,6 +29,12 @@ include_directories(${PROTOBUF_INCLUDE_DIR})
 set(PROTOC_EXE /usr/local/bin/protoc)                                            
 set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)                                  
 
+include(FindFlatbuffers)
+find_package(Flatbuffers REQUIRED)
+
+message(STATUS "Using FlatBuffers with flatc=${FLATBUFFERS_FLATC_EXECUTABLE} \
+    and include dirs=${FLATBUFFERS_INCLUDE_DIRS}")
+
 # Pistache 
 ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"

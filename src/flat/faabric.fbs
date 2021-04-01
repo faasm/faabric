@@ -1,0 +1,13 @@
+table SnapshotPushRequest {
+  key:string;
+  contents:bytes;
+}
+
+table SnapshotPushResponse {
+  message:string;
+}
+
+rpc_service SnapshotService {
+  PushSnapshot(SnapshotPushRequest):SnapshotPushResponse;
+}
+
