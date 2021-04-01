@@ -64,12 +64,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string unboundTimeout = setEnvVar("UNBOUND_TIMEOUT", "5555");
     std::string chainedTimeout = setEnvVar("CHAINED_CALL_TIMEOUT", "9999");
 
-    std::string funcDir = setEnvVar("FUNC_DIR", "/tmp/foo");
-    std::string objDir = setEnvVar("OBJ_DIR", "/tmp/bar");
-    std::string runtimeDir = setEnvVar("RUNTIME_FILES_DIR", "/tmp/rara");
-    std::string sharedDir = setEnvVar("SHARED_FILES_DIR", "/tmp/sss");
-    std::string sharedStorageDir =
-      setEnvVar("SHARED_FILES_STORAGE_DIR", "/tmp/sss_store");
+    std::string faasmLocalDir = setEnvVar("FAASM_LOCAL_DIR", "/tmp/blah");
 
     std::string mpiSize = setEnvVar("DEFAULT_MPI_WORLD_SIZE", "2468");
 
@@ -99,11 +94,11 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.unboundTimeout == 5555);
     REQUIRE(conf.chainedCallTimeout == 9999);
 
-    REQUIRE(conf.functionDir == "/tmp/foo");
-    REQUIRE(conf.objectFileDir == "/tmp/bar");
-    REQUIRE(conf.runtimeFilesDir == "/tmp/rara");
-    REQUIRE(conf.sharedFilesDir == "/tmp/sss");
-    REQUIRE(conf.sharedFilesStorageDir == "/tmp/sss_store");
+    REQUIRE(conf.functionDir == "/tmp/blah/wasm");
+    REQUIRE(conf.objectFileDir == "/tmp/blah/object");
+    REQUIRE(conf.runtimeFilesDir == "/tmp/blah/runtime_root");
+    REQUIRE(conf.sharedFilesDir == "/tmp/blah/shared");
+    REQUIRE(conf.sharedFilesStorageDir == "/tmp/blah/shared_store");
 
     REQUIRE(conf.defaultMpiWorldSize == 2468);
 
@@ -132,11 +127,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("UNBOUND_TIMEOUT", unboundTimeout);
     setEnvVar("CHAINED_CALL_TIMEOUT", chainedTimeout);
 
-    setEnvVar("FUNC_DIR", funcDir);
-    setEnvVar("OBJ_DIR", objDir);
-    setEnvVar("RUNTIME_FILES_DIR", runtimeDir);
-    setEnvVar("SHARED_FILES_DIR", sharedDir);
-    setEnvVar("SHARED_FILES_STORAGE_DIR", sharedStorageDir);
+    setEnvVar("FAASM_LOCAL_DIR", faasmLocalDir);
 
     setEnvVar("DEFAULT_MPI_WORLD_SIZE", mpiSize);
 }

@@ -50,7 +50,8 @@ void SystemConfig::initialise()
       this->getSystemConfIntParam("CHAINED_CALL_TIMEOUT", "300000");
 
     // Filesystem storage
-    std::string faasmLocalDir = getEnvVar("FAASM_LOCAL_DIR", "/usr/local/faasm");
+    std::string faasmLocalDir =
+      getEnvVar("FAASM_LOCAL_DIR", "/usr/local/faasm");
     functionDir = fmt::format("{}/{}", faasmLocalDir, "wasm");
     objectFileDir = fmt::format("{}/{}", faasmLocalDir, "object");
     runtimeFilesDir = fmt::format("{}/{}", faasmLocalDir, "runtime_root");
