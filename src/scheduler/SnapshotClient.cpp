@@ -4,6 +4,7 @@
 #include <grpcpp/security/credentials.h>
 
 #include <faabric/rpc/macros.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
@@ -37,16 +38,24 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
   , stub(SnapshotService::NewStub(channel))
 {}
 
-void SnapshotClient::pushSnapshot(const std::string &key, const faabric::util::SnapshotData& req)
+void SnapshotClient::pushSnapshot(const std::string& key,
+                                  const faabric::util::SnapshotData& req)
 {
+    auto logger = faabric::util::getLogger();
+
     if (faabric::util::isMockMode()) {
         snapshotPushes.emplace_back(host, req);
     } else {
+        logger->debug("Pushing snapshot {} to {}", key, host);
+
         ClientContext context;
+
+        // TODO - avoid copying data here
         flatbuffers::grpc::MessageBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto dataOffset = mb.CreateVector<uint8_t>(req.data, req.size);
-        auto requestOffset = CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
+        auto requestOffset =
+          CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
 
         mb.Finish(requestOffset);
         auto requestMsg = mb.ReleaseMessage<SnapshotPushRequest>();
