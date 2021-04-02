@@ -48,10 +48,9 @@ set(LIB_FILES
     ${GRPC_SRC}
     )
 
+# To get faabric_lib to work here we have to set this include_directory.
+include_directories(${FAABRIC_INCLUDE_DIR}/faabric/flat)
 faabric_lib(flat "${LIB_FILES}")
-
-# Allow gRPC generated code to directly import generated headers
-target_include_directories(flat PRIVATE ${FAABRIC_INCLUDE_DIR}/faabric/flat)
 
 # Add include directories for flatbuffers themselves
 target_include_directories(flat PUBLIC ${FLATBUFFERS_INCLUDE_DIRS})
