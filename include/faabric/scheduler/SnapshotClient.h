@@ -22,6 +22,8 @@ namespace faabric::scheduler {
 std::vector<std::pair<std::string, faabric::util::SnapshotData>>
 getSnapshotPushes();
 
+std::vector<std::pair<std::string, std::string>> getSnapshotDeletes();
+
 void clearMockSnapshotRequests();
 
 // -----------------------------------
@@ -34,6 +36,8 @@ class SnapshotClient
 
     void pushSnapshot(const std::string& key,
                       const faabric::util::SnapshotData& data);
+
+    void deleteSnapshot(const std::string& key);
 
   private:
     const std::string host;

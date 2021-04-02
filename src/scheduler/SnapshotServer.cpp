@@ -58,4 +58,26 @@ Status SnapshotServer::PushSnapshot(
 
     return Status::OK;
 }
+
+Status SnapshotServer::DeleteSnapshot(
+  ServerContext* context,
+  const flatbuffers::grpc::Message<SnapshotDeleteRequest>* request,
+  flatbuffers::grpc::Message<SnapshotDeleteResponse>* response)
+{
+    const SnapshotDeleteRequest* r = request->GetRoot();
+    faabric::util::getLogger()->info("Deleting shapshot {}", r->key()->c_str());
+
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+
+    reg.deleteSnapshot(r->key()->str());
+
+    flatbuffers::grpc::MessageBuilder mb;
+    auto messageOffset = mb.CreateString("Success");
+    auto responseOffset = CreateSnapshotPushResponse(mb, messageOffset);
+    mb.Finish(responseOffset);
+    *response = mb.ReleaseMessage<SnapshotDeleteResponse>();
+
+    return Status::OK;
+}
 }

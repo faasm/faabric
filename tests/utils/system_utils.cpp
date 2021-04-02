@@ -1,5 +1,3 @@
-#include "faabric/scheduler/SnapshotClient.h"
-#include "faabric/snapshot/SnapshotRegistry.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
@@ -7,6 +5,8 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>

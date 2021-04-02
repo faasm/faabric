@@ -22,6 +22,11 @@ class SnapshotServer final
       const flatbuffers::grpc::Message<SnapshotPushRequest>* request,
       flatbuffers::grpc::Message<SnapshotPushResponse>* response) override;
 
+    virtual Status DeleteSnapshot(
+      ServerContext* context,
+      const flatbuffers::grpc::Message<SnapshotDeleteRequest>* request,
+      flatbuffers::grpc::Message<SnapshotDeleteResponse>* response) override;
+
   protected:
     void doStart(const std::string& serverAddr) override;
 };
