@@ -1,5 +1,4 @@
 #include <faabric/flat/FlatRPCServer.h>
-
 #include <faabric/util/logging.h>
 #include <grpcpp/grpcpp.h>
 

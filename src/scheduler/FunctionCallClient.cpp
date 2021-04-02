@@ -171,16 +171,4 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
         CHECK_RPC("unregister", stub->Unregister(&context, req, &response));
     }
 }
-
-void FunctionCallClient::pushSnapshot(const faabric::SnapshotPushRequest& data)
-{
-    if (faabric::util::isMockMode()) {
-        snapshotPushes.emplace_back(host, data);
-    } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("pushSnapshot",
-                  stub->PushSnapshot(&context, data, &response));
-    }
-}
 }

@@ -1,6 +1,6 @@
 table SnapshotPushRequest {
   key:string;
-  contents:[byte];
+  contents:[ubyte];
 }
 
 table SnapshotPushResponse {
