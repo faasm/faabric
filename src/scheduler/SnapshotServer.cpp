@@ -6,7 +6,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
-#include <faabric/proto/macros.h>
+#include <faabric/rpc/macros.h>
 #include <grpcpp/grpcpp.h>
 
 namespace faabric::scheduler {
@@ -36,13 +36,20 @@ Status PushSnapshot(
   flatbuffers::grpc::Message<SnapshotPushResponse>* response)
 {
     const SnapshotPushRequest* r = request->GetRoot();
-    faabric::util::getLogger()->info(
-      "Pushing shapshot {} (size {})", r->key(), r->contents().size());
+    faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
+                                     r->key()->c_str(),
+                                     r->contents()->size());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
-    // TODO - set snapshot
+    // TODO - avoid this copy
+    faabric::util::SnapshotData data;
+    data.size = r->contents()->size();
+    data.data = new uint8_t[r->contents()->size()];
+    std::memcpy(data.data, r->contents()->Data(), r->contents()->size());
+
+    reg.setSnapshot(r->key()->str(), data);
 
     return Status::OK;
 }

@@ -1,6 +1,6 @@
 #include <faabric/state/StateServer.h>
 
-#include <faabric/proto/macros.h>
+#include <faabric/rpc/macros.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>

@@ -3,7 +3,7 @@
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
 
-#include <faabric/proto/macros.h>
+#include <faabric/rpc/macros.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 

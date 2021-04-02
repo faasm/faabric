@@ -1,5 +1,4 @@
-#include <faabric/proto/RPCServer.h>
-
+#include <faabric/rpc/RPCServer.h>
 #include <faabric/util/logging.h>
 #include <grpcpp/grpcpp.h>
 

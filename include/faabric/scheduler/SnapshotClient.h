@@ -32,11 +32,11 @@ class SnapshotClient
   public:
     explicit SnapshotClient(const std::string& hostIn);
 
+    void pushSnapshot(const std::string &key, const faabric::util::SnapshotData& data);
+  private:
     const std::string host;
 
     std::shared_ptr<Channel> channel;
     std::unique_ptr<SnapshotService::Stub> stub;
-
-    void pushSnapshot(const std::string &key, const faabric::util::SnapshotData& data);
 };
 }

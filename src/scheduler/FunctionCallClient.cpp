@@ -4,7 +4,7 @@
 #include <grpcpp/create_channel.h>
 #include <grpcpp/security/credentials.h>
 
-#include <faabric/proto/macros.h>
+#include <faabric/rpc/macros.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
@@ -31,9 +31,6 @@ static std::unordered_map<std::string,
 
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
-
-static std::vector<std::pair<std::string, faabric::SnapshotPushRequest>>
-  snapshotPushes;
 
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
@@ -73,11 +70,6 @@ void queueResourceResponse(const std::string& host, faabric::HostResources& res)
     queuedResourceResponses[host].enqueue(res);
 }
 
-std::vector<std::pair<std::string, faabric::SnapshotPushRequest>> getSnapshotPushes()
-{
-    return snapshotPushes;
-}
-
 void clearMockRequests()
 {
     functionCalls.clear();
@@ -85,7 +77,6 @@ void clearMockRequests()
     mpiMessages.clear();
     resourceRequests.clear();
     unregisterRequests.clear();
-    snapshotPushes.clear();
 
     for (auto& p : queuedResourceResponses) {
         p.second.reset();

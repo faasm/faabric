@@ -6,7 +6,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
-#include <faabric/proto/macros.h>
+#include <faabric/rpc/macros.h>
 #include <grpcpp/grpcpp.h>
 
 namespace faabric::scheduler {

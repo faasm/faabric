@@ -1,5 +1,5 @@
-#include "faabric/snapshot/SnapshotRegistry.h"
-#include "faabric/util/snapshot.h"
+#include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
@@ -228,7 +228,6 @@ std::vector<std::string> Scheduler::callFunctions(
     // For threads/ processes we need to have a snapshot key and be ready to
     // push the snapshot to other hosts
     faabric::util::SnapshotData snapshotData;
-    faabric::SnapshotPushRequest snapshotReq;
     std::string snapshotKey = firstMsg.snapshotkey();
     bool snapshotNeeded =
       req.type() == req.THREADS || req.type() == req.PROCESSES;
@@ -241,8 +240,6 @@ std::vector<std::string> Scheduler::callFunctions(
         faabric::snapshot::SnapshotRegistry& reg =
           faabric::snapshot::getSnapshotRegistry();
         snapshotData = reg.getSnapshot(snapshotKey);
-
-        snapshotReq.set_allocated_key(&snapshotKey);
     }
 
     auto funcQueue = this->getFunctionQueue(firstMsg);

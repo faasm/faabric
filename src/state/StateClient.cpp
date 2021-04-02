@@ -1,6 +1,6 @@
 #include <faabric/state/StateClient.h>
 
-#include <faabric/proto/macros.h>
+#include <faabric/rpc/macros.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <grpcpp/create_channel.h>

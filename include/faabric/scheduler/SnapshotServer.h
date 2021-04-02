@@ -2,8 +2,7 @@
 
 #include <faabric/flat/faabric.grpc.fb.h>
 #include <faabric/flat/faabric_generated.h>
-#include <faabric/proto/RPCServer.h>
-#include <faabric/proto/faabric.pb.h>
+#include <faabric/rpc/RPCServer.h>
 #include <faabric/scheduler/Scheduler.h>
 
 #include <grpcpp/grpcpp.h>
@@ -21,7 +20,7 @@ class SnapshotServer final
     virtual Status PushSnapshot(
       ServerContext* context,
       const flatbuffers::grpc::Message<SnapshotPushRequest>* request,
-      flatbuffers::grpc::Message<SnapshotPushResponse>* response);
+      flatbuffers::grpc::Message<SnapshotPushResponse>* response) override;
 
   protected:
     void doStart(const std::string& serverAddr) override;

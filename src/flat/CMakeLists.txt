@@ -39,13 +39,11 @@ add_custom_command(
 # ----------------------------------------------
 
 set(HEADERS
-    ${FAABRIC_INCLUDE_DIR}/faabric/flat/FlatRPCServer.h
     ${FB_HEADER_COPIED}
     ${GRPC_HEADER_COPIED}
     )
 
 set(LIB_FILES
-    FlatRPCServer.cpp
     ${HEADERS}
     ${GRPC_SRC}
     )
@@ -58,10 +56,5 @@ target_include_directories(flat PRIVATE ${FAABRIC_INCLUDE_DIR}/faabric/flat)
 # Add include directories for flatbuffers themselves
 target_include_directories(flat PUBLIC ${FLATBUFFERS_INCLUDE_DIRS})
 
-add_dependencies(flat spdlog_ext)
-
-target_link_libraries(flat
-    gRPC::grpc++
-    gRPC::grpc++_reflection
-    )
+target_link_libraries(flat grpc)
 
