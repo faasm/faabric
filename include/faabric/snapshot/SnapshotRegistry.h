@@ -19,6 +19,7 @@ class SnapshotRegistry
 
     void deleteSnapshot(const std::string& key);
 
+    size_t getSnapshotCount();
   private:
     std::unordered_map<std::string, faabric::util::SnapshotData> snapshotMap;
 

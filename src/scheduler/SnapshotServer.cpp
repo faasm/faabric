@@ -12,7 +12,6 @@
 namespace faabric::scheduler {
 SnapshotServer::SnapshotServer()
   : RPCServer(DEFAULT_RPC_HOST, SNAPSHOT_RPC_PORT)
-  , scheduler(getScheduler())
 {}
 
 void SnapshotServer::doStart(const std::string& serverAddr)
@@ -30,7 +29,7 @@ void SnapshotServer::doStart(const std::string& serverAddr)
     server->Wait();
 }
 
-Status PushSnapshot(
+Status SnapshotServer::PushSnapshot(
   ServerContext* context,
   const flatbuffers::grpc::Message<SnapshotPushRequest>* request,
   flatbuffers::grpc::Message<SnapshotPushResponse>* response)
@@ -50,6 +49,12 @@ Status PushSnapshot(
     std::memcpy(data.data, r->contents()->Data(), r->contents()->size());
 
     reg.setSnapshot(r->key()->str(), data);
+
+    flatbuffers::grpc::MessageBuilder mb;
+    auto messageOffset = mb.CreateString("Success");
+    auto responseOffset = CreateSnapshotPushResponse(mb, messageOffset);
+    mb.Finish(responseOffset);
+    *response = mb.ReleaseMessage<SnapshotPushResponse>();
 
     return Status::OK;
 }

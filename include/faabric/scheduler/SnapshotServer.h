@@ -24,8 +24,5 @@ class SnapshotServer final
 
   protected:
     void doStart(const std::string& serverAddr) override;
-
-  private:
-    Scheduler& scheduler;
 };
 }

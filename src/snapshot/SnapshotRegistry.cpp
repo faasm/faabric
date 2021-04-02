@@ -37,6 +37,12 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
     snapshotMap.erase(key);
 }
 
+size_t SnapshotRegistry::getSnapshotCount()
+{
+    faabric::util::UniqueLock lock(snapshotsMx);
+    return snapshotMap.size();
+}
+
 SnapshotRegistry& getSnapshotRegistry()
 {
     static SnapshotRegistry reg;

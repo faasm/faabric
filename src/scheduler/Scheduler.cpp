@@ -319,7 +319,7 @@ std::vector<std::string> Scheduler::callFunctions(
                 }
             }
 
-            // If some are left, we need to distribute.
+            // If some are left, we need to distribute
             if (remainder > 0) {
                 // At this point we have a remainder, so we need to distribute
                 // the rest Get the list of registered hosts for this function

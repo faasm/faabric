@@ -23,20 +23,28 @@ TEST_CASE("Test pushing snapshot", "[scheduler]")
 
     snapshot::SnapshotRegistry& registry = snapshot::getSnapshotRegistry();
 
-    // TODO - check no snapshots
+    // Check nothing to start with
+    REQUIRE(registry.getSnapshotCount() == 0);
 
     // Prepare some snapshot data
-    std::string snapKey = "foo";
-    faabric::util::SnapshotData snap;
-    size_t snapSize = 1024;
-    snap.size = snapSize;
-    snap.data = new uint8_t[snapSize];
+    std::string snapKeyA = "foo";
+    std::string snapKeyB = "bar";
+    faabric::util::SnapshotData snapA;
+    faabric::util::SnapshotData snapB;
+    size_t snapSizeA = 1024;
+    size_t snapSizeB = 500;
+    snapA.size = snapSizeA;
+    snapB.size = snapSizeB;
+    snapA.data = new uint8_t[snapSizeA];
+    snapB.data = new uint8_t[snapSizeB];
 
     // Send the message
     scheduler::SnapshotClient cli(LOCALHOST);
-    cli.pushSnapshot(snapKey, snap);
+    cli.pushSnapshot(snapKeyA, snapA);
+    cli.pushSnapshot(snapKeyB, snapB);
 
-    // TODO - check snapshot created
+    // Check snapshots created in regsitry
+    REQUIRE(registry.getSnapshotCount() == 2);
 
     // Stop the server
     server.stop();
