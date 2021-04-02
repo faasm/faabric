@@ -1,9 +1,9 @@
-#include "faabric/scheduler/SnapshotClient.h"
-#include "faabric/snapshot/SnapshotRegistry.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/func.h>
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
@@ -140,6 +140,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     faabric::util::SnapshotData snapshot;
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
+
     if (!expectedSnapshot.empty()) {
         snapshot.size = 1234;
         snapshot.data = new uint8_t[snapshot.size];
@@ -283,6 +284,8 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     for (int i = 0; i < nCallsTwo; i++) {
         faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msg.set_snapshotkey(expectedSnapshot);
+
         msgsTwo.push_back(msg);
         expectedHostsTwo.push_back(otherHost);
     }
