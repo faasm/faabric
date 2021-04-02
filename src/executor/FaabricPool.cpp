@@ -26,7 +26,6 @@ void FaabricPool::startSnapshotServer()
 {
     auto logger = faabric::util::getLogger();
     logger->info("Starting snapshot server");
-
 }
 
 void FaabricPool::startStateServer()

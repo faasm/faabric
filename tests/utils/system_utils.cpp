@@ -1,3 +1,4 @@
+#include "faabric/snapshot/SnapshotRegistry.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
@@ -35,6 +36,9 @@ void cleanFaabric()
     faabric::HostResources res;
     res.set_cores(10);
     sch.setThisHostResources(res);
+
+    // Clear snapshots
+    faabric::snapshot::getSnapshotRegistry().clear();
 
     // Reset system config
     conf.reset();

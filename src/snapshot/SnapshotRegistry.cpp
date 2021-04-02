@@ -49,4 +49,13 @@ SnapshotRegistry& getSnapshotRegistry()
     return reg;
 }
 
+void SnapshotRegistry::clear()
+{
+    faabric::util::UniqueLock lock(snapshotsMx);
+    for (auto p : snapshotMap) {
+        deleteSnapshot(p.first);
+    }
+
+    snapshotMap.clear();
+}
 }

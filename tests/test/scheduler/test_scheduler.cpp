@@ -1,3 +1,5 @@
+#include "faabric/scheduler/SnapshotClient.h"
+#include "faabric/snapshot/SnapshotRegistry.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
@@ -119,12 +121,31 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 {
     cleanFaabric();
 
+    std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
-    SECTION("Threads") { execMode = faabric::BatchExecuteRequest::THREADS; }
-    SECTION("Processes") { execMode = faabric::BatchExecuteRequest::PROCESSES; }
+    SECTION("Threads")
+    {
+        execMode = faabric::BatchExecuteRequest::THREADS;
+        expectedSnapshot = "threadSnap";
+    }
+    SECTION("Processes")
+    {
+        execMode = faabric::BatchExecuteRequest::PROCESSES;
+        expectedSnapshot = "procSnap";
+    }
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
-
     bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
+
+    // Set up a dummy snapshot if necessary
+    faabric::util::SnapshotData snapshot;
+    faabric::snapshot::SnapshotRegistry& snapRegistry =
+      faabric::snapshot::getSnapshotRegistry();
+    if (!expectedSnapshot.empty()) {
+        snapshot.size = 1234;
+        snapshot.data = new uint8_t[snapshot.size];
+
+        snapRegistry.setSnapshot(expectedSnapshot, snapshot);
+    }
 
     // Mock everything
     faabric::util::setMockMode(true);
@@ -165,6 +186,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         msg.set_pythonuser("foobar");
         msg.set_issgx(true);
 
+        // Set snapshot key
+        msg.set_snapshotkey(expectedSnapshot);
+
         msgsOne.push_back(msg);
 
         // Expect this host to handle up to its number of cores
@@ -191,6 +215,18 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     auto resRequestsOne = faabric::scheduler::getResourceRequests();
     REQUIRE(resRequestsOne.size() == 1);
     REQUIRE(resRequestsOne.at(0).first == otherHost);
+
+    // Check snapshots have been pushed
+    auto snapshotPushes = faabric::scheduler::getSnapshotPushes();
+    if (expectedSnapshot.empty()) {
+        REQUIRE(snapshotPushes.empty());
+    } else {
+        REQUIRE(snapshotPushes.size() == 1);
+        auto pushedSnapshot = snapshotPushes.at(0);
+        REQUIRE(pushedSnapshot.first == otherHost);
+        REQUIRE(pushedSnapshot.second.size == snapshot.size);
+        REQUIRE(pushedSnapshot.second.data == snapshot.data);
+    }
 
     // Check scheduled on expected hosts
     REQUIRE(actualHostsOne == expectedHostsOne);
@@ -221,6 +257,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
             REQUIRE(msg.pythonuser() == "foobar");
             REQUIRE(msg.pythonfunction() == "baz");
             REQUIRE(msg.issgx());
+            REQUIRE(msg.snapshotkey() == expectedSnapshot);
         }
     }
 
