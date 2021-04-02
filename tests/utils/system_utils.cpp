@@ -1,3 +1,4 @@
+#include "faabric/scheduler/SnapshotClient.h"
 #include "faabric/snapshot/SnapshotRegistry.h"
 #include <catch.hpp>
 
@@ -47,6 +48,7 @@ void cleanFaabric()
     faabric::util::setTestMode(true);
     faabric::util::setMockMode(false);
     faabric::scheduler::clearMockRequests();
+    faabric::scheduler::clearMockSnapshotRequests();
 
     // Clear out MPI worlds
     scheduler::MpiWorldRegistry& mpiRegistry = scheduler::getMpiWorldRegistry();

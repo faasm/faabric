@@ -258,7 +258,6 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
             REQUIRE(msg.pythonuser() == "foobar");
             REQUIRE(msg.pythonfunction() == "baz");
             REQUIRE(msg.issgx());
-            REQUIRE(msg.snapshotkey() == expectedSnapshot);
         }
     }
 
