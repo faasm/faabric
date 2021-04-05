@@ -51,10 +51,6 @@ SnapshotRegistry& getSnapshotRegistry()
 
 void SnapshotRegistry::clear()
 {
-    for (auto p : snapshotMap) {
-        delete[] p.second.data;
-    }
-
     snapshotMap.clear();
 }
 }
