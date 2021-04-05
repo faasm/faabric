@@ -35,14 +35,12 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     size_t snapSizeB = 500;
     snapA.size = snapSizeA;
     snapB.size = snapSizeB;
-    snapA.data = new uint8_t[snapSizeA];
-    snapB.data = new uint8_t[snapSizeB];
 
     std::vector<uint8_t> dataA = { 0, 1, 2, 3, 4 };
     std::vector<uint8_t> dataB = { 3, 3, 2, 2 };
 
-    std::memcpy(snapA.data, dataA.data(), dataA.size());
-    std::memcpy(snapB.data, dataB.data(), dataB.size());
+    snapA.data = dataA.data();
+    snapB.data = dataB.data();
 
     // Send the message
     scheduler::SnapshotClient cli(LOCALHOST);
@@ -62,15 +60,6 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
 
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
-
-    // Delete one snapshot
-    cli.deleteSnapshot(snapKeyA);
-
-    // Check snapshot deleted
-    REQUIRE(registry.getSnapshotCount() == 1);
-
-    REQUIRE_THROWS(registry.getSnapshot(snapKeyA));
-    REQUIRE(registry.getSnapshot(snapKeyB).size == snapB.size);
 
     // Stop the server
     server.stop();

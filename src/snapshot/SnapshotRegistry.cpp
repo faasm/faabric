@@ -20,27 +20,13 @@ faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
     return snapshotMap[key];
 }
 
-void SnapshotRegistry::setBaseSnapshot(const faabric::Message& msg,
-                                       faabric::util::SnapshotData& data)
-{
-    std::string key = faabric::util::funcToString(msg, false);
-    setSnapshot(key, data);
-}
-
-void SnapshotRegistry::mapBaseSnapshot(const faabric::Message& msg,
-                                       uint8_t* target)
-{
-    std::string key = faabric::util::funcToString(msg, false);
-    mapSnapshot(key, target);
-}
-
 void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
     faabric::util::SnapshotData d = getSnapshot(key);
     mmap(target, d.size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
 }
 
-void SnapshotRegistry::setSnapshot(const std::string& key,
+void SnapshotRegistry::takeSnapshot(const std::string& key,
                                    faabric::util::SnapshotData data)
 {
     faabric::util::UniqueLock lock(snapshotsMx);

@@ -42,13 +42,11 @@ Status SnapshotServer::PushSnapshot(
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
-    // TODO - avoid this copy
+    // Set up the snapshot
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
-    data.data = new uint8_t[r->contents()->size()];
-    std::memcpy(data.data, r->contents()->Data(), r->contents()->size());
-
-    reg.setSnapshot(r->key()->str(), data);
+    data.data = r->contents()->Data();
+    reg.takeSnapshot(r->key()->str(), data);
 
     flatbuffers::grpc::MessageBuilder mb;
     auto messageOffset = mb.CreateString("Success");

@@ -16,15 +16,10 @@ class SnapshotRegistry
 
     faabric::util::SnapshotData& getSnapshot(const std::string& key);
 
-    void setBaseSnapshot(const faabric::Message& msg,
-                         faabric::util::SnapshotData& data);
-
-    void mapBaseSnapshot(const faabric::Message& msg, uint8_t* target);
-
     void mapSnapshot(const std::string& key, uint8_t* target);
 
-    void setSnapshot(const std::string& key, faabric::util::SnapshotData data);
-
+    void takeSnapshot(const std::string& key, faabric::util::SnapshotData data);
+    
     void deleteSnapshot(const std::string& key);
 
     size_t getSnapshotCount();
