@@ -222,7 +222,6 @@ class MpiWorld
 
     std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
       localQueueMap;
-    std::unordered_map<int, std::thread> asyncThreadMap;
 
     std::vector<int> cartProcsPerDim;
 
@@ -231,15 +230,6 @@ class MpiWorld
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
     void checkRankOnThisHost(int rank);
-
-    int doISendRecv(int sendRank,
-                    int recvRank,
-                    const uint8_t* sendBuffer,
-                    uint8_t* recvBuffer,
-                    faabric_datatype_t* dataType,
-                    int count,
-                    faabric::MPIMessage::MPIMessageType messageType =
-                      faabric::MPIMessage::NORMAL);
 
     void pushToState();
 };
