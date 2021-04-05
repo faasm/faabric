@@ -19,7 +19,7 @@ class SnapshotRegistry
     void mapSnapshot(const std::string& key, uint8_t* target);
 
     void takeSnapshot(const std::string& key, faabric::util::SnapshotData data);
-    
+
     void deleteSnapshot(const std::string& key);
 
     size_t getSnapshotCount();
@@ -29,7 +29,7 @@ class SnapshotRegistry
   private:
     std::unordered_map<std::string, faabric::util::SnapshotData> snapshotMap;
 
-    int writeSnapshotToFd(const std::string &key);
+    int writeSnapshotToFd(const std::string& key);
 
     std::mutex snapshotsMx;
 };

@@ -27,7 +27,7 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 }
 
 void SnapshotRegistry::takeSnapshot(const std::string& key,
-                                   faabric::util::SnapshotData data)
+                                    faabric::util::SnapshotData data)
 {
     faabric::util::UniqueLock lock(snapshotsMx);
     snapshotMap[key] = data;
@@ -89,6 +89,7 @@ int SnapshotRegistry::writeSnapshotToFd(const std::string& key)
     // Record the fd
     getSnapshot(key).fd = fd;
 
+    logger->debug("Wrote snapshot {} to fd {}", key, fd);
     return fd;
 }
 }
