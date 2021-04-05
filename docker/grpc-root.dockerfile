@@ -42,7 +42,7 @@ RUN sh cmake-linux.sh -- --skip-license --prefix=/usr/local
 # -------------------------------------------------------------------
 
 # Static libs
-RUN git clone --recurse-submodules -b v1.36.1 https://github.com/grpc/grpc
+RUN git clone --depth 1 --recurse-submodules -b v1.36.1 https://github.com/grpc/grpc
 WORKDIR /setup/grpc/cmake/build-static
 RUN cmake -GNinja \
     -DgRPC_INSTALL=ON \
@@ -64,7 +64,7 @@ RUN ninja install
 
 # Flatbuffers
 WORKDIR /setup
-RUN git clone --recurse-submodules https://github.com/google/flatbuffers
+RUN git clone --depth 1 --recurse-submodules https://github.com/google/flatbuffers
 WORKDIR /setup/flatbuffers
 RUN git checkout 276b1bc342d23142e4b2b9b9fadbf076474deec9
 WORKDIR /setup/flatbuffers/cmake/build-static
