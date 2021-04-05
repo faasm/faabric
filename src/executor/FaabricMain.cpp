@@ -32,6 +32,9 @@ void FaabricMain::startBackground()
     // In-memory state
     pool.startStateServer();
 
+    // Snapshots
+    pool.startSnapshotServer();
+
     // Work sharing
     pool.startFunctionCallServer();
 }

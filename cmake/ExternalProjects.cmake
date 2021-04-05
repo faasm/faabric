@@ -29,6 +29,12 @@ include_directories(${PROTOBUF_INCLUDE_DIR})
 set(PROTOC_EXE /usr/local/bin/protoc)                                            
 set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)                                  
 
+# Include FlatBuffers
+# I couldn't get the proper find_package working, so we have this hack now, and
+# assume that FB is installed where we think it should be.
+set(FLATBUFFERS_FLATC_EXECUTABLE "/usr/local/bin/flatc")
+set(FLATBUFFERS_INCLUDE_DIRS "/usr/local/include/flatbuffers")
+
 # Pistache 
 ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"

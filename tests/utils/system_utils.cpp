@@ -5,6 +5,8 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
@@ -36,6 +38,9 @@ void cleanFaabric()
     res.set_cores(10);
     sch.setThisHostResources(res);
 
+    // Clear snapshots
+    faabric::snapshot::getSnapshotRegistry().clear();
+
     // Reset system config
     conf.reset();
 
@@ -43,6 +48,7 @@ void cleanFaabric()
     faabric::util::setTestMode(true);
     faabric::util::setMockMode(false);
     faabric::scheduler::clearMockRequests();
+    faabric::scheduler::clearMockSnapshotRequests();
 
     // Clear out MPI worlds
     scheduler::MpiWorldRegistry& mpiRegistry = scheduler::getMpiWorldRegistry();

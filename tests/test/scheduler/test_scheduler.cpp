@@ -2,6 +2,8 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/func.h>
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
@@ -119,12 +121,32 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 {
     cleanFaabric();
 
+    std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
-    SECTION("Threads") { execMode = faabric::BatchExecuteRequest::THREADS; }
-    SECTION("Processes") { execMode = faabric::BatchExecuteRequest::PROCESSES; }
+    SECTION("Threads")
+    {
+        execMode = faabric::BatchExecuteRequest::THREADS;
+        expectedSnapshot = "threadSnap";
+    }
+    SECTION("Processes")
+    {
+        execMode = faabric::BatchExecuteRequest::PROCESSES;
+        expectedSnapshot = "procSnap";
+    }
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
-
     bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
+
+    // Set up a dummy snapshot if necessary
+    faabric::util::SnapshotData snapshot;
+    faabric::snapshot::SnapshotRegistry& snapRegistry =
+      faabric::snapshot::getSnapshotRegistry();
+
+    if (!expectedSnapshot.empty()) {
+        snapshot.size = 1234;
+        snapshot.data = new uint8_t[snapshot.size];
+
+        snapRegistry.setSnapshot(expectedSnapshot, snapshot);
+    }
 
     // Mock everything
     faabric::util::setMockMode(true);
@@ -165,6 +187,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         msg.set_pythonuser("foobar");
         msg.set_issgx(true);
 
+        // Set snapshot key
+        msg.set_snapshotkey(expectedSnapshot);
+
         msgsOne.push_back(msg);
 
         // Expect this host to handle up to its number of cores
@@ -191,6 +216,18 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     auto resRequestsOne = faabric::scheduler::getResourceRequests();
     REQUIRE(resRequestsOne.size() == 1);
     REQUIRE(resRequestsOne.at(0).first == otherHost);
+
+    // Check snapshots have been pushed
+    auto snapshotPushes = faabric::scheduler::getSnapshotPushes();
+    if (expectedSnapshot.empty()) {
+        REQUIRE(snapshotPushes.empty());
+    } else {
+        REQUIRE(snapshotPushes.size() == 1);
+        auto pushedSnapshot = snapshotPushes.at(0);
+        REQUIRE(pushedSnapshot.first == otherHost);
+        REQUIRE(pushedSnapshot.second.size == snapshot.size);
+        REQUIRE(pushedSnapshot.second.data == snapshot.data);
+    }
 
     // Check scheduled on expected hosts
     REQUIRE(actualHostsOne == expectedHostsOne);
@@ -246,6 +283,8 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     for (int i = 0; i < nCallsTwo; i++) {
         faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msg.set_snapshotkey(expectedSnapshot);
+
         msgsTwo.push_back(msg);
         expectedHostsTwo.push_back(otherHost);
     }
@@ -293,9 +332,29 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     faabric::util::setMockMode(true);
 
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
-    SECTION("Threads") { execMode = faabric::BatchExecuteRequest::THREADS; }
-    SECTION("Processes") { execMode = faabric::BatchExecuteRequest::PROCESSES; }
+    std::string expectedSnapshot;
+    SECTION("Threads")
+    {
+        execMode = faabric::BatchExecuteRequest::THREADS;
+        expectedSnapshot = "threadSnap";
+    }
+    SECTION("Processes")
+    {
+        execMode = faabric::BatchExecuteRequest::PROCESSES;
+        expectedSnapshot = "procSnap";
+    }
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
+
+    // Set up snapshot if necessary
+    faabric::util::SnapshotData snapshot;
+    faabric::snapshot::SnapshotRegistry& snapRegistry =
+      faabric::snapshot::getSnapshotRegistry();
+
+    if (!expectedSnapshot.empty()) {
+        snapshot.size = 1234;
+        snapshot.data = new uint8_t[snapshot.size];
+        snapRegistry.setSnapshot(expectedSnapshot, snapshot);
+    }
 
     // Set up this host with very low resources
     Scheduler& sch = scheduler::getScheduler();
@@ -316,6 +375,7 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     std::vector<faabric::Message> msgs;
     for (int i = 0; i < nCalls; i++) {
         faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msg.set_snapshotkey(expectedSnapshot);
         msgs.push_back(msg);
     }
 

@@ -27,6 +27,7 @@ set(LIB_FILES
 
 faabric_lib(util "${LIB_FILES}")
 
+add_dependencies(util pistache_ext)
 add_dependencies(util spdlog_ext)
 add_dependencies(util rapidjson_ext)
 add_dependencies(util cppcodec_ext)

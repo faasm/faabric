@@ -2,9 +2,9 @@
 
 #include <faabric/state/State.h>
 
-#include <faabric/proto/RPCServer.h>
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/rpc/RPCServer.h>
 
 using namespace grpc;
 

@@ -2,10 +2,13 @@
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/random.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
 
@@ -223,6 +226,24 @@ std::vector<std::string> Scheduler::callFunctions(
         throw std::runtime_error("Message with no master host");
     }
 
+    // For threads/ processes we need to have a snapshot key and be ready to
+    // push the snapshot to other hosts
+    faabric::util::SnapshotData snapshotData;
+    std::string snapshotKey = firstMsg.snapshotkey();
+    bool snapshotNeeded =
+      req.type() == req.THREADS || req.type() == req.PROCESSES;
+    if (snapshotNeeded) {
+        if (snapshotKey.empty()) {
+            logger->error("No snapshot provided for {}", funcStr);
+            throw std::runtime_error(
+              "Empty snapshot for distributed threads/ processes");
+        }
+
+        faabric::snapshot::SnapshotRegistry& reg =
+          faabric::snapshot::getSnapshotRegistry();
+        snapshotData = reg.getSnapshot(snapshotKey);
+    }
+
     auto funcQueue = this->getFunctionQueue(firstMsg);
 
     // TODO - more fine-grained locking. This blocks all functions
@@ -436,6 +457,15 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
     for (int i = offset; i < (offset + nOnThisHost); i++) {
         thisHostMsgs.push_back(req.messages().at(i));
         records.at(i) = host;
+    }
+
+    // Push the snapshot if necessary
+    if (req.type() == req.THREADS || req.type() == req.PROCESSES) {
+        std::string snapshotKey = firstMsg.snapshotkey();
+        SnapshotClient c(host);
+        const SnapshotData& d =
+          snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+        c.pushSnapshot(snapshotKey, d);
     }
 
     logger->debug(

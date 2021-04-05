@@ -18,6 +18,8 @@ class FaabricPool
 
     void startStateServer();
 
+    void startSnapshotServer();
+
     void reset();
 
     int getThreadToken();

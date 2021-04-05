@@ -22,6 +22,12 @@ void FaabricPool::startFunctionCallServer()
     functionServer.start();
 }
 
+void FaabricPool::startSnapshotServer()
+{
+    auto logger = faabric::util::getLogger();
+    logger->info("Starting snapshot server");
+}
+
 void FaabricPool::startStateServer()
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();

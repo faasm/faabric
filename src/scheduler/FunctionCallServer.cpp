@@ -1,11 +1,12 @@
-#include "faabric/util/func.h"
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>
+#include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
-#include <faabric/proto/macros.h>
+#include <faabric/rpc/macros.h>
 #include <grpcpp/grpcpp.h>
 
 namespace faabric::scheduler {
@@ -98,5 +99,4 @@ Status FunctionCallServer::Unregister(ServerContext* context,
     scheduler.removeRegisteredHost(request->host(), request->function());
     return Status::OK;
 }
-
 }

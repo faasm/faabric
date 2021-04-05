@@ -44,14 +44,11 @@ add_custom_command(
 # ----------------------------------------------
 
 set(HEADERS
-    ${FAABRIC_INCLUDE_DIR}/faabric/proto/macros.h
-    ${FAABRIC_INCLUDE_DIR}/faabric/proto/RPCServer.h
     ${PB_HEADER_COPIED}
     ${GRPC_HEADER_COPIED}
     )
 
 set(LIB_FILES
-    RPCServer.cpp
     ${HEADERS}
     ${PB_SRC}
     ${GRPC_SRC}
@@ -59,11 +56,5 @@ set(LIB_FILES
 
 faabric_lib(proto "${LIB_FILES}")
 
-add_dependencies(proto spdlog_ext)
-
-target_link_libraries(proto
-    ${Protobuf_LIBRARIES}
-    gRPC::grpc++
-    gRPC::grpc++_reflection
-    )
+target_link_libraries(proto rpc)
 

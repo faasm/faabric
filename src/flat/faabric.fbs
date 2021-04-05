@@ -1,0 +1,22 @@
+table SnapshotPushRequest {
+  key:string;
+  contents:[ubyte];
+}
+
+table SnapshotPushResponse {
+  message:string;
+}
+
+table SnapshotDeleteRequest {
+  key:string;
+}
+
+table SnapshotDeleteResponse {
+  message:string;
+}
+
+rpc_service SnapshotService {
+  PushSnapshot(SnapshotPushRequest):SnapshotPushResponse;
+  DeleteSnapshot(SnapshotDeleteRequest):SnapshotDeleteResponse;
+}
+
