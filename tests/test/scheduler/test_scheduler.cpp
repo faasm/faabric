@@ -145,7 +145,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         snapshot.size = 1234;
         snapshot.data = new uint8_t[snapshot.size];
 
-        snapRegistry.setSnapshot(expectedSnapshot, snapshot);
+        snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
     }
 
     // Mock everything
@@ -353,7 +353,7 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     if (!expectedSnapshot.empty()) {
         snapshot.size = 1234;
         snapshot.data = new uint8_t[snapshot.size];
-        snapRegistry.setSnapshot(expectedSnapshot, snapshot);
+        snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
     }
 
     // Set up this host with very low resources

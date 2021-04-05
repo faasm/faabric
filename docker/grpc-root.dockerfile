@@ -42,7 +42,7 @@ RUN sh cmake-linux.sh -- --skip-license --prefix=/usr/local
 # -------------------------------------------------------------------
 
 # Static libs
-RUN git clone --recurse-submodules -b v1.36.1 https://github.com/grpc/grpc
+RUN git clone --depth 1 --recurse-submodules -b v1.36.1 https://github.com/grpc/grpc
 WORKDIR /setup/grpc/cmake/build-static
 RUN cmake -GNinja \
     -DgRPC_INSTALL=ON \

@@ -4,6 +4,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/util/snapshot.h>
 
 namespace faabric::snapshot {
@@ -13,9 +14,11 @@ class SnapshotRegistry
   public:
     SnapshotRegistry();
 
-    faabric::util::SnapshotData getSnapshot(const std::string& key);
+    faabric::util::SnapshotData& getSnapshot(const std::string& key);
 
-    void setSnapshot(const std::string& key, faabric::util::SnapshotData data);
+    void mapSnapshot(const std::string& key, uint8_t* target);
+
+    void takeSnapshot(const std::string& key, faabric::util::SnapshotData data);
 
     void deleteSnapshot(const std::string& key);
 
@@ -25,6 +28,8 @@ class SnapshotRegistry
 
   private:
     std::unordered_map<std::string, faabric::util::SnapshotData> snapshotMap;
+
+    int writeSnapshotToFd(const std::string& key);
 
     std::mutex snapshotsMx;
 };
