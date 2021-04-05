@@ -19,6 +19,7 @@ namespace faabric::scheduler {
 // -----------------------------------
 // Mocking
 // -----------------------------------
+
 std::vector<std::pair<std::string, faabric::util::SnapshotData>>
 getSnapshotPushes();
 
@@ -29,6 +30,7 @@ void clearMockSnapshotRequests();
 // -----------------------------------
 // gRPC client
 // -----------------------------------
+
 class SnapshotClient
 {
   public:

@@ -63,7 +63,7 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
 
-    // Delete the snapshots
+    // Delete one snapshot
     cli.deleteSnapshot(snapKeyA);
 
     // Check snapshot deleted
