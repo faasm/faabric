@@ -29,6 +29,8 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 void SnapshotRegistry::takeSnapshot(const std::string& key,
                                     faabric::util::SnapshotData data)
 {
+    // Note - we only preserve the snapshot in the in-memory file, and do not
+    // take ownership for the original data referenced in SnapshotData
     faabric::util::UniqueLock lock(snapshotsMx);
     snapshotMap[key] = data;
 
@@ -44,7 +46,14 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
     }
 
     faabric::util::SnapshotData d = snapshotMap[key];
-    delete[] d.data;
+
+    // Note - the data referenced by the SnapshotData object is not owned by the
+    // snapshot registry so we don't delete it here. We only remove the file
+    // descriptor used for mapping memory
+    if (d.fd > 0) {
+        ::close(d.fd);
+    }
+
     snapshotMap.erase(key);
 }
 
@@ -69,18 +78,18 @@ int SnapshotRegistry::writeSnapshotToFd(const std::string& key)
 {
     auto logger = faabric::util::getLogger();
 
-    int fd = memfd_create(key.c_str(), 0);
+    int fd = ::memfd_create(key.c_str(), 0);
     faabric::util::SnapshotData snapData = getSnapshot(key);
 
     // Make the fd big enough
-    int ferror = ftruncate(fd, snapData.size);
+    int ferror = ::ftruncate(fd, snapData.size);
     if (ferror) {
         logger->error("ferror call failed with error {}", ferror);
         throw std::runtime_error("Failed writing memory to fd (ftruncate)");
     }
 
     // Write the data
-    ssize_t werror = write(fd, snapData.data, snapData.size);
+    ssize_t werror = ::write(fd, snapData.data, snapData.size);
     if (werror == -1) {
         logger->error("Write call failed with error {}", werror);
         throw std::runtime_error("Failed writing memory to fd (write)");

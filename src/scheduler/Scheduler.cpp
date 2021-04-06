@@ -430,6 +430,20 @@ std::vector<std::string> Scheduler::callFunctions(
     return executed;
 }
 
+void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
+                                        const std::string& snapshotKey)
+{
+
+    std::string funcStr = faabric::util::funcToString(msg, false);
+    std::unordered_set<std::string>& thisRegisteredHosts =
+      registeredHosts[funcStr];
+
+    for (auto host : thisRegisteredHosts) {
+        SnapshotClient c(host);
+        c.deleteSnapshot(snapshotKey);
+    }
+}
+
 int Scheduler::scheduleFunctionsOnHost(const std::string& host,
                                        faabric::BatchExecuteRequest& req,
                                        std::vector<std::string>& records,
