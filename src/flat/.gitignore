@@ -1,2 +1,4 @@
-# Flatbuf generated
+# Flatbuffers/ gRPC output
+*.fb.h
 *.fb.cc
+faabric_generated.h
