@@ -21,7 +21,7 @@ add_custom_command(
 add_custom_command(
     OUTPUT "${FB_HEADER_COPIED}"
     DEPENDS "${FB_HEADER}"
-    COMMAND ${CMAKE_COMMAND} -E rename
+    COMMAND ${CMAKE_COMMAND} -E copy
     ${FB_HEADER}
     ${FB_HEADER_COPIED}
     )
@@ -29,7 +29,7 @@ add_custom_command(
 add_custom_command(
     OUTPUT "${GRPC_HEADER_COPIED}"
     DEPENDS "${GRPC_HEADER}"
-    COMMAND ${CMAKE_COMMAND} -E rename
+    COMMAND ${CMAKE_COMMAND} -E copy
     ${GRPC_HEADER}
     ${GRPC_HEADER_COPIED}
     )
