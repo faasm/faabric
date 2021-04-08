@@ -46,7 +46,7 @@ Status SnapshotServer::PushSnapshot(
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
     data.data = r->contents()->Data();
-    reg.takeSnapshot(r->key()->str(), data);
+    reg.takeSnapshot(r->key()->str(), data, true);
 
     flatbuffers::grpc::MessageBuilder mb;
     auto messageOffset = mb.CreateString("Success");

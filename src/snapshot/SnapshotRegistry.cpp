@@ -24,21 +24,22 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
     faabric::util::SnapshotData d = getSnapshot(key);
 
-    // Lazily write to fd to prepare mapping
-    if (d.fd == 0) {
-        writeSnapshotToFd(key);
-    }
-
     mmap(target, d.size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
 }
 
 void SnapshotRegistry::takeSnapshot(const std::string& key,
-                                    faabric::util::SnapshotData data)
+                                    faabric::util::SnapshotData data,
+                                    bool locallyRestorable)
 {
     // Note - we only preserve the snapshot in the in-memory file, and do not
     // take ownership for the original data referenced in SnapshotData
     faabric::util::UniqueLock lock(snapshotsMx);
     snapshotMap[key] = data;
+
+    // Write to fd to be locally restorable
+    if (locallyRestorable) {
+        writeSnapshotToFd(key);
+    }
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)
