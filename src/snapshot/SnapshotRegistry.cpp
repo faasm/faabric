@@ -96,6 +96,12 @@ SnapshotRegistry& getSnapshotRegistry()
 
 void SnapshotRegistry::clear()
 {
+    for (auto p : snapshotMap) {
+        if (p.second.fd > 0) {
+            ::close(p.second.fd);
+        }
+    }
+
     snapshotMap.clear();
 }
 
