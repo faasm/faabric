@@ -739,4 +739,59 @@ TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
 
     faabric::util::setMockMode(false);
 }
+
+TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
+{
+    cleanFaabric();
+    faabric::util::setMockMode(true);
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+
+    // Set up other hosts
+    std::string otherHostA = "otherA";
+    std::string otherHostB = "otherB";
+    std::string otherHostC = "otherC";
+
+    sch.addHostToGlobalSet(otherHostA);
+    sch.addHostToGlobalSet(otherHostB);
+    sch.addHostToGlobalSet(otherHostC);
+
+    int nCores = 3;
+    faabric::HostResources res;
+    res.set_cores(nCores);
+    sch.setThisHostResources(res);
+
+    // Set up capacity for other hosts
+    faabric::scheduler::queueResourceResponse(otherHostA, res);
+    faabric::scheduler::queueResourceResponse(otherHostB, res);
+    faabric::scheduler::queueResourceResponse(otherHostC, res);
+
+    // Set up a number of requests that will use this host and two others, but
+    // not the third
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    int nRequests = 2 * nCores + 1;
+    std::vector<faabric::Message> msgs;
+    for (int i = 0; i < nRequests; i++) {
+        msgs.push_back(msg);
+    }
+    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    sch.callFunctions(req);
+
+    // Check other hosts are added
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 2);
+
+    std::unordered_set<std::string> expectedHosts =
+      sch.getFunctionRegisteredHosts(msg);
+
+    // Broadcast deletion of some snapshot
+    std::string snapKey = "blahblah";
+    sch.broadcastSnapshotDelete(msg, snapKey);
+
+    std::vector<std::pair<std::string, std::string>> expectedDeleteRequests;
+    for (auto h : expectedHosts) {
+        expectedDeleteRequests.push_back({ h, snapKey });
+    };
+    auto actualDeleteRequests = faabric::scheduler::getSnapshotDeletes();
+
+    REQUIRE(actualDeleteRequests == expectedDeleteRequests);
+}
 }
