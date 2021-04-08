@@ -115,5 +115,4 @@ TEST_CASE("Test set and get snapshots", "[snapshot]")
     deallocatePages(dataC, 3);
     deallocatePages(actualDataC, 3);
 }
-:x
-:
+}
