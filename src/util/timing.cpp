@@ -35,7 +35,8 @@ void logEndTimer(const std::string& label,
 {
     double millis = getTimeDiffMillis(begin);
     const std::shared_ptr<spdlog::logger>& l = faabric::util::getLogger();
-    l->trace("TIME = {:.2f}ms ({})", millis, label);
+    l->trace("TIME = {:.4f}ms ({})", millis, label);
+    //l->info("TIME = {:.4f}ms ({})", millis, label);
 }
 
 uint64_t timespecToNanos(struct timespec* nativeTimespec)
