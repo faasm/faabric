@@ -17,3 +17,7 @@ target_link_libraries(faabric_tests
 
 add_test(NAME faabric_tests COMMAND "tests/test/faabric_tests")
 
+# Queue u-benchmark
+add_executable(queue_ubench queue_benchmark.cpp)
+
+target_link_libraries(queue_ubench scheduler)
