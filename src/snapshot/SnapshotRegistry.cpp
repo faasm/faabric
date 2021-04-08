@@ -2,6 +2,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/memory.h>
 
 #include <sys/mman.h>
 
@@ -22,9 +23,28 @@ faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
 
 void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
+    auto logger = faabric::util::getLogger();
     faabric::util::SnapshotData d = getSnapshot(key);
 
-    mmap(target, d.size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
+    if (!faabric::util::isPageAligned((void*)target)) {
+        logger->error("Mapping snapshot to non page-aligned address");
+        throw std::runtime_error(
+          "Mapping snapshot to non page-aligned address");
+    }
+
+    if (d.fd == 0) {
+        logger->error("Attempting to map non-restorable snapshot");
+        throw std::runtime_error("Mapping non-restorable snapshot");
+    }
+
+    void* mmapRes =
+      mmap(target, d.size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
+
+    if (mmapRes == MAP_FAILED) {
+        logger->error(
+          "mmapping snapshot failed: {} ({})", errno, ::strerror(errno));
+        throw std::runtime_error("mmapping snapshot failed");
+    }
 }
 
 void SnapshotRegistry::takeSnapshot(const std::string& key,
