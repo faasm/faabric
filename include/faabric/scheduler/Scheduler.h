@@ -26,6 +26,9 @@ class Scheduler
     std::vector<std::string> callFunctions(faabric::BatchExecuteRequest& req,
                                            bool forceLocal = false);
 
+    void broadcastSnapshotDelete(const faabric::Message& msg,
+                                 const std::string& snapshotKey);
+
     void reset();
 
     void shutdown();

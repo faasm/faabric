@@ -82,7 +82,7 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
     if (faabric::util::isMockMode()) {
         snapshotDeletes.emplace_back(host, key);
     } else {
-        logger->debug("Deleting snapshot {}", key);
+        logger->debug("Deleting snapshot {} from {}", key, host);
 
         ClientContext context;
 
