@@ -14,7 +14,7 @@ add_custom_command(
     DEPENDS faabric.fbs
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     COMMAND ${FLATBUFFERS_FLATC_EXECUTABLE}
-    ARGS --grpc --cpp faabric.fbs
+    ARGS --grpc --cpp --raw-binary faabric.fbs
 )
 
 # Copy the generated headers into place

@@ -151,7 +151,6 @@ void MpiWorld::registerRank(int rank)
 
 std::string MpiWorld::getHostForRank(int rank)
 {
-    PROF_START(mpiGetHostForRank);
     // Pull from state if not present
     if (rankHostMap.count(rank) == 0) {
         faabric::util::FullLock lock(worldMutex);
@@ -177,7 +176,6 @@ std::string MpiWorld::getHostForRank(int rank)
         }
     }
 
-    PROF_END(mpiGetHostForRank);
     return rankHostMap[rank];
 }
 
@@ -410,15 +408,12 @@ void MpiWorld::recv(int sendRank,
                     MPI_Status* status,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
-    // PROF_START(faabricRecvRT);
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Listen to the in-memory queue for this rank and message type
     logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
     auto lq = getLocalQueue(sendRank, recvRank);
-    // PROF_START(faabricRecvGetLocalQueueDeq);
     auto m = lq->dequeue();
-    // PROF_END(faabricRecvGetLocalQueueDeq);
 
     if (messageType != m->messagetype()) {
         logger->error(
@@ -438,13 +433,11 @@ void MpiWorld::recv(int sendRank,
 
     // TODO - avoid copy here
     // Copy message data
-    PROF_START(faabricRecvCopy);
     if (m->count() > 0) {
         // std::move(m->buffer().begin(), m->buffer().end(), buffer);
         std::copy(m->buffer().begin(), m->buffer().end(), buffer);
         // buffer = m->buffer().data(); PROBLEM: m->buffer().data() is a const char*
     }
-    PROF_END(faabricRecvCopy);
 
     // Set status values if required
     if (status != nullptr) {
@@ -457,7 +450,6 @@ void MpiWorld::recv(int sendRank,
         // TODO - thread through tag
         status->MPI_TAG = -1;
     }
-    // PROF_END(faabricRecvRT);
 }
 
 void MpiWorld::sendRecv(uint8_t* sendBuffer,
@@ -719,9 +711,11 @@ void MpiWorld::awaitAsyncRequest(int requestId)
 
     // Rejoin the thread doing the async work
     std::thread& t = it->second;
+    PROF_START(faabricJoinWait);
     if (t.joinable()) {
         t.join();
     }
+    PROF_END(faabricJoinWait);
 
     // Remove the keypair when done
     // Double check to be extra-sure

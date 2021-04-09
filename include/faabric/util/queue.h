@@ -2,7 +2,6 @@
 
 #include <faabric/util/exception.h>
 #include <faabric/util/locks.h>
-#include <faabric/util/timing.h>
 
 #include <queue>
 
@@ -32,7 +31,6 @@ class Queue
         UniqueLock lock(mx);
 
         mq.push(value);
-        // mq.emplace(value);
 
         enqueueNotifier.notify_one();
     }
