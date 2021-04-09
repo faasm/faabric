@@ -1,19 +1,21 @@
 #pragma once
 
 #include <atomic>
-#include <condition_variable>
 #include <chrono>
+#include <condition_variable>
 #include <functional>
 #include <map>
 #include <thread>
 #include <vector>
 
-#include <faabric/util/queue.h>
 #include <faabric/util/exception.h>
+#include <faabric/util/queue.h>
 
 namespace faabric::scheduler {
-// static faabric::util::Queue<std::pair<int, std::function<void (void)>>> jobQueue;
-typedef faabric::util::Queue<std::pair<int, std::function<void (void)>>> MpiJobQueue;
+// static faabric::util::Queue<std::pair<int, std::function<void (void)>>>
+// jobQueue;
+typedef faabric::util::Queue<std::pair<int, std::function<void(void)>>>
+  MpiJobQueue;
 
 class MpiAsyncThreadPool
 {
@@ -30,7 +32,7 @@ class MpiAsyncThreadPool
     void entrypoint(int i);
 
   private:
-    std::vector<std::thread> threadPool; 
+    std::vector<std::thread> threadPool;
     std::mutex awakeMutex;
     std::condition_variable awakeCV;
 

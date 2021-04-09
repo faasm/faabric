@@ -3,17 +3,18 @@
 
 namespace faabric::scheduler {
 MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
-    : shutdown(false)
+  : shutdown(false)
 {
-    faabric::util::getLogger()->debug("Starting an MpiAsyncThreadPool of size {}",
-                                      nThreads);
+    faabric::util::getLogger()->debug(
+      "Starting an MpiAsyncThreadPool of size {}", nThreads);
 
     // Initialize job queue
     localJobQueue = std::make_shared<MpiJobQueue>();
 
     // Initialize thread pool
     for (int i = 0; i < nThreads; ++i) {
-        threadPool.emplace_back(std::bind(&MpiAsyncThreadPool::entrypoint, this, i));
+        threadPool.emplace_back(
+          std::bind(&MpiAsyncThreadPool::entrypoint, this, i));
     }
 }
 
@@ -39,28 +40,29 @@ void MpiAsyncThreadPool::awaitAsyncRequest(int reqId)
 
     // Wait until the condition is signaled and the predicate is false.
     // Note that the same lock protects concurrent accesses to asyncReqMap
-    awakeCV.wait(lock, [this, reqId]{ 
+    awakeCV.wait(lock, [this, reqId] {
         return this->asyncReqMap.find(reqId) != this->asyncReqMap.end();
     });
 
     // Before giving up the lock, remove our request as it has already finished
     auto it = asyncReqMap.find(reqId);
     if (it == asyncReqMap.end()) {
-        throw std::runtime_error(fmt::format("Error: unrecognized reqId {}", reqId));
+        throw std::runtime_error(
+          fmt::format("Error: unrecognized reqId {}", reqId));
     }
     asyncReqMap.erase(it);
 }
 
-std::shared_ptr<MpiJobQueue> MpiAsyncThreadPool::getMpiJobQueue() {
+std::shared_ptr<MpiJobQueue> MpiAsyncThreadPool::getMpiJobQueue()
+{
     return this->localJobQueue;
 }
 
 void MpiAsyncThreadPool::entrypoint(int i)
 {
-    std::pair<int, std::function <void (void)>> job;
+    std::pair<int, std::function<void(void)>> job;
 
-    while (!this->shutdown)
-    {
+    while (!this->shutdown) {
         // Dequeue blocks until there's something in the queue
         // Note - we assume that if we hit the timeout it's time to shutdown
         // TODO -define the timeout in a constant
@@ -74,7 +76,7 @@ void MpiAsyncThreadPool::entrypoint(int i)
         }
 
         int reqId = job.first;
-        std::function<void (void)> func = job.second;
+        std::function<void(void)> func = job.second;
 
         // Do the job without holding any locks
         func();
@@ -84,7 +86,8 @@ void MpiAsyncThreadPool::entrypoint(int i)
             faabric::util::UniqueLock lock(awakeMutex);
             auto it = asyncReqMap.insert(std::make_pair(reqId, 1));
             if (it.second == false) {
-                throw std::runtime_error(fmt::format("Error: reqId collision {}", reqId));
+                throw std::runtime_error(
+                  fmt::format("Error: reqId collision {}", reqId));
             }
         }
 
