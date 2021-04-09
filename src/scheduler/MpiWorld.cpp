@@ -151,6 +151,7 @@ void MpiWorld::registerRank(int rank)
 
 std::string MpiWorld::getHostForRank(int rank)
 {
+    PROF_START(mpiGetHostForRank);
     // Pull from state if not present
     if (rankHostMap.count(rank) == 0) {
         faabric::util::FullLock lock(worldMutex);
@@ -176,6 +177,7 @@ std::string MpiWorld::getHostForRank(int rank)
         }
     }
 
+    PROF_END(mpiGetHostForRank);
     return rankHostMap[rank];
 }
 
@@ -408,6 +410,7 @@ void MpiWorld::recv(int sendRank,
                     MPI_Status* status,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
+    // PROF_START(faabricRecvRT);
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Listen to the in-memory queue for this rank and message type
@@ -450,6 +453,7 @@ void MpiWorld::recv(int sendRank,
         // TODO - thread through tag
         status->MPI_TAG = -1;
     }
+    // PROF_END(faabricRecvRT);
 }
 
 void MpiWorld::sendRecv(uint8_t* sendBuffer,
