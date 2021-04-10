@@ -313,9 +313,7 @@ int MpiWorld::isend(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    faabric::util::getLogger()->debug("Enqueueing isend w/ reqId: {}",
-                                      requestId);
-    threadPool->getMpiJobQueue()->enqueue(
+    threadPool->getMpiReqQueue()->enqueue(
       std::make_pair(requestId,
                      std::bind(&MpiWorld::send,
                                this,
@@ -338,9 +336,7 @@ int MpiWorld::irecv(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    faabric::util::getLogger()->debug("Enqueueing irecv w/ reqId: {}",
-                                      requestId);
-    threadPool->getMpiJobQueue()->enqueue(
+    threadPool->getMpiReqQueue()->enqueue(
       std::make_pair(requestId,
                      std::bind(&MpiWorld::recv,
                                this,
@@ -707,8 +703,6 @@ void MpiWorld::awaitAsyncRequest(int requestId)
 {
     faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
-    faabric::util::getLogger()->debug("Starting awaitAsyncRequest on {}",
-                                      requestId);
     // Forward the await request to the local thread pool.
     // This call blocks until requestId has finished.
     threadPool->awaitAsyncRequest(requestId);

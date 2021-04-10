@@ -12,7 +12,7 @@
 
 namespace faabric::scheduler {
 typedef faabric::util::Queue<std::pair<int, std::function<void(void)>>>
-  MpiJobQueue;
+  MpiReqQueue;
 
 class MpiAsyncThreadPool
 {
@@ -23,7 +23,7 @@ class MpiAsyncThreadPool
 
     void awaitAsyncRequest(int reqId);
 
-    std::shared_ptr<MpiJobQueue> getMpiJobQueue();
+    std::shared_ptr<MpiReqQueue> getMpiReqQueue();
 
   private:
     std::vector<std::thread> threadPool;
@@ -35,8 +35,8 @@ class MpiAsyncThreadPool
     // thinking of a bit array with zeros and ones in the positions whose binary
     // representation match the reqId. With something like 1024 different reqIds
     // (which we would reuse) it would suffice I think.
-    std::unordered_set<int> asyncReqs;
-    std::shared_ptr<MpiJobQueue> localJobQueue;
+    std::unordered_set<int> finishedReqs;
+    std::shared_ptr<MpiReqQueue> localReqQueue;
 
     void entrypoint(int i);
 };
