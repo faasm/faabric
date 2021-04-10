@@ -39,18 +39,18 @@ void MpiAsyncThreadPool::awaitAsyncRequest(int reqId)
     faabric::util::UniqueLock lock(awakeMutex);
 
     // Wait until the condition is signaled and the predicate is false.
-    // Note that the same lock protects concurrent accesses to asyncReqMap
+    // Note that the same lock protects concurrent accesses to asyncReqs
     awakeCV.wait(lock, [this, reqId] {
-        return this->asyncReqMap.find(reqId) != this->asyncReqMap.end();
+        return this->asyncReqs.find(reqId) != this->asyncReqs.end();
     });
 
     // Before giving up the lock, remove our request as it has already finished
-    auto it = asyncReqMap.find(reqId);
-    if (it == asyncReqMap.end()) {
+    auto it = asyncReqs.find(reqId);
+    if (it == asyncReqs.end()) {
         throw std::runtime_error(
           fmt::format("Error: unrecognized reqId {}", reqId));
     }
-    asyncReqMap.erase(it);
+    asyncReqs.erase(it);
 }
 
 std::shared_ptr<MpiJobQueue> MpiAsyncThreadPool::getMpiJobQueue()
@@ -81,10 +81,10 @@ void MpiAsyncThreadPool::entrypoint(int i)
         // Do the job without holding any locks
         func();
 
-        // Acquire lock to modify the asyncReqMap
+        // Acquire lock to modify the asyncReqs
         {
             faabric::util::UniqueLock lock(awakeMutex);
-            auto it = asyncReqMap.insert(std::make_pair(reqId, 1));
+            auto it = asyncReqs.insert(reqId);
             if (it.second == false) {
                 throw std::runtime_error(
                   fmt::format("Error: reqId collision {}", reqId));

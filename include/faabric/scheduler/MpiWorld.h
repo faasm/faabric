@@ -10,8 +10,6 @@
 
 namespace faabric::scheduler {
 typedef faabric::util::Queue<faabric::MPIMessage> InMemoryMpiQueue;
-// typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
-// InMemoryMpiQueue;
 
 struct MpiWorldState
 {

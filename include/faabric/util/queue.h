@@ -2,7 +2,6 @@
 
 #include <faabric/util/exception.h>
 #include <faabric/util/locks.h>
-#include <faabric/util/timing.h>
 
 #include <queue>
 
@@ -27,12 +26,15 @@ template<typename T>
 class Queue
 {
   public:
-    void enqueue(T value)
+    void enqueue(T value, bool push = true)
     {
         UniqueLock lock(mx);
 
-        mq.push(value);
-        // mq.emplace(value);
+        if (push) {
+            mq.push(value);
+        } else {
+            mq.emplace(value);
+        }
 
         enqueueNotifier.notify_one();
     }
