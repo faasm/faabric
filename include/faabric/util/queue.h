@@ -26,15 +26,11 @@ template<typename T>
 class Queue
 {
   public:
-    void enqueue(T value, bool push = true)
+    void enqueue(T value)
     {
         UniqueLock lock(mx);
 
-        if (push) {
-            mq.push(value);
-        } else {
-            mq.emplace(value);
-        }
+        mq.push(value);
 
         enqueueNotifier.notify_one();
     }

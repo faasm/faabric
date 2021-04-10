@@ -3,8 +3,8 @@
 #include <atomic>
 #include <condition_variable>
 #include <functional>
-#include <unordered_set>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include <faabric/util/exception.h>
