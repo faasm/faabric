@@ -379,7 +379,6 @@ void MpiWorld::send(int sendRank,
     // Work out whether the message is sent locally or to another host
     const std::string otherHost = getHostForRank(recvRank);
     bool isLocal = otherHost == thisHost;
-    // m->set_isLocal(isLocal);
 
     // Set up message data
     if (count > 0 && buffer != nullptr) {
@@ -392,8 +391,6 @@ void MpiWorld::send(int sendRank,
             logger->trace("MPI - local RMA write {} -> {}", sendRank, recvRank);
             synchronizeRmaWrite(*m, false);
         } else {
-            // When sending a regular local message, use shared-memory for zero
-            // copying.
             logger->trace("MPI - send {} -> {}", sendRank, recvRank);
             getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
         }
@@ -418,7 +415,8 @@ void MpiWorld::recv(int sendRank,
 
     // Listen to the in-memory queue for this rank and message type
     logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
-    std::unique_ptr<faabric::MPIMessage> m = getLocalQueue(sendRank, recvRank)->dequeue();
+    std::unique_ptr<faabric::MPIMessage> m =
+      getLocalQueue(sendRank, recvRank)->dequeue();
 
     if (messageType != m->messagetype()) {
         logger->error(
@@ -440,9 +438,6 @@ void MpiWorld::recv(int sendRank,
     // Copy message data
     if (m->count() > 0) {
         std::move(m->buffer().begin(), m->buffer().end(), buffer);
-        // logger->debug("Buffer has {} elements of dt {}", m->count(), dataType->id);
-        // logger->debug("The data is: {}", m->buffer());
-        // buffer = (uint8_t*) m->mutable_buffer()->data();
     }
 
     // Set status values if required
@@ -1073,7 +1068,8 @@ void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
     } else {
         logger->trace(
           "Queueing message locally {} -> {}", msg.sender(), msg.destination());
-        getLocalQueue(msg.sender(), msg.destination())->enqueue(std::make_unique<faabric::MPIMessage>(msg));
+        getLocalQueue(msg.sender(), msg.destination())
+          ->enqueue(std::make_unique<faabric::MPIMessage>(msg));
     }
 }
 
