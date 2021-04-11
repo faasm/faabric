@@ -253,7 +253,7 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
         // Check message content
         const std::shared_ptr<InMemoryMpiQueue>& queueA2 =
           world.getLocalQueue(rankA1, rankA2);
-        faabric::MPIMessage actualMessage = queueA2->dequeue();
+        faabric::MPIMessage actualMessage = *(queueA2->dequeue());
         checkMessage(actualMessage, rankA1, rankA2, messageData);
     }
 
@@ -477,7 +477,7 @@ TEST_CASE("Test send across hosts", "[mpi]")
 
         // Check message content
         faabric::MPIMessage actualMessage =
-          localWorld.getLocalQueue(rankA, rankB)->dequeue();
+          *(localWorld.getLocalQueue(rankA, rankB)->dequeue());
         checkMessage(actualMessage, rankA, rankB, messageData);
     }
 
@@ -526,7 +526,7 @@ TEST_CASE("Test send/recv message with no data", "[mpi]")
     {
         // Check message content
         faabric::MPIMessage actualMessage =
-          world.getLocalQueue(rankA1, rankA2)->dequeue();
+          *(world.getLocalQueue(rankA1, rankA2)->dequeue());
         REQUIRE(actualMessage.count() == 0);
         REQUIRE(actualMessage.type() == FAABRIC_INT);
 
