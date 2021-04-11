@@ -1,9 +1,11 @@
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -17,6 +19,8 @@ MpiWorld::MpiWorld()
   , size(-1)
   , thisHost(faabric::util::getSystemConfig().endpointHost)
   , creationTime(faabric::util::startTimer())
+  , threadPool(std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
+      faabric::util::getUsableCores()))
   , cartProcsPerDim(2)
 {}
 
@@ -309,13 +313,16 @@ int MpiWorld::isend(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    asyncThreadMap.emplace(
-      requestId,
-      std::thread(
-        [this, sendRank, recvRank, buffer, dataType, count, messageType] {
-            this->send(
-              sendRank, recvRank, buffer, dataType, count, messageType);
-        }));
+    threadPool->getMpiReqQueue()->enqueue(
+      std::make_pair(requestId,
+                     std::bind(&MpiWorld::send,
+                               this,
+                               sendRank,
+                               recvRank,
+                               buffer,
+                               dataType,
+                               count,
+                               messageType)));
 
     return requestId;
 }
@@ -329,18 +336,17 @@ int MpiWorld::irecv(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    asyncThreadMap.emplace(
-      requestId,
-      std::thread(
-        [this, sendRank, recvRank, buffer, dataType, count, messageType] {
-            this->recv(sendRank,
-                       recvRank,
-                       buffer,
-                       dataType,
-                       count,
-                       nullptr,
-                       messageType);
-        }));
+    threadPool->getMpiReqQueue()->enqueue(
+      std::make_pair(requestId,
+                     std::bind(&MpiWorld::recv,
+                               this,
+                               sendRank,
+                               recvRank,
+                               buffer,
+                               dataType,
+                               count,
+                               nullptr,
+                               messageType)));
 
     return requestId;
 }
@@ -697,25 +703,11 @@ void MpiWorld::awaitAsyncRequest(int requestId)
 {
     faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
-    auto it = asyncThreadMap.find(requestId);
-
-    // Check that outstanding request is in map
-    if (it == asyncThreadMap.end()) {
-        throw std::runtime_error(fmt::format(
-          "Attempting to await unrecognised async request: {}", requestId));
-    }
-
-    // Rejoin the thread doing the async work
-    std::thread& t = it->second;
-    if (t.joinable()) {
-        t.join();
-    }
-
-    // Remove the keypair when done
-    // Double check to be extra-sure
-    if (!t.joinable()) {
-        asyncThreadMap.erase(it);
-    }
+    // Forward the await request to the local thread pool.
+    // This call blocks until requestId has finished.
+    threadPool->awaitAsyncRequest(requestId);
+    faabric::util::getLogger()->debug("Finished awaitAsyncRequest on {}",
+                                      requestId);
 }
 
 void MpiWorld::reduce(int sendRank,

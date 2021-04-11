@@ -4,6 +4,7 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
+#include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/state/StateKeyValue.h>
 #include <thread>
 
@@ -222,6 +223,7 @@ class MpiWorld
 
     std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
       localQueueMap;
+    std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
 
     std::vector<int> cartProcsPerDim;
 
