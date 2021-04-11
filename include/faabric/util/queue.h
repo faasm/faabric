@@ -30,7 +30,7 @@ class Queue
     {
         UniqueLock lock(mx);
 
-        mq.push(value);
+        mq.emplace(std::move(value));
 
         enqueueNotifier.notify_one();
     }
@@ -53,7 +53,7 @@ class Queue
             }
         }
 
-        T value = mq.front();
+        T value = std::move(mq.front());
         if (pop) {
             mq.pop();
             emptyNotifier.notify_one();
