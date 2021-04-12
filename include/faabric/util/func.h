@@ -58,8 +58,15 @@ unsigned int setMessageId(faabric::Message& msg);
 
 std::string buildAsyncResponse(const faabric::Message& msg);
 
+std::shared_ptr<faabric::Message> messageFactoryShared(
+  const std::string& user,
+  const std::string& function);
+
 faabric::Message messageFactory(const std::string& user,
                                 const std::string& function);
+
+faabric::BatchExecuteRequest batchExecFactory(
+  std::vector<std::shared_ptr<faabric::Message>>& msgs);
 
 faabric::BatchExecuteRequest batchExecFactory(
   std::vector<faabric::Message>& msgs);
