@@ -71,7 +71,6 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     function = call.function();
 
     size = newSize;
-    // threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(4);
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(size);
 
     // Write this to state
