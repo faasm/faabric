@@ -1006,7 +1006,7 @@ void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
-    std::shared_ptr<faabric::MPIMessage> m = queue->peek();
+    std::shared_ptr<faabric::MPIMessage> m = *(queue->peek());
 
     faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
     status->bytesSize = m->count() * datatype->size;

@@ -20,7 +20,6 @@ MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
 
 MpiAsyncThreadPool::~MpiAsyncThreadPool()
 {
-
     faabric::util::getLogger()->debug("Shutting down MpiAsyncThreadPool");
     this->shutdown = true;
 
