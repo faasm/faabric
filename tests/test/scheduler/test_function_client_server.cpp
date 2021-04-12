@@ -66,7 +66,7 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     std::shared_ptr<InMemoryMpiQueue> queue =
       localWorld.getLocalQueue(rankRemote, rankLocal);
     REQUIRE(queue->size() == 1);
-    const std::unique_ptr<faabric::MPIMessage> actualMessage = queue->dequeue();
+    const std::shared_ptr<faabric::MPIMessage> actualMessage = queue->dequeue();
 
     REQUIRE(actualMessage->worldid() == worldId);
     REQUIRE(actualMessage->sender() == rankRemote);

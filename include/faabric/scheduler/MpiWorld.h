@@ -9,7 +9,7 @@
 #include <thread>
 
 namespace faabric::scheduler {
-typedef faabric::util::Queue<std::unique_ptr<faabric::MPIMessage>>
+typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 
 struct MpiWorldState

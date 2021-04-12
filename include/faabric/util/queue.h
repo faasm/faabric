@@ -53,7 +53,7 @@ class Queue
             }
         }
 
-        T value = std::move(mq.front());
+        T value = mq.front();
         if (pop) {
             mq.pop();
             emptyNotifier.notify_one();

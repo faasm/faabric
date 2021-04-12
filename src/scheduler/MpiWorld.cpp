@@ -367,7 +367,7 @@ void MpiWorld::send(int sendRank,
     int msgId = (int)faabric::util::generateGid();
 
     // Create the message
-    auto m = std::make_unique<faabric::MPIMessage>();
+    auto m = std::make_shared<faabric::MPIMessage>();
     m->set_id(msgId);
     m->set_worldid(id);
     m->set_sender(sendRank);
@@ -415,7 +415,7 @@ void MpiWorld::recv(int sendRank,
 
     // Listen to the in-memory queue for this rank and message type
     logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
-    std::unique_ptr<faabric::MPIMessage> m =
+    std::shared_ptr<faabric::MPIMessage> m =
       getLocalQueue(sendRank, recvRank)->dequeue();
 
     if (messageType != m->messagetype()) {
@@ -1004,14 +1004,15 @@ void MpiWorld::allToAll(int rank,
 
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
+    // TODO - probe is now broken as we need to re-implement queue's peek
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
-    faabric::MPIMessage m = *(queue->peek());
+    std::shared_ptr<faabric::MPIMessage> m = queue->peek();
 
-    faabric_datatype_t* datatype = getFaabricDatatypeFromId(m.type());
-    status->bytesSize = m.count() * datatype->size;
+    faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
+    status->bytesSize = m->count() * datatype->size;
     status->MPI_ERROR = 0;
-    status->MPI_SOURCE = m.sender();
+    status->MPI_SOURCE = m->sender();
 }
 
 void MpiWorld::barrier(int thisRank)
@@ -1069,7 +1070,7 @@ void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
         logger->trace(
           "Queueing message locally {} -> {}", msg.sender(), msg.destination());
         getLocalQueue(msg.sender(), msg.destination())
-          ->enqueue(std::make_unique<faabric::MPIMessage>(msg));
+          ->enqueue(std::make_shared<faabric::MPIMessage>(msg));
     }
 }
 
