@@ -106,7 +106,8 @@ void FunctionCallClient::sendFlush()
     }
 }
 
-void FunctionCallClient::sendMPIMessage(const std::shared_ptr<faabric::MPIMessage> msg)
+void FunctionCallClient::sendMPIMessage(
+  const std::shared_ptr<faabric::MPIMessage> msg)
 {
     if (faabric::util::isMockMode()) {
         mpiMessages.emplace_back(host, *msg);
