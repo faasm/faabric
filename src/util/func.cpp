@@ -345,7 +345,7 @@ std::shared_ptr<faabric::Message> messageFactoryShared(
     auto ptr = std::make_shared<faabric::Message>();
 
     ptr->set_user(user);
-    ptr->set_user(function);
+    ptr->set_function(function);
 
     setMessageId(*ptr);
 
