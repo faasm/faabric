@@ -1004,10 +1004,9 @@ void MpiWorld::allToAll(int rank,
 
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
-    // TODO - probe is now broken as we need to re-implement queue's peek
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
-    std::shared_ptr<faabric::MPIMessage> m = queue->peek();
+    std::shared_ptr<faabric::MPIMessage> m = *(queue->peek());
 
     faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
     status->bytesSize = m->count() * datatype->size;

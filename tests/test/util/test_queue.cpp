@@ -1,7 +1,11 @@
 #include <catch.hpp>
+
 #include <faabric/util/bytes.h>
 #include <faabric/util/queue.h>
+
+#include <future>
 #include <thread>
+#include <unistd.h>
 
 using namespace faabric::util;
 
@@ -20,9 +24,9 @@ TEST_CASE("Test queue operations", "[util]")
 
     REQUIRE(q.dequeue() == 1);
     REQUIRE(q.dequeue() == 2);
-    REQUIRE(q.peek() == 3);
-    REQUIRE(q.peek() == 3);
-    REQUIRE(q.peek() == 3);
+    REQUIRE(*(q.peek()) == 3);
+    REQUIRE(*(q.peek()) == 3);
+    REQUIRE(*(q.peek()) == 3);
     REQUIRE(q.dequeue() == 3);
     REQUIRE(q.dequeue() == 4);
     REQUIRE(q.dequeue() == 5);
@@ -81,5 +85,35 @@ TEST_CASE("Test wait for draining queue with elements", "[util]")
     }
 
     REQUIRE(dequeued == expected);
+}
+
+TEST_CASE("Test queue on non-copy-constructible object", "[util]")
+{
+    faabric::util::Queue<std::promise<int32_t>> q;
+
+    std::promise<int32_t> a;
+    std::promise<int32_t> b;
+
+    std::future<int32_t> fa = a.get_future();
+    std::future<int32_t> fb = b.get_future();
+
+    q.enqueue(std::move(a));
+    q.enqueue(std::move(b));
+
+    std::thread ta([&q] { q.dequeue().set_value(1); });
+    std::thread tb([&q] {
+        usleep(500 * 1000);
+        q.dequeue().set_value(2);
+    });
+
+    if (ta.joinable()) {
+        ta.join();
+    }
+    if (tb.joinable()) {
+        tb.join();
+    }
+
+    REQUIRE(fa.get() == 1);
+    REQUIRE(fb.get() == 2);
 }
 }
