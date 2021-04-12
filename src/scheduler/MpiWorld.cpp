@@ -399,7 +399,7 @@ void MpiWorld::send(int sendRank,
 
         // TODO - avoid creating a client each time?
         scheduler::FunctionCallClient client(otherHost);
-        client.sendMPIMessage(*m);
+        client.sendMPIMessage(m);
     }
 }
 
@@ -1004,7 +1004,6 @@ void MpiWorld::allToAll(int rank,
 
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
-    // TODO - probe is now broken as we need to re-implement queue's peek
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
     std::shared_ptr<faabric::MPIMessage> m = queue->peek();

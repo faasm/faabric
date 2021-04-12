@@ -106,14 +106,14 @@ void FunctionCallClient::sendFlush()
     }
 }
 
-void FunctionCallClient::sendMPIMessage(const faabric::MPIMessage& msg)
+void FunctionCallClient::sendMPIMessage(const std::shared_ptr<faabric::MPIMessage> msg)
 {
     if (faabric::util::isMockMode()) {
-        mpiMessages.emplace_back(host, msg);
+        mpiMessages.emplace_back(host, *msg);
     } else {
         ClientContext context;
         faabric::FunctionStatusResponse response;
-        CHECK_RPC("mpi_message", stub->MPICall(&context, msg, &response));
+        CHECK_RPC("mpi_message", stub->MPICall(&context, *msg, &response));
     }
 }
 

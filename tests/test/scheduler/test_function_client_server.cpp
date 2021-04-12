@@ -53,10 +53,10 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     remoteWorld.registerRank(rankRemote);
 
     // Create a message
-    faabric::MPIMessage mpiMsg;
-    mpiMsg.set_worldid(worldId);
-    mpiMsg.set_sender(rankRemote);
-    mpiMsg.set_destination(rankLocal);
+    std::shared_ptr<faabric::MPIMessage> mpiMsg;
+    mpiMsg->set_worldid(worldId);
+    mpiMsg->set_sender(rankRemote);
+    mpiMsg->set_destination(rankLocal);
 
     // Send the message
     FunctionCallClient cli(LOCALHOST);
