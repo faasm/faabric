@@ -23,33 +23,19 @@ MpiAsyncThreadPool::~MpiAsyncThreadPool()
     faabric::util::getLogger()->debug("Shutting down MpiAsyncThreadPool");
     this->shutdown = true;
 
-    // When the destructor is called, either some thread will have hit the
-    // dequeue timeout and won't be joinable, or none has and all are joinable.
-    // We wait untill all hit the timeout, saving an additional cond. variable.
+    // Load the queue with shutdown messages, i.e. nullptr functions
+    std::function<void(void)> f;
+    for (int i = 0; i < this->threadPool.size(); i++) {
+        std::promise<void> p;
+        this->getMpiReqQueue()->enqueue(
+          std::make_pair(-1, std::make_pair(f, std::move(p))));
+    }
+
     for (auto& thread : threadPool) {
         if (thread.joinable()) {
             thread.join();
         }
     }
-}
-
-void MpiAsyncThreadPool::awaitAsyncRequest(int reqId)
-{
-    faabric::util::UniqueLock lock(awakeMutex);
-
-    // Wait until the condition is signaled and the predicate is false.
-    // Note that the same lock protects concurrent accesses to finishedReqs
-    awakeCV.wait(lock, [this, reqId] {
-        return this->finishedReqs.find(reqId) != this->finishedReqs.end();
-    });
-
-    // Before giving up the lock, remove our request as it has already finished
-    auto it = finishedReqs.find(reqId);
-    if (it == finishedReqs.end()) {
-        throw std::runtime_error(
-          fmt::format("Error: unrecognized reqId {}", reqId));
-    }
-    finishedReqs.erase(it);
 }
 
 std::shared_ptr<MpiReqQueue> MpiAsyncThreadPool::getMpiReqQueue()
@@ -59,39 +45,27 @@ std::shared_ptr<MpiReqQueue> MpiAsyncThreadPool::getMpiReqQueue()
 
 void MpiAsyncThreadPool::entrypoint(int i)
 {
-    std::pair<int, std::function<void(void)>> req;
+    faabric::scheduler::ReqQueueType req;
 
     while (!this->shutdown) {
-        // Dequeue blocks until there's something in the queue
-        // Note - we assume that if we hit the timeout it's time to shutdown
-        // TODO -define the timeout in a constant
-        try {
-            req = getMpiReqQueue()->dequeue(5000);
-        } catch (const faabric::util::QueueTimeoutException& e) {
+        req = getMpiReqQueue()->dequeue();
+
+        std::function<void(void)> func = req.second.first;
+        std::promise<void> promise = std::move(req.second.second);
+
+        // Detect shutdown condition
+        if (!func) {
             if (!this->shutdown) {
                 this->shutdown = true;
             }
             break;
         }
 
-        int reqId = req.first;
-        std::function<void(void)> func = req.second;
-
         // Do the job without holding any locks
         func();
 
-        // Acquire lock to modify the finishedReqs set
-        {
-            faabric::util::UniqueLock lock(awakeMutex);
-            auto it = finishedReqs.insert(reqId);
-            if (it.second == false) {
-                throw std::runtime_error(
-                  fmt::format("Error: reqId collision {}", reqId));
-            }
-        }
-
-        // Notify that the work is done lock-free
-        awakeCV.notify_all();
+        // Notify we are done via the future
+        promise.set_value();
     }
 }
 }

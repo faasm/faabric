@@ -11,6 +11,8 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/timing.h>
 
+static thread_local std::unordered_map<int, std::future<void>> futureMap;
+
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
   : id(-1)
@@ -69,6 +71,7 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     function = call.function();
 
     size = newSize;
+    // threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(4);
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(size);
 
     // Write this to state
@@ -311,16 +314,23 @@ int MpiWorld::isend(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
+    // TODO - use std::promise here instead of an additional finishedReq set?
+    std::promise<void> result_promise;
+    std::future<void> result_future = result_promise.get_future();
     threadPool->getMpiReqQueue()->enqueue(
       std::make_pair(requestId,
-                     std::bind(&MpiWorld::send,
-                               this,
-                               sendRank,
-                               recvRank,
-                               buffer,
-                               dataType,
-                               count,
-                               messageType)));
+                     std::make_pair(std::bind(&MpiWorld::send,
+                                              this,
+                                              sendRank,
+                                              recvRank,
+                                              buffer,
+                                              dataType,
+                                              count,
+                                              messageType),
+                                    std::move(result_promise))));
+
+    // Place the promise in a map to wait for it later
+    futureMap.emplace(std::make_pair(requestId, std::move(result_future)));
 
     return requestId;
 }
@@ -334,17 +344,23 @@ int MpiWorld::irecv(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
+    std::promise<void> result_promise;
+    std::future<void> result_future = result_promise.get_future();
     threadPool->getMpiReqQueue()->enqueue(
       std::make_pair(requestId,
-                     std::bind(&MpiWorld::recv,
-                               this,
-                               sendRank,
-                               recvRank,
-                               buffer,
-                               dataType,
-                               count,
-                               nullptr,
-                               messageType)));
+                     std::make_pair(std::bind(&MpiWorld::recv,
+                                              this,
+                                              sendRank,
+                                              recvRank,
+                                              buffer,
+                                              dataType,
+                                              count,
+                                              nullptr,
+                                              messageType),
+                                    std::move(result_promise))));
+
+    // Place the promise in a map to wait for it later
+    futureMap.emplace(std::make_pair(requestId, std::move(result_future)));
 
     return requestId;
 }
@@ -702,9 +718,16 @@ void MpiWorld::awaitAsyncRequest(int requestId)
 {
     faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
-    // Forward the await request to the local thread pool.
+    auto it = futureMap.find(requestId);
+    if (it == futureMap.end()) {
+        throw std::runtime_error(
+          fmt::format("Error: waiting for unrecognized request {}", requestId));
+    }
+
     // This call blocks until requestId has finished.
-    threadPool->awaitAsyncRequest(requestId);
+    it->second.wait();
+    futureMap.erase(it);
+
     faabric::util::getLogger()->debug("Finished awaitAsyncRequest on {}",
                                       requestId);
 }

@@ -17,3 +17,5 @@ target_link_libraries(faabric_tests
 
 add_test(NAME faabric_tests COMMAND "tests/test/faabric_tests")
 
+add_executable(pool_test pool_test.cpp)
+target_link_libraries(pool_test scheduler)
