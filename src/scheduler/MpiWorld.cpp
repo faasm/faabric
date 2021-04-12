@@ -11,16 +11,12 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/timing.h>
 
-static thread_local std::unordered_map<int, std::thread> asyncThreadMap;
-
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
   : id(-1)
   , size(-1)
   , thisHost(faabric::util::getSystemConfig().endpointHost)
   , creationTime(faabric::util::startTimer())
-  , threadPool(std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
-      faabric::util::getUsableCores()))
   , cartProcsPerDim(2)
 {}
 
@@ -73,6 +69,7 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     function = call.function();
 
     size = newSize;
+    threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(size);
 
     // Write this to state
     setUpStateKV();
@@ -122,6 +119,7 @@ void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
     stateKV->pull();
     stateKV->get(BYTES(&s));
     size = s.worldSize;
+    threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(size);
 }
 
 void MpiWorld::pushToState()
@@ -369,14 +367,14 @@ void MpiWorld::send(int sendRank,
     int msgId = (int)faabric::util::generateGid();
 
     // Create the message
-    faabric::MPIMessage m;
-    m.set_id(msgId);
-    m.set_worldid(id);
-    m.set_sender(sendRank);
-    m.set_destination(recvRank);
-    m.set_type(dataType->id);
-    m.set_count(count);
-    m.set_messagetype(messageType);
+    auto m = std::make_shared<faabric::MPIMessage>();
+    m->set_id(msgId);
+    m->set_worldid(id);
+    m->set_sender(sendRank);
+    m->set_destination(recvRank);
+    m->set_type(dataType->id);
+    m->set_count(count);
+    m->set_messagetype(messageType);
 
     // Work out whether the message is sent locally or to another host
     const std::string otherHost = getHostForRank(recvRank);
@@ -384,17 +382,17 @@ void MpiWorld::send(int sendRank,
 
     // Set up message data
     if (count > 0 && buffer != nullptr) {
-        m.set_buffer(buffer, dataType->size * count);
+        m->set_buffer(buffer, dataType->size * count);
     }
 
     // Dispatch the message locally or globally
     if (isLocal) {
         if (messageType == faabric::MPIMessage::RMA_WRITE) {
             logger->trace("MPI - local RMA write {} -> {}", sendRank, recvRank);
-            synchronizeRmaWrite(m, false);
+            synchronizeRmaWrite(*m, false);
         } else {
             logger->trace("MPI - send {} -> {}", sendRank, recvRank);
-            getLocalQueue(sendRank, recvRank)->enqueue(m);
+            getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
         }
     } else {
         logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
@@ -417,37 +415,38 @@ void MpiWorld::recv(int sendRank,
 
     // Listen to the in-memory queue for this rank and message type
     logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
-    faabric::MPIMessage m = getLocalQueue(sendRank, recvRank)->dequeue();
+    std::shared_ptr<faabric::MPIMessage> m =
+      getLocalQueue(sendRank, recvRank)->dequeue();
 
-    if (messageType != m.messagetype()) {
+    if (messageType != m->messagetype()) {
         logger->error(
           "Message types mismatched on {}->{} (expected={}, got={})",
           sendRank,
           recvRank,
           messageType,
-          m.messagetype());
+          m->messagetype());
         throw std::runtime_error("Mismatched message types");
     }
 
-    if (m.count() > count) {
+    if (m->count() > count) {
         logger->error(
-          "Message too long for buffer (msg={}, buffer={})", m.count(), count);
+          "Message too long for buffer (msg={}, buffer={})", m->count(), count);
         throw std::runtime_error("Message too long");
     }
 
     // TODO - avoid copy here
     // Copy message data
-    if (m.count() > 0) {
-        std::copy(m.buffer().begin(), m.buffer().end(), buffer);
+    if (m->count() > 0) {
+        std::move(m->buffer().begin(), m->buffer().end(), buffer);
     }
 
     // Set status values if required
     if (status != nullptr) {
-        status->MPI_SOURCE = m.sender();
+        status->MPI_SOURCE = m->sender();
         status->MPI_ERROR = MPI_SUCCESS;
 
         // Note, take the message size here as the receive count may be larger
-        status->bytesSize = m.count() * dataType->size;
+        status->bytesSize = m->count() * dataType->size;
 
         // TODO - thread through tag
         status->MPI_TAG = -1;
@@ -1007,12 +1006,12 @@ void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
-    faabric::MPIMessage m = queue->peek();
+    std::shared_ptr<faabric::MPIMessage> m = *(queue->peek());
 
-    faabric_datatype_t* datatype = getFaabricDatatypeFromId(m.type());
-    status->bytesSize = m.count() * datatype->size;
+    faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());
+    status->bytesSize = m->count() * datatype->size;
     status->MPI_ERROR = 0;
-    status->MPI_SOURCE = m.sender();
+    status->MPI_SOURCE = m->sender();
 }
 
 void MpiWorld::barrier(int thisRank)
@@ -1069,7 +1068,8 @@ void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
     } else {
         logger->trace(
           "Queueing message locally {} -> {}", msg.sender(), msg.destination());
-        getLocalQueue(msg.sender(), msg.destination())->enqueue(msg);
+        getLocalQueue(msg.sender(), msg.destination())
+          ->enqueue(std::make_shared<faabric::MPIMessage>(msg));
     }
 }
 

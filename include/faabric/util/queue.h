@@ -30,12 +30,12 @@ class Queue
     {
         UniqueLock lock(mx);
 
-        mq.push(value);
+        mq.emplace(std::move(value));
 
         enqueueNotifier.notify_one();
     }
 
-    T doDequeue(long timeoutMs, bool pop)
+    T dequeue(long timeoutMs = 0)
     {
         UniqueLock lock(mx);
 
@@ -53,18 +53,31 @@ class Queue
             }
         }
 
-        T value = mq.front();
-        if (pop) {
-            mq.pop();
-            emptyNotifier.notify_one();
-        }
+        T value = std::move(mq.front());
+        mq.pop();
+        emptyNotifier.notify_one();
 
         return value;
     }
 
-    T peek(long timeoutMs = 0) { return doDequeue(timeoutMs, false); }
+    T* peek(long timeoutMs = 0)
+    {
+        UniqueLock lock(mx);
+        while (mq.empty()) {
+            if (timeoutMs > 0) {
+                std::cv_status returnVal = enqueueNotifier.wait_for(
+                  lock, std::chrono::milliseconds(timeoutMs));
 
-    T dequeue(long timeoutMs = 0) { return doDequeue(timeoutMs, true); }
+                if (returnVal == std::cv_status::timeout) {
+                    throw QueueTimeoutException("Timeout waiting for dequeue");
+                }
+            } else {
+                enqueueNotifier.wait(lock);
+            }
+        }
+
+        return &mq.front();
+    }
 
     void waitToDrain(long timeoutMs)
     {

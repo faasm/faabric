@@ -60,16 +60,16 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
 
     // Send the message
     FunctionCallClient cli(LOCALHOST);
-    cli.sendMPIMessage(mpiMsg);
+    cli.sendMPIMessage(std::make_shared<faabric::MPIMessage>(mpiMsg));
 
     // Make sure the message has been put on the right queue locally
     std::shared_ptr<InMemoryMpiQueue> queue =
       localWorld.getLocalQueue(rankRemote, rankLocal);
     REQUIRE(queue->size() == 1);
-    const faabric::MPIMessage& actualMessage = queue->dequeue();
+    const std::shared_ptr<faabric::MPIMessage> actualMessage = queue->dequeue();
 
-    REQUIRE(actualMessage.worldid() == worldId);
-    REQUIRE(actualMessage.sender() == rankRemote);
+    REQUIRE(actualMessage->worldid() == worldId);
+    REQUIRE(actualMessage->sender() == rankRemote);
 
     // Stop the server
     server.stop();
