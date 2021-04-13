@@ -27,8 +27,7 @@ MpiAsyncThreadPool::~MpiAsyncThreadPool()
     std::function<void(void)> f;
     for (int i = 0; i < this->threadPool.size(); i++) {
         std::promise<void> p;
-        this->getMpiReqQueue()->enqueue(
-          std::make_pair(-1, std::make_pair(f, std::move(p))));
+        this->getMpiReqQueue()->enqueue(std::make_tuple(-1, f, std::move(p)));
     }
 
     for (auto& thread : threadPool) {
@@ -50,8 +49,8 @@ void MpiAsyncThreadPool::entrypoint(int i)
     while (!this->shutdown) {
         req = getMpiReqQueue()->dequeue();
 
-        std::function<void(void)> func = req.second.first;
-        std::promise<void> promise = std::move(req.second.second);
+        std::function<void(void)> func = std::get<1>(req);
+        std::promise<void> promise = std::move(std::get<2>(req));
 
         // Detect shutdown condition
         if (!func) {

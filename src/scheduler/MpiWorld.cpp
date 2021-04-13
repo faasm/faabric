@@ -313,23 +313,22 @@ int MpiWorld::isend(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    // TODO - use std::promise here instead of an additional finishedReq set?
-    std::promise<void> result_promise;
-    std::future<void> result_future = result_promise.get_future();
+    std::promise<void> resultPromise;
+    std::future<void> resultFuture = resultPromise.get_future();
     threadPool->getMpiReqQueue()->enqueue(
-      std::make_pair(requestId,
-                     std::make_pair(std::bind(&MpiWorld::send,
-                                              this,
-                                              sendRank,
-                                              recvRank,
-                                              buffer,
-                                              dataType,
-                                              count,
-                                              messageType),
-                                    std::move(result_promise))));
+      std::make_tuple(requestId,
+                      std::bind(&MpiWorld::send,
+                                this,
+                                sendRank,
+                                recvRank,
+                                buffer,
+                                dataType,
+                                count,
+                                messageType),
+                      std::move(resultPromise)));
 
     // Place the promise in a map to wait for it later
-    futureMap.emplace(std::make_pair(requestId, std::move(result_future)));
+    futureMap.emplace(std::make_pair(requestId, std::move(resultFuture)));
 
     return requestId;
 }
@@ -343,23 +342,23 @@ int MpiWorld::irecv(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
-    std::promise<void> result_promise;
-    std::future<void> result_future = result_promise.get_future();
+    std::promise<void> resultPromise;
+    std::future<void> resultFuture = resultPromise.get_future();
     threadPool->getMpiReqQueue()->enqueue(
-      std::make_pair(requestId,
-                     std::make_pair(std::bind(&MpiWorld::recv,
-                                              this,
-                                              sendRank,
-                                              recvRank,
-                                              buffer,
-                                              dataType,
-                                              count,
-                                              nullptr,
-                                              messageType),
-                                    std::move(result_promise))));
+      std::make_tuple(requestId,
+                      std::bind(&MpiWorld::recv,
+                                this,
+                                sendRank,
+                                recvRank,
+                                buffer,
+                                dataType,
+                                count,
+                                nullptr,
+                                messageType),
+                      std::move(resultPromise)));
 
     // Place the promise in a map to wait for it later
-    futureMap.emplace(std::make_pair(requestId, std::move(result_future)));
+    futureMap.emplace(std::make_pair(requestId, std::move(resultFuture)));
 
     return requestId;
 }

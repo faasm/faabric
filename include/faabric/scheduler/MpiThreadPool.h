@@ -12,8 +12,7 @@
 #include <faabric/util/queue.h>
 
 namespace faabric::scheduler {
-// < ReqId, <func(), promise>>
-typedef std::pair<int, std::pair<std::function<void(void)>, std::promise<void>>>
+typedef std::tuple<int, std::function<void(void)>, std::promise<void>>
   ReqQueueType;
 typedef faabric::util::Queue<ReqQueueType> MpiReqQueue;
 
