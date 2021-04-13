@@ -309,6 +309,22 @@ std::string buildAsyncResponse(const faabric::Message& msg)
 }
 
 faabric::BatchExecuteRequest batchExecFactory(
+  std::vector<std::shared_ptr<faabric::Message>>& msgs)
+{
+    // TODO - can we avoid this copy?
+    faabric::BatchExecuteRequest req;
+    for (auto p : msgs) {
+        *req.add_messages() = *p.get();
+    }
+
+    // Generate a random ID
+    unsigned int id = faabric::util::generateGid();
+    req.set_id(id);
+
+    return req;
+}
+
+faabric::BatchExecuteRequest batchExecFactory(
   std::vector<faabric::Message>& msgs)
 {
     // TODO - can we avoid this copy?
@@ -320,6 +336,22 @@ faabric::BatchExecuteRequest batchExecFactory(
     req.set_id(id);
 
     return req;
+}
+
+std::shared_ptr<faabric::Message> messageFactoryShared(
+  const std::string& user,
+  const std::string& function)
+{
+    auto ptr = std::make_shared<faabric::Message>();
+
+    ptr->set_user(user);
+    ptr->set_function(function);
+
+    setMessageId(*ptr);
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    ptr->set_masterhost(thisHost);
+    return ptr;
 }
 
 faabric::Message messageFactory(const std::string& user,

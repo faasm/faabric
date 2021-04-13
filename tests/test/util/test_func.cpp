@@ -18,6 +18,17 @@ TEST_CASE("Test message factory", "[util]")
     REQUIRE(!msg.resultkey().empty());
 }
 
+TEST_CASE("Test message factory shared", "[util]")
+{
+    std::shared_ptr<faabric::Message> msg =
+      faabric::util::messageFactoryShared("demo", "echo");
+    REQUIRE(msg->user() == "demo");
+    REQUIRE(msg->function() == "echo");
+    REQUIRE(msg->id() > 0);
+    REQUIRE(!msg->statuskey().empty());
+    REQUIRE(!msg->resultkey().empty());
+}
+
 TEST_CASE("Test retrieving function paths", "[util]")
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
