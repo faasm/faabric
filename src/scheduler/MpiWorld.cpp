@@ -11,6 +11,8 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/timing.h>
 
+static thread_local std::unordered_map<int, std::future<void>> futureMap;
+
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
   : id(-1)
@@ -311,16 +313,22 @@ int MpiWorld::isend(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
+    std::promise<void> resultPromise;
+    std::future<void> resultFuture = resultPromise.get_future();
     threadPool->getMpiReqQueue()->enqueue(
-      std::make_pair(requestId,
-                     std::bind(&MpiWorld::send,
-                               this,
-                               sendRank,
-                               recvRank,
-                               buffer,
-                               dataType,
-                               count,
-                               messageType)));
+      std::make_tuple(requestId,
+                      std::bind(&MpiWorld::send,
+                                this,
+                                sendRank,
+                                recvRank,
+                                buffer,
+                                dataType,
+                                count,
+                                messageType),
+                      std::move(resultPromise)));
+
+    // Place the promise in a map to wait for it later
+    futureMap.emplace(std::make_pair(requestId, std::move(resultFuture)));
 
     return requestId;
 }
@@ -334,17 +342,23 @@ int MpiWorld::irecv(int sendRank,
 {
     int requestId = (int)faabric::util::generateGid();
 
+    std::promise<void> resultPromise;
+    std::future<void> resultFuture = resultPromise.get_future();
     threadPool->getMpiReqQueue()->enqueue(
-      std::make_pair(requestId,
-                     std::bind(&MpiWorld::recv,
-                               this,
-                               sendRank,
-                               recvRank,
-                               buffer,
-                               dataType,
-                               count,
-                               nullptr,
-                               messageType)));
+      std::make_tuple(requestId,
+                      std::bind(&MpiWorld::recv,
+                                this,
+                                sendRank,
+                                recvRank,
+                                buffer,
+                                dataType,
+                                count,
+                                nullptr,
+                                messageType),
+                      std::move(resultPromise)));
+
+    // Place the promise in a map to wait for it later
+    futureMap.emplace(std::make_pair(requestId, std::move(resultFuture)));
 
     return requestId;
 }
@@ -702,9 +716,16 @@ void MpiWorld::awaitAsyncRequest(int requestId)
 {
     faabric::util::getLogger()->trace("MPI - await {}", requestId);
 
-    // Forward the await request to the local thread pool.
+    auto it = futureMap.find(requestId);
+    if (it == futureMap.end()) {
+        throw std::runtime_error(
+          fmt::format("Error: waiting for unrecognized request {}", requestId));
+    }
+
     // This call blocks until requestId has finished.
-    threadPool->awaitAsyncRequest(requestId);
+    it->second.wait();
+    futureMap.erase(it);
+
     faabric::util::getLogger()->debug("Finished awaitAsyncRequest on {}",
                                       requestId);
 }
