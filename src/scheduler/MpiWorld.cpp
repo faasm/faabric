@@ -64,6 +64,30 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
     return state.getKV(user, stateKey, MPI_HOST_STATE_LEN);
 }
 
+int MpiWorld::getMpiThreadPoolSize()
+{
+    // We initialise as many threads as MPI ranks assigned to this host, as long
+    // as this number does not exceed the number of usable cores.
+    int usableCores = faabric::util::getUsableCores();
+    int ranksInHost = size;
+    /* TODO improve
+    for (int i = 0; i < this->size; i++) {
+        if (getHostForRank(i) == thisHost) {
+            ranksInHost++;
+        }
+    }
+    */
+
+    // TODO - does it make sense to pin each thread to a CPU core using affinity
+    if (ranksInHost > usableCores) {
+        faabric::util::getLogger()->warn(
+          "WARNING: more MPI ranks in host ({}) than usable cores ({})",
+          ranksInHost,
+          usableCores);
+    }
+    return (int)std::min(ranksInHost, usableCores);
+}
+
 void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 {
     id = newId;
@@ -71,7 +95,8 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     function = call.function();
 
     size = newSize;
-    threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(size);
+    threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
+      getMpiThreadPoolSize());
 
     // Write this to state
     setUpStateKV();
@@ -121,7 +146,8 @@ void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
     stateKV->pull();
     stateKV->get(BYTES(&s));
     size = s.worldSize;
-    threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(size);
+    threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
+      getMpiThreadPoolSize());
 }
 
 void MpiWorld::pushToState()
