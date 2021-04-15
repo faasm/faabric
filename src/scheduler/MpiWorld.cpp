@@ -69,8 +69,11 @@ int MpiWorld::getMpiThreadPoolSize()
     int usableCores = faabric::util::getUsableCores();
     int worldSize = size;
 
-    // Note - this may overprovision threads if worldSize > usableCores, and
+    // Note - this will overprovision threads if worldSize > usableCores, and
     // worldSize % usableCores != 0
+    faabric::util::getLogger()->warn(
+      "Over-provisioning threads in the MPI thread pool. To avoid this, set a "
+      "MPI world size multiple of the number of cores per machine.");
     return std::min<int>(worldSize, usableCores);
 }
 

@@ -3,6 +3,8 @@
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 
+#include <thread>
+
 using namespace faabric::util;
 
 namespace tests {
@@ -34,5 +36,17 @@ TEST_CASE("Test setting environment variables", "[util]")
 
     const std::string original2 = setEnvVar("MY_VAR", "gamma");
     REQUIRE(original2 == "beta");
+}
+
+TEST_CASE("Test overriding CPU count", "[util]")
+{
+    // Unset just in case it is set
+    unsetEnvVar("OVERRIDE_CPU_COUNT");
+
+    unsigned int expectedNumCores = std::thread::hardware_concurrency();
+    REQUIRE(getUsableCores() == expectedNumCores);
+
+    getSystemConfig().overrideCpuCount = 4;
+    REQUIRE(getUsableCores() == 4);
 }
 }
