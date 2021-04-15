@@ -115,6 +115,7 @@ void SystemConfig::print()
 
     logger->info("--- Scheduling ---");
     logger->info("NO_SCHEDULER               {}", noScheduler);
+    logger->info("OVERRIDE_CPU_COUNT         {}", overrideCpuCount);
 
     logger->info("--- Timeouts ---");
     logger->info("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
