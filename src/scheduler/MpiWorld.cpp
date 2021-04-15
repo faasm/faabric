@@ -66,26 +66,12 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
 
 int MpiWorld::getMpiThreadPoolSize()
 {
-    // We initialise as many threads as MPI ranks assigned to this host, as long
-    // as this number does not exceed the number of usable cores.
     int usableCores = faabric::util::getUsableCores();
-    int ranksInHost = size;
-    /* TODO improve
-    for (int i = 0; i < this->size; i++) {
-        if (getHostForRank(i) == thisHost) {
-            ranksInHost++;
-        }
-    }
-    */
+    int worldSize = size;
 
-    // TODO - does it make sense to pin each thread to a CPU core using affinity
-    if (ranksInHost > usableCores) {
-        faabric::util::getLogger()->warn(
-          "WARNING: more MPI ranks in host ({}) than usable cores ({})",
-          ranksInHost,
-          usableCores);
-    }
-    return (int)std::min(ranksInHost, usableCores);
+    // Note - this may overprovision threads if worldSize > usableCores, and
+    // worldSize % usableCores != 0
+    return std::min<int>(worldSize, usableCores);
 }
 
 void MpiWorld::create(const faabric::Message& call, int newId, int newSize)

@@ -92,7 +92,6 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
     // Set message ID and master host
     faabric::util::setMessageId(msg);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    logger->debug("Setting up masterhost to {}", thisHost);
     msg.set_masterhost(thisHost);
 
     auto tid = (pid_t)syscall(SYS_gettid);
