@@ -66,14 +66,15 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
 
 int MpiWorld::getMpiThreadPoolSize()
 {
+    auto logger = faabric::util::getLogger();
     int usableCores = faabric::util::getUsableCores();
     int worldSize = size;
 
-    // Note - this will overprovision threads if worldSize > usableCores, and
-    // worldSize % usableCores != 0
-    faabric::util::getLogger()->warn(
-      "Over-provisioning threads in the MPI thread pool. To avoid this, set a "
-      "MPI world size multiple of the number of cores per machine.");
+    if ((worldSize > usableCores) && (worldSize % usableCores != 0)) {
+        logger->warn("Over-provisioning threads in the MPI thread pool.");
+        logger->warn("To avoid this, set an MPI world size multiple of the "
+                     "number of cores per machine.");
+    }
     return std::min<int>(worldSize, usableCores);
 }
 
