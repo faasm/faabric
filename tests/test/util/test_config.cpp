@@ -124,6 +124,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("REDIS_PORT", redisPort);
 
     setEnvVar("NO_SCHEDULER", noScheduler);
+    setEnvVar("OVERRIDE_CPU_COUNT", overrideCpuCount);
 
     setEnvVar("GLOBAL_MESSAGE_TIMEOUT", globalTimeout);
     setEnvVar("BOUND_TIMEOUT", boundTimeout);
