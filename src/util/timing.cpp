@@ -62,7 +62,7 @@ void printTimerTotals()
         int count = timerCounts[p.second];
         double avg = millis / count;
         printf(
-          "%-11.2f %-10.2f %5i  %s\n", millis, avg, count, p.second.c_str());
+          "%-11.2f %-10.3f %5i  %s\n", millis, avg, count, p.second.c_str());
     }
 }
 
