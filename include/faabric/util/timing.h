@@ -4,11 +4,13 @@
 #include <string>
 
 #ifdef TRACE_ALL
+#define PROF_BEGIN faabric::util::startGlobalTimer();
 #define PROF_START(name)                                                       \
     const faabric::util::TimePoint name = faabric::util::startTimer();
 #define PROF_END(name) faabric::util::logEndTimer(#name, name);
 #define PROF_SUMMARY faabric::util::printTimerTotals();
 #else
+#define PROF_BEGIN
 #define PROF_START(name)
 #define PROF_END(name)
 #define PROF_SUMMARY
@@ -25,6 +27,8 @@ double getTimeDiffMillis(const faabric::util::TimePoint& begin);
 
 void logEndTimer(const std::string& label,
                  const faabric::util::TimePoint& begin);
+
+void startGlobalTimer();
 
 void printTimerTotals();
 

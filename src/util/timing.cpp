@@ -1,6 +1,7 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
+faabric::util::TimePoint globalStart;
 std::unordered_map<std::string, std::atomic<long>> timerTotals;
 std::unordered_map<std::string, std::atomic<int>> timerCounts;
 
@@ -45,8 +46,17 @@ void logEndTimer(const std::string& label,
     timerCounts[label]++;
 }
 
+void startGlobalTimer()
+{
+    globalStart = startTimer();
+}
+
 void printTimerTotals()
 {
+    // Stop global timer
+    double totalMillis = getTimeDiffMillis(globalStart);
+    double totalSeconds = totalMillis / 1000.0;
+
     // Switch the pairs so we can use std::sort
     std::vector<std::pair<long, std::string>> totals;
     for (auto& p : timerTotals) {
@@ -64,6 +74,8 @@ void printTimerTotals()
         printf(
           "%-11.2f %-10.3f %5i  %s\n", millis, avg, count, p.second.c_str());
     }
+
+    printf("Total running time: %.2fs\n\n", totalSeconds);
 }
 
 uint64_t timespecToNanos(struct timespec* nativeTimespec)
