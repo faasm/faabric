@@ -1,6 +1,9 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
+std::unordered_map<std::string, std::atomic<long>> timerTotals;
+std::unordered_map<std::string, std::atomic<int>> timerCounts;
+
 namespace faabric::util {
 faabric::util::TimePoint startTimer()
 {
@@ -36,6 +39,31 @@ void logEndTimer(const std::string& label,
     double millis = getTimeDiffMillis(begin);
     const std::shared_ptr<spdlog::logger>& l = faabric::util::getLogger();
     l->trace("TIME = {:.2f}ms ({})", millis, label);
+
+    // Record microseconds total
+    timerTotals[label] += long(millis * 1000L);
+    timerCounts[label]++;
+}
+
+void printTimerTotals()
+{
+    // Switch the pairs so we can use std::sort
+    std::vector<std::pair<long, std::string>> totals;
+    for (auto& p : timerTotals) {
+        totals.push_back({ p.second, p.first });
+    }
+
+    std::sort(totals.begin(), totals.end());
+
+    printf("---------- TIMER TOTALS ----------\n");
+    printf("Total (ms)  Avg (ms)   Count  Label\n");
+    for (auto& p : totals) {
+        double millis = double(p.first) / 1000.0;
+        int count = timerCounts[p.second];
+        double avg = millis / count;
+        printf(
+          "%-11.2f %-10.2f %5i  %s\n", millis, avg, count, p.second.c_str());
+    }
 }
 
 uint64_t timespecToNanos(struct timespec* nativeTimespec)
