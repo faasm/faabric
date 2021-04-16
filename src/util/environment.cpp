@@ -1,3 +1,4 @@
+#include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 
 #include <thread>
@@ -35,7 +36,14 @@ void unsetEnvVar(const std::string& varName)
 
 unsigned int getUsableCores()
 {
-    unsigned int nCores = std::thread::hardware_concurrency();
+    auto conf = faabric::util::getSystemConfig();
+    unsigned int nCores;
+
+    if (conf.overrideCpuCount == 0) {
+        nCores = std::thread::hardware_concurrency();
+    } else {
+        nCores = conf.overrideCpuCount;
+    }
 
     // Returns zero when unable to detect
     if (nCores == 0) {

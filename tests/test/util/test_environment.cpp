@@ -1,7 +1,10 @@
+#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+
+#include <thread>
 
 using namespace faabric::util;
 
@@ -34,5 +37,25 @@ TEST_CASE("Test setting environment variables", "[util]")
 
     const std::string original2 = setEnvVar("MY_VAR", "gamma");
     REQUIRE(original2 == "beta");
+}
+
+TEST_CASE("Test overriding CPU count", "[util]")
+{
+    cleanFaabric();
+
+    // Check default cores is same as available concurrency
+    auto& conf = getSystemConfig();
+    unsigned int defaultCores = getUsableCores();
+    REQUIRE(defaultCores == std::thread::hardware_concurrency());
+
+    // Check it can be overridden
+    conf.overrideCpuCount = 1234;
+    REQUIRE(getUsableCores() == 1234);
+
+    // Reset the conf
+    conf.reset();
+
+    // Check we're back to the default
+    REQUIRE(getUsableCores() == defaultCores);
 }
 }

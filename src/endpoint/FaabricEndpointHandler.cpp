@@ -89,7 +89,10 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
         return "Empty function";
     }
 
+    // Set message ID and master host
     faabric::util::setMessageId(msg);
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    msg.set_masterhost(thisHost);
 
     auto tid = (pid_t)syscall(SYS_gettid);
 

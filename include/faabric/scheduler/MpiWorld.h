@@ -232,6 +232,8 @@ class MpiWorld
 
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
+    int getMpiThreadPoolSize();
+
     void checkRankOnThisHost(int rank);
 
     void pushToState();

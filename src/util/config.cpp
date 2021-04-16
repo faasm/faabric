@@ -40,6 +40,7 @@ void SystemConfig::initialise()
 
     // Scheduling
     noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
+    overrideCpuCount = this->getSystemConfIntParam("OVERRIDE_CPU_COUNT", "0");
 
     // Worker-related timeouts (all in seconds)
     globalMessageTimeout =
@@ -114,6 +115,7 @@ void SystemConfig::print()
 
     logger->info("--- Scheduling ---");
     logger->info("NO_SCHEDULER               {}", noScheduler);
+    logger->info("OVERRIDE_CPU_COUNT         {}", overrideCpuCount);
 
     logger->info("--- Timeouts ---");
     logger->info("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
