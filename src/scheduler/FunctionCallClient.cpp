@@ -8,6 +8,9 @@
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
+#include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
+
 namespace faabric::scheduler {
 
 // -----------------------------------
@@ -92,7 +95,10 @@ FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   , channel(grpc::CreateChannel(host + ":" + std::to_string(FUNCTION_CALL_PORT),
                                 grpc::InsecureChannelCredentials()))
   , stub(faabric::FunctionRPCService::NewStub(channel))
-{}
+{
+    auto logger = faabric::util::getLogger();
+    logger->warn("Created a new RPC client.");
+}
 
 void FunctionCallClient::sendFlush()
 {
@@ -112,9 +118,11 @@ void FunctionCallClient::sendMPIMessage(
     if (faabric::util::isMockMode()) {
         mpiMessages.emplace_back(host, *msg);
     } else {
+        PROF_START(faabricWaitForRpcCompletion);
         ClientContext context;
         faabric::FunctionStatusResponse response;
         CHECK_RPC("mpi_message", stub->MPICall(&context, *msg, &response));
+        PROF_END(faabricWaitForRpcCompletion);
     }
 }
 

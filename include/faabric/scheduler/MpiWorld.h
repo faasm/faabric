@@ -3,6 +3,7 @@
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/state/StateKeyValue.h>
@@ -231,6 +232,9 @@ class MpiWorld
     void setUpStateKV();
 
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
+
+    // std::unordered_map<std::string, std::shared_ptr<faabric::scheduler::FunctionCallClient>> rpcCallClients;
+    // std::shared_ptr<faabric::scheduler::FunctionCallClient> getRpcClient(const std::string& otherHost);
 
     int getMpiThreadPoolSize();
 

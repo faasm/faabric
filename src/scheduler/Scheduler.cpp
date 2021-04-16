@@ -295,14 +295,14 @@ std::vector<std::string> Scheduler::callFunctions(
                               nMessages,
                               funcStr);
             } else if (nLocally > 0) {
-                logger->debug("Executing {} of {} {} locally",
-                              nLocally,
-                              nMessages,
-                              funcStr);
+                logger->info("Executing {} of {} {} locally",
+                             nLocally,
+                             nMessages,
+                             funcStr);
             } else {
-                logger->debug("No local capacity, distributing {} x {}",
-                              nMessages,
-                              funcStr);
+                logger->info("No local capacity, distributing {} x {}",
+                             nMessages,
+                             funcStr);
             }
 
             // Build list of messages to be executed locally

@@ -12,6 +12,7 @@
 #include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
+static thread_local std::unordered_map<std::string, faabric::scheduler::FunctionCallClient> rpcCallClients;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -62,6 +63,43 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
     state::State& state = state::getGlobalState();
     std::string stateKey = getRankStateKey(id, rank);
     return state.getKV(user, stateKey, MPI_HOST_STATE_LEN);
+}
+
+/*
+std::shared_ptr<faabric::scheduler::FunctionCallClient> MpiWorld::getRpcClient(const std::string& otherHost)
+{
+    auto logger = faabric::util::getLogger();
+    auto it = this->rpcCallClients.find(otherHost);
+    if (it == rpcCallClients.end()) {
+        logger->info("Initialize RPC call client");
+        auto ret = rpcCallClients.emplace(std::make_pair(
+            otherHost, 
+            std::make_shared<FunctionCallClient>(otherHost)));
+        if (ret.second == false) {
+            throw std::runtime_error(fmt::format("Could not create RPC client to host {}", otherHost));
+        }
+        it = ret.first;
+    }
+
+    return it->second;
+}
+*/
+
+faabric::scheduler::FunctionCallClient& getRpcClient(const std::string& otherHost)
+{
+    auto logger = faabric::util::getLogger();
+    auto it = rpcCallClients.find(otherHost);
+    if (it == rpcCallClients.end()) {
+        logger->info("Initialize many RPC call client");
+        auto ret = rpcCallClients.emplace(std::make_pair(otherHost, 
+                                          FunctionCallClient(otherHost)));
+        if (ret.second == false) {
+            throw std::runtime_error(fmt::format("Could not create RPC client to host {}", otherHost));
+        }
+        it = ret.first;
+    }
+
+    return it->second;
 }
 
 int MpiWorld::getMpiThreadPoolSize()
@@ -425,11 +463,15 @@ void MpiWorld::send(int sendRank,
             getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
         }
     } else {
-        logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
+        logger->debug("MPI - send remote {} -> {}", sendRank, recvRank);
 
-        // TODO - avoid creating a client each time?
-        scheduler::FunctionCallClient client(otherHost);
-        client.sendMPIMessage(m);
+        // scheduler::FunctionCallClient client(otherHost);
+        /*
+        {
+            faabric::util::FullLock lock(worldMutex);
+            getRpcClient(otherHost)->sendMPIMessage(m);
+        }*/
+        getRpcClient(otherHost).sendMPIMessage(m);
     }
 }
 
