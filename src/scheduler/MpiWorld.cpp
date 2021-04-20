@@ -174,6 +174,7 @@ void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
     stateKV->pull();
     stateKV->get(BYTES(&s));
     size = s.worldSize;
+    faabric::util::getLogger()->info("World from state w/ size: {}", size);
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
       getMpiThreadPoolSize());
 }
@@ -427,6 +428,7 @@ void MpiWorld::send(int sendRank,
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     if (recvRank > this->size - 1) {
+        logger->info("Is this happening here?");
         throw std::runtime_error(fmt::format(
           "Rank {} bigger than world size {}", recvRank, this->size));
     }

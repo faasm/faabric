@@ -17,3 +17,5 @@ target_link_libraries(faabric_tests
 
 add_test(NAME faabric_tests COMMAND "tests/test/faabric_tests")
 
+add_executable(grpc_test test_grpc.cpp)
+target_link_libraries(grpc_test scheduler)
