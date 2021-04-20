@@ -13,7 +13,10 @@ namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
   : RPCServer(DEFAULT_RPC_HOST, FUNCTION_CALL_PORT)
   , scheduler(getScheduler())
-{}
+{
+    mpiQueue = std::make_unique<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>();
+    faabric::util::getLogger()->debug("init done");
+}
 
 void FunctionCallServer::doStart(const std::string& serverAddr)
 {
@@ -56,9 +59,10 @@ Status FunctionCallServer::MPICall(ServerContext* context,
     // TODO - avoid copying message
     faabric::MPIMessage m = *request;
 
-    MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getWorld(m.worldid());
-    world.enqueueMessage(m);
+    // MpiWorldRegistry& registry = getMpiWorldRegistry();
+    // MpiWorld& world = registry.getWorld(m.worldid());
+    // world.enqueueMessage(m);
+    this->mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(m));
 
     return Status::OK;
 }
