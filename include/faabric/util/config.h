@@ -26,6 +26,7 @@ class SystemConfig
     std::string captureStdout;
     std::string stateMode;
     std::string wasmVm;
+    std::string deltaSnapshotEncoding;
 
     // Redis
     std::string redisStateHost;

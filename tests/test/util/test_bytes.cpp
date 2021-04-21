@@ -103,4 +103,38 @@ TEST_CASE("Test safe copy with long buffer and other chars", "[util]")
     REQUIRE(input == actualStr);
 }
 
+TEST_CASE("Test integer encoding to/from bytes", "[util]")
+{
+    std::vector<uint8_t> buffer;
+
+    uint8_t v1 = 2, r1;
+    uint16_t v2 = 0xABCD, r2;
+    uint32_t v4 = 0xBEEF1337, r4;
+    uint64_t v8 = 0xABEE2929BEE51234, r8;
+
+    appendBytesOf(buffer, v1);
+    REQUIRE(buffer.size() == 1);
+    appendBytesOf(buffer, v2);
+    REQUIRE(buffer.size() == (1 + 2));
+    appendBytesOf(buffer, v4);
+    REQUIRE(buffer.size() == (1 + 2 + 4));
+    appendBytesOf(buffer, v8);
+    REQUIRE(buffer.size() == (1 + 2 + 4 + 8));
+
+    size_t offset = 0;
+    offset = readBytesOf(buffer, offset, &r1);
+    REQUIRE(r1 == v1);
+    REQUIRE(offset == 1);
+    offset = readBytesOf(buffer, offset, &r2);
+    REQUIRE(r2 == v2);
+    REQUIRE(offset == (1 + 2));
+    offset = readBytesOf(buffer, offset, &r4);
+    REQUIRE(r4 == v4);
+    REQUIRE(offset == (1 + 2 + 4));
+    offset = readBytesOf(buffer, offset, &r8);
+    REQUIRE(r8 == v8);
+    REQUIRE(offset == (1 + 2 + 4 + 8));
+    REQUIRE_THROWS_AS(readBytesOf(buffer, offset, &r1), std::range_error);
+}
+
 }

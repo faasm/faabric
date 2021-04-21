@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13.0)
+cmake_minimum_required(VERSION 3.14.0)
 project(faabric)
 
 option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
@@ -28,7 +28,7 @@ include(cmake/ExternalProjects.cmake)
 function(faabric_lib lib_name lib_deps)
     # "Normal" library used for linking internally
     add_library(${lib_name} ${lib_deps})
-    target_include_directories(${lib_name} 
+    target_include_directories(${lib_name}
         PUBLIC ${FAABRIC_INCLUDE_DIR}
         PUBLIC ${PISTACHE_INCLUDE_DIR}
         PUBLIC ${SPDLOG_INCLUDE_DIR}
@@ -39,7 +39,7 @@ function(faabric_lib lib_name lib_deps)
     # Object library for bundling everything together (should have the same
     # include dirs and dependencies as the normal library)
     add_library(${lib_name}_obj OBJECT ${lib_deps})
-    target_include_directories(${lib_name}_obj 
+    target_include_directories(${lib_name}_obj
         PUBLIC ${FAABRIC_INCLUDE_DIR}
         PUBLIC ${PISTACHE_INCLUDE_DIR}
         PUBLIC ${SPDLOG_INCLUDE_DIR}
@@ -52,7 +52,7 @@ function(faabric_lib lib_name lib_deps)
     if(BUILD_SHARED_LIBS)
         target_compile_options(${lib_name} PRIVATE "-fPIC")
         target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
-    endif()    
+    endif()
 endfunction()
 
 add_subdirectory(src/endpoint)
@@ -68,15 +68,15 @@ add_subdirectory(src/snapshot)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
 
-# Wrapper library - note we want to include all the _object_ targets in this 
+# Wrapper library - note we want to include all the _object_ targets in this
 # library to ensure it's all bundled in together
-if(BUILD_SHARED_LIBS) 
+if(BUILD_SHARED_LIBS)
     set(FAABRIC_LIB_TYPE SHARED)
 else()
     set(FAABRIC_LIB_TYPE STATIC)
 endif()
 
-add_library(faabric 
+add_library(faabric
     ${FAABRIC_LIB_TYPE}
     faabric.cpp
     $<TARGET_OBJECTS:endpoint_obj>
@@ -93,7 +93,7 @@ add_library(faabric
 
 add_dependencies(faabric pistache spdlog_ext)
 
-target_link_libraries(faabric
+target_link_libraries(faabric PUBLIC
     ${Protobuf_LIBRARIES}
     faabricmpi
     gRPC::grpc++
@@ -102,9 +102,10 @@ target_link_libraries(faabric
     pistache
     boost_system
     boost_filesystem
+    zstd::libzstd_static
     )
 
-target_include_directories(faabric PUBLIC 
+target_include_directories(faabric PUBLIC
     ${FAABRIC_INCLUDE_DIR}
     ${CMAKE_INSTALL_PREFIX}/include
 )
