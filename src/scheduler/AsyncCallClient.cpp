@@ -11,7 +11,7 @@ namespace faabric::scheduler {
 // -----------------------------------
 AsyncCallClient::AsyncCallClient(const std::string& hostIn)
   : host(hostIn)
-  , channel(grpc::CreateChannel(host + ":" + std::to_string(FUNCTION_CALL_PORT),
+  , channel(grpc::CreateChannel(host + ":" + std::to_string(ASYNC_FUNCTION_CALL_PORT),
                                 grpc::InsecureChannelCredentials()))
   , stub(faabric::AsyncRPCService::NewStub(channel))
 {
@@ -46,6 +46,17 @@ void AsyncClientCall::AsyncCompleteRpc() {
     bool ok = false;
 
     while(cq.Next(&gotTag, &ok)) {
+        AsyncClientCall* call = static_cast<AsyncClientCall*>(gotTag);
+
+        // Check that the request completed succesfully. Note that this does not
+        // check the status code, only that it finished.
+        if (!ok) {
+            throw std::runtime_error("Async RPC did not finish succesfully");
+        }
+
+        if (!call->status.ok()) {
+            throw std::runtime_error(fmt::format("RPC error {}", call->status.error_message()));
+        }
     }
 }
 }

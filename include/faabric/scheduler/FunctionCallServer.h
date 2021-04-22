@@ -43,6 +43,8 @@ class FunctionCallServer final
   protected:
     void doStart(const std::string& serverAddr) override;
 
+    void doStop() override;
+
   private:
     Scheduler& scheduler;
     std::unique_ptr<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>> mpiQueue;

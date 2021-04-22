@@ -27,5 +27,7 @@ class RPCServer
     std::thread servingThread;
 
     virtual void doStart(const std::string& serverAddr) = 0;
+
+    virtual void doStop() = 0;
 };
 }

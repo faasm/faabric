@@ -25,6 +25,8 @@ class AsyncCallClient
 
     void sendMpiMessage(const std::shared_ptr<faabric::MPIMessage> msg);
 
+    void AsyncCompleteRpc();
+
   private:
     const std::string host;
 

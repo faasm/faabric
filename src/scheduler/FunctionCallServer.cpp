@@ -40,6 +40,11 @@ void FunctionCallServer::doStart(const std::string& serverAddr)
     server->Wait();
 }
 
+void FunctionCallServer::doStop()
+{
+    server->Shutdown();
+}
+
 Status FunctionCallServer::Flush(ServerContext* context,
                                  const faabric::Message* request,
                                  faabric::FunctionStatusResponse* response)

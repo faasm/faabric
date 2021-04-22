@@ -40,7 +40,7 @@ void RPCServer::stop()
     }
 
     logger->info("RPC server stopping");
-    server->Shutdown();
+    doStop();
 
     if (_isBackground) {
         logger->debug("Waiting for RPC server background thread");
