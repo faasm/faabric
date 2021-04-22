@@ -12,7 +12,8 @@ void clientTest(int numThreads, int numRpcs)
 {
     auto logger = faabric::util::getLogger("bench");
     std::vector<std::thread> threadPool;
-    const std::string host = "172.29.0.3";
+    // const std::string host = "172.29.0.3";
+    const std::string host = "192.168.48.9";
 
     // Initialize message
     int bufferSize = 1;
@@ -27,13 +28,13 @@ void clientTest(int numThreads, int numRpcs)
     m->set_buffer(buffer.data(), sizeof(int) * bufferSize);
 
     // Initialize clients
+    faabric::scheduler::FunctionCallClient cli(host);
     for (int i = 0; i < numThreads; i++) {
         threadPool.emplace_back(std::thread([&] {
-            faabric::scheduler::FunctionCallClient cli(host);
             for (int j = 0; j < numRpcs; j++) {
-                PROF_START(fullRtt);
-                cli.sendMPIMessage(std::make_shared<faabric::MPIMessage>());
-                PROF_END(fullRtt);
+                PROF_START(fullRtt)
+                cli.sendMPIMessage(m);
+                PROF_END(fullRtt)
             }
         }));
     }
@@ -56,36 +57,4 @@ int main(int argc, char* argv[])
         PROF_SUMMARY
     }
     return 0;
-    /*
-    // Benchmark parameters
-    // 1. Number of threads
-    // 2. Number of loops
-    int numClients = 1;
-    int numRpcs = 1000;
-    std::string otherHost = "172.24.0.5";
-
-    // Create worlds
-    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    msg.set_mpiworldsize(1);
-    faabric::scheduler::MpiWorld& world =
-      faabric::scheduler::getMpiWorldRegistry().createWorld(msg, 1337, otherHost);
-    faabric::util::getLogger("bench")->info("Initialised world w/ ID: {}",
-            world.getId());
-
-    // Run benchmark
-    logger->info(fmt::format("Starting RPC benchmark to {}", otherHost));
-    logger->info(fmt::format("- Sending {} RPCs w/ {} clients", numRpcs, numClients));
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    for (uint8_t i = 0; i < numClients; i++) {
-        clientTest(otherHost, numRpcs);
-    }
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    auto duration = 
-      std::chrono::duration_cast<std::chrono::milliseconds> (end - begin).count();
-    logger->info(fmt::format("Sent {} RPCs in {} ms", numRpcs, duration));
-    logger->info(fmt::format("- Rate: {} RPCs/sec",
-                 (float) numRpcs / duration * 1e3));
-
-    return 0;
-    */
 }
