@@ -260,14 +260,20 @@ std::vector<std::string> Scheduler::callFunctions(
     if (forceLocal) {
         logger->debug("Executing {} x {} locally", nMessages, funcStr);
 
-        for (int i = 0; i < nMessages; i++) {
-            faabric::Message msg = req.messages().at(i);
+        if (isThreads) {
+            // Threads will handle their own batch requests, so we just need to
+            // add one
+            funcQueue->enqueue(std::make_pair(0, &req));
+            addFaasletsForBatch(req);
+        } else {
+            // For non-threads, we need a faaslet per message
+            for (int i = 0; i < nMessages; i++) {
+                funcQueue->enqueue(std::make_pair(i, &req));
+                incrementInFlightCount(req.messages().at(i));
+                addFaaslets(req.messages().at(i));
 
-            funcQueue->enqueue(msg);
-            incrementInFlightCount(msg);
-            addFaaslets(msg);
-
-            executed.at(i) = thisHost;
+                executed.at(i) = thisHost;
+            }
         }
     } else {
         // If we're not the master host, we need to forward the request back to
@@ -541,6 +547,20 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
       thisHostResources.functionsinflight() + 1);
 }
 
+void Scheduler::addFaasletsForBatch(const faabric::BatchExecuteRequest& req)
+{
+    auto logger = faabric::util::getLogger();
+
+    // Check whether we already have a faaslet for this function on this host
+    const std::string funcStr = faabric::util::funcToString(req);
+
+    // If we've not got one faaslet per in-flight function, add one
+    int nFaaslets = faasletCounts[funcStr];
+    if (nFaaslets == 0) {
+        addFaaslet(req.messages().at(0));
+    }
+}
+
 void Scheduler::addFaaslets(const faabric::Message& msg)
 {
     auto logger = faabric::util::getLogger();
@@ -554,24 +574,29 @@ void Scheduler::addFaaslets(const faabric::Message& msg)
     if (needToScale) {
         logger->debug(
           "Scaling {} {}->{} faaslets", funcStr, nFaaslets, nFaaslets + 1);
-
-        // Increment faaslet count
-        faasletCounts[funcStr]++;
-        thisHostResources.set_boundexecutors(
-          thisHostResources.boundexecutors() + 1);
-
-        // Send bind message (i.e. request a new faaslet bind to this func)
-        faabric::Message bindMsg =
-          faabric::util::messageFactory(msg.user(), msg.function());
-        bindMsg.set_type(faabric::Message_MessageType_BIND);
-        bindMsg.set_ispython(msg.ispython());
-        bindMsg.set_istypescript(msg.istypescript());
-        bindMsg.set_pythonuser(msg.pythonuser());
-        bindMsg.set_pythonfunction(msg.pythonfunction());
-        bindMsg.set_issgx(msg.issgx());
-
-        bindQueue->enqueue(bindMsg);
+        addFaaslet(msg);
     }
+}
+
+void Scheduler::addFaaslet(const faabric::Message& msg)
+{
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+    // Increment faaslet count
+    faasletCounts[funcStr]++;
+    thisHostResources.set_boundexecutors(thisHostResources.boundexecutors() +
+                                         1);
+
+    // Send bind message (i.e. request a new faaslet bind to this func)
+    faabric::Message bindMsg =
+      faabric::util::messageFactory(msg.user(), msg.function());
+    bindMsg.set_type(faabric::Message_MessageType_BIND);
+    bindMsg.set_ispython(msg.ispython());
+    bindMsg.set_istypescript(msg.istypescript());
+    bindMsg.set_pythonuser(msg.pythonuser());
+    bindMsg.set_pythonfunction(msg.pythonfunction());
+    bindMsg.set_issgx(msg.issgx());
+
+    bindQueue->enqueue(bindMsg);
 }
 
 std::string Scheduler::getThisHost()

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faabric/scheduler/InMemoryMessageQueue.h"
 #include <future>
 
 #include <faabric/proto/faabric.pb.h>
@@ -28,7 +29,7 @@ class FaabricExecutor
     virtual std::string processNextMessage();
 
     std::vector<std::future<int32_t>> batchExecuteThreads(
-      faabric::BatchExecuteRequest& req);
+      faabric::BatchExecuteRequest* req);
 
     std::string executeCall(faabric::Message& call);
 
@@ -61,7 +62,8 @@ class FaabricExecutor
 
     faabric::scheduler::Scheduler& scheduler;
 
-    std::shared_ptr<faabric::scheduler::InMemoryMessageQueue> currentQueue;
+    std::shared_ptr<faabric::scheduler::InMemoryMessageQueue> bindQueue;
+    std::shared_ptr<faabric::scheduler::InMemoryBatchQueue> functionQueue;
 
     int executionCount = 0;
 

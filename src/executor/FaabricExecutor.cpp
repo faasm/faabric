@@ -1,3 +1,4 @@
+#include "faabric/proto/faabric.pb.h"
 #include "faabric/util/queue.h"
 #include <faabric/executor/FaabricExecutor.h>
 
@@ -19,7 +20,7 @@ FaabricExecutor::FaabricExecutor(int threadIdxIn)
     logger->debug("Starting executor thread {}", id);
 
     // Listen to bind queue by default
-    currentQueue = scheduler.getBindQueue();
+    bindQueue = scheduler.getBindQueue();
 }
 
 void FaabricExecutor::bindToFunction(const faabric::Message& msg, bool force)
@@ -43,7 +44,7 @@ void FaabricExecutor::bindToFunction(const faabric::Message& msg, bool force)
     _isBound = true;
 
     // Get queue from the scheduler
-    currentQueue = scheduler.getFunctionQueue(msg);
+    functionQueue = scheduler.getFunctionQueue(msg);
 
     // Hook
     this->postBind(msg, force);
@@ -128,41 +129,43 @@ void FaabricExecutor::run()
 std::string FaabricExecutor::processNextMessage()
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
-    // Work out which timeout
-    int timeoutMs;
     faabric::util::SystemConfig conf = faabric::util::getSystemConfig();
-    if (_isBound) {
-        timeoutMs = conf.boundTimeout;
-    } else {
-        timeoutMs = conf.unboundTimeout;
-    }
-
-    faabric::Message msg = currentQueue->dequeue(timeoutMs);
 
     std::string errorMessage;
-    if (msg.type() == faabric::Message_MessageType_FLUSH) {
-        flush();
+    if (_isBound) {
+        faabric::scheduler::MessageTask execTask =
+          functionQueue->dequeue(conf.boundTimeout);
 
-    } else if (msg.type() == faabric::Message_MessageType_BIND) {
-        const std::string funcStr = faabric::util::funcToString(msg, false);
+        if (execTask.second->type() == faabric::BatchExecuteRequest::THREADS) {
+            batchExecuteThreads(execTask.second);
+        } else {
+            faabric::Message msg =
+              execTask.second->messages().at(execTask.first);
+            if (msg.type() == faabric::Message_MessageType_FLUSH) {
+                flush();
+            } else {
+                // Do the actual execution
+                // TODO - avoid this copy
+                errorMessage = executeCall(msg);
+            }
+        }
+    } else {
+        faabric::Message bindMsg = bindQueue->dequeue(conf.unboundTimeout);
+        const std::string funcStr = faabric::util::funcToString(bindMsg, false);
         logger->debug("{} binding to {}", id, funcStr);
 
         try {
-            this->bindToFunction(msg);
+            this->bindToFunction(bindMsg);
         } catch (faabric::util::InvalidFunctionException& e) {
             errorMessage = "Invalid function: " + funcStr;
         }
-    } else {
-        // Do the actual execution
-        errorMessage = this->executeCall(msg);
     }
 
     return errorMessage;
 }
 
 std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
-  faabric::BatchExecuteRequest& req)
+  faabric::BatchExecuteRequest* req)
 {
     const auto& logger = faabric::util::getLogger();
 

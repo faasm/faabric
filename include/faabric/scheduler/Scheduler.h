@@ -129,6 +129,10 @@ class Scheduler
 
     void addFaaslets(const faabric::Message& msg);
 
+    void addFaasletsForBatch(const faabric::BatchExecuteRequest& req);
+
+    void addFaaslet(const faabric::Message& msg);
+
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 
     int scheduleFunctionsOnHost(const std::string& host,
