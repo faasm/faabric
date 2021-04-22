@@ -47,6 +47,9 @@ service FunctionRPCService {
     rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
     }
 
+    rpc NoOp (ResourceRequest) returns (FunctionStatusResponse) {
+    }
+
     rpc GetResources (ResourceRequest) returns (HostResources) {
     }
 
@@ -54,6 +57,11 @@ service FunctionRPCService {
     }
 
     rpc Unregister (UnregisterRequest) returns (FunctionStatusResponse) {
+    }
+}
+
+service AsyncRPCService {
+    rpc MPIMsg (MPIMessage) returns (FunctionStatusResponse) {
     }
 }
 

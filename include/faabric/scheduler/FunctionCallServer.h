@@ -24,6 +24,10 @@ class FunctionCallServer final
                    const faabric::MPIMessage* request,
                    faabric::FunctionStatusResponse* response) override;
 
+    Status NoOp(ServerContext* context,
+                const faabric::ResourceRequest* request,
+                faabric::FunctionStatusResponse* response) override;
+
     Status GetResources(ServerContext* context,
                         const faabric::ResourceRequest* request,
                         faabric::HostResources* response) override;
@@ -41,5 +45,6 @@ class FunctionCallServer final
 
   private:
     Scheduler& scheduler;
+    std::unique_ptr<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>> mpiQueue;
 };
 }

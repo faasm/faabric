@@ -9,6 +9,8 @@
 #include <faabric/rpc/macros.h>
 #include <grpcpp/grpcpp.h>
 
+#include <faabric/util/timing.h>
+
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
   : RPCServer(DEFAULT_RPC_HOST, FUNCTION_CALL_PORT)
@@ -25,6 +27,11 @@ void FunctionCallServer::doStart(const std::string& serverAddr)
     builder.AddListeningPort(serverAddr, InsecureServerCredentials());
     builder.RegisterService(this);
 
+    // Set up max number of threads
+    grpc::ResourceQuota rq("test-rq");
+    rq.SetMaxThreads(20);
+    builder.SetResourceQuota(rq);
+    
     // Start it
     server = builder.BuildAndStart();
     faabric::util::getLogger()->info("Function call server listening on {}",
@@ -55,15 +62,31 @@ Status FunctionCallServer::MPICall(ServerContext* context,
                                    const faabric::MPIMessage* request,
                                    faabric::FunctionStatusResponse* response)
 {
-
     // TODO - avoid copying message
+    PROF_START(MpiCall)
+
+    PROF_START(MPICallCopy)
     faabric::MPIMessage m = *request;
+    PROF_END(MPICallCopy)
 
-    // MpiWorldRegistry& registry = getMpiWorldRegistry();
-    // MpiWorld& world = registry.getWorld(m.worldid());
-    // world.enqueueMessage(m);
+    PROF_START(MPICallEnqueue)
+    MpiWorldRegistry& registry = getMpiWorldRegistry();
+    MpiWorld& world = registry.getWorld(m.worldid());
+    world.enqueueMessage(m);
+    /*
     this->mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(m));
+    */
+    PROF_END(MPICallEnqueue)
 
+    PROF_END(MpiCall)
+
+    return Status::OK;
+}
+
+Status FunctionCallServer::NoOp(ServerContext* context,
+                                const faabric::ResourceRequest* request,
+                                faabric::FunctionStatusResponse* response)
+{
     return Status::OK;
 }
 
