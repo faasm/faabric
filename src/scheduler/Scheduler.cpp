@@ -232,48 +232,17 @@ std::vector<std::string> Scheduler::callFunctions(
         throw std::runtime_error("Message with no master host");
     }
 
-    // For threads/ processes we need to have a snapshot key and be ready to
-    // push the snapshot to other hosts
-    faabric::util::SnapshotData snapshotData;
-    std::string snapshotKey = firstMsg.snapshotkey();
-    bool snapshotNeeded =
-      req.type() == req.THREADS || req.type() == req.PROCESSES;
-    if (snapshotNeeded) {
-        if (snapshotKey.empty()) {
-            logger->error("No snapshot provided for {}", funcStr);
-            throw std::runtime_error(
-              "Empty snapshot for distributed threads/ processes");
-        }
-
-        faabric::snapshot::SnapshotRegistry& reg =
-          faabric::snapshot::getSnapshotRegistry();
-        snapshotData = reg.getSnapshot(snapshotKey);
-    }
-
-    auto funcQueue = this->getFunctionQueue(firstMsg);
-
-    // TODO - more fine-grained locking. This blocks all functions
-    // Lock the whole scheduler to be safe
+    // TODO - more granular locking, this is incredibly conservative
     faabric::util::FullLock lock(mx);
 
-    // Handle forced local execution
+    // We want to dispatch remote calls here, and record what's left to be done
+    // locally
+
+    // TODO - avoid this copy
+    std::vector<faabric::Message> localMessages;
     if (forceLocal) {
-        logger->debug("Executing {} x {} locally", nMessages, funcStr);
-
-        if (isThreads) {
-            // Threads will handle their own batch requests, so we just need to
-            // add one
-            funcQueue->enqueue(std::make_pair(0, &req));
-            addFaasletsForBatch(req);
-        } else {
-            // For non-threads, we need a faaslet per message
-            for (int i = 0; i < nMessages; i++) {
-                funcQueue->enqueue(std::make_pair(i, &req));
-                incrementInFlightCount(req.messages().at(i));
-                addFaaslets(req.messages().at(i));
-
-                executed.at(i) = thisHost;
-            }
+        for (auto m : req.messages()) {
+            localMessages.emplace_back(m);
         }
     } else {
         // If we're not the master host, we need to forward the request back to
@@ -291,9 +260,29 @@ std::vector<std::string> Scheduler::callFunctions(
             // At this point we know we're the master host, and we've not been
             // asked to force full local execution.
 
+            // For threads/ processes we need to have a snapshot key and be
+            // ready to push the snapshot to other hosts
+            faabric::util::SnapshotData snapshotData;
+            std::string snapshotKey = firstMsg.snapshotkey();
+            bool snapshotNeeded =
+              req.type() == req.THREADS || req.type() == req.PROCESSES;
+
+            if (snapshotNeeded) {
+                if (snapshotKey.empty()) {
+                    logger->error("No snapshot provided for {}", funcStr);
+                    throw std::runtime_error(
+                      "Empty snapshot for distributed threads/ processes");
+                }
+
+                faabric::snapshot::SnapshotRegistry& reg =
+                  faabric::snapshot::getSnapshotRegistry();
+                snapshotData = reg.getSnapshot(snapshotKey);
+            }
+
             // Work out how many we can handle locally
             int cores = thisHostResources.cores();
             int available = cores - thisHostResources.functionsinflight();
+
             available = std::max<int>(available, 0);
             int nLocally = std::min<int>(available, nMessages);
 
@@ -319,18 +308,8 @@ std::vector<std::string> Scheduler::callFunctions(
 
             // Build list of messages to be executed locally
             for (; nextMsgIdx < nLocally; nextMsgIdx++) {
-                faabric::Message msg = req.messages().at(nextMsgIdx);
-
-                remainder--;
-                incrementInFlightCount(msg);
-
-                // Provided we're not executing threads, execute the functions
-                // now
-                if (!isThreads) {
-                    funcQueue->enqueue(msg);
-                    executed.at(nextMsgIdx) = thisHost;
-                    addFaaslets(msg);
-                }
+                localMessages.emplace_back(req.messages().at(nextMsgIdx));
+                executed.at(nextMsgIdx) = thisHost;
             }
 
             // If some are left, we need to distribute
@@ -359,7 +338,6 @@ std::vector<std::string> Scheduler::callFunctions(
                   registeredHosts[funcStr];
 
                 std::unordered_set<std::string> allHosts = getAvailableHosts();
-
                 std::unordered_set<std::string> targetHosts;
 
                 // Build list of target hosts
@@ -402,23 +380,27 @@ std::vector<std::string> Scheduler::callFunctions(
             // just need to execute locally
             if (remainder > 0) {
                 for (; nextMsgIdx < nMessages; nextMsgIdx++) {
-                    faabric::Message msg = req.messages().at(nextMsgIdx);
-                    incrementInFlightCount(msg);
-
-                    if (isThreads) {
-                        logger->warn(
-                          "No capacity for {} thread, returning to caller",
-                          funcStr);
-                        executed.at(nextMsgIdx) = "";
-                    } else {
-                        logger->warn("No capacity for {}, executing locally",
-                                     funcStr);
-
-                        funcQueue->enqueue(msg);
-                        executed.at(nextMsgIdx) = thisHost;
-                        addFaaslets(msg);
-                    }
+                    localMessages.emplace_back(req.messages().at(nextMsgIdx));
+                    executed.at(nextMsgIdx) = thisHost;
                 }
+            }
+        }
+
+        logger->debug("Executing {} x {} locally", nMessages, funcStr);
+        auto funcQueue = this->getFunctionQueue(firstMsg);
+        if (isThreads) {
+            // Threads will handle their own batch requests, so we just need to
+            // add one
+            funcQueue->enqueue(std::make_pair(0, &req));
+            addFaasletsForBatch(req);
+        } else {
+            // For non-threads, we need a faaslet per message
+            for (int i = 0; i < nMessages; i++) {
+                funcQueue->enqueue(std::make_pair(i, &req));
+                incrementInFlightCount(req.messages().at(i));
+                addFaaslets(req.messages().at(i));
+
+                executed.at(i) = thisHost;
             }
         }
     }

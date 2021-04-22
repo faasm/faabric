@@ -133,19 +133,22 @@ std::string FaabricExecutor::processNextMessage()
 
     std::string errorMessage;
     if (_isBound) {
+        // Get the next message
         faabric::scheduler::MessageTask execTask =
           functionQueue->dequeue(conf.boundTimeout);
 
+        // Check if it's a batch of thread calls or not
         if (execTask.second->type() == faabric::BatchExecuteRequest::THREADS) {
             batchExecuteThreads(execTask.second);
         } else {
+            // Work out which message we're executing
             faabric::Message msg =
               execTask.second->messages().at(execTask.first);
+
             if (msg.type() == faabric::Message_MessageType_FLUSH) {
                 flush();
             } else {
                 // Do the actual execution
-                // TODO - avoid this copy
                 errorMessage = executeCall(msg);
             }
         }
@@ -160,7 +163,6 @@ std::string FaabricExecutor::processNextMessage()
             errorMessage = "Invalid function: " + funcStr;
         }
     }
-
     return errorMessage;
 }
 
@@ -169,14 +171,12 @@ std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
 {
     const auto& logger = faabric::util::getLogger();
 
-    const faabric::Message& firstMsg = req.messages().at(0);
-
-    const std::string funcStr = faabric::util::funcToString(firstMsg, false);
+    const std::string funcStr = faabric::util::funcToString(*req);
     logger->info(
-      "Batch executing {} threads of {}", req.messages().size(), funcStr);
+      "Batch executing {} threads of {}", req->messages().size(), funcStr);
 
     std::vector<std::future<int32_t>> threadFutures;
-    for (const faabric::Message& msg : req.messages()) {
+    for (const faabric::Message& msg : req->messages()) {
         std::promise<int32_t> p;
         std::future<int32_t> f = p.get_future();
 
