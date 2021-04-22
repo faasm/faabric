@@ -36,6 +36,7 @@ class SystemConfig
     // Scheduling
     int noScheduler;
     int overrideCpuCount;
+    int executorThreadPoolSize;
 
     // Worker-related timeouts
     int globalMessageTimeout;

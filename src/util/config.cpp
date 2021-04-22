@@ -43,6 +43,14 @@ void SystemConfig::initialise()
     // Scheduling
     noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
     overrideCpuCount = this->getSystemConfIntParam("OVERRIDE_CPU_COUNT", "0");
+    executorThreadPoolSize =
+      this->getSystemConfIntParam("THREAD_POOL_SIZE", "0");
+    if (executorThreadPoolSize == 0) {
+        // Thread pool should be one less than number of cores as main thread
+        // executes as well. Always need at least 1
+        executorThreadPoolSize =
+          std::max<int>(faabric::util::getUsableCores() - 1, 1);
+    }
 
     // Worker-related timeouts (all in seconds)
     globalMessageTimeout =

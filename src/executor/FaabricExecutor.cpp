@@ -8,6 +8,7 @@ namespace faabric::executor {
 FaabricExecutor::FaabricExecutor(int threadIdxIn)
   : threadIdx(threadIdxIn)
   , scheduler(faabric::scheduler::getScheduler())
+  , threadPoolSize(faabric::util::getSystemConfig().executorThreadPoolSize)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
@@ -145,7 +146,7 @@ std::string FaabricExecutor::processNextMessage()
 
     } else if (msg.type() == faabric::Message_MessageType_BIND) {
         const std::string funcStr = faabric::util::funcToString(msg, false);
-        logger->info("{} binding to {}", id, funcStr);
+        logger->("{} binding to {}", id, funcStr);
 
         try {
             this->bindToFunction(msg);
@@ -158,6 +159,23 @@ std::string FaabricExecutor::processNextMessage()
     }
 
     return errorMessage;
+}
+
+std::vector<std::future<uint32_t>> FaabricExecutor::batchExecuteThreads(
+  faabric::BatchExecuteRequest& req)
+{
+    const auto& logger = faabric::util::getLogger();
+
+    const faabric::Message& firstMsg = req.messages().at(0);
+
+    const std::string funcStr = faabric::util::funcToString(firstMsg, false);
+    logger->info(
+      "Batch executing {} threads of {}", req.messages().size(), funcStr);
+
+    std::vector<future<int32_t>> for (auto& msg : req.messages())
+    {
+        std::future<int32_t> f = doBatchExecuteThread(msg);
+    }
 }
 
 std::string FaabricExecutor::executeCall(faabric::Message& call)
