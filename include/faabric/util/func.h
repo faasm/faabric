@@ -54,6 +54,8 @@ bool isValidFunction(const faabric::Message& msg);
 
 std::string funcToString(const faabric::Message& msg, bool includeId);
 
+std::string funcToString(const faabric::BatchExecuteRequest& req);
+
 unsigned int setMessageId(faabric::Message& msg);
 
 std::string buildAsyncResponse(const faabric::Message& msg);

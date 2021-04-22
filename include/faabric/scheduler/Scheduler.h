@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faabric/proto/faabric.pb.h"
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 
@@ -58,8 +59,11 @@ class Scheduler
 
     std::string getThisHost();
 
-    std::shared_ptr<InMemoryMessageQueue> getFunctionQueue(
+    std::shared_ptr<InMemoryBatchQueue> getFunctionQueue(
       const faabric::Message& msg);
+
+    std::shared_ptr<InMemoryBatchQueue> getFunctionQueue(
+      const faabric::BatchExecuteRequest& req);
 
     std::shared_ptr<InMemoryMessageQueue> getBindQueue();
 
@@ -107,8 +111,7 @@ class Scheduler
 
     std::shared_mutex mx;
 
-    std::unordered_map<std::string, std::shared_ptr<InMemoryMessageQueue>>
-      queueMap;
+    InMemoryBatchQueueMap queueMap;
     std::unordered_map<std::string, long> faasletCounts;
     std::unordered_map<std::string, long> inFlightCounts;
 

@@ -128,7 +128,7 @@ void Scheduler::removeRegisteredHost(const std::string& host,
     registeredHosts[funcStr].erase(host);
 }
 
-std::shared_ptr<InMemoryMessageQueue> Scheduler::getFunctionQueue(
+std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
   const faabric::Message& msg)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
@@ -142,6 +142,12 @@ std::shared_ptr<InMemoryMessageQueue> Scheduler::getFunctionQueue(
     }
 
     return queueMap[funcStr];
+}
+
+std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
+  const faabric::BatchExecuteRequest& req)
+{
+    return getFunctionQueue(req.messages(0));
 }
 
 void Scheduler::notifyCallFinished(const faabric::Message& msg)

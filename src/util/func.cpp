@@ -298,6 +298,9 @@ std::string funcToString(const faabric::Message& msg, bool includeId)
     return str;
 }
 
+std::string funcToString(const faabric::BatchExecuteRequest& req) {
+    return funcToString(req.messages(0), false);
+}
 std::string buildAsyncResponse(const faabric::Message& msg)
 {
     if (msg.id() == 0) {
