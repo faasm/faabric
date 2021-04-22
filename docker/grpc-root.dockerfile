@@ -45,6 +45,7 @@ RUN sh cmake-linux.sh -- --skip-license --prefix=/usr/local
 RUN git clone --depth 1 --recurse-submodules -b v1.36.1 https://github.com/grpc/grpc
 WORKDIR /setup/grpc/cmake/build-static
 RUN cmake -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
     -DgRPC_INSTALL=ON \
     -DBUILD_SHARED_LIBS=OFF \
     -DgRPC_BUILD_TESTS=OFF \
@@ -55,6 +56,7 @@ RUN ninja install
 # Shared libs
 WORKDIR /setup/grpc/cmake/build-shared
 RUN cmake -GNinja \
+    -DCMAKE_BUILD_TYPE=Release \
     -DgRPC_INSTALL=ON \
     -DBUILD_SHARED_LIBS=ON \
     -DgRPC_BUILD_TESTS=OFF \
