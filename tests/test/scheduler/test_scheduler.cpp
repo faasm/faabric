@@ -205,9 +205,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     }
 
     // Create the batch request
-    faabric::BatchExecuteRequest reqOne =
-      faabric::util::batchExecFactory(msgsOne);
-    reqOne.set_type(execMode);
+    std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
+      faabric::util::batchExecFactoryShared(msgsOne);
+    reqOne->set_type(execMode);
 
     // Schedule the functions
     std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne);
@@ -268,7 +268,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(batchRequestOne.first == otherHost);
 
     // Check the request to the other host
-    REQUIRE(batchRequestOne.second.messages_size() == nCallsOffloadedOne);
+    REQUIRE(batchRequestOne.second->messages_size() == nCallsOffloadedOne);
 
     // Clear mocks
     faabric::scheduler::clearMockRequests();
@@ -290,9 +290,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     }
 
     // Create the batch request
-    faabric::BatchExecuteRequest reqTwo =
-      faabric::util::batchExecFactory(msgsTwo);
-    reqTwo.set_type(execMode);
+    std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
+      faabric::util::batchExecFactoryShared(msgsTwo);
+    reqTwo->set_type(execMode);
 
     // Schedule the functions
     std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo);
@@ -321,7 +321,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(pTwo.first == otherHost);
 
     // Check the request to the other host
-    REQUIRE(pTwo.second.messages_size() == nCallsTwo);
+    REQUIRE(pTwo.second->messages_size() == nCallsTwo);
 
     faabric::util::setMockMode(false);
 }
@@ -380,8 +380,9 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     }
 
     // Submit the request
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
-    req.set_type(execMode);
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactoryShared(msgs);
+    req->set_type(execMode);
     std::vector<std::string> executedHosts = sch.callFunctions(req);
 
     // Set up expectations
@@ -396,7 +397,7 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     }
 
     // Check they're scheduled locally
-    faabric::Message firstMsg = req.messages().at(0);
+    faabric::Message firstMsg = req->messages().at(0);
     REQUIRE(sch.getBindQueue()->size() == expectedBindQueueSize);
     REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedBindQueueSize);
 
@@ -562,9 +563,7 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
 
             // Put invocation on local queue and await global result
             for (int m = 0; m < nWaiterMessages; m++) {
-                const std::shared_ptr<InMemoryMessageQueue>& queue =
-                  sch.getFunctionQueue(msg);
-                queue->enqueue(msg);
+                sch.forceEnqueueMessage(msg);
                 sch.getFunctionResult(msg.id(), 5000);
             }
         });
@@ -577,12 +576,11 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
 
             faabric::Message dummyMsg =
               faabric::util::messageFactory("demo", "echo");
-            const std::shared_ptr<InMemoryMessageQueue>& queue =
-              sch.getFunctionQueue(dummyMsg);
 
             // Listen to local queue, set result on global bus
             for (int m = 0; m < nWorkerMessages; m++) {
-                faabric::Message msg = queue->dequeue(5000);
+                faabric::Message msg =
+                  sch.getNextMessageForFunction(dummyMsg, 5000);
                 sch.setFunctionResult(msg);
             }
         });
@@ -725,7 +723,8 @@ TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
     msg.set_masterhost(otherHost);
 
     std::vector<faabric::Message> msgs = { msg };
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactoryShared(msgs);
 
     std::vector<std::string> expectedHosts = { "" };
     std::vector<std::string> executedHosts = sch.callFunctions(req);
@@ -735,7 +734,7 @@ TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
     auto actualReqs = faabric::scheduler::getBatchRequests();
     REQUIRE(actualReqs.size() == 1);
     REQUIRE(actualReqs.at(0).first == otherHost);
-    REQUIRE(actualReqs.at(0).second.id() == req.id());
+    REQUIRE(actualReqs.at(0).second->id() == req->id());
 
     faabric::util::setMockMode(false);
 }
@@ -773,7 +772,8 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
     for (int i = 0; i < nRequests; i++) {
         msgs.push_back(msg);
     }
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactoryShared(msgs);
     sch.callFunctions(req);
 
     // Check other hosts are added

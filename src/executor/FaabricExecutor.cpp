@@ -4,18 +4,27 @@
 
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>
+#include <faabric/util/environment.h>
 
 namespace faabric::executor {
 FaabricExecutor::FaabricExecutor(int threadIdxIn)
   : threadIdx(threadIdxIn)
   , scheduler(faabric::scheduler::getScheduler())
-  , threadPoolSize(faabric::util::getSystemConfig().executorThreadPoolSize)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+
+    // Accept any non-zero thread pool size. If it is zero, thread pool should
+    // be one less than number of cores as main thread executes as well. Always
+    // need at least 1.
+    threadPoolSize = conf.executorThreadPoolSize;
+    if (threadPoolSize == 0) {
+        threadPoolSize = std::max<int>(faabric::util::getUsableCores() - 1, 1);
+    }
+
     // Set an ID for this Faaslet
-    id = faabric::util::getSystemConfig().endpointHost + "_" +
-         std::to_string(threadIdx);
+    id = conf.endpointHost + "_" + std::to_string(threadIdx);
 
     logger->debug("Starting executor thread {}", id);
 
@@ -60,6 +69,25 @@ void FaabricExecutor::finish()
     if (_isBound) {
         // Notify scheduler if this thread was bound to a function
         scheduler.notifyFaasletFinished(boundMessage);
+    }
+
+    // Shut down thread pool
+    faabric::Message killMsg;
+    killMsg.set_type(faabric::Message::KILL);
+    for (auto& queuePair : threadQueues) {
+        std::promise<int32_t> p;
+        std::future<int32_t> f = p.get_future();
+
+        queuePair.second.enqueue(std::make_pair(std::move(p), &killMsg));
+
+        f.get();
+    }
+
+    // Wait
+    for (auto& t : threads) {
+        if (t.second.joinable()) {
+            t.second.join();
+        }
     }
 
     // Hook

@@ -29,7 +29,7 @@ class FaabricExecutor
     virtual std::string processNextMessage();
 
     std::vector<std::future<int32_t>> batchExecuteThreads(
-      faabric::BatchExecuteRequest* req);
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     std::string executeCall(faabric::Message& call);
 

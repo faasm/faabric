@@ -114,13 +114,15 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     functionQueueB->dequeue();
 
     // Background threads to get flush messages
-    std::thread tA([&functionQueueA] {
-        faabric::Message msg = functionQueueA->dequeue(1000);
+    std::thread tA([&msgA] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        faabric::Message msg = sch.getNextMessageForFunction(msgA, 1000);
         REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
     });
 
-    std::thread tB([&functionQueueB] {
-        faabric::Message msg = functionQueueB->dequeue(1000);
+    std::thread tB([&msgB] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        faabric::Message msg = sch.getNextMessageForFunction(msgB, 1000);
         REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
     });
 
@@ -199,7 +201,10 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     }
 
     // Make the request
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactoryShared(msgs);
+    REQUIRE(req->messages().size() == nCalls);
+
     FunctionCallClient cli(LOCALHOST);
     cli.executeFunctions(req);
 

@@ -39,7 +39,7 @@ TEST_CASE("Test world creation", "[mpi]")
     REQUIRE(sch.getRecordedMessagesAll().size() == worldSize - 1);
 
     for (int i = 1; i < worldSize; i++) {
-        faabric::Message actualCall = sch.getFunctionQueue(msg)->dequeue();
+        faabric::Message actualCall = sch.getNextMessageForFunction(msg, 0);
         REQUIRE(actualCall.user() == user);
         REQUIRE(actualCall.function() == func);
         REQUIRE(actualCall.ismpi());

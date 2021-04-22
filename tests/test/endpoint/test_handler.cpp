@@ -56,7 +56,7 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
 
     // Check actual call has right details including the ID returned to the
     // caller
-    faabric::Message actualCall = sch.getFunctionQueue(call)->dequeue();
+    faabric::Message actualCall = sch.getNextMessageForFunction(call, 0);
     REQUIRE(actualCall.user() == call.user());
     REQUIRE(actualCall.function() == call.function());
     REQUIRE(actualCall.id() == std::stoi(responseStr));

@@ -128,6 +128,31 @@ void Scheduler::removeRegisteredHost(const std::string& host,
     registeredHosts[funcStr].erase(host);
 }
 
+void Scheduler::forceEnqueueMessage(const faabric::Message& msg)
+{
+    std::shared_ptr<InMemoryBatchQueue> queue = getFunctionQueue(msg);
+    std::vector<faabric::Message> msgs = { msg };
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactoryShared(msgs);
+    queue->enqueue(std::make_pair(0, req));
+}
+
+faabric::Message Scheduler::getNextMessageForFunction(
+  const faabric::Message& msg,
+  int timeout)
+{
+    std::shared_ptr<InMemoryBatchQueue> queue = getFunctionQueue(msg);
+    MessageTask task = queue->dequeue(timeout);
+
+    if (task.second->type() == faabric::BatchExecuteRequest::THREADS) {
+        throw std::runtime_error(
+          "Should not be using getNextMessageForFunction to dequeue batch "
+          "thread messages");
+    }
+
+    return task.second->messages().at(task.first);
+}
+
 std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
   const faabric::Message& msg)
 {
@@ -136,8 +161,8 @@ std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
     // This will be called from within something holding the lock
     if (queueMap.count(funcStr) == 0) {
         if (queueMap.count(funcStr) == 0) {
-            auto mq = new InMemoryMessageQueue();
-            queueMap.emplace(InMemoryMessageQueuePair(funcStr, mq));
+            auto mq = std::make_shared<InMemoryBatchQueue>();
+            queueMap.emplace(std::make_pair(funcStr, mq));
         }
     }
 
@@ -145,9 +170,9 @@ std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
 }
 
 std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
-  const faabric::BatchExecuteRequest& req)
+  const std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    return getFunctionQueue(req.messages(0));
+    return getFunctionQueue(req->messages(0));
 }
 
 void Scheduler::notifyCallFinished(const faabric::Message& msg)
@@ -212,18 +237,18 @@ Scheduler& getScheduler()
 }
 
 std::vector<std::string> Scheduler::callFunctions(
-  faabric::BatchExecuteRequest& req,
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
   bool forceLocal)
 {
     auto logger = faabric::util::getLogger();
 
-    int nMessages = req.messages_size();
-    bool isThreads = req.type() == req.THREADS;
+    // Extract properties of the request
+    int nMessages = req->messages_size();
+    bool isThreads = req->type() == req->THREADS;
     std::vector<std::string> executed(nMessages);
 
     // Note, we assume all the messages are for the same function and master
-    // host
-    const faabric::Message& firstMsg = req.messages().at(0);
+    const faabric::Message& firstMsg = req->messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     std::string masterHost = firstMsg.masterhost();
     if (masterHost.empty()) {
@@ -237,178 +262,154 @@ std::vector<std::string> Scheduler::callFunctions(
 
     // We want to dispatch remote calls here, and record what's left to be done
     // locally
-
-    // TODO - avoid this copy
-    std::vector<faabric::Message> localMessages;
-    if (forceLocal) {
-        for (auto m : req.messages()) {
-            localMessages.emplace_back(m);
-        }
-    } else {
+    std::vector<int> localIdxs;
+    if (!forceLocal && masterHost != thisHost) {
         // If we're not the master host, we need to forward the request back to
         // the master host. This will only happen if a nested batch execution
         // happens.
-        if (masterHost != thisHost) {
-            logger->debug("Forwarding {} {} back to master {}",
-                          nMessages,
-                          funcStr,
-                          masterHost);
+        logger->debug(
+          "Forwarding {} {} back to master {}", nMessages, funcStr, masterHost);
 
-            FunctionCallClient c(masterHost);
-            c.executeFunctions(req);
-        } else {
-            // At this point we know we're the master host, and we've not been
-            // asked to force full local execution.
+        FunctionCallClient c(masterHost);
+        c.executeFunctions(req);
 
-            // For threads/ processes we need to have a snapshot key and be
-            // ready to push the snapshot to other hosts
-            faabric::util::SnapshotData snapshotData;
-            std::string snapshotKey = firstMsg.snapshotkey();
-            bool snapshotNeeded =
-              req.type() == req.THREADS || req.type() == req.PROCESSES;
+    } else if (!forceLocal) {
+        // At this point we know we're the master host, and we've not been
+        // asked to force full local execution.
 
-            if (snapshotNeeded) {
-                if (snapshotKey.empty()) {
-                    logger->error("No snapshot provided for {}", funcStr);
-                    throw std::runtime_error(
-                      "Empty snapshot for distributed threads/ processes");
-                }
+        // For threads/ processes we need to have a snapshot key and be
+        // ready to push the snapshot to other hosts
+        faabric::util::SnapshotData snapshotData;
+        std::string snapshotKey = firstMsg.snapshotkey();
+        bool snapshotNeeded =
+          req->type() == req->THREADS || req->type() == req->PROCESSES;
 
-                faabric::snapshot::SnapshotRegistry& reg =
-                  faabric::snapshot::getSnapshotRegistry();
-                snapshotData = reg.getSnapshot(snapshotKey);
+        if (snapshotNeeded) {
+            if (snapshotKey.empty()) {
+                logger->error("No snapshot provided for {}", funcStr);
+                throw std::runtime_error(
+                  "Empty snapshot for distributed threads/ processes");
             }
 
-            // Work out how many we can handle locally
+            faabric::snapshot::SnapshotRegistry& reg =
+              faabric::snapshot::getSnapshotRegistry();
+            snapshotData = reg.getSnapshot(snapshotKey);
+        }
+
+        // Work out how many we can handle locally
+        int nLocally;
+        {
             int cores = thisHostResources.cores();
+
             int available = cores - thisHostResources.functionsinflight();
-
             available = std::max<int>(available, 0);
-            int nLocally = std::min<int>(available, nMessages);
 
-            // Keep track of what's been done
-            int remainder = nMessages;
-            int nextMsgIdx = 0;
+            nLocally = std::min<int>(available, nMessages);
+        }
 
-            if (isThreads && nLocally > 0) {
-                logger->debug("Returning {} of {} {} for local threads",
-                              nLocally,
-                              nMessages,
-                              funcStr);
-            } else if (nLocally > 0) {
-                logger->debug("Executing {} of {} {} locally",
-                              nLocally,
-                              nMessages,
-                              funcStr);
-            } else {
-                logger->debug("No local capacity, distributing {} x {}",
-                              nMessages,
-                              funcStr);
-            }
+        // Handle those that can be executed locally
+        for (int i = 0; i < nLocally; i++) {
+            localIdxs.emplace_back(i);
+            executed.at(i) = thisHost;
+        }
 
-            // Build list of messages to be executed locally
-            for (; nextMsgIdx < nLocally; nextMsgIdx++) {
-                localMessages.emplace_back(req.messages().at(nextMsgIdx));
-                executed.at(nextMsgIdx) = thisHost;
-            }
+        // If some are left, we need to distribute
+        int offset = nLocally;
+        if (offset < nMessages) {
+            // At this point we have a remainder, so we need to distribute
+            // the rest over the registered hosts for this function
+            std::unordered_set<std::string>& thisRegisteredHosts =
+              registeredHosts[funcStr];
 
-            // If some are left, we need to distribute
-            if (remainder > 0) {
-                // At this point we have a remainder, so we need to distribute
-                // the rest Get the list of registered hosts for this function
-                std::unordered_set<std::string>& thisRegisteredHosts =
-                  registeredHosts[funcStr];
+            // Schedule the remainder on these other hosts
+            for (auto& h : thisRegisteredHosts) {
+                int nOnThisHost =
+                  scheduleFunctionsOnHost(h, req, executed, offset);
 
-                // Schedule the remainder on these other hosts
-                for (auto& h : thisRegisteredHosts) {
-                    int nOnThisHost =
-                      scheduleFunctionsOnHost(h, req, executed, nextMsgIdx);
-
-                    remainder -= nOnThisHost;
-                    if (remainder <= 0) {
-                        break;
-                    }
-                }
-            }
-
-            // Now we need to find hosts that aren't already registered for
-            // this function and add them
-            if (remainder > 0) {
-                std::unordered_set<std::string>& thisRegisteredHosts =
-                  registeredHosts[funcStr];
-
-                std::unordered_set<std::string> allHosts = getAvailableHosts();
-                std::unordered_set<std::string> targetHosts;
-
-                // Build list of target hosts
-                for (auto& h : allHosts) {
-                    // Skip if already registered
-                    if (thisRegisteredHosts.find(h) !=
-                        thisRegisteredHosts.end()) {
-                        continue;
-                    }
-
-                    // Skip this host
-                    if (h == thisHost) {
-                        continue;
-                    }
-
-                    targetHosts.insert(h);
-                }
-
-                for (auto& h : targetHosts) {
-                    // Schedule functions on this host
-                    int nOnThisHost =
-                      scheduleFunctionsOnHost(h, req, executed, nextMsgIdx);
-
-                    remainder -= nOnThisHost;
-
-                    // Register the host if it's exected a function
-                    if (nOnThisHost > 0) {
-                        logger->debug("Registering {} for {}", h, funcStr);
-                        thisRegisteredHosts.insert(h);
-                    }
-
-                    // Stop if we've scheduled all functions
-                    if (remainder <= 0) {
-                        break;
-                    }
-                }
-            }
-
-            // At this point there's no more capacity in the system, so we
-            // just need to execute locally
-            if (remainder > 0) {
-                for (; nextMsgIdx < nMessages; nextMsgIdx++) {
-                    localMessages.emplace_back(req.messages().at(nextMsgIdx));
-                    executed.at(nextMsgIdx) = thisHost;
+                offset += nOnThisHost;
+                if (offset >= nMessages) {
+                    break;
                 }
             }
         }
 
-        logger->debug("Executing {} x {} locally", nMessages, funcStr);
-        auto funcQueue = this->getFunctionQueue(firstMsg);
-        if (isThreads) {
-            // Threads will handle their own batch requests, so we just need to
-            // add one
-            funcQueue->enqueue(std::make_pair(0, &req));
-            addFaasletsForBatch(req);
-        } else {
-            // For non-threads, we need a faaslet per message
-            for (int i = 0; i < nMessages; i++) {
-                funcQueue->enqueue(std::make_pair(i, &req));
-                incrementInFlightCount(req.messages().at(i));
-                addFaaslets(req.messages().at(i));
+        if (offset < nMessages) {
+            // At this point we know we need to enlist unregistered hosts, so we
+            // build a list of hosts that aren't already registered, and aren't
+            // this host
+            std::unordered_set<std::string> allHosts = getAvailableHosts();
+            std::unordered_set<std::string>& thisRegisteredHosts =
+              registeredHosts[funcStr];
 
-                executed.at(i) = thisHost;
+            std::unordered_set<std::string> targetHosts;
+            for (auto& h : allHosts) {
+                if (thisRegisteredHosts.find(h) != thisRegisteredHosts.end()) {
+                    continue;
+                }
+
+                if (h == thisHost) {
+                    continue;
+                }
+
+                targetHosts.insert(h);
             }
+
+            for (auto& h : targetHosts) {
+                // Schedule functions on this host
+                int nOnThisHost =
+                  scheduleFunctionsOnHost(h, req, executed, offset);
+
+                // Register the host if it's exected a function
+                if (nOnThisHost > 0) {
+                    logger->debug("Registering {} for {}", h, funcStr);
+                    thisRegisteredHosts.insert(h);
+                }
+
+                offset += nOnThisHost;
+                if (offset >= nMessages) {
+                    break;
+                }
+            }
+        }
+
+        // At this point there's no more capacity in the system, so we
+        // just need to execute locally
+        for (; offset < nMessages; offset++) {
+            localIdxs.emplace_back(offset);
+            executed.at(offset) = thisHost;
+        }
+    }
+
+    // Now handle the messages that need to be executed locally
+    std::shared_ptr<faabric::BatchExecuteRequest> localReq;
+    if (forceLocal) {
+        localReq = req;
+    } else {
+        localReq = std::make_shared<faabric::BatchExecuteRequest>();
+        for(int idx : localIdxs) {
+            *localReq->add_messages() = req->messages().at(idx);
+        }
+    }
+
+    auto funcQueue = this->getFunctionQueue(firstMsg);
+    if (isThreads) {
+        // Threads will handle their own batch requests, so we just need to
+        // add one
+        funcQueue->enqueue(std::make_pair(0, localReq));
+        addFaasletsForBatch(localReq);
+    } else {
+        // For non-threads, we need a faaslet per message
+        for (int i = 0; i < localReq->messages().size(); i++) {
+            funcQueue->enqueue(std::make_pair(i, req));
+            incrementInFlightCount(localReq->messages().at(i));
+            addFaaslets(localReq->messages().at(i));
         }
     }
 
     // Accounting
     for (int i = 0; i < nMessages; i++) {
         std::string executedHost = executed.at(i);
-        faabric::Message msg = req.messages().at(i);
+        faabric::Message msg = req->messages().at(i);
 
         // Log results if in test mode
         if (faabric::util::isTestMode()) {
@@ -438,16 +439,17 @@ void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
     }
 }
 
-int Scheduler::scheduleFunctionsOnHost(const std::string& host,
-                                       faabric::BatchExecuteRequest& req,
-                                       std::vector<std::string>& records,
-                                       int offset)
+int Scheduler::scheduleFunctionsOnHost(
+  const std::string& host,
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  std::vector<std::string>& records,
+  int offset)
 {
     auto logger = faabric::util::getLogger();
-    faabric::Message firstMsg = req.messages().at(0);
+    faabric::Message firstMsg = req->messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
-    int nMessages = req.messages_size();
+    int nMessages = req->messages_size();
     int remainder = nMessages - offset;
 
     // Execute as many as possible to this host
@@ -463,12 +465,12 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
     int nOnThisHost = std::min<int>(available, remainder);
     std::vector<faabric::Message> thisHostMsgs;
     for (int i = offset; i < (offset + nOnThisHost); i++) {
-        thisHostMsgs.push_back(req.messages().at(i));
+        thisHostMsgs.push_back(req->messages().at(i));
         records.at(i) = host;
     }
 
     // Push the snapshot if necessary
-    if (req.type() == req.THREADS || req.type() == req.PROCESSES) {
+    if (req->type() == req->THREADS || req->type() == req->PROCESSES) {
         std::string snapshotKey = firstMsg.snapshotkey();
         SnapshotClient c(host);
         const SnapshotData& d =
@@ -480,11 +482,11 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
       "Sending {} of {} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
     FunctionCallClient c(host);
-    faabric::BatchExecuteRequest hostRequest =
-      faabric::util::batchExecFactory(thisHostMsgs);
-    hostRequest.set_snapshotkey(req.snapshotkey());
-    hostRequest.set_snapshotsize(req.snapshotsize());
-    hostRequest.set_type(req.type());
+    std::shared_ptr<faabric::BatchExecuteRequest> hostRequest =
+      faabric::util::batchExecFactoryShared(thisHostMsgs);
+    hostRequest->set_snapshotkey(req->snapshotkey());
+    hostRequest->set_snapshotsize(req->snapshotsize());
+    hostRequest->set_type(req->type());
 
     c.executeFunctions(hostRequest);
 
@@ -496,10 +498,10 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
     // TODO - avoid this copy
     faabric::Message msgCopy = msg;
     std::vector<faabric::Message> msgs = { msg };
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    auto req = faabric::util::batchExecFactoryShared(msgs);
 
     // Specify that this is a normal function, not a thread
-    req.set_type(req.FUNCTIONS);
+    req->set_type(req->FUNCTIONS);
 
     // Make the call
     callFunctions(req, forceLocal);
@@ -529,7 +531,8 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg)
       thisHostResources.functionsinflight() + 1);
 }
 
-void Scheduler::addFaasletsForBatch(const faabric::BatchExecuteRequest& req)
+void Scheduler::addFaasletsForBatch(
+  const std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     auto logger = faabric::util::getLogger();
 
@@ -539,7 +542,7 @@ void Scheduler::addFaasletsForBatch(const faabric::BatchExecuteRequest& req)
     // If we've not got one faaslet per in-flight function, add one
     int nFaaslets = faasletCounts[funcStr];
     if (nFaaslets == 0) {
-        addFaaslet(req.messages().at(0));
+        addFaaslet(req->messages().at(0));
     }
 }
 
@@ -617,14 +620,21 @@ void Scheduler::flushLocally()
         }
 
         // Clear any existing messages in the queue
-        std::shared_ptr<InMemoryMessageQueue> queue = queueMap[p.first];
+        std::shared_ptr<InMemoryBatchQueue> queue = queueMap[p.first];
         queue->drain();
 
         // Dispatch a flush message for each warm faaslet
+        std::vector<faabric::Message> flushMsgs;
         for (int i = 0; i < p.second; i++) {
             faabric::Message msg;
             msg.set_type(faabric::Message_MessageType_FLUSH);
-            queue->enqueue(msg);
+            flushMsgs.emplace_back(msg);
+        }
+
+        std::shared_ptr<faabric::BatchExecuteRequest> req =
+          faabric::util::batchExecFactoryShared(flushMsgs);
+        for (int i = 0; i < flushMsgs.size(); i++) {
+            queue->enqueue(std::make_pair(i, req));
         }
     }
 
@@ -806,5 +816,4 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
 
     return node;
 }
-
 }

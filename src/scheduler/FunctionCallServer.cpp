@@ -78,7 +78,8 @@ Status FunctionCallServer::ExecuteFunctions(
   faabric::FunctionStatusResponse* response)
 {
     // TODO - avoiding having to copy the message here
-    faabric::BatchExecuteRequest requestCopy = *request;
+    std::shared_ptr<faabric::BatchExecuteRequest> requestCopy =
+      std::make_shared<faabric::BatchExecuteRequest>(*request);
 
     // This host has now been told to execute these functions no matter what
     scheduler.callFunctions(requestCopy, true);

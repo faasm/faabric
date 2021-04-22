@@ -17,7 +17,8 @@ static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
 static std::vector<std::pair<std::string, faabric::Message>> flushCalls;
 
-static std::vector<std::pair<std::string, faabric::BatchExecuteRequest>>
+static std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
   batchMessages;
 
 static std::vector<std::pair<std::string, faabric::MPIMessage>> mpiMessages;
@@ -42,7 +43,8 @@ std::vector<std::pair<std::string, faabric::Message>> getFlushCalls()
     return flushCalls;
 }
 
-std::vector<std::pair<std::string, faabric::BatchExecuteRequest>>
+std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
 getBatchRequests()
 {
     return batchMessages;
@@ -141,7 +143,7 @@ faabric::HostResources FunctionCallClient::getResources(
 }
 
 void FunctionCallClient::executeFunctions(
-  const faabric::BatchExecuteRequest& req)
+  const std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     if (faabric::util::isMockMode()) {
         batchMessages.emplace_back(host, req);
@@ -149,7 +151,7 @@ void FunctionCallClient::executeFunctions(
         ClientContext context;
         faabric::FunctionStatusResponse response;
         CHECK_RPC("exec_funcs",
-                  stub->ExecuteFunctions(&context, req, &response));
+                  stub->ExecuteFunctions(&context, *req, &response));
     }
 }
 

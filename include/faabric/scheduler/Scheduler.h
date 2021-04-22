@@ -24,8 +24,9 @@ class Scheduler
     // ----------------------------------
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
-    std::vector<std::string> callFunctions(faabric::BatchExecuteRequest& req,
-                                           bool forceLocal = false);
+    std::vector<std::string> callFunctions(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      bool forceLocal = false);
 
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
@@ -59,11 +60,16 @@ class Scheduler
 
     std::string getThisHost();
 
+    void forceEnqueueMessage(const faabric::Message& msg);
+
+    faabric::Message getNextMessageForFunction(const faabric::Message& msg,
+                                               int timeout);
+
     std::shared_ptr<InMemoryBatchQueue> getFunctionQueue(
       const faabric::Message& msg);
 
     std::shared_ptr<InMemoryBatchQueue> getFunctionQueue(
-      const faabric::BatchExecuteRequest& req);
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     std::shared_ptr<InMemoryMessageQueue> getBindQueue();
 
@@ -129,16 +135,18 @@ class Scheduler
 
     void addFaaslets(const faabric::Message& msg);
 
-    void addFaasletsForBatch(const faabric::BatchExecuteRequest& req);
+    void addFaasletsForBatch(
+      const std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void addFaaslet(const faabric::Message& msg);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 
-    int scheduleFunctionsOnHost(const std::string& host,
-                                faabric::BatchExecuteRequest& req,
-                                std::vector<std::string>& records,
-                                int offset);
+    int scheduleFunctionsOnHost(
+      const std::string& host,
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      std::vector<std::string>& records,
+      int offset);
 };
 
 Scheduler& getScheduler();
