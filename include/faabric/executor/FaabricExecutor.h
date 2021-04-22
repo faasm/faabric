@@ -6,8 +6,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 
-typedef std::pair<std::promise<int32_t>, std::shared_ptr<faabric::Message>>
-  ThreadTaskPair;
+typedef std::pair<std::promise<int32_t>, faabric::Message*> ThreadTaskPair;
 typedef faabric::util::Queue<ThreadTaskPair> ThreadTaskQueue;
 typedef std::unordered_map<int, ThreadTaskQueue> ThreadQueueMap;
 typedef std::unordered_map<int, std::thread> ThreadMap;
@@ -28,7 +27,7 @@ class FaabricExecutor
 
     virtual std::string processNextMessage();
 
-    std::vector<std::future<uint32_t>> batchExecuteThreads(
+    std::vector<std::future<int32_t>> batchExecuteThreads(
       faabric::BatchExecuteRequest& req);
 
     std::string executeCall(faabric::Message& call);
@@ -44,7 +43,9 @@ class FaabricExecutor
   protected:
     virtual bool doExecute(faabric::Message& msg);
 
-    virtual std::future<uint32_t> doBatchExecuteThread(faabric::Message& msg);
+    virtual std::future<int32_t> doBatchExecuteThread(
+      int threadPoolIdx,
+      const faabric::Message& msg);
 
     virtual void postBind(const faabric::Message& msg, bool force);
 
@@ -66,6 +67,7 @@ class FaabricExecutor
 
     std::mutex threadsMutex;
     uint32_t threadPoolSize = 0;
+    ThreadQueueMap threadQueues;
     ThreadMap threads;
 
   private:
