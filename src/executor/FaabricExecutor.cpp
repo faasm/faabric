@@ -166,10 +166,23 @@ std::string FaabricExecutor::processNextMessage()
         faabric::scheduler::MessageTask execTask =
           functionQueue->dequeue(conf.boundTimeout);
 
+        std::string funcStr = faabric::util::funcToString(execTask.second);
+
+        int nMessages = execTask.second->messages_size();
+
         // Check if it's a batch of thread calls or not
         if (execTask.second->type() == faabric::BatchExecuteRequest::THREADS) {
+            logger->debug(
+              "{} batch executing {}x{} threads", id, funcStr, nMessages);
+
             batchExecuteThreads(execTask.second);
         } else {
+            logger->debug("{} executing {} message {}/{}",
+                          id,
+                          funcStr,
+                          execTask.first,
+                          nMessages);
+
             // Work out which message we're executing
             faabric::Message msg =
               execTask.second->messages().at(execTask.first);
@@ -263,9 +276,7 @@ std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
 std::string FaabricExecutor::executeCall(faabric::Message& call)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
     const std::string funcStr = faabric::util::funcToString(call, true);
-    logger->info("Faaslet executing {}", funcStr);
 
     // Create and execute the module
     bool success;
