@@ -14,13 +14,19 @@ bool DummyExecutor::doExecute(faabric::Message& call)
 {
     auto logger = faabric::util::getLogger();
     logger->debug("DummyExecutor executing call {}", call.id());
-    call.set_outputdata("Executed by DummyExecutor");
+    call.set_outputdata(
+      fmt::format("Function {} executed successfully", call.id()));
+
     return true;
 }
 
-int32_t DummyExecutor::executeThread(int threadPoolIdx,
-                                     const faabric::Message& msg)
+int32_t DummyExecutor::executeThread(int threadPoolIdx, faabric::Message& msg)
 {
+    auto logger = faabric::util::getLogger();
+    logger->debug("DummyExecutor executing call {}", msg.id());
+    msg.set_outputdata(
+      fmt::format("Function {} executed successfully", msg.id()));
+
     return 0;
 }
 

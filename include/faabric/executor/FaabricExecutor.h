@@ -47,8 +47,7 @@ class FaabricExecutor
   protected:
     virtual bool doExecute(faabric::Message& msg);
 
-    virtual int32_t executeThread(int threadPoolIdx,
-                                  const faabric::Message& msg);
+    virtual int32_t executeThread(int threadPoolIdx, faabric::Message& msg);
 
     virtual void postBind(const faabric::Message& msg, bool force);
 

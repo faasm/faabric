@@ -231,8 +231,8 @@ std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
                           int msgIdx = std::get<1>(task);
                           std::shared_ptr<faabric::BatchExecuteRequest> req =
                             std::get<2>(task);
-                          const faabric::Message& msg =
-                            req->messages().at(msgIdx);
+                          faabric::Message& msg =
+                            req->mutable_messages()->at(msgIdx);
 
                           if (msg.type() == faabric::Message::KILL) {
                               std::get<0>(task).set_value(0);
@@ -298,8 +298,7 @@ bool FaabricExecutor::doExecute(faabric::Message& msg)
     return true;
 }
 
-int32_t FaabricExecutor::executeThread(int threadPoolIdx,
-                                       const faabric::Message& msg)
+int32_t FaabricExecutor::executeThread(int threadPoolIdx, faabric::Message& msg)
 {
     return 0;
 }
