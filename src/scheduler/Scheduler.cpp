@@ -301,9 +301,11 @@ std::vector<std::string> Scheduler::callFunctions(
         {
             int cores = thisHostResources.cores();
 
+            // Work out available cores, flooring at zero
             int available = cores - thisHostResources.functionsinflight();
             available = std::max<int>(available, 0);
 
+            // Claim as many as we can
             nLocally = std::min<int>(available, nMessages);
         }
 
@@ -334,28 +336,23 @@ std::vector<std::string> Scheduler::callFunctions(
         }
 
         if (offset < nMessages) {
-            // At this point we know we need to enlist unregistered hosts, so we
-            // build a list of hosts that aren't already registered, and aren't
-            // this host
+            // At this point we know we need to enlist unregistered hosts
             std::unordered_set<std::string> allHosts = getAvailableHosts();
             std::unordered_set<std::string>& thisRegisteredHosts =
               registeredHosts[funcStr];
 
-            std::unordered_set<std::string> targetHosts;
             for (auto& h : allHosts) {
+                // Skip if already registered
                 if (thisRegisteredHosts.find(h) != thisRegisteredHosts.end()) {
                     continue;
                 }
 
+                // Skip if this host
                 if (h == thisHost) {
                     continue;
                 }
 
-                targetHosts.insert(h);
-            }
-
-            for (auto& h : targetHosts) {
-                // Schedule functions on this host
+                // Schedule functions on the host
                 int nOnThisHost =
                   scheduleFunctionsOnHost(h, req, executed, offset);
 
@@ -380,28 +377,33 @@ std::vector<std::string> Scheduler::callFunctions(
         }
     }
 
-    // Now handle the messages that need to be executed locally
+    // Now set up a message to handle local execution
     std::shared_ptr<faabric::BatchExecuteRequest> localReq;
     if (forceLocal) {
         localReq = req;
     } else {
         localReq = std::make_shared<faabric::BatchExecuteRequest>();
-        for(int idx : localIdxs) {
+        for (int idx : localIdxs) {
+            // TODO - avoid this copy
             *localReq->add_messages() = req->messages().at(idx);
         }
     }
 
+    // Schedule this message locally. For threads we only need one Faaslet, for
+    // anything else ideally we want one Faaslet per function but may have to
+    // queue
+    logger->debug("Scheduling {} messages locally",
+                  localReq->messages().size());
     auto funcQueue = this->getFunctionQueue(firstMsg);
-    if (isThreads) {
-        // Threads will handle their own batch requests, so we just need to
-        // add one
-        funcQueue->enqueue(std::make_pair(0, localReq));
-        addFaasletsForBatch(localReq);
-    } else {
-        // For non-threads, we need a faaslet per message
-        for (int i = 0; i < localReq->messages().size(); i++) {
+    for (int i = 0; i < localReq->messages().size(); i++) {
+        // Increment in-flight count
+        incrementInFlightCount(localReq->messages().at(i));
+
+        if (isThreads && i == 0) {
+            funcQueue->enqueue(std::make_pair(0, localReq));
+            addFaasletsForBatch(localReq);
+        } else if (!isThreads) {
             funcQueue->enqueue(std::make_pair(i, req));
-            incrementInFlightCount(localReq->messages().at(i));
             addFaaslets(localReq->messages().at(i));
         }
     }
@@ -446,7 +448,7 @@ int Scheduler::scheduleFunctionsOnHost(
   int offset)
 {
     auto logger = faabric::util::getLogger();
-    faabric::Message firstMsg = req->messages().at(0);
+    const faabric::Message& firstMsg = req->messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
     int nMessages = req->messages_size();
@@ -462,6 +464,7 @@ int Scheduler::scheduleFunctionsOnHost(
         return 0;
     }
 
+    // TODO avoid this copy
     int nOnThisHost = std::min<int>(available, remainder);
     std::vector<faabric::Message> thisHostMsgs;
     for (int i = offset; i < (offset + nOnThisHost); i++) {

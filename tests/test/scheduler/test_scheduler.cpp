@@ -195,9 +195,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         // Expect this host to handle up to its number of cores
         // If in threads mode, expect it _not_ to execute
         bool isThisHost = i < thisCores;
-        if (isThisHost && isThreads) {
-            expectedHostsOne.push_back("");
-        } else if (isThisHost) {
+        if (isThisHost) {
             expectedHostsOne.push_back(thisHost);
         } else {
             expectedHostsOne.push_back(otherHost);
@@ -237,10 +235,10 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Check the bind messages on this host
     auto bindQueue = sch.getBindQueue();
     if (isThreads) {
-        // For threads we expect the caller to do the work
-        REQUIRE(bindQueue->size() == 0);
+        // For threads we expect only one bind message
+        REQUIRE(bindQueue->size() == 1);
         REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
-        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+        REQUIRE(sch.getFunctionFaasletCount(m) == 1);
     } else {
         // Check the scheduler info on this host
         REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
@@ -309,7 +307,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
 
     if (isThreads) {
-        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+        REQUIRE(sch.getFunctionFaasletCount(m) == 1);
     } else {
         REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
     }
@@ -364,10 +362,11 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     res.set_cores(nCores);
     sch.setThisHostResources(res);
 
-    // Set up another host with no resources
+    // Set up another host with insufficient resources
     std::string otherHost = "other";
+    sch.addHostToGlobalSet(otherHost);
     faabric::HostResources resOther;
-    resOther.set_cores(0);
+    resOther.set_cores(2);
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
     // Submit more calls than we have capacity for
@@ -385,24 +384,29 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     req->set_type(execMode);
     std::vector<std::string> executedHosts = sch.callFunctions(req);
 
-    // Set up expectations
-    std::vector<std::string> expectedHosts;
+    // Check list of executed hosts
+    std::vector<std::string> expectedHosts =
+      std::vector<std::string>(nCalls, thisHost);
+    expectedHosts.at(1) = otherHost;
+    expectedHosts.at(2) = otherHost;
+
+    REQUIRE(executedHosts == expectedHosts);
+
+    // Check status of local queueing
+    int expectedLocalCalls = nCalls - 2;
     int expectedBindQueueSize;
     if (execMode == faabric::BatchExecuteRequest::THREADS) {
-        expectedHosts = std::vector<std::string>(nCalls, "");
-        expectedBindQueueSize = 0;
+        expectedBindQueueSize = 1;
     } else {
-        expectedHosts = std::vector<std::string>(nCalls, thisHost);
-        expectedBindQueueSize = nCalls;
+        expectedBindQueueSize = expectedLocalCalls;
     }
 
-    // Check they're scheduled locally
     faabric::Message firstMsg = req->messages().at(0);
     REQUIRE(sch.getBindQueue()->size() == expectedBindQueueSize);
     REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedBindQueueSize);
 
-    // We expect the in flight count to be incremented regardless
-    REQUIRE(sch.getFunctionInFlightCount(firstMsg) == nCalls);
+    // We expect the in flight count to be recorded locally
+    REQUIRE(sch.getFunctionInFlightCount(firstMsg) == expectedLocalCalls);
 
     faabric::util::setMockMode(false);
 }
@@ -449,8 +453,6 @@ TEST_CASE("Test unregistering host", "[scheduler]")
 
     faabric::util::setMockMode(false);
 }
-
-TEST_CASE("Test host unregisters", "[scheduler]") {}
 
 TEST_CASE("Test counts can't go below zero", "[scheduler]")
 {

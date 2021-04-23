@@ -54,7 +54,8 @@ bool isValidFunction(const faabric::Message& msg);
 
 std::string funcToString(const faabric::Message& msg, bool includeId);
 
-std::string funcToString(const std::shared_ptr<faabric::BatchExecuteRequest> req);
+std::string funcToString(
+  const std::shared_ptr<faabric::BatchExecuteRequest> req);
 
 unsigned int setMessageId(faabric::Message& msg);
 
