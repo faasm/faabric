@@ -130,10 +130,10 @@ void Scheduler::removeRegisteredHost(const std::string& host,
 
 void Scheduler::forceEnqueueMessage(const faabric::Message& msg)
 {
-    std::shared_ptr<InMemoryBatchQueue> queue = getFunctionQueue(msg);
-    std::vector<faabric::Message> msgs = { msg };
     std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactoryShared(msgs);
+      faabric::util::batchExecFactory();
+    *req->add_messages() = msg;
+    std::shared_ptr<InMemoryBatchQueue> queue = getFunctionQueue(msg);
     queue->enqueue(std::make_pair(0, req));
 }
 
@@ -464,11 +464,17 @@ int Scheduler::scheduleFunctionsOnHost(
         return 0;
     }
 
-    // TODO avoid this copy
+    // Set up new request
+    std::shared_ptr<faabric::BatchExecuteRequest> hostRequest =
+      faabric::util::batchExecFactory();
+    hostRequest->set_snapshotkey(req->snapshotkey());
+    hostRequest->set_snapshotsize(req->snapshotsize());
+    hostRequest->set_type(req->type());
+
+    // Add messages
     int nOnThisHost = std::min<int>(available, remainder);
-    std::vector<faabric::Message> thisHostMsgs;
     for (int i = offset; i < (offset + nOnThisHost); i++) {
-        thisHostMsgs.push_back(req->messages().at(i));
+        *hostRequest->add_messages() = req->messages().at(i);
         records.at(i) = host;
     }
 
@@ -485,12 +491,6 @@ int Scheduler::scheduleFunctionsOnHost(
       "Sending {} of {} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
     FunctionCallClient c(host);
-    std::shared_ptr<faabric::BatchExecuteRequest> hostRequest =
-      faabric::util::batchExecFactoryShared(thisHostMsgs);
-    hostRequest->set_snapshotkey(req->snapshotkey());
-    hostRequest->set_snapshotsize(req->snapshotsize());
-    hostRequest->set_type(req->type());
-
     c.executeFunctions(hostRequest);
 
     return nOnThisHost;
@@ -499,9 +499,8 @@ int Scheduler::scheduleFunctionsOnHost(
 void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
 {
     // TODO - avoid this copy
-    faabric::Message msgCopy = msg;
-    std::vector<faabric::Message> msgs = { msg };
-    auto req = faabric::util::batchExecFactoryShared(msgs);
+    auto req = faabric::util::batchExecFactory();
+    *req->add_messages() = msg;
 
     // Specify that this is a normal function, not a thread
     req->set_type(req->FUNCTIONS);
@@ -627,16 +626,13 @@ void Scheduler::flushLocally()
         queue->drain();
 
         // Dispatch a flush message for each warm faaslet
-        std::vector<faabric::Message> flushMsgs;
+        std::shared_ptr<faabric::BatchExecuteRequest> req =
+          faabric::util::batchExecFactory();
         for (int i = 0; i < p.second; i++) {
-            faabric::Message msg;
-            msg.set_type(faabric::Message_MessageType_FLUSH);
-            flushMsgs.emplace_back(msg);
+            req->add_messages()->set_type(faabric::Message::FLUSH);
         }
 
-        std::shared_ptr<faabric::BatchExecuteRequest> req =
-          faabric::util::batchExecFactoryShared(flushMsgs);
-        for (int i = 0; i < flushMsgs.size(); i++) {
+        for (int i = 0; i < req->messages_size(); i++) {
             queue->enqueue(std::make_pair(i, req));
         }
     }

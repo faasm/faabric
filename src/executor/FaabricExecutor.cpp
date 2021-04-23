@@ -72,11 +72,9 @@ void FaabricExecutor::finish()
     }
 
     // Shut down thread pool with a series of kill messages
-    faabric::Message killMsg;
-    killMsg.set_type(faabric::Message::KILL);
-    std::vector<faabric::Message> msgs = { killMsg };
     std::shared_ptr<BatchExecuteRequest> killReq =
-      faabric::util::batchExecFactoryShared(msgs);
+      faabric::util::batchExecFactory();
+    killReq->add_messages()->set_type(faabric::Message::KILL);
 
     for (auto& queuePair : threadQueues) {
         std::promise<int32_t> p;
@@ -243,7 +241,9 @@ std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
                               break;
                           }
 
-                          doBatchExecuteThread(threadPoolIdx, msg);
+                          int32_t returnValue =
+                            executeThread(threadPoolIdx, msg);
+                          std::get<0>(task).set_value(returnValue);
 
                           // Caller has to notify scheduler when finished
                           // executing a thread locally
@@ -296,6 +296,12 @@ std::string FaabricExecutor::executeCall(faabric::Message& call)
 bool FaabricExecutor::doExecute(faabric::Message& msg)
 {
     return true;
+}
+
+int32_t FaabricExecutor::executeThread(int threadPoolIdx,
+                                       const faabric::Message& msg)
+{
+    return 0;
 }
 
 void FaabricExecutor::postBind(const faabric::Message& msg, bool force) {}

@@ -314,26 +314,24 @@ std::string buildAsyncResponse(const faabric::Message& msg)
     return std::to_string(msg.id());
 }
 
-std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactoryShared(
-  const std::vector<faabric::Message>& msgs)
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory()
 {
     auto req = std::make_shared<faabric::BatchExecuteRequest>();
-
-    *req->mutable_messages() = { msgs.begin(), msgs.end() };
-
     req->set_id(faabric::util::generateGid());
     return req;
 }
 
-std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactoryShared(
-  const std::vector<std::shared_ptr<faabric::Message>>& msgs)
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
+  const std::string& user,
+  const std::string& function,
+  int count)
 {
-    auto req = std::make_shared<faabric::BatchExecuteRequest>();
-    for (auto p : msgs) {
-        *req->add_messages() = *p.get();
+    auto req = batchExecFactory();
+
+    for (int i = 0; i < count; i++) {
+        *req->add_messages() = std::move(messageFactory(user, function));
     }
 
-    req->set_id(faabric::util::generateGid());
     return req;
 }
 

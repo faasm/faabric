@@ -194,24 +194,17 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
 
     // Set up a load of calls
     int nCalls = 30;
-    std::vector<faabric::Message> msgs;
-    for (int i = 0; i < nCalls; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-        msgs.emplace_back(msg);
-    }
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", nCalls);
 
     // Make the request
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactoryShared(msgs);
-    REQUIRE(req->messages().size() == nCalls);
-
     FunctionCallClient cli(LOCALHOST);
     cli.executeFunctions(req);
 
     // Stop the server
     server.stop();
 
-    faabric::Message m = msgs.at(0);
+    faabric::Message m = req->messages().at(0);
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
     // Check no other hosts have been registered

@@ -14,9 +14,8 @@ class DummyExecutor final : public FaabricExecutor
 
     bool doExecute(faabric::Message& call) override;
 
-    std::future<int32_t> doBatchExecuteThread(
-      int threadPoolIdx,
-      const faabric::Message& msg) override;
+    int32_t executeThread(int threadPoolIdx,
+                          const faabric::Message& msg) override;
 
     void preFinishCall(faabric::Message& call,
                        bool success,

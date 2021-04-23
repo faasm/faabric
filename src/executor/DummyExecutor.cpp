@@ -10,12 +10,19 @@ void DummyExecutor::flush() {}
 
 void DummyExecutor::postBind(const faabric::Message& msg, bool force) {}
 
-bool DummyExecutor::doExecute(faabric::Message& call) {}
+bool DummyExecutor::doExecute(faabric::Message& call)
+{
+    auto logger = faabric::util::getLogger();
+    logger->debug("DummyExecutor executing call {}", call.id());
+    call.set_outputdata("Executed by DummyExecutor");
+    return true;
+}
 
-std::future<int32_t> DummyExecutor::doBatchExecuteThread(
-  int threadPoolIdx,
-  const faabric::Message& msg)
-{}
+int32_t DummyExecutor::executeThread(int threadPoolIdx,
+                                     const faabric::Message& msg)
+{
+    return 0;
+}
 
 void DummyExecutor::preFinishCall(faabric::Message& call,
                                   bool success,

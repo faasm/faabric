@@ -176,12 +176,13 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Set up the messages
-    std::vector<faabric::Message> msgsOne;
     std::vector<std::string> expectedHostsOne;
+    std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
+      faabric::util::batchExecFactory("foo", "bar", nCallsOne);
+    reqOne->set_type(execMode);
     for (int i = 0; i < nCallsOne; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-
         // Set important bind fields
+        faabric::Message& msg = reqOne->mutable_messages()->at(i);
         msg.set_ispython(true);
         msg.set_pythonfunction("baz");
         msg.set_pythonuser("foobar");
@@ -189,8 +190,6 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
         // Set snapshot key
         msg.set_snapshotkey(expectedSnapshot);
-
-        msgsOne.push_back(msg);
 
         // Expect this host to handle up to its number of cores
         // If in threads mode, expect it _not_ to execute
@@ -201,11 +200,6 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
             expectedHostsOne.push_back(otherHost);
         }
     }
-
-    // Create the batch request
-    std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
-      faabric::util::batchExecFactoryShared(msgsOne);
-    reqOne->set_type(execMode);
 
     // Schedule the functions
     std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne);
@@ -230,7 +224,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Check scheduled on expected hosts
     REQUIRE(actualHostsOne == expectedHostsOne);
 
-    faabric::Message m = msgsOne.at(0);
+    faabric::Message m = reqOne->messages().at(0);
 
     // Check the bind messages on this host
     auto bindQueue = sch.getBindQueue();
@@ -276,20 +270,16 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     // Now schedule a second batch and check they're also sent to the other host
     // (which is now warm)
-    std::vector<faabric::Message> msgsTwo;
     std::vector<std::string> expectedHostsTwo;
-
+    std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
+      faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
     for (int i = 0; i < nCallsTwo; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        faabric::Message& msg = reqTwo->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
-
-        msgsTwo.push_back(msg);
         expectedHostsTwo.push_back(otherHost);
     }
 
     // Create the batch request
-    std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
-      faabric::util::batchExecFactoryShared(msgsTwo);
     reqTwo->set_type(execMode);
 
     // Schedule the functions
@@ -371,17 +361,15 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
 
     // Submit more calls than we have capacity for
     int nCalls = 10;
-    std::vector<faabric::Message> msgs;
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", nCalls);
+    req->set_type(execMode);
     for (int i = 0; i < nCalls; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
-        msgs.push_back(msg);
     }
 
     // Submit the request
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactoryShared(msgs);
-    req->set_type(execMode);
     std::vector<std::string> executedHosts = sch.callFunctions(req);
 
     // Check list of executed hosts
@@ -721,12 +709,9 @@ TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
 
     std::string otherHost = "other";
 
-    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
-    msg.set_masterhost(otherHost);
-
-    std::vector<faabric::Message> msgs = { msg };
     std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactoryShared(msgs);
+      faabric::util::batchExecFactory("blah", "foo", 1);
+    req->mutable_messages()->at(0).set_masterhost(otherHost);
 
     std::vector<std::string> expectedHosts = { "" };
     std::vector<std::string> executedHosts = sch.callFunctions(req);
@@ -770,12 +755,9 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
     // not the third
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     int nRequests = 2 * nCores + 1;
-    std::vector<faabric::Message> msgs;
-    for (int i = 0; i < nRequests; i++) {
-        msgs.push_back(msg);
-    }
     std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactoryShared(msgs);
+      faabric::util::batchExecFactory("foo", "bar", nRequests);
+
     sch.callFunctions(req);
 
     // Check other hosts are added

@@ -68,11 +68,13 @@ std::shared_ptr<faabric::Message> messageFactoryShared(
 faabric::Message messageFactory(const std::string& user,
                                 const std::string& function);
 
-std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactoryShared(
-  const std::vector<faabric::Message>& msgs);
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory();
 
-std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactoryShared(
-  const std::vector<std::shared_ptr<faabric::Message>>& msgs);
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
+  const std::string& user,
+  const std::string& function,
+  int count = 1
+);
 
 void convertMessageToPython(faabric::Message& msg);
 
