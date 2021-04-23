@@ -12,7 +12,9 @@
 #include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
-static thread_local std::unordered_map<std::string, faabric::scheduler::FunctionCallClient> rpcCallClients;
+static thread_local std::unordered_map<std::string,
+                                       faabric::scheduler::FunctionCallClient>
+  rpcCallClients;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -66,17 +68,19 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
 }
 
 /*
-std::shared_ptr<faabric::scheduler::FunctionCallClient> MpiWorld::getRpcClient(const std::string& otherHost)
+std::shared_ptr<faabric::scheduler::FunctionCallClient>
+MpiWorld::getRpcClient(const std::string& otherHost)
 {
     auto logger = faabric::util::getLogger();
     auto it = this->rpcCallClients.find(otherHost);
     if (it == rpcCallClients.end()) {
         logger->info("Initialize RPC call client");
         auto ret = rpcCallClients.emplace(std::make_pair(
-            otherHost, 
+            otherHost,
             std::make_shared<FunctionCallClient>(otherHost)));
         if (ret.second == false) {
-            throw std::runtime_error(fmt::format("Could not create RPC client to host {}", otherHost));
+            throw std::runtime_error(fmt::format("Could not create RPC client to
+host {}", otherHost));
         }
         it = ret.first;
     }
@@ -85,16 +89,18 @@ std::shared_ptr<faabric::scheduler::FunctionCallClient> MpiWorld::getRpcClient(c
 }
 */
 
-faabric::scheduler::FunctionCallClient& getRpcClient(const std::string& otherHost)
+faabric::scheduler::FunctionCallClient& getRpcClient(
+  const std::string& otherHost)
 {
     auto logger = faabric::util::getLogger();
     auto it = rpcCallClients.find(otherHost);
     if (it == rpcCallClients.end()) {
         logger->info("Initialize many RPC call client");
-        auto ret = rpcCallClients.emplace(std::make_pair(otherHost, 
-                                          FunctionCallClient(otherHost)));
+        auto ret = rpcCallClients.emplace(
+          std::make_pair(otherHost, FunctionCallClient(otherHost)));
         if (ret.second == false) {
-            throw std::runtime_error(fmt::format("Could not create RPC client to host {}", otherHost));
+            throw std::runtime_error(
+              fmt::format("Could not create RPC client to host {}", otherHost));
         }
         it = ret.first;
     }

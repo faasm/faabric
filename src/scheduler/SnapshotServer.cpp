@@ -29,6 +29,11 @@ void SnapshotServer::doStart(const std::string& serverAddr)
     server->Wait();
 }
 
+void SnapshotServer::doStop()
+{
+    server->Shutdown();
+}
+
 Status SnapshotServer::PushSnapshot(
   ServerContext* context,
   const flatbuffers::grpc::Message<SnapshotPushRequest>* request,

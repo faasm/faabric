@@ -16,7 +16,8 @@ FunctionCallServer::FunctionCallServer()
   : RPCServer(DEFAULT_RPC_HOST, FUNCTION_CALL_PORT)
   , scheduler(getScheduler())
 {
-    mpiQueue = std::make_unique<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>();
+    mpiQueue = std::make_unique<
+      faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>();
     faabric::util::getLogger()->debug("init done");
 }
 
@@ -31,7 +32,7 @@ void FunctionCallServer::doStart(const std::string& serverAddr)
     grpc::ResourceQuota rq("test-rq");
     rq.SetMaxThreads(20);
     builder.SetResourceQuota(rq);
-    
+
     // Start it
     server = builder.BuildAndStart();
     faabric::util::getLogger()->info("Function call server listening on {}",

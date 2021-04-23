@@ -233,8 +233,10 @@ class MpiWorld
 
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
-    // std::unordered_map<std::string, std::shared_ptr<faabric::scheduler::FunctionCallClient>> rpcCallClients;
-    // std::shared_ptr<faabric::scheduler::FunctionCallClient> getRpcClient(const std::string& otherHost);
+    // std::unordered_map<std::string,
+    // std::shared_ptr<faabric::scheduler::FunctionCallClient>> rpcCallClients;
+    // std::shared_ptr<faabric::scheduler::FunctionCallClient>
+    // getRpcClient(const std::string& otherHost);
 
     int getMpiThreadPoolSize();
 

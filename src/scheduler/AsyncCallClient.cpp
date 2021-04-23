@@ -1,4 +1,5 @@
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/rpc/macros.h>
 #include <faabric/scheduler/AsyncCallClient.h>
 
 #include <grpcpp/grpcpp.h>
@@ -11,8 +12,9 @@ namespace faabric::scheduler {
 // -----------------------------------
 AsyncCallClient::AsyncCallClient(const std::string& hostIn)
   : host(hostIn)
-  , channel(grpc::CreateChannel(host + ":" + std::to_string(ASYNC_FUNCTION_CALL_PORT),
-                                grpc::InsecureChannelCredentials()))
+  , channel(
+      grpc::CreateChannel(host + ":" + std::to_string(ASYNC_FUNCTION_CALL_PORT),
+                          grpc::InsecureChannelCredentials()))
   , stub(faabric::AsyncRPCService::NewStub(channel))
 {
     // TODO remove
@@ -23,30 +25,42 @@ AsyncCallClient::AsyncCallClient(const std::string& hostIn)
 void AsyncCallClient::sendMpiMessage(
   const std::shared_ptr<faabric::MPIMessage> msg)
 {
-    // Message we are sending
-    faabric::MPIMessage m = *msg;
+    // Check shutdown
+    if (!msg) {
+        faabric::util::getLogger()->info("Shutting down queue");
+        cq.Shutdown();
+    } else {
+        // Message we are sending
+        faabric::MPIMessage m = *msg;
 
-    // Response we are receiving
-    faabric::FunctionStatusResponse response;
+        // Response we are receiving
+        faabric::FunctionStatusResponse response;
 
-    // Prepare call. Note that this does not actually start the RPC.
-    AsyncClientCall* call = new AsyncClientCall;
-    call->response_reader = stub->PrepareAsyncMPIMsg(&call->context, m, &cq);
+        // Prepare call. Note that this does not actually start the RPC.
+        AsyncCall* call = new AsyncCall;
+        call->response_reader =
+          stub->PrepareAsyncMPIMsg(&call->context, m, &cq);
 
-    // Initiate RPC
-    call->response_reader->StartCall();
+        // Initiate RPC
+        call->response_reader->StartCall();
 
-    // Wait for responses in a separate loop to make the sending fully async
-    call->response_reader->Finish(&call->response, &call->status, (void*) call);
+        // Wait for responses in a separate loop to make the sending fully async
+        call->response_reader->Finish(
+          &call->response, &call->status, (void*)call);
+    }
 }
 
-// RPC response reader to be spawned in a separate thread
-void AsyncClientCall::AsyncCompleteRpc() {
+// This method consumes the async requests that are already finished and checks
+// that the status is OK
+// Note: this method should run in a separate thread for a true asynchronous
+// behaviour
+void AsyncCallClient::AsyncCompleteRpc()
+{
     void* gotTag;
     bool ok = false;
 
-    while(cq.Next(&gotTag, &ok)) {
-        AsyncClientCall* call = static_cast<AsyncClientCall*>(gotTag);
+    while (cq.Next(&gotTag, &ok)) {
+        AsyncCall* call = static_cast<AsyncCall*>(gotTag);
 
         // Check that the request completed succesfully. Note that this does not
         // check the status code, only that it finished.
@@ -54,9 +68,13 @@ void AsyncClientCall::AsyncCompleteRpc() {
             throw std::runtime_error("Async RPC did not finish succesfully");
         }
 
+        // Check that the processing of the RPC was OK
         if (!call->status.ok()) {
-            throw std::runtime_error(fmt::format("RPC error {}", call->status.error_message()));
+            throw std::runtime_error(
+              fmt::format("RPC error {}", call->status.error_message()));
         }
     }
+
+    faabric::util::getLogger()->info("Exiting AsyncComplteRpc");
 }
 }

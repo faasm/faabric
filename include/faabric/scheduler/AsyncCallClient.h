@@ -31,15 +31,19 @@ class AsyncCallClient
     const std::string host;
 
     grpc::CompletionQueue cq;
-    std::unique_ptr<faabbric::AsyncRPCService::Stub> stub;
+    std::shared_ptr<Channel> channel;
+    std::unique_ptr<faabric::AsyncRPCService::Stub> stub;
 
-    struct AsyncClientCall {
+    // Wrapper around an individual async call
+    struct AsyncCall
+    {
         faabric::FunctionStatusResponse response;
 
         grpc::ClientContext context;
         grpc::Status status;
 
-        std::unique_ptr<grpc::ClientAsyncResponseReader<FunctionStatusResponse>> response;
+        std::unique_ptr<grpc::ClientAsyncResponseReader<FunctionStatusResponse>>
+          response_reader;
     };
 };
 }

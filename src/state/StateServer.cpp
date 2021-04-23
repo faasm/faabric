@@ -34,6 +34,11 @@ void StateServer::doStart(const std::string& serverAddr)
     server->Wait();
 }
 
+void StateServer::doStop()
+{
+    server->Shutdown();
+}
+
 Status StateServer::Pull(
   ServerContext* context,
   ServerReaderWriter<faabric::StatePart, faabric::StateChunkRequest>* stream)

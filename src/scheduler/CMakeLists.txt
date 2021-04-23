@@ -1,6 +1,8 @@
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/scheduler/*.h")
 
 set(LIB_FILES
+        AsyncCallClient.cpp
+        AsyncCallServer.cpp
         ExecGraph.cpp
         FunctionCallClient.cpp
         FunctionCallServer.cpp

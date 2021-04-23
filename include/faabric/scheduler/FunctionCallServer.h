@@ -47,6 +47,7 @@ class FunctionCallServer final
 
   private:
     Scheduler& scheduler;
-    std::unique_ptr<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>> mpiQueue;
+    std::unique_ptr<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>
+      mpiQueue;
 };
 }

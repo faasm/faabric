@@ -29,5 +29,7 @@ class SnapshotServer final
 
   protected:
     void doStart(const std::string& serverAddr) override;
+
+    void doStop() override;
 };
 }
