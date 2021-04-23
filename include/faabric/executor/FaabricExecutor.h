@@ -1,9 +1,9 @@
 #pragma once
 
-#include "faabric/scheduler/InMemoryMessageQueue.h"
 #include <future>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 

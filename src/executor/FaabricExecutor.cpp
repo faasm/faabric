@@ -1,10 +1,9 @@
-#include "faabric/proto/faabric.pb.h"
-#include "faabric/util/queue.h"
 #include <faabric/executor/FaabricExecutor.h>
-
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/queue.h>
 
 namespace faabric::executor {
 FaabricExecutor::FaabricExecutor(int threadIdxIn)
