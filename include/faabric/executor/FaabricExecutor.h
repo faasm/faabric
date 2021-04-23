@@ -7,8 +7,11 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 
-typedef std::pair<std::promise<int32_t>, faabric::Message*> ThreadTaskPair;
-typedef faabric::util::Queue<ThreadTaskPair> ThreadTaskQueue;
+typedef std::tuple<std::promise<int32_t>,
+                   int,
+                   std::shared_ptr<faabric::BatchExecuteRequest>>
+  ThreadTask;
+typedef faabric::util::Queue<ThreadTask> ThreadTaskQueue;
 typedef std::unordered_map<int, ThreadTaskQueue> ThreadQueueMap;
 typedef std::unordered_map<int, std::thread> ThreadMap;
 

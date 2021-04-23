@@ -4,6 +4,7 @@ set(LIB_FILES
         FaabricExecutor.cpp
         FaabricMain.cpp
         FaabricPool.cpp
+        DummyExecutor.cpp
         ${HEADERS}
         )
 

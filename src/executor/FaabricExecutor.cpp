@@ -1,3 +1,4 @@
+#include "faabric/util/func.h"
 #include <faabric/executor/FaabricExecutor.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/state/State.h>
@@ -70,14 +71,17 @@ void FaabricExecutor::finish()
         scheduler.notifyFaasletFinished(boundMessage);
     }
 
-    // Shut down thread pool
+    // Shut down thread pool with a series of kill messages
     faabric::Message killMsg;
     killMsg.set_type(faabric::Message::KILL);
+    std::vector<faabric::Message> msgs = { killMsg };
+    std::shared_ptr<BatchExecuteRequest> killReq =
+      faabric::util::batchExecFactoryShared(msgs);
+
     for (auto& queuePair : threadQueues) {
         std::promise<int32_t> p;
         std::future<int32_t> f = p.get_future();
-
-        queuePair.second.enqueue(std::make_pair(std::move(p), &killMsg));
+        queuePair.second.enqueue(std::make_tuple(std::move(p), 0, killReq));
 
         f.get();
     }
@@ -194,22 +198,24 @@ std::string FaabricExecutor::processNextMessage()
 }
 
 std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
-  faabric::BatchExecuteRequest* req)
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     const auto& logger = faabric::util::getLogger();
 
-    const std::string funcStr = faabric::util::funcToString(*req);
+    const std::string funcStr = faabric::util::funcToString(req);
     logger->info(
       "Batch executing {} threads of {}", req->messages().size(), funcStr);
 
     std::vector<std::future<int32_t>> threadFutures;
-    for (const faabric::Message& msg : req->messages()) {
+    for (int i = 0; i < req->messages_size(); i++) {
         std::promise<int32_t> p;
         std::future<int32_t> f = p.get_future();
 
+        const faabric::Message& msg = req->messages().at(i);
         int threadPoolIdx = msg.appindex() % threadPoolSize;
-        ThreadTaskPair taskPair = std::make_pair(std::move(p), &msg);
-        threadQueues[threadPoolIdx].enqueue(taskPair);
+
+        ThreadTask task = std::make_tuple(std::move(p), i, req);
+        threadQueues[threadPoolIdx].enqueue(std::move(task));
 
         if (threads.count(threadPoolIdx) == 0) {
             // Get mutex and re-check
@@ -221,29 +227,34 @@ std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
                       auto logger = faabric::util::getLogger();
 
                       for (;;) {
-                          ThreadTaskPair taskPair =
+                          ThreadTask task =
                             threadQueues[threadPoolIdx].dequeue();
 
-                          if (taskPair.second->type() ==
-                              faabric::Message::KILL) {
-                              taskPair.first.set_value(0);
+                          int msgIdx = std::get<1>(task);
+                          std::shared_ptr<faabric::BatchExecuteRequest> req =
+                            std::get<2>(task);
+                          const faabric::Message& msg =
+                            req->messages().at(msgIdx);
+
+                          if (msg.type() == faabric::Message::KILL) {
+                              std::get<0>(task).set_value(0);
                               logger->debug("Executor thread {} shutting down",
                                             threadPoolIdx);
                               break;
                           }
 
-                          doBatchExecuteThread(threadPoolIdx, taskPair.second);
+                          doBatchExecuteThread(threadPoolIdx, msg);
 
                           // Caller has to notify scheduler when finished
                           // executing a thread locally
                           auto& sch = faabric::scheduler::getScheduler();
-                          sch.notifyCallFinished(*taskPair.second);
+                          sch.notifyCallFinished(msg);
                       }
                   }));
             }
         }
 
-        threadFutures.emplace_back(f);
+        threadFutures.emplace_back(std::move(f));
     }
 
     return threadFutures;
