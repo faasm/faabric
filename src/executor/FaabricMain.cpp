@@ -37,6 +37,9 @@ void FaabricMain::startBackground()
 
     // Work sharing
     pool.startFunctionCallServer();
+
+    // Start async function server
+    pool.startAsyncCallServer();
 }
 
 void FaabricMain::shutdown()

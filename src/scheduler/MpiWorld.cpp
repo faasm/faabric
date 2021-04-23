@@ -1,7 +1,5 @@
 #include <faabric/mpi/mpi.h>
 
-#include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
@@ -12,9 +10,8 @@
 #include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
-static thread_local std::unordered_map<std::string,
-                                       faabric::scheduler::FunctionCallClient>
-  rpcCallClients;
+// static thread_local std::unordered_map<std::string,
+// std::shared_ptr<faabric::scheduler::AsyncCallClient>> rpcCallClients;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -67,28 +64,38 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
     return state.getKV(user, stateKey, MPI_HOST_STATE_LEN);
 }
 
-/*
-std::shared_ptr<faabric::scheduler::FunctionCallClient>
-MpiWorld::getRpcClient(const std::string& otherHost)
+std::shared_ptr<faabric::scheduler::AsyncCallClient> MpiWorld::getRpcClient(
+  const std::string& otherHost)
 {
     auto logger = faabric::util::getLogger();
+    // No TLS
     auto it = this->rpcCallClients.find(otherHost);
+    // TLS
+    // auto it = rpcCallClients.find(otherHost);
     if (it == rpcCallClients.end()) {
-        logger->info("Initialize RPC call client");
+        logger->info("Initialize async RPC call client");
         auto ret = rpcCallClients.emplace(std::make_pair(
-            otherHost,
-            std::make_shared<FunctionCallClient>(otherHost)));
+          otherHost,
+          std::make_shared<faabric::scheduler::AsyncCallClient>(otherHost)));
         if (ret.second == false) {
-            throw std::runtime_error(fmt::format("Could not create RPC client to
-host {}", otherHost));
+            throw std::runtime_error(
+              fmt::format("Could not create RPC client to host {}", otherHost));
         }
         it = ret.first;
+        // Start the asyncrhonous ACK message reading
+        it->second->startResponseReaderThread();
+        /*
+        std::thread(&faabric::scheduler::AsyncCallClient::AsyncCompleteRpc,
+                    it->second.get()
+        ).detach();
+        */
     }
 
     return it->second;
 }
-*/
 
+/* Thread-local alternative
+ * TODO - decide which to keep
 faabric::scheduler::FunctionCallClient& getRpcClient(
   const std::string& otherHost)
 {
@@ -107,6 +114,7 @@ faabric::scheduler::FunctionCallClient& getRpcClient(
 
     return it->second;
 }
+*/
 
 int MpiWorld::getMpiThreadPoolSize()
 {
@@ -155,16 +163,24 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
+    faabric::util::getLogger()->info("Terminating MPI world");
+
+    // Clear state
     setUpStateKV();
     state::getGlobalState().deleteKV(stateKV->user, stateKV->key);
-
     for (auto& s : rankHostMap) {
         const std::shared_ptr<state::StateKeyValue>& rankState =
           getRankHostState(s.first);
         state::getGlobalState().deleteKV(rankState->user, rankState->key);
     }
 
+    // Clear local queues
     localQueueMap.clear();
+
+    // Clear RPC clients
+    for (auto& c : rpcCallClients) {
+        c.second->doShutdown();
+    }
 }
 
 void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
@@ -479,7 +495,7 @@ void MpiWorld::send(int sendRank,
             faabric::util::FullLock lock(worldMutex);
             getRpcClient(otherHost)->sendMPIMessage(m);
         }*/
-        getRpcClient(otherHost).sendMPIMessage(m);
+        getRpcClient(otherHost)->sendMpiMessage(m);
     }
 }
 
@@ -498,6 +514,9 @@ void MpiWorld::recv(int sendRank,
     std::shared_ptr<faabric::MPIMessage> m =
       getLocalQueue(sendRank, recvRank)->dequeue();
 
+    if (!m) {
+        throw std::runtime_error("Recevied a malformed message");
+    }
     if (messageType != m->messagetype()) {
         logger->error(
           "Message types mismatched on {}->{} (expected={}, got={})",

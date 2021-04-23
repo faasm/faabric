@@ -7,6 +7,8 @@
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
 
+#include <thread>
+
 using namespace grpc;
 
 using grpc::Channel;
@@ -23,9 +25,15 @@ class AsyncCallClient
   public:
     explicit AsyncCallClient(const std::string& hostIn);
 
+    ~AsyncCallClient();
+
+    void doShutdown();
+
     void sendMpiMessage(const std::shared_ptr<faabric::MPIMessage> msg);
 
     void AsyncCompleteRpc();
+
+    void startResponseReaderThread();
 
   private:
     const std::string host;
@@ -33,6 +41,7 @@ class AsyncCallClient
     grpc::CompletionQueue cq;
     std::shared_ptr<Channel> channel;
     std::unique_ptr<faabric::AsyncRPCService::Stub> stub;
+    std::thread responseThread;
 
     // Wrapper around an individual async call
     struct AsyncCall

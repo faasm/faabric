@@ -82,6 +82,7 @@ void AsyncCallServer::CallData::doRpc()
         // can concurrently process different requests.
         this->service->RequestMPIMsg(&ctx, &msg, &responder, cq, cq, this);
     } else if (status == PROCESS) {
+        PROF_START(asyncRpcProcess)
         // Spawn a new CallData instance to serve new clients
         // Note that we deallocate ourselves in the FINISH state
         new CallData(service, cq);
@@ -89,15 +90,16 @@ void AsyncCallServer::CallData::doRpc()
         // Actual message processing
         // TODO move from here?
         // TODO remove copy?
-        // faabric::MPIMessage m = *msg;
-        // MpiWorldRegistry& registry = getMpiWorldRegistry();
-        // MpiWorld& world = registry.getWorld(m.worldid());
-        // world.enqueueMessage(m);
-        mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(msg));
+        faabric::MPIMessage m = msg;
+        MpiWorldRegistry& registry = getMpiWorldRegistry();
+        MpiWorld& world = registry.getWorld(m.worldid());
+        world.enqueueMessage(m);
+        // mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(msg));
 
         // Let gRPC know we are done
         status = FINISH;
         responder.Finish(response, Status::OK, this);
+        PROF_END(asyncRpcProcess)
     } else {
         if (status != FINISH) {
             throw std::runtime_error("Unrecognized state in async RPC server");

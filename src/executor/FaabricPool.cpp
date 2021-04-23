@@ -24,6 +24,13 @@ void FaabricPool::startFunctionCallServer()
     functionServer.start();
 }
 
+void FaabricPool::startAsyncCallServer()
+{
+    auto logger = faabric::util::getLogger();
+    logger->info("Starting async function call server");
+    asyncCallServer.start();
+}
+
 void FaabricPool::startSnapshotServer()
 {
     auto logger = faabric::util::getLogger();
@@ -134,6 +141,9 @@ void FaabricPool::shutdown()
 
     logger->info("Waiting for the function server to finish");
     functionServer.stop();
+
+    logger->info("Waiting for the async function call server to finish");
+    asyncCallServer.stop();
 
     if (poolThread.joinable()) {
         logger->info("Waiting for pool to finish");

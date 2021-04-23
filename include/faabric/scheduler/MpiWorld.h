@@ -3,6 +3,7 @@
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/AsyncCallClient.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiThreadPool.h>
@@ -225,7 +226,10 @@ class MpiWorld
 
     std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
       localQueueMap;
+
+    // Thread pool for asynchronous work
     std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
+    int getMpiThreadPoolSize();
 
     std::vector<int> cartProcsPerDim;
 
@@ -233,12 +237,12 @@ class MpiWorld
 
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
-    // std::unordered_map<std::string,
-    // std::shared_ptr<faabric::scheduler::FunctionCallClient>> rpcCallClients;
-    // std::shared_ptr<faabric::scheduler::FunctionCallClient>
-    // getRpcClient(const std::string& otherHost);
-
-    int getMpiThreadPoolSize();
+    // Inter-host MPI calls through RPCs
+    std::shared_ptr<faabric::scheduler::AsyncCallClient> getRpcClient(
+      const std::string& otherHost);
+    std::unordered_map<std::string,
+                       std::shared_ptr<faabric::scheduler::AsyncCallClient>>
+      rpcCallClients;
 
     void checkRankOnThisHost(int rank);
 

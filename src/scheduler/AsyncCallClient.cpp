@@ -5,6 +5,7 @@
 #include <grpcpp/grpcpp.h>
 
 #include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
 
 namespace faabric::scheduler {
 // -----------------------------------
@@ -22,16 +23,34 @@ AsyncCallClient::AsyncCallClient(const std::string& hostIn)
     logger->warn("Created a new async RPC client.");
 }
 
+AsyncCallClient::~AsyncCallClient()
+{
+    this->doShutdown();
+}
+
+void AsyncCallClient::doShutdown()
+{
+    faabric::util::getLogger()->warn("AsyncCallClient dtor");
+
+    // Send shutdown message to ourselves to kill the response reader thread
+    this->sendMpiMessage(nullptr);
+    if (this->responseThread.joinable()) {
+        this->responseThread.join();
+    }
+}
+
 void AsyncCallClient::sendMpiMessage(
   const std::shared_ptr<faabric::MPIMessage> msg)
 {
     // Check shutdown
+    // Note - we don't bother draining the queue during shutdown
     if (!msg) {
-        faabric::util::getLogger()->info("Shutting down queue");
+        faabric::util::getLogger()->debug("Shutting down RPC response queue");
         cq.Shutdown();
     } else {
+        PROF_START(asyncSend)
         // Message we are sending
-        faabric::MPIMessage m = *msg;
+        // faabric::MPIMessage m = *msg;
 
         // Response we are receiving
         faabric::FunctionStatusResponse response;
@@ -39,7 +58,7 @@ void AsyncCallClient::sendMpiMessage(
         // Prepare call. Note that this does not actually start the RPC.
         AsyncCall* call = new AsyncCall;
         call->response_reader =
-          stub->PrepareAsyncMPIMsg(&call->context, m, &cq);
+          stub->PrepareAsyncMPIMsg(&call->context, *msg, &cq);
 
         // Initiate RPC
         call->response_reader->StartCall();
@@ -47,6 +66,7 @@ void AsyncCallClient::sendMpiMessage(
         // Wait for responses in a separate loop to make the sending fully async
         call->response_reader->Finish(
           &call->response, &call->status, (void*)call);
+        PROF_END(asyncSend)
     }
 }
 
@@ -75,6 +95,12 @@ void AsyncCallClient::AsyncCompleteRpc()
         }
     }
 
-    faabric::util::getLogger()->info("Exiting AsyncComplteRpc");
+    faabric::util::getLogger()->debug("Exiting AsyncComplteRpc");
+}
+
+void AsyncCallClient::startResponseReaderThread()
+{
+    this->responseThread =
+      std::thread(&faabric::scheduler::AsyncCallClient::AsyncCompleteRpc, this);
 }
 }

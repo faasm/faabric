@@ -6,6 +6,9 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/rpc/RPCServer.h>
 
+#include <faabric/scheduler/MpiWorld.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
+
 #include <grpcpp/grpcpp.h>
 
 using namespace grpc;

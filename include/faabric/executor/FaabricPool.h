@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/executor/FaabricExecutor.h>
+#include <faabric/scheduler/AsyncCallServer.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/StateServer.h>
@@ -13,6 +14,8 @@ class FaabricPool
     explicit FaabricPool(int nThreads);
 
     void startFunctionCallServer();
+
+    void startAsyncCallServer();
 
     void startThreadPool(bool background = true);
 
@@ -39,6 +42,7 @@ class FaabricPool
     faabric::util::TokenPool threadTokenPool;
     faabric::state::StateServer stateServer;
     faabric::scheduler::FunctionCallServer functionServer;
+    faabric::scheduler::AsyncCallServer asyncCallServer;
 
     std::thread mpiThread;
     std::thread poolThread;
