@@ -10,8 +10,6 @@
 #include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
-// static thread_local std::unordered_map<std::string,
-// std::shared_ptr<faabric::scheduler::AsyncCallClient>> rpcCallClients;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -68,10 +66,7 @@ std::shared_ptr<faabric::scheduler::AsyncCallClient> MpiWorld::getRpcClient(
   const std::string& otherHost)
 {
     auto logger = faabric::util::getLogger();
-    // No TLS
     auto it = this->rpcCallClients.find(otherHost);
-    // TLS
-    // auto it = rpcCallClients.find(otherHost);
     if (it == rpcCallClients.end()) {
         logger->info("Initialize async RPC call client");
         auto ret = rpcCallClients.emplace(std::make_pair(
@@ -84,37 +79,10 @@ std::shared_ptr<faabric::scheduler::AsyncCallClient> MpiWorld::getRpcClient(
         it = ret.first;
         // Start the asyncrhonous ACK message reading
         it->second->startResponseReaderThread();
-        /*
-        std::thread(&faabric::scheduler::AsyncCallClient::AsyncCompleteRpc,
-                    it->second.get()
-        ).detach();
-        */
     }
 
     return it->second;
 }
-
-/* Thread-local alternative
- * TODO - decide which to keep
-faabric::scheduler::FunctionCallClient& getRpcClient(
-  const std::string& otherHost)
-{
-    auto logger = faabric::util::getLogger();
-    auto it = rpcCallClients.find(otherHost);
-    if (it == rpcCallClients.end()) {
-        logger->info("Initialize many RPC call client");
-        auto ret = rpcCallClients.emplace(
-          std::make_pair(otherHost, FunctionCallClient(otherHost)));
-        if (ret.second == false) {
-            throw std::runtime_error(
-              fmt::format("Could not create RPC client to host {}", otherHost));
-        }
-        it = ret.first;
-    }
-
-    return it->second;
-}
-*/
 
 int MpiWorld::getMpiThreadPoolSize()
 {
@@ -489,12 +457,6 @@ void MpiWorld::send(int sendRank,
     } else {
         logger->debug("MPI - send remote {} -> {}", sendRank, recvRank);
 
-        // scheduler::FunctionCallClient client(otherHost);
-        /*
-        {
-            faabric::util::FullLock lock(worldMutex);
-            getRpcClient(otherHost)->sendMPIMessage(m);
-        }*/
         getRpcClient(otherHost)->sendMpiMessage(m);
     }
 }

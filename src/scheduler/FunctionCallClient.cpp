@@ -8,9 +8,6 @@
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
-#include <faabric/util/logging.h>
-#include <faabric/util/timing.h>
-
 namespace faabric::scheduler {
 
 // -----------------------------------
@@ -95,11 +92,7 @@ FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   , channel(grpc::CreateChannel(host + ":" + std::to_string(FUNCTION_CALL_PORT),
                                 grpc::InsecureChannelCredentials()))
   , stub(faabric::FunctionRPCService::NewStub(channel))
-{
-    // TODO remove
-    auto logger = faabric::util::getLogger();
-    logger->warn("Created a new RPC client.");
-}
+{}
 
 void FunctionCallClient::sendFlush()
 {
@@ -110,43 +103,6 @@ void FunctionCallClient::sendFlush()
         ClientContext context;
         faabric::FunctionStatusResponse response;
         CHECK_RPC("function_flush", stub->Flush(&context, call, &response));
-    }
-}
-
-void FunctionCallClient::sendMPIMessage(
-  const std::shared_ptr<faabric::MPIMessage> msg)
-{
-    if (faabric::util::isMockMode()) {
-        mpiMessages.emplace_back(host, *msg);
-    } else {
-        PROF_START(sendMPIMessage)
-        ClientContext context;
-
-        PROF_START(sendMPIMessageCopy)
-        faabric::FunctionStatusResponse response;
-        faabric::MPIMessage m = *msg;
-        PROF_END(sendMPIMessageCopy)
-
-        PROF_START(sendMPIMessageRpc)
-        CHECK_RPC("mpi_message", stub->MPICall(&context, m, &response));
-        PROF_END(sendMPIMessageRpc)
-
-        PROF_END(sendMPIMessage)
-
-        // NoOp
-        /*
-        PROF_START(sendMPIMessage)
-
-        faabric::ResourceRequest r;
-        faabric::FunctionStatusResponse response;
-        ClientContext context;
-
-        PROF_START(sendMPIMessageRpc)
-        CHECK_RPC("noop_message", stub->NoOp(&context, r, &response));
-        PROF_END(sendMPIMessageRpc)
-
-        PROF_END(sendMPIMessage)
-        */
     }
 }
 

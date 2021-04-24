@@ -1,24 +1,12 @@
 #include <faabric/scheduler/AsyncCallServer.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
-#include <faabric/util/logging.h>
 
 #include <faabric/rpc/macros.h>
-
-#include <faabric/util/timing.h>
-
-static std::unique_ptr<
-  faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>
-  mpiQueue;
+#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 AsyncCallServer::AsyncCallServer()
   : RPCServer(DEFAULT_RPC_HOST, ASYNC_FUNCTION_CALL_PORT)
-{
-    // TODO remove this
-    mpiQueue = std::make_unique<
-      faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>();
-    faabric::util::getLogger()->debug("init done");
-}
+{}
 
 void AsyncCallServer::doStop()
 {
@@ -82,24 +70,19 @@ void AsyncCallServer::CallData::doRpc()
         // can concurrently process different requests.
         this->service->RequestMPIMsg(&ctx, &msg, &responder, cq, cq, this);
     } else if (status == PROCESS) {
-        PROF_START(asyncRpcProcess)
         // Spawn a new CallData instance to serve new clients
         // Note that we deallocate ourselves in the FINISH state
         new CallData(service, cq);
 
         // Actual message processing
-        // TODO move from here?
-        // TODO remove copy?
         faabric::MPIMessage m = msg;
         MpiWorldRegistry& registry = getMpiWorldRegistry();
         MpiWorld& world = registry.getWorld(m.worldid());
         world.enqueueMessage(m);
-        // mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(msg));
 
         // Let gRPC know we are done
         status = FINISH;
         responder.Finish(response, Status::OK, this);
-        PROF_END(asyncRpcProcess)
     } else {
         if (status != FINISH) {
             throw std::runtime_error("Unrecognized state in async RPC server");

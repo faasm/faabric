@@ -9,17 +9,11 @@
 #include <faabric/rpc/macros.h>
 #include <grpcpp/grpcpp.h>
 
-#include <faabric/util/timing.h>
-
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
   : RPCServer(DEFAULT_RPC_HOST, FUNCTION_CALL_PORT)
   , scheduler(getScheduler())
-{
-    mpiQueue = std::make_unique<
-      faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>();
-    faabric::util::getLogger()->debug("init done");
-}
+{}
 
 void FunctionCallServer::doStart(const std::string& serverAddr)
 {
@@ -61,38 +55,6 @@ Status FunctionCallServer::Flush(ServerContext* context,
     // Reset the scheduler
     scheduler.reset();
 
-    return Status::OK;
-}
-
-Status FunctionCallServer::MPICall(ServerContext* context,
-                                   const faabric::MPIMessage* request,
-                                   faabric::FunctionStatusResponse* response)
-{
-    // TODO - avoid copying message
-    PROF_START(MpiCall)
-
-    PROF_START(MPICallCopy)
-    faabric::MPIMessage m = *request;
-    PROF_END(MPICallCopy)
-
-    PROF_START(MPICallEnqueue)
-    MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getWorld(m.worldid());
-    world.enqueueMessage(m);
-    /*
-    this->mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(m));
-    */
-    PROF_END(MPICallEnqueue)
-
-    PROF_END(MpiCall)
-
-    return Status::OK;
-}
-
-Status FunctionCallServer::NoOp(ServerContext* context,
-                                const faabric::ResourceRequest* request,
-                                faabric::FunctionStatusResponse* response)
-{
     return Status::OK;
 }
 

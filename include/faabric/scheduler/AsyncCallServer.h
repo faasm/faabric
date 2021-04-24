@@ -1,13 +1,11 @@
 #pragma once
 
-#include <faabric/util/queue.h>
-
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/rpc/RPCServer.h>
-
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/util/queue.h>
 
 #include <grpcpp/grpcpp.h>
 
@@ -25,9 +23,6 @@ class AsyncCallServer final : public rpc::RPCServer
     void doStop() override;
 
   private:
-    // std::unique_ptr<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>
-    // mpiQueue;
-
     std::unique_ptr<grpc::ServerCompletionQueue> cq;
     AsyncRPCService::AsyncService service;
 
