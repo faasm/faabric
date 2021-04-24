@@ -52,7 +52,7 @@ class AsyncCallClient
         grpc::Status status;
 
         std::unique_ptr<grpc::ClientAsyncResponseReader<FunctionStatusResponse>>
-          response_reader;
+          responseReader;
     };
 };
 }

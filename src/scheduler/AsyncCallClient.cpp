@@ -50,22 +50,17 @@ void AsyncCallClient::sendMpiMessage(
     } else {
         PROF_START(asyncSend)
         // Message we are sending
-        // faabric::MPIMessage m = *msg;
+        faabric::MPIMessage m = *msg;
 
         // Response we are receiving
         faabric::FunctionStatusResponse response;
 
         // Prepare call. Note that this does not actually start the RPC.
         AsyncCall* call = new AsyncCall;
-        call->response_reader =
-          stub->PrepareAsyncMPIMsg(&call->context, *msg, &cq);
-
-        // Initiate RPC
-        call->response_reader->StartCall();
+        call->responseReader = stub->AsyncMPIMsg(&call->context, m, &cq);
 
         // Wait for responses in a separate loop to make the sending fully async
-        call->response_reader->Finish(
-          &call->response, &call->status, (void*)call);
+        call->responseReader->Finish(&call->response, &call->status, call);
         PROF_END(asyncSend)
     }
 }
@@ -76,10 +71,12 @@ void AsyncCallClient::sendMpiMessage(
 // behaviour
 void AsyncCallClient::AsyncCompleteRpc()
 {
-    void* gotTag;
-    bool ok = false;
-
-    while (cq.Next(&gotTag, &ok)) {
+    while (true) {
+        void* gotTag;
+        bool ok = false;
+        if (!cq.Next(&gotTag, &ok)) {
+            break;
+        }
         AsyncCall* call = static_cast<AsyncCall*>(gotTag);
 
         // Check that the request completed succesfully. Note that this does not
@@ -93,6 +90,7 @@ void AsyncCallClient::AsyncCompleteRpc()
             throw std::runtime_error(
               fmt::format("RPC error {}", call->status.error_message()));
         }
+        delete call;
     }
 
     faabric::util::getLogger()->debug("Exiting AsyncComplteRpc");

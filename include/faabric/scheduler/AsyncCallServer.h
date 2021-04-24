@@ -1,7 +1,7 @@
 #pragma once
 
-#include <faabric/util/queue.h>
 #include <faabric/util/locks.h>
+#include <faabric/util/queue.h>
 
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
@@ -28,19 +28,27 @@ class AsyncCallServer final : public rpc::RPCServer
   private:
     // std::unique_ptr<faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>
     // mpiQueue;
+    const unsigned int numServerThreads;
+    const unsigned int numServerContexts;
 
     std::unique_ptr<grpc::ServerCompletionQueue> cq;
-    AsyncRPCService::AsyncService service;
+    faabric::AsyncRPCService::AsyncService service;
 
     // Context for a single outstanding RPC
-    struct RpcContext {
+    struct RpcContext
+    {
         std::unique_ptr<grpc::ServerContext> serverContext;
         // Transport to write the response
-        std::unique_ptr<grpc::ServerAsyncResponseWriter<faabric::FunctionStatusResponse>> responseWriter;
+        std::unique_ptr<
+          grpc::ServerAsyncResponseWriter<faabric::FunctionStatusResponse>>
+          responseWriter;
         // Inbound and outbound RPC types
         faabric::MPIMessage msg;
-        faabric::FunctionStatusResponse response;
-        enum { READY, DONE } state;
+        enum
+        {
+            READY,
+            DONE
+        } state;
     };
 
     // Multi-threaded server support
@@ -52,38 +60,5 @@ class AsyncCallServer final : public rpc::RPCServer
     void handleRpcs();
 
     void refreshContext(int i);
-    // Sub-class used to encapsulate the logic to serve a type of async request
-    /*
-    class CallData
-    {
-      public:
-        CallData(AsyncRPCService::AsyncService* service,
-                 grpc::ServerCompletionQueue* cq);
-
-        void doRpc();
-
-      private:
-        AsyncRPCService::AsyncService* service;
-        grpc::ServerCompletionQueue* cq;
-        grpc::ServerContext ctx;
-
-        // Message and response to the client
-        faabric::MPIMessage msg;
-        faabric::FunctionStatusResponse response;
-
-        // Transport to answer the client
-        grpc::ServerAsyncResponseWriter<faabric::FunctionStatusResponse>
-          responder;
-
-        // State machine for the serving process
-        enum CallStatus
-        {
-            CREATE,
-            PROCESS,
-            FINISH
-        };
-        CallStatus status;
-    };
-    */
 };
 }

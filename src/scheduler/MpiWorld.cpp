@@ -1172,8 +1172,9 @@ void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
         // ordering
         synchronizeRmaWrite(msg, true);
     } else {
-        logger->trace(
+        logger->info(
           "Queueing message locally {} -> {}", msg.sender(), msg.destination());
+        logger->info("Message has type: {}", msg.messagetype());
         getLocalQueue(msg.sender(), msg.destination())
           ->enqueue(std::make_shared<faabric::MPIMessage>(msg));
     }
