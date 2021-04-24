@@ -53,8 +53,6 @@ class FunctionCallClient
 
     void sendFlush();
 
-    void sendMPIMessage(const std::shared_ptr<faabric::MPIMessage> msg);
-
     faabric::HostResources getResources(const faabric::ResourceRequest& req);
 
     void executeFunctions(const faabric::BatchExecuteRequest& req);

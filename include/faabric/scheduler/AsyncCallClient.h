@@ -25,8 +25,6 @@ class AsyncCallClient
 
     void AsyncCompleteRpc();
 
-    void startResponseReaderThread();
-
   private:
     const std::string host;
 

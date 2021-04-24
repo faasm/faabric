@@ -10,6 +10,7 @@ AsyncCallServer::AsyncCallServer()
 
 void AsyncCallServer::doStop()
 {
+    isShutdown = true;
     server->Shutdown();
     cq->Shutdown();
 }
@@ -24,6 +25,7 @@ void AsyncCallServer::doStart(const std::string& serverAddr)
 
     // Start it
     server = builder.BuildAndStart();
+    isShutdown = false;
     faabric::util::getLogger()->info(
       "Async function call server listening on {}", serverAddr);
 
@@ -40,13 +42,16 @@ void AsyncCallServer::handleRpcs()
     bool ok;
 
     // Block until we read a new tag from the completion queue.
-    // Note that the tag is the memory address of a CallData instance
-    while (true) {
-        if (!cq->Next(&tag, &ok) || !ok) {
-            throw std::runtime_error(
-              "Error dequeueing from gRPC completion queue");
+    // Note - Next will return false if shutdown _and_ the queue is drained.
+    // By not breaking from the loop if shutdown we effectively drain it.
+    while (cq->Next(&tag, &ok)) {
+        if (!isShutdown) {
+            if (!ok) {
+                throw std::runtime_error(
+                  "Error dequeueing from gRPC completion queue");
+            }
+            static_cast<CallData*>(tag)->doRpc();
         }
-        static_cast<CallData*>(tag)->doRpc();
     }
 }
 

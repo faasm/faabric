@@ -12,7 +12,10 @@ AsyncCallClient::AsyncCallClient(const std::string& hostIn)
       grpc::CreateChannel(host + ":" + std::to_string(ASYNC_FUNCTION_CALL_PORT),
                           grpc::InsecureChannelCredentials()))
   , stub(faabric::AsyncRPCService::NewStub(channel))
-{}
+{
+    this->responseThread =
+      std::thread(&faabric::scheduler::AsyncCallClient::AsyncCompleteRpc, this);
+}
 
 AsyncCallClient::~AsyncCallClient()
 {
@@ -22,7 +25,7 @@ AsyncCallClient::~AsyncCallClient()
 void AsyncCallClient::doShutdown()
 {
     // Send shutdown message to ourselves to kill the response reader thread
-    this->sendMpiMessage(nullptr);
+    this->sendMpiMessage(RPC_SHUTDOWN);
     if (this->responseThread.joinable()) {
         this->responseThread.join();
     }
@@ -32,8 +35,9 @@ void AsyncCallClient::sendMpiMessage(
   const std::shared_ptr<faabric::MPIMessage> msg)
 {
     // Check shutdown
-    // Note - we don't bother draining the queue during shutdown
-    if (!msg) {
+    // Note - we don't drain the queue during shutdown as the shutdown message
+    // should be the last one
+    if (msg == RPC_SHUTDOWN) {
         faabric::util::getLogger()->debug("Shutting down RPC response queue");
         cq.Shutdown();
     } else {
@@ -56,8 +60,6 @@ void AsyncCallClient::sendMpiMessage(
 
 // This method consumes the async requests that are already finished and checks
 // that the status is OK
-// Note - this method should run in a separate thread for a true asynchronous
-// behaviour
 void AsyncCallClient::AsyncCompleteRpc()
 {
     void* gotTag;
@@ -82,11 +84,5 @@ void AsyncCallClient::AsyncCompleteRpc()
     }
 
     faabric::util::getLogger()->debug("Exiting AsyncComplteRpc");
-}
-
-void AsyncCallClient::startResponseReaderThread()
-{
-    this->responseThread =
-      std::thread(&faabric::scheduler::AsyncCallClient::AsyncCompleteRpc, this);
 }
 }

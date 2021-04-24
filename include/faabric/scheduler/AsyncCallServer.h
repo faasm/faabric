@@ -25,6 +25,7 @@ class AsyncCallServer final : public rpc::RPCServer
   private:
     std::unique_ptr<grpc::ServerCompletionQueue> cq;
     AsyncRPCService::AsyncService service;
+    bool isShutdown;
 
     // Sub-class used to encapsulate the logic to serve a type of async request
     class CallData

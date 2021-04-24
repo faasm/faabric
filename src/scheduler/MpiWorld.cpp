@@ -77,8 +77,6 @@ std::shared_ptr<faabric::scheduler::AsyncCallClient> MpiWorld::getRpcClient(
               fmt::format("Could not create RPC client to host {}", otherHost));
         }
         it = ret.first;
-        // Start the asyncrhonous ACK message reading
-        it->second->startResponseReaderThread();
     }
 
     return it->second;
@@ -164,7 +162,6 @@ void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
     stateKV->pull();
     stateKV->get(BYTES(&s));
     size = s.worldSize;
-    faabric::util::getLogger()->info("World from state w/ size: {}", size);
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
       getMpiThreadPoolSize());
 }
