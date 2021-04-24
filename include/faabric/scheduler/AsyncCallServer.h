@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/util/queue.h>
+#include <faabric/util/locks.h>
 
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
@@ -31,7 +32,28 @@ class AsyncCallServer final : public rpc::RPCServer
     std::unique_ptr<grpc::ServerCompletionQueue> cq;
     AsyncRPCService::AsyncService service;
 
+    // Context for a single outstanding RPC
+    struct RpcContext {
+        std::unique_ptr<grpc::ServerContext> serverContext;
+        // Transport to write the response
+        std::unique_ptr<grpc::ServerAsyncResponseWriter<faabric::FunctionStatusResponse>> responseWriter;
+        // Inbound and outbound RPC types
+        faabric::MPIMessage msg;
+        faabric::FunctionStatusResponse response;
+        enum { READY, DONE } state;
+    };
+
+    // Multi-threaded server support
+    std::vector<std::thread> serverThreads;
+    std::vector<RpcContext> serverRpcContexts;
+    std::mutex serverMutex;
+    bool isShutdown;
+
+    void handleRpcs();
+
+    void refreshContext(int i);
     // Sub-class used to encapsulate the logic to serve a type of async request
+    /*
     class CallData
     {
       public:
@@ -62,7 +84,6 @@ class AsyncCallServer final : public rpc::RPCServer
         };
         CallStatus status;
     };
-
-    void handleRpcs();
+    */
 };
 }

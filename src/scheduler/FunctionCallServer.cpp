@@ -76,12 +76,12 @@ Status FunctionCallServer::MPICall(ServerContext* context,
     PROF_END(MPICallCopy)
 
     PROF_START(MPICallEnqueue)
+    /*
     MpiWorldRegistry& registry = getMpiWorldRegistry();
     MpiWorld& world = registry.getWorld(m.worldid());
     world.enqueueMessage(m);
-    /*
-    this->mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(m));
     */
+    this->mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(m));
     PROF_END(MPICallEnqueue)
 
     PROF_END(MpiCall)

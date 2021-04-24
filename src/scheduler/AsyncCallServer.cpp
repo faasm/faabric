@@ -6,6 +6,8 @@
 
 #include <faabric/util/timing.h>
 
+#define NUM_SERVER_THREADS 10
+
 static std::unique_ptr<
   faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>
   mpiQueue;
@@ -13,6 +15,8 @@ static std::unique_ptr<
 namespace faabric::scheduler {
 AsyncCallServer::AsyncCallServer()
   : RPCServer(DEFAULT_RPC_HOST, ASYNC_FUNCTION_CALL_PORT)
+  , serverRpcContexts(NUM_SERVER_THREADS * 100)
+  // , serverRpcContexts(faabric::getUsableCores() * 100)
 {
     // TODO remove this
     mpiQueue = std::make_unique<
@@ -22,13 +26,31 @@ AsyncCallServer::AsyncCallServer()
 
 void AsyncCallServer::doStop()
 {
-    server->Shutdown();
-    cq->Shutdown();
+    {
+        faabric::util::UniqueLock lock(serverMutex);
+        isShutdown = true;
+        server->Shutdown();
+        cq->Shutdown;
+    }
+
+    // Stop all threads
+    for (auto& t : serverThreads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+
+    // Drain the completion queue
+    void* ignoredTag;
+    bool ignoredOk;
+    while (cq->Next(&_tag, &ignoredOk)) {
+    }
 }
 
 void AsyncCallServer::doStart(const std::string& serverAddr)
 {
     // Build the server
+    isShutdown = false;
     grpc::ServerBuilder builder;
     builder.AddListeningPort(serverAddr, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -39,29 +61,75 @@ void AsyncCallServer::doStart(const std::string& serverAddr)
     faabric::util::getLogger()->info(
       "Async function call server listening on {}", serverAddr);
 
-    this->handleRpcs();
+    // Initialize threads and contexts
+    for (int i = 0; i < NUM_SERVER_THREADS * 100; i++) {
+        refreshContext(i);
+    }
+    for (int i = 0; i < NUM_SERVER_THREADS; i++) {
+        serverThreads.emplace_back(&faabric::scheduler::AsyncCallServer::handleRpcs, this);
+    }
 }
 
 void AsyncCallServer::handleRpcs()
 {
-    // This object wraps the logic behind the processing of a single request
-    // It is mapped to the service (i.e. request type) and it's completion queue
-    new CallData(&service, cq.get());
-
     void* tag;
     bool ok;
 
     // Block until we read a new tag from the completion queue.
     // Note that the tag is the memory address of a CallData instance
-    while (true) {
-        if (!cq->Next(&tag, &ok) || !ok) {
+    while (cq->Next(&tag, &ok)) {
+        if (!ok) {
             throw std::runtime_error(
               "Error dequeueing from gRPC completion queue");
         }
-        static_cast<CallData*>(tag)->doRpc();
+        int i = static_cast<int>(reinterpret_cast<intptr_t>(tag));
+        switch (serverRpcContexts[i].state) {
+          case RpcContext::READY:
+            // Actual message processing
+            // TODO move from here?
+            // TODO remove copy?
+            /*
+            faabric::MPIMessage m = msg;
+            MpiWorldRegistry& registry = getMpiWorldRegistry();
+            MpiWorld& world = registry.getWorld(m.worldid());
+            world.enqueueMessage(m);
+            */
+            mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(msg));
+
+            // Let gRPC know we are done
+            serverRpcContexts[i].state = RpcContext::DONE;
+            serverRpcContexts[i].responseWriter.Finish(response, Status::OK, this);
+            PROF_END(asyncRpcProcess)
+            break;
+          case Context::DONE:
+            refreshContext(i);
+            break;
+        }
+        // static_cast<CallData*>(tag)->doRpc();
     }
 }
 
+void AsyncCallServer::refreshContext(int i)
+{
+    faabric::util::UniqueLock lock(serverMutex);
+    if (!isShutdown) {
+        serverRpcContexts[i].state = RpcContext::READY;
+        // Server context should _not_ be reused across RPCs
+        // https://grpc.github.io/grpc/cpp/classgrpc_1_1_server_context.html
+        serverRpcContexts[i].serverContext.reset(new grpc::ServerContext);
+        serverRpcContexts[i].responseWriter.reset(
+          new grpc::ServerAsyncResponseWriter<faabric::FunctionStatusResponse>(
+              serverRpcContexts[i].serverContext.get()));
+        service->RequestMPIMsg(serverRpcContexts[i].serverContext.get(),
+                               &serverRpcContexts[i].response,
+                               serverRpcContexts[i].responseWriter.get(),
+                               cq.get(),
+                               cq.get(),
+                               reinterpret_cast<void*>(i));
+    }
+}
+
+/*
 AsyncCallServer::CallData::CallData(AsyncRPCService::AsyncService* service,
                                     grpc::ServerCompletionQueue* cq)
   : service(service)
@@ -94,7 +162,7 @@ void AsyncCallServer::CallData::doRpc()
         MpiWorldRegistry& registry = getMpiWorldRegistry();
         MpiWorld& world = registry.getWorld(m.worldid());
         world.enqueueMessage(m);
-        // mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(msg));
+        mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(msg));
 
         // Let gRPC know we are done
         status = FINISH;
@@ -108,4 +176,5 @@ void AsyncCallServer::CallData::doRpc()
         delete this;
     }
 }
+*/
 }
