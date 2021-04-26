@@ -1,19 +1,11 @@
 #pragma once
 
-#include <grpcpp/channel.h>
-#include <grpcpp/client_context.h>
-#include <grpcpp/support/channel_arguments.h>
-
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
 
+#include <grpcpp/grpcpp.h>
+
 #include <thread>
-
-using namespace grpc;
-
-using grpc::Channel;
-using grpc::ClientContext;
-using grpc::Status;
 
 namespace faabric::scheduler {
 
@@ -33,13 +25,11 @@ class AsyncCallClient
 
     void AsyncCompleteRpc();
 
-    void startResponseReaderThread();
-
   private:
     const std::string host;
 
     grpc::CompletionQueue cq;
-    std::shared_ptr<Channel> channel;
+    std::shared_ptr<grpc::Channel> channel;
     std::unique_ptr<faabric::AsyncRPCService::Stub> stub;
     std::thread responseThread;
 

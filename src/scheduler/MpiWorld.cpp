@@ -10,8 +10,6 @@
 #include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
-// static thread_local std::unordered_map<std::string,
-// std::shared_ptr<faabric::scheduler::AsyncCallClient>> rpcCallClients;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -68,12 +66,9 @@ std::shared_ptr<faabric::scheduler::AsyncCallClient> MpiWorld::getRpcClient(
   const std::string& otherHost)
 {
     auto logger = faabric::util::getLogger();
-    // No TLS
     auto it = this->rpcCallClients.find(otherHost);
-    // TLS
-    // auto it = rpcCallClients.find(otherHost);
     if (it == rpcCallClients.end()) {
-        logger->info("Initialize async RPC call client");
+        logger->debug("Initialize async RPC call client");
         auto ret = rpcCallClients.emplace(std::make_pair(
           otherHost,
           std::make_shared<faabric::scheduler::AsyncCallClient>(otherHost)));
@@ -82,39 +77,10 @@ std::shared_ptr<faabric::scheduler::AsyncCallClient> MpiWorld::getRpcClient(
               fmt::format("Could not create RPC client to host {}", otherHost));
         }
         it = ret.first;
-        // Start the asyncrhonous ACK message reading
-        it->second->startResponseReaderThread();
-        /*
-        std::thread(&faabric::scheduler::AsyncCallClient::AsyncCompleteRpc,
-                    it->second.get()
-        ).detach();
-        */
     }
 
     return it->second;
 }
-
-/* Thread-local alternative
- * TODO - decide which to keep
-faabric::scheduler::FunctionCallClient& getRpcClient(
-  const std::string& otherHost)
-{
-    auto logger = faabric::util::getLogger();
-    auto it = rpcCallClients.find(otherHost);
-    if (it == rpcCallClients.end()) {
-        logger->info("Initialize many RPC call client");
-        auto ret = rpcCallClients.emplace(
-          std::make_pair(otherHost, FunctionCallClient(otherHost)));
-        if (ret.second == false) {
-            throw std::runtime_error(
-              fmt::format("Could not create RPC client to host {}", otherHost));
-        }
-        it = ret.first;
-    }
-
-    return it->second;
-}
-*/
 
 int MpiWorld::getMpiThreadPoolSize()
 {
@@ -163,7 +129,7 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
-    faabric::util::getLogger()->info("Terminating MPI world");
+    faabric::util::getLogger()->debug("Terminating MPI world");
 
     // Clear state
     setUpStateKV();
@@ -196,7 +162,6 @@ void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
     stateKV->pull();
     stateKV->get(BYTES(&s));
     size = s.worldSize;
-    faabric::util::getLogger()->info("World from state w/ size: {}", size);
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
       getMpiThreadPoolSize());
 }
@@ -450,7 +415,6 @@ void MpiWorld::send(int sendRank,
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     if (recvRank > this->size - 1) {
-        logger->info("Is this happening here?");
         throw std::runtime_error(fmt::format(
           "Rank {} bigger than world size {}", recvRank, this->size));
     }
@@ -487,15 +451,14 @@ void MpiWorld::send(int sendRank,
             getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
         }
     } else {
-        logger->debug("MPI - send remote {} -> {}", sendRank, recvRank);
+        logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
 
-        // scheduler::FunctionCallClient client(otherHost);
-        /*
-        {
-            faabric::util::FullLock lock(worldMutex);
-            getRpcClient(otherHost)->sendMPIMessage(m);
-        }*/
-        getRpcClient(otherHost)->sendMpiMessage(m);
+        if (messageType == faabric::MPIMessage::RMA_WRITE) {
+            faabric::scheduler::AsyncCallClient cli(otherHost);
+            cli.sendMpiMessage(m);
+        } else {
+            getRpcClient(otherHost)->sendMpiMessage(m);
+        }
     }
 }
 
@@ -1172,9 +1135,6 @@ void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
         // ordering
         synchronizeRmaWrite(msg, true);
     } else {
-        logger->info(
-          "Queueing message locally {} -> {}", msg.sender(), msg.destination());
-        logger->info("Message has type: {}", msg.messagetype());
         getLocalQueue(msg.sender(), msg.destination())
           ->enqueue(std::make_shared<faabric::MPIMessage>(msg));
     }

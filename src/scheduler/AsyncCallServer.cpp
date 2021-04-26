@@ -1,14 +1,8 @@
 #include <faabric/scheduler/AsyncCallServer.h>
-#include <faabric/util/environment.h>
-#include <faabric/util/logging.h>
 
 #include <faabric/rpc/macros.h>
-
-#include <faabric/util/timing.h>
-
-static std::unique_ptr<
-  faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>
-  mpiQueue;
+#include <faabric/util/environment.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 AsyncCallServer::AsyncCallServer()
@@ -16,11 +10,11 @@ AsyncCallServer::AsyncCallServer()
   , numServerThreads(faabric::util::getUsableCores())
   , numServerContexts(numServerThreads * 100)
   , serverRpcContexts(numServerContexts)
+{}
+
+AsyncCallServer::~AsyncCallServer()
 {
-    // TODO remove this
-    mpiQueue = std::make_unique<
-      faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>>();
-    faabric::util::getLogger()->debug("init done");
+    this->doStop();
 }
 
 void AsyncCallServer::doStop()
@@ -32,6 +26,7 @@ void AsyncCallServer::doStop()
         cq->Shutdown();
     }
 
+    faabric::util::getLogger()->info("stopping threads");
     // Stop all threads
     for (auto& t : serverThreads) {
         if (t.joinable()) {
@@ -49,7 +44,6 @@ void AsyncCallServer::doStop()
 void AsyncCallServer::doStart(const std::string& serverAddr)
 {
     // Build the server
-    isShutdown = false;
     grpc::ServerBuilder builder;
     builder.AddListeningPort(serverAddr, grpc::InsecureServerCredentials());
     builder.RegisterService(&service);
@@ -57,6 +51,7 @@ void AsyncCallServer::doStart(const std::string& serverAddr)
 
     // Start it
     server = builder.BuildAndStart();
+    isShutdown = false;
     faabric::util::getLogger()->info(
       "Async function call server listening on {}", serverAddr);
 
@@ -75,37 +70,36 @@ void AsyncCallServer::handleRpcs()
     void* tag;
     bool ok;
 
-    // Block until we read a new tag from the completion queue.
-    // Note that the tag is the memory address of a CallData instance
+    // Block until new tag is added to the queue _or_ shutdown is called
+    // Note - if _shutdown_ but queue not drained, Next is true but ok not
     while (cq->Next(&tag, &ok)) {
-        if (!ok) {
+        if (!ok && !isShutdown) {
             throw std::runtime_error(
               "Error dequeueing from gRPC completion queue");
         }
-        int i = static_cast<int>(reinterpret_cast<intptr_t>(tag));
-        switch (serverRpcContexts[i].state) {
-            case RpcContext::READY: {
-                // Actual message processing
-                PROF_START(asyncRpcProcess)
-                // TODO move from here?
-                // TODO remove copy?
-                faabric::MPIMessage m = serverRpcContexts[i].msg;
-                MpiWorldRegistry& registry = getMpiWorldRegistry();
-                MpiWorld& world = registry.getWorld(m.worldid());
-                world.enqueueMessage(m);
-                // mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(m));
+        if (ok) {
+            int i = static_cast<int>(reinterpret_cast<intptr_t>(tag));
+            switch (serverRpcContexts[i].state) {
+                case RpcContext::READY: {
+                    // Actual message processing
+                    // TODO remove copy?
+                    faabric::MPIMessage m = serverRpcContexts[i].msg;
+                    MpiWorldRegistry& registry = getMpiWorldRegistry();
+                    MpiWorld& world = registry.getWorld(m.worldid());
+                    world.enqueueMessage(m);
+                    // mpiQueue->enqueue(std::make_shared<faabric::MPIMessage>(m));
 
-                // Let gRPC know we are done
-                faabric::FunctionStatusResponse response;
-                serverRpcContexts[i].state = RpcContext::DONE;
-                serverRpcContexts[i].responseWriter->Finish(
-                  response, Status::OK, tag);
-                PROF_END(asyncRpcProcess)
-                break;
+                    // Let gRPC know we are done
+                    faabric::FunctionStatusResponse response;
+                    serverRpcContexts[i].state = RpcContext::DONE;
+                    serverRpcContexts[i].responseWriter->Finish(
+                      response, Status::OK, tag);
+                    break;
+                }
+                case RpcContext::DONE:
+                    refreshContext(i);
+                    break;
             }
-            case RpcContext::DONE:
-                refreshContext(i);
-                break;
         }
     }
 }

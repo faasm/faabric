@@ -2,6 +2,8 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/AsyncCallClient.h>
+#include <faabric/scheduler/AsyncCallServer.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorld.h>
@@ -14,6 +16,8 @@
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
 
+#include <thread>
+
 using namespace scheduler;
 
 namespace tests {
@@ -24,7 +28,7 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
 
     // Start the server
     ServerContext serverContext;
-    FunctionCallServer server;
+    AsyncCallServer server;
     server.start();
     usleep(1000 * 100);
 
@@ -59,8 +63,12 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     mpiMsg.set_destination(rankLocal);
 
     // Send the message
-    FunctionCallClient cli(LOCALHOST);
-    cli.sendMPIMessage(std::make_shared<faabric::MPIMessage>(mpiMsg));
+    // Note - the client's destructor forces a synchronization point, and will
+    // block until the message is delivered
+    {
+        AsyncCallClient cli(LOCALHOST);
+        cli.sendMpiMessage(std::make_shared<faabric::MPIMessage>(mpiMsg));
+    }
 
     // Make sure the message has been put on the right queue locally
     std::shared_ptr<InMemoryMpiQueue> queue =

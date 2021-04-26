@@ -2,13 +2,15 @@
 #include <catch.hpp>
 
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/FunctionCallServer.h>
+#include <faabric/scheduler/AsyncCallServer.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 #include <faabric/util/random.h>
+
+#include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
 
@@ -441,7 +443,7 @@ TEST_CASE("Test send across hosts", "[mpi]")
     cleanFaabric();
 
     // Start a server on this host
-    FunctionCallServer server;
+    AsyncCallServer server;
     server.start();
     usleep(1000 * 100);
 
@@ -471,16 +473,6 @@ TEST_CASE("Test send across hosts", "[mpi]")
     remoteWorld.send(
       rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-    SECTION("Check queueing")
-    {
-        REQUIRE(localWorld.getLocalQueueSize(rankA, rankB) == 1);
-
-        // Check message content
-        faabric::MPIMessage actualMessage =
-          *(localWorld.getLocalQueue(rankA, rankB)->dequeue());
-        checkMessage(actualMessage, rankA, rankB, messageData);
-    }
-
     SECTION("Check recv")
     {
         // Receive the message for the given rank
@@ -495,6 +487,66 @@ TEST_CASE("Test send across hosts", "[mpi]")
         REQUIRE(status.MPI_SOURCE == rankA);
         REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
+    }
+
+    server.stop();
+}
+
+TEST_CASE("Test many sends across hosts", "[mpi]")
+{
+    cleanFaabric();
+
+    // Start a server on this host
+    AsyncCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Set up the world on this host
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpiworldsize(worldSize);
+
+    scheduler::MpiWorld& localWorld =
+      getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+
+    // Set up a world on the "remote" host
+    std::string otherHost = faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
+    scheduler::MpiWorld remoteWorld;
+    remoteWorld.overrideHost(otherHost);
+    remoteWorld.initialiseFromState(msg, worldId);
+
+    // Register two ranks (one on each host)
+    int rankA = 1;
+    int rankB = 2;
+    remoteWorld.registerRank(rankA);
+    localWorld.registerRank(rankB);
+
+    // Send many messages of different sizes
+    int numSend = 100;
+    for (int i = 0; i < numSend; i++) {
+        std::vector<int> messageData(i + 1, 1);
+        remoteWorld.send(
+          rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
+    }
+
+    SECTION("Check recv")
+    {
+        // Receive the message for the given rank
+        for (int i = 0; i < numSend; i++) {
+            std::vector<int> expectedMessageData(i + 1, 1);
+            MPI_Status status{};
+            auto buffer = new int[expectedMessageData.size()];
+            localWorld.recv(
+              rankA, rankB, BYTES(buffer), MPI_INT, expectedMessageData.size(), &status);
+
+            std::vector<int> actual(buffer, buffer + expectedMessageData.size());
+            REQUIRE(actual == expectedMessageData);
+
+            REQUIRE(status.MPI_SOURCE == rankA);
+            REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
+            REQUIRE(status.bytesSize == expectedMessageData.size() * sizeof(int));
+            faabric::util::getLogger()->info("ACKed message w/ size: {}", i + 1);
+        }
     }
 
     server.stop();
@@ -690,7 +742,7 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 {
     cleanFaabric();
 
-    FunctionCallServer server;
+    AsyncCallServer server;
     server.start();
     usleep(1000 * 100);
 
@@ -1701,7 +1753,7 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
     remoteWorld.overrideHost(otherHost);
     remoteWorld.initialiseFromState(msg, worldId);
 
-    FunctionCallServer server;
+    AsyncCallServer server;
     server.start();
     usleep(1000 * 100);
 

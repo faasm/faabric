@@ -4,7 +4,6 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/AsyncCallClient.h>
-#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/state/StateKeyValue.h>

@@ -2,8 +2,6 @@
 #include <faabric/executor/FaabricPool.h>
 #include <faabric/util/logging.h>
 
-#include <faabric/util/timing.h>
-
 namespace faabric::executor {
 FaabricPool::FaabricPool(int nThreads)
   : _shutdown(false)
@@ -81,9 +79,7 @@ void FaabricPool::startThreadPool(bool background)
 
                 // Worker will now run for a long time
                 try {
-                    PROF_BEGIN
                     executor.get()->run();
-                    PROF_SUMMARY
                 } catch (faabric::executor::ExecutorPoolFinishedException& e) {
                     this->_shutdown = true;
                 }

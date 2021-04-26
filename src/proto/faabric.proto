@@ -44,12 +44,6 @@ service FunctionRPCService {
     rpc Flush (Message) returns (FunctionStatusResponse) {
     }
 
-    rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
-    }
-
-    rpc NoOp (ResourceRequest) returns (FunctionStatusResponse) {
-    }
-
     rpc GetResources (ResourceRequest) returns (HostResources) {
     }
 
