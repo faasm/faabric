@@ -1,6 +1,6 @@
 #pragma once
 
-#include "DummyExecutor.h"
+#include <faabric/executor/DummyExecutor.h>
 #include <faabric/executor/FaabricPool.h>
 
 using namespace faabric::executor;

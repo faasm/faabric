@@ -1,9 +1,9 @@
-#include "faabric/util/func.h"
 #include <faabric/executor/FaabricExecutor.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/func.h>
 #include <faabric/util/queue.h>
 
 namespace faabric::executor {

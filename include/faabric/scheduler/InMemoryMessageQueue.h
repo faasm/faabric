@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 
-#include "faabric/proto/faabric.pb.h"
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/util/func.h>
 #include <faabric/util/queue.h>
 
