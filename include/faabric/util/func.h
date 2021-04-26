@@ -73,8 +73,7 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory();
 std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
   const std::string& user,
   const std::string& function,
-  int count = 1
-);
+  int count = 1);
 
 void convertMessageToPython(faabric::Message& msg);
 

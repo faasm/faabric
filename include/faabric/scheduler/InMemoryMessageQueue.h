@@ -7,7 +7,8 @@
 #include <faabric/util/queue.h>
 
 namespace faabric::scheduler {
-typedef std::pair<std::vector<int>, std::shared_ptr<faabric::BatchExecuteRequest>>
+typedef std::pair<std::vector<int>,
+                  std::shared_ptr<faabric::BatchExecuteRequest>>
   MessageTask;
 
 typedef faabric::util::Queue<MessageTask> InMemoryBatchQueue;
