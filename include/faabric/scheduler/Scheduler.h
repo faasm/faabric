@@ -3,12 +3,12 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
-
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/queue.h>
 
 #include <shared_mutex>
+#include <future>
 
 #define AVAILABLE_HOST_SET "available_hosts"
 
@@ -57,6 +57,12 @@ class Scheduler
     void setFunctionResult(faabric::Message& msg);
 
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
+
+    void setThreadResult(const faabric::Message &msg, int32_t returnValue);
+
+    void setThreadResult(uint32_t msgId, int32_t returnValue);
+
+    int32_t awaitThreadResult(uint32_t messageId);
 
     std::string getThisHost();
 
@@ -121,6 +127,8 @@ class Scheduler
     std::unordered_map<std::string, long> faasletCounts;
     std::unordered_map<std::string, long> inFlightCounts;
 
+    std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
+
     faabric::HostResources thisHostResources;
     std::unordered_map<std::string, std::unordered_set<std::string>>
       registeredHosts;
@@ -140,6 +148,8 @@ class Scheduler
     void doAddFaaslets(const faabric::Message& msg, int count);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
+
+    void registerThread(uint32_t msgId);
 
     int scheduleFunctionsOnHost(
       const std::string& host,

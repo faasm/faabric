@@ -400,6 +400,12 @@ std::vector<std::string> Scheduler::callFunctions(
     // Schedule messages locally if need be. For threads we only need one
     // faaslet, for anything else we want one Faaslet per function in flight
     if (!localMessageIdxs.empty()) {
+        // Register each local result
+        for (int i = 0; i < localMessageIdxs.size(); i++) {
+            const faabric::Message& msg = req->messages().at(i);
+            registerThread(msg.id());
+        }
+
         auto funcQueue = this->getFunctionQueue(firstMsg);
         incrementInFlightCount(firstMsg, localMessageIdxs.size());
         funcQueue->enqueue(std::make_pair(localMessageIdxs, req));
@@ -678,6 +684,44 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Set long-lived result for function too
     redis.set(msg.statuskey(), inputData);
     redis.expire(key, STATUS_KEY_EXPIRY);
+}
+
+void Scheduler::registerThread(uint32_t msgId)
+{
+    // Here we need to ensure the promise is registered locally so callers can
+    // start waiting
+    threadResults[msgId];
+}
+
+void Scheduler::setThreadResult(const faabric::Message& msg,
+                                     int32_t returnValue)
+{
+    bool isMaster = msg.masterhost() == conf.endpointHost;
+
+    if (isMaster) {
+        setThreadResult(msg.id(), returnValue);
+    } else {
+        FunctionCallClient c(msg.masterhost());
+        faabric::ThreadResultRequest req;
+        req.set_messageid(msg.id());
+        req.set_returnvalue(returnValue);
+        c.setThreadResult(req);
+    }
+}
+
+void Scheduler::setThreadResult(uint32_t msgId, int32_t returnValue)
+{
+    threadResults[msgId].set_value(returnValue);
+}
+
+int32_t Scheduler::awaitThreadResult(uint32_t messageId)
+{
+    if (threadResults.count(messageId) == 0) {
+        const auto& logger = faabric::util::getLogger();
+        logger->error("Thread {} not registered on this host", messageId);
+    }
+
+    return threadResults[messageId].get_future().get();
 }
 
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,

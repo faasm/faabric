@@ -36,6 +36,10 @@ class FunctionCallServer final
                       const faabric::UnregisterRequest* request,
                       faabric::FunctionStatusResponse* response) override;
 
+    Status SetThreadResult(ServerContext* context,
+                           const faabric::ThreadResultRequest* request,
+                           faabric::FunctionStatusResponse* response) override;
+
   protected:
     void doStart(const std::string& serverAddr) override;
 

@@ -1,15 +1,11 @@
 #pragma once
 
-#include <future>
-
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 
-typedef std::tuple<std::promise<int32_t>,
-                   int,
-                   std::shared_ptr<faabric::BatchExecuteRequest>>
+typedef std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>
   ThreadTask;
 typedef faabric::util::Queue<ThreadTask> ThreadTaskQueue;
 typedef std::unordered_map<int, ThreadTaskQueue> ThreadQueueMap;
@@ -31,8 +27,7 @@ class FaabricExecutor
 
     virtual std::string processNextMessage();
 
-    std::vector<std::future<int32_t>> batchExecuteThreads(
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
+    void batchExecuteThreads(faabric::scheduler::MessageTask &task);
 
     std::string executeCall(faabric::Message& call);
 

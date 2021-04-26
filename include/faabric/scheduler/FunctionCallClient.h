@@ -34,6 +34,9 @@ getResourceRequests();
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests();
 
+std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
+getThreadResults();
+
 void queueResourceResponse(const std::string& host,
                            faabric::HostResources& res);
 
@@ -62,5 +65,7 @@ class FunctionCallClient
       const std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void unregister(const faabric::UnregisterRequest& req);
+
+    void setThreadResult(const faabric::ThreadResultRequest& req);
 };
 }

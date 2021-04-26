@@ -43,6 +43,11 @@ message UnregisterRequest {
     Message function = 2;
 }
 
+message ThreadResultRequest {
+    int32 messageId = 1;
+    int32 returnValue = 2;
+}
+
 service FunctionRPCService {
     rpc Flush (Message) returns (FunctionStatusResponse) {
     }
@@ -57,6 +62,9 @@ service FunctionRPCService {
     }
 
     rpc Unregister (UnregisterRequest) returns (FunctionStatusResponse) {
+    }
+
+    rpc SetThreadResult (ThreadResultRequest) returns (FunctionStatusResponse) {
     }
 }
 

@@ -100,4 +100,13 @@ Status FunctionCallServer::Unregister(ServerContext* context,
     scheduler.removeRegisteredHost(request->host(), request->function());
     return Status::OK;
 }
+
+Status FunctionCallServer::SetThreadResult(
+  ServerContext* context,
+  const faabric::ThreadResultRequest* request,
+  faabric::FunctionStatusResponse* response)
+{
+    scheduler.setThreadResult(request->messageid(), request->returnvalue());
+    return Status::OK;
+}
 }

@@ -24,10 +24,8 @@ int32_t DummyExecutor::executeThread(int threadPoolIdx, faabric::Message& msg)
 {
     auto logger = faabric::util::getLogger();
     logger->debug("DummyExecutor executing thread {}", msg.id());
-    msg.set_outputdata(
-      fmt::format("Thread {} executed successfully", msg.id()));
 
-    return 0;
+    return msg.id() * 2;
 }
 
 void DummyExecutor::preFinishCall(faabric::Message& call,

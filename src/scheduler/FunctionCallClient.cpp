@@ -33,6 +33,9 @@ static std::unordered_map<std::string,
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
+static std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
+  threadResults;
+
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
     return functionCalls;
@@ -65,6 +68,12 @@ std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests()
 {
     return unregisterRequests;
+}
+
+std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
+getThreadResults()
+{
+    return threadResults;
 }
 
 void queueResourceResponse(const std::string& host, faabric::HostResources& res)
@@ -163,6 +172,19 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
         ClientContext context;
         faabric::FunctionStatusResponse response;
         CHECK_RPC("unregister", stub->Unregister(&context, req, &response));
+    }
+}
+
+void FunctionCallClient::setThreadResult(
+  const faabric::ThreadResultRequest& req)
+{
+    if (faabric::util::isMockMode()) {
+        threadResults.emplace_back(host, req);
+    } else {
+        ClientContext context;
+        faabric::FunctionStatusResponse response;
+        CHECK_RPC("thread_result",
+                  stub->SetThreadResult(&context, req, &response));
     }
 }
 }
