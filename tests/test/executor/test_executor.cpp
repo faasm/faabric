@@ -45,6 +45,8 @@ TEST_CASE("Test executing simple function", "[executor]")
       faabric::util::batchExecFactory("foo", "bar", 1);
     uint32_t msgId = req->messages().at(0).id();
 
+    REQUIRE(req->messages_size() == 1);
+
     executeWithDummyExecutor(req);
 
     auto& sch = faabric::scheduler::getScheduler();

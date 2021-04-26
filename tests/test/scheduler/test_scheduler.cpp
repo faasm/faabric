@@ -55,6 +55,7 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     int nCalls = nCores + 1;
     for (int i = 0; i < nCalls; i++) {
         sch.callFunction(msg);
+        REQUIRE(sch.getThisHostResources().cores() == nCores);
     }
 
     REQUIRE(sch.getFunctionFaasletCount(msg) == nCores);

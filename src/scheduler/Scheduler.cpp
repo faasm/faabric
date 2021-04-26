@@ -270,7 +270,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
     // We want to dispatch remote calls here, and record what's left to be done
     // locally
-    std::vector<int> localIdxs;
+    std::vector<int> localMessageIdxs;
     if (!forceLocal && masterHost != thisHost) {
         // If we're not the master host, we need to forward the request back to
         // the master host. This will only happen if a nested batch execution
@@ -281,7 +281,13 @@ std::vector<std::string> Scheduler::callFunctions(
         FunctionCallClient c(masterHost);
         c.executeFunctions(req);
 
-    } else if (!forceLocal) {
+    } else if (forceLocal) {
+        // We're forced to execute locally here so we do all the messages
+        for (int i = 0; i < nMessages; i++) {
+            localMessageIdxs.emplace_back(i);
+            executed.at(i) = thisHost;
+        }
+    } else {
         // At this point we know we're the master host, and we've not been
         // asked to force full local execution.
 
@@ -315,9 +321,13 @@ std::vector<std::string> Scheduler::callFunctions(
         }
 
         // Handle those that can be executed locally
-        for (int i = 0; i < nLocally; i++) {
-            localIdxs.emplace_back(i);
-            executed.at(i) = thisHost;
+        if (nLocally > 0) {
+            logger->debug(
+              "Executing {}/{} {} locally", nLocally, nMessages, funcStr);
+            for (int i = 0; i < nLocally; i++) {
+                localMessageIdxs.emplace_back(i);
+                executed.at(i) = thisHost;
+            }
         }
 
         // If some are left, we need to distribute
@@ -376,26 +386,30 @@ std::vector<std::string> Scheduler::callFunctions(
 
         // At this point there's no more capacity in the system, so we
         // just need to execute locally
-        for (; offset < nMessages; offset++) {
-            localIdxs.emplace_back(offset);
-            executed.at(offset) = thisHost;
+        if (offset < nMessages) {
+            logger->debug(
+              "Overloading {}/{} {} locally", nLocally, nMessages, funcStr);
+
+            for (; offset < nMessages; offset++) {
+                localMessageIdxs.emplace_back(offset);
+                executed.at(offset) = thisHost;
+            }
         }
     }
 
-    // Schedule this message locally. For threads we only need one Faaslet, for
-    // anything else ideally we want one Faaslet per function but may have to
-    // queue
-    logger->debug("Scheduling {} messages locally", localIdxs.size());
-    auto funcQueue = this->getFunctionQueue(firstMsg);
-    incrementInFlightCount(firstMsg, localIdxs.size());
-    funcQueue->enqueue(std::make_pair(localIdxs, req));
+    // Schedule messages locally if need be. For threads we only need one
+    // faaslet, for anything else we want one Faaslet per function in flight
+    if (!localMessageIdxs.empty()) {
+        auto funcQueue = this->getFunctionQueue(firstMsg);
+        incrementInFlightCount(firstMsg, localMessageIdxs.size());
+        funcQueue->enqueue(std::make_pair(localMessageIdxs, req));
 
-    // Add faaslets if need be
-    if (isThreads) {
-        addFaasletsForBatch(firstMsg);
-    }
-    if (!isThreads) {
-        addFaaslets(firstMsg);
+        // Add faaslets if need be
+        if (isThreads) {
+            addFaasletsForBatch(firstMsg);
+        } else {
+            addFaaslets(firstMsg);
+        }
     }
 
     // Accounting
@@ -478,7 +492,7 @@ int Scheduler::scheduleFunctionsOnHost(
     }
 
     logger->debug(
-      "Sending {} of {} {} to {}", nOnThisHost, nMessages, funcStr, host);
+      "Sending {}/{} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
     FunctionCallClient c(host);
     c.executeFunctions(hostRequest);
