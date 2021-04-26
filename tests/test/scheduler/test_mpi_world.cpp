@@ -1738,7 +1738,6 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
         REQUIRE(actual == dataA1);
     }
 
-    /*
     SECTION("RMA Put to another world")
     {
         // Do the put
@@ -1760,7 +1759,6 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
           rankA1, MPI_INT, dataCount, BYTES(actual.data()), MPI_INT, dataCount);
         REQUIRE(actual == putData);
     }
-    */
 
     server.stop();
 }

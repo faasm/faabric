@@ -454,7 +454,12 @@ void MpiWorld::send(int sendRank,
     } else {
         logger->debug("MPI - send remote {} -> {}", sendRank, recvRank);
 
-        getRpcClient(otherHost)->sendMpiMessage(m);
+        if (messageType == faabric::MPIMessage::RMA_WRITE) {
+            faabric::scheduler::AsyncCallClient cli(otherHost);
+            cli.sendMpiMessage(m);
+        } else {
+            getRpcClient(otherHost)->sendMpiMessage(m);
+        }
     }
 }
 
