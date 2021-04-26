@@ -162,30 +162,25 @@ std::string FaabricExecutor::processNextMessage()
 
     std::string errorMessage;
     if (_isBound) {
-        // Get the next message
+        // Get the next task
         faabric::scheduler::MessageTask execTask =
           functionQueue->dequeue(conf.boundTimeout);
 
+        std::vector<int> messageIdxs = execTask.first;
+        int nMessages = messageIdxs.size();
         std::string funcStr = faabric::util::funcToString(execTask.second);
-
-        int nMessages = execTask.second->messages_size();
 
         // Check if it's a batch of thread calls or not
         if (execTask.second->type() == faabric::BatchExecuteRequest::THREADS) {
-            logger->debug(
-              "{} batch executing {}x{} threads", id, funcStr, nMessages);
+            logger->debug("{} batch {} threads of {}", id, nMessages, funcStr);
 
             batchExecuteThreads(execTask.second);
-        } else {
-            logger->debug("{} executing {} message {}/{}",
-                          id,
-                          funcStr,
-                          execTask.first,
-                          nMessages);
+        } else if (nMessages == 1) {
+            int msgIdx = messageIdxs.at(0);
+            logger->debug("{} executing single {} message", id, funcStr);
 
             // Work out which message we're executing
-            faabric::Message msg =
-              execTask.second->messages().at(execTask.first);
+            faabric::Message msg = execTask.second->messages().at(msgIdx);
 
             if (msg.type() == faabric::Message_MessageType_FLUSH) {
                 flush();
@@ -193,6 +188,14 @@ std::string FaabricExecutor::processNextMessage()
                 // Do the actual execution
                 errorMessage = executeCall(msg);
             }
+        } else {
+            logger->error("Executing {} x {} messages but not in thread mode "
+                          "is unuspported",
+                          nMessages,
+                          funcStr);
+
+            throw std::runtime_error(
+              "Executing multiple messages not in thread mode");
         }
     } else {
         faabric::Message bindMsg = bindQueue->dequeue(conf.unboundTimeout);
@@ -257,6 +260,9 @@ std::vector<std::future<int32_t>> FaabricExecutor::batchExecuteThreads(
                           int32_t returnValue =
                             executeThread(threadPoolIdx, msg);
                           std::get<0>(task).set_value(returnValue);
+
+                          // Set the result for this message
+                          this->finishCall(msg, true, "");
 
                           // Caller has to notify scheduler when finished
                           // executing a thread locally

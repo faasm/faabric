@@ -83,9 +83,11 @@ TEST_CASE("Test executing threads", "[executor]")
     executeWithDummyExecutor(req);
 
     auto& sch = faabric::scheduler::getScheduler();
-    for (uint32_t msgId : messageIds) {
+    for (int i = 0; i < nThreads; i++) {
+        uint32_t msgId = messageIds.at(i);
         faabric::Message result = sch.getFunctionResult(msgId, 2000);
-        std::string expected = fmt::format("Thread {} executed successfully");
+        std::string expected =
+          fmt::format("Thread {} executed successfully", msgId);
         REQUIRE(result.outputdata() == expected);
     }
 }

@@ -131,14 +131,13 @@ class Scheduler
 
     faabric::HostResources getHostResources(const std::string& host);
 
-    void incrementInFlightCount(const faabric::Message& msg);
+    void incrementInFlightCount(const faabric::Message& msg, int count);
 
     void addFaaslets(const faabric::Message& msg);
 
-    void addFaasletsForBatch(
-      const std::shared_ptr<faabric::BatchExecuteRequest> req);
+    void addFaasletsForBatch(const faabric::Message& msg);
 
-    void addFaaslet(const faabric::Message& msg);
+    void doAddFaaslets(const faabric::Message& msg, int count);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 

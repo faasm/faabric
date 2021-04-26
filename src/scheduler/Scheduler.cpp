@@ -134,7 +134,8 @@ void Scheduler::forceEnqueueMessage(const faabric::Message& msg)
       faabric::util::batchExecFactory();
     *req->add_messages() = msg;
     std::shared_ptr<InMemoryBatchQueue> queue = getFunctionQueue(msg);
-    queue->enqueue(std::make_pair(0, req));
+    std::vector<int> idxs = { 0 };
+    queue->enqueue(std::make_pair(idxs, req));
 }
 
 faabric::Message Scheduler::getNextMessageForFunction(
@@ -150,7 +151,14 @@ faabric::Message Scheduler::getNextMessageForFunction(
           "thread messages");
     }
 
-    return task.second->messages().at(task.first);
+    if (task.first.size() != 1) {
+        throw std::runtime_error(
+          "Should not be using getNextMessageForFunction to dequeue batches "
+          "with more than one function");
+    }
+
+    int msgIdx = task.first.at(0);
+    return task.second->messages().at(msgIdx);
 }
 
 std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
@@ -284,16 +292,13 @@ std::vector<std::string> Scheduler::callFunctions(
         bool snapshotNeeded =
           req->type() == req->THREADS || req->type() == req->PROCESSES;
 
-        if (snapshotNeeded) {
-            if (snapshotKey.empty()) {
-                logger->error("No snapshot provided for {}", funcStr);
-                throw std::runtime_error(
-                  "Empty snapshot for distributed threads/ processes");
-            }
-
-            faabric::snapshot::SnapshotRegistry& reg =
-              faabric::snapshot::getSnapshotRegistry();
-            snapshotData = reg.getSnapshot(snapshotKey);
+        if (snapshotNeeded && snapshotKey.empty()) {
+            logger->error("No snapshot provided for {}", funcStr);
+            throw std::runtime_error(
+              "Empty snapshot for distributed threads/ processes");
+        } else if (snapshotNeeded) {
+            snapshotData =
+              faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
         }
 
         // Work out how many we can handle locally
@@ -377,35 +382,20 @@ std::vector<std::string> Scheduler::callFunctions(
         }
     }
 
-    // Now set up a message to handle local execution
-    std::shared_ptr<faabric::BatchExecuteRequest> localReq;
-    if (forceLocal) {
-        localReq = req;
-    } else {
-        localReq = std::make_shared<faabric::BatchExecuteRequest>();
-        for (int idx : localIdxs) {
-            // TODO - avoid this copy
-            *localReq->add_messages() = req->messages().at(idx);
-        }
-    }
-
     // Schedule this message locally. For threads we only need one Faaslet, for
     // anything else ideally we want one Faaslet per function but may have to
     // queue
-    logger->debug("Scheduling {} messages locally",
-                  localReq->messages().size());
+    logger->debug("Scheduling {} messages locally", localIdxs.size());
     auto funcQueue = this->getFunctionQueue(firstMsg);
-    for (int i = 0; i < localReq->messages().size(); i++) {
-        // Increment in-flight count
-        incrementInFlightCount(localReq->messages().at(i));
+    incrementInFlightCount(firstMsg, localIdxs.size());
+    funcQueue->enqueue(std::make_pair(localIdxs, req));
 
-        if (isThreads && i == 0) {
-            funcQueue->enqueue(std::make_pair(0, localReq));
-            addFaasletsForBatch(localReq);
-        } else if (!isThreads) {
-            funcQueue->enqueue(std::make_pair(i, req));
-            addFaaslets(localReq->messages().at(i));
-        }
+    // Add faaslets if need be
+    if (isThreads) {
+        addFaasletsForBatch(firstMsg);
+    }
+    if (!isThreads) {
+        addFaaslets(firstMsg);
     }
 
     // Accounting
@@ -525,26 +515,27 @@ Scheduler::getRecordedMessagesShared()
     return recordedMessagesShared;
 }
 
-void Scheduler::incrementInFlightCount(const faabric::Message& msg)
+void Scheduler::incrementInFlightCount(const faabric::Message& msg, int count)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
-    inFlightCounts[funcStr]++;
+
+    inFlightCounts[funcStr] += count;
+
     thisHostResources.set_functionsinflight(
-      thisHostResources.functionsinflight() + 1);
+      thisHostResources.functionsinflight() + count);
 }
 
-void Scheduler::addFaasletsForBatch(
-  const std::shared_ptr<faabric::BatchExecuteRequest> req)
+void Scheduler::addFaasletsForBatch(const faabric::Message& msg)
 {
     auto logger = faabric::util::getLogger();
 
     // Check whether we already have a faaslet for this function on this host
-    const std::string funcStr = faabric::util::funcToString(req);
+    const std::string funcStr = faabric::util::funcToString(msg, false);
 
     // If we've not got one faaslet per in-flight function, add one
     int nFaaslets = faasletCounts[funcStr];
     if (nFaaslets == 0) {
-        addFaaslet(req->messages().at(0));
+        doAddFaaslets(msg, 1);
     }
 }
 
@@ -553,37 +544,41 @@ void Scheduler::addFaaslets(const faabric::Message& msg)
     auto logger = faabric::util::getLogger();
     const std::string funcStr = faabric::util::funcToString(msg, false);
 
-    // If we've not got one faaslet per in-flight function, add one
+    // If we've not got one faaslet per in-flight function, try to add enough
     int nFaaslets = faasletCounts[funcStr];
     int inFlightCount = inFlightCounts[funcStr];
-    bool needToScale = nFaaslets < inFlightCount;
 
-    if (needToScale) {
+    int difference = inFlightCount - nFaaslets;
+
+    if (difference > 0) {
         logger->debug(
           "Scaling {} {}->{} faaslets", funcStr, nFaaslets, nFaaslets + 1);
-        addFaaslet(msg);
+        doAddFaaslets(msg, difference);
     }
 }
 
-void Scheduler::addFaaslet(const faabric::Message& msg)
+void Scheduler::doAddFaaslets(const faabric::Message& msg, int count)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
+
     // Increment faaslet count
-    faasletCounts[funcStr]++;
+    faasletCounts[funcStr] += count;
     thisHostResources.set_boundexecutors(thisHostResources.boundexecutors() +
-                                         1);
+                                         count);
 
-    // Send bind message (i.e. request a new faaslet bind to this func)
-    faabric::Message bindMsg =
-      faabric::util::messageFactory(msg.user(), msg.function());
-    bindMsg.set_type(faabric::Message_MessageType_BIND);
-    bindMsg.set_ispython(msg.ispython());
-    bindMsg.set_istypescript(msg.istypescript());
-    bindMsg.set_pythonuser(msg.pythonuser());
-    bindMsg.set_pythonfunction(msg.pythonfunction());
-    bindMsg.set_issgx(msg.issgx());
+    // Send bind messages
+    for (int i = 0; i < count; i++) {
+        faabric::Message bindMsg =
+          faabric::util::messageFactory(msg.user(), msg.function());
+        bindMsg.set_type(faabric::Message_MessageType_BIND);
+        bindMsg.set_ispython(msg.ispython());
+        bindMsg.set_istypescript(msg.istypescript());
+        bindMsg.set_pythonuser(msg.pythonuser());
+        bindMsg.set_pythonfunction(msg.pythonfunction());
+        bindMsg.set_issgx(msg.issgx());
 
-    bindQueue->enqueue(bindMsg);
+        bindQueue->enqueue(bindMsg);
+    }
 }
 
 std::string Scheduler::getThisHost()
@@ -627,13 +622,12 @@ void Scheduler::flushLocally()
 
         // Dispatch a flush message for each warm faaslet
         std::shared_ptr<faabric::BatchExecuteRequest> req =
-          faabric::util::batchExecFactory();
+          faabric::util::batchExecFactory("", "", p.second);
         for (int i = 0; i < p.second; i++) {
-            req->add_messages()->set_type(faabric::Message::FLUSH);
-        }
+            req->mutable_messages()->at(i).set_type(faabric::Message::FLUSH);
 
-        for (int i = 0; i < req->messages_size(); i++) {
-            queue->enqueue(std::make_pair(i, req));
+            std::vector<int> idxs = { i };
+            queue->enqueue(std::make_pair(idxs, req));
         }
     }
 
