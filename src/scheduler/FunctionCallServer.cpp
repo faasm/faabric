@@ -22,11 +22,6 @@ void FunctionCallServer::doStart(const std::string& serverAddr)
     builder.AddListeningPort(serverAddr, InsecureServerCredentials());
     builder.RegisterService(this);
 
-    // Set up max number of threads
-    grpc::ResourceQuota rq("test-rq");
-    rq.SetMaxThreads(20);
-    builder.SetResourceQuota(rq);
-
     // Start it
     server = builder.BuildAndStart();
     faabric::util::getLogger()->info("Function call server listening on {}",

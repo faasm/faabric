@@ -68,7 +68,7 @@ std::shared_ptr<faabric::scheduler::AsyncCallClient> MpiWorld::getRpcClient(
     auto logger = faabric::util::getLogger();
     auto it = this->rpcCallClients.find(otherHost);
     if (it == rpcCallClients.end()) {
-        logger->info("Initialize async RPC call client");
+        logger->debug("Initialize async RPC call client");
         auto ret = rpcCallClients.emplace(std::make_pair(
           otherHost,
           std::make_shared<faabric::scheduler::AsyncCallClient>(otherHost)));
@@ -129,7 +129,7 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
-    faabric::util::getLogger()->info("Terminating MPI world");
+    faabric::util::getLogger()->debug("Terminating MPI world");
 
     // Clear state
     setUpStateKV();
@@ -415,7 +415,6 @@ void MpiWorld::send(int sendRank,
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     if (recvRank > this->size - 1) {
-        logger->info("Is this happening here?");
         throw std::runtime_error(fmt::format(
           "Rank {} bigger than world size {}", recvRank, this->size));
     }
@@ -452,7 +451,7 @@ void MpiWorld::send(int sendRank,
             getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
         }
     } else {
-        logger->debug("MPI - send remote {} -> {}", sendRank, recvRank);
+        logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
 
         if (messageType == faabric::MPIMessage::RMA_WRITE) {
             faabric::scheduler::AsyncCallClient cli(otherHost);

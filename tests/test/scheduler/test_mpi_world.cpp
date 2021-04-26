@@ -471,18 +471,6 @@ TEST_CASE("Test send across hosts", "[mpi]")
     remoteWorld.send(
       rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-    /*
-    SECTION("Check queueing")
-    {
-        REQUIRE(localWorld.getLocalQueueSize(rankA, rankB) == 1);
-
-        // Check message content
-        faabric::MPIMessage actualMessage =
-          *(localWorld.getLocalQueue(rankA, rankB)->dequeue());
-        checkMessage(actualMessage, rankA, rankB, messageData);
-    }
-    */
-
     SECTION("Check recv")
     {
         // Receive the message for the given rank
