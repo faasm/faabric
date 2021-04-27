@@ -329,7 +329,7 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
     auto req = batchExecFactory();
 
     for (int i = 0; i < count; i++) {
-        *req->add_messages() = std::move(messageFactory(user, function));
+        *req->add_messages() = messageFactory(user, function);
     }
 
     return req;

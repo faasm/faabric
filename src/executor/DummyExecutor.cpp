@@ -20,7 +20,10 @@ bool DummyExecutor::doExecute(faabric::Message& call)
     return true;
 }
 
-int32_t DummyExecutor::executeThread(int threadPoolIdx, faabric::Message& msg)
+int32_t DummyExecutor::executeThread(
+  int threadPoolIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::Message& msg)
 {
     auto logger = faabric::util::getLogger();
     logger->debug("DummyExecutor executing thread {}", msg.id());

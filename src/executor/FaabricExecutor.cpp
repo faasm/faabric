@@ -221,9 +221,6 @@ void FaabricExecutor::batchExecuteThreads(faabric::scheduler::MessageTask& task)
                  req->messages_size(),
                  funcStr);
 
-    // Call hook
-    preBatchExecuteThreads(task);
-
     // Iterate through and invoke threads
     for (int msgIdx : messageIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
@@ -259,7 +256,7 @@ void FaabricExecutor::batchExecuteThreads(faabric::scheduler::MessageTask& task)
                           }
 
                           int32_t returnValue =
-                            executeThread(threadPoolIdx, msg);
+                            executeThread(threadPoolIdx, req, msg);
 
                           // Set the result for this thread
                           auto& sch = faabric::scheduler::getScheduler();
@@ -313,16 +310,15 @@ bool FaabricExecutor::doExecute(faabric::Message& msg)
     return true;
 }
 
-int32_t FaabricExecutor::executeThread(int threadPoolIdx, faabric::Message& msg)
+int32_t FaabricExecutor::executeThread(
+  int threadPoolIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::Message& msg)
 {
     return 0;
 }
 
 void FaabricExecutor::postBind(const faabric::Message& msg, bool force) {}
-
-void FaabricExecutor::preBatchExecuteThreads(
-  faabric::scheduler::MessageTask& task)
-{}
 
 void FaabricExecutor::preFinishCall(faabric::Message& call,
                                     bool success,
