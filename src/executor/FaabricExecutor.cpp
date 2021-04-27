@@ -72,7 +72,6 @@ void FaabricExecutor::finish()
     }
 
     // Shut down thread pool with a series of kill messages
-
     for (auto& queuePair : threadQueues) {
         std::shared_ptr<BatchExecuteRequest> killReq =
           faabric::util::batchExecFactory();
@@ -222,14 +221,16 @@ void FaabricExecutor::batchExecuteThreads(faabric::scheduler::MessageTask& task)
                  req->messages_size(),
                  funcStr);
 
-    auto& conf = faabric::util::getSystemConfig();
+    // Call hook
+    preBatchExecuteThreads(task);
 
-    std::vector<std::future<int32_t>> threadFutures;
+    // Iterate through and invoke threads
     for (int msgIdx : messageIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
         int threadPoolIdx = msg.appindex() % threadPoolSize;
 
-        ThreadTask task = std::make_pair(msgIdx, req);
+        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>> task =
+          std::make_pair(msgIdx, req);
         threadQueues[threadPoolIdx].enqueue(std::move(task));
 
         if (threads.count(threadPoolIdx) == 0) {
@@ -244,8 +245,7 @@ void FaabricExecutor::batchExecuteThreads(faabric::scheduler::MessageTask& task)
                                     threadPoolIdx);
 
                       for (;;) {
-                          ThreadTask task =
-                            threadQueues[threadPoolIdx].dequeue();
+                          auto task = threadQueues[threadPoolIdx].dequeue();
 
                           int msgIdx = task.first;
                           std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -319,6 +319,10 @@ int32_t FaabricExecutor::executeThread(int threadPoolIdx, faabric::Message& msg)
 }
 
 void FaabricExecutor::postBind(const faabric::Message& msg, bool force) {}
+
+void FaabricExecutor::preBatchExecuteThreads(
+  faabric::scheduler::MessageTask& task)
+{}
 
 void FaabricExecutor::preFinishCall(faabric::Message& call,
                                     bool success,

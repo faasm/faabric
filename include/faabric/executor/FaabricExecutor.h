@@ -5,12 +5,6 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 
-typedef std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>
-  ThreadTask;
-typedef faabric::util::Queue<ThreadTask> ThreadTaskQueue;
-typedef std::unordered_map<int, ThreadTaskQueue> ThreadQueueMap;
-typedef std::unordered_map<int, std::thread> ThreadMap;
-
 namespace faabric::executor {
 class FaabricExecutor
 {
@@ -27,7 +21,7 @@ class FaabricExecutor
 
     virtual std::string processNextMessage();
 
-    void batchExecuteThreads(faabric::scheduler::MessageTask &task);
+    void batchExecuteThreads(faabric::scheduler::MessageTask& task);
 
     std::string executeCall(faabric::Message& call);
 
@@ -45,6 +39,8 @@ class FaabricExecutor
     virtual int32_t executeThread(int threadPoolIdx, faabric::Message& msg);
 
     virtual void postBind(const faabric::Message& msg, bool force);
+
+    virtual void preBatchExecuteThreads(faabric::scheduler::MessageTask& task);
 
     virtual void preFinishCall(faabric::Message& call,
                                bool success,
@@ -65,8 +61,12 @@ class FaabricExecutor
 
     std::mutex threadsMutex;
     uint32_t threadPoolSize = 0;
-    ThreadQueueMap threadQueues;
-    ThreadMap threads;
+    std::unordered_map<int, std::thread> threads;
+    std::unordered_map<
+      int,
+      faabric::util::Queue<
+        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
+      threadQueues;
 
   private:
     faabric::Message boundMessage;
