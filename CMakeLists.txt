@@ -67,6 +67,7 @@ add_subdirectory(src/scheduler)
 add_subdirectory(src/snapshot)
 add_subdirectory(src/state)
 add_subdirectory(src/util)
+add_subdirectory(src/zeromq)
 
 # Wrapper library - note we want to include all the _object_ targets in this
 # library to ensure it's all bundled in together

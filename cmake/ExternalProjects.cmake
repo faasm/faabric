@@ -107,6 +107,17 @@ FetchContent_MakeAvailable(zstd_ext)
 target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
 add_library(zstd::libzstd_static ALIAS libzstd_static)
 
+# ZeroMQ
+ExternalProject_Add(libzeromq_ext
+    GIT_REPOSITORY "https://github.com/zeromq/libzmq.git"
+    GIT_TAG "v4.3.4"
+)
+ExternalProject_Add(cppzeromq_ext
+    GIT_REPOSITORY "https://github.com/faasm/cppzmq.git"
+    GIT_TAG "faasm"
+)
+add_dependencies(cppzeromq_ext libzeromq_ext)
+
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)
     set(CATCH_INSTALL_DOCS OFF CACHE INTERNAL "")
