@@ -694,13 +694,19 @@ void Scheduler::registerThread(uint32_t msgId)
 }
 
 void Scheduler::setThreadResult(const faabric::Message& msg,
-                                     int32_t returnValue)
+                                int32_t returnValue)
 {
     bool isMaster = msg.masterhost() == conf.endpointHost;
+    const auto& logger = faabric::util::getLogger();
 
     if (isMaster) {
         setThreadResult(msg.id(), returnValue);
     } else {
+        logger->debug("Sending thread result {} for {} to {}",
+                      returnValue,
+                      msg.id(),
+                      msg.masterhost());
+
         FunctionCallClient c(msg.masterhost());
         faabric::ThreadResultRequest req;
         req.set_messageid(msg.id());
@@ -716,9 +722,11 @@ void Scheduler::setThreadResult(uint32_t msgId, int32_t returnValue)
 
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
+    const auto& logger = faabric::util::getLogger();
+
     if (threadResults.count(messageId) == 0) {
-        const auto& logger = faabric::util::getLogger();
         logger->error("Thread {} not registered on this host", messageId);
+        throw std::runtime_error("Awaiting unregistered thread");
     }
 
     return threadResults[messageId].get_future().get();

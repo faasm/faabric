@@ -88,7 +88,7 @@ TEST_CASE("Test executing threads", "[executor]")
     for (int i = 0; i < nThreads; i++) {
         uint32_t msgId = messageIds.at(i);
         int32_t result = sch.awaitThreadResult(msgId);
-        REQUIRE(result == msgId * 2);
+        REQUIRE(result == msgId / 100);
     }
 }
 }

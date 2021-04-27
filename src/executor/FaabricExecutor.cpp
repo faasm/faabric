@@ -72,16 +72,13 @@ void FaabricExecutor::finish()
     }
 
     // Shut down thread pool with a series of kill messages
-    std::shared_ptr<BatchExecuteRequest> killReq =
-      faabric::util::batchExecFactory();
-    killReq->add_messages()->set_type(faabric::Message::KILL);
 
     for (auto& queuePair : threadQueues) {
-        std::promise<int32_t> p;
-        std::future<int32_t> f = p.get_future();
-        queuePair.second.enqueue(std::make_pair(0, killReq));
+        std::shared_ptr<BatchExecuteRequest> killReq =
+          faabric::util::batchExecFactory();
 
-        f.get();
+        killReq->add_messages()->set_type(faabric::Message::KILL);
+        queuePair.second.enqueue(std::make_pair(0, killReq));
     }
 
     // Wait
@@ -243,6 +240,8 @@ void FaabricExecutor::batchExecuteThreads(faabric::scheduler::MessageTask& task)
                 threads.emplace(
                   std::make_pair(threadPoolIdx, [this, threadPoolIdx] {
                       auto logger = faabric::util::getLogger();
+                      logger->debug("Thread pool thread {} starting up",
+                                    threadPoolIdx);
 
                       for (;;) {
                           ThreadTask task =
@@ -256,8 +255,6 @@ void FaabricExecutor::batchExecuteThreads(faabric::scheduler::MessageTask& task)
                             req->mutable_messages()->at(msgIdx);
 
                           if (msg.type() == faabric::Message::KILL) {
-                              logger->debug("Executor thread {} shutting down",
-                                            threadPoolIdx);
                               break;
                           }
 
@@ -271,6 +268,9 @@ void FaabricExecutor::batchExecuteThreads(faabric::scheduler::MessageTask& task)
                           // Notify scheduler finished
                           sch.notifyCallFinished(msg);
                       }
+
+                      logger->debug("Thread pool thread {} shutting down",
+                                    threadPoolIdx);
                   }));
             }
         }
