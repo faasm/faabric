@@ -1,8 +1,10 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
-#include <faabric/zeromq/MpiMessageEndpoint.h>
+#include <faabric/transport/MpiMessageEndpoint.h>
 
-namespace faabric::zeromq {
+#include <faabric/util/logging.h>
+
+namespace faabric::transport {
 MpiMessageEndpoint::MpiMessageEndpoint()
   : MessageEndpoint(DEFAULT_RPC_HOST, MPI_MESSAGE_PORT)
 {}
@@ -13,29 +15,22 @@ MpiMessageEndpoint::MpiMessageEndpoint(const std::string& overrideHost)
 
 void MpiMessageEndpoint::sendMpiMessage(std::shared_ptr<faabric::MPIMessage> msg)
 {
-    if (sockType != faabric::zeromq::ZeroMQSocketType::PUSH) {
-        throw std::runtime_error("Can't send from a non-PUSH socket");
-    }
+    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
+    size_t msgSize = msg->ByteSizeLong();
+    char* serialisedMsg = new char[msgSize];
 
-    std::string serialisedMsg;
-    if (!msg->SerializeToString(&serialisedMsg)) {
+    if (!msg->SerializeToArray(serialisedMsg, msgSize)) {
         throw std::runtime_error("Error serialising message");
     }
-
-    // Send message
-    // TODO - possible to avoid the copy here?
-    zmq::message_t zmqMsg(serialisedMsg.data(), serialisedMsg.size());
-    sendMessage(zmqMsg);
+    sendMessage(serialisedMsg, msgSize);
 }
 
-void MpiMessageEndpoint::doHandleMessage(zmq::message_t& msg)
+void MpiMessageEndpoint::doHandleMessage(const void *msgData, int size)
 {
-    // TODO - possible to reduce copies here
-    std::string deserialisedMsg((char *) msg.data(), msg.size());
     faabric::MPIMessage mpiMsg;
 
     // Deserialise message string
-    if (!mpiMsg.ParseFromString(deserialisedMsg)) {
+    if (!mpiMsg.ParseFromArray(msgData, size)) {
         throw std::runtime_error("Error deserialising message");
     }
 

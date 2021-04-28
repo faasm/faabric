@@ -5,20 +5,21 @@
 
 #include <faabric_utils.h>
 
+#include <faabric/proto/mpiMessage.pb.h>
 #include <faabric/rpc/macros.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
-#include <faabric/zeromq/mpiMessage.pb.h>
-#include <faabric/zeromq/MpiMessageEndpoint.h>
+#include <faabric/transport/MpiMessageEndpoint.h>
 
 #include <faabric/util/logging.h>
 
-using namespace faabric::zeromq;
+using namespace faabric::transport;
 
 namespace tests {
-TEST_CASE("Test connect two sockets", "[zeromq]")
+TEST_CASE("Test connect two sockets", "[transport]")
 {
-    zmq::context_t context(1);
+    // zmq::context_t context(1);
+    MessageContext context;
 
     {
         MpiMessageEndpoint origin, destination;
@@ -29,7 +30,7 @@ TEST_CASE("Test connect two sockets", "[zeromq]")
     context.close();
 }
 
-TEST_CASE("Test send one MPI message", "[zeromq]")
+TEST_CASE("Test send one MPI message", "[transport]")
 {
     cleanFaabric();
 
@@ -59,7 +60,7 @@ TEST_CASE("Test send one MPI message", "[zeromq]")
     std::shared_ptr<faabric::scheduler::InMemoryMpiQueue> queue =
       world.getLocalQueue(rankRemote, rankLocal);
 
-    zmq::context_t context(1);
+    MessageContext context;
     {
         MpiMessageEndpoint origin, destination;
         origin.start(context, ZeroMQSocketType::PUSH, false);
@@ -78,10 +79,10 @@ TEST_CASE("Test send one MPI message", "[zeromq]")
     context.close();
 }
 
-TEST_CASE("Test sending many MPI messages", "[zeromq]")
+TEST_CASE("Test sending many MPI messages", "[transport]")
 {
     cleanFaabric();
-    zmq::context_t context(1);
+    MessageContext context;
 
     // Prepare MPI World
     const char* user = "mpi";
@@ -106,11 +107,8 @@ TEST_CASE("Test sending many MPI messages", "[zeromq]")
     mpiMsg->set_buffer(buffer.data(), sizeof(int) * bufferSize);
     mpiMsg->set_sender(rankRemote);
     mpiMsg->set_destination(rankLocal);
-    std::shared_ptr<faabric::scheduler::InMemoryMpiQueue> queue =
-      world.getLocalQueue(rankRemote, rankLocal);
 
     int numMessages = 100000;
-
     // Prepare sender
     std::thread senderThread = std::thread([&context, numMessages, mpiMsg] {
         MpiMessageEndpoint origin;
@@ -152,10 +150,10 @@ TEST_CASE("Test sending many MPI messages", "[zeromq]")
     context.close();
 }
 
-TEST_CASE("Send many messages from multiple sockets", "[zeromq]")
+TEST_CASE("Send many messages from multiple sockets", "[transport]")
 {
     cleanFaabric();
-    zmq::context_t context(1);
+    MessageContext context;
 
     // Prepare MPI World
     const char* user = "mpi";
@@ -182,15 +180,27 @@ TEST_CASE("Send many messages from multiple sockets", "[zeromq]")
 
     int numSender = 5;
     int numMessages = 100000;
+    // Prepare sender
+    std::vector<std::thread> senderThreads;
+    senderThreads.reserve(numSender);
+    for (int j = 0; j < numSender; j++) {
+        senderThreads.emplace_back(std::thread([&context, mpiMsg, numMessages, numSender] {
+            MpiMessageEndpoint threadLocalOrigin;
+            threadLocalOrigin.start(context, ZeroMQSocketType::PUSH, false);
+            for (int i = 0; i < (numMessages / numSender); i++) {
+                threadLocalOrigin.sendMpiMessage(mpiMsg);
+            }
+        }));
+    }
+
     // Prepare receiver
-    std::thread receiverThread = std::thread([&context, &world, &mpiMsg, numMessages, numSender] {
+    std::thread receiverThread = std::thread([&context, &world, mpiMsg, numMessages, numSender] {
         std::shared_ptr<faabric::scheduler::InMemoryMpiQueue> queue =
           world.getLocalQueue(mpiMsg->sender(), mpiMsg->destination());
 
         MpiMessageEndpoint threadLocalDestination;
         threadLocalDestination.start(context, ZeroMQSocketType::PULL, true);
         for (int i = 0; i < numMessages; i++) {
-            faabric::util::getLogger()->debug(fmt::format("receive: {}", i));
             threadLocalDestination.handleMessage();
         }
 
@@ -202,23 +212,9 @@ TEST_CASE("Send many messages from multiple sockets", "[zeromq]")
                 REQUIRE(actualMsg->worldid() == mpiMsg->worldid());
                 REQUIRE(actualMsg->sender() == mpiMsg->sender());
                 REQUIRE(actualMsg->destination() == mpiMsg->destination());
-                // We don't know the exact ordering anymore
-                REQUIRE(actualMsg->count() < (numMessages / numSender));
             }
         }
     });
-
-    std::vector<std::thread> senderThreads(numSender);
-    for (int j = 0; j < numSender; j++) {
-        senderThreads.emplace_back(std::thread([&context, mpiMsg, numMessages, numSender] {
-            MpiMessageEndpoint threadLocalOrigin;
-            threadLocalOrigin.start(context, ZeroMQSocketType::PUSH, false);
-            for (int i = 0; i < (numMessages / numSender); i++) {
-                mpiMsg->set_count(i);
-                threadLocalOrigin.sendMpiMessage(mpiMsg);
-            }
-        }));
-    }
 
     for (auto& t : senderThreads) {
         t.join();

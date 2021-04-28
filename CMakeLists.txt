@@ -66,8 +66,8 @@ add_subdirectory(src/rpc)
 add_subdirectory(src/scheduler)
 add_subdirectory(src/snapshot)
 add_subdirectory(src/state)
+add_subdirectory(src/transport)
 add_subdirectory(src/util)
-add_subdirectory(src/zeromq)
 
 # Wrapper library - note we want to include all the _object_ targets in this
 # library to ensure it's all bundled in together
@@ -89,6 +89,7 @@ add_library(faabric
     $<TARGET_OBJECTS:scheduler_obj>
     $<TARGET_OBJECTS:snapshot_obj>
     $<TARGET_OBJECTS:state_obj>
+    $<TARGET_OBJECTS:transport_obj>
     $<TARGET_OBJECTS:util_obj>
 )
 

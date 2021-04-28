@@ -1,14 +1,14 @@
 #pragma once
 
 #include <faabric/rpc/macros.h>
-#include <faabric/zeromq/MessageEndpoint.h>
+#include <faabric/transport/MessageEndpoint.h>
 
-#include <faabric/zeromq/mpiMessage.pb.h>
+#include <faabric/proto/mpiMessage.pb.h>
 
-namespace faabric::zeromq {
+namespace faabric::transport {
 
 class MpiMessageEndpoint final
-  : public faabric::zeromq::MessageEndpoint
+  : public faabric::transport::MessageEndpoint
 {
   public:
     MpiMessageEndpoint();
@@ -18,6 +18,6 @@ class MpiMessageEndpoint final
     void sendMpiMessage(std::shared_ptr<faabric::MPIMessage> mpiMsg);
 
   private:
-    void doHandleMessage(zmq::message_t& msg) override;
+    void doHandleMessage(const void* msgData, int size) override;
 };
 }
