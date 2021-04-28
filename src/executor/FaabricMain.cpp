@@ -9,16 +9,16 @@ extern void checkSgxSetup();
 #endif
 
 namespace faabric::executor {
-FaabricMain::FaabricMain(faabric::executor::FaabricPool& poolIn)
-  : conf(faabric::util::getSystemConfig())
-  , scheduler(faabric::scheduler::getScheduler())
-  , pool(poolIn)
-{}
-
 void FaabricMain::startBackground()
 {
-    scheduler.addHostToGlobalSet();
+    // Ensure we can ping both redis instances
+    faabric::redis::Redis::getQueue().ping();
+    faabric::redis::Redis::getState().ping();
 
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.addHostToGlobalSet();
+
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     conf.print();
 
 #if (FAASM_SGX)
@@ -26,17 +26,45 @@ void FaabricMain::startBackground()
     sgx::checkSgxSetup();
 #endif
 
-    // Start thread pool in background
-    pool.startThreadPool();
-
     // In-memory state
-    pool.startStateServer();
+    startStateServer();
 
     // Snapshots
-    pool.startSnapshotServer();
+    startSnapshotServer();
 
     // Work sharing
-    pool.startFunctionCallServer();
+    startFunctionCallServer();
+}
+
+void FaabricMain::startFunctionCallServer()
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    logger->info("Starting function call server");
+    functionServer.start();
+}
+
+void FaabricMain::startSnapshotServer()
+{
+    auto logger = faabric::util::getLogger();
+    logger->info("Starting snapshot server");
+    snapshotServer.start();
+}
+
+void FaabricMain::startStateServer()
+{
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+
+    // Skip state server if not in inmemory mode
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    if (conf.stateMode != "inmemory") {
+        logger->info("Not starting state server in state mode {}",
+                     conf.stateMode);
+        return;
+    }
+
+    // Note that the state server spawns its own background thread
+    logger->info("Starting state server");
+    stateServer.start();
 }
 
 void FaabricMain::shutdown()
@@ -44,8 +72,18 @@ void FaabricMain::shutdown()
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     logger->info("Removing from global working set");
 
-    scheduler.shutdown();
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.shutdown();
 
-    pool.shutdown();
+    logger->info("Waiting for the state server to finish");
+    stateServer.stop();
+
+    logger->info("Waiting for the function server to finish");
+    functionServer.stop();
+
+    logger->info("Waiting for the snapshot server to finish");
+    snapshotServer.stop();
+
+    logger->info("Faabric pool successfully shut down");
 }
 }

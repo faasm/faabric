@@ -1,12 +1,6 @@
-file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/executor/*.h")
-
 set(LIB_FILES
-        Executor.cpp
-        FaabricExecutor.cpp
+        "${FAABRIC_INCLUDE_DIR}/executor/FaabricMain.h"
         FaabricMain.cpp
-        FaabricPool.cpp
-        DummyExecutor.cpp
-        ${HEADERS}
         )
 
 faabric_lib(executor "${LIB_FILES}")
