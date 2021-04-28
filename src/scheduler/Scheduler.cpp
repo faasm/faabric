@@ -252,7 +252,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
     // Extract properties of the request
     int nMessages = req->messages_size();
-    bool isThreads = req->type() == req->THREADS;
+    bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     std::vector<std::string> executed(nMessages);
 
     // Note, we assume all the messages are for the same function and master

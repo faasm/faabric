@@ -15,13 +15,8 @@ FaabricExecutor::FaabricExecutor(int threadIdxIn)
 
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
-    // Accept any non-zero thread pool size. If it is zero, thread pool should
-    // be one less than number of cores as main thread executes as well. Always
-    // need at least 1.
-    threadPoolSize = conf.executorThreadPoolSize;
-    if (threadPoolSize == 0) {
-        threadPoolSize = std::max<int>(faabric::util::getUsableCores() - 1, 1);
-    }
+    // Note that the main thread will be executing so we want one less
+    threadPoolSize = faabric::util::getUsableCores() - 1;
 
     // Set an ID for this Faaslet
     id = conf.endpointHost + "_" + std::to_string(threadIdx);
