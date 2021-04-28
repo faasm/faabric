@@ -16,21 +16,36 @@ TEST_CASE("Test queue operations", "[util]")
 {
     IntQueue q;
 
+    // Check deqeue if present does nothing if nothing in queue
+    int dummy = -999;
+    q.dequeueIfPresent(&dummy);
+    REQUIRE(dummy == -999);
+
+    // Enqueue a bunch of elements
     q.enqueue(1);
     q.enqueue(2);
     q.enqueue(3);
     q.enqueue(4);
     q.enqueue(5);
 
+    // Dequeue
     REQUIRE(q.dequeue() == 1);
     REQUIRE(q.dequeue() == 2);
+
+    // Check peek doesn't remove
     REQUIRE(*(q.peek()) == 3);
     REQUIRE(*(q.peek()) == 3);
     REQUIRE(*(q.peek()) == 3);
     REQUIRE(q.dequeue() == 3);
-    REQUIRE(q.dequeue() == 4);
+
+    // Check dequeue if present removes when something is there
+    q.dequeueIfPresent(&dummy);
+    REQUIRE(dummy == 4);
+
+    // Check a final dequeue
     REQUIRE(q.dequeue() == 5);
 
+    // Check error thrown on timeout when waiting
     REQUIRE_THROWS(q.dequeue(1));
 }
 

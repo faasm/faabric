@@ -86,6 +86,20 @@ void FaabricExecutor::finish()
     this->postFinish();
 }
 
+void FaabricExecutor::invokeThreads(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    // Make sure request has right type
+    req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+    // Schedule threads
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.callFunctions(req);
+
+    // Yield to allow this module to execute local threads
+    yield();
+}
+
 void FaabricExecutor::finishCall(faabric::Message& msg,
                                  bool success,
                                  const std::string& errorMsg)
@@ -146,16 +160,32 @@ void FaabricExecutor::run()
     this->finish();
 }
 
-std::string FaabricExecutor::processNextMessage()
+void FaabricExecutor::yield()
+{
+    const auto& logger = faabric::util::getLogger();
+    logger->debug("{} yielding for incoming messages", id);
+    processNextMessage(false);
+}
+
+std::string FaabricExecutor::processNextMessage(bool block)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     faabric::util::SystemConfig conf = faabric::util::getSystemConfig();
 
     std::string errorMessage;
     if (_isBound) {
-        // Get the next task
-        faabric::scheduler::MessageTask execTask =
-          functionQueue->dequeue(conf.boundTimeout);
+
+        faabric::scheduler::MessageTask execTask;
+        if (block) {
+            execTask = functionQueue->dequeue(conf.boundTimeout);
+        } else {
+            functionQueue->dequeueIfPresent(&execTask);
+
+            // Return if no message
+            if (execTask.first.empty()) {
+                return "";
+            }
+        }
 
         std::vector<int> messageIdxs = execTask.first;
         int nMessages = messageIdxs.size();

@@ -16,15 +16,13 @@ void DummyExecutor::postBind(const faabric::Message& msg, bool force) {}
 bool DummyExecutor::doExecute(faabric::Message& call)
 {
     auto logger = faabric::util::getLogger();
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
     if (call.function() == "thread-check") {
         call.set_outputdata(
           fmt::format("Threaded function {} executed successfully", call.id()));
 
+        // Set up the request
         int nThreads = std::stoi(call.inputdata());
-
-        // Spawn some more threads
         std::shared_ptr<faabric::BatchExecuteRequest> req =
           faabric::util::batchExecFactory("dummy", "thread-check", nThreads);
 
@@ -32,9 +30,8 @@ bool DummyExecutor::doExecute(faabric::Message& call)
             m.set_snapshotkey(call.snapshotkey());
         }
 
-        req->set_type(faabric::BatchExecuteRequest::THREADS);
-
-        sch.callFunctions(req);
+        // Call the threads
+        invokeThreads(req);
     } else if (call.function() == "simple") {
         call.set_outputdata(
           fmt::format("Simple function {} executed successfully", call.id()));

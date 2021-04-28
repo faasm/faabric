@@ -19,7 +19,9 @@ class FaabricExecutor
 
     bool isBound();
 
-    virtual std::string processNextMessage();
+    std::string processNextMessage(bool block = true);
+
+    void yield();
 
     void batchExecuteThreads(faabric::scheduler::MessageTask& task);
 
@@ -51,6 +53,8 @@ class FaabricExecutor
 
     virtual void postFinish();
 
+    void invokeThreads(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
     bool _isBound = false;
 
     faabric::scheduler::Scheduler& scheduler;
@@ -75,5 +79,6 @@ class FaabricExecutor
     void finishCall(faabric::Message& msg,
                     bool success,
                     const std::string& errorMsg);
+
 };
 }
