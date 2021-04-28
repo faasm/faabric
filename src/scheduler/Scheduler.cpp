@@ -29,8 +29,6 @@ Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
 {
-    bindQueue = std::make_shared<InMemoryMessageQueue>();
-
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
     thisHostResources.set_cores(cores);
@@ -62,17 +60,20 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::reset()
 {
-    // Reset queue map
-    for (const auto& iter : queueMap) {
-        iter.second->reset();
+    // Shut down all Faaslets
+    for (auto p : warmFaaslets) {
+        for (auto f : p.second) {
+            f->finish();
+        }
     }
-    queueMap.clear();
+
+    warmFaaslets.clear();
+
+    // Note, we assume there are no currently executing faaslets
+    executingFaaslets.clear();
 
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
-
-    // Clear queues
-    bindQueue->reset();
 
     // Reset resources
     thisHostResources = faabric::HostResources();
@@ -128,61 +129,6 @@ void Scheduler::removeRegisteredHost(const std::string& host,
     registeredHosts[funcStr].erase(host);
 }
 
-void Scheduler::forceEnqueueMessage(const faabric::Message& msg)
-{
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory();
-    *req->add_messages() = msg;
-    std::shared_ptr<InMemoryBatchQueue> queue = getFunctionQueue(msg);
-    std::vector<int> idxs = { 0 };
-    queue->enqueue(std::make_pair(idxs, req));
-}
-
-faabric::Message Scheduler::getNextMessageForFunction(
-  const faabric::Message& msg,
-  int timeout)
-{
-    std::shared_ptr<InMemoryBatchQueue> queue = getFunctionQueue(msg);
-    MessageTask task = queue->dequeue(timeout);
-
-    if (task.second->type() == faabric::BatchExecuteRequest::THREADS) {
-        throw std::runtime_error(
-          "Should not be using getNextMessageForFunction to dequeue batch "
-          "thread messages");
-    }
-
-    if (task.first.size() != 1) {
-        throw std::runtime_error(
-          "Should not be using getNextMessageForFunction to dequeue batches "
-          "with more than one function");
-    }
-
-    int msgIdx = task.first.at(0);
-    return task.second->messages().at(msgIdx);
-}
-
-std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
-  const faabric::Message& msg)
-{
-    std::string funcStr = faabric::util::funcToString(msg, false);
-
-    // This will be called from within something holding the lock
-    if (queueMap.count(funcStr) == 0) {
-        if (queueMap.count(funcStr) == 0) {
-            auto mq = std::make_shared<InMemoryBatchQueue>();
-            queueMap.emplace(std::make_pair(funcStr, mq));
-        }
-    }
-
-    return queueMap[funcStr];
-}
-
-std::shared_ptr<InMemoryBatchQueue> Scheduler::getFunctionQueue(
-  const std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    return getFunctionQueue(req->messages(0));
-}
-
 void Scheduler::notifyCallFinished(const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
@@ -230,18 +176,6 @@ void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
     int newBoundExecutors =
       decrementAboveZero(thisHostResources.boundexecutors());
     thisHostResources.set_boundexecutors(newBoundExecutors);
-}
-
-std::shared_ptr<InMemoryMessageQueue> Scheduler::getBindQueue()
-{
-    return bindQueue;
-}
-
-Scheduler& getScheduler()
-{
-    // Note that this ref is shared between all faaslets on the given host
-    static Scheduler scheduler;
-    return scheduler;
 }
 
 std::vector<std::string> Scheduler::callFunctions(
@@ -406,15 +340,22 @@ std::vector<std::string> Scheduler::callFunctions(
             registerThread(msg.id());
         }
 
-        auto funcQueue = this->getFunctionQueue(firstMsg);
         incrementInFlightCount(firstMsg, localMessageIdxs.size());
-        funcQueue->enqueue(std::make_pair(localMessageIdxs, req));
+
+        // The executing faaslet is the one who will be doing the work
+        MessageTask t = std::make_pair(localMessageIdxs, req);
 
         // Add faaslets if need be
         if (isThreads) {
-            addFaasletsForBatch(firstMsg);
+            executingFaaslets[funcStr].back()->batchExecuteThreads(t);
         } else {
             addFaaslets(firstMsg);
+
+            for (auto i : localMessageIdxs) {
+                faabric::Message& msg = req->mutable_messages()->at(i);
+                std::shared_ptr<Executor> f = claimFaaslet(funcStr);
+                f->executeCall(msg);
+            }
         }
     }
 
@@ -586,18 +527,9 @@ void Scheduler::doAddFaaslets(const faabric::Message& msg, int count)
     thisHostResources.set_boundexecutors(thisHostResources.boundexecutors() +
                                          count);
 
-    // Send bind messages
+    // Add warm faaslets
     for (int i = 0; i < count; i++) {
-        faabric::Message bindMsg =
-          faabric::util::messageFactory(msg.user(), msg.function());
-        bindMsg.set_type(faabric::Message_MessageType_BIND);
-        bindMsg.set_ispython(msg.ispython());
-        bindMsg.set_istypescript(msg.istypescript());
-        bindMsg.set_pythonuser(msg.pythonuser());
-        bindMsg.set_pythonfunction(msg.pythonfunction());
-        bindMsg.set_issgx(msg.issgx());
-
-        bindQueue->enqueue(bindMsg);
+        warmFaaslets[funcStr].emplace_back(createExecutor(*this, msg));
     }
 }
 
@@ -630,32 +562,11 @@ void Scheduler::flushLocally()
     logger->info("Flushing host {}",
                  faabric::util::getSystemConfig().endpointHost);
 
-    // Notify all warm faaslets of flush
-    for (const auto& p : faasletCounts) {
-        if (p.second == 0) {
-            continue;
+    // Flush each warm faaslet
+    for (auto& p : warmFaaslets) {
+        for (auto& f : p.second) {
+            f->flush();
         }
-
-        // Clear any existing messages in the queue
-        std::shared_ptr<InMemoryBatchQueue> queue = queueMap[p.first];
-        queue->drain();
-
-        // Dispatch a flush message for each warm faaslet
-        std::shared_ptr<faabric::BatchExecuteRequest> req =
-          faabric::util::batchExecFactory("", "", p.second);
-        for (int i = 0; i < p.second; i++) {
-            req->mutable_messages()->at(i).set_type(faabric::Message::FLUSH);
-
-            std::vector<int> idxs = { i };
-            queue->enqueue(std::make_pair(idxs, req));
-        }
-    }
-
-    // Wait for flush messages to be consumed, then clear the queues
-    for (const auto& p : queueMap) {
-        logger->debug("Waiting for {} to drain on flush", p.first);
-        p.second->waitToDrain(FLUSH_TIMEOUT_MS);
-        p.second->reset();
     }
 }
 

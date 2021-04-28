@@ -1,6 +1,7 @@
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/executor/*.h")
 
 set(LIB_FILES
+        Executor.cpp
         FaabricExecutor.cpp
         FaabricMain.cpp
         FaabricPool.cpp

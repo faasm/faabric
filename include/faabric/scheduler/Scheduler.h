@@ -5,39 +5,95 @@
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
 
-#include <shared_mutex>
 #include <future>
+#include <shared_mutex>
 
 #define AVAILABLE_HOST_SET "available_hosts"
 
 namespace faabric::scheduler {
+
+class Scheduler;
+
+class Executor
+{
+  public:
+    explicit Executor(Scheduler& sch, const faabric::Message& msg);
+
+    virtual ~Executor() {}
+
+    void batchExecuteThreads(faabric::scheduler::MessageTask& task);
+
+    std::string executeCall(faabric::Message& call);
+
+    void finish();
+
+    virtual void flush();
+
+    std::string id;
+
+  protected:
+    virtual bool doExecute(faabric::Message& msg);
+
+    virtual int32_t executeThread(
+      int threadPoolIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::Message& msg);
+
+    virtual void postBind(const faabric::Message& msg);
+
+    virtual void preFinishCall(faabric::Message& call,
+                               bool success,
+                               const std::string& errorMsg);
+
+    virtual void postFinishCall();
+
+    virtual void postFinish();
+
+    void invokeThreads(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    bool _isBound = false;
+
+    int executionCount = 0;
+
+    std::mutex threadsMutex;
+    uint32_t threadPoolSize = 0;
+    std::unordered_map<int, std::thread> threads;
+
+    std::unordered_map<
+      int,
+      faabric::util::Queue<
+        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
+      threadQueues;
+
+  private:
+    faabric::Message boundMessage;
+    Scheduler& scheduler;
+
+    void finishCall(faabric::Message& msg,
+                    bool success,
+                    const std::string& errorMsg);
+};
 
 class Scheduler
 {
   public:
     Scheduler();
 
-    // ----------------------------------
-    // External API
-    // ----------------------------------
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
     std::vector<std::string> callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       bool forceLocal = false);
 
-    void broadcastSnapshotDelete(const faabric::Message& msg,
-                                 const std::string& snapshotKey);
-
     void reset();
 
     void shutdown();
 
-    void notifyCallFinished(const faabric::Message& msg);
-
-    void notifyFaasletFinished(const faabric::Message& msg);
+    void broadcastSnapshotDelete(const faabric::Message& msg,
+                                 const std::string& snapshotKey);
 
     long getFunctionInFlightCount(const faabric::Message& msg);
 
@@ -58,26 +114,13 @@ class Scheduler
 
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
 
-    void setThreadResult(const faabric::Message &msg, int32_t returnValue);
+    void setThreadResult(const faabric::Message& msg, int32_t returnValue);
 
     void setThreadResult(uint32_t msgId, int32_t returnValue);
 
     int32_t awaitThreadResult(uint32_t messageId);
 
     std::string getThisHost();
-
-    void forceEnqueueMessage(const faabric::Message& msg);
-
-    faabric::Message getNextMessageForFunction(const faabric::Message& msg,
-                                               int timeout);
-
-    std::shared_ptr<InMemoryBatchQueue> getFunctionQueue(
-      const faabric::Message& msg);
-
-    std::shared_ptr<InMemoryBatchQueue> getFunctionQueue(
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    std::shared_ptr<InMemoryMessageQueue> getBindQueue();
 
     std::unordered_set<std::string> getAvailableHosts();
 
@@ -114,16 +157,28 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    void notifyCallFinished(const faabric::Message& msg);
+
+    void notifyFaasletFinished(const faabric::Message& msg);
+
+  protected:
+    virtual std::shared_ptr<Executor> createExecutor(
+      const Scheduler& sch,
+      const faabric::Message& msg) = 0;
+
   private:
     std::string thisHost;
 
     faabric::util::SystemConfig& conf;
 
-    std::shared_ptr<InMemoryMessageQueue> bindQueue;
+    std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
+      executingFaaslets;
+
+    std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
+      warmFaaslets;
 
     std::shared_mutex mx;
 
-    InMemoryBatchQueueMap queueMap;
     std::unordered_map<std::string, long> faasletCounts;
     std::unordered_map<std::string, long> inFlightCounts;
 
@@ -137,15 +192,20 @@ class Scheduler
     std::vector<unsigned int> recordedMessagesLocal;
     std::vector<std::pair<std::string, unsigned int>> recordedMessagesShared;
 
-    faabric::HostResources getHostResources(const std::string& host);
+    std::shared_ptr<Executor> claimFaaslet(const std::string& appId);
 
-    void incrementInFlightCount(const faabric::Message& msg, int count);
+    void returnFaaslet(const std::string& appId,
+                       std::shared_ptr<Executor> faaslet);
 
     void addFaaslets(const faabric::Message& msg);
 
     void addFaasletsForBatch(const faabric::Message& msg);
 
     void doAddFaaslets(const faabric::Message& msg, int count);
+
+    faabric::HostResources getHostResources(const std::string& host);
+
+    void incrementInFlightCount(const faabric::Message& msg, int count);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 
@@ -158,5 +218,6 @@ class Scheduler
       int offset);
 };
 
-Scheduler& getScheduler();
+extern Scheduler& getScheduler();
+
 }

@@ -2,7 +2,6 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
-#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::executor {
@@ -57,11 +56,6 @@ class FaabricExecutor
 
     bool _isBound = false;
 
-    faabric::scheduler::Scheduler& scheduler;
-
-    std::shared_ptr<faabric::scheduler::InMemoryMessageQueue> bindQueue;
-    std::shared_ptr<faabric::scheduler::InMemoryBatchQueue> functionQueue;
-
     int executionCount = 0;
 
     std::mutex threadsMutex;
@@ -79,6 +73,5 @@ class FaabricExecutor
     void finishCall(faabric::Message& msg,
                     bool success,
                     const std::string& errorMsg);
-
 };
 }
