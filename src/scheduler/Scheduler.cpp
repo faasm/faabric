@@ -342,19 +342,16 @@ std::vector<std::string> Scheduler::callFunctions(
 
         incrementInFlightCount(firstMsg, localMessageIdxs.size());
 
-        // The executing faaslet is the one who will be doing the work
-        MessageTask t = std::make_pair(localMessageIdxs, req);
-
-        // Add faaslets if need be
+        // Handle the execution
         if (isThreads) {
-            executingFaaslets[funcStr].back()->batchExecuteThreads(t);
+            executingFaaslets[funcStr].back()->batchExecuteThreads(
+              localMessageIdxs, req);
         } else {
             addFaaslets(firstMsg);
 
             for (auto i : localMessageIdxs) {
-                faabric::Message& msg = req->mutable_messages()->at(i);
                 std::shared_ptr<Executor> f = claimFaaslet(funcStr);
-                f->executeCall(msg);
+                f->executeFunction(i, req);
             }
         }
     }

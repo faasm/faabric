@@ -24,9 +24,12 @@ class Executor
 
     virtual ~Executor() {}
 
-    void batchExecuteThreads(faabric::scheduler::MessageTask& task);
+    void batchExecuteThreads(std::vector<int> msgIdxs,
+                             std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    std::string executeCall(faabric::Message& call);
+    std::string executeFunction(
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void finish();
 
@@ -75,6 +78,11 @@ class Executor
     void finishCall(faabric::Message& msg,
                     bool success,
                     const std::string& errorMsg);
+
+    void executeTask(int threadPoolIdx,
+                     int msgIdx,
+                     std::shared_ptr<faabric::BatchExecuteRequest> req,
+                     bool isThread);
 };
 
 class Scheduler

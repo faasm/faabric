@@ -1,5 +1,5 @@
 set(LIB_FILES
-        "${FAABRIC_INCLUDE_DIR}/executor/FaabricMain.h"
+        "${FAABRIC_INCLUDE_DIR}/faabric/executor/FaabricMain.h"
         FaabricMain.cpp
         )
 
