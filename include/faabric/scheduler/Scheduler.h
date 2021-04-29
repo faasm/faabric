@@ -24,7 +24,7 @@ class Executor
   public:
     explicit Executor(const faabric::Message& msg);
 
-    virtual ~Executor() {}
+    virtual ~Executor();
 
     void batchExecuteThreads(std::vector<int> msgIdxs,
                              std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -46,8 +46,6 @@ class Executor
       int threadPoolIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::Message& msg);
-
-    virtual void postBind(const faabric::Message& msg);
 
     virtual void preFinishCall(faabric::Message& call,
                                bool success,
@@ -149,12 +147,14 @@ class Scheduler
     // ----------------------------------
     // Testing
     // ----------------------------------
-    std::vector<unsigned int> getRecordedMessagesAll();
+    std::vector<faabric::Message> getRecordedMessagesAll();
 
-    std::vector<unsigned int> getRecordedMessagesLocal();
+    std::vector<faabric::Message> getRecordedMessagesLocal();
 
-    std::vector<std::pair<std::string, unsigned int>>
+    std::vector<std::pair<std::string, faabric::Message>>
     getRecordedMessagesShared();
+
+    void clearRecordedMessages();
 
     // ----------------------------------
     // Exec graph
@@ -192,9 +192,10 @@ class Scheduler
     std::unordered_map<std::string, std::unordered_set<std::string>>
       registeredHosts;
 
-    std::vector<unsigned int> recordedMessagesAll;
-    std::vector<unsigned int> recordedMessagesLocal;
-    std::vector<std::pair<std::string, unsigned int>> recordedMessagesShared;
+    std::vector<faabric::Message> recordedMessagesAll;
+    std::vector<faabric::Message> recordedMessagesLocal;
+    std::vector<std::pair<std::string, faabric::Message>>
+      recordedMessagesShared;
 
     std::shared_ptr<Executor> claimFaaslet(const std::string& appId);
 

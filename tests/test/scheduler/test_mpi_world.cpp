@@ -36,10 +36,11 @@ TEST_CASE("Test world creation", "[mpi]")
     REQUIRE(world.getFunction() == func);
 
     // Check that chained function calls are made as expected
-    REQUIRE(sch.getRecordedMessagesAll().size() == worldSize - 1);
+    std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
+    REQUIRE(actual.size() == worldSize - 1);
 
     for (int i = 1; i < worldSize; i++) {
-        faabric::Message actualCall = sch.getNextMessageForFunction(msg, 0);
+        faabric::Message actualCall = actual.at(i);
         REQUIRE(actualCall.user() == user);
         REQUIRE(actualCall.function() == func);
         REQUIRE(actualCall.ismpi());

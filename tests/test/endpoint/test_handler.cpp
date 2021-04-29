@@ -45,18 +45,15 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
     endpoint::FaabricEndpointHandler handler;
     const std::string responseStr = handler.handleFunction(requestStr);
 
-    // Check function count has increased and bind message sent
+    // Check function count has increased
     scheduler::Scheduler& sch = scheduler::getScheduler();
     REQUIRE(sch.getFunctionInFlightCount(call) == 1);
-    REQUIRE(sch.getBindQueue()->size() == 1);
-
-    faabric::Message actualBind = sch.getBindQueue()->dequeue();
-    REQUIRE(actualBind.user() == call.user());
-    REQUIRE(actualBind.function() == call.function());
 
     // Check actual call has right details including the ID returned to the
     // caller
-    faabric::Message actualCall = sch.getNextMessageForFunction(call, 0);
+    std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
+    REQUIRE(msgs.size() == 1);
+    faabric::Message actualCall = msgs.at(0);
     REQUIRE(actualCall.user() == call.user());
     REQUIRE(actualCall.function() == call.function());
     REQUIRE(actualCall.id() == std::stoi(responseStr));

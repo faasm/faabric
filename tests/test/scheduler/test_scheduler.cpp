@@ -227,31 +227,15 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     faabric::Message m = reqOne->messages().at(0);
 
-    // Check the bind messages on this host
-    auto bindQueue = sch.getBindQueue();
+    // Check the faaslet counts on this host
     if (isThreads) {
-        // For threads we expect only one bind message
-        REQUIRE(bindQueue->size() == 1);
+        // For threads we expect only one faaslet
         REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
         REQUIRE(sch.getFunctionFaasletCount(m) == 1);
     } else {
         // Check the scheduler info on this host
         REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
         REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
-
-        // For non-threads we expect faaslets to be created
-        REQUIRE(bindQueue->size() == thisCores);
-        for (int i = 0; i < thisCores; i++) {
-            faabric::Message msg = bindQueue->dequeue();
-
-            REQUIRE(msg.user() == m.user());
-            REQUIRE(msg.function() == m.function());
-            REQUIRE(msg.type() == faabric::Message_MessageType_BIND);
-            REQUIRE(msg.ispython());
-            REQUIRE(msg.pythonuser() == "foobar");
-            REQUIRE(msg.pythonfunction() == "baz");
-            REQUIRE(msg.issgx());
-        }
     }
 
     // Check the message is dispatched to the other host
@@ -383,16 +367,15 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
 
     // Check status of local queueing
     int expectedLocalCalls = nCalls - 2;
-    int expectedBindQueueSize;
+    int expectedFaaslets;
     if (execMode == faabric::BatchExecuteRequest::THREADS) {
-        expectedBindQueueSize = 1;
+        expectedFaaslets = 1;
     } else {
-        expectedBindQueueSize = expectedLocalCalls;
+        expectedFaaslets = expectedLocalCalls;
     }
 
     faabric::Message firstMsg = req->messages().at(0);
-    REQUIRE(sch.getBindQueue()->size() == expectedBindQueueSize);
-    REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedBindQueueSize);
+    REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedFaaslets);
 
     // We expect the in flight count to be recorded locally
     REQUIRE(sch.getFunctionInFlightCount(firstMsg) == expectedLocalCalls);
@@ -453,6 +436,7 @@ TEST_CASE("Test counts can't go below zero", "[scheduler]")
     sch.notifyFaasletFinished(msg);
     sch.notifyFaasletFinished(msg);
     sch.notifyFaasletFinished(msg);
+    sch.notifyFaasletFinished(msg);
     REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
 
     sch.notifyCallFinished(msg);
@@ -489,11 +473,13 @@ TEST_CASE("Check test mode", "[scheduler]")
         sch.callFunction(msgB);
         sch.callFunction(msgC);
 
-        std::vector<unsigned int> expected = { (unsigned int)msgA.id(),
-                                               (unsigned int)msgB.id(),
-                                               (unsigned int)msgC.id() };
-        std::vector<unsigned int> actual = sch.getRecordedMessagesAll();
-        REQUIRE(actual == expected);
+        std::vector<int> expectedIds = { msgA.id(), msgB.id(), msgC.id() };
+        std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
+
+        REQUIRE(actual.size() == expectedIds.size());
+        for (int i = 0; i < expectedIds.size(); i++) {
+            REQUIRE(expectedIds.at(i) == actual.at(i).id());
+        }
     }
 
     faabric::util::setTestMode(origTestMode);
@@ -532,17 +518,10 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
 {
     cleanFaabric();
 
-    int nWorkers = 5;
-    int nWorkerMessages = 8;
-
     int nWaiters = 10;
     int nWaiterMessages = 4;
 
-    // Sanity check
-    REQUIRE((nWaiters * nWaiterMessages) == (nWorkers * nWorkerMessages));
-
     std::vector<std::thread> waiterThreads;
-    std::vector<std::thread> workerThreads;
 
     // Create waiters that will submit messages and await their results
     for (int i = 0; i < nWaiters; i++) {
@@ -552,39 +531,19 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
             faabric::Message msg =
               faabric::util::messageFactory("demo", "echo");
 
-            // Put invocation on local queue and await global result
-            for (int m = 0; m < nWaiterMessages; m++) {
-                sch.forceEnqueueMessage(msg);
-                sch.getFunctionResult(msg.id(), 5000);
-            }
-        });
-    }
+            // Invoke and await
+            std::shared_ptr<faabric::BatchExecuteRequest> req =
+              faabric::util::batchExecFactory("demo", "echo", nWaiterMessages);
+            sch.callFunctions(req);
 
-    // Create workers that will dequeue messages and set success
-    for (int i = 0; i < nWorkers; i++) {
-        workerThreads.emplace_back([nWorkerMessages] {
-            Scheduler& sch = scheduler::getScheduler();
-
-            faabric::Message dummyMsg =
-              faabric::util::messageFactory("demo", "echo");
-
-            // Listen to local queue, set result on global bus
-            for (int m = 0; m < nWorkerMessages; m++) {
-                faabric::Message msg =
-                  sch.getNextMessageForFunction(dummyMsg, 5000);
-                sch.setFunctionResult(msg);
+            for (const auto& m : req->messages()) {
+                sch.getFunctionResult(m.id(), 5000);
             }
         });
     }
 
     // Wait for all the threads to finish
     for (auto& w : waiterThreads) {
-        if (w.joinable()) {
-            w.join();
-        }
-    }
-
-    for (auto& w : workerThreads) {
         if (w.joinable()) {
             w.join();
         }

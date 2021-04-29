@@ -9,6 +9,8 @@ DummyExecutor::DummyExecutor(const faabric::Message& msg)
   : Executor(msg)
 {}
 
+DummyExecutor::~DummyExecutor() {}
+
 bool DummyExecutor::doExecute(faabric::Message& call)
 {
     auto logger = faabric::util::getLogger();

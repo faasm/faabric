@@ -1,5 +1,6 @@
 #pragma once
 
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/scheduler/SnapshotServer.h>
@@ -10,7 +11,7 @@ namespace faabric::executor {
 class FaabricMain
 {
   public:
-    FaabricMain(std::shared_ptr<faabric::scheduler::Scheduler> schIn);
+    FaabricMain(std::shared_ptr<faabric::scheduler::ExecutorFactory> fac);
 
     void startBackground();
 

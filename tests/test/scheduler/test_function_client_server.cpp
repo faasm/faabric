@@ -99,45 +99,16 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     sch.callFunction(msgA);
     sch.callFunction(msgB);
 
-    // Empty the queued messages
-    auto bindQueue = sch.getBindQueue();
-    auto functionQueueA = sch.getFunctionQueue(msgA);
-    auto functionQueueB = sch.getFunctionQueue(msgB);
-
-    REQUIRE(bindQueue->size() == 2);
-    REQUIRE(functionQueueA->size() == 1);
-    REQUIRE(functionQueueB->size() == 1);
-
-    bindQueue->dequeue();
-    bindQueue->dequeue();
-    functionQueueA->dequeue();
-    functionQueueB->dequeue();
-
-    // Background threads to get flush messages
-    std::thread tA([&msgA] {
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        faabric::Message msg = sch.getNextMessageForFunction(msgA, 1000);
-        REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
-    });
-
-    std::thread tB([&msgB] {
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        faabric::Message msg = sch.getNextMessageForFunction(msgB, 1000);
-        REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
-    });
+    // Check messages passed
+    std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
+    REQUIRE(msgs.size() == 2);
+    REQUIRE(msgs.at(0).function() == "foo");
+    REQUIRE(msgs.at(1).function() == "bar");
+    sch.clearRecordedMessages();
 
     // Send flush message
     FunctionCallClient cli(LOCALHOST);
     cli.sendFlush();
-
-    // Wait for thread to get flush message
-    if (tA.joinable()) {
-        tA.join();
-    }
-
-    if (tB.joinable()) {
-        tB.join();
-    }
 
     server.stop();
 
@@ -213,8 +184,6 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Check we've got faaslets and in-flight messages
     REQUIRE(sch.getFunctionInFlightCount(m) == nCalls);
     REQUIRE(sch.getFunctionFaasletCount(m) == nCalls);
-
-    REQUIRE(sch.getBindQueue()->size() == nCalls);
 }
 
 TEST_CASE("Test get resources request", "[scheduler]")

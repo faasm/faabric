@@ -1,5 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/scheduler/SnapshotClient.h>
@@ -369,11 +370,11 @@ std::vector<std::string> Scheduler::callFunctions(
 
         // Log results if in test mode
         if (faabric::util::isTestMode()) {
-            recordedMessagesAll.push_back(msg.id());
+            recordedMessagesAll.push_back(msg);
             if (executedHost.empty() || executedHost == thisHost) {
-                recordedMessagesLocal.push_back(msg.id());
+                recordedMessagesLocal.push_back(msg);
             } else {
-                recordedMessagesShared.emplace_back(executedHost, msg.id());
+                recordedMessagesShared.emplace_back(executedHost, msg);
             }
         }
     }
@@ -463,17 +464,24 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
     callFunctions(req, forceLocal);
 }
 
-std::vector<unsigned int> Scheduler::getRecordedMessagesAll()
+void Scheduler::clearRecordedMessages()
+{
+    recordedMessagesAll.clear();
+    recordedMessagesLocal.clear();
+    recordedMessagesShared.clear();
+}
+
+std::vector<faabric::Message> Scheduler::getRecordedMessagesAll()
 {
     return recordedMessagesAll;
 }
 
-std::vector<unsigned int> Scheduler::getRecordedMessagesLocal()
+std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
 {
     return recordedMessagesLocal;
 }
 
-std::vector<std::pair<std::string, unsigned int>>
+std::vector<std::pair<std::string, faabric::Message>>
 Scheduler::getRecordedMessagesShared()
 {
     return recordedMessagesShared;
@@ -531,8 +539,9 @@ void Scheduler::doAddFaaslets(const faabric::Message& msg, int count)
                                          count);
 
     // Add warm faaslets
+    std::shared_ptr<ExecutorFactory> factory = getExecutorFactory();
     for (int i = 0; i < count; i++) {
-        warmFaaslets[funcStr].emplace_back(createExecutor(msg));
+        warmFaaslets[funcStr].emplace_back(factory->createExecutor(msg));
     }
 }
 

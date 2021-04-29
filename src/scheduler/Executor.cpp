@@ -11,7 +11,7 @@ namespace faabric::scheduler {
 Executor::Executor(const faabric::Message& msg)
   : boundMessage(msg)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    const auto& logger = faabric::util::getLogger();
 
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
@@ -19,17 +19,12 @@ Executor::Executor(const faabric::Message& msg)
 
     // Set an ID for this Faaslet
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
-
-    // Hook
-    this->postBind(msg);
 }
+
+Executor::~Executor() {}
 
 void Executor::finish()
 {
-    // Notify scheduler if this thread was bound to a function
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.notifyFaasletFinished(boundMessage);
-
     // Shut down thread pool with a series of kill messages
     for (auto& queuePair : threadQueues) {
         std::shared_ptr<BatchExecuteRequest> killReq =
@@ -163,7 +158,7 @@ void Executor::batchExecuteThreads(
     }
 }
 
-void Executor::executeFunction(
+std::string Executor::executeFunction(
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -174,7 +169,10 @@ void Executor::executeFunction(
 
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
-    this->finishCall(msg, true, "");
+    std::string resultStr = "Success";
+    finishCall(msg, true, resultStr);
+
+    return resultStr;
 }
 
 // ------------------------------------------
@@ -194,16 +192,12 @@ int32_t Executor::executeThread(
     return 0;
 }
 
-void Executor::postBind(const faabric::Message& msg) {}
-
 void Executor::preFinishCall(faabric::Message& call,
                              bool success,
                              const std::string& errorMsg)
 {}
 
 void Executor::postFinishCall() {}
-
-void Executor::postFinish() {}
 
 void Executor::flush() {}
 }

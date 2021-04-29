@@ -1,10 +1,10 @@
 #pragma once
 
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 
 namespace faabric::scheduler {
 
-class DummyScheduler : public Scheduler
+class DummyExecutorFactory : public ExecutorFactory
 {
   protected:
     std::shared_ptr<Executor> createExecutor(

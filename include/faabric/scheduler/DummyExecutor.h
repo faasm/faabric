@@ -9,6 +9,8 @@ class DummyExecutor final : public Executor
   public:
     DummyExecutor(const faabric::Message& msg);
 
+    ~DummyExecutor() override;
+
   protected:
     bool doExecute(faabric::Message& call) override;
 

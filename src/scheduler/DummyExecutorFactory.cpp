@@ -1,10 +1,9 @@
 #include <faabric/scheduler/DummyExecutor.h>
-#include <faabric/scheduler/DummyScheduler.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/DummyExecutorFactory.h>
 
 namespace faabric::scheduler {
 
-std::shared_ptr<Executor> DummyScheduler::createExecutor(
+std::shared_ptr<Executor> DummyExecutorFactory::createExecutor(
   const faabric::Message& msg)
 {
     return std::make_shared<DummyExecutor>(msg);

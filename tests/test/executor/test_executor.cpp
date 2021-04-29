@@ -35,14 +35,8 @@ void executeWithDummyExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req)
     conf.boundTimeout = 1000;
     conf.unboundTimeout = 1000;
 
-    DummyExecutorPool pool(4);
-    pool.startThreadPool(true);
-
     auto& sch = faabric::scheduler::getScheduler();
     sch.callFunctions(req);
-
-    // Pool will wait for executors before shutting down
-    pool.shutdown();
 
     conf.boundTimeout = boundOriginal;
     conf.unboundTimeout = unboundOriginal;
