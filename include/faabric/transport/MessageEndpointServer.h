@@ -11,9 +11,11 @@ namespace faabric::transport {
  * This abstract class implements a server-like loop functionality and will
  * always run in the background.
  */
-class MessageEndpoint : public faabric::transport::MessageEndpoint
+class MessageEndpointServer : public faabric::transport::MessageEndpoint
 {
   public:
+    MessageEndpointServer(const std::string& host, int port);
+
     void start(faabric::transport::MessageContext& context);
 
     void stop(faabric::transport::MessageContext& context);

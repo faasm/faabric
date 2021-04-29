@@ -1,5 +1,4 @@
 #include <faabric/scheduler/FunctionCallServer.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>
@@ -7,29 +6,51 @@
 #include <faabric/util/logging.h>
 
 #include <faabric/rpc/macros.h>
-#include <grpcpp/grpcpp.h>
 
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
-  : RPCServer(DEFAULT_RPC_HOST, FUNCTION_CALL_PORT)
+  : faabric::transport::MessageEndpointServer(DEFAULT_RPC_HOST,
+                                              FUNCTION_CALL_PORT)
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doStart(const std::string& serverAddr)
+void FunctionCallServer::doRecv(const void* msgData, int size)
 {
-    // Build the server
-    ServerBuilder builder;
-    builder.AddListeningPort(serverAddr, InsecureServerCredentials());
-    builder.RegisterService(this);
-
-    // Start it
-    server = builder.BuildAndStart();
-    faabric::util::getLogger()->info("Function call server listening on {}",
-                                     serverAddr);
-
-    server->Wait();
+    // Detect if we are processing the header or not
+    auto logger = faabric::util::getLogger();
+    if (size == sizeof(faabric::scheduler::FunctionCalls)) {
+        logger->info("Begin processing header");
+        this->lastHeader = static_cast<faabric::scheduler::FunctionCalls>(
+          atoi((const char*)msgData));
+        logger->info("Processing header: {}", lastHeader);
+    } else {
+        logger->info("Processing message body for header: {}", lastHeader);
+        switch (this->lastHeader) {
+            case faabric::scheduler::FunctionCalls::MpiMessage:
+                this->recvMpiMessage(msgData, size);
+            default:
+                throw std::runtime_error(fmt::format(
+                  "Unrecognized last header: {}", this->lastHeader));
+        }
+    }
 }
 
+void FunctionCallServer::recvMpiMessage(const void* msgData, int size)
+{
+    // TODO - can we avoid this copy here?
+    faabric::MPIMessage mpiMsg;
+
+    // Deserialise message string
+    if (!mpiMsg.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    MpiWorldRegistry& registry = getMpiWorldRegistry();
+    MpiWorld& world = registry.getWorld(mpiMsg.worldid());
+    world.enqueueMessage(mpiMsg);
+}
+
+/*
 Status FunctionCallServer::Flush(ServerContext* context,
                                  const faabric::Message* request,
                                  faabric::FunctionStatusResponse* response)
@@ -56,9 +77,6 @@ Status FunctionCallServer::MPICall(ServerContext* context,
     // TODO - avoid copying message
     faabric::MPIMessage m = *request;
 
-    MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getWorld(m.worldid());
-    world.enqueueMessage(m);
 
     return Status::OK;
 }
@@ -99,4 +117,5 @@ Status FunctionCallServer::Unregister(ServerContext* context,
     scheduler.removeRegisteredHost(request->host(), request->function());
     return Status::OK;
 }
+*/
 }

@@ -13,22 +13,23 @@ MessageEndpoint::~MessageEndpoint()
 }
 
 void MessageEndpoint::open(faabric::transport::MessageContext& context,
-                            faabric::transport::SocketType sockType,
-                            bool bind)
+                           faabric::transport::SocketType sockType,
+                           bool bind)
 {
-    std::string address = "tcp://" + this->host + ":" + std::to_string(this->port);
+    std::string address =
+      "tcp://" + this->host + ":" + std::to_string(this->port);
 
     // Note - only one socket may bind, but several can connect. This allows
     // for easy N - 1 or 1 - N PUSH/PULL patterns. Order between bind and
     // connect does not matter.
     switch (sockType) {
         case faabric::transport::SocketType::PUSH:
-            this->socket =
-              std::make_unique<zmq::socket_t>(context.get(), zmq::socket_type::push);
+            this->socket = std::make_unique<zmq::socket_t>(
+              context.get(), zmq::socket_type::push);
             break;
         case faabric::transport::SocketType::PULL:
-            this->socket =
-              std::make_unique<zmq::socket_t>(context.get(), zmq::socket_type::pull);
+            this->socket = std::make_unique<zmq::socket_t>(
+              context.get(), zmq::socket_type::pull);
             break;
         default:
             throw std::runtime_error("Unrecognized socket type");
@@ -42,20 +43,30 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     }
 }
 
-void MessageEndpoint::send(char* serialisedMsg, size_t msgSize)
+void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
 {
     // Pass a deallocation function for ZeroMQ to be zero-copy
     zmq::message_t msg(serialisedMsg, msgSize, [](void* data, void* hint) {
-        delete[] (char*) data;
+        delete[](char*) data;
     });
 
-    this->socket->send(msg, zmq::send_flags::none);
+    if (more) {
+        if (!this->socket->send(msg, zmq::send_flags::sndmore)) {
+            throw std::runtime_error("Error sending message through socket");
+        }
+    } else {
+        if (!this->socket->send(msg, zmq::send_flags::none)) {
+            throw std::runtime_error("Error sending message through socket");
+        }
+    }
 }
 
 void MessageEndpoint::recv()
 {
     zmq::message_t msg;
-    this->inboundSocket->recv(msg);
+    if (!this->socket->recv(msg)) {
+        throw std::runtime_error("Error receiving message through socket");
+    }
 
     // Implementation specific message handling
     doRecv(msg.data(), msg.size());
@@ -63,6 +74,6 @@ void MessageEndpoint::recv()
 
 void MessageEndpoint::close()
 {
-    this->socket.close();
+    this->socket->close();
 }
 }

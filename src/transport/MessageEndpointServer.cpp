@@ -1,4 +1,4 @@
-#include <faabric/scheduler/MessageEndpointServer.h>
+#include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/util/logging.h>
 
 // TODO - include this through a header
@@ -12,7 +12,7 @@ MessageEndpointServer::MessageEndpointServer(const std::string& host, int port)
 void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
     // Start serving thread in background
-    this->servingThread = std::thread([this] {
+    this->servingThread = std::thread([this, &context] {
         // Open message endpoint, and bind
         this->open(context, faabric::transport::SocketType::PULL, true);
 
@@ -27,7 +27,7 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
                 throw std::runtime_error("Errror in socket receiving message");
             }
         }
-    }
+    });
 }
 
 void MessageEndpointServer::stop(faabric::transport::MessageContext& context)

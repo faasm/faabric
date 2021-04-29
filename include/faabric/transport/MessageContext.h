@@ -14,7 +14,8 @@ class MessageContext
   public:
     MessageContext();
 
-    // Message context should not be copied as there must only be one ZMQ context
+    // Message context should not be copied as there must only be one ZMQ
+    // context
     MessageContext(const MessageContext& ctx) = delete;
 
     MessageContext(int overrideIoThreads);

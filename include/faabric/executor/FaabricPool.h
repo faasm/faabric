@@ -4,6 +4,7 @@
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/StateServer.h>
+#include <faabric/transport/MessageContext.h>
 #include <faabric/util/queue.h>
 
 namespace faabric::executor {
@@ -35,6 +36,8 @@ class FaabricPool
 
   private:
     std::atomic<bool> _shutdown = false;
+    faabric::transport::MessageContext messageContext;
+
     faabric::scheduler::Scheduler& scheduler;
     faabric::util::TokenPool threadTokenPool;
     faabric::state::StateServer stateServer;

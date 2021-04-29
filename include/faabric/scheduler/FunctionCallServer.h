@@ -1,21 +1,28 @@
 #pragma once
 
-#include <faabric/scheduler/Scheduler.h>
-
 #include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/rpc/RPCServer.h>
-
-using namespace grpc;
+#include <faabric/scheduler/MpiWorld.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::scheduler {
+enum FunctionCalls
+{
+    MpiMessage = 1,
+    ExecuteFunctions = 2,
+    Flush = 3,
+    Unregister = 4,
+};
+
 class FunctionCallServer final
-  : public rpc::RPCServer
-  , public faabric::FunctionRPCService::Service
+  : public faabric::transport::MessageEndpointServer
 {
   public:
     FunctionCallServer();
 
+    /*
     Status Flush(ServerContext* context,
                  const faabric::Message* request,
                  faabric::FunctionStatusResponse* response) override;
@@ -35,11 +42,14 @@ class FunctionCallServer final
     Status Unregister(ServerContext* context,
                       const faabric::UnregisterRequest* request,
                       faabric::FunctionStatusResponse* response) override;
-
-  protected:
-    void doStart(const std::string& serverAddr) override;
+    */
 
   private:
     Scheduler& scheduler;
+    faabric::scheduler::FunctionCalls lastHeader;
+
+    void doRecv(const void* msgData, int size) override;
+
+    void recvMpiMessage(const void* msgData, int size);
 };
 }

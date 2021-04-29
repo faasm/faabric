@@ -441,8 +441,9 @@ TEST_CASE("Test send across hosts", "[mpi]")
     cleanFaabric();
 
     // Start a server on this host
+    faabric::transport::MessageContext context;
     FunctionCallServer server;
-    server.start();
+    server.start(context);
     usleep(1000 * 100);
 
     // Set up the world on this host
@@ -497,7 +498,7 @@ TEST_CASE("Test send across hosts", "[mpi]")
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
 
-    server.stop();
+    server.stop(context);
 }
 
 TEST_CASE("Test send/recv message with no data", "[mpi]")
@@ -690,8 +691,9 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 {
     cleanFaabric();
 
+    faabric::transport::MessageContext context;
     FunctionCallServer server;
-    server.start();
+    server.start(context);
     usleep(1000 * 100);
 
     std::string otherHost = "123.45.67.8";
@@ -981,7 +983,7 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
     //            if (threadB2.joinable()) threadB2.join();
     //        }
 
-    server.stop();
+    server.stop(context);
 }
 
 template<typename T>
@@ -1701,8 +1703,9 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
     remoteWorld.overrideHost(otherHost);
     remoteWorld.initialiseFromState(msg, worldId);
 
+    faabric::transport::MessageContext context;
     FunctionCallServer server;
-    server.start();
+    server.start(context);
     usleep(1000 * 100);
 
     // Register four ranks
@@ -1758,6 +1761,6 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
         REQUIRE(actual == putData);
     }
 
-    server.stop();
+    server.stop(context);
 }
 }

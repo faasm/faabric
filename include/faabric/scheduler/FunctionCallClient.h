@@ -1,17 +1,7 @@
 #pragma once
 
-#include <grpcpp/channel.h>
-#include <grpcpp/client_context.h>
-#include <grpcpp/support/channel_arguments.h>
-
-#include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
-
-using namespace grpc;
-
-using grpc::Channel;
-using grpc::ClientContext;
-using grpc::Status;
+#include <faabric/transport/MessageEndpoint.h>
 
 namespace faabric::scheduler {
 
@@ -39,17 +29,12 @@ void queueResourceResponse(const std::string& host,
 void clearMockRequests();
 
 // -----------------------------------
-// gRPC client
+// Message client
 // -----------------------------------
-class FunctionCallClient
+class FunctionCallClient : faabric::transport::MessageEndpoint
 {
   public:
     explicit FunctionCallClient(const std::string& hostIn);
-
-    const std::string host;
-
-    std::shared_ptr<Channel> channel;
-    std::unique_ptr<faabric::FunctionRPCService::Stub> stub;
 
     void sendFlush();
 
@@ -60,5 +45,8 @@ class FunctionCallClient
     void executeFunctions(const faabric::BatchExecuteRequest& req);
 
     void unregister(const faabric::UnregisterRequest& req);
+
+  private:
+    void doRecv(const void* msgData, int size) override;
 };
 }

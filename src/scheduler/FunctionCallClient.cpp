@@ -1,8 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-
-#include <grpcpp/create_channel.h>
-#include <grpcpp/security/credentials.h>
+#include <faabric/scheduler/FunctionCallServer.h>
 
 #include <faabric/rpc/macros.h>
 #include <faabric/util/queue.h>
@@ -85,17 +83,15 @@ void clearMockRequests()
 }
 
 // -----------------------------------
-// gRPC client
+// Message Client
 // -----------------------------------
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : host(hostIn)
-  , channel(grpc::CreateChannel(host + ":" + std::to_string(FUNCTION_CALL_PORT),
-                                grpc::InsecureChannelCredentials()))
-  , stub(faabric::FunctionRPCService::NewStub(channel))
+  : faabric::transport::MessageEndpoint(hostIn, FUNCTION_CALL_PORT)
 {}
 
 void FunctionCallClient::sendFlush()
 {
+    /*
     faabric::Message call;
     if (faabric::util::isMockMode()) {
         flushCalls.emplace_back(host, call);
@@ -104,11 +100,34 @@ void FunctionCallClient::sendFlush()
         faabric::FunctionStatusResponse response;
         CHECK_RPC("function_flush", stub->Flush(&context, call, &response));
     }
+    */
 }
 
 void FunctionCallClient::sendMPIMessage(
   const std::shared_ptr<faabric::MPIMessage> msg)
 {
+    // Send the header first
+    // Note - the verbosity beneath is useful to guarantee zero copy for larger
+    // messages
+    /*
+    int functionNum =
+    static_cast<int>(faabric::scheduler::FunctionCalls::MpiMessage); size_t
+    headerSize = sizeof(faabric::scheduler::FunctionCalls); char* header = new
+    char[headerSize]; memcpy(header, &functionNum, headerSize);
+    // Mark that we are sending more messages
+    send(header, headerSize, true);
+    */
+
+    // Send the message body
+    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
+    size_t msgSize = msg->ByteSizeLong();
+    char* serialisedMsg = new char[msgSize];
+
+    if (!msg->SerializeToArray(serialisedMsg, msgSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    send(serialisedMsg, msgSize);
+    /*
     if (faabric::util::isMockMode()) {
         mpiMessages.emplace_back(host, *msg);
     } else {
@@ -116,12 +135,14 @@ void FunctionCallClient::sendMPIMessage(
         faabric::FunctionStatusResponse response;
         CHECK_RPC("mpi_message", stub->MPICall(&context, *msg, &response));
     }
+    */
 }
 
 faabric::HostResources FunctionCallClient::getResources(
   const faabric::ResourceRequest& req)
 {
     faabric::HostResources response;
+    /*
 
     if (faabric::util::isMockMode()) {
         // Register the request
@@ -137,12 +158,14 @@ faabric::HostResources FunctionCallClient::getResources(
                   stub->GetResources(&context, req, &response));
     }
 
+    */
     return response;
 }
 
 void FunctionCallClient::executeFunctions(
   const faabric::BatchExecuteRequest& req)
 {
+    /*
     if (faabric::util::isMockMode()) {
         batchMessages.emplace_back(host, req);
     } else {
@@ -151,10 +174,12 @@ void FunctionCallClient::executeFunctions(
         CHECK_RPC("exec_funcs",
                   stub->ExecuteFunctions(&context, req, &response));
     }
+    */
 }
 
 void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
 {
+    /*
     if (faabric::util::isMockMode()) {
         unregisterRequests.emplace_back(host, req);
     } else {
@@ -162,5 +187,11 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
         faabric::FunctionStatusResponse response;
         CHECK_RPC("unregister", stub->Unregister(&context, req, &response));
     }
+    */
+}
+
+void FunctionCallClient::doRecv(const void* msgData, int size)
+{
+    throw std::runtime_error("Calling recv from a producer client.");
 }
 }
