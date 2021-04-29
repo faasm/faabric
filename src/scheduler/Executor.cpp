@@ -71,9 +71,6 @@ void Executor::finishCall(faabric::Message& msg,
     logger->debug("Setting function result for {}", funcStr);
     sch.setFunctionResult(msg);
 
-    // Increment the execution counter
-    executionCount++;
-
     // Hook
     this->postFinishCall();
 }

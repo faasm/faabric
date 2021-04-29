@@ -52,11 +52,11 @@ TEST_CASE("Test protobuf classes", "[proto]")
     funcCall.set_istypescript(true);
     funcCall.set_isstatusrequest(true);
 
-    funcCall.set_type(faabric::Message_MessageType_BIND);
+    funcCall.set_type(faabric::Message_MessageType_KILL);
 
     funcCall.set_cmdline(cmdline);
 
-    REQUIRE(funcCall.type() == faabric::Message_MessageType_BIND);
+    REQUIRE(funcCall.type() == faabric::Message_MessageType_KILL);
     REQUIRE(user == funcCall.user());
     REQUIRE(func == funcCall.function());
     REQUIRE(resultKey == funcCall.resultkey());
@@ -71,7 +71,7 @@ TEST_CASE("Test protobuf classes", "[proto]")
     REQUIRE(user == newFuncCall.user());
     REQUIRE(func == newFuncCall.function());
     REQUIRE(resultKey == newFuncCall.resultkey());
-    REQUIRE(faabric::Message_MessageType_BIND == newFuncCall.type());
+    REQUIRE(faabric::Message_MessageType_KILL == newFuncCall.type());
 
     REQUIRE(pyUser == newFuncCall.pythonuser());
     REQUIRE(pyFunc == newFuncCall.pythonfunction());

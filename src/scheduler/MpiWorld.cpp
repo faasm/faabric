@@ -1,13 +1,12 @@
-#include "faabric/proto/faabric.pb.h"
-#include "faabric/util/func.h"
 #include <faabric/mpi/mpi.h>
-
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>

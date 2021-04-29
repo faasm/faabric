@@ -55,12 +55,6 @@ class Executor
 
     virtual void postFinish();
 
-    void invokeThreads(std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    bool _isBound = false;
-
-    int executionCount = 0;
-
     std::mutex threadsMutex;
     uint32_t threadPoolSize = 0;
     std::unordered_map<int, std::thread> threads;

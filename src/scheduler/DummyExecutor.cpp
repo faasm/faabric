@@ -29,7 +29,8 @@ bool DummyExecutor::doExecute(faabric::Message& call)
         }
 
         // Call the threads
-        invokeThreads(req);
+        Scheduler& sch = getScheduler();
+        sch.callFunctions(req);
     } else if (call.function() == "simple") {
         call.set_outputdata(
           fmt::format("Simple function {} executed successfully", call.id()));

@@ -111,10 +111,9 @@ message Message {
 
     enum MessageType {
         CALL = 0;
-        BIND = 1;
-        KILL = 2;
-        EMPTY = 3;
-        FLUSH = 4;
+        KILL = 1;
+        EMPTY = 2;
+        FLUSH = 3;
     }
 
     MessageType type = 5;
