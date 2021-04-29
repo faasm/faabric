@@ -1,14 +1,11 @@
 #include "faabric_utils.h"
 #include <catch.hpp>
 
-#include <faabric/executor/DummyExecutorPool.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
-
-using namespace faabric::executor;
 
 namespace tests {
 

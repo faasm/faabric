@@ -1,28 +1,17 @@
-#include <faabric/executor/FaabricExecutor.h>
+#pragma once
 
-namespace faabric::executor {
+#include <faabric/scheduler/Scheduler.h>
 
-class DummyExecutor final : public FaabricExecutor
+namespace faabric::scheduler {
+
+class DummyExecutor final : public Executor
 {
-  public:
-    explicit DummyExecutor(int threadIdx);
-
-    void flush() override;
-
   protected:
-    void postBind(const faabric::Message& msg, bool force) override;
-
     bool doExecute(faabric::Message& call) override;
 
     int32_t executeThread(int threadPoolIdx,
                           std::shared_ptr<faabric::BatchExecuteRequest> req,
                           faabric::Message& msg) override;
-
-    void preFinishCall(faabric::Message& call,
-                       bool success,
-                       const std::string& errorMsg) override;
-
-    void postFinish() override;
 };
 
 }

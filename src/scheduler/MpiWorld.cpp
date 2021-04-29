@@ -98,7 +98,6 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     // Dispatch all the chained calls
     // NOTE - with the master being rank zero, we want to spawn
     // (size - 1) new functions starting with rank 1
-    scheduler::Scheduler& sch = scheduler::getScheduler();
     for (int i = 1; i < size; i++) {
         faabric::Message msg = faabric::util::messageFactory(user, function);
         msg.set_ismpi(true);

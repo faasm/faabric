@@ -17,10 +17,14 @@ namespace faabric::scheduler {
 
 class Scheduler;
 
+void setScheduler(std::shared_ptr<Scheduler> sch);
+
+std::shared_ptr<Scheduler> getScheduler();
+
 class Executor
 {
   public:
-    explicit Executor(Scheduler& sch, const faabric::Message& msg);
+    explicit Executor(const faabric::Message& msg);
 
     virtual ~Executor() {}
 
@@ -73,7 +77,6 @@ class Executor
 
   private:
     faabric::Message boundMessage;
-    Scheduler& scheduler;
 
     void finishCall(faabric::Message& msg,
                     bool success,
@@ -171,7 +174,6 @@ class Scheduler
 
   protected:
     virtual std::shared_ptr<Executor> createExecutor(
-      const Scheduler& sch,
       const faabric::Message& msg) = 0;
 
   private:
@@ -225,7 +227,5 @@ class Scheduler
       std::vector<std::string>& records,
       int offset);
 };
-
-extern Scheduler& getScheduler();
 
 }

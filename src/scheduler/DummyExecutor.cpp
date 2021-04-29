@@ -1,17 +1,9 @@
-#include "faabric/proto/faabric.pb.h"
-#include "faabric/scheduler/Scheduler.h"
-#include "faabric/util/func.h"
-#include <faabric/executor/DummyExecutor.h>
+#include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/DummyExecutor.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/func.h>
 
-namespace faabric::executor {
-
-DummyExecutor::DummyExecutor(int threadIdxIn)
-  : FaabricExecutor(threadIdxIn)
-{}
-
-void DummyExecutor::flush() {}
-
-void DummyExecutor::postBind(const faabric::Message& msg, bool force) {}
+namespace faabric::scheduler {
 
 bool DummyExecutor::doExecute(faabric::Message& call)
 {
@@ -54,11 +46,4 @@ int32_t DummyExecutor::executeThread(
 
     return msg.id() / 100;
 }
-
-void DummyExecutor::preFinishCall(faabric::Message& call,
-                                  bool success,
-                                  const std::string& errorMsg)
-{}
-
-void DummyExecutor::postFinish() {}
 }

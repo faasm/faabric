@@ -1,22 +1,13 @@
 #pragma once
 
-#include <faabric/executor/DummyExecutor.h>
-#include <faabric/executor/FaabricPool.h>
+#include <faabric/scheduler/Scheduler.h>
 
-using namespace faabric::executor;
+namespace faabric::scheduler {
 
-namespace faabric::executor {
-class DummyExecutorPool : public FaabricPool
+class DummyScheduler : public Scheduler
 {
-  public:
-    explicit DummyExecutorPool(int nThreads)
-      : FaabricPool(nThreads)
-    {}
-
   protected:
-    std::unique_ptr<FaabricExecutor> createExecutor(int threadIdx)
-    {
-        return std::make_unique<DummyExecutor>(threadIdx);
-    }
+    std::shared_ptr<Executor> createExecutor(
+      const faabric::Message& msg) override;
 };
 }

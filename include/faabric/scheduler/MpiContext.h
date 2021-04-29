@@ -20,8 +20,8 @@ class MpiContext
     int getRank();
 
   private:
-    bool isMpi;
-    int rank;
-    int worldId;
+    bool isMpi = false;
+    int rank = -1;
+    int worldId = -1;
 };
 }

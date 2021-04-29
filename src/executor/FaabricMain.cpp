@@ -1,4 +1,5 @@
 #include <faabric/executor/FaabricMain.h>
+#include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
@@ -9,14 +10,20 @@ extern void checkSgxSetup();
 #endif
 
 namespace faabric::executor {
+FaabricMain::FaabricMain(std::shared_ptr<faabric::scheduler::Scheduler> schIn)
+  : stateServer(faabric::state::getGlobalState())
+{
+    faabric::scheduler::setScheduler(schIn);
+}
+
 void FaabricMain::startBackground()
 {
     // Ensure we can ping both redis instances
     faabric::redis::Redis::getQueue().ping();
     faabric::redis::Redis::getState().ping();
 
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.addHostToGlobalSet();
+    auto sch = faabric::scheduler::getScheduler();
+    sch->addHostToGlobalSet();
 
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     conf.print();
@@ -69,11 +76,11 @@ void FaabricMain::startStateServer()
 
 void FaabricMain::shutdown()
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    const auto& logger = faabric::util::getLogger();
     logger->info("Removing from global working set");
 
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.shutdown();
+    auto sch = faabric::scheduler::getScheduler();
+    sch->shutdown();
 
     logger->info("Waiting for the state server to finish");
     stateServer.stop();

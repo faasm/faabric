@@ -20,6 +20,22 @@ using namespace faabric::util;
 
 namespace faabric::scheduler {
 
+static std::shared_ptr<Scheduler> _sch = nullptr;
+
+void setScheduler(std::shared_ptr<Scheduler> sch)
+{
+    _sch = sch;
+}
+
+std::shared_ptr<Scheduler> getScheduler()
+{
+    if (_sch == nullptr) {
+        throw std::runtime_error("No scheduler set up");
+    }
+
+    return _sch;
+}
+
 int decrementAboveZero(int input)
 {
     return std::max<int>(input - 1, 0);
@@ -526,7 +542,7 @@ void Scheduler::doAddFaaslets(const faabric::Message& msg, int count)
 
     // Add warm faaslets
     for (int i = 0; i < count; i++) {
-        warmFaaslets[funcStr].emplace_back(createExecutor(*this, msg));
+        warmFaaslets[funcStr].emplace_back(createExecutor(msg));
     }
 }
 
