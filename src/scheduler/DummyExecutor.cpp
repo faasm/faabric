@@ -5,6 +5,10 @@
 
 namespace faabric::scheduler {
 
+DummyExecutor::DummyExecutor(const faabric::Message& msg)
+  : Executor(msg)
+{}
+
 bool DummyExecutor::doExecute(faabric::Message& call)
 {
     auto logger = faabric::util::getLogger();

@@ -20,20 +20,10 @@ using namespace faabric::util;
 
 namespace faabric::scheduler {
 
-static std::shared_ptr<Scheduler> _sch = nullptr;
-
-void setScheduler(std::shared_ptr<Scheduler> sch)
+Scheduler& getScheduler()
 {
-    _sch = sch;
-}
-
-std::shared_ptr<Scheduler> getScheduler()
-{
-    if (_sch == nullptr) {
-        throw std::runtime_error("No scheduler set up");
-    }
-
-    return _sch;
+    static Scheduler sch;
+    return sch;
 }
 
 int decrementAboveZero(int input)

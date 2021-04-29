@@ -42,8 +42,5 @@ class FunctionCallServer final
 
   protected:
     void doStart(const std::string& serverAddr) override;
-
-  private:
-    Scheduler& scheduler;
 };
 }

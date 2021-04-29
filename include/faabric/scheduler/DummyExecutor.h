@@ -6,6 +6,9 @@ namespace faabric::scheduler {
 
 class DummyExecutor final : public Executor
 {
+  public:
+    DummyExecutor(const faabric::Message& msg);
+
   protected:
     bool doExecute(faabric::Message& call) override;
 

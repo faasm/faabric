@@ -1,5 +1,6 @@
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>
@@ -12,7 +13,6 @@
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
   : RPCServer(DEFAULT_RPC_HOST, FUNCTION_CALL_PORT)
-  , scheduler(getScheduler())
 {}
 
 void FunctionCallServer::doStart(const std::string& serverAddr)
@@ -40,10 +40,11 @@ Status FunctionCallServer::Flush(ServerContext* context,
     faabric::state::getGlobalState().forceClearAll(false);
 
     // Clear the scheduler
-    scheduler.flushLocally();
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.flushLocally();
 
     // Reset the scheduler
-    scheduler.reset();
+    sch.reset();
 
     return Status::OK;
 }
@@ -67,7 +68,8 @@ Status FunctionCallServer::GetResources(ServerContext* context,
                                         const faabric::ResourceRequest* request,
                                         faabric::HostResources* response)
 {
-    *response = scheduler.getThisHostResources();
+    auto& sch = faabric::scheduler::getScheduler();
+    *response = sch.getThisHostResources();
 
     return Status::OK;
 }
@@ -82,7 +84,8 @@ Status FunctionCallServer::ExecuteFunctions(
       std::make_shared<faabric::BatchExecuteRequest>(*request);
 
     // This host has now been told to execute these functions no matter what
-    scheduler.callFunctions(requestCopy, true);
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.callFunctions(requestCopy, true);
 
     return Status::OK;
 }
@@ -97,7 +100,8 @@ Status FunctionCallServer::Unregister(ServerContext* context,
       "Unregistering host {} for {}", request->host(), funcStr);
 
     // Remove the host from the warm set
-    scheduler.removeRegisteredHost(request->host(), request->function());
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.removeRegisteredHost(request->host(), request->function());
     return Status::OK;
 }
 
@@ -106,7 +110,8 @@ Status FunctionCallServer::SetThreadResult(
   const faabric::ThreadResultRequest* request,
   faabric::FunctionStatusResponse* response)
 {
-    scheduler.setThreadResult(request->messageid(), request->returnvalue());
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.setThreadResult(request->messageid(), request->returnvalue());
     return Status::OK;
 }
 }

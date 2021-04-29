@@ -17,9 +17,7 @@ namespace faabric::scheduler {
 
 class Scheduler;
 
-void setScheduler(std::shared_ptr<Scheduler> sch);
-
-std::shared_ptr<Scheduler> getScheduler();
+Scheduler& getScheduler();
 
 class Executor
 {
@@ -171,10 +169,6 @@ class Scheduler
     void notifyCallFinished(const faabric::Message& msg);
 
     void notifyFaasletFinished(const faabric::Message& msg);
-
-  protected:
-    virtual std::shared_ptr<Executor> createExecutor(
-      const faabric::Message& msg) = 0;
 
   private:
     std::string thisHost;

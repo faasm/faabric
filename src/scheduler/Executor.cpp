@@ -27,8 +27,8 @@ Executor::Executor(const faabric::Message& msg)
 void Executor::finish()
 {
     // Notify scheduler if this thread was bound to a function
-    auto sch = faabric::scheduler::getScheduler();
-    sch->notifyFaasletFinished(boundMessage);
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.notifyFaasletFinished(boundMessage);
 
     // Shut down thread pool with a series of kill messages
     for (auto& queuePair : threadQueues) {
@@ -69,12 +69,12 @@ void Executor::finishCall(faabric::Message& msg,
 
     // Notify the scheduler *before* setting the result. Calls awaiting
     // the result will carry on blocking
-    auto sch = faabric::scheduler::getScheduler();
-    sch->notifyCallFinished(msg);
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.notifyCallFinished(msg);
 
     // Set result
     logger->debug("Setting function result for {}", funcStr);
-    sch->setFunctionResult(msg);
+    sch.setFunctionResult(msg);
 
     // Increment the execution counter
     executionCount++;
@@ -104,7 +104,7 @@ void Executor::executeTask(int threadPoolIdx,
                   logger->debug("Thread pool thread {} starting up",
                                 threadPoolIdx);
 
-                  auto sch = faabric::scheduler::getScheduler();
+                  auto& sch = faabric::scheduler::getScheduler();
 
                   for (;;) {
                       auto task = threadQueues[threadPoolIdx].dequeue();
@@ -128,10 +128,10 @@ void Executor::executeTask(int threadPoolIdx,
                       }
 
                       // Set the result for this thread
-                      sch->setThreadResult(msg, returnValue);
+                      sch.setThreadResult(msg, returnValue);
 
                       // Notify scheduler finished
-                      sch->notifyCallFinished(msg);
+                      sch.notifyCallFinished(msg);
                   }
 
                   logger->debug("Thread pool thread {} shutting down",

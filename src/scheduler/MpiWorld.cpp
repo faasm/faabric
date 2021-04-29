@@ -95,6 +95,8 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     // Register this as the master
     registerRank(0);
 
+    auto& sch = faabric::scheduler::getScheduler();
+
     // Dispatch all the chained calls
     // NOTE - with the master being rank zero, we want to spawn
     // (size - 1) new functions starting with rank 1
