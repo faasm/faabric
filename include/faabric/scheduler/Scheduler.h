@@ -191,9 +191,9 @@ class Scheduler
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 
-    std::shared_ptr<Executor> claimFaaslet(const std::string& appId);
+    std::shared_ptr<Executor> claimFaaslet(const faabric::Message &msg);
 
-    void returnFaaslet(const std::string& appId,
+    void returnFaaslet(const faabric::Message &msg,
                        std::shared_ptr<Executor> faaslet);
 
     void addFaaslets(const faabric::Message& msg);
