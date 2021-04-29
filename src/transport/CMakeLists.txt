@@ -3,13 +3,15 @@
 # ----------------------------------------------
 
 set(HEADERS
+    "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageContext.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpoint.h"
-    "${FAABRIC_INCLUDE_DIR}/faabric/transport/MpiMessageEndpoint.h"
+    "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpointServer.h"
 )
 
 set(LIB_FILES 
+    MessageContext.cpp
     MessageEndpoint.cpp
-    MpiMessageEndpoint.cpp
+    MessageEndpointServer.cpp
     ${HEADERS}
 )
 
@@ -25,5 +27,5 @@ target_include_directories(transport PUBLIC ${ZEROMQ_INCLUDE_DIRS})
 add_dependencies(transport libzeromq_ext)
 add_dependencies(transport cppzeromq_ext)
 
-target_link_libraries(transport proto scheduler zmq)
+target_link_libraries(transport proto zmq)
 

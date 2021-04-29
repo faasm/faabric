@@ -4,44 +4,31 @@
 
 #include <faabric/util/logging.h>
 
+#include <atomic>
 #include <zmq.hpp>
 
 namespace faabric::transport {
-enum class ZeroMQSocketType { PUSH, PULL };
+enum class SocketType { PUSH, PULL };
 
-// Wrapper around zmq::context_t. Note that the ZMQ context is thread-safe.
-class MessageContext
-{
-  public:
-    MessageContext();
-
-    // Message context should not be copied as there must only be one ZMQ context
-    MessageContext(const MessageContext& ctx) = delete;
-
-    // As a rule of thumb, use one IO thread per Gbps of data
-    MessageContext(int overrideIoThreads);
-
-    ~MessageContext();
-
-    zmq::context_t& get();
-
-    void close();
-
-    zmq::context_t ctx;
-};
-
+/* Wrapper arround zmq::socket_t 
+ *
+ */
 class MessageEndpoint
 {
   public:
     MessageEndpoint(const std::string& hostIn, int portIn);
 
+    // Message endpoints shouldn't be copied as ZeroMQ sockets are not thread 
+    // safe
+    MessageEndpoint(const MessageEndpoint& ctx) = delete;
+
     ~MessageEndpoint();
 
-    void start(faabric::transport::MessageContext& context,
-               faabric::transport::ZeroMQSocketType sockTypeIn,
+    void open(faabric::transport::MessageContext& context,
+               faabric::transport::SocketType sockTypeIn,
                bool bind);
 
-    void handleMessage();
+    void recv();
 
     void close();
 
@@ -49,11 +36,11 @@ class MessageEndpoint
     const std::string host;
     const int port;
 
-    std::unique_ptr<zmq::socket_t> sock;
-    faabric::transport::ZeroMQSocketType sockType;
+    void send(char* serialisedMsg, size_t msgSize);
 
-    void sendMessage(char* serialisedMsg, size_t msgSize);
+    virtual void doRecv(const void* msgData, int size) = 0;
 
-    virtual void doHandleMessage(const void* msgData, int size) = 0;
+  private:
+    zmq::socket_t socket;
 };
 }
