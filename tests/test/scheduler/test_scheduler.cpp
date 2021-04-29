@@ -42,7 +42,6 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
 
     // Initial checks
     REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
 
@@ -59,21 +58,18 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     }
 
     REQUIRE(sch.getFunctionFaasletCount(msg) == nCores);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == nCores);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
     REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
 
     resCheck = sch.getThisHostResources();
     REQUIRE(resCheck.cores() == nCores);
     REQUIRE(resCheck.boundexecutors() == nCores);
-    REQUIRE(resCheck.functionsinflight() == nCores);
 
     // Run shutdown
     sch.shutdown();
 
     // Check scheduler has been cleared
     REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
 
@@ -81,7 +77,6 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     int actualCores = faabric::util::getUsableCores();
     REQUIRE(resCheck.cores() == actualCores);
     REQUIRE(resCheck.boundexecutors() == 0);
-    REQUIRE(resCheck.functionsinflight() == 0);
 
     faabric::util::setMockMode(false);
 }
@@ -229,13 +224,15 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Check the faaslet counts on this host
     if (isThreads) {
         // For threads we expect only one faaslet
-        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
         REQUIRE(sch.getFunctionFaasletCount(m) == 1);
     } else {
-        // Check the scheduler info on this host
-        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+        // For functions we expect one per core
         REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
     }
+
+    // Check the number of messages executed locally and remotely
+    REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
+    REQUIRE(sch.getRecordedMessagesShared().size() == nCallsOffloadedOne);
 
     // Check the message is dispatched to the other host
     auto batchRequestsOne = faabric::scheduler::getBatchRequests();
@@ -278,7 +275,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(actualHostsTwo == expectedHostsTwo);
 
     // Check no other functions have been scheduled on this host
-    REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+    REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
+    REQUIRE(sch.getRecordedMessagesShared().size() ==
+            nCallsOffloadedOne + nCallsTwo);
 
     if (isThreads) {
         REQUIRE(sch.getFunctionFaasletCount(m) == 1);
@@ -305,16 +304,19 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
 
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
     std::string expectedSnapshot;
+
     SECTION("Threads")
     {
         execMode = faabric::BatchExecuteRequest::THREADS;
         expectedSnapshot = "threadSnap";
     }
+
     SECTION("Processes")
     {
         execMode = faabric::BatchExecuteRequest::PROCESSES;
         expectedSnapshot = "procSnap";
     }
+
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
 
     // Set up snapshot if necessary
@@ -376,9 +378,6 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     faabric::Message firstMsg = req->messages().at(0);
     REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedFaaslets);
 
-    // We expect the in flight count to be recorded locally
-    REQUIRE(sch.getFunctionInFlightCount(firstMsg) == expectedLocalCalls);
-
     faabric::util::setMockMode(false);
 }
 
@@ -423,20 +422,6 @@ TEST_CASE("Test unregistering host", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     faabric::util::setMockMode(false);
-}
-
-TEST_CASE("Test counts can't go below zero", "[scheduler]")
-{
-    cleanFaabric();
-
-    Scheduler& sch = scheduler::getScheduler();
-    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-
-    sch.notifyCallFinished(msg);
-    sch.notifyCallFinished(msg);
-    sch.notifyCallFinished(msg);
-    sch.notifyCallFinished(msg);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
 }
 
 TEST_CASE("Check test mode", "[scheduler]")

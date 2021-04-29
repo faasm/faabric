@@ -101,8 +101,6 @@ class Scheduler
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
 
-    long getFunctionInFlightCount(const faabric::Message& msg);
-
     long getFunctionFaasletCount(const faabric::Message& msg);
 
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
@@ -194,6 +192,8 @@ class Scheduler
     std::vector<faabric::Message> recordedMessagesLocal;
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
+
+    long getFunctionInFlightCount(const faabric::Message& msg);
 
     std::shared_ptr<Executor> claimFaaslet(const faabric::Message& msg);
 

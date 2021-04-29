@@ -508,7 +508,8 @@ std::shared_ptr<Executor> Scheduler::claimFaaslet(const faabric::Message& msg)
 {
     const auto& logger = faabric::util::getLogger();
     std::string funcStr = faabric::util::funcToString(msg, false);
-    int maxFaaslets = thisHostResources.cores();
+
+    int nInFlight = getFunctionInFlightCount(msg);
     int nWarmFaaslets = warmFaaslets[funcStr].size();
     int nExecutingFaaslets = executingFaaslets[funcStr].size();
     int nTotal = nWarmFaaslets + nExecutingFaaslets;
@@ -516,7 +517,7 @@ std::shared_ptr<Executor> Scheduler::claimFaaslet(const faabric::Message& msg)
     std::shared_ptr<faabric::scheduler::ExecutorFactory> factory =
       getExecutorFactory();
 
-    bool canScale = nTotal < maxFaaslets;
+    bool shouldScale = nTotal < nInFlight;
     if (nWarmFaaslets > 0) {
         // Here we have warm faaslets that we can reuse
         logger->debug("Reusing warm faaslet for {}", funcStr);
@@ -529,7 +530,7 @@ std::shared_ptr<Executor> Scheduler::claimFaaslet(const faabric::Message& msg)
         executingFaaslets[funcStr].emplace_back(exec);
 
         return executingFaaslets[funcStr].back();
-    } else if (canScale) {
+    } else if (shouldScale) {
         // We have no warm faaslets, but can scale so we add one
         // to the list of executing
         logger->debug("Scaling {} from {} -> {}", funcStr, nTotal, nTotal + 1);
@@ -541,18 +542,23 @@ std::shared_ptr<Executor> Scheduler::claimFaaslet(const faabric::Message& msg)
           thisHostResources.boundexecutors() + 1);
 
         return executingFaaslets[funcStr].back();
-    } else {
-        // Here we can't scale, so we've got to overload a random executing
-        // faaslet
-        int executingFaasletIdx = std::rand() % (nExecutingFaaslets - 1);
-
+    } else if (!executingFaaslets[funcStr].empty()) {
+        // Here we're not scaling, so we've got to overload a random executing
+        // faaslet which will do the queueing
         logger->debug(
-          "No capacity for warm {} faaslets, reusing {} ({} executing)",
+          "No capacity for warm {} faaslets (using one of {} executing)",
           funcStr,
-          executingFaasletIdx,
           nExecutingFaaslets);
 
-        return executingFaaslets[funcStr].at(executingFaasletIdx);
+        return executingFaaslets[funcStr][std::rand() %
+                                          executingFaaslets[funcStr].size()];
+    } else {
+        logger->error(
+          "Unable to claim faaslet: {} warm, {} executing, {} cores",
+          nWarmFaaslets,
+          nExecutingFaaslets,
+          thisHostResources.cores());
+        throw std::runtime_error("Unable to claim faaslet");
     }
 }
 

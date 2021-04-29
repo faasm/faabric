@@ -175,15 +175,15 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Stop the server
     server.stop();
 
-    faabric::Message m = req->messages().at(0);
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
     // Check no other hosts have been registered
+    faabric::Message m = req->messages().at(0);
     REQUIRE(sch.getFunctionRegisteredHostCount(m) == 0);
 
-    // Check we've got faaslets and in-flight messages
-    REQUIRE(sch.getFunctionInFlightCount(m) == nCalls);
-    REQUIRE(sch.getFunctionFaasletCount(m) == nCalls);
+    // Check calls have been registered
+    REQUIRE(sch.getRecordedMessagesLocal().size() == nCalls);
+    REQUIRE(sch.getRecordedMessagesShared().empty());
 }
 
 TEST_CASE("Test get resources request", "[scheduler]")
