@@ -1,3 +1,5 @@
+#include "faabric/util/clock.h"
+#include "faabric/util/timing.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
@@ -97,9 +99,20 @@ void Executor::executeTask(int threadPoolIdx,
                                 threadPoolIdx);
 
                   auto& sch = faabric::scheduler::getScheduler();
+                  auto& conf = faabric::util::getSystemConfig();
 
                   for (;;) {
-                      auto task = threadQueues[threadPoolIdx].dequeue();
+                      std::pair<int,
+                                std::shared_ptr<faabric::BatchExecuteRequest>>
+                        task;
+                      try {
+                          task = threadQueues[threadPoolIdx].dequeue(
+                            conf.boundTimeout);
+                      } catch (faabric::util::QueueTimeoutException& ex) {
+                          // Tell the executor you're done
+                          threadFinished(threadPoolIdx);
+                          break;
+                      }
 
                       int msgIdx = task.first;
                       std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -170,6 +183,16 @@ std::string Executor::executeFunction(
     finishCall(msg, true, resultStr);
 
     return resultStr;
+}
+
+void Executor::threadFinished(int threadPoolIdx) {
+    threads.erase(threadPoolIdx);
+
+    if(threads.empty()) {
+        // Notify that we're done
+        auto& sch = faabric::scheduler::getScheduler();
+        sch.notifyFaasletFinished(this, boundMessage);
+    }
 }
 
 // ------------------------------------------

@@ -7,6 +7,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/timing.h>
 
 #include <future>
 #include <shared_mutex>
@@ -38,6 +39,10 @@ class Executor
     virtual void flush();
 
     std::string id;
+
+    bool isOld();
+
+    void threadFinished(int threadPoolIdx);
 
   protected:
     virtual bool doExecute(faabric::Message& msg);
@@ -121,6 +126,10 @@ class Scheduler
 
     int32_t awaitThreadResult(uint32_t messageId);
 
+    void notifyCallFinished(const faabric::Message& msg);
+
+    void notifyFaasletFinished(Executor* exec, const faabric::Message& msg);
+
     std::string getThisHost();
 
     std::unordered_set<std::string> getAvailableHosts();
@@ -160,10 +169,6 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
-    void notifyCallFinished(const faabric::Message& msg);
-
-    void notifyFaasletFinished(const faabric::Message& msg);
-
   private:
     std::string thisHost;
 
@@ -177,7 +182,6 @@ class Scheduler
 
     std::shared_mutex mx;
 
-    std::unordered_map<std::string, long> faasletCounts;
     std::unordered_map<std::string, long> inFlightCounts;
 
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
@@ -191,9 +195,9 @@ class Scheduler
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 
-    std::shared_ptr<Executor> claimFaaslet(const faabric::Message &msg);
+    std::shared_ptr<Executor> claimFaaslet(const faabric::Message& msg);
 
-    void returnFaaslet(const faabric::Message &msg,
+    void returnFaaslet(const faabric::Message& msg,
                        std::shared_ptr<Executor> faaslet);
 
     void addFaaslets(const faabric::Message& msg);

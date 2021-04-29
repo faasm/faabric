@@ -147,17 +147,26 @@ void Scheduler::notifyCallFinished(const faabric::Message& msg)
     thisHostResources.set_functionsinflight(newInFlight);
 }
 
-void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
+void Scheduler::notifyFaasletFinished(Executor* exec,
+                                      const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
-    const std::string funcStr = faabric::util::funcToString(msg, false);
 
-    auto logger = faabric::util::getLogger();
-    // Unregister this host if not master and no more faaslets assigned to
-    // this function
-    if (msg.masterhost().empty()) {
-        logger->error("Message {} without master host set", funcStr);
-        throw std::runtime_error("Message without master host");
+    std::string funcStr = faabric::util::funcToString(msg, false);
+
+    for (int i = 0; i < warmFaaslets.size(); i++) {
+        if (warmFaaslets[funcStr].at(i)->id == exec->id) {
+            warmFaaslets[funcStr].erase(warmFaaslets[funcStr].begin() + i);
+            break;
+        }
+    }
+
+    for (int i = 0; i < executingFaaslets.size(); i++) {
+        if (executingFaaslets[funcStr].at(i)->id == exec->id) {
+            executingFaaslets[funcStr].erase(
+              executingFaaslets[funcStr].begin() + i);
+            break;
+        }
     }
 
     int count = getFunctionFaasletCount(msg);
@@ -522,7 +531,8 @@ std::shared_ptr<Executor> Scheduler::claimFaaslet(const faabric::Message& msg)
         executingFaaslets[funcStr].emplace_back(factory->createExecutor(msg));
 
         // Update host resources
-        thisHostResources.set_boundexecutors(thisHostResources.boundexecutors() + 1);
+        thisHostResources.set_boundexecutors(
+          thisHostResources.boundexecutors() + 1);
 
         return executingFaaslets[funcStr].back();
     } else {

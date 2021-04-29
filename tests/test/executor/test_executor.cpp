@@ -28,18 +28,15 @@ void executeWithDummyExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     auto& conf = faabric::util::getSystemConfig();
     int boundOriginal = conf.boundTimeout;
-    int unboundOriginal = conf.unboundTimeout;
     int overrideCpuOriginal = conf.overrideCpuCount;
 
     conf.overrideCpuCount = 10;
     conf.boundTimeout = 1000;
-    conf.unboundTimeout = 1000;
 
     auto& sch = faabric::scheduler::getScheduler();
     sch.callFunctions(req);
 
     conf.boundTimeout = boundOriginal;
-    conf.unboundTimeout = unboundOriginal;
     conf.overrideCpuCount = overrideCpuOriginal;
 }
 

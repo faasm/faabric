@@ -32,7 +32,6 @@ TEST_CASE("Test default system config initialisation", "[util]")
 
     REQUIRE(conf.globalMessageTimeout == 60000);
     REQUIRE(conf.boundTimeout == 30000);
-    REQUIRE(conf.unboundTimeout == 300000);
     REQUIRE(conf.chainedCallTimeout == 300000);
 
     REQUIRE(conf.defaultMpiWorldSize == 5);
@@ -63,7 +62,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
 
     std::string globalTimeout = setEnvVar("GLOBAL_MESSAGE_TIMEOUT", "9876");
     std::string boundTimeout = setEnvVar("BOUND_TIMEOUT", "6666");
-    std::string unboundTimeout = setEnvVar("UNBOUND_TIMEOUT", "5555");
     std::string chainedTimeout = setEnvVar("CHAINED_CALL_TIMEOUT", "9999");
 
     std::string faasmLocalDir = setEnvVar("FAASM_LOCAL_DIR", "/tmp/blah");
@@ -94,7 +92,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
 
     REQUIRE(conf.globalMessageTimeout == 9876);
     REQUIRE(conf.boundTimeout == 6666);
-    REQUIRE(conf.unboundTimeout == 5555);
     REQUIRE(conf.chainedCallTimeout == 9999);
 
     REQUIRE(conf.functionDir == "/tmp/blah/wasm");
@@ -128,7 +125,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
 
     setEnvVar("GLOBAL_MESSAGE_TIMEOUT", globalTimeout);
     setEnvVar("BOUND_TIMEOUT", boundTimeout);
-    setEnvVar("UNBOUND_TIMEOUT", unboundTimeout);
     setEnvVar("CHAINED_CALL_TIMEOUT", chainedTimeout);
 
     setEnvVar("FAASM_LOCAL_DIR", faasmLocalDir);

@@ -48,7 +48,6 @@ void SystemConfig::initialise()
     globalMessageTimeout =
       this->getSystemConfIntParam("GLOBAL_MESSAGE_TIMEOUT", "60000");
     boundTimeout = this->getSystemConfIntParam("BOUND_TIMEOUT", "30000");
-    unboundTimeout = this->getSystemConfIntParam("UNBOUND_TIMEOUT", "300000");
     chainedCallTimeout =
       this->getSystemConfIntParam("CHAINED_CALL_TIMEOUT", "300000");
 
@@ -123,7 +122,6 @@ void SystemConfig::print()
     logger->info("--- Timeouts ---");
     logger->info("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
     logger->info("BOUND_TIMEOUT              {}", boundTimeout);
-    logger->info("UNBOUND_TIMEOUT            {}", unboundTimeout);
     logger->info("CHAINED_CALL_TIMEOUT       {}", chainedCallTimeout);
 
     logger->info("--- Storage ---");
