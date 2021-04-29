@@ -23,7 +23,10 @@ Executor::Executor(const faabric::Message& msg)
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
 }
 
-Executor::~Executor() {}
+Executor::~Executor()
+{
+    finish();
+}
 
 void Executor::finish()
 {
@@ -43,6 +46,8 @@ void Executor::finish()
         }
     }
 
+    threadQueues.clear();
+
     // Hook
     this->postFinish();
 }
@@ -54,10 +59,11 @@ void Executor::finishCall(faabric::Message& msg,
     // Hook
     this->preFinishCall(msg, success, errorMsg);
 
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
+    const auto& logger = faabric::util::getLogger();
     const std::string funcStr = faabric::util::funcToString(msg, true);
+
     logger->info("Finished {}", funcStr);
+
     if (!success) {
         msg.set_outputdata(errorMsg);
     }
@@ -128,12 +134,14 @@ void Executor::executeTask(int threadPoolIdx,
                       int32_t returnValue;
                       if (isThread) {
                           returnValue = executeThread(threadPoolIdx, req, msg);
+
+                          // Set the result for this thread
+                          sch.setThreadResult(msg, returnValue);
                       } else {
                           returnValue = doExecute(msg);
-                      }
 
-                      // Set the result for this thread
-                      sch.setThreadResult(msg, returnValue);
+                          finishCall(msg, true, "Success");
+                      }
 
                       // Notify scheduler finished
                       sch.notifyCallFinished(msg);
@@ -175,20 +183,20 @@ std::string Executor::executeFunction(
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     const std::string funcStr = faabric::util::funcToString(req);
 
+    // This will queue if overloaded
     executeTask(0, msgIdx, req, false);
 
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-
-    std::string resultStr = "Success";
-    finishCall(msg, true, resultStr);
+    std::string resultStr = fmt::format("Message {} submitted", msg.id());
 
     return resultStr;
 }
 
-void Executor::threadFinished(int threadPoolIdx) {
+void Executor::threadFinished(int threadPoolIdx)
+{
     threads.erase(threadPoolIdx);
 
-    if(threads.empty()) {
+    if (threads.empty()) {
         // Notify that we're done
         auto& sch = faabric::scheduler::getScheduler();
         sch.notifyFaasletFinished(this, boundMessage);
@@ -216,6 +224,8 @@ void Executor::preFinishCall(faabric::Message& call,
                              bool success,
                              const std::string& errorMsg)
 {}
+
+void Executor::postFinish() {}
 
 void Executor::postFinishCall() {}
 

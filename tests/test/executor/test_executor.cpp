@@ -89,7 +89,7 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
 {
     cleanFaabric();
 
-    int nThreads = 10;
+    int nThreads = 8;
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "thread-check", 1);
     faabric::Message& msg = req->mutable_messages()->at(0);

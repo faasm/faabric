@@ -20,24 +20,31 @@ bool DummyExecutor::doExecute(faabric::Message& call)
           fmt::format("Threaded function {} executed successfully", call.id()));
 
         // Set up the request
-        int nThreads = std::stoi(call.inputdata());
+        int nThreads = 5;
+        if (!call.inputdata().empty()) {
+            nThreads = std::stoi(call.inputdata());
+        }
+
         std::shared_ptr<faabric::BatchExecuteRequest> req =
           faabric::util::batchExecFactory("dummy", "thread-check", nThreads);
+        req->set_type(faabric::BatchExecuteRequest::THREADS);
 
-        for (faabric::Message& m : *req->mutable_messages()) {
+        for (int i = 0; i < req->messages_size(); i++) {
+            faabric::Message& m = req->mutable_messages()->at(i);
             m.set_snapshotkey(call.snapshotkey());
+            m.set_appindex(i + 1);
         }
 
         // Call the threads
         Scheduler& sch = getScheduler();
         sch.callFunctions(req);
-    } else if (call.function() == "simple") {
+
+        for (auto& m : req->messages()) {
+            sch.awaitThreadResult(m.id());
+        }
+    } else {
         call.set_outputdata(
           fmt::format("Simple function {} executed successfully", call.id()));
-    } else {
-        logger->error(
-          "Dummy function {}/{} not recognised", call.user(), call.function());
-        return false;
     }
 
     return true;

@@ -135,6 +135,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         expectedSnapshot = "procSnap";
     }
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
+
     bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
 
     // Set up a dummy snapshot if necessary
@@ -181,16 +182,14 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
       faabric::util::batchExecFactory("foo", "bar", nCallsOne);
     reqOne->set_type(execMode);
-    for (int i = 0; i < nCallsOne; i++) {
-        // Set important bind fields
-        faabric::Message& msg = reqOne->mutable_messages()->at(i);
-        msg.set_ispython(true);
-        msg.set_pythonfunction("baz");
-        msg.set_pythonuser("foobar");
-        msg.set_issgx(true);
 
+    for (int i = 0; i < nCallsOne; i++) {
         // Set snapshot key
+        faabric::Message& msg = reqOne->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
+
+        // Set app index
+        msg.set_appindex(i);
 
         // Expect this host to handle up to its number of cores
         // If in threads mode, expect it _not_ to execute
@@ -432,12 +431,6 @@ TEST_CASE("Test counts can't go below zero", "[scheduler]")
 
     Scheduler& sch = scheduler::getScheduler();
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-
-    sch.notifyFaasletFinished(msg);
-    sch.notifyFaasletFinished(msg);
-    sch.notifyFaasletFinished(msg);
-    sch.notifyFaasletFinished(msg);
-    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
 
     sch.notifyCallFinished(msg);
     sch.notifyCallFinished(msg);

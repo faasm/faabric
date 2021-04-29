@@ -200,12 +200,6 @@ class Scheduler
     void returnFaaslet(const faabric::Message& msg,
                        std::shared_ptr<Executor> faaslet);
 
-    void addFaaslets(const faabric::Message& msg);
-
-    void addFaasletsForBatch(const faabric::Message& msg);
-
-    void doAddFaaslets(const faabric::Message& msg, int count);
-
     faabric::HostResources getHostResources(const std::string& host);
 
     void incrementInFlightCount(const faabric::Message& msg, int count);

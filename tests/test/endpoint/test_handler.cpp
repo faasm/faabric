@@ -16,25 +16,16 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
     // Note - must be async to avoid needing a result
     faabric::Message call = faabric::util::messageFactory("foo", "bar");
     call.set_isasync(true);
-    std::string user;
-    std::string function;
+    std::string user = "foo";
+    std::string function = "bar";
+    std::string actualInput;
 
-    SECTION("C/C++")
+    SECTION("With input")
     {
-        user = "demo";
-        function = "echo";
-
-        SECTION("With input") { call.set_inputdata("foobar"); }
-        SECTION("No input") {}
+        actualInput = "foobar";
+        call.set_inputdata(actualInput);
     }
-    SECTION("Python")
-    {
-        user = PYTHON_USER;
-        function = PYTHON_FUNC;
-        call.set_pythonuser("python");
-        call.set_pythonfunction("hello");
-        call.set_ispython(true);
-    }
+    SECTION("No input") {}
 
     call.set_user(user);
     call.set_function(function);
@@ -57,6 +48,7 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
     REQUIRE(actualCall.user() == call.user());
     REQUIRE(actualCall.function() == call.function());
     REQUIRE(actualCall.id() == std::stoi(responseStr));
+    REQUIRE(actualCall.inputdata() == actualInput);
 }
 
 TEST_CASE("Test empty invocation", "[endpoint]")

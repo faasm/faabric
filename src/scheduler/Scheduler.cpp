@@ -109,6 +109,14 @@ long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
     return inFlightCounts[funcStr];
 }
 
+void Scheduler::incrementInFlightCount(const faabric::Message& msg, int count)
+{
+    const std::string funcStr = faabric::util::funcToString(msg, false);
+    inFlightCounts[funcStr] += count;
+    thisHostResources.set_functionsinflight(
+      thisHostResources.functionsinflight() + count);
+}
+
 long Scheduler::getFunctionFaasletCount(const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
@@ -365,8 +373,6 @@ std::vector<std::string> Scheduler::callFunctions(
                 f->batchExecuteThreads(localMessageIdxs, req);
             }
         } else {
-            addFaaslets(firstMsg);
-
             for (auto i : localMessageIdxs) {
                 std::shared_ptr<Executor> f = claimFaaslet(firstMsg);
                 f->executeFunction(i, req);
