@@ -19,6 +19,7 @@ Executor::Executor(const faabric::Message& msg)
 
     // Set an ID for this Executor
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
+    faabric::util::getLogger()->debug("Starting executor {}", id);
 }
 
 Executor::~Executor()
@@ -72,6 +73,9 @@ void Executor::finishCall(faabric::Message& msg,
     auto& sch = faabric::scheduler::getScheduler();
     logger->debug("Setting function result for {}", funcStr);
     sch.setFunctionResult(msg);
+
+    // Notify scheduler finished
+    sch.notifyCallFinished(this, msg);
 
     // Hook
     this->postFinishCall();
@@ -134,11 +138,9 @@ void Executor::executeTask(int threadPoolIdx,
                       } else {
                           returnValue = doExecute(msg);
 
+                          // Notify scheduler we've finished the call
                           finishCall(msg, true, "Success");
                       }
-
-                      // Notify scheduler finished
-                      sch.notifyCallFinished(this, msg);
                   }
 
                   logger->debug("Thread pool thread {} shutting down",

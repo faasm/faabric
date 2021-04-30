@@ -135,16 +135,22 @@ void Scheduler::notifyCallFinished(Executor* exec, const faabric::Message& msg)
     const auto& logger = faabric::util::getLogger();
     const std::string funcStr = faabric::util::funcToString(msg, false);
 
+    int nExecuting = executingExecutors[funcStr].size();
+
     // Remove from executing executors
     std::shared_ptr<Executor> execPtr = nullptr;
-    for (int i = 0; i < executingExecutors.size(); i++) {
-        if (executingExecutors[funcStr].at(i)->id == exec->id) {
+    for (int i = 0; i < nExecuting; i++) {
+        std::string thisId = executingExecutors[funcStr].at(i)->id;
+
+        if (thisId == exec->id) {
             execPtr = executingExecutors[funcStr].at(i);
 
             executingExecutors[funcStr].erase(
               executingExecutors[funcStr].begin() + i);
 
             break;
+        } else {
+            logger->debug("{} is not {}", thisId, exec->id);
         }
     }
 
