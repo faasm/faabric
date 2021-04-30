@@ -20,6 +20,21 @@ FaabricMain::FaabricMain(
 
 void FaabricMain::startBackground()
 {
+    // Start basics
+    startRunner();
+
+    // In-memory state
+    startStateServer();
+
+    // Snapshots
+    startSnapshotServer();
+
+    // Work sharing
+    startFunctionCallServer();
+}
+
+void FaabricMain::startRunner()
+{
     // Ensure we can ping both redis instances
     faabric::redis::Redis::getQueue().ping();
     faabric::redis::Redis::getState().ping();
@@ -34,15 +49,6 @@ void FaabricMain::startBackground()
     // Check for SGX capability and create shared enclave
     sgx::checkSgxSetup();
 #endif
-
-    // In-memory state
-    startStateServer();
-
-    // Snapshots
-    startSnapshotServer();
-
-    // Work sharing
-    startFunctionCallServer();
 }
 
 void FaabricMain::startFunctionCallServer()

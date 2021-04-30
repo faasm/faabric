@@ -13,8 +13,6 @@ namespace faabric::scheduler {
 Executor::Executor(const faabric::Message& msg)
   : boundMessage(msg)
 {
-    const auto& logger = faabric::util::getLogger();
-
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
     threadPoolSize = faabric::util::getUsableCores();
@@ -180,7 +178,6 @@ std::string Executor::executeFunction(
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     const std::string funcStr = faabric::util::funcToString(req);
 
     // This will queue if overloaded

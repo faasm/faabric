@@ -15,6 +15,8 @@ class FaabricMain
 
     void startBackground();
 
+    void startRunner();
+
     void startFunctionCallServer();
 
     void startStateServer();
