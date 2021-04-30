@@ -24,14 +24,6 @@ class FunctionCallServer final
     FunctionCallServer();
 
     /*
-    Status Flush(ServerContext* context,
-                 const faabric::Message* request,
-                 faabric::FunctionStatusResponse* response) override;
-
-    Status MPICall(ServerContext* context,
-                   const faabric::MPIMessage* request,
-                   faabric::FunctionStatusResponse* response) override;
-
     Status GetResources(ServerContext* context,
                         const faabric::ResourceRequest* request,
                         faabric::HostResources* response) override;
@@ -56,5 +48,11 @@ class FunctionCallServer final
                 int bodySize) override;
 
     void recvMpiMessage(const void* msgData, int size);
+
+    void recvFlush();
+
+    void recvExecuteFunctions(const void* msgData, int size);
+
+    void recvUnregister(const void* msgData, int size);
 };
 }

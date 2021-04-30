@@ -1,12 +1,9 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/FunctionCallServer.h>
 
 #include <faabric/rpc/macros.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
-
-#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 
@@ -87,6 +84,8 @@ void clearMockRequests()
 // -----------------------------------
 // Message Client
 // -----------------------------------
+
+// TODO - remove this constructor?
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   : faabric::transport::MessageEndpoint(hostIn, FUNCTION_CALL_PORT)
 {}
@@ -101,7 +100,9 @@ FunctionCallClient::FunctionCallClient(
 
 FunctionCallClient::~FunctionCallClient()
 {
-    this->close();
+    if (!faabric::util::isMockMode()) {
+        this->close();
+    }
 }
 
 void FunctionCallClient::close()
@@ -109,18 +110,35 @@ void FunctionCallClient::close()
     MessageEndpoint::close();
 }
 
+void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
+{
+    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
+    int functionNum = static_cast<int>(call);
+    size_t headerSize = sizeof(faabric::scheduler::FunctionCalls);
+    char* header = new char[headerSize];
+    memcpy(header, &functionNum, headerSize);
+    // Mark that we are sending more messages
+    send(header, headerSize, true);
+}
+
 void FunctionCallClient::sendFlush()
 {
-    /*
     faabric::Message call;
     if (faabric::util::isMockMode()) {
         flushCalls.emplace_back(host, call);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("function_flush", stub->Flush(&context, call, &response));
+        // Send the header first
+        sendHeader(faabric::scheduler::FunctionCalls::Flush);
+
+        // Send the message body
+        size_t msgSize = call.ByteSizeLong();
+        char* serialisedMsg = new char[msgSize];
+        // Serialise using protobuf
+        if (!call.SerializeToArray(serialisedMsg, msgSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        send(serialisedMsg, msgSize);
     }
-    */
 }
 
 void FunctionCallClient::sendMPIMessage(
@@ -130,14 +148,7 @@ void FunctionCallClient::sendMPIMessage(
         mpiMessages.emplace_back(host, *msg);
     } else {
         // Send the header first
-        // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
-        int functionNum =
-          static_cast<int>(faabric::scheduler::FunctionCalls::MpiMessage);
-        size_t headerSize = sizeof(faabric::scheduler::FunctionCalls);
-        char* header = new char[headerSize];
-        memcpy(header, &functionNum, headerSize);
-        // Mark that we are sending more messages
-        send(header, headerSize, true);
+        sendHeader(faabric::scheduler::FunctionCalls::MpiMessage);
 
         // Send the message body
         size_t msgSize = msg->ByteSizeLong();
@@ -177,29 +188,40 @@ faabric::HostResources FunctionCallClient::getResources(
 void FunctionCallClient::executeFunctions(
   const faabric::BatchExecuteRequest& req)
 {
-    /*
     if (faabric::util::isMockMode()) {
         batchMessages.emplace_back(host, req);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("exec_funcs",
-                  stub->ExecuteFunctions(&context, req, &response));
+        // Send the header first
+        sendHeader(faabric::scheduler::FunctionCalls::ExecuteFunctions);
+
+        // Send the message body
+        size_t msgSize = req.ByteSizeLong();
+        char* serialisedMsg = new char[msgSize];
+        // Serialise using protobuf
+        if (!req.SerializeToArray(serialisedMsg, msgSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        send(serialisedMsg, msgSize);
     }
-    */
 }
 
 void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
 {
-    /*
     if (faabric::util::isMockMode()) {
         unregisterRequests.emplace_back(host, req);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("unregister", stub->Unregister(&context, req, &response));
+        // Send the header first
+        sendHeader(faabric::scheduler::FunctionCalls::Unregister);
+
+        // Send the message body
+        size_t msgSize = req.ByteSizeLong();
+        char* serialisedMsg = new char[msgSize];
+        // Serialise using protobuf
+        if (!req.SerializeToArray(serialisedMsg, msgSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        send(serialisedMsg, msgSize);
     }
-    */
 }
 
 void FunctionCallClient::doRecv(const void* msgData, int size)

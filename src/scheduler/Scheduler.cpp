@@ -182,7 +182,7 @@ void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
             req.set_host(thisHost);
             *req.mutable_function() = msg;
 
-            FunctionCallClient c(msg.masterhost());
+            FunctionCallClient c(this->messageContext, msg.masterhost());
             c.unregister(req);
         }
     }
@@ -273,7 +273,7 @@ std::vector<std::string> Scheduler::callFunctions(
                           funcStr,
                           masterHost);
 
-            FunctionCallClient c(masterHost);
+            FunctionCallClient c(this->messageContext, masterHost);
             c.executeFunctions(req);
         } else {
             // At this point we know we're the master host, and we've not been
@@ -485,7 +485,7 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
     logger->debug(
       "Sending {} of {} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
-    FunctionCallClient c(host);
+    FunctionCallClient c(this->messageContext, host);
     faabric::BatchExecuteRequest hostRequest =
       faabric::util::batchExecFactory(thisHostMsgs);
     hostRequest.set_snapshotkey(req.snapshotkey());
@@ -583,7 +583,7 @@ void Scheduler::broadcastFlush()
 
     // Dispatch flush message to all other hosts
     for (auto& otherHost : allHosts) {
-        FunctionCallClient c(otherHost);
+        FunctionCallClient c(this->messageContext, otherHost);
         c.sendFlush();
     }
 
@@ -719,7 +719,7 @@ faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
     // Get the resources for that host
     faabric::ResourceRequest resourceReq;
-    FunctionCallClient c(host);
+    FunctionCallClient c(this->messageContext, host);
 
     faabric::HostResources resp = c.getResources(resourceReq);
 

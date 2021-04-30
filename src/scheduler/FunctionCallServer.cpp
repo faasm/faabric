@@ -29,6 +29,15 @@ void FunctionCallServer::doRecv(const void* headerData,
         case faabric::scheduler::FunctionCalls::MpiMessage:
             this->recvMpiMessage(bodyData, bodySize);
             break;
+        case faabric::scheduler::FunctionCalls::Flush:
+            this->recvFlush();
+            break;
+        case faabric::scheduler::FunctionCalls::ExecuteFunctions:
+            this->recvExecuteFunctions(bodyData, bodySize);
+            break;
+        case faabric::scheduler::FunctionCalls::Unregister:
+            this->recvUnregister(bodyData, bodySize);
+            break;
         default:
             throw std::runtime_error(
               fmt::format("Unrecognized call header: {}", call));
@@ -50,13 +59,8 @@ void FunctionCallServer::recvMpiMessage(const void* msgData, int size)
     world.enqueueMessage(mpiMsg);
 }
 
-/*
-Status FunctionCallServer::Flush(ServerContext* context,
-                                 const faabric::Message* request,
-                                 faabric::FunctionStatusResponse* response)
+void FunctionCallServer::recvFlush()
 {
-    auto logger = faabric::util::getLogger();
-
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
 
@@ -65,22 +69,42 @@ Status FunctionCallServer::Flush(ServerContext* context,
 
     // Reset the scheduler
     scheduler.reset();
-
-    return Status::OK;
 }
 
-Status FunctionCallServer::MPICall(ServerContext* context,
-                                   const faabric::MPIMessage* request,
-                                   faabric::FunctionStatusResponse* response)
+void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
 {
+    // TODO - avoiding having to copy the message here
+    faabric::BatchExecuteRequest requestCopy;
 
-    // TODO - avoid copying message
-    faabric::MPIMessage m = *request;
+    // Deserialise message string
+    if (!requestCopy.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
 
-
-    return Status::OK;
+    // This host has now been told to execute these functions no matter what
+    scheduler.callFunctions(requestCopy, true);
 }
 
+void FunctionCallServer::recvUnregister(const void* msgData, int size)
+{
+    // TODO - avoiding having to copy the message here
+    faabric::UnregisterRequest request;
+
+    // Deserialise message string
+    if (!request.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    std::string funcStr =
+      faabric::util::funcToString(request.function(), false);
+    faabric::util::getLogger()->info(
+      "Unregistering host {} for {}", request.host(), funcStr);
+
+    // Remove the host from the warm set
+    scheduler.removeRegisteredHost(request.host(), request.function());
+}
+
+/*
 Status FunctionCallServer::GetResources(ServerContext* context,
                                         const faabric::ResourceRequest* request,
                                         faabric::HostResources* response)
@@ -90,32 +114,5 @@ Status FunctionCallServer::GetResources(ServerContext* context,
     return Status::OK;
 }
 
-Status FunctionCallServer::ExecuteFunctions(
-  ServerContext* context,
-  const faabric::BatchExecuteRequest* request,
-  faabric::FunctionStatusResponse* response)
-{
-    // TODO - avoiding having to copy the message here
-    faabric::BatchExecuteRequest requestCopy = *request;
-
-    // This host has now been told to execute these functions no matter what
-    scheduler.callFunctions(requestCopy, true);
-
-    return Status::OK;
-}
-
-Status FunctionCallServer::Unregister(ServerContext* context,
-                                      const faabric::UnregisterRequest* request,
-                                      faabric::FunctionStatusResponse* response)
-{
-    std::string funcStr =
-      faabric::util::funcToString(request->function(), false);
-    faabric::util::getLogger()->info(
-      "Unregistering host {} for {}", request->host(), funcStr);
-
-    // Remove the host from the warm set
-    scheduler.removeRegisteredHost(request->host(), request->function());
-    return Status::OK;
-}
 */
 }

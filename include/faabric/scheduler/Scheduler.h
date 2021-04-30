@@ -2,6 +2,7 @@
 
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
+#include <faabric/transport/MessageContext.h>
 
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -97,6 +98,11 @@ class Scheduler
     std::unordered_set<unsigned int> getChainedFunctions(unsigned int msgId);
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
+
+    // ----------------------------------
+    // Message transport
+    // ----------------------------------
+    faabric::transport::MessageContext messageContext;
 
   private:
     std::string thisHost;

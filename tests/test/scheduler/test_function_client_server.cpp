@@ -18,7 +18,7 @@ using namespace scheduler;
 
 namespace tests {
 
-TEST_CASE("Test sending MPI message", "[scheduler]")
+TEST_CASE("Test sending MPI message", "[new-scheduler]")
 {
     cleanFaabric();
 
@@ -78,7 +78,7 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     server.stop(context);
 }
 
-TEST_CASE("Test sending flush message", "[scheduler]")
+TEST_CASE("Test sending flush message", "[new-scheduler]")
 {
     cleanFaabric();
 
@@ -128,7 +128,7 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     });
 
     // Send flush message
-    FunctionCallClient cli(LOCALHOST);
+    FunctionCallClient cli(context, LOCALHOST);
     cli.sendFlush();
 
     // Wait for thread to get flush message
@@ -140,6 +140,8 @@ TEST_CASE("Test sending flush message", "[scheduler]")
         tB.join();
     }
 
+    // Close the client, and then stop the server
+    cli.close();
     server.stop(context);
 
     // Check the scheduler has been flushed
@@ -150,7 +152,7 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     REQUIRE(state.getKVCount() == 0);
 }
 
-TEST_CASE("Test broadcasting flush message", "[scheduler]")
+TEST_CASE("Test broadcasting flush message", "[new-scheduler]")
 {
     cleanFaabric();
     faabric::util::setMockMode(true);
@@ -183,7 +185,7 @@ TEST_CASE("Test broadcasting flush message", "[scheduler]")
     faabric::util::setMockMode(false);
 }
 
-TEST_CASE("Test client batch execution request", "[scheduler]")
+TEST_CASE("Test client batch execution request", "[new-scheduler]")
 {
     cleanFaabric();
 
@@ -203,9 +205,12 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
 
     // Make the request
     faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
-    FunctionCallClient cli(LOCALHOST);
+    FunctionCallClient cli(context, LOCALHOST);
     cli.executeFunctions(req);
+    usleep(1000 * 100);
 
+    // Close the client
+    cli.close();
     // Stop the server
     server.stop(context);
 
@@ -312,7 +317,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     reqA.set_host("foobar");
     *reqA.mutable_function() = msg;
 
-    FunctionCallClient cli(LOCALHOST);
+    FunctionCallClient cli(context, LOCALHOST);
     cli.unregister(reqA);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
@@ -324,6 +329,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     // Stop the server
+    cli.close();
     server.stop(context);
 }
 }

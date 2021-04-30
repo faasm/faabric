@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
 
@@ -57,5 +58,7 @@ class FunctionCallClient : faabric::transport::MessageEndpoint
 
   private:
     void doRecv(const void* msgData, int size) override;
+
+    void sendHeader(faabric::scheduler::FunctionCalls call);
 };
 }

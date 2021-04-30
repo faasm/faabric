@@ -9,7 +9,9 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
 
 MessageEndpoint::~MessageEndpoint()
 {
-    this->close();
+    if (this->socket) {
+        this->close();
+    }
 }
 
 void MessageEndpoint::open(faabric::transport::MessageContext& context,
@@ -34,6 +36,10 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
         default:
             throw std::runtime_error("Unrecognized socket type");
     }
+
+    // Set linger period to zero. This avoids blocking if closing a socket with
+    // outstanding messages.
+    this->socket->set(zmq::sockopt::linger, 0);
 
     // Bind or connect the socket
     if (bind) {
