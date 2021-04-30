@@ -2,12 +2,85 @@
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 
+using namespace faabric::scheduler;
+
 namespace tests {
+
+class TestExecutor final : public Executor
+{
+  public:
+    TestExecutor(const faabric::Message& msg)
+      : Executor(msg)
+    {}
+
+    ~TestExecutor() {}
+
+    bool doExecute(faabric::Message& call)
+    {
+        auto logger = faabric::util::getLogger();
+
+        if (call.function() == "thread-check") {
+            call.set_outputdata(fmt::format(
+              "Threaded function {} executed successfully", call.id()));
+
+            // Set up the request
+            int nThreads = 5;
+            if (!call.inputdata().empty()) {
+                nThreads = std::stoi(call.inputdata());
+            }
+
+            std::shared_ptr<faabric::BatchExecuteRequest> req =
+              faabric::util::batchExecFactory(
+                "dummy", "thread-check", nThreads);
+            req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+            for (int i = 0; i < req->messages_size(); i++) {
+                faabric::Message& m = req->mutable_messages()->at(i);
+                m.set_snapshotkey(call.snapshotkey());
+                m.set_appindex(i + 1);
+            }
+
+            // Call the threads
+            Scheduler& sch = getScheduler();
+            sch.callFunctions(req);
+
+            for (auto& m : req->messages()) {
+                sch.awaitThreadResult(m.id());
+            }
+        } else {
+            call.set_outputdata(fmt::format(
+              "Simple function {} executed successfully", call.id()));
+        }
+
+        return true;
+    }
+
+    int32_t executeThread(int threadPoolIdx,
+                          std::shared_ptr<faabric::BatchExecuteRequest> req,
+                          faabric::Message& msg)
+    {
+        auto logger = faabric::util::getLogger();
+        logger->debug("TestExecutor executing thread {}", msg.id());
+
+        return msg.id() / 100;
+    }
+};
+
+class TestExecutorFactory : public ExecutorFactory
+{
+  protected:
+    std::shared_ptr<Executor> createExecutor(
+      const faabric::Message& msg) override
+    {
+        return std::make_shared<TestExecutor>(msg);
+    }
+};
 
 std::string setUpDummySnapshot()
 {
@@ -24,8 +97,12 @@ std::string setUpDummySnapshot()
     return snapKey;
 }
 
-void executeWithDummyExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req)
+void executeWithTestExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
+    std::shared_ptr<TestExecutorFactory> fac =
+      std::make_shared<TestExecutorFactory>();
+    setExecutorFactory(fac);
+
     auto& conf = faabric::util::getSystemConfig();
     int boundOriginal = conf.boundTimeout;
     int overrideCpuOriginal = conf.overrideCpuCount;
@@ -50,7 +127,7 @@ TEST_CASE("Test executing simple function", "[executor]")
 
     REQUIRE(req->messages_size() == 1);
 
-    executeWithDummyExecutor(req);
+    executeWithTestExecutor(req);
 
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message result = sch.getFunctionResult(msgId, 1000);
@@ -75,7 +152,7 @@ TEST_CASE("Test executing threads directly", "[executor]")
         messageIds.emplace_back(req->messages().at(i).id());
     }
 
-    executeWithDummyExecutor(req);
+    executeWithTestExecutor(req);
 
     auto& sch = faabric::scheduler::getScheduler();
     for (int i = 0; i < nThreads; i++) {
@@ -99,7 +176,7 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     std::vector<uint32_t> messageIds;
     msg.set_snapshotkey(snapKey);
 
-    executeWithDummyExecutor(req);
+    executeWithTestExecutor(req);
 
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
