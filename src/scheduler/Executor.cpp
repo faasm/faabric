@@ -68,12 +68,8 @@ void Executor::finishCall(faabric::Message& msg,
 
     fflush(stdout);
 
-    // Notify the scheduler *before* setting the result. Calls awaiting
-    // the result will carry on blocking
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.notifyCallFinished(msg);
-
     // Set result
+    auto& sch = faabric::scheduler::getScheduler();
     logger->debug("Setting function result for {}", funcStr);
     sch.setFunctionResult(msg);
 
@@ -142,7 +138,7 @@ void Executor::executeTask(int threadPoolIdx,
                       }
 
                       // Notify scheduler finished
-                      sch.notifyCallFinished(msg);
+                      sch.notifyCallFinished(this, msg);
                   }
 
                   logger->debug("Thread pool thread {} shutting down",

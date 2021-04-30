@@ -88,7 +88,6 @@ void Scheduler::reset()
 
     // Reset scheduler state
     registeredHosts.clear();
-    inFlightCounts.clear();
 
     // Records
     recordedMessagesAll.clear();
@@ -101,20 +100,6 @@ void Scheduler::shutdown()
     reset();
 
     removeHostFromGlobalSet(thisHost);
-}
-
-long Scheduler::getFunctionInFlightCount(const faabric::Message& msg)
-{
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    return inFlightCounts[funcStr];
-}
-
-void Scheduler::incrementInFlightCount(const faabric::Message& msg, int count)
-{
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    inFlightCounts[funcStr] += count;
-    thisHostResources.set_functionsinflight(
-      thisHostResources.functionsinflight() + count);
 }
 
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
@@ -143,16 +128,36 @@ void Scheduler::removeRegisteredHost(const std::string& host,
     registeredHosts[funcStr].erase(host);
 }
 
-void Scheduler::notifyCallFinished(const faabric::Message& msg)
+void Scheduler::notifyCallFinished(Executor* exec, const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
 
+    const auto& logger = faabric::util::getLogger();
     const std::string funcStr = faabric::util::funcToString(msg, false);
 
-    inFlightCounts[funcStr] = decrementAboveZero(inFlightCounts[funcStr]);
+    // Remove from executing executors
+    std::shared_ptr<Executor> execPtr = nullptr;
+    for (int i = 0; i < executingExecutors.size(); i++) {
+        if (executingExecutors[funcStr].at(i)->id == exec->id) {
+            execPtr = executingExecutors[funcStr].at(i);
 
-    int newInFlight = decrementAboveZero(thisHostResources.functionsinflight());
-    thisHostResources.set_functionsinflight(newInFlight);
+            executingExecutors[funcStr].erase(
+              executingExecutors[funcStr].begin() + i);
+
+            break;
+        }
+    }
+
+    if (execPtr == nullptr) {
+        logger->error("Unable to find record of executor {}", exec->id);
+        throw std::runtime_error("Unable to find record of executor");
+    }
+
+    // Add back to pool of warm executors
+    warmExecutors[funcStr].emplace_back(execPtr);
+
+    // Update count of in-flight executors
+    thisHostResources.set_functionsinflight(executingExecutors.size());
 }
 
 void Scheduler::notifyExecutorFinished(Executor* exec,
@@ -162,6 +167,7 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
+    // Remove from warm executors
     for (int i = 0; i < warmExecutors.size(); i++) {
         if (warmExecutors[funcStr].at(i)->id == exec->id) {
             warmExecutors[funcStr].erase(warmExecutors[funcStr].begin() + i);
@@ -169,6 +175,7 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
         }
     }
 
+    // Remove from executing executors
     for (int i = 0; i < executingExecutors.size(); i++) {
         if (executingExecutors[funcStr].at(i)->id == exec->id) {
             executingExecutors[funcStr].erase(
@@ -359,8 +366,6 @@ std::vector<std::string> Scheduler::callFunctions(
             registerThread(msg.id());
         }
 
-        incrementInFlightCount(firstMsg, localMessageIdxs.size());
-
         // Handle the execution
         if (isThreads) {
             // If we have an executing executor, we give the execution to that,
@@ -509,7 +514,6 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
     const auto& logger = faabric::util::getLogger();
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    int nInFlight = getFunctionInFlightCount(msg);
     int nWarmExecutors = warmExecutors[funcStr].size();
     int nExecutingExecutors = executingExecutors[funcStr].size();
     int nTotal = nWarmExecutors + nExecutingExecutors;
@@ -517,7 +521,6 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
     std::shared_ptr<faabric::scheduler::ExecutorFactory> factory =
       getExecutorFactory();
 
-    bool shouldScale = nTotal < nInFlight;
     if (nWarmExecutors > 0) {
         // Here we have warm executors that we can reuse
         logger->debug("Reusing warm executor for {}", funcStr);
@@ -529,10 +532,8 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
         // Add it to the list of executing
         executingExecutors[funcStr].emplace_back(exec);
 
-        return executingExecutors[funcStr].back();
-    } else if (shouldScale) {
-        // We have no warm executors, but can scale so we add one
-        // to the list of executing
+    } else {
+        // We have no warm executors available, so scale up
         logger->debug("Scaling {} from {} -> {}", funcStr, nTotal, nTotal + 1);
 
         executingExecutors[funcStr].emplace_back(factory->createExecutor(msg));
@@ -540,40 +541,9 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
         // Update host resources
         thisHostResources.set_boundexecutors(
           thisHostResources.boundexecutors() + 1);
-
-        return executingExecutors[funcStr].back();
-    } else if (!executingExecutors[funcStr].empty()) {
-        // Here we're not scaling, so we've got to overload a random executing
-        // executor which will do the queueing
-        logger->debug(
-          "No capacity for warm {} executors (using one of {} executing)",
-          funcStr,
-          nExecutingExecutors);
-
-        return executingExecutors[funcStr][std::rand() %
-                                           executingExecutors[funcStr].size()];
-    } else {
-        logger->error(
-          "Unable to claim executor: {} warm, {} executing, {} cores",
-          nWarmExecutors,
-          nExecutingExecutors,
-          thisHostResources.cores());
-        throw std::runtime_error("Unable to claim executor");
     }
-}
 
-void Scheduler::returnExecutor(const faabric::Message& msg,
-                               std::shared_ptr<Executor> executor)
-{
-    std::string funcStr = faabric::util::funcToString(msg, false);
-
-    // Remove from executing executors
-    std::remove(executingExecutors[funcStr].begin(),
-                executingExecutors[funcStr].end(),
-                executor);
-
-    // Place back in list of warm executors
-    warmExecutors[funcStr].emplace_back(executor);
+    return executingExecutors[funcStr].back();
 }
 
 std::string Scheduler::getThisHost()

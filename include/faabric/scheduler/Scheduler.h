@@ -124,7 +124,7 @@ class Scheduler
 
     int32_t awaitThreadResult(uint32_t messageId);
 
-    void notifyCallFinished(const faabric::Message& msg);
+    void notifyCallFinished(Executor* exec, const faabric::Message& msg);
 
     void notifyExecutorFinished(Executor* exec, const faabric::Message& msg);
 
@@ -180,8 +180,6 @@ class Scheduler
 
     std::shared_mutex mx;
 
-    std::unordered_map<std::string, long> inFlightCounts;
-
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
 
     faabric::HostResources thisHostResources;
@@ -193,16 +191,9 @@ class Scheduler
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 
-    long getFunctionInFlightCount(const faabric::Message& msg);
-
     std::shared_ptr<Executor> claimExecutor(const faabric::Message& msg);
 
-    void returnExecutor(const faabric::Message& msg,
-                        std::shared_ptr<Executor> executor);
-
     faabric::HostResources getHostResources(const std::string& host);
-
-    void incrementInFlightCount(const faabric::Message& msg, int count);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 
