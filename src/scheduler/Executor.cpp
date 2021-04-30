@@ -69,13 +69,13 @@ void Executor::finishCall(faabric::Message& msg,
 
     fflush(stdout);
 
-    // Set result
+    // Notify scheduler finished
     auto& sch = faabric::scheduler::getScheduler();
+    sch.notifyCallFinished(this, msg);
+
+    // Set result
     logger->debug("Setting function result for {}", funcStr);
     sch.setFunctionResult(msg);
-
-    // Notify scheduler finished
-    sch.notifyCallFinished(this, msg);
 
     // Hook
     this->postFinishCall();
@@ -136,10 +136,24 @@ void Executor::executeTask(int threadPoolIdx,
                           // Set the result for this thread
                           sch.setThreadResult(msg, returnValue);
                       } else {
-                          returnValue = doExecute(msg);
+                          bool success;
+                          std::string errorMessage;
+                          try {
+                              success = doExecute(msg);
+                          } catch (const std::exception& e) {
+                              errorMessage = "Error: " + std::string(e.what());
+                              logger->error(errorMessage);
+                              success = false;
+                              msg.set_returnvalue(1);
+                          }
 
-                          // Notify scheduler we've finished the call
-                          finishCall(msg, true, "Success");
+                          if (!success && errorMessage.empty()) {
+                              errorMessage = "Call failed (return value=" +
+                                             std::to_string(msg.returnvalue()) +
+                                             ")";
+                          }
+
+                          finishCall(msg, success, errorMessage);
                       }
                   }
 
