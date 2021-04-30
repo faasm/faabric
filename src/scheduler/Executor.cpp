@@ -1,13 +1,13 @@
-#include "faabric/util/clock.h"
-#include "faabric/util/timing.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
+#include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/timing.h>
 
 namespace faabric::scheduler {
 Executor::Executor(const faabric::Message& msg)

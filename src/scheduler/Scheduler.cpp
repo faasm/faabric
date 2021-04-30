@@ -156,7 +156,7 @@ void Scheduler::notifyCallFinished(const faabric::Message& msg)
 }
 
 void Scheduler::notifyExecutorFinished(Executor* exec,
-                                      const faabric::Message& msg)
+                                       const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
 
@@ -551,7 +551,7 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
           nExecutingExecutors);
 
         return executingExecutors[funcStr][std::rand() %
-                                          executingExecutors[funcStr].size()];
+                                           executingExecutors[funcStr].size()];
     } else {
         logger->error(
           "Unable to claim executor: {} warm, {} executing, {} cores",
@@ -563,7 +563,7 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
 }
 
 void Scheduler::returnExecutor(const faabric::Message& msg,
-                              std::shared_ptr<Executor> executor)
+                               std::shared_ptr<Executor> executor)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 

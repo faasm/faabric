@@ -198,7 +198,7 @@ class Scheduler
     std::shared_ptr<Executor> claimExecutor(const faabric::Message& msg);
 
     void returnExecutor(const faabric::Message& msg,
-                       std::shared_ptr<Executor> executor);
+                        std::shared_ptr<Executor> executor);
 
     faabric::HostResources getHostResources(const std::string& host);
 
