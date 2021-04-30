@@ -246,6 +246,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
         FunctionCallClient c(masterHost);
         c.executeFunctions(req);
+        return executed;
 
     } else if (forceLocal) {
         // We're forced to execute locally here so we do all the messages
@@ -363,26 +364,29 @@ std::vector<std::string> Scheduler::callFunctions(
         }
     }
 
+    // Register thread results if need be
+    if (isThreads) {
+        for (auto& m : req->messages()) {
+            registerThread(m.id());
+        }
+    }
+
     // Schedule messages locally if need be. For threads we only need one
     // executor, for anything else we want one Executor per function in flight
     if (!localMessageIdxs.empty()) {
-        // Register each local result
-        for (int i = 0; i < localMessageIdxs.size(); i++) {
-            const faabric::Message& msg = req->messages().at(i);
-            registerThread(msg.id());
-        }
-
         // Handle the execution
         if (isThreads) {
             // If we have an executing executor, we give the execution to that,
             // otherwise we add another
+            std::shared_ptr<Executor> e;
             if (!executingExecutors.empty()) {
-                executingExecutors[funcStr].back()->batchExecuteThreads(
-                  localMessageIdxs, req);
+                e = executingExecutors[funcStr].back();
             } else {
-                std::shared_ptr<Executor> f = claimExecutor(firstMsg);
-                f->batchExecuteThreads(localMessageIdxs, req);
+                e = claimExecutor(firstMsg);
             }
+
+            // Execute the threads
+            e->batchExecuteThreads(localMessageIdxs, req);
         } else {
             for (auto i : localMessageIdxs) {
                 std::shared_ptr<Executor> f = claimExecutor(firstMsg);

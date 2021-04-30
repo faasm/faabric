@@ -177,6 +177,18 @@ void Executor::batchExecuteThreads(
                  req->messages_size(),
                  funcStr);
 
+    // Restore if necessary
+    const faabric::Message& firstMsg = req->messages().at(0);
+    std::string snapshotKey = firstMsg.snapshotkey();
+    if (!snapshotKey.empty() && (snapshotKey != lastSnapshot)) {
+        faabric::util::UniqueLock lock(threadsMutex);
+
+        if (snapshotKey != lastSnapshot) {
+            lastSnapshot = snapshotKey;
+            restore(firstMsg);
+        }
+    }
+
     // Iterate through and invoke threads
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
@@ -239,4 +251,6 @@ void Executor::postFinish() {}
 void Executor::postFinishCall() {}
 
 void Executor::flush() {}
+
+void Executor::restore(const faabric::Message& msg) {}
 }

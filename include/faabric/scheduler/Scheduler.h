@@ -60,6 +60,8 @@ class Executor
 
     virtual void postFinish();
 
+    virtual void restore(const faabric::Message& msg);
+
     std::mutex threadsMutex;
     uint32_t threadPoolSize = 0;
     std::unordered_map<int, std::thread> threads;
@@ -72,6 +74,8 @@ class Executor
 
   private:
     faabric::Message boundMessage;
+
+    std::string lastSnapshot;
 
     void finishCall(faabric::Message& msg,
                     bool success,
