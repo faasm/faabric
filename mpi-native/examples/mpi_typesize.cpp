@@ -1,6 +1,14 @@
 #include <faabric/mpi/mpi.h>
 #include <stdio.h>
 
+#include <faabric/mpi-native/MpiExecutor.h>
+#include <faabric/util/logging.h>
+
+int main(int argc, char** argv)
+{
+    return faabric::mpi_native::mpiNativeMain(argc, argv);
+}
+
 bool checkTypeSize(MPI_Datatype dt, int expected, const char* name)
 {
     int actual;
@@ -16,45 +24,8 @@ bool checkTypeSize(MPI_Datatype dt, int expected, const char* name)
     }
 }
 
-#include <faabric/mpi-native/MpiExecutor.h>
-#include <faabric/util/logging.h>
-int main(int argc, char** argv)
-{
-    auto logger = faabric::util::getLogger();
-    auto& scheduler = faabric::scheduler::getScheduler();
-    auto& conf = faabric::util::getSystemConfig();
-
-    bool __isRoot;
-    int __worldSize;
-    if (argc < 2) {
-        logger->debug("Non-root process started");
-        __isRoot = false;
-    } else if (argc < 3) {
-        logger->error("Root process started without specifying world size!");
-        return 1;
-    } else {
-        logger->debug("Root process started");
-        __worldSize = std::stoi(argv[2]);
-        __isRoot = true;
-        logger->debug("MPI World Size: {}", __worldSize);
-    }
-
-    // Pre-load message to bootstrap execution
-    if (__isRoot) {
-        faabric::Message msg = faabric::util::messageFactory("mpi", "exec");
-        msg.set_mpiworldsize(__worldSize);
-        scheduler.callFunction(msg);
-    }
-
-    {
-        faabric::executor::SingletonPool p;
-        p.startPool();
-    }
-
-    return 0;
-}
-
-int faabric::executor::mpiFunc()
+namespace faabric::mpi_native {
+int mpiFunc()
 {
     MPI_Init(NULL, NULL);
 

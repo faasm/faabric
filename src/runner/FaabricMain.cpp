@@ -1,4 +1,4 @@
-#include <faabric/executor/FaabricMain.h>
+#include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/util/config.h>
@@ -10,7 +10,7 @@ extern void checkSgxSetup();
 }
 #endif
 
-namespace faabric::executor {
+namespace faabric::runner {
 FaabricMain::FaabricMain(
   std::shared_ptr<faabric::scheduler::ExecutorFactory> execFactory)
   : stateServer(faabric::state::getGlobalState())

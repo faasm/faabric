@@ -101,7 +101,7 @@ class Scheduler
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
 
-    long getFunctionFaasletCount(const faabric::Message& msg);
+    long getFunctionExecutorCount(const faabric::Message& msg);
 
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
@@ -126,7 +126,7 @@ class Scheduler
 
     void notifyCallFinished(const faabric::Message& msg);
 
-    void notifyFaasletFinished(Executor* exec, const faabric::Message& msg);
+    void notifyExecutorFinished(Executor* exec, const faabric::Message& msg);
 
     std::string getThisHost();
 
@@ -173,10 +173,10 @@ class Scheduler
     faabric::util::SystemConfig& conf;
 
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
-      executingFaaslets;
+      executingExecutors;
 
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
-      warmFaaslets;
+      warmExecutors;
 
     std::shared_mutex mx;
 
@@ -195,10 +195,10 @@ class Scheduler
 
     long getFunctionInFlightCount(const faabric::Message& msg);
 
-    std::shared_ptr<Executor> claimFaaslet(const faabric::Message& msg);
+    std::shared_ptr<Executor> claimExecutor(const faabric::Message& msg);
 
-    void returnFaaslet(const faabric::Message& msg,
-                       std::shared_ptr<Executor> faaslet);
+    void returnExecutor(const faabric::Message& msg,
+                       std::shared_ptr<Executor> executor);
 
     faabric::HostResources getHostResources(const std::string& host);
 

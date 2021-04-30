@@ -19,7 +19,7 @@ Executor::Executor(const faabric::Message& msg)
 
     threadPoolSize = faabric::util::getUsableCores();
 
-    // Set an ID for this Faaslet
+    // Set an ID for this Executor
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
 }
 
@@ -199,7 +199,7 @@ void Executor::threadFinished(int threadPoolIdx)
     if (threads.empty()) {
         // Notify that we're done
         auto& sch = faabric::scheduler::getScheduler();
-        sch.notifyFaasletFinished(this, boundMessage);
+        sch.notifyExecutorFinished(this, boundMessage);
     }
 }
 

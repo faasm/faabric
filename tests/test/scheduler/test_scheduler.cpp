@@ -97,7 +97,7 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     faabric::scheduler::queueResourceResponse(otherHost, res);
 
     // Initial checks
-    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
+    REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
 
@@ -113,7 +113,7 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
         REQUIRE(sch.getThisHostResources().cores() == nCores);
     }
 
-    REQUIRE(sch.getFunctionFaasletCount(msg) == nCores);
+    REQUIRE(sch.getFunctionExecutorCount(msg) == nCores);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
     REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
 
@@ -125,7 +125,7 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     sch.shutdown();
 
     // Check scheduler has been cleared
-    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
+    REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
 
@@ -285,13 +285,13 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
 
     faabric::Message m = reqOne->messages().at(0);
 
-    // Check the faaslet counts on this host
+    // Check the executor counts on this host
     if (isThreads) {
-        // For threads we expect only one faaslet
-        REQUIRE(sch.getFunctionFaasletCount(m) == 1);
+        // For threads we expect only one executor
+        REQUIRE(sch.getFunctionExecutorCount(m) == 1);
     } else {
         // For functions we expect one per core
-        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+        REQUIRE(sch.getFunctionExecutorCount(m) == thisCores);
     }
 
     // Check the number of messages executed locally and remotely
@@ -344,9 +344,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
             nCallsOffloadedOne + nCallsTwo);
 
     if (isThreads) {
-        REQUIRE(sch.getFunctionFaasletCount(m) == 1);
+        REQUIRE(sch.getFunctionExecutorCount(m) == 1);
     } else {
-        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+        REQUIRE(sch.getFunctionExecutorCount(m) == thisCores);
     }
 
     // Check the second message is dispatched to the other host
@@ -434,15 +434,15 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
 
     // Check status of local queueing
     int expectedLocalCalls = nCalls - 2;
-    int expectedFaaslets;
+    int expectedExecutors;
     if (execMode == faabric::BatchExecuteRequest::THREADS) {
-        expectedFaaslets = 1;
+        expectedExecutors = 1;
     } else {
-        expectedFaaslets = expectedLocalCalls;
+        expectedExecutors = expectedLocalCalls;
     }
 
     faabric::Message firstMsg = req->messages().at(0);
-    REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedFaaslets);
+    REQUIRE(sch.getFunctionExecutorCount(firstMsg) == expectedExecutors);
 
     faabric::util::setMockMode(false);
     unsetSlowExecutor();

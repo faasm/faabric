@@ -67,17 +67,17 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::reset()
 {
-    // Shut down all Faaslets
-    for (auto p : warmFaaslets) {
+    // Shut down all Executors
+    for (auto p : warmExecutors) {
         for (auto f : p.second) {
             f->finish();
         }
     }
 
-    warmFaaslets.clear();
+    warmExecutors.clear();
 
-    // Note, we assume there are no currently executing faaslets
-    executingFaaslets.clear();
+    // Note, we assume there are no currently executing executors
+    executingExecutors.clear();
 
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -117,10 +117,10 @@ void Scheduler::incrementInFlightCount(const faabric::Message& msg, int count)
       thisHostResources.functionsinflight() + count);
 }
 
-long Scheduler::getFunctionFaasletCount(const faabric::Message& msg)
+long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
-    return warmFaaslets[funcStr].size() + executingFaaslets[funcStr].size();
+    return warmExecutors[funcStr].size() + executingExecutors[funcStr].size();
 }
 
 int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
@@ -155,31 +155,31 @@ void Scheduler::notifyCallFinished(const faabric::Message& msg)
     thisHostResources.set_functionsinflight(newInFlight);
 }
 
-void Scheduler::notifyFaasletFinished(Executor* exec,
+void Scheduler::notifyExecutorFinished(Executor* exec,
                                       const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    for (int i = 0; i < warmFaaslets.size(); i++) {
-        if (warmFaaslets[funcStr].at(i)->id == exec->id) {
-            warmFaaslets[funcStr].erase(warmFaaslets[funcStr].begin() + i);
+    for (int i = 0; i < warmExecutors.size(); i++) {
+        if (warmExecutors[funcStr].at(i)->id == exec->id) {
+            warmExecutors[funcStr].erase(warmExecutors[funcStr].begin() + i);
             break;
         }
     }
 
-    for (int i = 0; i < executingFaaslets.size(); i++) {
-        if (executingFaaslets[funcStr].at(i)->id == exec->id) {
-            executingFaaslets[funcStr].erase(
-              executingFaaslets[funcStr].begin() + i);
+    for (int i = 0; i < executingExecutors.size(); i++) {
+        if (executingExecutors[funcStr].at(i)->id == exec->id) {
+            executingExecutors[funcStr].erase(
+              executingExecutors[funcStr].begin() + i);
             break;
         }
     }
 
-    int count = getFunctionFaasletCount(msg);
+    int count = getFunctionExecutorCount(msg);
     if (count == 1) {
-        // Unregister if this was the last faaslet for that function
+        // Unregister if this was the last executor for that function
         bool isMaster = thisHost == msg.masterhost();
         if (!isMaster) {
             faabric::UnregisterRequest req;
@@ -351,7 +351,7 @@ std::vector<std::string> Scheduler::callFunctions(
     }
 
     // Schedule messages locally if need be. For threads we only need one
-    // faaslet, for anything else we want one Faaslet per function in flight
+    // executor, for anything else we want one Executor per function in flight
     if (!localMessageIdxs.empty()) {
         // Register each local result
         for (int i = 0; i < localMessageIdxs.size(); i++) {
@@ -363,18 +363,18 @@ std::vector<std::string> Scheduler::callFunctions(
 
         // Handle the execution
         if (isThreads) {
-            // If we have an executing faaslet, we give the execution to that,
+            // If we have an executing executor, we give the execution to that,
             // otherwise we add another
-            if (!executingFaaslets.empty()) {
-                executingFaaslets[funcStr].back()->batchExecuteThreads(
+            if (!executingExecutors.empty()) {
+                executingExecutors[funcStr].back()->batchExecuteThreads(
                   localMessageIdxs, req);
             } else {
-                std::shared_ptr<Executor> f = claimFaaslet(firstMsg);
+                std::shared_ptr<Executor> f = claimExecutor(firstMsg);
                 f->batchExecuteThreads(localMessageIdxs, req);
             }
         } else {
             for (auto i : localMessageIdxs) {
-                std::shared_ptr<Executor> f = claimFaaslet(firstMsg);
+                std::shared_ptr<Executor> f = claimExecutor(firstMsg);
                 f->executeFunction(i, req);
             }
         }
@@ -504,76 +504,76 @@ Scheduler::getRecordedMessagesShared()
     return recordedMessagesShared;
 }
 
-std::shared_ptr<Executor> Scheduler::claimFaaslet(const faabric::Message& msg)
+std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
 {
     const auto& logger = faabric::util::getLogger();
     std::string funcStr = faabric::util::funcToString(msg, false);
 
     int nInFlight = getFunctionInFlightCount(msg);
-    int nWarmFaaslets = warmFaaslets[funcStr].size();
-    int nExecutingFaaslets = executingFaaslets[funcStr].size();
-    int nTotal = nWarmFaaslets + nExecutingFaaslets;
+    int nWarmExecutors = warmExecutors[funcStr].size();
+    int nExecutingExecutors = executingExecutors[funcStr].size();
+    int nTotal = nWarmExecutors + nExecutingExecutors;
 
     std::shared_ptr<faabric::scheduler::ExecutorFactory> factory =
       getExecutorFactory();
 
     bool shouldScale = nTotal < nInFlight;
-    if (nWarmFaaslets > 0) {
-        // Here we have warm faaslets that we can reuse
-        logger->debug("Reusing warm faaslet for {}", funcStr);
+    if (nWarmExecutors > 0) {
+        // Here we have warm executors that we can reuse
+        logger->debug("Reusing warm executor for {}", funcStr);
 
         // Take the warm one
-        std::shared_ptr<Executor> exec = warmFaaslets[funcStr].back();
-        warmFaaslets[funcStr].pop_back();
+        std::shared_ptr<Executor> exec = warmExecutors[funcStr].back();
+        warmExecutors[funcStr].pop_back();
 
         // Add it to the list of executing
-        executingFaaslets[funcStr].emplace_back(exec);
+        executingExecutors[funcStr].emplace_back(exec);
 
-        return executingFaaslets[funcStr].back();
+        return executingExecutors[funcStr].back();
     } else if (shouldScale) {
-        // We have no warm faaslets, but can scale so we add one
+        // We have no warm executors, but can scale so we add one
         // to the list of executing
         logger->debug("Scaling {} from {} -> {}", funcStr, nTotal, nTotal + 1);
 
-        executingFaaslets[funcStr].emplace_back(factory->createExecutor(msg));
+        executingExecutors[funcStr].emplace_back(factory->createExecutor(msg));
 
         // Update host resources
         thisHostResources.set_boundexecutors(
           thisHostResources.boundexecutors() + 1);
 
-        return executingFaaslets[funcStr].back();
-    } else if (!executingFaaslets[funcStr].empty()) {
+        return executingExecutors[funcStr].back();
+    } else if (!executingExecutors[funcStr].empty()) {
         // Here we're not scaling, so we've got to overload a random executing
-        // faaslet which will do the queueing
+        // executor which will do the queueing
         logger->debug(
-          "No capacity for warm {} faaslets (using one of {} executing)",
+          "No capacity for warm {} executors (using one of {} executing)",
           funcStr,
-          nExecutingFaaslets);
+          nExecutingExecutors);
 
-        return executingFaaslets[funcStr][std::rand() %
-                                          executingFaaslets[funcStr].size()];
+        return executingExecutors[funcStr][std::rand() %
+                                          executingExecutors[funcStr].size()];
     } else {
         logger->error(
-          "Unable to claim faaslet: {} warm, {} executing, {} cores",
-          nWarmFaaslets,
-          nExecutingFaaslets,
+          "Unable to claim executor: {} warm, {} executing, {} cores",
+          nWarmExecutors,
+          nExecutingExecutors,
           thisHostResources.cores());
-        throw std::runtime_error("Unable to claim faaslet");
+        throw std::runtime_error("Unable to claim executor");
     }
 }
 
-void Scheduler::returnFaaslet(const faabric::Message& msg,
-                              std::shared_ptr<Executor> faaslet)
+void Scheduler::returnExecutor(const faabric::Message& msg,
+                              std::shared_ptr<Executor> executor)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    // Remove from executing faaslets
-    std::remove(executingFaaslets[funcStr].begin(),
-                executingFaaslets[funcStr].end(),
-                faaslet);
+    // Remove from executing executors
+    std::remove(executingExecutors[funcStr].begin(),
+                executingExecutors[funcStr].end(),
+                executor);
 
-    // Place back in list of warm faaslets
-    warmFaaslets[funcStr].emplace_back(faaslet);
+    // Place back in list of warm executors
+    warmExecutors[funcStr].emplace_back(executor);
 }
 
 std::string Scheduler::getThisHost()
@@ -605,8 +605,8 @@ void Scheduler::flushLocally()
     logger->info("Flushing host {}",
                  faabric::util::getSystemConfig().endpointHost);
 
-    // Flush each warm faaslet
-    for (auto& p : warmFaaslets) {
+    // Flush each warm executor
+    for (auto& p : warmExecutors) {
         for (auto& f : p.second) {
             f->flush();
         }

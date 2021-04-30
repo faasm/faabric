@@ -1,16 +1,19 @@
 #pragma once
 
 #include <faabric/endpoint/FaabricEndpoint.h>
-#include <faabric/executor/FaabricExecutor.h>
-#include <faabric/executor/FaabricPool.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 
-namespace faabric::executor {
-class MpiExecutor final : public faabric::executor::FaabricExecutor
+using namespace faabric::scheduler;
+
+namespace faabric::mpi_native {
+class MpiExecutor final : public Executor
 {
   public:
-    explicit MpiExecutor();
+    explicit MpiExecutor(const faabric::Message& msg);
+
+    virtual ~MpiExecutor();
 
     bool doExecute(faabric::Message& msg) override;
 
@@ -19,25 +22,17 @@ class MpiExecutor final : public faabric::executor::FaabricExecutor
     void postFinish() override;
 };
 
-class SingletonPool : public faabric::executor::FaabricPool
+class MpiExecutorFactory : public ExecutorFactory
 {
-  public:
-    SingletonPool();
-
-    ~SingletonPool();
-
-    void startPool();
-
   protected:
-    std::unique_ptr<FaabricExecutor> createExecutor(int threadIdx) override
+    std::shared_ptr<Executor> createExecutor(
+      const faabric::Message& msg) override
     {
-        return std::make_unique<MpiExecutor>();
+        return std::make_unique<MpiExecutor>(msg);
     }
-
-  private:
-    faabric::endpoint::FaabricEndpoint endpoint;
-    faabric::scheduler::Scheduler& scheduler;
 };
+
+int mpiNativeMain(int argc, char** argv);
 
 extern faabric::Message* executingCall;
 extern int __attribute__((weak)) mpiFunc();

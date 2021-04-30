@@ -1,17 +1,18 @@
 #include <faabric/mpi-native/MpiExecutor.h>
 
-namespace faabric::executor {
+namespace faabric::mpi_native {
+
 faabric::Message* executingCall;
 int mpiFunc();
 
-MpiExecutor::MpiExecutor()
-  : FaabricExecutor(0){};
+MpiExecutor::MpiExecutor(const faabric::Message& msg)
+  : Executor(msg){};
 
 bool MpiExecutor::doExecute(faabric::Message& msg)
 {
     auto logger = faabric::util::getLogger();
 
-    faabric::executor::executingCall = &msg;
+    faabric::mpi_native::executingCall = &msg;
 
     bool success;
     int error = mpiFunc();
@@ -32,46 +33,37 @@ void MpiExecutor::postFinishCall()
     throw faabric::util::ExecutorFinishedException("Finished MPI Execution!");
 }
 
-void MpiExecutor::postFinish()
-{
-    throw faabric::executor::ExecutorPoolFinishedException(
-      "SingletonPool finished");
-}
-
-SingletonPool::SingletonPool()
-  : FaabricPool(1)
-  , scheduler(faabric::scheduler::getScheduler())
+int mpiNativeMain(int argc, char** argv)
 {
     auto logger = faabric::util::getLogger();
-    auto conf = faabric::util::getSystemConfig();
+    auto& scheduler = faabric::scheduler::getScheduler();
+    auto& conf = faabric::util::getSystemConfig();
 
-    // Ensure we can ping both redis instances
-    faabric::redis::Redis::getQueue().ping();
-    faabric::redis::Redis::getState().ping();
+    bool __isRoot;
+    int __worldSize;
+    if (argc < 2) {
+        logger->debug("Non-root process started");
+        __isRoot = false;
+    } else if (argc < 3) {
+        logger->error("Root process started without specifying world size!");
+        return 1;
+    } else {
+        logger->debug("Root process started");
+        __worldSize = std::stoi(argv[2]);
+        __isRoot = true;
+        logger->debug("MPI World Size: {}", __worldSize);
+    }
 
-    // Add host to the list of global sets and print configuration
-    logger->debug("Adding host to global set");
-    this->scheduler.addHostToGlobalSet();
-    conf.print();
-}
+    // Force this host to run one thread
+    conf.overrideCpuCount = 1;
 
-SingletonPool::~SingletonPool()
-{
-    auto logger = faabric::util::getLogger();
+    // Pre-load message to bootstrap execution
+    if (__isRoot) {
+        faabric::Message msg = faabric::util::messageFactory("mpi", "exec");
+        msg.set_mpiworldsize(__worldSize);
+        scheduler.callFunction(msg);
+    }
 
-    logger->debug("Destructor for singleton pool");
-    this->shutdown();
-    this->scheduler.shutdown();
-}
-
-void SingletonPool::startPool()
-{
-    auto logger = faabric::util::getLogger();
-
-    // Start singleton thread pool
-    logger->debug("Starting signleton thread pool");
-    this->startStateServer();
-    this->startFunctionCallServer();
-    this->startThreadPool(false);
+    return 0;
 }
 }

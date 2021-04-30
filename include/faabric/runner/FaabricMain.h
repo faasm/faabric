@@ -7,7 +7,7 @@
 #include <faabric/state/StateServer.h>
 #include <faabric/util/config.h>
 
-namespace faabric::executor {
+namespace faabric::runner {
 class FaabricMain
 {
   public:
