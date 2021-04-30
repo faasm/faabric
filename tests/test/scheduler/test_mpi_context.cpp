@@ -102,7 +102,6 @@ TEST_CASE("Check joining world", "[mpi]")
 
     // Get one message formed by world creation
     Scheduler& sch = getScheduler();
-    REQUIRE(sch.getRecordedMessagesAll().size() == 1);
     faabric::Message msgB = sch.getRecordedMessagesAll().at(0);
 
     // Create another context and make sure it's not initialised

@@ -1,24 +1,80 @@
+#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/redis/Redis.h>
+#include <faabric/scheduler/DummyExecutorFactory.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/testing.h>
-#include <faabric_utils.h>
 
-#include <faabric/redis/Redis.h>
-#include <faabric/scheduler/Scheduler.h>
-#include <faabric/util/environment.h>
-
-using namespace scheduler;
-using namespace redis;
+using namespace faabric::scheduler;
 
 namespace tests {
+
+class SlowExecutor final : public Executor
+{
+  public:
+    SlowExecutor(const faabric::Message& msg)
+      : Executor(msg)
+    {}
+
+    ~SlowExecutor() {}
+
+    bool doExecute(faabric::Message& call)
+    {
+        auto logger = faabric::util::getLogger();
+        logger->debug("SlowExecutor executing function {}", call.id());
+
+        usleep(500 * 1000);
+        return true;
+    }
+
+    int32_t executeThread(int threadPoolIdx,
+                          std::shared_ptr<faabric::BatchExecuteRequest> req,
+                          faabric::Message& msg)
+    {
+        auto logger = faabric::util::getLogger();
+        logger->debug("SlowExecutor executing thread {}", msg.id());
+
+        usleep(500 * 1000);
+        return 0;
+    }
+};
+
+class SlowExecutorFactory : public ExecutorFactory
+{
+  protected:
+    std::shared_ptr<Executor> createExecutor(
+      const faabric::Message& msg) override
+    {
+        return std::make_shared<SlowExecutor>(msg);
+    }
+};
+
+void setSlowExecutor()
+{
+    std::shared_ptr<ExecutorFactory> fac =
+      std::make_shared<SlowExecutorFactory>();
+    setExecutorFactory(fac);
+}
+
+void unsetSlowExecutor()
+{
+    std::shared_ptr<DummyExecutorFactory> fac =
+      std::make_shared<DummyExecutorFactory>();
+    setExecutorFactory(fac);
+}
+
 TEST_CASE("Test scheduler clear-up", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     faabric::Message msg = faabric::util::messageFactory("blah", "foo");
@@ -79,11 +135,13 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     REQUIRE(resCheck.boundexecutors() == 0);
 
     faabric::util::setMockMode(false);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test scheduler available hosts", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
@@ -111,24 +169,30 @@ TEST_CASE("Test scheduler available hosts", "[scheduler]")
     actualHosts = sch.getAvailableHosts();
 
     REQUIRE(actualHosts == expectedHosts);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test batch scheduling", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
+
     SECTION("Threads")
     {
         execMode = faabric::BatchExecuteRequest::THREADS;
         expectedSnapshot = "threadSnap";
     }
+
     SECTION("Processes")
     {
         execMode = faabric::BatchExecuteRequest::PROCESSES;
         expectedSnapshot = "procSnap";
     }
+
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
 
     bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
@@ -295,11 +359,13 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(pTwo.second->messages_size() == nCallsTwo);
 
     faabric::util::setMockMode(false);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test overloaded scheduler", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
@@ -379,11 +445,13 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedFaaslets);
 
     faabric::util::setMockMode(false);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test unregistering host", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     Scheduler& sch = scheduler::getScheduler();
@@ -400,10 +468,10 @@ TEST_CASE("Test unregistering host", "[scheduler]")
     // Set up capacity for other host
     faabric::scheduler::queueResourceResponse(otherHost, res);
 
-    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    for (int i = 0; i < nCores + 1; i++) {
-        sch.callFunction(msg);
-    }
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", nCores + 1);
+    sch.callFunctions(req);
+    faabric::Message msg = req->messages().at(0);
 
     // Check other host is added
     std::unordered_set<std::string> expectedHosts = { otherHost };
@@ -422,11 +490,13 @@ TEST_CASE("Test unregistering host", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     faabric::util::setMockMode(false);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check test mode", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     Scheduler& sch = scheduler::getScheduler();
 
@@ -461,11 +531,13 @@ TEST_CASE("Check test mode", "[scheduler]")
     }
 
     faabric::util::setTestMode(origTestMode);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Global message queue tests", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     redis::Redis& redis = redis::Redis::getQueue();
     scheduler::Scheduler& sch = scheduler::getScheduler();
@@ -490,11 +562,14 @@ TEST_CASE("Global message queue tests", "[scheduler]")
     faabric::Message actualCall2 = sch.getFunctionResult(call.id(), 1);
 
     checkMessageEquality(call, actualCall2);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check multithreaded function results", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     int nWaiters = 10;
     int nWaiterMessages = 4;
@@ -528,11 +603,13 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
     }
 
     // If we get here then things work properly
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check getting function status", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     scheduler::Scheduler& sch = scheduler::getScheduler();
 
@@ -583,11 +660,14 @@ TEST_CASE("Check getting function status", "[scheduler]")
     REQUIRE(result.type() == expectedType);
     REQUIRE(result.outputdata() == expectedOutput);
     REQUIRE(result.executedhost() == expectedHost);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check setting long-lived function status", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     scheduler::Scheduler& sch = scheduler::getScheduler();
     redis::Redis& redis = redis::Redis::getQueue();
 
@@ -614,6 +694,7 @@ TEST_CASE("Check setting long-lived function status", "[scheduler]")
 TEST_CASE("Check logging chained functions", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     scheduler::Scheduler& sch = scheduler::getScheduler();
 
@@ -636,11 +717,14 @@ TEST_CASE("Check logging chained functions", "[scheduler]")
     sch.logChainedFunction(msg.id(), chainedMsgIdC);
     expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     scheduler::Scheduler& sch = scheduler::getScheduler();
@@ -662,11 +746,14 @@ TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
     REQUIRE(actualReqs.at(0).second->id() == req->id());
 
     faabric::util::setMockMode(false);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
     scheduler::Scheduler& sch = scheduler::getScheduler();
 
@@ -715,5 +802,7 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
     auto actualDeleteRequests = faabric::scheduler::getSnapshotDeletes();
 
     REQUIRE(actualDeleteRequests == expectedDeleteRequests);
+
+    unsetSlowExecutor();
 }
 }
