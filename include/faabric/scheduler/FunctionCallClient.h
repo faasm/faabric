@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
 
 namespace faabric::scheduler {
@@ -34,7 +35,15 @@ void clearMockRequests();
 class FunctionCallClient : faabric::transport::MessageEndpoint
 {
   public:
+    // TODO remove this constructor
     explicit FunctionCallClient(const std::string& hostIn);
+
+    explicit FunctionCallClient(faabric::transport::MessageContext& context,
+                                const std::string& hostIn);
+
+    ~FunctionCallClient();
+
+    void close();
 
     void sendFlush();
 

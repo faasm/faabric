@@ -10,6 +10,7 @@
 namespace faabric::scheduler {
 enum FunctionCalls
 {
+    None = 0,
     MpiMessage = 1,
     ExecuteFunctions = 2,
     Flush = 3,
@@ -46,9 +47,13 @@ class FunctionCallServer final
 
   private:
     Scheduler& scheduler;
-    faabric::scheduler::FunctionCalls lastHeader;
 
     void doRecv(const void* msgData, int size) override;
+
+    void doRecv(const void* headerData,
+                int headerSize,
+                const void* bodyData,
+                int bodySize) override;
 
     void recvMpiMessage(const void* msgData, int size);
 };

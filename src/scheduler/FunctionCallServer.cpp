@@ -16,22 +16,22 @@ FunctionCallServer::FunctionCallServer()
 
 void FunctionCallServer::doRecv(const void* msgData, int size)
 {
-    // Detect if we are processing the header or not
-    auto logger = faabric::util::getLogger();
-    if (size == sizeof(faabric::scheduler::FunctionCalls)) {
-        logger->info("Begin processing header");
-        this->lastHeader = static_cast<faabric::scheduler::FunctionCalls>(
-          atoi((const char*)msgData));
-        logger->info("Processing header: {}", lastHeader);
-    } else {
-        logger->info("Processing message body for header: {}", lastHeader);
-        switch (this->lastHeader) {
-            case faabric::scheduler::FunctionCalls::MpiMessage:
-                this->recvMpiMessage(msgData, size);
-            default:
-                throw std::runtime_error(fmt::format(
-                  "Unrecognized last header: {}", this->lastHeader));
-        }
+    throw std::runtime_error("doRecv for one message not implemented");
+}
+
+void FunctionCallServer::doRecv(const void* headerData,
+                                int headerSize,
+                                const void* bodyData,
+                                int bodySize)
+{
+    int call = static_cast<int>(*static_cast<const char*>(headerData));
+    switch (call) {
+        case faabric::scheduler::FunctionCalls::MpiMessage:
+            this->recvMpiMessage(bodyData, bodySize);
+            break;
+        default:
+            throw std::runtime_error(
+              fmt::format("Unrecognized call header: {}", call));
     }
 }
 

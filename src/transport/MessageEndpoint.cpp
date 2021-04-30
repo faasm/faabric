@@ -45,6 +45,10 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
 
 void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
 {
+    if (!this->socket) {
+        throw std::runtime_error("Trying to send from a null-pointing socket");
+    }
+
     // Pass a deallocation function for ZeroMQ to be zero-copy
     zmq::message_t msg(serialisedMsg, msgSize, [](void* data, void* hint) {
         delete[](char*) data;
@@ -63,6 +67,10 @@ void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
 
 void MessageEndpoint::recv()
 {
+    if (!this->socket) {
+        throw std::runtime_error("Trying to recv from a null-pointing socket");
+    }
+
     zmq::message_t msg;
     if (!this->socket->recv(msg)) {
         throw std::runtime_error("Error receiving message through socket");

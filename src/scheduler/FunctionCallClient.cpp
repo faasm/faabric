@@ -6,6 +6,8 @@
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
+#include <faabric/util/logging.h>
+
 namespace faabric::scheduler {
 
 // -----------------------------------
@@ -89,6 +91,24 @@ FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   : faabric::transport::MessageEndpoint(hostIn, FUNCTION_CALL_PORT)
 {}
 
+FunctionCallClient::FunctionCallClient(
+  faabric::transport::MessageContext& context,
+  const std::string& hostIn)
+  : faabric::transport::MessageEndpoint(hostIn, FUNCTION_CALL_PORT)
+{
+    this->open(context, faabric::transport::SocketType::PUSH, false);
+}
+
+FunctionCallClient::~FunctionCallClient()
+{
+    this->close();
+}
+
+void FunctionCallClient::close()
+{
+    MessageEndpoint::close();
+}
+
 void FunctionCallClient::sendFlush()
 {
     /*
@@ -106,36 +126,28 @@ void FunctionCallClient::sendFlush()
 void FunctionCallClient::sendMPIMessage(
   const std::shared_ptr<faabric::MPIMessage> msg)
 {
-    // Send the header first
-    // Note - the verbosity beneath is useful to guarantee zero copy for larger
-    // messages
-    /*
-    int functionNum =
-    static_cast<int>(faabric::scheduler::FunctionCalls::MpiMessage); size_t
-    headerSize = sizeof(faabric::scheduler::FunctionCalls); char* header = new
-    char[headerSize]; memcpy(header, &functionNum, headerSize);
-    // Mark that we are sending more messages
-    send(header, headerSize, true);
-    */
-
-    // Send the message body
-    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
-    size_t msgSize = msg->ByteSizeLong();
-    char* serialisedMsg = new char[msgSize];
-
-    if (!msg->SerializeToArray(serialisedMsg, msgSize)) {
-        throw std::runtime_error("Error serialising message");
-    }
-    send(serialisedMsg, msgSize);
-    /*
     if (faabric::util::isMockMode()) {
         mpiMessages.emplace_back(host, *msg);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("mpi_message", stub->MPICall(&context, *msg, &response));
+        // Send the header first
+        // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
+        int functionNum =
+          static_cast<int>(faabric::scheduler::FunctionCalls::MpiMessage);
+        size_t headerSize = sizeof(faabric::scheduler::FunctionCalls);
+        char* header = new char[headerSize];
+        memcpy(header, &functionNum, headerSize);
+        // Mark that we are sending more messages
+        send(header, headerSize, true);
+
+        // Send the message body
+        size_t msgSize = msg->ByteSizeLong();
+        char* serialisedMsg = new char[msgSize];
+        // Serialise using protobuf
+        if (!msg->SerializeToArray(serialisedMsg, msgSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        send(serialisedMsg, msgSize);
     }
-    */
 }
 
 faabric::HostResources FunctionCallClient::getResources(

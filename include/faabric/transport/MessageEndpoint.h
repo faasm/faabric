@@ -45,7 +45,6 @@ class MessageEndpoint
 
     virtual void doRecv(const void* msgData, int size) = 0;
 
-  private:
     std::unique_ptr<zmq::socket_t> socket;
 };
 }

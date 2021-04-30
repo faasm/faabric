@@ -20,6 +20,14 @@ class MessageEndpointServer : public faabric::transport::MessageEndpoint
 
     void stop(faabric::transport::MessageContext& context);
 
+    void recv();
+
+    // Provide another template to receive messages with header and body
+    virtual void doRecv(const void* headerBody,
+                        int headerSize,
+                        const void* bodyData,
+                        int bodySize) = 0;
+
   private:
     std::thread servingThread;
 };
