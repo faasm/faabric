@@ -1,8 +1,6 @@
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/scheduler/*.h")
 
 set(LIB_FILES
-        DummyExecutor.cpp
-        DummyExecutorFactory.cpp
         ExecutorFactory.cpp
         Executor.cpp
         ExecGraph.cpp

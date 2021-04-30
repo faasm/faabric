@@ -1,4 +1,8 @@
 set(LIB_FILES
+    DummyExecutor.cpp
+    DummyExecutor.h
+    DummyExecutorFactory.cpp
+    DummyExecutorFactory.h
     exec_graph_utils.cpp
     message_utils.cpp
     system_utils.cpp

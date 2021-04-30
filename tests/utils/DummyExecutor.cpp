@@ -1,5 +1,6 @@
+#include "DummyExecutor.h"
+
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DummyExecutor.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/func.h>
 

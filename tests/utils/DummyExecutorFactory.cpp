@@ -1,5 +1,5 @@
-#include <faabric/scheduler/DummyExecutor.h>
-#include <faabric/scheduler/DummyExecutorFactory.h>
+#include "DummyExecutorFactory.h"
+#include "DummyExecutor.h"
 
 namespace faabric::scheduler {
 

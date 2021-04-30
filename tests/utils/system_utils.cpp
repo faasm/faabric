@@ -1,9 +1,9 @@
-#include "faabric/scheduler/ExecutorFactory.h"
+#include "DummyExecutorFactory.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
-#include <faabric/scheduler/DummyExecutorFactory.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
