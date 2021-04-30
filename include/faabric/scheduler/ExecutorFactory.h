@@ -7,6 +7,8 @@ namespace faabric::scheduler {
 class ExecutorFactory
 {
   public:
+    virtual ~ExecutorFactory(){};
+
     virtual std::shared_ptr<Executor> createExecutor(
       const faabric::Message& msg) = 0;
 };
