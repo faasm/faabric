@@ -46,12 +46,13 @@ add_custom_command(
 set(HEADERS
     ${PB_HEADER_COPIED}
     ${GRPC_HEADER_COPIED}
-    ${MPI_PB_HEADER_COPIED}
     )
 
-set(LIB_FILES ${HEADERS} ${PB_SRC} ${GRPC_SRC} ${MPI_PB_SRC})
-
-# set(LIB_FILES ${HEADER_LIST} ${SOURCE_LIST})
+set(LIB_FILES
+    ${HEADERS}
+    ${PB_SRC}
+    ${GRPC_SRC}
+    )
 
 faabric_lib(proto "${LIB_FILES}")
 

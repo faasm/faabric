@@ -1,8 +1,8 @@
 #include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/util/logging.h>
 
-// TODO - include this through a header
-#define ZMQ_ETERM 156384765
+// Defined in libzmq/include/zmq.h (156384765)
+#define ZMQ_ETERM ETERM
 
 namespace faabric::transport {
 MessageEndpointServer::MessageEndpointServer(const std::string& host, int port)

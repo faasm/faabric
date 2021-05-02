@@ -36,7 +36,6 @@ class FaabricPool
 
   private:
     std::atomic<bool> _shutdown = false;
-
     faabric::scheduler::Scheduler& scheduler;
     faabric::util::TokenPool threadTokenPool;
     faabric::state::StateServer stateServer;

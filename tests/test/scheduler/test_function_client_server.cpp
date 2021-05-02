@@ -23,7 +23,7 @@ TEST_CASE("Test sending MPI message", "[new-scheduler]")
     cleanFaabric();
 
     // Start the server
-    faabric::transport::MessageContext context;
+    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
     server.start(context);
     usleep(1000 * 100);
@@ -83,7 +83,7 @@ TEST_CASE("Test sending flush message", "[new-scheduler]")
     cleanFaabric();
 
     // Start the server
-    faabric::transport::MessageContext context;
+    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
     server.start(context);
     usleep(1000 * 100);
@@ -190,7 +190,7 @@ TEST_CASE("Test client batch execution request", "[new-scheduler]")
     cleanFaabric();
 
     // Start the server
-    faabric::transport::MessageContext context;
+    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
     server.start(context);
     usleep(1000 * 100);
@@ -307,7 +307,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     faabric::scheduler::clearMockRequests();
 
     // Start the server
-    faabric::transport::MessageContext context;
+    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
     server.start(context);
     usleep(1000 * 100);

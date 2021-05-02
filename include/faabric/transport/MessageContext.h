@@ -22,10 +22,14 @@ class MessageContext
 
     ~MessageContext();
 
+    zmq::context_t ctx;
+
     zmq::context_t& get();
 
     void close();
 
-    zmq::context_t ctx;
+    inline static bool isContextShutDown = false;
 };
+
+faabric::transport::MessageContext& getGlobalMessageContext();
 }

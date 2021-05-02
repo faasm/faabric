@@ -99,11 +99,6 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
-    // ----------------------------------
-    // Message transport
-    // ----------------------------------
-    faabric::transport::MessageContext messageContext;
-
   private:
     std::string thisHost;
 

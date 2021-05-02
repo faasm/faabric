@@ -20,6 +20,8 @@ class MessageEndpointServer : public faabric::transport::MessageEndpoint
 
     void stop(faabric::transport::MessageContext& context);
 
+    // A server expects to receive a multi-part message with header and body.
+    // Thus, we override the default receive behaviour
     void recv();
 
     // Provide another template to receive messages with header and body
