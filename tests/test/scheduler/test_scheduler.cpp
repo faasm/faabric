@@ -90,7 +90,7 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     // Set resources
     int nCores = 5;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
     // Set resources for other host too
@@ -102,15 +102,14 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
 
     faabric::HostResources resCheck = sch.getThisHostResources();
-    REQUIRE(resCheck.cores() == nCores);
-    REQUIRE(resCheck.boundexecutors() == 0);
-    REQUIRE(resCheck.functionsinflight() == 0);
+    REQUIRE(resCheck.slots() == nCores);
+    REQUIRE(resCheck.usedslots() == 0);
 
-    // Make calls
+    // Make calls with one extra that should be sent to the other host
     int nCalls = nCores + 1;
     for (int i = 0; i < nCalls; i++) {
         sch.callFunction(msg);
-        REQUIRE(sch.getThisHostResources().cores() == nCores);
+        REQUIRE(sch.getThisHostResources().slots() == nCores);
     }
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == nCores);
@@ -118,8 +117,8 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
 
     resCheck = sch.getThisHostResources();
-    REQUIRE(resCheck.cores() == nCores);
-    REQUIRE(resCheck.boundexecutors() == nCores);
+    REQUIRE(resCheck.slots() == nCores);
+    REQUIRE(resCheck.usedslots() == nCores);
 
     // Run shutdown
     sch.shutdown();
@@ -131,8 +130,8 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
 
     resCheck = sch.getThisHostResources();
     int actualCores = faabric::util::getUsableCores();
-    REQUIRE(resCheck.cores() == actualCores);
-    REQUIRE(resCheck.boundexecutors() == 0);
+    REQUIRE(resCheck.slots() == actualCores);
+    REQUIRE(resCheck.usedslots() == 0);
 
     faabric::util::setMockMode(false);
     unsetSlowExecutor();
@@ -227,12 +226,12 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     int nCallsOffloadedOne = nCallsOne - thisCores;
 
     faabric::HostResources thisResources;
-    thisResources.set_cores(thisCores);
+    thisResources.set_slots(thisCores);
 
     faabric::HostResources otherResources;
-    otherResources.set_cores(otherCores);
+    otherResources.set_slots(otherCores);
 
-    // Prepare two resource responses for other host
+    // Prepare resource response for other host
     sch.setThisHostResources(thisResources);
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
@@ -251,7 +250,6 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         msg.set_appindex(i);
 
         // Expect this host to handle up to its number of cores
-        // If in threads mode, expect it _not_ to execute
         bool isThisHost = i < thisCores;
         if (isThisHost) {
             expectedHostsOne.push_back(thisHost);
@@ -283,9 +281,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Check scheduled on expected hosts
     REQUIRE(actualHostsOne == expectedHostsOne);
 
-    faabric::Message m = reqOne->messages().at(0);
-
     // Check the executor counts on this host
+    faabric::Message m = reqOne->messages().at(0);
+    faabric::HostResources res = sch.getThisHostResources();
     if (isThreads) {
         // For threads we expect only one executor
         REQUIRE(sch.getFunctionExecutorCount(m) == 1);
@@ -293,6 +291,9 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
         // For functions we expect one per core
         REQUIRE(sch.getFunctionExecutorCount(m) == thisCores);
     }
+
+    REQUIRE(res.slots() == thisCores);
+    REQUIRE(res.usedslots() == thisCores);
 
     // Check the number of messages executed locally and remotely
     REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
@@ -303,8 +304,6 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(batchRequestsOne.size() == 1);
     auto batchRequestOne = batchRequestsOne.at(0);
     REQUIRE(batchRequestOne.first == otherHost);
-
-    // Check the request to the other host
     REQUIRE(batchRequestOne.second->messages_size() == nCallsOffloadedOne);
 
     // Clear mocks
@@ -313,8 +312,7 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Set up resource response again
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
-    // Now schedule a second batch and check they're also sent to the other host
-    // (which is now warm)
+    // Now schedule a second batch and check they're all sent to the other host
     std::vector<std::string> expectedHostsTwo;
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
       faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
@@ -401,14 +399,14 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     std::string thisHost = sch.getThisHost();
     int nCores = 1;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
     // Set up another host with insufficient resources
     std::string otherHost = "other";
     sch.addHostToGlobalSet(otherHost);
     faabric::HostResources resOther;
-    resOther.set_cores(2);
+    resOther.set_slots(2);
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
     // Submit more calls than we have capacity for
@@ -462,7 +460,7 @@ TEST_CASE("Test unregistering host", "[scheduler]")
 
     int nCores = 5;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
     // Set up capacity for other host
@@ -768,7 +766,7 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
 
     int nCores = 3;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
     // Set up capacity for other hosts

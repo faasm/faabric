@@ -37,7 +37,7 @@ void cleanFaabric()
 
     // Give scheduler enough resources
     faabric::HostResources res;
-    res.set_cores(10);
+    res.set_slots(10);
     sch.setThisHostResources(res);
 
     // Clear snapshots

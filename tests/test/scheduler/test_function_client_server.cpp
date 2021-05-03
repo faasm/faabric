@@ -192,29 +192,25 @@ TEST_CASE("Test get resources request", "[scheduler]")
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
-    int expectedCores;
-    int expectedExecutors;
-    int expectedInFlight;
+    int expectedSlots;
+    int expectedUsedSlots;
 
     SECTION("Override resources")
     {
         faabric::HostResources res;
 
-        expectedCores = 10;
-        expectedExecutors = 15;
-        expectedInFlight = 20;
+        expectedSlots = 10;
+        expectedUsedSlots = 15;
 
-        res.set_boundexecutors(expectedExecutors);
-        res.set_cores(expectedCores);
-        res.set_functionsinflight(expectedInFlight);
+        res.set_slots(expectedSlots);
+        res.set_usedslots(expectedUsedSlots);
 
         sch.setThisHostResources(res);
     }
     SECTION("Default resources")
     {
-        expectedCores = sch.getThisHostResources().cores();
-        expectedExecutors = 0;
-        expectedInFlight = 0;
+        expectedSlots = sch.getThisHostResources().slots();
+        expectedUsedSlots = 0;
     }
 
     // Start the server
@@ -228,9 +224,8 @@ TEST_CASE("Test get resources request", "[scheduler]")
     FunctionCallClient cli(LOCALHOST);
     faabric::HostResources resResponse = cli.getResources(req);
 
-    REQUIRE(resResponse.boundexecutors() == expectedExecutors);
-    REQUIRE(resResponse.cores() == expectedCores);
-    REQUIRE(resResponse.functionsinflight() == expectedInFlight);
+    REQUIRE(resResponse.slots() == expectedSlots);
+    REQUIRE(resResponse.usedslots() == expectedUsedSlots);
 
     // Stop the server
     server.stop();
@@ -246,8 +241,8 @@ TEST_CASE("Test unregister request", "[scheduler]")
     // Remove capacity from this host and add on other
     faabric::HostResources thisResources;
     faabric::HostResources otherResources;
-    thisResources.set_cores(0);
-    otherResources.set_cores(5);
+    thisResources.set_slots(0);
+    otherResources.set_slots(5);
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThisHostResources(thisResources);

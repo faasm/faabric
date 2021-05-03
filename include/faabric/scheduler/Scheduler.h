@@ -42,7 +42,7 @@ class Executor
 
     bool isOld();
 
-    void threadFinished(int threadPoolIdx);
+    void shutdownThread(int threadPoolIdx);
 
   protected:
     virtual bool doExecute(faabric::Message& msg);
@@ -76,6 +76,10 @@ class Executor
     faabric::Message boundMessage;
 
     std::string lastSnapshot;
+
+    std::atomic<int> executingThreadCount = 0;
+
+    void finishThread(faabric::Message& msg, int32_t returnValue);
 
     void finishCall(faabric::Message& msg,
                     bool success,
@@ -127,6 +131,8 @@ class Scheduler
     void setThreadResult(uint32_t msgId, int32_t returnValue);
 
     int32_t awaitThreadResult(uint32_t messageId);
+
+    void notifyThreadFinished(Executor* exec, const faabric::Message& msg);
 
     void notifyCallFinished(Executor* exec, const faabric::Message& msg);
 
@@ -202,6 +208,8 @@ class Scheduler
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 
     void registerThread(uint32_t msgId);
+
+    void updateHostResources();
 
     int scheduleFunctionsOnHost(
       const std::string& host,

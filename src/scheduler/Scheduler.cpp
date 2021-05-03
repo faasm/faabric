@@ -27,18 +27,13 @@ Scheduler& getScheduler()
     return sch;
 }
 
-int decrementAboveZero(int input)
-{
-    return std::max<int>(input - 1, 0);
-}
-
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
 {
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
-    thisHostResources.set_cores(cores);
+    thisHostResources.set_slots(cores);
 }
 
 std::unordered_set<std::string> Scheduler::getAvailableHosts()
@@ -69,14 +64,18 @@ void Scheduler::reset()
 {
     // Shut down all Executors
     for (auto p : warmExecutors) {
-        for (auto f : p.second) {
-            f->finish();
+        for (auto e : p.second) {
+            e->finish();
+        }
+    }
+
+    for (auto p : executingExecutors) {
+        for (auto e : p.second) {
+            e->finish();
         }
     }
 
     warmExecutors.clear();
-
-    // Note, we assume there are no currently executing executors
     executingExecutors.clear();
 
     // Ensure host is set correctly
@@ -84,7 +83,7 @@ void Scheduler::reset()
 
     // Reset resources
     thisHostResources = faabric::HostResources();
-    thisHostResources.set_cores(faabric::util::getUsableCores());
+    thisHostResources.set_slots(faabric::util::getUsableCores());
 
     // Reset scheduler state
     registeredHosts.clear();
@@ -128,6 +127,13 @@ void Scheduler::removeRegisteredHost(const std::string& host,
     registeredHosts[funcStr].erase(host);
 }
 
+void Scheduler::notifyThreadFinished(Executor* exec,
+                                     const faabric::Message& msg)
+{
+    faabric::util::FullLock lock(mx);
+    thisHostResources.set_usedslots(thisHostResources.usedslots() - 1);
+}
+
 void Scheduler::notifyCallFinished(Executor* exec, const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
@@ -149,8 +155,6 @@ void Scheduler::notifyCallFinished(Executor* exec, const faabric::Message& msg)
               executingExecutors[funcStr].begin() + i);
 
             break;
-        } else {
-            logger->debug("{} is not {}", thisId, exec->id);
         }
     }
 
@@ -162,8 +166,8 @@ void Scheduler::notifyCallFinished(Executor* exec, const faabric::Message& msg)
     // Add back to pool of warm executors
     warmExecutors[funcStr].emplace_back(execPtr);
 
-    // Update count of in-flight executors
-    thisHostResources.set_functionsinflight(executingExecutors.size());
+    // Release a slot
+    thisHostResources.set_usedslots(thisHostResources.usedslots() - 1);
 }
 
 void Scheduler::notifyExecutorFinished(Executor* exec,
@@ -203,11 +207,6 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
             c.unregister(req);
         }
     }
-
-    // Update bound executors on this host
-    int newBoundExecutors =
-      decrementAboveZero(thisHostResources.boundexecutors());
-    thisHostResources.set_boundexecutors(newBoundExecutors);
 }
 
 std::vector<std::string> Scheduler::callFunctions(
@@ -277,10 +276,10 @@ std::vector<std::string> Scheduler::callFunctions(
         // Work out how many we can handle locally
         int nLocally;
         {
-            int cores = thisHostResources.cores();
+            int slots = thisHostResources.slots();
 
             // Work out available cores, flooring at zero
-            int available = cores - thisHostResources.functionsinflight();
+            int available = slots - thisHostResources.usedslots();
             available = std::max<int>(available, 0);
 
             // Claim as many as we can
@@ -374,6 +373,11 @@ std::vector<std::string> Scheduler::callFunctions(
     // Schedule messages locally if need be. For threads we only need one
     // executor, for anything else we want one Executor per function in flight
     if (!localMessageIdxs.empty()) {
+
+        // Update slots
+        thisHostResources.set_usedslots(thisHostResources.usedslots() +
+                                        localMessageIdxs.size());
+
         // Handle the execution
         if (isThreads) {
             // If we have an executing executor, we give the execution to that,
@@ -443,7 +447,7 @@ int Scheduler::scheduleFunctionsOnHost(
 
     // Execute as many as possible to this host
     faabric::HostResources r = getHostResources(host);
-    int available = r.cores() - r.functionsinflight();
+    int available = r.slots() - r.usedslots();
 
     // Drop out if none available
     if (available <= 0) {
@@ -541,16 +545,11 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
 
         // Add it to the list of executing
         executingExecutors[funcStr].emplace_back(exec);
-
     } else {
         // We have no warm executors available, so scale up
         logger->debug("Scaling {} from {} -> {}", funcStr, nTotal, nTotal + 1);
 
         executingExecutors[funcStr].emplace_back(factory->createExecutor(msg));
-
-        // Update host resources
-        thisHostResources.set_boundexecutors(
-          thisHostResources.boundexecutors() + 1);
     }
 
     return executingExecutors[funcStr].back();

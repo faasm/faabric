@@ -51,6 +51,24 @@ void Executor::finish()
     this->postFinish();
 }
 
+void Executor::finishThread(faabric::Message& msg, int32_t returnValue)
+{
+    // Decrement executing threads
+    int oldThreadCount = executingThreadCount.fetch_sub(1);
+
+    // Set the result for this thread
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.setThreadResult(msg, returnValue);
+
+    // Notify that the thread has finished, or notify that the call has finished
+    // once we're done with all the threads
+    if (oldThreadCount == 1) {
+        sch.notifyCallFinished(this, msg);
+    } else {
+        sch.notifyThreadFinished(this, msg);
+    }
+}
+
 void Executor::finishCall(faabric::Message& msg,
                           bool success,
                           const std::string& errorMsg)
@@ -109,12 +127,12 @@ void Executor::executeTask(int threadPoolIdx,
                       std::pair<int,
                                 std::shared_ptr<faabric::BatchExecuteRequest>>
                         task;
+
                       try {
                           task = threadQueues[threadPoolIdx].dequeue(
                             conf.boundTimeout);
                       } catch (faabric::util::QueueTimeoutException& ex) {
-                          // Tell the executor you're done
-                          threadFinished(threadPoolIdx);
+                          shutdownThread(threadPoolIdx);
                           break;
                       }
 
@@ -133,8 +151,8 @@ void Executor::executeTask(int threadPoolIdx,
                       if (isThread) {
                           returnValue = executeThread(threadPoolIdx, req, msg);
 
-                          // Set the result for this thread
-                          sch.setThreadResult(msg, returnValue);
+                          // Notify finished
+                          finishThread(msg, returnValue);
                       } else {
                           bool success;
                           std::string errorMessage;
@@ -189,6 +207,13 @@ void Executor::batchExecuteThreads(
         }
     }
 
+    // Set number of executing threads
+    int previousCount = executingThreadCount.fetch_add(msgIdxs.size());
+    if (previousCount != 0) {
+        throw std::runtime_error(
+          "Executing thread count should be zero before spawning new threads");
+    }
+
     // Iterate through and invoke threads
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
@@ -213,7 +238,7 @@ std::string Executor::executeFunction(
     return resultStr;
 }
 
-void Executor::threadFinished(int threadPoolIdx)
+void Executor::shutdownThread(int threadPoolIdx)
 {
     threads.erase(threadPoolIdx);
 
