@@ -133,8 +133,19 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                               break;
                           }
 
-                          int32_t returnValue =
-                            executeTask(threadPoolIdx, msgIdx, req);
+                          int32_t returnValue;
+                          try {
+                              returnValue =
+                                executeTask(threadPoolIdx, msgIdx, req);
+                          } catch (const std::exception& ex) {
+                              returnValue = 1;
+
+                              msg.set_outputdata(
+                                fmt::format("Task {} threw exception. What: {}",
+                                            msg.id(),
+                                            ex.what()));
+                          }
+
                           msg.set_returnvalue(returnValue);
 
                           // Notify finished

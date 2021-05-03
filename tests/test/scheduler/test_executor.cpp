@@ -58,6 +58,10 @@ class TestExecutor final : public Executor
             for (auto& m : req->messages()) {
                 sch.awaitThreadResult(m.id());
             }
+        } else if (msg.function() == "ret-one") {
+            return 1;
+        } else if (msg.function() == "error") {
+            throw std::runtime_error("This is a test error");
         } else if (req->type() == faabric::BatchExecuteRequest::THREADS) {
             auto logger = faabric::util::getLogger();
             logger->debug("TestExecutor executing thread {}", msg.id());
@@ -181,5 +185,57 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
     REQUIRE(res.returnvalue() == 0);
+}
+
+TEST_CASE("Test non-zero return code", "[executor]")
+{
+    cleanFaabric();
+
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "ret-one", 1);
+    faabric::Message& msg = req->mutable_messages()->at(0);
+
+    executeWithTestExecutor(req);
+
+    auto& sch = faabric::scheduler::getScheduler();
+    faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
+    REQUIRE(res.returnvalue() == 1);
+}
+
+TEST_CASE("Test erroring function", "[executor]")
+{
+    cleanFaabric();
+
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "error", 1);
+    faabric::Message& msg = req->mutable_messages()->at(0);
+
+    executeWithTestExecutor(req);
+
+    auto& sch = faabric::scheduler::getScheduler();
+    faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
+    REQUIRE(res.returnvalue() == 1);
+
+    std::string expectedErrorMsg = fmt::format(
+      "Task {} threw exception. What: This is a test error", msg.id());
+    REQUIRE(res.outputdata() == expectedErrorMsg);
+}
+
+TEST_CASE("Test erroring thread", "[executor]")
+{
+    cleanFaabric();
+
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "error", 1);
+    faabric::Message& msg = req->mutable_messages()->at(0);
+    req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+    std::string snapKey = setUpDummySnapshot();
+    msg.set_snapshotkey(snapKey);
+    executeWithTestExecutor(req);
+
+    auto& sch = faabric::scheduler::getScheduler();
+    int32_t res = sch.awaitThreadResult(msg.id());
+    REQUIRE(res == 1);
 }
 }
