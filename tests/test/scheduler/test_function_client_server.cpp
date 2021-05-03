@@ -23,7 +23,6 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     cleanFaabric();
 
     // Start the server
-    ServerContext serverContext;
     FunctionCallServer server;
     server.start();
     usleep(1000 * 100);
@@ -80,7 +79,6 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     cleanFaabric();
 
     // Start the server
-    ServerContext serverContext;
     FunctionCallServer server;
     server.start();
     usleep(1000 * 100);
@@ -158,7 +156,6 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     cleanFaabric();
 
     // Start the server
-    ServerContext serverContext;
     FunctionCallServer server;
     server.start();
     usleep(1000 * 100);
@@ -214,7 +211,6 @@ TEST_CASE("Test get resources request", "[scheduler]")
     }
 
     // Start the server
-    ServerContext serverContext;
     FunctionCallServer server;
     server.start();
     usleep(1000 * 100);
@@ -259,7 +255,6 @@ TEST_CASE("Test unregister request", "[scheduler]")
     faabric::scheduler::clearMockRequests();
 
     // Start the server
-    ServerContext serverContext;
     FunctionCallServer server;
     server.start();
     usleep(1000 * 100);
@@ -279,6 +274,63 @@ TEST_CASE("Test unregister request", "[scheduler]")
     *reqB.mutable_function() = msg;
     cli.unregister(reqB);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+
+    // Stop the server
+    server.stop();
+}
+
+TEST_CASE("Test set thread result", "[scheduler]")
+{
+    cleanFaabric();
+
+    // Register threads on this host
+    int threadIdA = 123;
+    int threadIdB = 345;
+    int returnValueA = 88;
+    int returnValueB = 99;
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.registerThread(threadIdA);
+    sch.registerThread(threadIdB);
+
+    // Start the server
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Make the request
+    faabric::ThreadResultRequest reqA;
+    faabric::ThreadResultRequest reqB;
+
+    reqA.set_messageid(threadIdA);
+    reqA.set_returnvalue(returnValueA);
+
+    reqB.set_messageid(threadIdB);
+    reqB.set_returnvalue(returnValueB);
+
+    // Set up two threads to await the results
+    std::thread tA([threadIdA, returnValueA] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        int32_t r = sch.awaitThreadResult(threadIdA);
+        REQUIRE(r == returnValueA);
+    });
+
+    std::thread tB([threadIdB, returnValueB] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        int32_t r = sch.awaitThreadResult(threadIdB);
+        REQUIRE(r == returnValueB);
+    });
+
+    FunctionCallClient cli(LOCALHOST);
+    cli.setThreadResult(reqA);
+    cli.setThreadResult(reqB);
+
+    if (tA.joinable()) {
+        tA.join();
+    }
+
+    if (tB.joinable()) {
+        tB.join();
+    }
 
     // Stop the server
     server.stop();

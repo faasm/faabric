@@ -106,6 +106,8 @@ class Scheduler
 
     int32_t awaitThreadResult(uint32_t messageId);
 
+    void registerThread(uint32_t msgId);
+
     void vacateSlot();
 
     void notifyExecutorFinished(Executor* exec, const faabric::Message& msg);
@@ -180,8 +182,6 @@ class Scheduler
     faabric::HostResources getHostResources(const std::string& host);
 
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
-
-    void registerThread(uint32_t msgId);
 
     void updateHostResources();
 

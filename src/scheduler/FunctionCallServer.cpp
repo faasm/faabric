@@ -110,8 +110,13 @@ Status FunctionCallServer::SetThreadResult(
   const faabric::ThreadResultRequest* request,
   faabric::FunctionStatusResponse* response)
 {
+    faabric::util::getLogger()->info("Setting thread {} result to {}",
+                                     request->messageid(),
+                                     request->returnvalue());
+
     auto& sch = faabric::scheduler::getScheduler();
     sch.setThreadResult(request->messageid(), request->returnvalue());
+
     return Status::OK;
 }
 }
