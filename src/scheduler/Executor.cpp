@@ -73,7 +73,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         }
     }
 
-    // Set number of executing tasks
+    // Set executing task count
     executingTaskCount += msgIdxs.size();
 
     // Iterate through and invoke tasks
@@ -144,8 +144,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                               sch.setFunctionResult(msg);
                           }
 
-                          // Decrement task count
-                          sch.vacateSlot();
+                          // Decrement task count and notify if we're completely
+                          // done
                           int oldTaskCount = executingTaskCount.fetch_sub(1);
                           if (oldTaskCount == 1) {
                               sch.notifyExecutorFinished(this, msg);

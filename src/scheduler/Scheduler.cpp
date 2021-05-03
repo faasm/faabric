@@ -582,6 +582,9 @@ void Scheduler::flushLocally()
 
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
+    // Vacate the slot taken by this function
+    vacateSlot();
+
     redis::Redis& redis = redis::Redis::getQueue();
 
     // Record which host did the execution
@@ -617,6 +620,9 @@ void Scheduler::registerThread(uint32_t msgId)
 void Scheduler::setThreadResult(const faabric::Message& msg,
                                 int32_t returnValue)
 {
+    // Vacate the slot taken by this thread
+    vacateSlot();
+
     bool isMaster = msg.masterhost() == conf.endpointHost;
     const auto& logger = faabric::util::getLogger();
 

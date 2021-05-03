@@ -2,19 +2,19 @@
 
 namespace faabric::scheduler {
 
-static std::shared_ptr<ExecutorFactory> _fac;
+static std::shared_ptr<ExecutorFactory> _factory;
 
 void setExecutorFactory(std::shared_ptr<ExecutorFactory> fac)
 {
-    _fac = fac;
+    _factory = fac;
 }
 
 std::shared_ptr<ExecutorFactory> getExecutorFactory()
 {
-    if (_fac == nullptr) {
+    if (_factory == nullptr) {
         throw std::runtime_error("No executor factory set");
     }
 
-    return _fac;
+    return _factory;
 }
 }
