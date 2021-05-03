@@ -14,6 +14,8 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
+std::atomic<int> restoreCount = 0;
+
 class TestExecutor final : public Executor
 {
   public:
@@ -22,6 +24,8 @@ class TestExecutor final : public Executor
     {}
 
     ~TestExecutor() {}
+
+    void restore(const faabric::Message& msg) { restoreCount += 1; }
 
     int32_t executeTask(int threadPoolIdx,
                         int msgIdx,
@@ -127,6 +131,7 @@ void executeWithTestExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req,
 TEST_CASE("Test executing simple function", "[executor]")
 {
     cleanFaabric();
+    restoreCount = 0;
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "simple", 1);
@@ -141,11 +146,15 @@ TEST_CASE("Test executing simple function", "[executor]")
     std::string expected =
       fmt::format("Simple function {} executed successfully", msgId);
     REQUIRE(result.outputdata() == expected);
+
+    // Check that restore has not been called
+    REQUIRE(restoreCount == 0);
 }
 
 TEST_CASE("Test executing threads directly", "[executor]")
 {
     cleanFaabric();
+    restoreCount = 0;
 
     int nThreads = 10;
     std::shared_ptr<BatchExecuteRequest> req =
@@ -167,11 +176,15 @@ TEST_CASE("Test executing threads directly", "[executor]")
         int32_t result = sch.awaitThreadResult(msgId);
         REQUIRE(result == msgId / 100);
     }
+
+    // Check that restore has only been called once
+    REQUIRE(restoreCount == 1);
 }
 
 TEST_CASE("Test executing threads indirectly", "[executor]")
 {
     cleanFaabric();
+    restoreCount = 0;
 
     int nThreads = 8;
     std::shared_ptr<BatchExecuteRequest> req =
@@ -188,6 +201,9 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
     REQUIRE(res.returnvalue() == 0);
+
+    // Check that restore has only been called once
+    REQUIRE(restoreCount == 1);
 }
 
 TEST_CASE("Test thread results returned on non-master", "[executor]")
