@@ -14,7 +14,7 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doRecv(const void* msgData, int size)
+void FunctionCallServer::doRecv(void* msgData, int size)
 {
     throw std::runtime_error("doRecv for one message not implemented");
 }
@@ -37,6 +37,9 @@ void FunctionCallServer::doRecv(const void* headerData,
             break;
         case faabric::scheduler::FunctionCalls::Unregister:
             this->recvUnregister(bodyData, bodySize);
+            break;
+        case faabric::scheduler::FunctionCalls::GetResources:
+            this->recvGetResources(bodyData, bodySize);
             break;
         default:
             throw std::runtime_error(
@@ -104,15 +107,29 @@ void FunctionCallServer::recvUnregister(const void* msgData, int size)
     scheduler.removeRegisteredHost(request.host(), request.function());
 }
 
-/*
-Status FunctionCallServer::GetResources(ServerContext* context,
-                                        const faabric::ResourceRequest* request,
-                                        faabric::HostResources* response)
+void FunctionCallServer::recvGetResources(const void* data, int size)
 {
-    *response = scheduler.getThisHostResources();
+    // Read the return address from the received data
+    const std::string returnHost((const char*)data, size);
 
-    return Status::OK;
+    // Prepare the response
+    faabric::HostResources response = scheduler.getThisHostResources();
+
+    // Open the endpoint socket, server always binds
+    faabric::transport::SimpleMessageEndpoint endpoint(
+      returnHost, FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+    endpoint.open(faabric::transport::getGlobalMessageContext(),
+                  faabric::transport::SocketType::PUSH,
+                  true);
+
+    // Send the response body
+    size_t responseSize = response.ByteSizeLong();
+    // Deliberately use heap-allocation for zero-copy sending
+    char* serialisedMsg = new char[responseSize];
+    // Serialise using protobuf
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    endpoint.send(serialisedMsg, responseSize);
 }
-
-*/
 }

@@ -11,8 +11,6 @@ MessageEndpointServer::MessageEndpointServer(const std::string& host, int port)
 
 void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
-    auto logger = faabric::util::getLogger();
-
     // Start serving thread in background
     this->servingThread = std::thread([this, &context] {
         // Open message endpoint, and bind
@@ -31,8 +29,6 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
             }
         }
     });
-
-    logger->debug("Stopping message endpoint server...");
 }
 
 void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
@@ -73,6 +69,11 @@ void MessageEndpointServer::recv()
     zmq::message_t body;
     if (!this->socket->recv(body)) {
         throw std::runtime_error("Error receiving message through socket");
+    }
+
+    // Check that there are no more messages to receive
+    if (body.more()) {
+        throw std::runtime_error("Body sent with SNDMORE flag");
     }
 
     // Implementation specific message handling

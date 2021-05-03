@@ -227,8 +227,7 @@ TEST_CASE("Test client batch execution request", "[new-scheduler]")
     REQUIRE(sch.getBindQueue()->size() == nCalls);
 }
 
-/*
-TEST_CASE("Test get resources request", "[scheduler]")
+TEST_CASE("Test get resources request", "[new-scheduler]")
 {
     cleanFaabric();
 
@@ -260,26 +259,27 @@ TEST_CASE("Test get resources request", "[scheduler]")
     }
 
     // Start the server
-    faabric::transport::MessageContext context;
+    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
     server.start(context);
     usleep(1000 * 100);
 
     // Make the request
     faabric::ResourceRequest req;
-    FunctionCallClient cli(LOCALHOST);
+    FunctionCallClient cli(context, LOCALHOST);
     faabric::HostResources resResponse = cli.getResources(req);
 
     REQUIRE(resResponse.boundexecutors() == expectedExecutors);
     REQUIRE(resResponse.cores() == expectedCores);
     REQUIRE(resResponse.functionsinflight() == expectedInFlight);
 
+    // Close the client
+    cli.close();
     // Stop the server
     server.stop(context);
 }
-*/
 
-TEST_CASE("Test unregister request", "[scheduler]")
+TEST_CASE("Test unregister request", "[new-scheduler]")
 {
     cleanFaabric();
 
@@ -326,6 +326,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
     cli.unregister(reqB);
+    usleep(1000 * 100);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     // Stop the server

@@ -94,6 +94,7 @@ FunctionCallClient::FunctionCallClient(
   faabric::transport::MessageContext& context,
   const std::string& hostIn)
   : faabric::transport::MessageEndpoint(hostIn, FUNCTION_CALL_PORT)
+  , otherHost(hostIn)
 {
     this->open(context, faabric::transport::SocketType::PUSH, false);
 }
@@ -165,8 +166,6 @@ faabric::HostResources FunctionCallClient::getResources(
   const faabric::ResourceRequest& req)
 {
     faabric::HostResources response;
-    /*
-
     if (faabric::util::isMockMode()) {
         // Register the request
         resourceRequests.emplace_back(host, req);
@@ -176,12 +175,36 @@ faabric::HostResources FunctionCallClient::getResources(
             response = queuedResourceResponses[host].dequeue();
         }
     } else {
-        ClientContext context;
-        CHECK_RPC("get_resources",
-                  stub->GetResources(&context, req, &response));
+        // Send the header first
+        sendHeader(faabric::scheduler::FunctionCalls::GetResources);
+
+        // The body of the message is our address, where the server will send
+        // the response.
+        size_t addressSize = this->otherHost.size();
+        char* address = new char[addressSize];
+        strncpy(address, this->otherHost.c_str(), addressSize);
+        send(address, addressSize);
+
+        // Wait for the response, open a temporary endpoint for it
+        // Note - we use a different port not to clash with existing server
+        faabric::transport::SimpleMessageEndpoint endpoint(
+          DEFAULT_RPC_HOST, FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+        // Open the socket, client does not bind
+        endpoint.open(faabric::transport::getGlobalMessageContext(),
+                      faabric::transport::SocketType::PULL,
+                      false);
+        // Receive message
+        char* msgData;
+        int size;
+        endpoint.recv(msgData, size);
+        // Deserialise message string
+        if (!response.ParseFromArray(msgData, size)) {
+            faabric::util::getLogger()->info("raising exception in client");
+            // Exception raised here!!
+            throw std::runtime_error("Error deserialising message");
+        }
     }
 
-    */
     return response;
 }
 
@@ -224,7 +247,7 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
     }
 }
 
-void FunctionCallClient::doRecv(const void* msgData, int size)
+void FunctionCallClient::doRecv(void* msgData, int size)
 {
     throw std::runtime_error("Calling recv from a producer client.");
 }

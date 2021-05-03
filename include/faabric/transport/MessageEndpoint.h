@@ -33,17 +33,17 @@ class MessageEndpoint
               faabric::transport::SocketType sockTypeIn,
               bool bind);
 
-    void recv();
-
     void close();
+
+    void send(char* serialisedMsg, size_t msgSize, bool more = false);
+
+    void recv();
 
   protected:
     const std::string host;
     const int port;
 
-    void send(char* serialisedMsg, size_t msgSize, bool more = false);
-
-    virtual void doRecv(const void* msgData, int size) = 0;
+    virtual void doRecv(void* msgData, int size) = 0;
 
     std::unique_ptr<zmq::socket_t> socket;
 };

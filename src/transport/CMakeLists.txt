@@ -6,12 +6,14 @@ set(HEADERS
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageContext.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpoint.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpointServer.h"
+    "${FAABRIC_INCLUDE_DIR}/faabric/transport/SimpleMessageEndpoint.h"
 )
 
 set(LIB_FILES 
     MessageContext.cpp
     MessageEndpoint.cpp
     MessageEndpointServer.cpp
+    SimpleMessageEndpoint.cpp
     ${HEADERS}
 )
 

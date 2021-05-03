@@ -57,7 +57,9 @@ class FunctionCallClient : faabric::transport::MessageEndpoint
     void unregister(const faabric::UnregisterRequest& req);
 
   private:
-    void doRecv(const void* msgData, int size) override;
+    const std::string otherHost;
+
+    void doRecv(void* msgData, int size) override;
 
     void sendHeader(faabric::scheduler::FunctionCalls call);
 };
