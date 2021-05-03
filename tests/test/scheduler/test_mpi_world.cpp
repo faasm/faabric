@@ -1701,26 +1701,26 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
 {
     cleanFaabric();
 
-    std::string otherHost = "192.168.9.2";
-
-    faabric::Message msg = faabric::util::messageFactory(user, func);
-    msg.set_mpiworldid(worldId);
-    msg.set_mpiworldsize(worldSize);
-
-    MpiWorldRegistry& registry = getMpiWorldRegistry();
-    scheduler::MpiWorld& localWorld =
-      registry.createWorld(msg, worldId, LOCALHOST);
-
-    scheduler::MpiWorld remoteWorld;
-    remoteWorld.overrideHost(otherHost);
-    remoteWorld.initialiseFromState(msg, worldId);
-
     auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
     server.start(context);
     usleep(1000 * 100);
 
     {
+        std::string otherHost = "192.168.9.2";
+
+        faabric::Message msg = faabric::util::messageFactory(user, func);
+        msg.set_mpiworldid(worldId);
+        msg.set_mpiworldsize(worldSize);
+
+        MpiWorldRegistry& registry = getMpiWorldRegistry();
+        scheduler::MpiWorld& localWorld =
+          registry.createWorld(msg, worldId, LOCALHOST);
+
+        scheduler::MpiWorld remoteWorld;
+        remoteWorld.overrideHost(otherHost);
+        remoteWorld.initialiseFromState(msg, worldId);
+
         // Register four ranks
         int rankA1 = 1;
         int rankA2 = 2;
@@ -1767,6 +1767,7 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
                                rankA1,
                                MPI_INT,
                                dataCount);
+            usleep(1000 * 100);
 
             // Make sure it's been copied to the memory location
             REQUIRE(dataA1 == putData);
