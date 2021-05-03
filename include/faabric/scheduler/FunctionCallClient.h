@@ -1,9 +1,10 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallServer.h>
+#include <faabric/scheduler/FunctionCallCommon.h>
 #include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/transport/SimpleMessageEndpoint.h>
 
 namespace faabric::scheduler {
 

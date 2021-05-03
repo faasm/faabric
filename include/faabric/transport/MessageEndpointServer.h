@@ -32,5 +32,8 @@ class MessageEndpointServer : public faabric::transport::MessageEndpoint
 
   private:
     std::thread servingThread;
+
+    // Hint the compiler that we deliberately override doRecv's signature
+    using MessageEndpoint::doRecv;
 };
 }

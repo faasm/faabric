@@ -23,14 +23,15 @@ void SimpleMessageEndpoint::recv(char*& msgData, int& size)
     size = this->msgSize;
 }
 
-void SimpleMessageEndpoint::doRecv(void* msgData, int size) {
+void SimpleMessageEndpoint::doRecv(void* msgData, int size)
+{
     /*
     if (this->msgData) {
         delete[] this->msgData;
     }
     */
     this->msgData = new char[size]();
-    memcpy(this->msgData, (char*) msgData, size);
+    memcpy(this->msgData, (char*)msgData, size);
     this->msgSize = size;
 }
 }

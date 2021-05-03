@@ -18,7 +18,7 @@ using namespace scheduler;
 
 namespace tests {
 
-TEST_CASE("Test sending MPI message", "[new-scheduler]")
+TEST_CASE("Test sending MPI message", "[scheduler]")
 {
     cleanFaabric();
 
@@ -78,7 +78,7 @@ TEST_CASE("Test sending MPI message", "[new-scheduler]")
     server.stop(context);
 }
 
-TEST_CASE("Test sending flush message", "[new-scheduler]")
+TEST_CASE("Test sending flush message", "[scheduler]")
 {
     cleanFaabric();
 
@@ -152,7 +152,7 @@ TEST_CASE("Test sending flush message", "[new-scheduler]")
     REQUIRE(state.getKVCount() == 0);
 }
 
-TEST_CASE("Test broadcasting flush message", "[new-scheduler]")
+TEST_CASE("Test broadcasting flush message", "[scheduler]")
 {
     cleanFaabric();
     faabric::util::setMockMode(true);
@@ -185,7 +185,7 @@ TEST_CASE("Test broadcasting flush message", "[new-scheduler]")
     faabric::util::setMockMode(false);
 }
 
-TEST_CASE("Test client batch execution request", "[new-scheduler]")
+TEST_CASE("Test client batch execution request", "[scheduler]")
 {
     cleanFaabric();
 
@@ -227,7 +227,7 @@ TEST_CASE("Test client batch execution request", "[new-scheduler]")
     REQUIRE(sch.getBindQueue()->size() == nCalls);
 }
 
-TEST_CASE("Test get resources request", "[new-scheduler]")
+TEST_CASE("Test get resources request", "[scheduler]")
 {
     cleanFaabric();
 
@@ -279,7 +279,7 @@ TEST_CASE("Test get resources request", "[new-scheduler]")
     server.stop(context);
 }
 
-TEST_CASE("Test unregister request", "[new-scheduler]")
+TEST_CASE("Test unregister request", "[scheduler]")
 {
     cleanFaabric();
 

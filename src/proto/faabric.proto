@@ -40,11 +40,6 @@ message UnregisterRequest {
     Message function = 2;
 }
 
-service FunctionRPCService {
-    rpc GetResources (ResourceRequest) returns (HostResources) {
-    }
-}
-
 message FunctionStatusResponse {
     enum FunctionStatus {
         OK = 0;

@@ -13,11 +13,6 @@ FaabricPool::FaabricPool(int nThreads)
     // Ensure we can ping both redis instances
     faabric::redis::Redis::getQueue().ping();
     faabric::redis::Redis::getState().ping();
-
-    // The message context has the lifetime of the server set (i.e. pool) but
-    // is coupled to the scheduler for convinience. As the later has static
-    // storage duration, we refresh it using move semantics.
-    scheduler->messageContext = std::move(faabric::transport::MessageContext());
 }
 
 void FaabricPool::startFunctionCallServer()
@@ -47,7 +42,8 @@ void FaabricPool::startStateServer()
 
     // Note that the state server spawns its own background thread
     logger->info("Starting state server");
-    stateServer.start(faabric::transport::getGlobalMessageContext());
+    // stateServer.start(faabric::transport::getGlobalMessageContext());
+    stateServer.start();
 }
 
 void FaabricPool::startThreadPool(bool background)
@@ -131,7 +127,8 @@ void FaabricPool::shutdown()
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     logger->info("Waiting for the state server to finish");
-    stateServer.stop(faabric::transport::getGlobalMessageContext());
+    // stateServer.stop(faabric::transport::getGlobalMessageContext());
+    stateServer.stop();
 
     logger->info("Waiting for the function server to finish");
     functionServer.stop(faabric::transport::getGlobalMessageContext());

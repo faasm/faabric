@@ -105,6 +105,7 @@ target_link_libraries(faabric PUBLIC
     boost_system
     boost_filesystem
     zstd::libzstd_static
+    zmq
     )
 
 target_include_directories(faabric PUBLIC

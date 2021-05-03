@@ -34,8 +34,7 @@ faabric::transport::MessageContext& getGlobalMessageContext()
     // needs to be reset. In this situations we override the shut-down message
     // context.
     if (msgContext->isContextShutDown) {
-        msgContext =
-          std::move(std::make_unique<faabric::transport::MessageContext>());
+        msgContext = std::make_unique<faabric::transport::MessageContext>();
         msgContext->isContextShutDown = false;
     }
     return *msgContext;

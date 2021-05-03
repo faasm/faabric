@@ -1,6 +1,5 @@
 #include <faabric/mpi/mpi.h>
 
-#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -12,6 +11,9 @@
 #include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
+static thread_local std::unordered_map<std::string,
+                                       faabric::scheduler::FunctionCallClient>
+  remoteEndpoints;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -21,6 +23,14 @@ MpiWorld::MpiWorld()
   , creationTime(faabric::util::startTimer())
   , cartProcsPerDim(2)
 {}
+
+MpiWorld::~MpiWorld()
+{
+    for (auto& s : remoteEndpoints) {
+        s.second.close();
+    }
+    remoteEndpoints.clear();
+}
 
 std::string getWorldStateKey(int worldId)
 {
@@ -62,6 +72,21 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
     state::State& state = state::getGlobalState();
     std::string stateKey = getRankStateKey(id, rank);
     return state.getKV(user, stateKey, MPI_HOST_STATE_LEN);
+}
+
+faabric::scheduler::FunctionCallClient& MpiWorld::getRemoteEndpoint(
+  const std::string& otherHost)
+{
+    auto it = remoteEndpoints.find(otherHost);
+    if (it == remoteEndpoints.end()) {
+        auto _it = remoteEndpoints.try_emplace(
+          otherHost, faabric::transport::getGlobalMessageContext(), otherHost);
+        if (!_it.second) {
+            throw std::runtime_error("Error inserting remote endpoint");
+        }
+        it = _it.first;
+    }
+    return it->second;
 }
 
 int MpiWorld::getMpiThreadPoolSize()
@@ -426,10 +451,7 @@ void MpiWorld::send(int sendRank,
         }
     } else {
         logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
-
-        // TODO - avoid creating a client each time?
-        scheduler::FunctionCallClient client(otherHost);
-        client.sendMPIMessage(m);
+        getRemoteEndpoint(otherHost).sendMPIMessage(m);
     }
 }
 

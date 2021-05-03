@@ -3,6 +3,7 @@
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/state/StateKeyValue.h>
@@ -25,6 +26,8 @@ class MpiWorld
 {
   public:
     MpiWorld();
+
+    ~MpiWorld();
 
     void create(const faabric::Message& call, int newId, int newSize);
 
@@ -224,7 +227,9 @@ class MpiWorld
 
     std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
       localQueueMap;
+
     std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
+    int getMpiThreadPoolSize();
 
     std::vector<int> cartProcsPerDim;
 
@@ -232,7 +237,10 @@ class MpiWorld
 
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
-    int getMpiThreadPoolSize();
+    // std::unordered_map<std::string, faabric::scheduler::FunctionCallClient>
+    // remoteEndpoints;
+    faabric::scheduler::FunctionCallClient& getRemoteEndpoint(
+      const std::string& otherHost);
 
     void checkRankOnThisHost(int rank);
 
