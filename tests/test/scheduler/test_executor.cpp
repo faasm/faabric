@@ -1,3 +1,5 @@
+#include "faabric/scheduler/FunctionCallClient.h"
+#include "faabric/util/testing.h"
 #include "faabric_utils.h"
 #include <catch.hpp>
 
@@ -101,7 +103,8 @@ std::string setUpDummySnapshot()
     return snapKey;
 }
 
-void executeWithTestExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req)
+void executeWithTestExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req,
+                             bool forceLocal)
 {
     std::shared_ptr<TestExecutorFactory> fac =
       std::make_shared<TestExecutorFactory>();
@@ -115,7 +118,7 @@ void executeWithTestExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req)
     conf.boundTimeout = 1000;
 
     auto& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(req);
+    sch.callFunctions(req, forceLocal);
 
     conf.boundTimeout = boundOriginal;
     conf.overrideCpuCount = overrideCpuOriginal;
@@ -131,7 +134,7 @@ TEST_CASE("Test executing simple function", "[executor]")
 
     REQUIRE(req->messages_size() == 1);
 
-    executeWithTestExecutor(req);
+    executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message result = sch.getFunctionResult(msgId, 1000);
@@ -156,7 +159,7 @@ TEST_CASE("Test executing threads directly", "[executor]")
         messageIds.emplace_back(req->messages().at(i).id());
     }
 
-    executeWithTestExecutor(req);
+    executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
     for (int i = 0; i < nThreads; i++) {
@@ -180,11 +183,59 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     std::vector<uint32_t> messageIds;
     msg.set_snapshotkey(snapKey);
 
-    executeWithTestExecutor(req);
+    executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
     REQUIRE(res.returnvalue() == 0);
+}
+
+TEST_CASE("Test thread results returned on non-master", "[executor]")
+{
+    cleanFaabric();
+
+    faabric::util::setMockMode(true);
+    std::string otherHost = "other";
+
+    int nThreads = 5;
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "blah", nThreads);
+    req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+    std::vector<uint32_t> messageIds;
+    std::string snapKey = setUpDummySnapshot();
+    for (int i = 0; i < nThreads; i++) {
+        faabric::Message& msg = req->mutable_messages()->at(i);
+        msg.set_snapshotkey(snapKey);
+        msg.set_masterhost(otherHost);
+
+        messageIds.emplace_back(req->messages().at(i).id());
+    }
+
+    executeWithTestExecutor(req, true);
+
+    // We have to manually add a wait here as the thread results won't actually
+    // get logged on this host
+    usleep(1000 * 1000);
+
+    std::vector<std::pair<std::string, faabric::ThreadResultRequest>> actual =
+      faabric::scheduler::getThreadResults();
+    REQUIRE(actual.size() == nThreads);
+
+    std::vector<uint32_t> actualMessageIds;
+    for (auto& p : actual) {
+        REQUIRE(p.first == otherHost);
+        REQUIRE(p.second.returnvalue() == p.second.messageid() / 100);
+
+        actualMessageIds.push_back(p.second.messageid());
+    }
+
+    std::sort(actualMessageIds.begin(), actualMessageIds.end());
+    std::sort(messageIds.begin(), messageIds.end());
+
+    REQUIRE(actualMessageIds == messageIds);
+
+    faabric::util::setMockMode(false);
 }
 
 TEST_CASE("Test non-zero return code", "[executor]")
@@ -195,7 +246,7 @@ TEST_CASE("Test non-zero return code", "[executor]")
       faabric::util::batchExecFactory("dummy", "ret-one", 1);
     faabric::Message& msg = req->mutable_messages()->at(0);
 
-    executeWithTestExecutor(req);
+    executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
@@ -210,7 +261,7 @@ TEST_CASE("Test erroring function", "[executor]")
       faabric::util::batchExecFactory("dummy", "error", 1);
     faabric::Message& msg = req->mutable_messages()->at(0);
 
-    executeWithTestExecutor(req);
+    executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
@@ -232,7 +283,7 @@ TEST_CASE("Test erroring thread", "[executor]")
 
     std::string snapKey = setUpDummySnapshot();
     msg.set_snapshotkey(snapKey);
-    executeWithTestExecutor(req);
+    executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
     int32_t res = sch.awaitThreadResult(msg.id());
