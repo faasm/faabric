@@ -14,14 +14,17 @@ class ExampleExecutor : public Executor
 
     ~ExampleExecutor() {}
 
-    bool doExecute(faabric::Message& call)
+    int32_t executeTask(int threadPoolIdx,
+                        int msgIdx,
+                        std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
         auto logger = faabric::util::getLogger();
 
         logger->info("Hello world!");
-        call.set_outputdata("This is hello output!");
+        faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+        msg.set_outputdata("This is hello output!");
 
-        return true;
+        return 0;
     }
 };
 

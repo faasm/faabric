@@ -21,18 +21,23 @@ class TestExecutor final : public Executor
 
     ~TestExecutor() {}
 
-    bool doExecute(faabric::Message& call)
+    int32_t executeTask(int threadPoolIdx,
+                        int msgIdx,
+                        std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
         auto logger = faabric::util::getLogger();
+        faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+        bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
 
-        if (call.function() == "thread-check") {
-            call.set_outputdata(fmt::format(
-              "Threaded function {} executed successfully", call.id()));
+        // Custom thread-check function
+        if (msg.function() == "thread-check" && !isThread) {
+            msg.set_outputdata(fmt::format(
+              "Threaded function {} executed successfully", msg.id()));
 
             // Set up the request
             int nThreads = 5;
-            if (!call.inputdata().empty()) {
-                nThreads = std::stoi(call.inputdata());
+            if (!msg.inputdata().empty()) {
+                nThreads = std::stoi(msg.inputdata());
             }
 
             std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -42,7 +47,7 @@ class TestExecutor final : public Executor
 
             for (int i = 0; i < req->messages_size(); i++) {
                 faabric::Message& m = req->mutable_messages()->at(i);
-                m.set_snapshotkey(call.snapshotkey());
+                m.set_snapshotkey(msg.snapshotkey());
                 m.set_appindex(i + 1);
             }
 
@@ -53,22 +58,17 @@ class TestExecutor final : public Executor
             for (auto& m : req->messages()) {
                 sch.awaitThreadResult(m.id());
             }
+        } else if (req->type() == faabric::BatchExecuteRequest::THREADS) {
+            auto logger = faabric::util::getLogger();
+            logger->debug("TestExecutor executing thread {}", msg.id());
+
+            return msg.id() / 100;
         } else {
-            call.set_outputdata(fmt::format(
-              "Simple function {} executed successfully", call.id()));
+            msg.set_outputdata(fmt::format(
+              "Simple function {} executed successfully", msg.id()));
         }
 
-        return true;
-    }
-
-    int32_t executeThread(int threadPoolIdx,
-                          std::shared_ptr<faabric::BatchExecuteRequest> req,
-                          faabric::Message& msg)
-    {
-        auto logger = faabric::util::getLogger();
-        logger->debug("TestExecutor executing thread {}", msg.id());
-
-        return msg.id() / 100;
+        return 0;
     }
 };
 
@@ -142,7 +142,7 @@ TEST_CASE("Test executing threads directly", "[executor]")
 
     int nThreads = 10;
     std::shared_ptr<BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("dummy", "thread-check", nThreads);
+      faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
     std::vector<uint32_t> messageIds;

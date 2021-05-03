@@ -8,28 +8,20 @@ int mpiFunc();
 MpiExecutor::MpiExecutor(const faabric::Message& msg)
   : Executor(msg){};
 
-bool MpiExecutor::doExecute(faabric::Message& msg)
+int32_t MpiExecutor::executeTask(
+  int threadPoolIdx,
+  int msgIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     auto logger = faabric::util::getLogger();
 
-    faabric::mpi_native::executingCall = &msg;
+    faabric::mpi_native::executingCall = &req->mutable_messages()->at(msgIdx);
 
-    bool success;
     int error = mpiFunc();
     if (error) {
         logger->error("There was an error running the MPI function");
-        success = false;
-    } else {
-        success = true;
     }
 
-    return success;
-}
-
-void MpiExecutor::postFinishCall()
-{
-    auto logger = faabric::util::getLogger();
-    logger->debug("Finished MPI execution.");
     throw faabric::util::ExecutorFinishedException("Finished MPI Execution!");
 }
 

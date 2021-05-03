@@ -15,11 +15,10 @@ class MpiExecutor final : public Executor
 
     virtual ~MpiExecutor();
 
-    bool doExecute(faabric::Message& msg) override;
-
-    void postFinishCall() override;
-
-    void postFinish() override;
+    int32_t executeTask(
+      int threadPoolIdx,
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> req) override;
 };
 
 class MpiExecutorFactory : public ExecutorFactory

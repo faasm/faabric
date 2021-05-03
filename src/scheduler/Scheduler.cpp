@@ -127,20 +127,18 @@ void Scheduler::removeRegisteredHost(const std::string& host,
     registeredHosts[funcStr].erase(host);
 }
 
-void Scheduler::notifyThreadFinished(Executor* exec,
-                                     const faabric::Message& msg)
+void Scheduler::vacateSlot()
 {
     faabric::util::FullLock lock(mx);
     thisHostResources.set_usedslots(thisHostResources.usedslots() - 1);
 }
 
-void Scheduler::notifyCallFinished(Executor* exec, const faabric::Message& msg)
+void Scheduler::notifyExecutorFinished(Executor* exec,
+                                       const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
 
-    const auto& logger = faabric::util::getLogger();
     const std::string funcStr = faabric::util::funcToString(msg, false);
-
     int nExecuting = executingExecutors[funcStr].size();
 
     // Remove from executing executors
@@ -159,18 +157,16 @@ void Scheduler::notifyCallFinished(Executor* exec, const faabric::Message& msg)
     }
 
     if (execPtr == nullptr) {
+        const auto& logger = faabric::util::getLogger();
         logger->error("Unable to find record of executor {}", exec->id);
         throw std::runtime_error("Unable to find record of executor");
     }
 
     // Add back to pool of warm executors
     warmExecutors[funcStr].emplace_back(execPtr);
-
-    // Release a slot
-    thisHostResources.set_usedslots(thisHostResources.usedslots() - 1);
 }
 
-void Scheduler::notifyExecutorFinished(Executor* exec,
+void Scheduler::notifyExecutorShutdown(Executor* exec,
                                        const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
@@ -195,7 +191,7 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
     }
 
     int count = getFunctionExecutorCount(msg);
-    if (count == 1) {
+    if (count == 0) {
         // Unregister if this was the last executor for that function
         bool isMaster = thisHost == msg.masterhost();
         if (!isMaster) {
@@ -373,28 +369,20 @@ std::vector<std::string> Scheduler::callFunctions(
     // Schedule messages locally if need be. For threads we only need one
     // executor, for anything else we want one Executor per function in flight
     if (!localMessageIdxs.empty()) {
-
         // Update slots
         thisHostResources.set_usedslots(thisHostResources.usedslots() +
                                         localMessageIdxs.size());
 
-        // Handle the execution
-        if (isThreads) {
-            // If we have an executing executor, we give the execution to that,
-            // otherwise we add another
-            std::shared_ptr<Executor> e;
-            if (!executingExecutors.empty()) {
-                e = executingExecutors[funcStr].back();
-            } else {
-                e = claimExecutor(firstMsg);
-            }
-
-            // Execute the threads
-            e->batchExecuteThreads(localMessageIdxs, req);
+        if (isThreads && !executingExecutors.empty()) {
+            std::shared_ptr<Executor> e = executingExecutors[funcStr].back();
+            e->executeTasks(localMessageIdxs, req);
+        } else if (isThreads) {
+            std::shared_ptr<Executor> e = claimExecutor(firstMsg);
+            e->executeTasks(localMessageIdxs, req);
         } else {
             for (auto i : localMessageIdxs) {
-                std::shared_ptr<Executor> f = claimExecutor(firstMsg);
-                f->executeFunction(i, req);
+                std::shared_ptr<Executor> e = claimExecutor(firstMsg);
+                e->executeTasks({ i }, req);
             }
         }
     }

@@ -12,11 +12,10 @@ class DummyExecutor final : public Executor
     ~DummyExecutor() override;
 
   protected:
-    bool doExecute(faabric::Message& call) override;
-
-    int32_t executeThread(int threadPoolIdx,
-                          std::shared_ptr<faabric::BatchExecuteRequest> req,
-                          faabric::Message& msg) override;
+    int32_t executeTask(
+      int threadPoolIdx,
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> req) override;
 };
 
 }

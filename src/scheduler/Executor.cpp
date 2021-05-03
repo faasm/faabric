@@ -39,7 +39,7 @@ void Executor::finish()
     }
 
     // Wait
-    for (auto& t : threads) {
+    for (auto& t : threadPoolThreads) {
         if (t.second.joinable()) {
             t.second.join();
         }
@@ -51,149 +51,15 @@ void Executor::finish()
     this->postFinish();
 }
 
-void Executor::finishThread(faabric::Message& msg, int32_t returnValue)
-{
-    // Decrement executing threads
-    int oldThreadCount = executingThreadCount.fetch_sub(1);
-
-    // Set the result for this thread
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResult(msg, returnValue);
-
-    // Notify that the thread has finished, or notify that the call has finished
-    // once we're done with all the threads
-    if (oldThreadCount == 1) {
-        sch.notifyCallFinished(this, msg);
-    } else {
-        sch.notifyThreadFinished(this, msg);
-    }
-}
-
-void Executor::finishCall(faabric::Message& msg,
-                          bool success,
-                          const std::string& errorMsg)
-{
-    // Hook
-    this->preFinishCall(msg, success, errorMsg);
-
-    const auto& logger = faabric::util::getLogger();
-    const std::string funcStr = faabric::util::funcToString(msg, true);
-
-    logger->info("Finished {}", funcStr);
-
-    if (!success) {
-        msg.set_outputdata(errorMsg);
-    }
-
-    fflush(stdout);
-
-    // Notify scheduler finished
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.notifyCallFinished(this, msg);
-
-    // Set result
-    logger->debug("Setting function result for {}", funcStr);
-    sch.setFunctionResult(msg);
-
-    // Hook
-    this->postFinishCall();
-}
-
-void Executor::executeTask(int threadPoolIdx,
-                           int msgIdx,
-                           std::shared_ptr<faabric::BatchExecuteRequest> req,
-                           bool isThread)
-{
-
-    std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>> task =
-      std::make_pair(msgIdx, req);
-    threadQueues[threadPoolIdx].enqueue(std::move(task));
-
-    if (threads.count(threadPoolIdx) == 0) {
-        // Get mutex and re-check
-        faabric::util::UniqueLock lock(threadsMutex);
-
-        if (threads.count(threadPoolIdx) == 0) {
-            threads.emplace(
-              std::make_pair(threadPoolIdx, [this, threadPoolIdx, isThread] {
-                  auto logger = faabric::util::getLogger();
-                  logger->debug("Thread pool thread {} starting up",
-                                threadPoolIdx);
-
-                  auto& sch = faabric::scheduler::getScheduler();
-                  auto& conf = faabric::util::getSystemConfig();
-
-                  for (;;) {
-                      std::pair<int,
-                                std::shared_ptr<faabric::BatchExecuteRequest>>
-                        task;
-
-                      try {
-                          task = threadQueues[threadPoolIdx].dequeue(
-                            conf.boundTimeout);
-                      } catch (faabric::util::QueueTimeoutException& ex) {
-                          shutdownThread(threadPoolIdx);
-                          break;
-                      }
-
-                      int msgIdx = task.first;
-                      std::shared_ptr<faabric::BatchExecuteRequest> req =
-                        task.second;
-
-                      faabric::Message& msg =
-                        req->mutable_messages()->at(msgIdx);
-
-                      if (msg.type() == faabric::Message::KILL) {
-                          break;
-                      }
-
-                      int32_t returnValue;
-                      if (isThread) {
-                          returnValue = executeThread(threadPoolIdx, req, msg);
-
-                          // Notify finished
-                          finishThread(msg, returnValue);
-                      } else {
-                          bool success;
-                          std::string errorMessage;
-                          try {
-                              success = doExecute(msg);
-                          } catch (const std::exception& e) {
-                              errorMessage = "Error: " + std::string(e.what());
-                              logger->error(errorMessage);
-                              success = false;
-                              msg.set_returnvalue(1);
-                          }
-
-                          if (!success && errorMessage.empty()) {
-                              errorMessage = "Call failed (return value=" +
-                                             std::to_string(msg.returnvalue()) +
-                                             ")";
-                          }
-
-                          finishCall(msg, success, errorMessage);
-                      }
-                  }
-
-                  logger->debug("Thread pool thread {} shutting down",
-                                threadPoolIdx);
-              }));
-        }
-    }
-}
-
-void Executor::batchExecuteThreads(
-  std::vector<int> msgIdxs,
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
+void Executor::executeTasks(std::vector<int> msgIdxs,
+                            std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     const auto& logger = faabric::util::getLogger();
     int nMessages = msgIdxs.size();
 
     const std::string funcStr = faabric::util::funcToString(req);
-    logger->info("Batch executing {}/{} threads of {}",
-                 nMessages,
-                 req->messages_size(),
-                 funcStr);
+    logger->info(
+      "Executing {}/{} tasks of {}", nMessages, req->messages_size(), funcStr);
 
     // Restore if necessary
     const faabric::Message& firstMsg = req->messages().at(0);
@@ -207,45 +73,101 @@ void Executor::batchExecuteThreads(
         }
     }
 
-    // Set number of executing threads
-    int previousCount = executingThreadCount.fetch_add(msgIdxs.size());
-    if (previousCount != 0) {
-        throw std::runtime_error(
-          "Executing thread count should be zero before spawning new threads");
-    }
+    // Set number of executing tasks
+    executingTaskCount += msgIdxs.size();
 
-    // Iterate through and invoke threads
+    // Iterate through and invoke tasks
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
         int threadPoolIdx = msg.appindex() % threadPoolSize;
 
-        executeTask(threadPoolIdx, msgIdx, req, true);
+        // Enqueue the task
+        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>> task =
+          std::make_pair(msgIdx, req);
+        threadQueues[threadPoolIdx].enqueue(std::move(task));
+
+        // Lazily create the thread
+        if (threadPoolThreads.count(threadPoolIdx) == 0) {
+            // Get mutex and re-check
+            faabric::util::UniqueLock lock(threadsMutex);
+
+            if (threadPoolThreads.count(threadPoolIdx) == 0) {
+
+                threadPoolThreads.emplace(
+                  std::make_pair(threadPoolIdx, [this, threadPoolIdx] {
+                      auto logger = faabric::util::getLogger();
+                      logger->debug("Thread pool thread {} starting up",
+                                    threadPoolIdx);
+
+                      auto& sch = faabric::scheduler::getScheduler();
+                      auto& conf = faabric::util::getSystemConfig();
+
+                      for (;;) {
+                          std::pair<
+                            int,
+                            std::shared_ptr<faabric::BatchExecuteRequest>>
+                            task;
+
+                          try {
+                              task = threadQueues[threadPoolIdx].dequeue(
+                                conf.boundTimeout);
+                          } catch (faabric::util::QueueTimeoutException& ex) {
+                              // If the thread has had no messages, it needs to
+                              // remove itself
+                              shutdownThreadPoolThread(threadPoolIdx);
+                              break;
+                          }
+
+                          int msgIdx = task.first;
+                          std::shared_ptr<faabric::BatchExecuteRequest> req =
+                            task.second;
+                          bool isThread = req->type() ==
+                                          faabric::BatchExecuteRequest::THREADS;
+
+                          faabric::Message& msg =
+                            req->mutable_messages()->at(msgIdx);
+
+                          // If the thread is being killed, the executor itself
+                          // will handle the clean-up
+                          if (msg.type() == faabric::Message::KILL) {
+                              break;
+                          }
+
+                          int32_t returnValue =
+                            executeTask(threadPoolIdx, msgIdx, req);
+                          msg.set_returnvalue(returnValue);
+
+                          // Notify finished
+                          if (isThread) {
+                              sch.setThreadResult(msg, returnValue);
+                          } else {
+                              sch.setFunctionResult(msg);
+                          }
+
+                          // Decrement task count
+                          sch.vacateSlot();
+                          int oldTaskCount = executingTaskCount.fetch_sub(1);
+                          if (oldTaskCount == 1) {
+                              sch.notifyExecutorFinished(this, msg);
+                          }
+                      }
+                  }));
+            }
+        }
     }
 }
 
-std::string Executor::executeFunction(
-  int msgIdx,
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
+void Executor::shutdownThreadPoolThread(int threadPoolIdx)
 {
-    const std::string funcStr = faabric::util::funcToString(req);
+    const auto& logger = faabric::util::getLogger();
+    logger->debug("Thread pool thread {} shutting down", threadPoolIdx);
 
-    // This will queue if overloaded
-    executeTask(0, msgIdx, req, false);
+    threadPoolThreads.erase(threadPoolIdx);
 
-    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-    std::string resultStr = fmt::format("Message {} submitted", msg.id());
-
-    return resultStr;
-}
-
-void Executor::shutdownThread(int threadPoolIdx)
-{
-    threads.erase(threadPoolIdx);
-
-    if (threads.empty()) {
+    if (threadPoolThreads.empty()) {
         // Notify that we're done
         auto& sch = faabric::scheduler::getScheduler();
-        sch.notifyExecutorFinished(this, boundMessage);
+        sch.notifyExecutorShutdown(this, boundMessage);
     }
 }
 
@@ -253,27 +175,14 @@ void Executor::shutdownThread(int threadPoolIdx)
 // HOOKS
 // ------------------------------------------
 
-bool Executor::doExecute(faabric::Message& msg)
-{
-    return true;
-}
-
-int32_t Executor::executeThread(
-  int threadPoolIdx,
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::Message& msg)
+int32_t Executor::executeTask(int threadPoolIdx,
+                              int msgIdx,
+                              std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     return 0;
 }
 
-void Executor::preFinishCall(faabric::Message& call,
-                             bool success,
-                             const std::string& errorMsg)
-{}
-
 void Executor::postFinish() {}
-
-void Executor::postFinishCall() {}
 
 void Executor::flush() {}
 

@@ -27,12 +27,8 @@ class Executor
 
     virtual ~Executor();
 
-    void batchExecuteThreads(std::vector<int> msgIdxs,
-                             std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    std::string executeFunction(
-      int msgIdx,
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
+    void executeTasks(std::vector<int> msgIdxs,
+                      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void finish();
 
@@ -40,31 +36,25 @@ class Executor
 
     std::string id;
 
-    bool isOld();
-
-    void shutdownThread(int threadPoolIdx);
-
   protected:
-    virtual bool doExecute(faabric::Message& msg);
-
-    virtual int32_t executeThread(
-      int threadPoolIdx,
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::Message& msg);
-
-    virtual void preFinishCall(faabric::Message& call,
-                               bool success,
-                               const std::string& errorMsg);
-
-    virtual void postFinishCall();
-
-    virtual void postFinish();
+    virtual int32_t executeTask(int threadPoolIdx,
+                             int msgIdx,
+                             std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     virtual void restore(const faabric::Message& msg);
 
+    virtual void postFinish();
+
+  private:
+    faabric::Message boundMessage;
+
+    std::string lastSnapshot;
+
+    std::atomic<int> executingTaskCount = 0;
+
     std::mutex threadsMutex;
     uint32_t threadPoolSize = 0;
-    std::unordered_map<int, std::thread> threads;
+    std::unordered_map<int, std::thread> threadPoolThreads;
 
     std::unordered_map<
       int,
@@ -72,23 +62,7 @@ class Executor
         std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
       threadQueues;
 
-  private:
-    faabric::Message boundMessage;
-
-    std::string lastSnapshot;
-
-    std::atomic<int> executingThreadCount = 0;
-
-    void finishThread(faabric::Message& msg, int32_t returnValue);
-
-    void finishCall(faabric::Message& msg,
-                    bool success,
-                    const std::string& errorMsg);
-
-    void executeTask(int threadPoolIdx,
-                     int msgIdx,
-                     std::shared_ptr<faabric::BatchExecuteRequest> req,
-                     bool isThread);
+    void shutdownThreadPoolThread(int threadPoolIdx);
 };
 
 class Scheduler
@@ -132,11 +106,11 @@ class Scheduler
 
     int32_t awaitThreadResult(uint32_t messageId);
 
-    void notifyThreadFinished(Executor* exec, const faabric::Message& msg);
-
-    void notifyCallFinished(Executor* exec, const faabric::Message& msg);
+    void vacateSlot();
 
     void notifyExecutorFinished(Executor* exec, const faabric::Message& msg);
+
+    void notifyExecutorShutdown(Executor* exec, const faabric::Message& msg);
 
     std::string getThisHost();
 

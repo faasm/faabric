@@ -26,21 +26,14 @@ class SlowExecutor final : public Executor
 
     ~SlowExecutor() {}
 
-    bool doExecute(faabric::Message& call)
+    int32_t executeTask(
+      int threadPoolIdx,
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> req) override
     {
         auto logger = faabric::util::getLogger();
-        logger->debug("SlowExecutor executing function {}", call.id());
-
-        usleep(500 * 1000);
-        return true;
-    }
-
-    int32_t executeThread(int threadPoolIdx,
-                          std::shared_ptr<faabric::BatchExecuteRequest> req,
-                          faabric::Message& msg)
-    {
-        auto logger = faabric::util::getLogger();
-        logger->debug("SlowExecutor executing thread {}", msg.id());
+        faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+        logger->debug("SlowExecutor executing task{}", msg.id());
 
         usleep(500 * 1000);
         return 0;

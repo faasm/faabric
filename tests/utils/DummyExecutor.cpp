@@ -12,23 +12,16 @@ DummyExecutor::DummyExecutor(const faabric::Message& msg)
 
 DummyExecutor::~DummyExecutor() {}
 
-bool DummyExecutor::doExecute(faabric::Message& call)
-{
-    auto logger = faabric::util::getLogger();
-    logger->debug("DummyExecutor executing function {}", call.id());
-
-    call.set_outputdata(fmt::format("DummyExecutor executed {}", call.id()));
-
-    return true;
-}
-
-int32_t DummyExecutor::executeThread(
+int32_t DummyExecutor::executeTask(
   int threadPoolIdx,
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::Message& msg)
+  int msgIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     auto logger = faabric::util::getLogger();
-    logger->debug("DummyExecutor executing thread {}", msg.id());
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+    logger->debug("DummyExecutor executing task {}", msg.id());
+
+    msg.set_outputdata(fmt::format("DummyExecutor executed {}", msg.id()));
 
     return 0;
 }
