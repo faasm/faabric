@@ -64,6 +64,9 @@ class TestExecutor final : public Executor
             for (auto& m : req->messages()) {
                 sch.awaitThreadResult(m.id());
             }
+        } else if (msg.function() == "echo") {
+            msg.set_outputdata(msg.inputdata());
+            return 0;
         } else if (msg.function() == "ret-one") {
             return 1;
         } else if (msg.function() == "error") {
@@ -75,7 +78,7 @@ class TestExecutor final : public Executor
             return msg.id() / 100;
         } else {
             msg.set_outputdata(fmt::format(
-              "Simple function {} executed successfully", msg.id()));
+              "Simple function {} executed", msg.id()));
         }
 
         return 0;
@@ -145,7 +148,7 @@ TEST_CASE("Test executing simple function", "[executor]")
     faabric::Message result =
       sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
     std::string expected =
-      fmt::format("Simple function {} executed successfully", msgId);
+      fmt::format("Simple function {} executed", msgId);
     REQUIRE(result.outputdata() == expected);
 
     // Check that restore has not been called
@@ -305,5 +308,64 @@ TEST_CASE("Test erroring thread", "[executor]")
     auto& sch = faabric::scheduler::getScheduler();
     int32_t res = sch.awaitThreadResult(msg.id());
     REQUIRE(res == 1);
+}
+
+TEST_CASE("Test executing different functions", "[executor]")
+{
+    cleanFaabric();
+
+    // Set up multiple requests
+    std::shared_ptr<BatchExecuteRequest> reqA =
+      faabric::util::batchExecFactory("dummy", "echo", 2);
+    std::shared_ptr<BatchExecuteRequest> reqB =
+      faabric::util::batchExecFactory("dummy", "ret-one", 1);
+    std::shared_ptr<BatchExecuteRequest> reqC =
+      faabric::util::batchExecFactory("dummy", "blah", 2);
+
+    reqA->mutable_messages()->at(0).set_inputdata("Message A1");
+    reqA->mutable_messages()->at(1).set_inputdata("Message A2");
+
+    std::shared_ptr<TestExecutorFactory> fac =
+      std::make_shared<TestExecutorFactory>();
+    setExecutorFactory(fac);
+
+    auto& conf = faabric::util::getSystemConfig();
+    int boundOriginal = conf.boundTimeout;
+    int overrideCpuOriginal = conf.overrideCpuCount;
+
+    conf.overrideCpuCount = 10;
+    conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
+
+    // Execute all the functions
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.callFunctions(reqA, false);
+    sch.callFunctions(reqB, false);
+    sch.callFunctions(reqC, false);
+
+    faabric::Message resA1 =
+      sch.getFunctionResult(reqA->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
+    faabric::Message resA2 =
+      sch.getFunctionResult(reqA->messages().at(1).id(), SHORT_TEST_TIMEOUT_MS);
+
+    faabric::Message resB =
+      sch.getFunctionResult(reqB->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
+
+    faabric::Message resC1 =
+      sch.getFunctionResult(reqC->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
+    faabric::Message resC2 =
+      sch.getFunctionResult(reqC->messages().at(1).id(), SHORT_TEST_TIMEOUT_MS);
+
+    REQUIRE(resA1.outputdata() == "Message A1");
+    REQUIRE(resA2.outputdata() == "Message A2");
+
+    REQUIRE(resB.returnvalue() == 1);
+
+    REQUIRE(resC1.outputdata() == fmt::format("Simple function {} executed",
+                                              reqC->messages().at(0).id()));
+    REQUIRE(resC2.outputdata() == fmt::format("Simple function {} executed",
+                                              reqC->messages().at(1).id()));
+
+    conf.boundTimeout = boundOriginal;
+    conf.overrideCpuCount = overrideCpuOriginal;
 }
 }

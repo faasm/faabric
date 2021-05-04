@@ -58,8 +58,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     int nMessages = msgIdxs.size();
 
     const std::string funcStr = faabric::util::funcToString(req);
-    logger->info(
-      "Executing {}/{} tasks of {}", nMessages, req->messages_size(), funcStr);
+    logger->info("{} executing {} tasks of {}",
+                 id,
+                 nMessages,
+                 funcStr);
 
     // Restore if necessary. If we're executing threads on the master host we
     // assume we don't need to restore, but for everything else we do. If we've
