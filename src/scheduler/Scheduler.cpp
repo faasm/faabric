@@ -138,25 +138,22 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
                                        const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
-
     const std::string funcStr = faabric::util::funcToString(msg, false);
-    int nExecuting = executingExecutors[funcStr].size();
 
-    // Remove from executing executors
+    std::vector<std::shared_ptr<Executor>>& executing =
+      executingExecutors[funcStr];
+
+    // Find and remove from executing executors
     std::shared_ptr<Executor> execPtr = nullptr;
-    for (int i = 0; i < nExecuting; i++) {
-        std::string thisId = executingExecutors[funcStr].at(i)->id;
-
-        if (thisId == exec->id) {
-            execPtr = executingExecutors[funcStr].at(i);
-
-            executingExecutors[funcStr].erase(
-              executingExecutors[funcStr].begin() + i);
-
+    for (int i = 0; i < executing.size(); i++) {
+        if (executing.at(i)->id == exec->id) {
+            execPtr = executing.at(i);
+            executing.erase(executing.begin() + i);
             break;
         }
     }
 
+    // Check if not found
     if (execPtr == nullptr) {
         const auto& logger = faabric::util::getLogger();
         logger->error("Unable to find record of executor {}", exec->id);
@@ -174,22 +171,21 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
+    std::vector<std::shared_ptr<Executor>>& warm = warmExecutors[funcStr];
+    std::vector<std::shared_ptr<Executor>>& executing =
+      executingExecutors[funcStr];
+
+    std::string execId = exec->id;
+
     // Remove from warm executors
-    for (int i = 0; i < warmExecutors.size(); i++) {
-        if (warmExecutors[funcStr].at(i)->id == exec->id) {
-            warmExecutors[funcStr].erase(warmExecutors[funcStr].begin() + i);
-            break;
-        }
-    }
+    std::remove_if(warm.begin(), warm.end(), [&execId](const auto& p) {
+        return p->id == execId;
+    });
 
     // Remove from executing executors
-    for (int i = 0; i < executingExecutors.size(); i++) {
-        if (executingExecutors[funcStr].at(i)->id == exec->id) {
-            executingExecutors[funcStr].erase(
-              executingExecutors[funcStr].begin() + i);
-            break;
-        }
-    }
+    std::remove_if(executing.begin(),
+                   executing.end(),
+                   [&execId](const auto& p) { return p->id == execId; });
 
     int count = getFunctionExecutorCount(msg);
     if (count == 0) {
