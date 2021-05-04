@@ -36,12 +36,12 @@ class Executor
 
     std::string id;
 
-  protected:
     virtual int32_t executeTask(
       int threadPoolIdx,
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
+  protected:
     virtual void restore(const faabric::Message& msg);
 
     virtual void postFinish();
