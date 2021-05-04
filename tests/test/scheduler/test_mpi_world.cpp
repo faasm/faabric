@@ -36,15 +36,16 @@ TEST_CASE("Test world creation", "[mpi]")
     REQUIRE(world.getFunction() == func);
 
     // Check that chained function calls are made as expected
-    REQUIRE(sch.getRecordedMessagesAll().size() == worldSize - 1);
+    std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
+    REQUIRE(actual.size() == worldSize - 1);
 
-    for (int i = 1; i < worldSize; i++) {
-        faabric::Message actualCall = sch.getFunctionQueue(msg)->dequeue();
+    for (int i = 0; i < worldSize - 1; i++) {
+        faabric::Message actualCall = actual.at(i);
         REQUIRE(actualCall.user() == user);
         REQUIRE(actualCall.function() == func);
         REQUIRE(actualCall.ismpi());
         REQUIRE(actualCall.mpiworldid() == worldId);
-        REQUIRE(actualCall.mpirank() == i);
+        REQUIRE(actualCall.mpirank() == i + 1);
     }
 
     // Check that this host is registered as the master

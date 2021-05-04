@@ -1,31 +1,80 @@
+#include "DummyExecutorFactory.h"
+#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/testing.h>
-#include <faabric_utils.h>
 
-#include <faabric/redis/Redis.h>
-#include <faabric/scheduler/Scheduler.h>
-#include <faabric/util/environment.h>
-
-using namespace scheduler;
-using namespace redis;
+using namespace faabric::scheduler;
 
 namespace tests {
+
+class SlowExecutor final : public Executor
+{
+  public:
+    SlowExecutor(const faabric::Message& msg)
+      : Executor(msg)
+    {}
+
+    ~SlowExecutor() {}
+
+    int32_t executeTask(
+      int threadPoolIdx,
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> req) override
+    {
+        auto logger = faabric::util::getLogger();
+        faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+        logger->debug("SlowExecutor executing task{}", msg.id());
+
+        usleep(SHORT_TEST_TIMEOUT_MS * 1000);
+        return 0;
+    }
+};
+
+class SlowExecutorFactory : public ExecutorFactory
+{
+  protected:
+    std::shared_ptr<Executor> createExecutor(
+      const faabric::Message& msg) override
+    {
+        return std::make_shared<SlowExecutor>(msg);
+    }
+};
+
+void setSlowExecutor()
+{
+    std::shared_ptr<ExecutorFactory> fac =
+      std::make_shared<SlowExecutorFactory>();
+    setExecutorFactory(fac);
+}
+
+void unsetSlowExecutor()
+{
+    std::shared_ptr<DummyExecutorFactory> fac =
+      std::make_shared<DummyExecutorFactory>();
+    setExecutorFactory(fac);
+}
+
 TEST_CASE("Test scheduler clear-up", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     faabric::Message msg = faabric::util::messageFactory("blah", "foo");
 
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
     std::string otherHost = "other";
-    std::unordered_set<std::string> expectedHosts = { otherHost };
+    std::set<std::string> expectedHosts = { otherHost };
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
@@ -34,60 +83,57 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
     // Set resources
     int nCores = 5;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
     // Set resources for other host too
     faabric::scheduler::queueResourceResponse(otherHost, res);
 
     // Initial checks
-    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
 
     faabric::HostResources resCheck = sch.getThisHostResources();
-    REQUIRE(resCheck.cores() == nCores);
-    REQUIRE(resCheck.boundexecutors() == 0);
-    REQUIRE(resCheck.functionsinflight() == 0);
+    REQUIRE(resCheck.slots() == nCores);
+    REQUIRE(resCheck.usedslots() == 0);
 
-    // Make calls
+    // Make calls with one extra that should be sent to the other host
     int nCalls = nCores + 1;
     for (int i = 0; i < nCalls; i++) {
         sch.callFunction(msg);
+        REQUIRE(sch.getThisHostResources().slots() == nCores);
     }
 
-    REQUIRE(sch.getFunctionFaasletCount(msg) == nCores);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == nCores);
+    REQUIRE(sch.getFunctionExecutorCount(msg) == nCores);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
     REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
 
     resCheck = sch.getThisHostResources();
-    REQUIRE(resCheck.cores() == nCores);
-    REQUIRE(resCheck.boundexecutors() == nCores);
-    REQUIRE(resCheck.functionsinflight() == nCores);
+    REQUIRE(resCheck.slots() == nCores);
+    REQUIRE(resCheck.usedslots() == nCores);
 
     // Run shutdown
     sch.shutdown();
 
     // Check scheduler has been cleared
-    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
 
     resCheck = sch.getThisHostResources();
     int actualCores = faabric::util::getUsableCores();
-    REQUIRE(resCheck.cores() == actualCores);
-    REQUIRE(resCheck.boundexecutors() == 0);
-    REQUIRE(resCheck.functionsinflight() == 0);
+    REQUIRE(resCheck.slots() == actualCores);
+    REQUIRE(resCheck.usedslots() == 0);
 
     faabric::util::setMockMode(false);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test scheduler available hosts", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
@@ -101,10 +147,8 @@ TEST_CASE("Test scheduler available hosts", "[scheduler]")
     sch.addHostToGlobalSet(hostB);
     sch.addHostToGlobalSet(hostC);
 
-    std::unordered_set<std::string> expectedHosts = {
-        thisHost, hostA, hostB, hostC
-    };
-    std::unordered_set<std::string> actualHosts = sch.getAvailableHosts();
+    std::set<std::string> expectedHosts = { thisHost, hostA, hostB, hostC };
+    std::set<std::string> actualHosts = sch.getAvailableHosts();
 
     REQUIRE(actualHosts == expectedHosts);
 
@@ -115,25 +159,32 @@ TEST_CASE("Test scheduler available hosts", "[scheduler]")
     actualHosts = sch.getAvailableHosts();
 
     REQUIRE(actualHosts == expectedHosts);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test batch scheduling", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
+
     SECTION("Threads")
     {
         execMode = faabric::BatchExecuteRequest::THREADS;
         expectedSnapshot = "threadSnap";
     }
+
     SECTION("Processes")
     {
         execMode = faabric::BatchExecuteRequest::PROCESSES;
         expectedSnapshot = "procSnap";
     }
+
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
+
     bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
 
     // Set up a dummy snapshot if necessary
@@ -166,48 +217,37 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     int nCallsOffloadedOne = nCallsOne - thisCores;
 
     faabric::HostResources thisResources;
-    thisResources.set_cores(thisCores);
+    thisResources.set_slots(thisCores);
 
     faabric::HostResources otherResources;
-    otherResources.set_cores(otherCores);
+    otherResources.set_slots(otherCores);
 
-    // Prepare two resource responses for other host
+    // Prepare resource response for other host
     sch.setThisHostResources(thisResources);
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Set up the messages
-    std::vector<faabric::Message> msgsOne;
     std::vector<std::string> expectedHostsOne;
+    std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
+      faabric::util::batchExecFactory("foo", "bar", nCallsOne);
+    reqOne->set_type(execMode);
+
     for (int i = 0; i < nCallsOne; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-
-        // Set important bind fields
-        msg.set_ispython(true);
-        msg.set_pythonfunction("baz");
-        msg.set_pythonuser("foobar");
-        msg.set_issgx(true);
-
         // Set snapshot key
+        faabric::Message& msg = reqOne->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
 
-        msgsOne.push_back(msg);
+        // Set app index
+        msg.set_appindex(i);
 
         // Expect this host to handle up to its number of cores
-        // If in threads mode, expect it _not_ to execute
         bool isThisHost = i < thisCores;
-        if (isThisHost && isThreads) {
-            expectedHostsOne.push_back("");
-        } else if (isThisHost) {
+        if (isThisHost) {
             expectedHostsOne.push_back(thisHost);
         } else {
             expectedHostsOne.push_back(otherHost);
         }
     }
-
-    // Create the batch request
-    faabric::BatchExecuteRequest reqOne =
-      faabric::util::batchExecFactory(msgsOne);
-    reqOne.set_type(execMode);
 
     // Schedule the functions
     std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne);
@@ -232,43 +272,30 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Check scheduled on expected hosts
     REQUIRE(actualHostsOne == expectedHostsOne);
 
-    faabric::Message m = msgsOne.at(0);
-
-    // Check the bind messages on this host
-    auto bindQueue = sch.getBindQueue();
+    // Check the executor counts on this host
+    faabric::Message m = reqOne->messages().at(0);
+    faabric::HostResources res = sch.getThisHostResources();
     if (isThreads) {
-        // For threads we expect the caller to do the work
-        REQUIRE(bindQueue->size() == 0);
-        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
-        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+        // For threads we expect only one executor
+        REQUIRE(sch.getFunctionExecutorCount(m) == 1);
     } else {
-        // Check the scheduler info on this host
-        REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
-        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
-
-        // For non-threads we expect faaslets to be created
-        REQUIRE(bindQueue->size() == thisCores);
-        for (int i = 0; i < thisCores; i++) {
-            faabric::Message msg = bindQueue->dequeue();
-
-            REQUIRE(msg.user() == m.user());
-            REQUIRE(msg.function() == m.function());
-            REQUIRE(msg.type() == faabric::Message_MessageType_BIND);
-            REQUIRE(msg.ispython());
-            REQUIRE(msg.pythonuser() == "foobar");
-            REQUIRE(msg.pythonfunction() == "baz");
-            REQUIRE(msg.issgx());
-        }
+        // For functions we expect one per core
+        REQUIRE(sch.getFunctionExecutorCount(m) == thisCores);
     }
+
+    REQUIRE(res.slots() == thisCores);
+    REQUIRE(res.usedslots() == thisCores);
+
+    // Check the number of messages executed locally and remotely
+    REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
+    REQUIRE(sch.getRecordedMessagesShared().size() == nCallsOffloadedOne);
 
     // Check the message is dispatched to the other host
     auto batchRequestsOne = faabric::scheduler::getBatchRequests();
     REQUIRE(batchRequestsOne.size() == 1);
     auto batchRequestOne = batchRequestsOne.at(0);
     REQUIRE(batchRequestOne.first == otherHost);
-
-    // Check the request to the other host
-    REQUIRE(batchRequestOne.second.messages_size() == nCallsOffloadedOne);
+    REQUIRE(batchRequestOne.second->messages_size() == nCallsOffloadedOne);
 
     // Clear mocks
     faabric::scheduler::clearMockRequests();
@@ -276,23 +303,18 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     // Set up resource response again
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
-    // Now schedule a second batch and check they're also sent to the other host
-    // (which is now warm)
-    std::vector<faabric::Message> msgsTwo;
+    // Now schedule a second batch and check they're all sent to the other host
     std::vector<std::string> expectedHostsTwo;
-
+    std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
+      faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
     for (int i = 0; i < nCallsTwo; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        faabric::Message& msg = reqTwo->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
-
-        msgsTwo.push_back(msg);
         expectedHostsTwo.push_back(otherHost);
     }
 
     // Create the batch request
-    faabric::BatchExecuteRequest reqTwo =
-      faabric::util::batchExecFactory(msgsTwo);
-    reqTwo.set_type(execMode);
+    reqTwo->set_type(execMode);
 
     // Schedule the functions
     std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo);
@@ -306,12 +328,14 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(actualHostsTwo == expectedHostsTwo);
 
     // Check no other functions have been scheduled on this host
-    REQUIRE(sch.getFunctionInFlightCount(m) == thisCores);
+    REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
+    REQUIRE(sch.getRecordedMessagesShared().size() ==
+            nCallsOffloadedOne + nCallsTwo);
 
     if (isThreads) {
-        REQUIRE(sch.getFunctionFaasletCount(m) == 0);
+        REQUIRE(sch.getFunctionExecutorCount(m) == 1);
     } else {
-        REQUIRE(sch.getFunctionFaasletCount(m) == thisCores);
+        REQUIRE(sch.getFunctionExecutorCount(m) == thisCores);
     }
 
     // Check the second message is dispatched to the other host
@@ -321,28 +345,33 @@ TEST_CASE("Test batch scheduling", "[scheduler]")
     REQUIRE(pTwo.first == otherHost);
 
     // Check the request to the other host
-    REQUIRE(pTwo.second.messages_size() == nCallsTwo);
+    REQUIRE(pTwo.second->messages_size() == nCallsTwo);
 
     faabric::util::setMockMode(false);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test overloaded scheduler", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
     std::string expectedSnapshot;
+
     SECTION("Threads")
     {
         execMode = faabric::BatchExecuteRequest::THREADS;
         expectedSnapshot = "threadSnap";
     }
+
     SECTION("Processes")
     {
         execMode = faabric::BatchExecuteRequest::PROCESSES;
         expectedSnapshot = "procSnap";
     }
+
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
 
     // Set up snapshot if necessary
@@ -361,54 +390,57 @@ TEST_CASE("Test overloaded scheduler", "[scheduler]")
     std::string thisHost = sch.getThisHost();
     int nCores = 1;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
-    // Set up another host with no resources
+    // Set up another host with insufficient resources
     std::string otherHost = "other";
+    sch.addHostToGlobalSet(otherHost);
     faabric::HostResources resOther;
-    resOther.set_cores(0);
+    resOther.set_slots(2);
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
     // Submit more calls than we have capacity for
     int nCalls = 10;
-    std::vector<faabric::Message> msgs;
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", nCalls);
+    req->set_type(execMode);
     for (int i = 0; i < nCalls; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
-        msgs.push_back(msg);
     }
 
     // Submit the request
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
-    req.set_type(execMode);
     std::vector<std::string> executedHosts = sch.callFunctions(req);
 
-    // Set up expectations
-    std::vector<std::string> expectedHosts;
-    int expectedBindQueueSize;
+    // Check list of executed hosts
+    std::vector<std::string> expectedHosts =
+      std::vector<std::string>(nCalls, thisHost);
+    expectedHosts.at(1) = otherHost;
+    expectedHosts.at(2) = otherHost;
+
+    REQUIRE(executedHosts == expectedHosts);
+
+    // Check status of local queueing
+    int expectedLocalCalls = nCalls - 2;
+    int expectedExecutors;
     if (execMode == faabric::BatchExecuteRequest::THREADS) {
-        expectedHosts = std::vector<std::string>(nCalls, "");
-        expectedBindQueueSize = 0;
+        expectedExecutors = 1;
     } else {
-        expectedHosts = std::vector<std::string>(nCalls, thisHost);
-        expectedBindQueueSize = nCalls;
+        expectedExecutors = expectedLocalCalls;
     }
 
-    // Check they're scheduled locally
-    faabric::Message firstMsg = req.messages().at(0);
-    REQUIRE(sch.getBindQueue()->size() == expectedBindQueueSize);
-    REQUIRE(sch.getFunctionFaasletCount(firstMsg) == expectedBindQueueSize);
-
-    // We expect the in flight count to be incremented regardless
-    REQUIRE(sch.getFunctionInFlightCount(firstMsg) == nCalls);
+    faabric::Message firstMsg = req->messages().at(0);
+    REQUIRE(sch.getFunctionExecutorCount(firstMsg) == expectedExecutors);
 
     faabric::util::setMockMode(false);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test unregistering host", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     Scheduler& sch = scheduler::getScheduler();
@@ -419,19 +451,19 @@ TEST_CASE("Test unregistering host", "[scheduler]")
 
     int nCores = 5;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
     // Set up capacity for other host
     faabric::scheduler::queueResourceResponse(otherHost, res);
 
-    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    for (int i = 0; i < nCores + 1; i++) {
-        sch.callFunction(msg);
-    }
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", nCores + 1);
+    sch.callFunctions(req);
+    faabric::Message msg = req->messages().at(0);
 
     // Check other host is added
-    std::unordered_set<std::string> expectedHosts = { otherHost };
+    std::set<std::string> expectedHosts = { otherHost };
     REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
@@ -447,32 +479,13 @@ TEST_CASE("Test unregistering host", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     faabric::util::setMockMode(false);
-}
-
-TEST_CASE("Test host unregisters", "[scheduler]") {}
-
-TEST_CASE("Test counts can't go below zero", "[scheduler]")
-{
-    cleanFaabric();
-
-    Scheduler& sch = scheduler::getScheduler();
-    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-
-    sch.notifyFaasletFinished(msg);
-    sch.notifyFaasletFinished(msg);
-    sch.notifyFaasletFinished(msg);
-    REQUIRE(sch.getFunctionFaasletCount(msg) == 0);
-
-    sch.notifyCallFinished(msg);
-    sch.notifyCallFinished(msg);
-    sch.notifyCallFinished(msg);
-    sch.notifyCallFinished(msg);
-    REQUIRE(sch.getFunctionInFlightCount(msg) == 0);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check test mode", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     Scheduler& sch = scheduler::getScheduler();
 
@@ -497,19 +510,23 @@ TEST_CASE("Check test mode", "[scheduler]")
         sch.callFunction(msgB);
         sch.callFunction(msgC);
 
-        std::vector<unsigned int> expected = { (unsigned int)msgA.id(),
-                                               (unsigned int)msgB.id(),
-                                               (unsigned int)msgC.id() };
-        std::vector<unsigned int> actual = sch.getRecordedMessagesAll();
-        REQUIRE(actual == expected);
+        std::vector<int> expectedIds = { msgA.id(), msgB.id(), msgC.id() };
+        std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
+
+        REQUIRE(actual.size() == expectedIds.size());
+        for (int i = 0; i < expectedIds.size(); i++) {
+            REQUIRE(expectedIds.at(i) == actual.at(i).id());
+        }
     }
 
     faabric::util::setTestMode(origTestMode);
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Global message queue tests", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     redis::Redis& redis = redis::Redis::getQueue();
     scheduler::Scheduler& sch = scheduler::getScheduler();
@@ -534,23 +551,19 @@ TEST_CASE("Global message queue tests", "[scheduler]")
     faabric::Message actualCall2 = sch.getFunctionResult(call.id(), 1);
 
     checkMessageEquality(call, actualCall2);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check multithreaded function results", "[scheduler]")
 {
     cleanFaabric();
-
-    int nWorkers = 5;
-    int nWorkerMessages = 8;
+    setSlowExecutor();
 
     int nWaiters = 10;
     int nWaiterMessages = 4;
 
-    // Sanity check
-    REQUIRE((nWaiters * nWaiterMessages) == (nWorkers * nWorkerMessages));
-
     std::vector<std::thread> waiterThreads;
-    std::vector<std::thread> workerThreads;
 
     // Create waiters that will submit messages and await their results
     for (int i = 0; i < nWaiters; i++) {
@@ -560,30 +573,13 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
             faabric::Message msg =
               faabric::util::messageFactory("demo", "echo");
 
-            // Put invocation on local queue and await global result
-            for (int m = 0; m < nWaiterMessages; m++) {
-                const std::shared_ptr<InMemoryMessageQueue>& queue =
-                  sch.getFunctionQueue(msg);
-                queue->enqueue(msg);
-                sch.getFunctionResult(msg.id(), 5000);
-            }
-        });
-    }
+            // Invoke and await
+            std::shared_ptr<faabric::BatchExecuteRequest> req =
+              faabric::util::batchExecFactory("demo", "echo", nWaiterMessages);
+            sch.callFunctions(req);
 
-    // Create workers that will dequeue messages and set success
-    for (int i = 0; i < nWorkers; i++) {
-        workerThreads.emplace_back([nWorkerMessages] {
-            Scheduler& sch = scheduler::getScheduler();
-
-            faabric::Message dummyMsg =
-              faabric::util::messageFactory("demo", "echo");
-            const std::shared_ptr<InMemoryMessageQueue>& queue =
-              sch.getFunctionQueue(dummyMsg);
-
-            // Listen to local queue, set result on global bus
-            for (int m = 0; m < nWorkerMessages; m++) {
-                faabric::Message msg = queue->dequeue(5000);
-                sch.setFunctionResult(msg);
+            for (const auto& m : req->messages()) {
+                sch.getFunctionResult(m.id(), 5000);
             }
         });
     }
@@ -595,18 +591,14 @@ TEST_CASE("Check multithreaded function results", "[scheduler]")
         }
     }
 
-    for (auto& w : workerThreads) {
-        if (w.joinable()) {
-            w.join();
-        }
-    }
-
     // If we get here then things work properly
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check getting function status", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     scheduler::Scheduler& sch = scheduler::getScheduler();
 
@@ -657,11 +649,14 @@ TEST_CASE("Check getting function status", "[scheduler]")
     REQUIRE(result.type() == expectedType);
     REQUIRE(result.outputdata() == expectedOutput);
     REQUIRE(result.executedhost() == expectedHost);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Check setting long-lived function status", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     scheduler::Scheduler& sch = scheduler::getScheduler();
     redis::Redis& redis = redis::Redis::getQueue();
 
@@ -688,6 +683,7 @@ TEST_CASE("Check setting long-lived function status", "[scheduler]")
 TEST_CASE("Check logging chained functions", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
 
     scheduler::Scheduler& sch = scheduler::getScheduler();
 
@@ -701,7 +697,7 @@ TEST_CASE("Check logging chained functions", "[scheduler]")
 
     // Log and check this shows up in the result
     sch.logChainedFunction(msg.id(), chainedMsgIdA);
-    std::unordered_set<unsigned int> expected = { chainedMsgIdA };
+    std::set<unsigned int> expected = { chainedMsgIdA };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 
     // Log some more and check
@@ -710,22 +706,23 @@ TEST_CASE("Check logging chained functions", "[scheduler]")
     sch.logChainedFunction(msg.id(), chainedMsgIdC);
     expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
 
     scheduler::Scheduler& sch = scheduler::getScheduler();
 
     std::string otherHost = "other";
 
-    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
-    msg.set_masterhost(otherHost);
-
-    std::vector<faabric::Message> msgs = { msg };
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("blah", "foo", 1);
+    req->mutable_messages()->at(0).set_masterhost(otherHost);
 
     std::vector<std::string> expectedHosts = { "" };
     std::vector<std::string> executedHosts = sch.callFunctions(req);
@@ -735,14 +732,17 @@ TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
     auto actualReqs = faabric::scheduler::getBatchRequests();
     REQUIRE(actualReqs.size() == 1);
     REQUIRE(actualReqs.at(0).first == otherHost);
-    REQUIRE(actualReqs.at(0).second.id() == req.id());
+    REQUIRE(actualReqs.at(0).second->id() == req->id());
 
     faabric::util::setMockMode(false);
+
+    unsetSlowExecutor();
 }
 
 TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
 {
     cleanFaabric();
+    setSlowExecutor();
     faabric::util::setMockMode(true);
     scheduler::Scheduler& sch = scheduler::getScheduler();
 
@@ -757,7 +757,7 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
 
     int nCores = 3;
     faabric::HostResources res;
-    res.set_cores(nCores);
+    res.set_slots(nCores);
     sch.setThisHostResources(res);
 
     // Set up capacity for other hosts
@@ -769,18 +769,15 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
     // not the third
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     int nRequests = 2 * nCores + 1;
-    std::vector<faabric::Message> msgs;
-    for (int i = 0; i < nRequests; i++) {
-        msgs.push_back(msg);
-    }
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", nRequests);
+
     sch.callFunctions(req);
 
     // Check other hosts are added
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 2);
 
-    std::unordered_set<std::string> expectedHosts =
-      sch.getFunctionRegisteredHosts(msg);
+    std::set<std::string> expectedHosts = sch.getFunctionRegisteredHosts(msg);
 
     // Broadcast deletion of some snapshot
     std::string snapKey = "blahblah";
@@ -793,5 +790,7 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
     auto actualDeleteRequests = faabric::scheduler::getSnapshotDeletes();
 
     REQUIRE(actualDeleteRequests == expectedDeleteRequests);
+
+    unsetSlowExecutor();
 }
 }

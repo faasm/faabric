@@ -39,7 +39,6 @@ class SystemConfig
 
     // Worker-related timeouts
     int globalMessageTimeout;
-    int unboundTimeout;
     int boundTimeout;
     int chainedCallTimeout;
 

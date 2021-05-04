@@ -22,7 +22,8 @@ std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls();
 
 std::vector<std::pair<std::string, faabric::Message>> getFlushCalls();
 
-std::vector<std::pair<std::string, faabric::BatchExecuteRequest>>
+std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
 getBatchRequests();
 
 std::vector<std::pair<std::string, faabric::MPIMessage>> getMPIMessages();
@@ -32,6 +33,9 @@ getResourceRequests();
 
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests();
+
+std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
+getThreadResults();
 
 void queueResourceResponse(const std::string& host,
                            faabric::HostResources& res);
@@ -57,8 +61,11 @@ class FunctionCallClient
 
     faabric::HostResources getResources(const faabric::ResourceRequest& req);
 
-    void executeFunctions(const faabric::BatchExecuteRequest& req);
+    void executeFunctions(
+      const std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void unregister(const faabric::UnregisterRequest& req);
+
+    void setThreadResult(const faabric::ThreadResultRequest& req);
 };
 }

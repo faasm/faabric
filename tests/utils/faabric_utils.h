@@ -8,6 +8,8 @@
 
 using namespace faabric;
 
+#define SHORT_TEST_TIMEOUT_MS 1000
+
 namespace tests {
 void cleanFaabric();
 

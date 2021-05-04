@@ -298,6 +298,12 @@ std::string funcToString(const faabric::Message& msg, bool includeId)
     return str;
 }
 
+std::string funcToString(
+  const std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    return funcToString(req->messages(0), false);
+}
+
 std::string buildAsyncResponse(const faabric::Message& msg)
 {
     if (msg.id() == 0) {
@@ -308,32 +314,23 @@ std::string buildAsyncResponse(const faabric::Message& msg)
     return std::to_string(msg.id());
 }
 
-faabric::BatchExecuteRequest batchExecFactory(
-  std::vector<std::shared_ptr<faabric::Message>>& msgs)
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory()
 {
-    // TODO - can we avoid this copy?
-    faabric::BatchExecuteRequest req;
-    for (auto p : msgs) {
-        *req.add_messages() = *p.get();
-    }
-
-    // Generate a random ID
-    unsigned int id = faabric::util::generateGid();
-    req.set_id(id);
-
+    auto req = std::make_shared<faabric::BatchExecuteRequest>();
+    req->set_id(faabric::util::generateGid());
     return req;
 }
 
-faabric::BatchExecuteRequest batchExecFactory(
-  std::vector<faabric::Message>& msgs)
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
+  const std::string& user,
+  const std::string& function,
+  int count)
 {
-    // TODO - can we avoid this copy?
-    faabric::BatchExecuteRequest req;
-    *req.mutable_messages() = { msgs.begin(), msgs.end() };
+    auto req = batchExecFactory();
 
-    // Generate a random ID
-    unsigned int id = faabric::util::generateGid();
-    req.set_id(id);
+    for (int i = 0; i < count; i++) {
+        *req->add_messages() = messageFactory(user, function);
+    }
 
     return req;
 }

@@ -1,11 +1,12 @@
 #include <faabric/mpi/mpi.h>
-
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -95,18 +96,21 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     // Register this as the master
     registerRank(0);
 
+    auto& sch = faabric::scheduler::getScheduler();
+
     // Dispatch all the chained calls
     // NOTE - with the master being rank zero, we want to spawn
     // (size - 1) new functions starting with rank 1
-    scheduler::Scheduler& sch = scheduler::getScheduler();
-    for (int i = 1; i < size; i++) {
-        faabric::Message msg = faabric::util::messageFactory(user, function);
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory(user, function, size - 1);
+    for (int i = 0; i < req->messages_size(); i++) {
+        faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_ismpi(true);
         msg.set_mpiworldid(id);
-        msg.set_mpirank(i);
-
-        sch.callFunction(msg);
+        msg.set_mpirank(i + 1);
     }
+
+    sch.callFunctions(req);
 }
 
 void MpiWorld::destroy()

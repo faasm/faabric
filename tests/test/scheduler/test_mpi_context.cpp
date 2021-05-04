@@ -102,7 +102,7 @@ TEST_CASE("Check joining world", "[mpi]")
 
     // Get one message formed by world creation
     Scheduler& sch = getScheduler();
-    faabric::Message msgB = sch.getFunctionQueue(msgA)->dequeue();
+    faabric::Message msgB = sch.getRecordedMessagesAll().at(0);
 
     // Create another context and make sure it's not initialised
     MpiContext cB;

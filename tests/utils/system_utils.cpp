@@ -1,7 +1,9 @@
+#include "DummyExecutorFactory.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -35,7 +37,7 @@ void cleanFaabric()
 
     // Give scheduler enough resources
     faabric::HostResources res;
-    res.set_cores(10);
+    res.set_slots(10);
     sch.setThisHostResources(res);
 
     // Clear snapshots
@@ -49,6 +51,11 @@ void cleanFaabric()
     faabric::util::setMockMode(false);
     faabric::scheduler::clearMockRequests();
     faabric::scheduler::clearMockSnapshotRequests();
+
+    // Set up dummy executor factory
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+    faabric::scheduler::setExecutorFactory(fac);
 
     // Clear out MPI worlds
     scheduler::MpiWorldRegistry& mpiRegistry = scheduler::getMpiWorldRegistry();

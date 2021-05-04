@@ -54,6 +54,9 @@ bool isValidFunction(const faabric::Message& msg);
 
 std::string funcToString(const faabric::Message& msg, bool includeId);
 
+std::string funcToString(
+  const std::shared_ptr<faabric::BatchExecuteRequest> req);
+
 unsigned int setMessageId(faabric::Message& msg);
 
 std::string buildAsyncResponse(const faabric::Message& msg);
@@ -65,11 +68,12 @@ std::shared_ptr<faabric::Message> messageFactoryShared(
 faabric::Message messageFactory(const std::string& user,
                                 const std::string& function);
 
-faabric::BatchExecuteRequest batchExecFactory(
-  std::vector<std::shared_ptr<faabric::Message>>& msgs);
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory();
 
-faabric::BatchExecuteRequest batchExecFactory(
-  std::vector<faabric::Message>& msgs);
+std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
+  const std::string& user,
+  const std::string& function,
+  int count = 1);
 
 void convertMessageToPython(faabric::Message& msg);
 

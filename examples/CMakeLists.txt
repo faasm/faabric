@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # -----------------------------------------------
 # These examples must support being compiled as stand-alone project.
-# Don't include them in the main CMake build, instead link them against 
+# Don't include them in the main CMake build, instead link them against
 # the installed Faabric library as an external user would.
 # -----------------------------------------------
 
@@ -26,8 +26,8 @@ function(add_example example_name)
         boost_system
         boost_filesystem
     )
-    
-    set(ALL_EXAMPLES ${ALL_EXAMPLES} ${example_name} PARENT_SCOPE)   
+
+    set(ALL_EXAMPLES ${ALL_EXAMPLES} ${example_name} PARENT_SCOPE)
 endfunction()
 
 add_example(check)
