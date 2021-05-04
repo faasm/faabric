@@ -61,15 +61,26 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     logger->info(
       "Executing {}/{} tasks of {}", nMessages, req->messages_size(), funcStr);
 
-    // Restore if necessary
+    // Restore if necessary. If we're executing threads on the master host we
+    // assume we don't need to restore, but for everything else we do. If we've
+    // already restored from this snapshot, we don't do so again.
     const faabric::Message& firstMsg = req->messages().at(0);
     std::string snapshotKey = firstMsg.snapshotkey();
-    if (!snapshotKey.empty() && (snapshotKey != lastSnapshot)) {
-        faabric::util::UniqueLock lock(threadsMutex);
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
-        if (snapshotKey != lastSnapshot) {
-            lastSnapshot = snapshotKey;
-            restore(firstMsg);
+    bool isMaster = firstMsg.masterhost() == thisHost;
+    bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+    bool isSnapshot = !snapshotKey.empty();
+    bool alreadyRestored = snapshotKey == lastSnapshot;
+
+    if (isSnapshot && !alreadyRestored) {
+        if ((!isMaster && isThreads) || !isThreads) {
+            faabric::util::UniqueLock lock(threadsMutex);
+
+            if (snapshotKey != lastSnapshot) {
+                lastSnapshot = snapshotKey;
+                restore(firstMsg);
+            }
         }
     }
 
