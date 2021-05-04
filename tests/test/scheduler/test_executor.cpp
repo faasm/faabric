@@ -35,6 +35,10 @@ class TestExecutor final : public Executor
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
         bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
 
+        // Check we're being asked to execute the message we've bound to
+        REQUIRE(msg.user() == boundMessage.user());
+        REQUIRE(msg.function() == boundMessage.function());
+
         // Custom thread-check function
         if (msg.function() == "thread-check" && !isThread) {
             msg.set_outputdata(fmt::format(
@@ -77,8 +81,8 @@ class TestExecutor final : public Executor
 
             return msg.id() / 100;
         } else {
-            msg.set_outputdata(fmt::format(
-              "Simple function {} executed", msg.id()));
+            msg.set_outputdata(
+              fmt::format("Simple function {} executed", msg.id()));
         }
 
         return 0;
@@ -147,8 +151,7 @@ TEST_CASE("Test executing simple function", "[executor]")
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message result =
       sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
-    std::string expected =
-      fmt::format("Simple function {} executed", msgId);
+    std::string expected = fmt::format("Simple function {} executed", msgId);
     REQUIRE(result.outputdata() == expected);
 
     // Check that restore has not been called

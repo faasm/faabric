@@ -46,9 +46,9 @@ class Executor
 
     virtual void postFinish();
 
-  private:
     faabric::Message boundMessage;
 
+  private:
     std::string lastSnapshot;
 
     std::atomic<int> executingTaskCount = 0;

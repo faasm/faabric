@@ -10,6 +10,8 @@
 #include <faabric/util/timing.h>
 
 namespace faabric::scheduler {
+
+// TODO - avoid the copy of the message here?
 Executor::Executor(const faabric::Message& msg)
   : boundMessage(msg)
 {
@@ -58,10 +60,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     int nMessages = msgIdxs.size();
 
     const std::string funcStr = faabric::util::funcToString(req);
-    logger->info("{} executing {} tasks of {}",
-                 id,
-                 nMessages,
-                 funcStr);
+    logger->info("{} executing {} tasks of {}", id, nMessages, funcStr);
 
     // Restore if necessary. If we're executing threads on the master host we
     // assume we don't need to restore, but for everything else we do. If we've
@@ -79,10 +78,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         if ((!isMaster && isThreads) || !isThreads) {
             faabric::util::UniqueLock lock(threadsMutex);
 
-            if (snapshotKey != lastSnapshot) {
-                lastSnapshot = snapshotKey;
-                restore(firstMsg);
-            }
+            lastSnapshot = snapshotKey;
+            restore(firstMsg);
         }
     }
 
