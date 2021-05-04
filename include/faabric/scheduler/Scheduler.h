@@ -88,7 +88,7 @@ class Scheduler
 
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
-    std::unordered_set<std::string> getFunctionRegisteredHosts(
+    std::set<std::string> getFunctionRegisteredHosts(
       const faabric::Message& msg);
 
     void broadcastFlush();
@@ -117,7 +117,7 @@ class Scheduler
 
     std::string getThisHost();
 
-    std::unordered_set<std::string> getAvailableHosts();
+    std::set<std::string> getAvailableHosts();
 
     void addHostToGlobalSet();
 
@@ -150,7 +150,7 @@ class Scheduler
     void logChainedFunction(unsigned int parentMessageId,
                             unsigned int chainedMessageId);
 
-    std::unordered_set<unsigned int> getChainedFunctions(unsigned int msgId);
+    std::set<unsigned int> getChainedFunctions(unsigned int msgId);
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
@@ -170,13 +170,16 @@ class Scheduler
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
 
     faabric::HostResources thisHostResources;
-    std::unordered_map<std::string, std::unordered_set<std::string>>
-      registeredHosts;
+    std::set<std::string> availableHostsCache;
+    std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
     std::vector<faabric::Message> recordedMessagesAll;
     std::vector<faabric::Message> recordedMessagesLocal;
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
+
+    std::vector<std::string> getUnregisteredHosts(const std::string funcStr,
+                                                  bool noCache = false);
 
     std::shared_ptr<Executor> claimExecutor(const faabric::Message& msg);
 

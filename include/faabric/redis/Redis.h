@@ -4,6 +4,7 @@
 #include <faabric/util/exception.h>
 
 #include <hiredis/hiredis.h>
+#include <set>
 #include <spdlog/spdlog.h>
 #include <string>
 #include <thread>
@@ -113,13 +114,13 @@ class Redis
 
     std::string srandmember(const std::string& key);
 
-    std::unordered_set<std::string> smembers(const std::string& key);
+    std::set<std::string> smembers(const std::string& key);
 
-    std::unordered_set<std::string> sdiff(const std::string& keyA,
-                                          const std::string& keyB);
+    std::set<std::string> sdiff(const std::string& keyA,
+                                const std::string& keyB);
 
-    std::unordered_set<std::string> sinter(const std::string& keyA,
-                                           const std::string& keyB);
+    std::set<std::string> sinter(const std::string& keyA,
+                                 const std::string& keyB);
 
     int lpushLong(const std::string& key, long val);
 

@@ -82,9 +82,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         int threadPoolIdx = msg.appindex() % threadPoolSize;
 
         // Enqueue the task
-        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>> task =
-          std::make_pair(msgIdx, req);
-        threadQueues[threadPoolIdx].enqueue(std::move(task));
+        threadQueues[threadPoolIdx].enqueue(std::make_pair(msgIdx, req));
 
         // Lazily create the thread
         if (threadPoolThreads.count(threadPoolIdx) == 0) {

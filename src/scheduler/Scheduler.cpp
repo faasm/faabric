@@ -36,7 +36,7 @@ Scheduler::Scheduler()
     thisHostResources.set_slots(cores);
 }
 
-std::unordered_set<std::string> Scheduler::getAvailableHosts()
+std::set<std::string> Scheduler::getAvailableHosts()
 {
     redis::Redis& redis = redis::Redis::getQueue();
     return redis.smembers(AVAILABLE_HOST_SET);
@@ -86,6 +86,7 @@ void Scheduler::reset()
     thisHostResources.set_slots(faabric::util::getUsableCores());
 
     // Reset scheduler state
+    availableHostsCache.clear();
     registeredHosts.clear();
 
     // Records
@@ -113,7 +114,7 @@ int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
     return (int)registeredHosts[funcStr].size();
 }
 
-std::unordered_set<std::string> Scheduler::getFunctionRegisteredHosts(
+std::set<std::string> Scheduler::getFunctionRegisteredHosts(
   const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
@@ -209,7 +210,7 @@ std::vector<std::string> Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   bool forceLocal)
 {
-    auto logger = faabric::util::getLogger();
+    const auto& logger = faabric::util::getLogger();
 
     // Extract properties of the request
     int nMessages = req->messages_size();
@@ -297,7 +298,7 @@ std::vector<std::string> Scheduler::callFunctions(
         if (offset < nMessages) {
             // At this point we have a remainder, so we need to distribute
             // the rest over the registered hosts for this function
-            std::unordered_set<std::string>& thisRegisteredHosts =
+            std::set<std::string>& thisRegisteredHosts =
               registeredHosts[funcStr];
 
             // Schedule the remainder on these other hosts
@@ -313,17 +314,10 @@ std::vector<std::string> Scheduler::callFunctions(
         }
 
         if (offset < nMessages) {
-            // At this point we know we need to enlist unregistered hosts
-            std::unordered_set<std::string> allHosts = getAvailableHosts();
-            std::unordered_set<std::string>& thisRegisteredHosts =
-              registeredHosts[funcStr];
+            std::vector<std::string> unregisteredHosts =
+              getUnregisteredHosts(funcStr);
 
-            for (auto& h : allHosts) {
-                // Skip if already registered
-                if (thisRegisteredHosts.find(h) != thisRegisteredHosts.end()) {
-                    continue;
-                }
-
+            for (auto& h : unregisteredHosts) {
                 // Skip if this host
                 if (h == thisHost) {
                     continue;
@@ -336,7 +330,7 @@ std::vector<std::string> Scheduler::callFunctions(
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
                     logger->debug("Registering {} for {}", h, funcStr);
-                    thisRegisteredHosts.insert(h);
+                    registeredHosts[funcStr].insert(h);
                 }
 
                 offset += nOnThisHost;
@@ -406,13 +400,41 @@ std::vector<std::string> Scheduler::callFunctions(
     return executed;
 }
 
+std::vector<std::string> Scheduler::getUnregisteredHosts(
+  const std::string funcStr,
+  bool noCache)
+{
+    // Load the list of available hosts
+    if (availableHostsCache.empty() || noCache) {
+        availableHostsCache = getAvailableHosts();
+    }
+
+    // At this point we know we need to enlist unregistered hosts
+    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+
+    std::vector<std::string> unregisteredHosts;
+
+    std::set_difference(
+      availableHostsCache.begin(),
+      availableHostsCache.end(),
+      thisRegisteredHosts.begin(),
+      thisRegisteredHosts.end(),
+      std::inserter(unregisteredHosts, unregisteredHosts.begin()));
+
+    // If we've not got any, try again without caching
+    if (unregisteredHosts.empty() && !noCache) {
+        return getUnregisteredHosts(funcStr, true);
+    }
+
+    return unregisteredHosts;
+}
+
 void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
                                         const std::string& snapshotKey)
 {
 
     std::string funcStr = faabric::util::funcToString(msg, false);
-    std::unordered_set<std::string>& thisRegisteredHosts =
-      registeredHosts[funcStr];
+    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
 
     for (auto host : thisRegisteredHosts) {
         SnapshotClient c(host);
@@ -551,7 +573,7 @@ std::string Scheduler::getThisHost()
 void Scheduler::broadcastFlush()
 {
     // Get all hosts
-    std::unordered_set<std::string> allHosts = getAvailableHosts();
+    std::set<std::string> allHosts = getAvailableHosts();
 
     // Remove this host from the set
     allHosts.erase(thisHost);
@@ -755,15 +777,14 @@ void Scheduler::logChainedFunction(unsigned int parentMessageId,
     redis.expire(key, STATUS_KEY_EXPIRY);
 }
 
-std::unordered_set<unsigned int> Scheduler::getChainedFunctions(
-  unsigned int msgId)
+std::set<unsigned int> Scheduler::getChainedFunctions(unsigned int msgId)
 {
     redis::Redis& redis = redis::Redis::getQueue();
 
     const std::string& key = getChainedKey(msgId);
-    const std::unordered_set<std::string> chainedCalls = redis.smembers(key);
+    const std::set<std::string> chainedCalls = redis.smembers(key);
 
-    std::unordered_set<unsigned int> chainedIds;
+    std::set<unsigned int> chainedIds;
     for (auto i : chainedCalls) {
         chainedIds.insert(std::stoi(i));
     }
@@ -790,8 +811,7 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
     result.ParseFromArray(messageBytes.data(), (int)messageBytes.size());
 
     // Recurse through chained calls
-    std::unordered_set<unsigned int> chainedMsgIds =
-      getChainedFunctions(messageId);
+    std::set<unsigned int> chainedMsgIds = getChainedFunctions(messageId);
     std::vector<ExecGraphNode> children;
     for (auto c : chainedMsgIds) {
         children.emplace_back(getFunctionExecGraphNode(c));

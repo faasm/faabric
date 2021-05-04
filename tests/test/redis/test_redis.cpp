@@ -361,7 +361,7 @@ TEST_CASE("Test set operations with empty sets", "[redis]")
 
     std::string setName = "test_empty_set";
 
-    std::unordered_set<std::string> members = redis.smembers(setName);
+    std::set<std::string> members = redis.smembers(setName);
     REQUIRE(members.empty());
 }
 
@@ -401,7 +401,7 @@ TEST_CASE("Test set operations", "[redis]")
     REQUIRE(redisQueue.scard(setB) == 1);
 
     // Check members
-    std::unordered_set<std::string> expectedA = { valueA, valueB };
+    std::set<std::string> expectedA = { valueA, valueB };
     REQUIRE(redisQueue.smembers(setA) == expectedA);
 
     // Remove and check
@@ -441,8 +441,7 @@ TEST_CASE("Test set diff", "[redis]")
     std::string setA = "set_a";
     std::string setB = "set_b";
 
-    const std::unordered_set<std::string> actualA =
-      redisQueue.sdiff(setA, setB);
+    const std::set<std::string> actualA = redisQueue.sdiff(setA, setB);
     REQUIRE(actualA.empty());
 
     std::string valueA = "123.45.67.8";
@@ -457,8 +456,8 @@ TEST_CASE("Test set diff", "[redis]")
     redisQueue.sadd(setB, valueC);
     redisQueue.sadd(setB, valueD);
 
-    std::unordered_set<std::string> actualB = redisQueue.sdiff(setA, setB);
-    std::unordered_set<std::string> expected = { valueA, valueB };
+    std::set<std::string> actualB = redisQueue.sdiff(setA, setB);
+    std::set<std::string> expected = { valueA, valueB };
 
     REQUIRE(actualB == expected);
 }
@@ -471,7 +470,7 @@ TEST_CASE("Test set intersection", "[redis]")
     std::string setA = "set_a";
     std::string setB = "set_b";
 
-    std::unordered_set<std::string> actualA = redisQueue.sinter(setA, setB);
+    std::set<std::string> actualA = redisQueue.sinter(setA, setB);
     REQUIRE(actualA.empty());
 
     std::string valueA = "val_a";
@@ -489,8 +488,8 @@ TEST_CASE("Test set intersection", "[redis]")
     redisQueue.sadd(setB, valueD);
     redisQueue.sadd(setB, valueE);
 
-    std::unordered_set<std::string> actualB = redisQueue.sinter(setA, setB);
-    std::unordered_set<std::string> expected = { valueA, valueC };
+    std::set<std::string> actualB = redisQueue.sinter(setA, setB);
+    std::set<std::string> expected = { valueA, valueC };
 
     REQUIRE(actualB == expected);
 }

@@ -35,7 +35,7 @@ class SlowExecutor final : public Executor
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
         logger->debug("SlowExecutor executing task{}", msg.id());
 
-        usleep(500 * 1000);
+        usleep(SHORT_TEST_TIMEOUT_MS * 1000);
         return 0;
     }
 };
@@ -74,7 +74,7 @@ TEST_CASE("Test scheduler clear-up", "[scheduler]")
 
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
     std::string otherHost = "other";
-    std::unordered_set<std::string> expectedHosts = { otherHost };
+    std::set<std::string> expectedHosts = { otherHost };
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
@@ -147,10 +147,8 @@ TEST_CASE("Test scheduler available hosts", "[scheduler]")
     sch.addHostToGlobalSet(hostB);
     sch.addHostToGlobalSet(hostC);
 
-    std::unordered_set<std::string> expectedHosts = {
-        thisHost, hostA, hostB, hostC
-    };
-    std::unordered_set<std::string> actualHosts = sch.getAvailableHosts();
+    std::set<std::string> expectedHosts = { thisHost, hostA, hostB, hostC };
+    std::set<std::string> actualHosts = sch.getAvailableHosts();
 
     REQUIRE(actualHosts == expectedHosts);
 
@@ -465,7 +463,7 @@ TEST_CASE("Test unregistering host", "[scheduler]")
     faabric::Message msg = req->messages().at(0);
 
     // Check other host is added
-    std::unordered_set<std::string> expectedHosts = { otherHost };
+    std::set<std::string> expectedHosts = { otherHost };
     REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
@@ -699,7 +697,7 @@ TEST_CASE("Check logging chained functions", "[scheduler]")
 
     // Log and check this shows up in the result
     sch.logChainedFunction(msg.id(), chainedMsgIdA);
-    std::unordered_set<unsigned int> expected = { chainedMsgIdA };
+    std::set<unsigned int> expected = { chainedMsgIdA };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 
     // Log some more and check
@@ -779,8 +777,7 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
     // Check other hosts are added
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 2);
 
-    std::unordered_set<std::string> expectedHosts =
-      sch.getFunctionRegisteredHosts(msg);
+    std::set<std::string> expectedHosts = sch.getFunctionRegisteredHosts(msg);
 
     // Broadcast deletion of some snapshot
     std::string snapKey = "blahblah";

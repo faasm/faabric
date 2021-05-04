@@ -29,7 +29,8 @@ TEST_CASE("Test main runner", "[runner]")
 
     for (const auto& m : req->messages()) {
         std::string expected = fmt::format("DummyExecutor executed {}", m.id());
-        faabric::Message res = sch.getFunctionResult(m.id(), 1000);
+        faabric::Message res =
+          sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.outputdata() == expected);
     }
 }

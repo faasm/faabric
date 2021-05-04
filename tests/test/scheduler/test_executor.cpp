@@ -1,14 +1,14 @@
-#include "faabric/scheduler/FunctionCallClient.h"
-#include "faabric/util/testing.h"
 #include "faabric_utils.h"
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
 
@@ -119,7 +119,7 @@ void executeWithTestExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req,
     int overrideCpuOriginal = conf.overrideCpuCount;
 
     conf.overrideCpuCount = 10;
-    conf.boundTimeout = 1000;
+    conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
     auto& sch = faabric::scheduler::getScheduler();
     sch.callFunctions(req, forceLocal);
@@ -142,7 +142,8 @@ TEST_CASE("Test executing simple function", "[executor]")
     executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
-    faabric::Message result = sch.getFunctionResult(msgId, 1000);
+    faabric::Message result =
+      sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
     std::string expected =
       fmt::format("Simple function {} executed successfully", msgId);
     REQUIRE(result.outputdata() == expected);
@@ -225,14 +226,14 @@ TEST_CASE("Test thread results returned on non-master", "[executor]")
         msg.set_snapshotkey(snapKey);
         msg.set_masterhost(otherHost);
 
-        messageIds.emplace_back(req->messages().at(i).id());
+        messageIds.emplace_back(msg.id());
     }
 
     executeWithTestExecutor(req, true);
 
     // We have to manually add a wait here as the thread results won't actually
     // get logged on this host
-    usleep(1000 * 1000);
+    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
 
     std::vector<std::pair<std::string, faabric::ThreadResultRequest>> actual =
       faabric::scheduler::getThreadResults();
