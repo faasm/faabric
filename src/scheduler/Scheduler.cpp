@@ -479,8 +479,8 @@ int Scheduler::scheduleFunctionsOnHost(
     }
 
     // Push the snapshot if necessary
-    if (req->type() == req->THREADS || req->type() == req->PROCESSES) {
-        std::string snapshotKey = firstMsg.snapshotkey();
+    std::string snapshotKey = firstMsg.snapshotkey();
+    if (!snapshotKey.empty()) {
         SnapshotClient c(host);
         const SnapshotData& d =
           snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);

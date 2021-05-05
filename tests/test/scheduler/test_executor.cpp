@@ -5,6 +5,7 @@
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -15,6 +16,21 @@ using namespace faabric::scheduler;
 namespace tests {
 
 std::atomic<int> restoreCount = 0;
+
+std::string setUpDummySnapshot()
+{
+    std::vector<uint8_t> snapData = { 0, 1, 2, 3, 4 };
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+    faabric::util::SnapshotData snap;
+    std::string snapKey = "foobar";
+    snap.data = snapData.data();
+    snap.size = snapData.size();
+
+    reg.takeSnapshot(snapKey, snap);
+
+    return snapKey;
+}
 
 class TestExecutor final : public Executor
 {
@@ -55,9 +71,11 @@ class TestExecutor final : public Executor
                 "dummy", "thread-check", nThreads);
             req->set_type(faabric::BatchExecuteRequest::THREADS);
 
+            std::string snapKey = setUpDummySnapshot();
+
             for (int i = 0; i < req->messages_size(); i++) {
                 faabric::Message& m = req->mutable_messages()->at(i);
-                m.set_snapshotkey(msg.snapshotkey());
+                m.set_snapshotkey(snapKey);
                 m.set_appindex(i + 1);
             }
 
@@ -98,21 +116,6 @@ class TestExecutorFactory : public ExecutorFactory
         return std::make_shared<TestExecutor>(msg);
     }
 };
-
-std::string setUpDummySnapshot()
-{
-    std::vector<uint8_t> snapData = { 0, 1, 2, 3, 4 };
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-    faabric::util::SnapshotData snap;
-    std::string snapKey = "foobar";
-    snap.data = snapData.data();
-    snap.size = snapData.size();
-
-    reg.takeSnapshot(snapKey, snap);
-
-    return snapKey;
-}
 
 void executeWithTestExecutor(std::shared_ptr<faabric::BatchExecuteRequest> req,
                              bool forceLocal)
@@ -156,6 +159,8 @@ TEST_CASE("Test executing simple function", "[executor]")
 
     // Check that restore has not been called
     REQUIRE(restoreCount == 0);
+
+    sch.shutdown();
 }
 
 TEST_CASE("Test executing threads directly", "[executor]")
@@ -184,8 +189,10 @@ TEST_CASE("Test executing threads directly", "[executor]")
         REQUIRE(result == msgId / 100);
     }
 
-    // Check that restore has only been called once
-    REQUIRE(restoreCount == 1);
+    // Check that restore has not been called as we're on the master
+    REQUIRE(restoreCount == 0);
+
+    sch.shutdown();
 }
 
 TEST_CASE("Test executing threads indirectly", "[executor]")
@@ -199,18 +206,106 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     faabric::Message& msg = req->mutable_messages()->at(0);
     msg.set_inputdata(std::to_string(nThreads));
 
-    std::string snapKey = setUpDummySnapshot();
-    std::vector<uint32_t> messageIds;
-    msg.set_snapshotkey(snapKey);
-
     executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
     REQUIRE(res.returnvalue() == 0);
 
-    // Check that restore has only been called once
+    // Check that restore has not been called as we're on the master
+    REQUIRE(restoreCount == 0);
+
+    sch.shutdown();
+}
+
+TEST_CASE("Test executing remote threads indirectly", "[executor]")
+{
+    cleanFaabric();
+    restoreCount = 0;
+
+    std::shared_ptr<TestExecutorFactory> fac =
+      std::make_shared<TestExecutorFactory>();
+    setExecutorFactory(fac);
+
+    faabric::util::setMockMode(true);
+
+    auto& conf = faabric::util::getSystemConfig();
+    std::string thisHost = conf.endpointHost;
+
+    // Add other host to available hosts
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    std::string otherHost = "other";
+    sch.addHostToGlobalSet(otherHost);
+
+    // Make sure we have only enough resources to execute the initial function
+    faabric::HostResources res;
+    res.set_slots(1);
+    sch.setThisHostResources(res);
+
+    // Set up other host to have some resources
+    faabric::HostResources resOther;
+    resOther.set_slots(10);
+    faabric::scheduler::queueResourceResponse(otherHost, resOther);
+
+    // Background thread to execute main function and await results
+    std::thread t([] {
+        int nThreads = 8;
+        std::shared_ptr<BatchExecuteRequest> req =
+          faabric::util::batchExecFactory("dummy", "thread-check", 1);
+        faabric::Message& msg = req->mutable_messages()->at(0);
+        msg.set_inputdata(std::to_string(nThreads));
+
+        auto& sch = faabric::scheduler::getScheduler();
+        sch.callFunctions(req, false);
+
+        faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
+        REQUIRE(res.returnvalue() == 0);
+    });
+
+    // Give it time to have made the request
+    usleep(SHORT_TEST_TIMEOUT_MS * 500);
+
+    // Check restore hasn't been called yet
+    REQUIRE(restoreCount == 0);
+
+    // Get the request that's been submitted
+    auto reqs = faabric::scheduler::getBatchRequests();
+    REQUIRE(reqs.size() == 1);
+    std::string actualHost = reqs.at(0).first;
+    REQUIRE(actualHost == otherHost);
+
+    // Check the snapshot has been pushed to the other host
+    auto snapPushes = faabric::scheduler::getSnapshotPushes();
+    REQUIRE(snapPushes.size() == 1);
+    REQUIRE(snapPushes.at(0).first == otherHost);
+
+    std::shared_ptr<faabric::BatchExecuteRequest> distReq = reqs.at(0).second;
+    faabric::Message firstMsg = distReq->messages().at(0);
+
+    // Now execute request on this host as if we were on the other host
+    conf.endpointHost = otherHost;
+    sch.callFunctions(distReq, true);
+    conf.endpointHost = thisHost;
+
+    // Check restore has been called as we're not on master
     REQUIRE(restoreCount == 1);
+
+    // Process the thread result requests
+    std::vector<std::pair<std::string, faabric::ThreadResultRequest>> results =
+      faabric::scheduler::getThreadResults();
+
+    for (auto& r : results) {
+        REQUIRE(r.first == thisHost);
+        sch.setThreadResult(r.second.messageid(), r.second.returnvalue());
+    }
+
+    // Rejoin the other thread
+    if (t.joinable()) {
+        t.join();
+    }
+
+    // Shutdown
+    sch.shutdown();
 }
 
 TEST_CASE("Test thread results returned on non-master", "[executor]")
@@ -259,6 +354,8 @@ TEST_CASE("Test thread results returned on non-master", "[executor]")
     REQUIRE(actualMessageIds == messageIds);
 
     faabric::util::setMockMode(false);
+
+    faabric::scheduler::getScheduler().shutdown();
 }
 
 TEST_CASE("Test non-zero return code", "[executor]")
@@ -274,6 +371,8 @@ TEST_CASE("Test non-zero return code", "[executor]")
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
     REQUIRE(res.returnvalue() == 1);
+
+    sch.shutdown();
 }
 
 TEST_CASE("Test erroring function", "[executor]")
@@ -293,6 +392,8 @@ TEST_CASE("Test erroring function", "[executor]")
     std::string expectedErrorMsg = fmt::format(
       "Task {} threw exception. What: This is a test error", msg.id());
     REQUIRE(res.outputdata() == expectedErrorMsg);
+
+    sch.shutdown();
 }
 
 TEST_CASE("Test erroring thread", "[executor]")
@@ -311,6 +412,8 @@ TEST_CASE("Test erroring thread", "[executor]")
     auto& sch = faabric::scheduler::getScheduler();
     int32_t res = sch.awaitThreadResult(msg.id());
     REQUIRE(res == 1);
+
+    sch.shutdown();
 }
 
 TEST_CASE("Test executing different functions", "[executor]")
@@ -370,5 +473,8 @@ TEST_CASE("Test executing different functions", "[executor]")
 
     conf.boundTimeout = boundOriginal;
     conf.overrideCpuCount = overrideCpuOriginal;
+
+    sch.shutdown();
 }
+
 }

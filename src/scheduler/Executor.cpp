@@ -31,6 +31,8 @@ Executor::~Executor()
 
 void Executor::finish()
 {
+    faabric::util::getLogger()->debug("Shutting down executor {}", id);
+
     // Shut down thread pool with a series of kill messages
     for (auto& queuePair : threadQueues) {
         std::shared_ptr<BatchExecuteRequest> killReq =
@@ -78,9 +80,18 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         if ((!isMaster && isThreads) || !isThreads) {
             faabric::util::UniqueLock lock(threadsMutex);
 
+            logger->debug(
+              "Performing snapshot restore {} [{}]", funcStr, snapshotKey);
             lastSnapshot = snapshotKey;
             restore(firstMsg);
+        } else {
+            logger->debug("Skipping snapshot restore on master {} [{}]",
+                          funcStr,
+                          snapshotKey);
         }
+    } else if (isSnapshot) {
+        logger->debug(
+          "Skipping already restored snapshot {} [{}]", funcStr, snapshotKey);
     }
 
     // Set executing task count
@@ -138,6 +149,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                           // If the thread is being killed, the executor itself
                           // will handle the clean-up
                           if (msg.type() == faabric::Message::KILL) {
+                              logger->debug("Killing thread pool thread {}:{}",
+                                            id,
+                                            threadPoolIdx);
                               break;
                           }
 
@@ -179,7 +193,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 void Executor::shutdownThreadPoolThread(int threadPoolIdx)
 {
     const auto& logger = faabric::util::getLogger();
-    logger->debug("Thread pool thread {} shutting down", threadPoolIdx);
+    logger->debug("Shutting down thread pool thread {}:{}", id, threadPoolIdx);
 
     threadPoolThreads.erase(threadPoolIdx);
 
