@@ -164,7 +164,7 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
     warmExecutors[funcStr].emplace_back(execPtr);
 
     // Reset the executor
-    execPtr->reset();
+    execPtr->reset(msg);
 }
 
 void Scheduler::notifyExecutorShutdown(Executor* exec,

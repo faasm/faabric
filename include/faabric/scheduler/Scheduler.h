@@ -36,7 +36,7 @@ class Executor
 
     virtual void flush();
 
-    virtual void reset();
+    virtual void reset(const faabric::Message& msg);
 
     virtual int32_t executeTask(
       int threadPoolIdx,
