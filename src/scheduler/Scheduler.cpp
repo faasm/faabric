@@ -139,6 +139,9 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
 {
     faabric::util::FullLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
+        const auto& logger = faabric::util::getLogger();
+
+    logger->debug("{} finished message {}", exec->id, msg.id());
 
     std::vector<std::shared_ptr<Executor>>& executing =
       executingExecutors[funcStr];
@@ -155,7 +158,6 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
 
     // Check if not found
     if (execPtr == nullptr) {
-        const auto& logger = faabric::util::getLogger();
         logger->error("Unable to find record of executor {}", exec->id);
         throw std::runtime_error("Unable to find record of executor");
     }
