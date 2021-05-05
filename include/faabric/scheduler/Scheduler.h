@@ -23,6 +23,8 @@ Scheduler& getScheduler();
 class Executor
 {
   public:
+    std::string id;
+
     explicit Executor(const faabric::Message& msg);
 
     virtual ~Executor();
@@ -34,7 +36,7 @@ class Executor
 
     virtual void flush();
 
-    std::string id;
+    virtual void reset();
 
     virtual int32_t executeTask(
       int threadPoolIdx,

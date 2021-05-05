@@ -205,5 +205,7 @@ void Executor::postFinish() {}
 
 void Executor::flush() {}
 
+void Executor::reset() {}
+
 void Executor::restore(const faabric::Message& msg) {}
 }
