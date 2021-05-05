@@ -1,4 +1,5 @@
 #include <faabric/state/InMemoryStateKeyValue.h>
+#include <faabric/transport/MessageContext.h>
 
 #include <cstdio>
 
@@ -24,7 +25,9 @@ size_t InMemoryStateKeyValue::getStateSizeFromRemote(const std::string& userIn,
     }
 
     StateClient stateClient(userIn, keyIn, masterIP);
-    return stateClient.stateSize();
+    size_t stateSize = stateClient.stateSize();
+    stateClient.close();
+    return stateSize;
 }
 
 void InMemoryStateKeyValue::deleteFromRemote(const std::string& userIn,
@@ -41,6 +44,7 @@ void InMemoryStateKeyValue::deleteFromRemote(const std::string& userIn,
 
     StateClient stateClient(userIn, keyIn, masterIP);
     stateClient.deleteState();
+    stateClient.close();
 }
 
 void InMemoryStateKeyValue::clearAll(bool global)
@@ -60,7 +64,6 @@ InMemoryStateKeyValue::InMemoryStateKeyValue(const std::string& userIn,
   : StateKeyValue(userIn, keyIn, sizeIn)
   , thisIP(thisIPIn)
   , masterIP(getInMemoryStateRegistry().getMasterIP(user, key, thisIP, true))
-  , masterClient(userIn, keyIn, masterIP)
   , status(masterIP == thisIP ? InMemoryStateKeyStatus::MASTER
                               : InMemoryStateKeyStatus::NOT_MASTER)
   , stateRegistry(getInMemoryStateRegistry())
@@ -86,7 +89,9 @@ void InMemoryStateKeyValue::lockGlobal()
     if (status == InMemoryStateKeyStatus::MASTER) {
         globalLock.lock();
     } else {
-        masterClient.lock();
+        StateClient cli(user, key, masterIP);
+        cli.lock();
+        cli.close();
     }
 }
 
@@ -95,7 +100,9 @@ void InMemoryStateKeyValue::unlockGlobal()
     if (status == InMemoryStateKeyStatus::MASTER) {
         globalLock.unlock();
     } else {
-        masterClient.unlock();
+        StateClient cli(user, key, masterIP);
+        cli.unlock();
+        cli.close();
     }
 }
 
@@ -106,7 +113,9 @@ void InMemoryStateKeyValue::pullFromRemote()
     }
 
     std::vector<StateChunk> chunks = getAllChunks();
-    masterClient.pullChunks(chunks, BYTES(sharedMemory));
+    StateClient cli(user, key, masterIP);
+    cli.pullChunks(chunks, BYTES(sharedMemory));
+    cli.close();
 }
 
 void InMemoryStateKeyValue::pullChunkFromRemote(long offset, size_t length)
@@ -117,7 +126,9 @@ void InMemoryStateKeyValue::pullChunkFromRemote(long offset, size_t length)
 
     uint8_t* chunkStart = BYTES(sharedMemory) + offset;
     std::vector<StateChunk> chunks = { StateChunk(offset, length, chunkStart) };
-    masterClient.pullChunks(chunks, BYTES(sharedMemory));
+    StateClient cli(user, key, masterIP);
+    cli.pullChunks(chunks, BYTES(sharedMemory));
+    cli.close();
 }
 
 void InMemoryStateKeyValue::pushToRemote()
@@ -127,7 +138,9 @@ void InMemoryStateKeyValue::pushToRemote()
     }
 
     std::vector<StateChunk> allChunks = getAllChunks();
-    masterClient.pushChunks(allChunks);
+    StateClient cli(user, key, masterIP);
+    cli.pushChunks(allChunks);
+    cli.close();
 }
 
 void InMemoryStateKeyValue::pushPartialToRemote(
@@ -136,7 +149,9 @@ void InMemoryStateKeyValue::pushPartialToRemote(
     if (status == InMemoryStateKeyStatus::MASTER) {
         // Nothing to be done
     } else {
-        masterClient.pushChunks(chunks);
+        StateClient cli(user, key, masterIP);
+        cli.pushChunks(chunks);
+        cli.close();
     }
 }
 
@@ -150,7 +165,9 @@ void InMemoryStateKeyValue::appendToRemote(const uint8_t* data, size_t length)
         // Add to list
         appendedData.emplace_back(length, dataCopy);
     } else {
-        masterClient.append(data, length);
+        StateClient cli(user, key, masterIP);
+        cli.append(data, length);
+        cli.close();
     }
 }
 
@@ -168,7 +185,9 @@ void InMemoryStateKeyValue::pullAppendedFromRemote(uint8_t* data,
             offset += appended.length;
         }
     } else {
-        masterClient.pullAppended(data, length, nValues);
+        StateClient cli(user, key, masterIP);
+        cli.pullAppended(data, length, nValues);
+        cli.close();
     }
 }
 
@@ -178,7 +197,9 @@ void InMemoryStateKeyValue::clearAppendedFromRemote()
         // Clear appended locally
         appendedData.clear();
     } else {
-        masterClient.clearAppended();
+        StateClient cli(user, key, masterIP);
+        cli.clearAppended();
+        cli.close();
     }
 }
 

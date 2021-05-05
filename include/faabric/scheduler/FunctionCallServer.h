@@ -18,8 +18,6 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    void doRecv(void* msgData, int size) override;
-
     void doRecv(const void* headerData,
                 int headerSize,
                 const void* bodyData,

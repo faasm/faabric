@@ -7,208 +7,297 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
-#include <grpcpp/grpcpp.h>
-
 #define KV_FROM_REQUEST(request)                                               \
     auto kv = std::static_pointer_cast<InMemoryStateKeyValue>(                 \
-      state.getKV(request->user(), request->key()));
+      state.getKV(request.user(), request.key()));
 
 namespace faabric::state {
 StateServer::StateServer(State& stateIn)
-  : RPCServer(DEFAULT_RPC_HOST, STATE_PORT)
+  : faabric::transport::MessageEndpointServer(DEFAULT_RPC_HOST, STATE_PORT)
   , state(stateIn)
 {}
 
-void StateServer::doStart(const std::string& serverAddr)
+void StateServer::doRecv(const void* headerData,
+                         int headerSize,
+                         const void* bodyData,
+                         int bodySize)
 {
-    // Build the server
-    ServerBuilder builder;
-    builder.AddListeningPort(serverAddr, InsecureServerCredentials());
-    builder.RegisterService(this);
-
-    // Start it
-    server = builder.BuildAndStart();
-    faabric::util::getLogger()->info("State server listening on {}",
-                                     serverAddr);
-
-    server->Wait();
+    int call = static_cast<int>(*static_cast<const char*>(headerData));
+    switch (call) {
+        case faabric::state::StateCalls::Pull:
+            this->recvPull(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::Push:
+            this->recvPush(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::Size:
+            this->recvSize(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::Append:
+            this->recvAppend(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::ClearAppended:
+            this->recvClearAppended(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::PullAppended:
+            this->recvPullAppended(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::Lock:
+            this->recvLock(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::Unlock:
+            this->recvUnlock(bodyData, bodySize);
+            break;
+        case faabric::state::StateCalls::Delete:
+            this->recvDelete(bodyData, bodySize);
+            break;
+        default:
+            throw std::runtime_error(
+              fmt::format("Unrecognized state call header: {}", call));
+    }
 }
 
-Status StateServer::Pull(
-  ServerContext* context,
-  ServerReaderWriter<faabric::StatePart, faabric::StateChunkRequest>* stream)
+// Send empty response notifying we are done
+void StateServer::sendEmptyResponse(const std::string& returnHost)
 {
+    faabric::StateResponse response;
+    size_t responseSize = response.ByteSizeLong();
+    char* serialisedMsg = new char[responseSize];
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    sendResponse(serialisedMsg, responseSize, returnHost);
+}
 
-    // Iterate through streamed requests
+/* Send response to the client
+ *
+ * Current state implementation _always_ blocks even with methods that return
+ * nothing. We create a new endpoint every time. Re-using them would be a
+ * possible optimisation if needed.
+ */
+void StateServer::sendResponse(char* serialisedMsg,
+                               int size,
+                               const std::string& returnHost)
+{
+    // Open the endpoint socket, server always binds
+    faabric::transport::SimpleMessageEndpoint endpoint(
+      returnHost, STATE_PORT + REPLY_PORT_OFFSET);
+    endpoint.open(faabric::transport::getGlobalMessageContext(),
+                  faabric::transport::SocketType::PUSH,
+                  true);
+    endpoint.send(serialisedMsg, size);
+}
+
+void StateServer::recvSize(const void* data, int size)
+{
+    // Read input request
+    faabric::StateRequest request;
+
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Prepare the response
+    faabric::util::getLogger()->debug(
+      "Size {}/{}", request.user(), request.key());
+    KV_FROM_REQUEST(request)
+    faabric::StateSizeResponse response;
+    response.set_user(kv->user);
+    response.set_key(kv->key);
+    response.set_statesize(kv->size());
+
+    // Send the response body
+    size_t responseSize = response.ByteSizeLong();
+    // Deliberately use heap-allocation for zero-copy sending
+    char* serialisedMsg = new char[responseSize];
+    // Serialise using protobuf
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    sendResponse(serialisedMsg, responseSize, request.returnhost());
+}
+
+void StateServer::recvPull(const void* data, int size)
+{
     faabric::StateChunkRequest request;
-    while (stream->Read(&request)) {
-        faabric::util::getLogger()->debug("Pull {}/{} ({}->{})",
-                                          request.user(),
-                                          request.key(),
-                                          request.offset(),
-                                          request.offset() +
-                                            request.chunksize());
 
-        // Write the response
-        KV_FROM_REQUEST((&request))
-        faabric::StatePart response;
-
-        uint64_t chunkOffset = request.offset();
-        uint64_t chunkLen = request.chunksize();
-        uint8_t* chunk = kv->getChunk(chunkOffset, chunkLen);
-
-        response.set_user(request.user());
-        response.set_key(request.key());
-        response.set_offset(chunkOffset);
-
-        // TODO: avoid copying here
-        response.set_data(chunk, chunkLen);
-
-        stream->Write(response);
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
     }
 
-    return Status::OK;
+    faabric::util::getLogger()->debug("Pull {}/{} ({}->{})",
+                                      request.user(),
+                                      request.key(),
+                                      request.offset(),
+                                      request.offset() + request.chunksize());
+
+    // Write the response
+    faabric::StatePart response;
+    KV_FROM_REQUEST(request)
+    uint64_t chunkOffset = request.offset();
+    uint64_t chunkLen = request.chunksize();
+    uint8_t* chunk = kv->getChunk(chunkOffset, chunkLen);
+    response.set_user(request.user());
+    response.set_key(request.key());
+    response.set_offset(chunkOffset);
+    // TODO: avoid copying here
+    response.set_data(chunk, chunkLen);
+
+    // Send the response body
+    size_t responseSize = response.ByteSizeLong();
+    // Deliberately use heap-allocation for zero-copy sending
+    char* serialisedMsg = new char[responseSize];
+    // Serialise using protobuf
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    sendResponse(serialisedMsg, responseSize, request.returnhost());
 }
 
-Status StateServer::Push(ServerContext* context,
-                         ServerReader<faabric::StatePart>* reader,
-                         faabric::StateResponse* response)
+void StateServer::recvPush(const void* data, int size)
 {
+    faabric::StatePart stateChunk;
 
-    // Assume user and key are same throughout
-    std::string user;
-    std::string key;
-
-    faabric::StatePart request;
-    while (reader->Read(&request)) {
-        faabric::util::getLogger()->debug("Push {}/{} ({}->{})",
-                                          request.user(),
-                                          request.key(),
-                                          request.offset(),
-                                          request.offset() +
-                                            request.data().size());
-
-        KV_FROM_REQUEST((&request))
-        kv->setChunk(request.offset(),
-                     BYTES_CONST(request.data().c_str()),
-                     request.data().size());
-
-        if (user.empty()) {
-            user = kv->user;
-            key = kv->key;
-        }
+    // Deserialise message string
+    if (!stateChunk.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
     }
 
-    response->set_user(user);
-    response->set_key(key);
+    // Update the KV store
+    faabric::util::getLogger()->debug("Push {}/{} ({}->{})",
+                                      stateChunk.user(),
+                                      stateChunk.key(),
+                                      stateChunk.offset(),
+                                      stateChunk.offset() +
+                                        stateChunk.data().size());
+    KV_FROM_REQUEST(stateChunk)
+    kv->setChunk(stateChunk.offset(),
+                 BYTES_CONST(stateChunk.data().c_str()),
+                 stateChunk.data().size());
 
-    return Status::OK;
+    sendEmptyResponse(stateChunk.returnhost());
 }
 
-Status StateServer::Size(ServerContext* context,
-                         const faabric::StateRequest* request,
-                         faabric::StateSizeResponse* response)
+void StateServer::recvAppend(const void* data, int size)
 {
-    faabric::util::getLogger()->debug(
-      "Size {}/{}", request->user(), request->key());
-    KV_FROM_REQUEST(request)
-    response->set_user(kv->user);
-    response->set_key(kv->key);
-    response->set_statesize(kv->size());
+    faabric::StateRequest request;
 
-    return Status::OK;
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Update the KV
+    KV_FROM_REQUEST(request)
+    auto reqData = BYTES_CONST(request.data().c_str());
+    uint64_t dataLen = request.data().size();
+    kv->append(reqData, dataLen);
+
+    sendEmptyResponse(request.returnhost());
 }
 
-Status StateServer::Append(ServerContext* context,
-                           const faabric::StateRequest* request,
-                           faabric::StateResponse* response)
+void StateServer::recvPullAppended(const void* data, int size)
 {
+    faabric::StateAppendedRequest request;
+
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Prepare response
+    faabric::StateAppendedResponse response;
     faabric::util::getLogger()->debug(
-      "Append {}/{}", request->user(), request->key());
+      "Pull appended {}/{}", request.user(), request.key());
     KV_FROM_REQUEST(request)
-
-    auto data = BYTES_CONST(request->data().c_str());
-    uint64_t dataLen = request->data().size();
-    kv->append(data, dataLen);
-
-    response->set_user(request->user());
-    response->set_key(request->key());
-
-    return Status::OK;
-}
-
-Status StateServer::ClearAppended(ServerContext* context,
-                                  const ::faabric::StateRequest* request,
-                                  faabric::StateResponse* response)
-{
-    faabric::util::getLogger()->debug(
-      "Clear appended {}/{}", request->user(), request->key());
-
-    KV_FROM_REQUEST(request)
-
-    kv->clearAppended();
-
-    return Status::OK;
-}
-
-Status StateServer::PullAppended(grpc::ServerContext* context,
-                                 const ::faabric::StateAppendedRequest* request,
-                                 faabric::StateAppendedResponse* response)
-{
-    faabric::util::getLogger()->debug(
-      "Pull appended {}/{}", request->user(), request->key());
-
-    KV_FROM_REQUEST(request)
-
-    response->set_user(request->user());
-    response->set_key(request->key());
-
-    for (uint32_t i = 0; i < request->nvalues(); i++) {
+    response.set_user(request.user());
+    response.set_key(request.key());
+    for (uint32_t i = 0; i < request.nvalues(); i++) {
         AppendedInMemoryState& value = kv->getAppendedValue(i);
-        auto appendedValue = response->add_values();
+        auto appendedValue = response.add_values();
         appendedValue->set_data(reinterpret_cast<char*>(value.data.get()),
                                 value.length);
     }
 
-    return Status::OK;
+    // Send response
+    size_t responseSize = response.ByteSizeLong();
+    char* serialisedMsg = new char[responseSize];
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    sendResponse(serialisedMsg, responseSize, request.returnhost());
 }
 
-Status StateServer::Lock(grpc::ServerContext* context,
-                         const faabric::StateRequest* request,
-                         faabric::StateResponse* response)
+void StateServer::recvDelete(const void* data, int size)
 {
-    faabric::util::getLogger()->debug(
-      "Lock {}/{}", request->user(), request->key());
+    faabric::StateRequest request;
 
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Delete value
+    faabric::util::getLogger()->debug(
+      "Delete {}/{}", request.user(), request.key());
+    state.deleteKV(request.user(), request.key());
+
+    sendEmptyResponse(request.returnhost());
+}
+
+void StateServer::recvClearAppended(const void* data, int size)
+{
+    faabric::StateRequest request;
+
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Perform operation
+    faabric::util::getLogger()->debug(
+      "Clear appended {}/{}", request.user(), request.key());
+    KV_FROM_REQUEST(request)
+    kv->clearAppended();
+
+    sendEmptyResponse(request.returnhost());
+}
+
+void StateServer::recvLock(const void* data, int size)
+{
+    faabric::StateRequest request;
+
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Perform operation
+    faabric::util::getLogger()->debug(
+      "Lock {}/{}", request.user(), request.key());
     KV_FROM_REQUEST(request)
     kv->lockWrite();
 
-    return Status::OK;
+    sendEmptyResponse(request.returnhost());
 }
 
-Status StateServer::Unlock(grpc::ServerContext* context,
-                           const faabric::StateRequest* request,
-                           faabric::StateResponse* response)
+void StateServer::recvUnlock(const void* data, int size)
 {
-    faabric::util::getLogger()->debug(
-      "Unlock {}/{}", request->user(), request->key());
+    faabric::StateRequest request;
 
+    // Deserialise message string
+    if (!request.ParseFromArray(data, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Perform operation
+    faabric::util::getLogger()->debug(
+      "Unlock {}/{}", request.user(), request.key());
     KV_FROM_REQUEST(request)
     kv->unlockWrite();
 
-    return Status::OK;
-}
-
-Status StateServer::Delete(grpc::ServerContext* context,
-                           const faabric::StateRequest* request,
-                           faabric::StateResponse* response)
-{
-
-    faabric::util::getLogger()->debug(
-      "Delete {}/{}", request->user(), request->key());
-
-    state.deleteKV(request->user(), request->key());
-
-    return Status::OK;
+    sendEmptyResponse(request.returnhost());
 }
 }

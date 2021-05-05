@@ -2,27 +2,28 @@
 
 #include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/transport/SimpleMessageEndpoint.h>
 
 #include <thread>
 
 namespace faabric::transport {
-/* Message endpoint with server-like behaviour
+/* Server handling a long-running 0MQ socket
  *
  * This abstract class implements a server-like loop functionality and will
- * always run in the background.
+ * always run in the background. Note that message endpoints (i.e. 0MQ sockets)
+ * are _not_ thread safe, must be open-ed and close-ed from the _same_ thread,
+ * and thus should preferably live in the thread's local address space.
  */
-class MessageEndpointServer : public faabric::transport::MessageEndpoint
+class MessageEndpointServer
 {
   public:
-    MessageEndpointServer(const std::string& host, int port);
+    MessageEndpointServer(const std::string& hostIn, int portIn);
 
     void start(faabric::transport::MessageContext& context);
 
     void stop(faabric::transport::MessageContext& context);
 
-    // A server expects to receive a multi-part message with header and body.
-    // Thus, we override the default receive behaviour
-    void recv();
+    void recv(faabric::transport::SimpleMessageEndpoint& endpoint);
 
     // Provide another template to receive messages with header and body
     virtual void doRecv(const void* headerBody,
@@ -31,9 +32,9 @@ class MessageEndpointServer : public faabric::transport::MessageEndpoint
                         int bodySize) = 0;
 
   private:
-    std::thread servingThread;
+    const std::string host;
+    const int port;
 
-    // Hint the compiler that we deliberately override doRecv's signature
-    using MessageEndpoint::doRecv;
+    std::thread servingThread;
 };
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/state/StateServer.h>
+#include <faabric/transport/MessageContext.h>
 
 namespace faabric::state {
 class DummyStateServer

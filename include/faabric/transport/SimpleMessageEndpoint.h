@@ -15,6 +15,8 @@ class SimpleMessageEndpoint : public faabric::transport::MessageEndpoint
 
     ~SimpleMessageEndpoint();
 
+    void close();
+
     void recv(char*& msgData, int& msgSize);
 
   private:

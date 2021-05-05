@@ -39,12 +39,13 @@ class MessageEndpoint
 
     void recv();
 
+    std::unique_ptr<zmq::socket_t> socket;
+
   protected:
     const std::string host;
     const int port;
+    int id;
 
     virtual void doRecv(void* msgData, int size) = 0;
-
-    std::unique_ptr<zmq::socket_t> socket;
 };
 }

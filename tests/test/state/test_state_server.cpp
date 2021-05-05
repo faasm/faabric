@@ -52,6 +52,11 @@ TEST_CASE("Test request/ response", "[state]")
 {
     setUpStateMode();
 
+    // Create server
+    StateServer s(getGlobalState());
+    s.start();
+    usleep(1000 * 100);
+
     std::vector<uint8_t> actual(dataA.size(), 0);
 
     // Prepare a key-value with data
@@ -66,12 +71,6 @@ TEST_CASE("Test request/ response", "[state]")
     auto kvADuplicate =
       InMemoryStateKeyValue(userA, keyA, dataB.size(), thisIP);
     kvADuplicate.set(dataB.data());
-
-    // Create server
-    ServerContext serverContext;
-    StateServer s(getGlobalState());
-    s.start();
-    usleep(1000 * 100);
 
     StateClient client(userA, keyA, DEFAULT_RPC_HOST);
 
@@ -95,6 +94,7 @@ TEST_CASE("Test request/ response", "[state]")
         std::vector<StateChunk> chunks = { chunkA, chunkB, chunkC };
         std::vector<uint8_t> expected = { 0, 1, 2, 3, 4, 5, 0, 7 };
         client.pullChunks(chunks, actual.data());
+        REQUIRE(actual == expected);
     }
 
     SECTION("State push multi chunk")
@@ -134,6 +134,9 @@ TEST_CASE("Test request/ response", "[state]")
 
         REQUIRE(actualAppended == expected);
     }
+
+    // Close the state client
+    client.close();
 
     s.stop();
 

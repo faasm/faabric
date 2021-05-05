@@ -169,6 +169,7 @@ message StateRequest {
     string user = 1;
     string key = 2;
     bytes data = 3;
+    string returnHost = 4;
 }
 
 message StateChunkRequest {
@@ -176,6 +177,7 @@ message StateChunkRequest {
     string key = 2;
     uint64 offset = 3;
     uint64 chunkSize = 4;
+    string returnHost = 5;
 }
 
 message StateResponse {
@@ -189,6 +191,7 @@ message StatePart {
     string key = 2;
     uint64 offset = 3;
     bytes data = 4;
+    string returnHost = 5;
 }
 
 message StateSizeResponse {
@@ -201,6 +204,7 @@ message StateAppendedRequest {
     string user = 1;
     string key = 2;
     uint32 nValues = 3;
+    string returnHost = 4;
 }
 
 message StateAppendedResponse {

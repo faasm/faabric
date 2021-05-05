@@ -117,6 +117,8 @@ ExternalProject_Add(cppzeromq_ext
     GIT_TAG "faasm"
 )
 add_dependencies(cppzeromq_ext libzeromq_ext)
+ExternalProject_Get_Property(cppcodec_ext SOURCE_DIR)
+set(ZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
 
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/scheduler/ExecGraph.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/transport/MessageContext.h>
 
@@ -112,6 +113,11 @@ class Scheduler
       queueMap;
     std::unordered_map<std::string, long> faasletCounts;
     std::unordered_map<std::string, long> inFlightCounts;
+
+    std::unordered_map<std::string, faabric::scheduler::FunctionCallClient>
+      functionCallClients;
+    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+      const std::string& otherHost);
 
     faabric::HostResources thisHostResources;
     std::unordered_map<std::string, std::unordered_set<std::string>>

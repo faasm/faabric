@@ -34,6 +34,7 @@ function(faabric_lib lib_name lib_deps)
         PUBLIC ${SPDLOG_INCLUDE_DIR}
         PUBLIC ${RAPIDJSON_INCLUDE_DIR}
         PUBLIC ${CPPCODEC_INCLUDE_DIR}
+        PUBLIC ${ZEROMQ_INCLUDE_DIR}
         )
 
     # Object library for bundling everything together (should have the same
@@ -45,6 +46,7 @@ function(faabric_lib lib_name lib_deps)
         PUBLIC ${SPDLOG_INCLUDE_DIR}
         PUBLIC ${RAPIDJSON_INCLUDE_DIR}
         PUBLIC ${CPPCODEC_INCLUDE_DIR}
+        PUBLIC ${ZEROMQ_INCLUDE_DIR}
         )
 
     target_link_libraries(${lib_name}_obj ${lib_name})

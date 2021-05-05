@@ -3,126 +3,201 @@
 #include <faabric/rpc/macros.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
-#include <grpcpp/create_channel.h>
-#include <grpcpp/security/credentials.h>
 
 namespace faabric::state {
-ChannelArguments getChannelArgs()
-{
-    ChannelArguments channelArgs;
-
-    // Can set channel properties here if need be
-
-    return channelArgs;
-}
-
 StateClient::StateClient(const std::string& userIn,
                          const std::string& keyIn,
                          const std::string& hostIn)
-  : user(userIn)
+  : faabric::transport::MessageEndpoint(hostIn, STATE_PORT)
+  , user(userIn)
   , key(keyIn)
   , host(hostIn)
   , reg(state::getInMemoryStateRegistry())
-  , channel(grpc::CreateCustomChannel(host + ":" + std::to_string(STATE_PORT),
-                                      grpc::InsecureChannelCredentials(),
-                                      getChannelArgs()))
-  , stub(faabric::StateRPCService::NewStub(channel))
-{}
-
-void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
 {
-    faabric::StateResponse response;
-    ClientContext clientContext;
-    auto stream = stub->Push(&clientContext, &response);
-
-    for (auto chunk : chunks) {
-        faabric::StatePart c;
-        c.set_user(user);
-        c.set_key(key);
-        c.set_offset(chunk.offset);
-        c.set_data(chunk.data, chunk.length);
-
-        if (!stream->Write(c)) {
-            break;
-        };
-    }
-
-    stream->WritesDone();
-
-    CHECK_RPC("push_chunks", stream->Finish());
+    this->open(faabric::transport::getGlobalMessageContext(),
+               faabric::transport::SocketType::PUSH,
+               false);
 }
 
+StateClient::~StateClient()
+{
+    this->close();
+}
+
+void StateClient::close()
+{
+    MessageEndpoint::close();
+}
+
+void StateClient::sendHeader(faabric::state::StateCalls call)
+{
+    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
+    int functionNum = static_cast<int>(call);
+    size_t headerSize = sizeof(faabric::state::StateCalls);
+    char* header = new char[headerSize];
+    memcpy(header, &functionNum, headerSize);
+    // Mark that we are sending more messages
+    send(header, headerSize, true);
+}
+
+// Block until call finishes, but ignore response
+void StateClient::awaitResponse()
+{
+    char* data;
+    int size;
+    awaitResponse(data, size);
+}
+
+// Block until we receive a response from the server
+void StateClient::awaitResponse(char*& data, int& size)
+{
+    // Wait for the response, open a temporary endpoint for it
+    // Note - we use a different host/port not to clash with existing server
+    faabric::transport::SimpleMessageEndpoint endpoint(
+      faabric::util::getSystemConfig().endpointHost,
+      STATE_PORT + REPLY_PORT_OFFSET);
+    // Open the socket, client does not bind
+    endpoint.open(faabric::transport::getGlobalMessageContext(),
+                  faabric::transport::SocketType::PULL,
+                  false);
+    endpoint.recv(data, size);
+    endpoint.close();
+}
+
+void StateClient::sendStateRequest(bool expectReply)
+{
+    sendStateRequest(nullptr, 0, expectReply);
+}
+
+void StateClient::sendStateRequest(const uint8_t* data,
+                                   int length,
+                                   bool expectReply)
+{
+    faabric::StateRequest request;
+    request.set_user(user);
+    request.set_key(key);
+    if (length > 0) {
+        request.set_data(data, length);
+    }
+    request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+    size_t requestSize = request.ByteSizeLong();
+    char* serialisedMsg = new char[requestSize];
+    // Serialise using protobuf
+    if (!request.SerializeToArray(serialisedMsg, requestSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    send(serialisedMsg, requestSize);
+}
+
+/* Note - this was a streaming RPC that we now turn into a series of consecutive
+ * pull requests to the server.
+ */
+void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
+{
+    for (const auto& chunk : chunks) {
+        // Send the header first
+        sendHeader(faabric::state::StateCalls::Push);
+
+        faabric::StatePart stateChunk;
+        stateChunk.set_user(user);
+        stateChunk.set_key(key);
+        stateChunk.set_offset(chunk.offset);
+        stateChunk.set_data(chunk.data, chunk.length);
+        stateChunk.set_returnhost(
+          faabric::util::getSystemConfig().endpointHost);
+        size_t chunkSize = stateChunk.ByteSizeLong();
+        char* serialisedMsg = new char[chunkSize];
+        // Serialise using protobuf
+        if (!stateChunk.SerializeToArray(serialisedMsg, chunkSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        send(serialisedMsg, chunkSize);
+
+        // Await for a response
+        awaitResponse();
+    }
+}
+
+/* Note - this was a streaming RPC that we now turn into a series of consecutive
+ * pull requests to the server.
+ */
 void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
                              uint8_t* bufferStart)
 {
-    ClientContext context;
-    auto stream = stub->Pull(&context);
+    for (const auto& chunk : chunks) {
+        // Send the header first
+        sendHeader(faabric::state::StateCalls::Pull);
 
-    // Writer thread in background
-    std::thread writer([this, &chunks, &stream] {
-        for (const auto& chunk : chunks) {
-            faabric::StateChunkRequest request;
-            request.set_user(user);
-            request.set_key(key);
-            request.set_offset(chunk.offset);
-            request.set_chunksize(chunk.length);
-
-            if (!stream->Write(request)) {
-                faabric::util::getLogger()->error(
-                  "Failed to request {}/{} ({} -> {})",
-                  user,
-                  key,
-                  chunk.offset,
-                  chunk.offset + chunk.length);
-                break;
-            }
+        // Prepare request
+        faabric::StateChunkRequest request;
+        request.set_user(user);
+        request.set_key(key);
+        request.set_offset(chunk.offset);
+        request.set_chunksize(chunk.length);
+        request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+        size_t requestSize = request.ByteSizeLong();
+        char* serialisedMsg = new char[requestSize];
+        // Serialise using protobuf
+        if (!request.SerializeToArray(serialisedMsg, requestSize)) {
+            throw std::runtime_error("Error serialising message");
         }
+        send(serialisedMsg, requestSize);
 
-        stream->WritesDone();
-    });
-
-    // Read responses in this thread
-    faabric::StatePart response;
-    while (stream->Read(&response)) {
+        // Receive message
+        char* msgData;
+        int size;
+        awaitResponse(msgData, size);
+        faabric::StatePart response;
+        if (!response.ParseFromArray(msgData, size)) {
+            throw std::runtime_error("Error deserialising message");
+        }
         std::copy(response.data().begin(),
                   response.data().end(),
                   bufferStart + response.offset());
     }
-
-    // Wait for the writer thread
-    if (writer.joinable()) {
-        writer.join();
-    }
-
-    CHECK_RPC("pull_chunks", stream->Finish())
 }
 
 void StateClient::append(const uint8_t* data, size_t length)
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send the header first
+    sendHeader(faabric::state::StateCalls::Append);
 
-    request.set_user(user);
-    request.set_key(key);
-    request.set_data(data, length);
+    // Send request
+    sendStateRequest(data, length);
 
-    ClientContext context;
-    CHECK_RPC("state_append", stub->Append(&context, request, &response))
+    // Await for response to finish
+    awaitResponse();
 }
 
 void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 {
-    faabric::StateAppendedRequest request;
-    faabric::StateAppendedResponse response;
+    // Send the header first
+    sendHeader(faabric::state::StateCalls::PullAppended);
 
+    // Prepare request
+    faabric::StateAppendedRequest request;
     request.set_user(user);
     request.set_key(key);
     request.set_nvalues(nValues);
+    request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+    size_t requestSize = request.ByteSizeLong();
+    char* serialisedMsg = new char[requestSize];
+    // Serialise using protobuf
+    if (!request.SerializeToArray(serialisedMsg, requestSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    send(serialisedMsg, requestSize);
 
-    ClientContext context;
-    CHECK_RPC("state_pull_appended",
-              stub->PullAppended(&context, request, &response))
+    // Receive response
+    faabric::StateAppendedResponse response;
+    char* msgData;
+    int size;
+    awaitResponse(msgData, size);
+    if (!response.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
 
+    // Process response
     size_t offset = 0;
     for (auto& value : response.values()) {
         if (offset > length) {
@@ -143,62 +218,78 @@ void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 
 void StateClient::clearAppended()
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send the header first
+    sendHeader(faabric::state::StateCalls::ClearAppended);
 
-    request.set_user(user);
-    request.set_key(key);
+    // Send request
+    sendStateRequest();
 
-    ClientContext context;
-    CHECK_RPC("state_clear_appended",
-              stub->ClearAppended(&context, request, &response))
+    // Await for response to finish
+    awaitResponse();
 }
 
 size_t StateClient::stateSize()
 {
-    faabric::StateRequest request;
-    request.set_user(user);
-    request.set_key(key);
+    // Send the header first
+    sendHeader(faabric::state::StateCalls::Size);
+
+    // Include the return address in the message body
+    sendStateRequest(true);
 
     faabric::StateSizeResponse response;
-    ClientContext context;
-    CHECK_RPC("state_size", stub->Size(&context, request, &response))
+    // Receive message
+    char* msgData;
+    int size;
+    awaitResponse(msgData, size);
+    if (!response.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
     return response.statesize();
 }
 
 void StateClient::deleteState()
 {
-    faabric::StateRequest request;
+    // Send the header first
+    sendHeader(faabric::state::StateCalls::Delete);
+
+    // Send request
+    sendStateRequest(true);
+
+    // Wait for the response
     faabric::StateResponse response;
-
-    request.set_user(user);
-    request.set_key(key);
-
-    ClientContext context;
-    CHECK_RPC("state_delete", stub->Delete(&context, request, &response))
+    char* msgData;
+    int size;
+    awaitResponse(msgData, size);
+    if (!response.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
 }
 
 void StateClient::lock()
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send the header first
+    sendHeader(faabric::state::StateCalls::Lock);
 
-    request.set_user(user);
-    request.set_key(key);
+    // Send request
+    sendStateRequest();
 
-    ClientContext context;
-    CHECK_RPC("state_lock", stub->Lock(&context, request, &response))
+    // Await for response to finish
+    awaitResponse();
 }
 
 void StateClient::unlock()
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send the header first
+    sendHeader(faabric::state::StateCalls::Unlock);
 
-    request.set_user(user);
-    request.set_key(key);
+    sendStateRequest();
 
-    ClientContext context;
-    CHECK_RPC("state_unlock", stub->Unlock(&context, request, &response))
+    // Await for response to finish
+    awaitResponse();
+}
+
+void StateClient::doRecv(void* msgData, int size)
+{
+    throw std::runtime_error("Calling recv from a producer client.");
 }
 }

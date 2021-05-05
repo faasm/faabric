@@ -1,62 +1,46 @@
 #pragma once
 
-#include <faabric/state/State.h>
-
-#include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/rpc/RPCServer.h>
-
-using namespace grpc;
+#include <faabric/state/State.h>
+#include <faabric/state/StateCommon.h>
+#include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::state {
-class StateServer final
-  : public rpc::RPCServer
-  , public faabric::StateRPCService::Service
+class StateServer final : public faabric::transport::MessageEndpointServer
 {
   public:
     explicit StateServer(State& stateIn);
 
-    Status Pull(
-      ServerContext* context,
-      ServerReaderWriter<faabric::StatePart, faabric::StateChunkRequest>*
-        stream) override;
-
-    Status Push(ServerContext* context,
-                ServerReader<faabric::StatePart>* reader,
-                faabric::StateResponse* response) override;
-
-    Status Size(ServerContext* context,
-                const faabric::StateRequest* request,
-                faabric::StateSizeResponse* response) override;
-
-    Status Append(ServerContext* context,
-                  const faabric::StateRequest* request,
-                  faabric::StateResponse* response) override;
-
-    Status ClearAppended(ServerContext* context,
-                         const ::faabric::StateRequest* request,
-                         faabric::StateResponse* response) override;
-
-    Status PullAppended(grpc::ServerContext* context,
-                        const ::faabric::StateAppendedRequest* request,
-                        faabric::StateAppendedResponse* response) override;
-
-    Status Lock(grpc::ServerContext* context,
-                const faabric::StateRequest* request,
-                faabric::StateResponse* response) override;
-
-    Status Unlock(grpc::ServerContext* context,
-                  const faabric::StateRequest* request,
-                  faabric::StateResponse* response) override;
-
-    Status Delete(grpc::ServerContext* context,
-                  const faabric::StateRequest* request,
-                  faabric::StateResponse* response) override;
-
-  protected:
-    void doStart(const std::string& serverAddr) override;
-
   private:
     State& state;
+
+    void doRecv(const void* headerData,
+                int headerSize,
+                const void* bodyData,
+                int bodySize) override;
+
+    void sendEmptyResponse(const std::string& returnHost);
+
+    void sendResponse(char* serialisedMsg,
+                      int size,
+                      const std::string& returnHost);
+
+    void recvSize(const void* data, int size);
+
+    void recvPull(const void* data, int size);
+
+    void recvPush(const void* data, int size);
+
+    void recvAppend(const void* data, int size);
+
+    void recvPullAppended(const void* data, int size);
+
+    void recvClearAppended(const void* data, int size);
+
+    void recvDelete(const void* data, int size);
+
+    void recvLock(const void* data, int size);
+
+    void recvUnlock(const void* data, int size);
 };
 }

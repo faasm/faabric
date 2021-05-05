@@ -245,5 +245,7 @@ class MpiWorld
     void checkRankOnThisHost(int rank);
 
     void pushToState();
+
+    void clearTLS();
 };
 }

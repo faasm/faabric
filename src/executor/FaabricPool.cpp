@@ -19,7 +19,7 @@ void FaabricPool::startFunctionCallServer()
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     logger->info("Starting function call server");
-    functionServer.start(faabric::transport::getGlobalMessageContext());
+    functionServer.start();
 }
 
 void FaabricPool::startSnapshotServer()
@@ -42,7 +42,6 @@ void FaabricPool::startStateServer()
 
     // Note that the state server spawns its own background thread
     logger->info("Starting state server");
-    // stateServer.start(faabric::transport::getGlobalMessageContext());
     stateServer.start();
 }
 
@@ -127,11 +126,10 @@ void FaabricPool::shutdown()
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     logger->info("Waiting for the state server to finish");
-    // stateServer.stop(faabric::transport::getGlobalMessageContext());
     stateServer.stop();
 
     logger->info("Waiting for the function server to finish");
-    functionServer.stop(faabric::transport::getGlobalMessageContext());
+    functionServer.stop();
 
     if (poolThread.joinable()) {
         logger->info("Waiting for pool to finish");

@@ -5,6 +5,7 @@
 #include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/SimpleMessageEndpoint.h>
+#include <faabric/util/config.h>
 
 namespace faabric::scheduler {
 
@@ -58,10 +59,10 @@ class FunctionCallClient : faabric::transport::MessageEndpoint
     void unregister(const faabric::UnregisterRequest& req);
 
   private:
-    const std::string otherHost;
-
     void doRecv(void* msgData, int size) override;
 
     void sendHeader(faabric::scheduler::FunctionCalls call);
+
+    void awaitResponse(char* data, int& size);
 };
 }
