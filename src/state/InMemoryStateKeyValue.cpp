@@ -1,5 +1,4 @@
 #include <faabric/state/InMemoryStateKeyValue.h>
-#include <faabric/transport/MessageContext.h>
 
 #include <cstdio>
 

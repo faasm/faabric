@@ -62,8 +62,6 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
-    void awaitResponse();
-
     void awaitResponse(char*& data, int& size);
 };
 }

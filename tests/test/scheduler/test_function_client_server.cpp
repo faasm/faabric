@@ -117,6 +117,7 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     // Send flush message
     FunctionCallClient cli(LOCALHOST);
     cli.sendFlush();
+    usleep(1000 * 100);
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);

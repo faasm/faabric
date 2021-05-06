@@ -257,22 +257,6 @@ std::vector<std::string> Scheduler::callFunctions(
             executed.at(i) = thisHost;
         }
     } else {
-/*
-<<<<<<< HEAD
-        // If we're not the master host, we need to forward the request back to
-        // the master host. This will only happen if a nested batch execution
-        // happens.
-        if (masterHost != thisHost) {
-            logger->debug("Forwarding {} {} back to master {}",
-                          nMessages,
-                          funcStr,
-                          masterHost);
-
-            getFunctionCallClient(masterHost).executeFunctions(req);
-        } else {
-            // At this point we know we're the master host, and we've not been
-            // asked to force full local execution.
-*/
         // At this point we know we're the master host, and we've not been
         // asked to force full local execution.
 

@@ -4,9 +4,9 @@
 #include <faabric/transport/common.h>
 
 namespace faabric::transport {
-/* Simple message endpoint implementation
+/* Minimal message endpoint client
  *
- * Low-level and simple message endpoint to run outstanding connections together
+ * Low-level and minimal message endpoint client to run in companion with
  * with higher-level client/server pairs.
  */
 class MessageEndpointClient : public faabric::transport::MessageEndpoint
@@ -18,6 +18,12 @@ class MessageEndpointClient : public faabric::transport::MessageEndpoint
 
     void recv(char*& msgData, int& msgSize);
 
+    /* Wait for a message
+     *
+     * This method blocks the calling thread until we receive a message from
+     * the specified host:port pair. When pointed at a server, this method
+     * allows for blocking communications.
+     */
     void awaitResponse(const std::string& host,
                        int port,
                        char*& data,

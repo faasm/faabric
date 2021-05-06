@@ -239,9 +239,7 @@ class MpiWorld
 
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
-    // std::unordered_map<std::string, faabric::scheduler::FunctionCallClient>
-    // remoteEndpoints;
-    faabric::scheduler::FunctionCallClient& getRemoteEndpoint(
+    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
     void checkRankOnThisHost(int rank);

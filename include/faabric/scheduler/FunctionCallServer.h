@@ -23,14 +23,6 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    /* Send ACK to the client
-     *
-     * This method is used by calls that want to block, but have no return
-     * value. Together with a blocking receive from the client, receiving this
-     * message ACKs the remote call.
-     */
-    void sendEmptyResponse(const std::string& returnHost);
-
     void doRecv(const void* headerData,
                 int headerSize,
                 const void* bodyData,

@@ -1,5 +1,4 @@
 #include <faabric/transport/MessageEndpointServer.h>
-#include <faabric/util/logging.h>
 
 // Defined in libzmq/include/zmq.h (156384765)
 #define ZMQ_ETERM ETERM

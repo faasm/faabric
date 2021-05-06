@@ -121,13 +121,6 @@ void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
     send(header, headerSize, true);
 }
 
-void FunctionCallClient::awaitResponse()
-{
-    char* data;
-    int size;
-    awaitResponse(data, size);
-}
-
 void FunctionCallClient::awaitResponse(char*& data, int& size)
 {
     // Call the superclass implementation
@@ -156,8 +149,6 @@ void FunctionCallClient::sendFlush()
             throw std::runtime_error("Error serialising message");
         }
         send(serialisedMsg, msgSize);
-
-        awaitResponse();
     }
 }
 
@@ -214,6 +205,7 @@ faabric::HostResources FunctionCallClient::getResources()
         if (!response.ParseFromArray(msgData, size)) {
             throw std::runtime_error("Error deserialising message");
         }
+        delete msgData;
     }
 
     return response;

@@ -11,7 +11,7 @@
 
 namespace faabric::scheduler {
 SnapshotServer::SnapshotServer()
-  : RPCServer(DEFAULT_RPC_HOST, SNAPSHOT_RPC_PORT)
+  : RPCServer(DEFAULT_SNAPSHOT_HOST, SNAPSHOT_RPC_PORT)
 {}
 
 void SnapshotServer::doStart(const std::string& serverAddr)

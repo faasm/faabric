@@ -13,7 +13,7 @@
 
 namespace faabric::state {
 StateServer::StateServer(State& stateIn)
-  : faabric::transport::MessageEndpointServer(DEFAULT_RPC_HOST, STATE_PORT)
+  : faabric::transport::MessageEndpointServer(DEFAULT_STATE_HOST, STATE_PORT)
   , state(stateIn)
 {}
 

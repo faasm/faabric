@@ -9,7 +9,7 @@
 
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
-  : faabric::transport::MessageEndpointServer(DEFAULT_RPC_HOST,
+  : faabric::transport::MessageEndpointServer(DEFAULT_FUNCTION_CALL_HOST,
                                               FUNCTION_CALL_PORT)
   , scheduler(getScheduler())
 {}
@@ -21,18 +21,6 @@ void FunctionCallServer::stop()
 
     // Call the parent stop
     MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
-}
-
-// Send empty response notifying we are done
-void FunctionCallServer::sendEmptyResponse(const std::string& returnHost)
-{
-    faabric::EmptyResponse response;
-    size_t responseSize = response.ByteSizeLong();
-    char* serialisedMsg = new char[responseSize];
-    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
-        throw std::runtime_error("Error serialising message");
-    }
-    sendResponse(serialisedMsg, responseSize, returnHost, FUNCTION_CALL_PORT);
 }
 
 void FunctionCallServer::doRecv(const void* headerData,
@@ -97,9 +85,6 @@ void FunctionCallServer::recvFlush(const void* msgData, int size)
 
     // Reset the scheduler
     scheduler.reset();
-
-    // Send response notifying we are done
-    sendEmptyResponse(request.returnhost());
 }
 
 void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
@@ -170,19 +155,4 @@ void FunctionCallServer::recvSetThreadResult(const void* msgData, int size)
 
     scheduler.setThreadResult(request.messageid(), request.returnvalue());
 }
-/*
-Status FunctionCallServer::SetThreadResult(
-  ServerContext* context,
-  const faabric::ThreadResultRequest* request,
-  faabric::FunctionStatusResponse* response)
-{
-    faabric::util::getLogger()->info("Setting thread {} result to {}",
-                                     request->messageid(),
-                                     request->returnvalue());
-
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResult(request->messageid(), request->returnvalue());
-
-    return Status::OK;
-*/
 }

@@ -14,7 +14,7 @@
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
 static thread_local std::unordered_map<std::string,
                                        faabric::scheduler::FunctionCallClient>
-  remoteEndpoints;
+  functionCallClients;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -72,13 +72,13 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
     return state.getKV(user, stateKey, MPI_HOST_STATE_LEN);
 }
 
-faabric::scheduler::FunctionCallClient& MpiWorld::getRemoteEndpoint(
+faabric::scheduler::FunctionCallClient& MpiWorld::getFunctionCallClient(
   const std::string& otherHost)
 {
-    auto it = remoteEndpoints.find(otherHost);
-    if (it == remoteEndpoints.end()) {
+    auto it = functionCallClients.find(otherHost);
+    if (it == functionCallClients.end()) {
         // The second argument is forwarded to the client's constructor
-        auto _it = remoteEndpoints.try_emplace(otherHost, otherHost);
+        auto _it = functionCallClients.try_emplace(otherHost, otherHost);
         if (!_it.second) {
             throw std::runtime_error("Error inserting remote endpoint");
         }
@@ -169,10 +169,10 @@ void MpiWorld::closeFunctionCallClients()
 void MpiWorld::clearTLS()
 {
     // Close all open sockets
-    for (auto& s : remoteEndpoints) {
+    for (auto& s : functionCallClients) {
         s.second.close();
     }
-    remoteEndpoints.clear();
+    functionCallClients.clear();
 }
 
 void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
@@ -478,7 +478,7 @@ void MpiWorld::send(int sendRank,
         }
     } else {
         logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
-        getRemoteEndpoint(otherHost).sendMPIMessage(m);
+        getFunctionCallClient(otherHost).sendMPIMessage(m);
     }
 }
 

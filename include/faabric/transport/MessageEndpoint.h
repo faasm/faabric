@@ -17,6 +17,10 @@ enum class SocketType
 
 /* Wrapper arround zmq::socket_t
  *
+ * Thread-unsafe socket-like object. MUST be open-ed and close-ed from the
+ * _same_ thread. For a proto://host:pair triple, one socket may bind, and all
+ * the rest must connect. Order does not matter. Sockets either send (PUSH)
+ * or recv (PULL) data.
  */
 class MessageEndpoint
 {

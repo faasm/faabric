@@ -76,9 +76,6 @@ void StateClient::sendStateRequest(const uint8_t* data,
     send(serialisedMsg, requestSize);
 }
 
-/* Note - this was a streaming RPC that we now turn into a series of consecutive
- * pull requests to the server.
- */
 void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
 {
     for (const auto& chunk : chunks) {
@@ -105,9 +102,6 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
     }
 }
 
-/* Note - this was a streaming RPC that we now turn into a series of consecutive
- * pull requests to the server.
- */
 void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
                              uint8_t* bufferStart)
 {
@@ -268,11 +262,4 @@ void StateClient::unlock()
     // Await for response to finish
     awaitResponse();
 }
-
-/*
-void StateClient::doRecv(void* msgData, int size)
-{
-    throw std::runtime_error("Calling recv from a producer client.");
-}
-*/
 }
