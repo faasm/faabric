@@ -23,9 +23,8 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     cleanFaabric();
 
     // Start the server
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
     // Create an MPI world on this host and one on a "remote" host
@@ -33,14 +32,18 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
 
     const char* user = "mpi";
     const char* func = "hellompi";
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
     int worldId = 123;
     int worldSize = 2;
+    faabric::Message msg;
+    msg.set_user("mpi");
+    msg.set_function("hellompi");
+    msg.set_mpiworldid(123);
+    msg.set_mpiworldsize(2);
+    faabric::util::messageFactory(user, func);
 
     scheduler::MpiWorldRegistry& registry = getMpiWorldRegistry();
-    scheduler::MpiWorld& localWorld = registry.createWorld(msg, worldId);
-    localWorld.overrideHost(LOCALHOST);
-    localWorld.create(msg, worldId, worldSize);
+    scheduler::MpiWorld& localWorld =
+      registry.createWorld(msg, worldId, LOCALHOST);
 
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
@@ -59,7 +62,7 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     mpiMsg.set_destination(rankLocal);
 
     // Send the message
-    FunctionCallClient cli(context, LOCALHOST);
+    FunctionCallClient cli(LOCALHOST);
     cli.sendMPIMessage(std::make_shared<faabric::MPIMessage>(mpiMsg));
     usleep(1000 * 100);
 
@@ -67,15 +70,20 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     std::shared_ptr<InMemoryMpiQueue> queue =
       localWorld.getLocalQueue(rankRemote, rankLocal);
     REQUIRE(queue->size() == 1);
-    const std::shared_ptr<faabric::MPIMessage> actualMessage = queue->dequeue();
+    const std::shared_ptr<faabric::MPIMessage> actualMessage =
+      queue->dequeue();
 
     REQUIRE(actualMessage->worldid() == worldId);
     REQUIRE(actualMessage->sender() == rankRemote);
 
-    // First close the client
+    // First close the client and the worlds
     cli.close();
+
+    localWorld.closeFunctionCallClients();
+    remoteWorld.closeFunctionCallClients();
+
     // Stop the server and messaging context
-    server.stop(context);
+    server.stop();
 }
 
 TEST_CASE("Test sending flush message", "[scheduler]")
@@ -83,9 +91,8 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     cleanFaabric();
 
     // Start the server
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
     // Set up some state
@@ -128,7 +135,7 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     });
 
     // Send flush message
-    FunctionCallClient cli(context, LOCALHOST);
+    FunctionCallClient cli(LOCALHOST);
     cli.sendFlush();
 
     // Wait for thread to get flush message
@@ -140,16 +147,16 @@ TEST_CASE("Test sending flush message", "[scheduler]")
         tB.join();
     }
 
-    // Close the client, and then stop the server
-    cli.close();
-    server.stop(context);
-
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msgB) == 0);
 
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);
+
+    // Close the client, and then stop the server
+    cli.close();
+    server.stop();
 }
 
 TEST_CASE("Test broadcasting flush message", "[scheduler]")
@@ -183,6 +190,8 @@ TEST_CASE("Test broadcasting flush message", "[scheduler]")
     }
 
     faabric::util::setMockMode(false);
+
+    sch.closeFunctionCallClients();
 }
 
 TEST_CASE("Test client batch execution request", "[scheduler]")
@@ -190,9 +199,8 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     cleanFaabric();
 
     // Start the server
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
     // Set up a load of calls
@@ -205,14 +213,14 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
 
     // Make the request
     faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
-    FunctionCallClient cli(context, LOCALHOST);
+    FunctionCallClient cli(LOCALHOST);
     cli.executeFunctions(req);
     usleep(1000 * 100);
 
     // Close the client
     cli.close();
     // Stop the server
-    server.stop(context);
+    server.stop();
 
     faabric::Message m = msgs.at(0);
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
@@ -259,14 +267,13 @@ TEST_CASE("Test get resources request", "[scheduler]")
     }
 
     // Start the server
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
     // Make the request
     faabric::ResourceRequest req;
-    FunctionCallClient cli(context, LOCALHOST);
+    FunctionCallClient cli(LOCALHOST);
     faabric::HostResources resResponse = cli.getResources(req);
 
     REQUIRE(resResponse.boundexecutors() == expectedExecutors);
@@ -276,7 +283,7 @@ TEST_CASE("Test get resources request", "[scheduler]")
     // Close the client
     cli.close();
     // Stop the server
-    server.stop(context);
+    server.stop();
 }
 
 TEST_CASE("Test unregister request", "[scheduler]")
@@ -307,9 +314,8 @@ TEST_CASE("Test unregister request", "[scheduler]")
     faabric::scheduler::clearMockRequests();
 
     // Start the server
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
     // Make the request with a host that's not registered
@@ -317,7 +323,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     reqA.set_host("foobar");
     *reqA.mutable_function() = msg;
 
-    FunctionCallClient cli(context, LOCALHOST);
+    FunctionCallClient cli(LOCALHOST);
     cli.unregister(reqA);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
@@ -331,6 +337,6 @@ TEST_CASE("Test unregister request", "[scheduler]")
 
     // Stop the server
     cli.close();
-    server.stop(context);
+    server.stop();
 }
 }

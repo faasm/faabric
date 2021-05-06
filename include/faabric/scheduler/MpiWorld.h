@@ -47,6 +47,8 @@ class MpiWorld
 
     void destroy();
 
+    void closeFunctionCallClients();
+
     void enqueueMessage(faabric::MPIMessage& msg);
 
     void getCartesianRank(int rank,

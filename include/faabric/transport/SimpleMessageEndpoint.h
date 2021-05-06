@@ -1,5 +1,6 @@
 #pragma once
 
+#include <faabric/transport/common.h>
 #include <faabric/transport/MessageEndpoint.h>
 
 namespace faabric::transport {
@@ -18,6 +19,8 @@ class SimpleMessageEndpoint : public faabric::transport::MessageEndpoint
     void close();
 
     void recv(char*& msgData, int& msgSize);
+
+    void awaitResponse(const std::string& host, int port, char*& data, int& size);
 
   private:
     char* msgData;

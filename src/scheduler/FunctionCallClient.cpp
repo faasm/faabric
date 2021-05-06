@@ -84,19 +84,12 @@ void clearMockRequests()
 // -----------------------------------
 // Message Client
 // -----------------------------------
-
-// TODO - remove this constructor?
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpoint(hostIn, FUNCTION_CALL_PORT)
-{}
-
-FunctionCallClient::FunctionCallClient(
-  faabric::transport::MessageContext& context,
-  const std::string& hostIn)
-  : faabric::transport::MessageEndpoint(hostIn, FUNCTION_CALL_PORT)
-  , otherHost(hostIn)
+  : faabric::transport::SimpleMessageEndpoint(hostIn, FUNCTION_CALL_PORT)
 {
-    this->open(context, faabric::transport::SocketType::PUSH, false);
+    this->open(faabric::transport::getGlobalMessageContext(),
+               faabric::transport::SocketType::PUSH,
+               false);
 }
 
 FunctionCallClient::~FunctionCallClient()
@@ -108,7 +101,7 @@ FunctionCallClient::~FunctionCallClient()
 
 void FunctionCallClient::close()
 {
-    MessageEndpoint::close();
+    SimpleMessageEndpoint::close();
 }
 
 void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
@@ -122,16 +115,36 @@ void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
     send(header, headerSize, true);
 }
 
+void FunctionCallClient::awaitResponse()
+{
+    char* data;
+    int size;
+    awaitResponse(data, size);
+}
+
+void FunctionCallClient::awaitResponse(char*& data, int& size)
+{
+    // Call the superclass implementation
+    SimpleMessageEndpoint::awaitResponse(faabric::util::getSystemConfig().endpointHost,
+                                         FUNCTION_CALL_PORT + REPLY_PORT_OFFSET,
+                                         data,
+                                         size);
+}
+
+
 void FunctionCallClient::sendFlush()
 {
-    faabric::Message call;
     if (faabric::util::isMockMode()) {
+        faabric::Message call;
         flushCalls.emplace_back(host, call);
     } else {
+        faabric::ResponseRequest call;
+
         // Send the header first
         sendHeader(faabric::scheduler::FunctionCalls::Flush);
 
         // Send the message body
+        call.set_returnhost(faabric::util::getSystemConfig().endpointHost);
         size_t msgSize = call.ByteSizeLong();
         char* serialisedMsg = new char[msgSize];
         // Serialise using protobuf
@@ -139,6 +152,8 @@ void FunctionCallClient::sendFlush()
             throw std::runtime_error("Error serialising message");
         }
         send(serialisedMsg, msgSize);
+
+        awaitResponse();
     }
 }
 
@@ -178,29 +193,22 @@ faabric::HostResources FunctionCallClient::getResources(
         // Send the header first
         sendHeader(faabric::scheduler::FunctionCalls::GetResources);
 
-        // The body of the message is our address, where the server will send
-        // the response.
-        size_t addressSize = this->otherHost.size();
-        char* address = new char[addressSize];
-        strncpy(address, this->otherHost.c_str(), addressSize);
-        send(address, addressSize);
+        faabric::ResponseRequest request;
+        request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+        size_t msgSize = request.ByteSizeLong();
+        char* serialisedMsg = new char[msgSize];
+        // Serialise using protobuf
+        if (!request.SerializeToArray(serialisedMsg, msgSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        send(serialisedMsg, msgSize);
 
-        // Wait for the response, open a temporary endpoint for it
-        // Note - we use a different port not to clash with existing server
-        faabric::transport::SimpleMessageEndpoint endpoint(
-          DEFAULT_RPC_HOST, FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
-        // Open the socket, client does not bind
-        endpoint.open(faabric::transport::getGlobalMessageContext(),
-                      faabric::transport::SocketType::PULL,
-                      false);
         // Receive message
         char* msgData;
         int size;
-        endpoint.recv(msgData, size);
+        awaitResponse(msgData, size);
         // Deserialise message string
         if (!response.ParseFromArray(msgData, size)) {
-            faabric::util::getLogger()->info("raising exception in client");
-            // Exception raised here!!
             throw std::runtime_error("Error deserialising message");
         }
     }

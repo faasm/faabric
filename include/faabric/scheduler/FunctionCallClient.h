@@ -1,9 +1,7 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallCommon.h>
 #include <faabric/transport/MessageContext.h>
-#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/SimpleMessageEndpoint.h>
 #include <faabric/util/config.h>
 
@@ -35,14 +33,10 @@ void clearMockRequests();
 // -----------------------------------
 // Message client
 // -----------------------------------
-class FunctionCallClient : faabric::transport::MessageEndpoint
+class FunctionCallClient : faabric::transport::SimpleMessageEndpoint
 {
   public:
-    // TODO remove this constructor
     explicit FunctionCallClient(const std::string& hostIn);
-
-    explicit FunctionCallClient(faabric::transport::MessageContext& context,
-                                const std::string& hostIn);
 
     ~FunctionCallClient();
 
@@ -63,6 +57,8 @@ class FunctionCallClient : faabric::transport::MessageEndpoint
 
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
-    void awaitResponse(char* data, int& size);
+    void awaitResponse();
+
+    void awaitResponse(char*& data, int& size);
 };
 }

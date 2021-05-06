@@ -60,6 +60,15 @@ void Scheduler::addHostToGlobalSet()
     redis.sadd(AVAILABLE_HOST_SET, thisHost);
 }
 
+void Scheduler::closeFunctionCallClients()
+{
+    // Close function call clients
+    for (auto& iter : functionCallClients) {
+        iter.second.close();
+    }
+    functionCallClients.clear();
+}
+
 void Scheduler::reset()
 {
     // Reset queue map
@@ -87,6 +96,8 @@ void Scheduler::reset()
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
+
+    closeFunctionCallClients();
 }
 
 void Scheduler::shutdown()
@@ -182,9 +193,7 @@ void Scheduler::notifyFaasletFinished(const faabric::Message& msg)
             req.set_host(thisHost);
             *req.mutable_function() = msg;
 
-            FunctionCallClient c(faabric::transport::getGlobalMessageContext(),
-                                 msg.masterhost());
-            c.unregister(req);
+            getFunctionCallClient(msg.masterhost()).unregister(req);
         }
     }
 
@@ -274,9 +283,7 @@ std::vector<std::string> Scheduler::callFunctions(
                           funcStr,
                           masterHost);
 
-            FunctionCallClient c(faabric::transport::getGlobalMessageContext(),
-                                 masterHost);
-            c.executeFunctions(req);
+            getFunctionCallClient(masterHost).executeFunctions(req);
         } else {
             // At this point we know we're the master host, and we've not been
             // asked to force full local execution.
@@ -487,14 +494,13 @@ int Scheduler::scheduleFunctionsOnHost(const std::string& host,
     logger->debug(
       "Sending {} of {} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
-    FunctionCallClient c(faabric::transport::getGlobalMessageContext(), host);
     faabric::BatchExecuteRequest hostRequest =
       faabric::util::batchExecFactory(thisHostMsgs);
     hostRequest.set_snapshotkey(req.snapshotkey());
     hostRequest.set_snapshotsize(req.snapshotsize());
     hostRequest.set_type(req.type());
 
-    c.executeFunctions(hostRequest);
+    getFunctionCallClient(host).executeFunctions(hostRequest);
 
     return nOnThisHost;
 }
@@ -521,6 +527,20 @@ std::vector<unsigned int> Scheduler::getRecordedMessagesAll()
 std::vector<unsigned int> Scheduler::getRecordedMessagesLocal()
 {
     return recordedMessagesLocal;
+}
+
+FunctionCallClient& Scheduler::getFunctionCallClient(
+  const std::string& otherHost)
+{
+    auto it = functionCallClients.find(otherHost);
+    if (it == functionCallClients.end()) {
+        auto _it = functionCallClients.try_emplace(otherHost, otherHost);
+        if (!_it.second) {
+            throw std::runtime_error("Error inserting function call client");
+        }
+        it = _it.first;
+    }
+    return it->second;
 }
 
 std::vector<std::pair<std::string, unsigned int>>
@@ -585,9 +605,7 @@ void Scheduler::broadcastFlush()
 
     // Dispatch flush message to all other hosts
     for (auto& otherHost : allHosts) {
-        FunctionCallClient c(faabric::transport::getGlobalMessageContext(),
-                             otherHost);
-        c.sendFlush();
+        getFunctionCallClient(otherHost).sendFlush();
     }
 
     // Perform flush locally
@@ -722,11 +740,7 @@ faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
     // Get the resources for that host
     faabric::ResourceRequest resourceReq;
-    FunctionCallClient c(faabric::transport::getGlobalMessageContext(), host);
-
-    faabric::HostResources resp = c.getResources(resourceReq);
-
-    return resp;
+    return getFunctionCallClient(host).getResources(resourceReq);
 }
 
 // --------------------------------------------

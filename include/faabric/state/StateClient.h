@@ -1,15 +1,12 @@
 #pragma once
 
-#include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/state/InMemoryStateRegistry.h>
 #include <faabric/state/State.h>
-#include <faabric/state/StateCommon.h>
-#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/SimpleMessageEndpoint.h>
 
 namespace faabric::state {
-class StateClient : faabric::transport::MessageEndpoint
+class StateClient : faabric::transport::SimpleMessageEndpoint
 {
   public:
     explicit StateClient(const std::string& userIn,
@@ -46,8 +43,6 @@ class StateClient : faabric::transport::MessageEndpoint
     void unlock();
 
   private:
-    void doRecv(void* msgData, int size) override;
-
     void sendHeader(faabric::state::StateCalls call);
 
     // Block, but ignore return value

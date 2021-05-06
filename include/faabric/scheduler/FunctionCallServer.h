@@ -1,7 +1,6 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallCommon.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -15,6 +14,8 @@ class FunctionCallServer final
   public:
     FunctionCallServer();
 
+    void stop();
+
   private:
     Scheduler& scheduler;
 
@@ -23,9 +24,11 @@ class FunctionCallServer final
                 const void* bodyData,
                 int bodySize) override;
 
+    void sendEmptyResponse(const std::string& returnHost);
+
     void recvMpiMessage(const void* msgData, int size);
 
-    void recvFlush();
+    void recvFlush(const void* msgData, int size);
 
     void recvExecuteFunctions(const void* msgData, int size);
 

@@ -2,7 +2,6 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/state/State.h>
-#include <faabric/state/StateCommon.h>
 #include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::state {
@@ -20,10 +19,6 @@ class StateServer final : public faabric::transport::MessageEndpointServer
                 int bodySize) override;
 
     void sendEmptyResponse(const std::string& returnHost);
-
-    void sendResponse(char* serialisedMsg,
-                      int size,
-                      const std::string& returnHost);
 
     void recvSize(const void* data, int size);
 

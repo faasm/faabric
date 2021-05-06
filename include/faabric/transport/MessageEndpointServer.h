@@ -19,17 +19,47 @@ class MessageEndpointServer
   public:
     MessageEndpointServer(const std::string& hostIn, int portIn);
 
+    /* Start and stop the server
+     *
+     * Generic methods to start and stop a message endpoint server. They take
+     * a, thread-safe, 0MQ context as an argument. The stop method will block
+     * until _all_ sockets within the context have been closed. Sockets blocking
+     * on a `recv` will be interrupted with ETERM upon context closure.
+     */
     void start(faabric::transport::MessageContext& context);
 
     void stop(faabric::transport::MessageContext& context);
 
+    /* Common start and stop entrypoint
+     *
+     * Call the generic methods with the default global message context.
+     */
+    void start();
+
+    void stop();
+
     void recv(faabric::transport::SimpleMessageEndpoint& endpoint);
 
-    // Provide another template to receive messages with header and body
+    /* Template function to handle message reception
+     *
+     * A message endpoint server in faabric expects each communication to be
+     * a multi-part 0MQ message. One message containing the header, and another
+     * one with the body. Note that 0MQ _guarantees_ in-order delivery.
+     */
     virtual void doRecv(const void* headerBody,
                         int headerSize,
                         const void* bodyData,
                         int bodySize) = 0;
+
+    /* Send response to the client
+     *
+     * Send the serialised message back to the client identified with a
+     * host:port pair. Together with a blocking recv at the client side, this
+     * method can be used to achieve synchronous client-server communication.
+     */
+    void sendResponse(char* serialisedMsg, int size, const std::string& returnHost, int returnPort);
+
+    // void sendEmptyResponse(const std::string& returnHost, int returnPort);
 
   private:
     const std::string host;

@@ -26,10 +26,7 @@ MpiWorld::MpiWorld()
 
 MpiWorld::~MpiWorld()
 {
-    for (auto& s : remoteEndpoints) {
-        s.second.close();
-    }
-    remoteEndpoints.clear();
+    this->destroy();
 }
 
 std::string getWorldStateKey(int worldId)
@@ -79,14 +76,24 @@ faabric::scheduler::FunctionCallClient& MpiWorld::getRemoteEndpoint(
 {
     auto it = remoteEndpoints.find(otherHost);
     if (it == remoteEndpoints.end()) {
-        auto _it = remoteEndpoints.try_emplace(
-          otherHost, faabric::transport::getGlobalMessageContext(), otherHost);
+        // The second argument is forwarded to the client's constructor
+        auto _it = remoteEndpoints.try_emplace(otherHost, otherHost);
         if (!_it.second) {
             throw std::runtime_error("Error inserting remote endpoint");
         }
         it = _it.first;
     }
     return it->second;
+}
+
+// Clear thread local state
+void MpiWorld::clearTLS()
+{
+    // Close all open sockets
+    for (auto& s : remoteEndpoints) {
+        s.second.close();
+    }
+    remoteEndpoints.clear();
 }
 
 int MpiWorld::getMpiThreadPoolSize()
@@ -136,8 +143,10 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
-    setUpStateKV();
-    state::getGlobalState().deleteKV(stateKV->user, stateKV->key);
+    closeFunctionCallClients();
+
+    // TODO - what to do here?
+    // state::getGlobalState().deleteKV(stateKV->user, stateKV->key);
 
     for (auto& s : rankHostMap) {
         const std::shared_ptr<state::StateKeyValue>& rankState =
@@ -146,6 +155,18 @@ void MpiWorld::destroy()
     }
 
     localQueueMap.clear();
+}
+
+void MpiWorld::closeFunctionCallClients()
+{
+    // When shutting down the thread pool, we also make sure we clean all thread
+    // local state by sending a clear message to the queue.
+    for (int i = 0; i < threadPool->size; i++) {
+        std::promise<void> p;
+        threadPool->getMpiReqQueue()->enqueue(std::make_tuple(
+          QUEUE_SHUTDOWN, std::bind(&MpiWorld::clearTLS, this), std::move(p)));
+    }
+
 }
 
 void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)

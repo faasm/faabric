@@ -14,9 +14,13 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doRecv(void* msgData, int size)
+void FunctionCallServer::stop()
 {
-    throw std::runtime_error("doRecv for one message not implemented");
+    // Close the dangling scheduler endpoints
+    faabric::scheduler::getScheduler().closeFunctionCallClients();
+
+    // Call the parent stop
+    MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
 }
 
 void FunctionCallServer::doRecv(const void* headerData,
@@ -30,7 +34,7 @@ void FunctionCallServer::doRecv(const void* headerData,
             this->recvMpiMessage(bodyData, bodySize);
             break;
         case faabric::scheduler::FunctionCalls::Flush:
-            this->recvFlush();
+            this->recvFlush(bodyData, bodySize);
             break;
         case faabric::scheduler::FunctionCalls::ExecuteFunctions:
             this->recvExecuteFunctions(bodyData, bodySize);
@@ -45,6 +49,18 @@ void FunctionCallServer::doRecv(const void* headerData,
             throw std::runtime_error(
               fmt::format("Unrecognized call header: {}", call));
     }
+}
+
+// Send empty response notifying we are done
+void FunctionCallServer::sendEmptyResponse(const std::string& returnHost)
+{
+    faabric::EmptyResponse response;
+    size_t responseSize = response.ByteSizeLong();
+    char* serialisedMsg = new char[responseSize];
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    sendResponse(serialisedMsg, responseSize, returnHost, FUNCTION_CALL_PORT);
 }
 
 void FunctionCallServer::recvMpiMessage(const void* msgData, int size)
@@ -62,8 +78,15 @@ void FunctionCallServer::recvMpiMessage(const void* msgData, int size)
     world.enqueueMessage(mpiMsg);
 }
 
-void FunctionCallServer::recvFlush()
+void FunctionCallServer::recvFlush(const void* msgData, int size)
 {
+    faabric::ResponseRequest request;
+
+    // Deserialise message string
+    if (!request.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
 
@@ -72,11 +95,13 @@ void FunctionCallServer::recvFlush()
 
     // Reset the scheduler
     scheduler.reset();
+
+    // Send response notifying we are done
+    sendEmptyResponse(request.returnhost());
 }
 
 void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
 {
-    // TODO - avoiding having to copy the message here
     faabric::BatchExecuteRequest requestCopy;
 
     // Deserialise message string
@@ -90,7 +115,6 @@ void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
 
 void FunctionCallServer::recvUnregister(const void* msgData, int size)
 {
-    // TODO - avoiding having to copy the message here
     faabric::UnregisterRequest request;
 
     // Deserialise message string
@@ -107,22 +131,29 @@ void FunctionCallServer::recvUnregister(const void* msgData, int size)
     scheduler.removeRegisteredHost(request.host(), request.function());
 }
 
-void FunctionCallServer::recvGetResources(const void* data, int size)
+void FunctionCallServer::recvGetResources(const void* msgData, int size)
 {
-    // Read the return address from the received data
-    const std::string returnHost((const char*)data, size);
+    faabric::ResponseRequest request;
 
-    // Prepare the response
-    faabric::HostResources response = scheduler.getThisHostResources();
+    // Deserialise message string
+    if (!request.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    // Read the return address from the received data
+    // const std::string returnHost((const char*)data, size);
 
     // Open the endpoint socket, server always binds
+    /*
     faabric::transport::SimpleMessageEndpoint endpoint(
-      returnHost, FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+      request.returnhost(), FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
     endpoint.open(faabric::transport::getGlobalMessageContext(),
                   faabric::transport::SocketType::PUSH,
                   true);
+    */
 
     // Send the response body
+    faabric::HostResources response = scheduler.getThisHostResources();
     size_t responseSize = response.ByteSizeLong();
     // Deliberately use heap-allocation for zero-copy sending
     char* serialisedMsg = new char[responseSize];
@@ -130,6 +161,6 @@ void FunctionCallServer::recvGetResources(const void* data, int size)
     if (!response.SerializeToArray(serialisedMsg, responseSize)) {
         throw std::runtime_error("Error serialising message");
     }
-    endpoint.send(serialisedMsg, responseSize);
+    sendResponse(serialisedMsg, responseSize, request.returnhost(), FUNCTION_CALL_PORT);
 }
 }

@@ -4,6 +4,7 @@
 namespace faabric::scheduler {
 MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
   : shutdown(false)
+  , size(nThreads)
 {
     faabric::util::getLogger()->debug(
       "Starting an MpiAsyncThreadPool of size {}", nThreads);
@@ -21,14 +22,6 @@ MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
 MpiAsyncThreadPool::~MpiAsyncThreadPool()
 {
     faabric::util::getLogger()->debug("Shutting down MpiAsyncThreadPool");
-    this->shutdown = true;
-
-    // Load the queue with shutdown messages, i.e. nullptr functions
-    std::function<void(void)> f;
-    for (int i = 0; i < this->threadPool.size(); i++) {
-        std::promise<void> p;
-        this->getMpiReqQueue()->enqueue(std::make_tuple(-1, f, std::move(p)));
-    }
 
     for (auto& thread : threadPool) {
         if (thread.joinable()) {
@@ -49,11 +42,15 @@ void MpiAsyncThreadPool::entrypoint(int i)
     while (!this->shutdown) {
         req = getMpiReqQueue()->dequeue();
 
+        int id = std::get<0>(req);
         std::function<void(void)> func = std::get<1>(req);
         std::promise<void> promise = std::move(std::get<2>(req));
 
         // Detect shutdown condition
-        if (!func) {
+        if (id == QUEUE_SHUTDOWN) {
+            // The shutdown tuple includes a TLS cleanup function that we run
+            // _once per thread_ and exit
+            func();
             if (!this->shutdown) {
                 this->shutdown = true;
             }

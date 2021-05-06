@@ -100,6 +100,8 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    void closeFunctionCallClients();
+
   private:
     std::string thisHost;
 
