@@ -33,11 +33,10 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     const char* user = "mpi";
     const char* func = "hellompi";
     int worldId = 123;
-    int worldSize = 2;
     faabric::Message msg;
-    msg.set_user("mpi");
-    msg.set_function("hellompi");
-    msg.set_mpiworldid(123);
+    msg.set_user(user);
+    msg.set_function(func);
+    msg.set_mpiworldid(worldId);
     msg.set_mpiworldsize(2);
     faabric::util::messageFactory(user, func);
 
@@ -108,43 +107,16 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     sch.callFunction(msgA);
     sch.callFunction(msgB);
 
-    // Empty the queued messages
-    auto bindQueue = sch.getBindQueue();
-    auto functionQueueA = sch.getFunctionQueue(msgA);
-    auto functionQueueB = sch.getFunctionQueue(msgB);
-
-    REQUIRE(bindQueue->size() == 2);
-    REQUIRE(functionQueueA->size() == 1);
-    REQUIRE(functionQueueB->size() == 1);
-
-    bindQueue->dequeue();
-    bindQueue->dequeue();
-    functionQueueA->dequeue();
-    functionQueueB->dequeue();
-
-    // Background threads to get flush messages
-    std::thread tA([&functionQueueA] {
-        faabric::Message msg = functionQueueA->dequeue(1000);
-        REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
-    });
-
-    std::thread tB([&functionQueueB] {
-        faabric::Message msg = functionQueueB->dequeue(1000);
-        REQUIRE(msg.type() == faabric::Message_MessageType_FLUSH);
-    });
+    // Check messages passed
+    std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
+    REQUIRE(msgs.size() == 2);
+    REQUIRE(msgs.at(0).function() == "foo");
+    REQUIRE(msgs.at(1).function() == "bar");
+    sch.clearRecordedMessages();
 
     // Send flush message
     FunctionCallClient cli(LOCALHOST);
     cli.sendFlush();
-
-    // Wait for thread to get flush message
-    if (tA.joinable()) {
-        tA.join();
-    }
-
-    if (tB.joinable()) {
-        tB.join();
-    }
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
@@ -204,14 +176,10 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
 
     // Set up a load of calls
     int nCalls = 30;
-    std::vector<faabric::Message> msgs;
-    for (int i = 0; i < nCalls; i++) {
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-        msgs.emplace_back(msg);
-    }
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", nCalls);
 
     // Make the request
-    faabric::BatchExecuteRequest req = faabric::util::batchExecFactory(msgs);
     FunctionCallClient cli(LOCALHOST);
     cli.executeFunctions(req);
     usleep(1000 * 100);
@@ -221,17 +189,15 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Stop the server
     server.stop();
 
-    faabric::Message m = msgs.at(0);
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
     // Check no other hosts have been registered
+    faabric::Message m = req->messages().at(0);
     REQUIRE(sch.getFunctionRegisteredHostCount(m) == 0);
 
-    // Check we've got faaslets and in-flight messages
-    REQUIRE(sch.getFunctionInFlightCount(m) == nCalls);
-    REQUIRE(sch.getFunctionFaasletCount(m) == nCalls);
-
-    REQUIRE(sch.getBindQueue()->size() == nCalls);
+    // Check calls have been registered
+    REQUIRE(sch.getRecordedMessagesLocal().size() == nCalls);
+    REQUIRE(sch.getRecordedMessagesShared().empty());
 }
 
 TEST_CASE("Test get resources request", "[scheduler]")
@@ -240,29 +206,25 @@ TEST_CASE("Test get resources request", "[scheduler]")
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
-    int expectedCores;
-    int expectedExecutors;
-    int expectedInFlight;
+    int expectedSlots;
+    int expectedUsedSlots;
 
     SECTION("Override resources")
     {
         faabric::HostResources res;
 
-        expectedCores = 10;
-        expectedExecutors = 15;
-        expectedInFlight = 20;
+        expectedSlots = 10;
+        expectedUsedSlots = 15;
 
-        res.set_boundexecutors(expectedExecutors);
-        res.set_cores(expectedCores);
-        res.set_functionsinflight(expectedInFlight);
+        res.set_slots(expectedSlots);
+        res.set_usedslots(expectedUsedSlots);
 
         sch.setThisHostResources(res);
     }
     SECTION("Default resources")
     {
-        expectedCores = sch.getThisHostResources().cores();
-        expectedExecutors = 0;
-        expectedInFlight = 0;
+        expectedSlots = sch.getThisHostResources().slots();
+        expectedUsedSlots = 0;
     }
 
     // Start the server
@@ -274,9 +236,8 @@ TEST_CASE("Test get resources request", "[scheduler]")
     FunctionCallClient cli(LOCALHOST);
     faabric::HostResources resResponse = cli.getResources();
 
-    REQUIRE(resResponse.boundexecutors() == expectedExecutors);
-    REQUIRE(resResponse.cores() == expectedCores);
-    REQUIRE(resResponse.functionsinflight() == expectedInFlight);
+    REQUIRE(resResponse.slots() == expectedSlots);
+    REQUIRE(resResponse.usedslots() == expectedUsedSlots);
 
     // Close the client
     cli.close();
@@ -294,8 +255,8 @@ TEST_CASE("Test unregister request", "[scheduler]")
     // Remove capacity from this host and add on other
     faabric::HostResources thisResources;
     faabric::HostResources otherResources;
-    thisResources.set_cores(0);
-    otherResources.set_cores(5);
+    thisResources.set_slots(0);
+    otherResources.set_slots(5);
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThisHostResources(thisResources);
@@ -335,6 +296,65 @@ TEST_CASE("Test unregister request", "[scheduler]")
 
     // Stop the server
     cli.close();
+    server.stop();
+}
+
+TEST_CASE("Test set thread result", "[scheduler]")
+{
+    cleanFaabric();
+
+    // Register threads on this host
+    int threadIdA = 123;
+    int threadIdB = 345;
+    int returnValueA = 88;
+    int returnValueB = 99;
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.registerThread(threadIdA);
+    sch.registerThread(threadIdB);
+
+    // Start the server
+    FunctionCallServer server;
+    server.start();
+    usleep(1000 * 100);
+
+    // Make the request
+    faabric::ThreadResultRequest reqA;
+    faabric::ThreadResultRequest reqB;
+
+    reqA.set_messageid(threadIdA);
+    reqA.set_returnvalue(returnValueA);
+
+    reqB.set_messageid(threadIdB);
+    reqB.set_returnvalue(returnValueB);
+
+    // Set up two threads to await the results
+    std::thread tA([threadIdA, returnValueA] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        int32_t r = sch.awaitThreadResult(threadIdA);
+        REQUIRE(r == returnValueA);
+    });
+
+    std::thread tB([threadIdB, returnValueB] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        int32_t r = sch.awaitThreadResult(threadIdB);
+        REQUIRE(r == returnValueB);
+    });
+
+    FunctionCallClient cli(LOCALHOST);
+    cli.setThreadResult(reqA);
+    cli.setThreadResult(reqB);
+
+    if (tA.joinable()) {
+        tA.join();
+    }
+
+    if (tB.joinable()) {
+        tB.join();
+    }
+
+    // Stop the client
+    cli.close();
+    // Stop the server
     server.stop();
 }
 }

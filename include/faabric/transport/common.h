@@ -17,6 +17,7 @@ enum FunctionCalls
     Flush = 3,
     Unregister = 4,
     GetResources = 5,
+    SetThreadResult = 6,
 };
 }
 

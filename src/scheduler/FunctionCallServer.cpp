@@ -57,6 +57,9 @@ void FunctionCallServer::doRecv(const void* headerData,
         case faabric::scheduler::FunctionCalls::GetResources:
             this->recvGetResources(bodyData, bodySize);
             break;
+        case faabric::scheduler::FunctionCalls::SetThreadResult:
+            this->recvSetThreadResult(bodyData, bodySize);
+            break;
         default:
             throw std::runtime_error(
               fmt::format("Unrecognized call header: {}", call));
@@ -101,15 +104,15 @@ void FunctionCallServer::recvFlush(const void* msgData, int size)
 
 void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
 {
-    faabric::BatchExecuteRequest requestCopy;
+    faabric::BatchExecuteRequest request;
 
     // Deserialise message string
-    if (!requestCopy.ParseFromArray(msgData, size)) {
+    if (!request.ParseFromArray(msgData, size)) {
         throw std::runtime_error("Error deserialising message");
     }
 
     // This host has now been told to execute these functions no matter what
-    scheduler.callFunctions(requestCopy, true);
+    scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(request), true);
 }
 
 void FunctionCallServer::recvUnregister(const void* msgData, int size)
@@ -151,4 +154,35 @@ void FunctionCallServer::recvGetResources(const void* msgData, int size)
     sendResponse(
       serialisedMsg, responseSize, request.returnhost(), FUNCTION_CALL_PORT);
 }
+
+void FunctionCallServer::recvSetThreadResult(const void* msgData, int size)
+{
+    faabric::ThreadResultRequest request;
+
+    // Deserialise message string
+    if (!request.ParseFromArray(msgData, size)) {
+        throw std::runtime_error("Error deserialising message");
+    }
+
+    faabric::util::getLogger()->info("Setting thread {} result to {}",
+                                     request.messageid(),
+                                     request.returnvalue());
+
+    scheduler.setThreadResult(request.messageid(), request.returnvalue());
+}
+/*
+Status FunctionCallServer::SetThreadResult(
+  ServerContext* context,
+  const faabric::ThreadResultRequest* request,
+  faabric::FunctionStatusResponse* response)
+{
+    faabric::util::getLogger()->info("Setting thread {} result to {}",
+                                     request->messageid(),
+                                     request->returnvalue());
+
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.setThreadResult(request->messageid(), request->returnvalue());
+
+    return Status::OK;
+*/
 }

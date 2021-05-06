@@ -14,7 +14,8 @@ static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
 static std::vector<std::pair<std::string, faabric::ResponseRequest>> flushCalls;
 
-static std::vector<std::pair<std::string, faabric::BatchExecuteRequest>>
+static std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
   batchMessages;
 
 static std::vector<std::pair<std::string, faabric::MPIMessage>> mpiMessages;
@@ -29,6 +30,9 @@ static std::unordered_map<std::string,
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
+static std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
+  threadResults;
+
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
     return functionCalls;
@@ -39,7 +43,8 @@ std::vector<std::pair<std::string, faabric::ResponseRequest>> getFlushCalls()
     return flushCalls;
 }
 
-std::vector<std::pair<std::string, faabric::BatchExecuteRequest>>
+std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
 getBatchRequests()
 {
     return batchMessages;
@@ -60,6 +65,12 @@ std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests()
 {
     return unregisterRequests;
+}
+
+std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
+getThreadResults()
+{
+    return threadResults;
 }
 
 void queueResourceResponse(const std::string& host, faabric::HostResources& res)
@@ -209,7 +220,7 @@ faabric::HostResources FunctionCallClient::getResources()
 }
 
 void FunctionCallClient::executeFunctions(
-  const faabric::BatchExecuteRequest& req)
+  const std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     if (faabric::util::isMockMode()) {
         batchMessages.emplace_back(host, req);
@@ -218,10 +229,10 @@ void FunctionCallClient::executeFunctions(
         sendHeader(faabric::scheduler::FunctionCalls::ExecuteFunctions);
 
         // Send the message body
-        size_t msgSize = req.ByteSizeLong();
+        size_t msgSize = req->ByteSizeLong();
         char* serialisedMsg = new char[msgSize];
         // Serialise using protobuf
-        if (!req.SerializeToArray(serialisedMsg, msgSize)) {
+        if (!req->SerializeToArray(serialisedMsg, msgSize)) {
             throw std::runtime_error("Error serialising message");
         }
         send(serialisedMsg, msgSize);
@@ -247,8 +258,23 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
     }
 }
 
-void FunctionCallClient::doRecv(void* msgData, int size)
+void FunctionCallClient::setThreadResult(
+  const faabric::ThreadResultRequest& req)
 {
-    throw std::runtime_error("Calling recv from a producer client.");
+    if (faabric::util::isMockMode()) {
+        threadResults.emplace_back(host, req);
+    } else {
+        // Send the header first
+        sendHeader(faabric::scheduler::FunctionCalls::SetThreadResult);
+
+        // Send the message body
+        size_t msgSize = req.ByteSizeLong();
+        char* serialisedMsg = new char[msgSize];
+        // Serialise using protobuf
+        if (!req.SerializeToArray(serialisedMsg, msgSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        send(serialisedMsg, msgSize);
+    }
 }
 }

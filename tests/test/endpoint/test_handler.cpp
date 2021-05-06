@@ -16,25 +16,16 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
     // Note - must be async to avoid needing a result
     faabric::Message call = faabric::util::messageFactory("foo", "bar");
     call.set_isasync(true);
-    std::string user;
-    std::string function;
+    std::string user = "foo";
+    std::string function = "bar";
+    std::string actualInput;
 
-    SECTION("C/C++")
+    SECTION("With input")
     {
-        user = "demo";
-        function = "echo";
-
-        SECTION("With input") { call.set_inputdata("foobar"); }
-        SECTION("No input") {}
+        actualInput = "foobar";
+        call.set_inputdata(actualInput);
     }
-    SECTION("Python")
-    {
-        user = PYTHON_USER;
-        function = PYTHON_FUNC;
-        call.set_pythonuser("python");
-        call.set_pythonfunction("hello");
-        call.set_ispython(true);
-    }
+    SECTION("No input") {}
 
     call.set_user(user);
     call.set_function(function);
@@ -45,21 +36,16 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
     endpoint::FaabricEndpointHandler handler;
     const std::string responseStr = handler.handleFunction(requestStr);
 
-    // Check function count has increased and bind message sent
-    scheduler::Scheduler& sch = scheduler::getScheduler();
-    REQUIRE(sch.getFunctionInFlightCount(call) == 1);
-    REQUIRE(sch.getBindQueue()->size() == 1);
-
-    faabric::Message actualBind = sch.getBindQueue()->dequeue();
-    REQUIRE(actualBind.user() == call.user());
-    REQUIRE(actualBind.function() == call.function());
-
     // Check actual call has right details including the ID returned to the
     // caller
-    faabric::Message actualCall = sch.getFunctionQueue(call)->dequeue();
+    scheduler::Scheduler& sch = scheduler::getScheduler();
+    std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
+    REQUIRE(msgs.size() == 1);
+    faabric::Message actualCall = msgs.at(0);
     REQUIRE(actualCall.user() == call.user());
     REQUIRE(actualCall.function() == call.function());
     REQUIRE(actualCall.id() == std::stoi(responseStr));
+    REQUIRE(actualCall.inputdata() == actualInput);
 }
 
 TEST_CASE("Test empty invocation", "[endpoint]")

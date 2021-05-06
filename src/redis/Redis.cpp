@@ -402,9 +402,9 @@ std::string Redis::srandmember(const std::string& key)
     return res;
 }
 
-std::unordered_set<std::string> extractStringSetFromReply(redisReply* reply)
+std::set<std::string> extractStringSetFromReply(redisReply* reply)
 {
-    std::unordered_set<std::string> retValue;
+    std::set<std::string> retValue;
     for (size_t i = 0; i < reply->elements; i++) {
         retValue.insert(reply->element[i]->str);
     }
@@ -412,32 +412,32 @@ std::unordered_set<std::string> extractStringSetFromReply(redisReply* reply)
     return retValue;
 }
 
-std::unordered_set<std::string> Redis::smembers(const std::string& key)
+std::set<std::string> Redis::smembers(const std::string& key)
 {
     auto reply = (redisReply*)redisCommand(context, "SMEMBERS %s", key.c_str());
-    std::unordered_set<std::string> result = extractStringSetFromReply(reply);
+    std::set<std::string> result = extractStringSetFromReply(reply);
 
     freeReplyObject(reply);
     return result;
 }
 
-std::unordered_set<std::string> Redis::sinter(const std::string& keyA,
-                                              const std::string& keyB)
+std::set<std::string> Redis::sinter(const std::string& keyA,
+                                    const std::string& keyB)
 {
     auto reply = (redisReply*)redisCommand(
       context, "SINTER %s %s", keyA.c_str(), keyB.c_str());
-    std::unordered_set<std::string> result = extractStringSetFromReply(reply);
+    std::set<std::string> result = extractStringSetFromReply(reply);
 
     freeReplyObject(reply);
     return result;
 }
 
-std::unordered_set<std::string> Redis::sdiff(const std::string& keyA,
-                                             const std::string& keyB)
+std::set<std::string> Redis::sdiff(const std::string& keyA,
+                                   const std::string& keyB)
 {
     auto reply = (redisReply*)redisCommand(
       context, "SDIFF %s %s", keyA.c_str(), keyB.c_str());
-    std::unordered_set<std::string> result = extractStringSetFromReply(reply);
+    std::set<std::string> result = extractStringSetFromReply(reply);
 
     freeReplyObject(reply);
     return result;

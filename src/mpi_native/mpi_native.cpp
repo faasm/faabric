@@ -6,7 +6,7 @@
 
 #include <faabric/util/logging.h>
 
-using namespace faabric::executor;
+using namespace faabric::mpi_native;
 
 static thread_local faabric::scheduler::MpiContext executingContext;
 static thread_local std::shared_ptr<spdlog::logger> mpiLogger = nullptr;
@@ -23,7 +23,7 @@ std::shared_ptr<spdlog::logger> getMpiLogger()
 
 faabric::Message* getExecutingCall()
 {
-    return faabric::executor::executingCall;
+    return faabric::mpi_native::executingCall;
 }
 
 faabric::scheduler::MpiWorld& getExecutingWorld()

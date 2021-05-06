@@ -15,22 +15,25 @@ message EmptyResponse {
 // ---------------------------------------------
 
 message BatchExecuteRequest {
+    int32 id = 1;
+
     enum BatchExecuteType {
         FUNCTIONS = 0;
         THREADS = 1;
         PROCESSES = 2;
     }
 
-    BatchExecuteType type = 1;
-
-    int32 id = 2;
+    BatchExecuteType type = 2;
 
     // Shared snapshot used for threads
-    string snapshotKey = 4;
-    int32 snapshotSize = 5;
+    string snapshotKey = 3;
+    int32 snapshotSize = 4;
 
-    repeated Message messages = 6;
-    repeated int32 returnValues = 7;
+    repeated Message messages = 5;
+
+    // Arbitrary context for this batch
+    int32 subType = 6;
+    bytes contextData = 7;
 }
 
 message ResponseRequest {
@@ -38,14 +41,18 @@ message ResponseRequest {
 }
 
 message HostResources {
-    int32 cores = 1;
-    int32 functionsInFlight = 2;
-    int32 boundExecutors = 3;
+    int32 slots = 1;
+    int32 usedSlots = 2;
 }
 
 message UnregisterRequest {
     string host = 1;
     Message function = 2;
+}
+
+message ThreadResultRequest {
+    int32 messageId = 1;
+    int32 returnValue = 2;
 }
 
 message FunctionStatusResponse {
@@ -84,68 +91,63 @@ message MPIMessage {
 }
 
 message Message {
-    string user = 1;
-    string function = 2;
-    string snapshotKey = 4;
-    int32 snapshotSize = 5;
-    int32 funcPtr = 6;
-    int32 returnValue = 7;
+    int32 id = 1;
+    int32 appId = 2;
+    int32 appIndex = 3;
+    string masterHost = 4;
 
     enum MessageType {
         CALL = 0;
-        BIND = 1;
-        KILL = 2;
-        EMPTY = 3;
-        FLUSH = 4;
+        KILL = 1;
+        EMPTY = 2;
+        FLUSH = 3;
     }
 
-    MessageType type = 8;
+    MessageType type = 5;
+    string user = 6;
+    string function = 7;
 
-    int64 timestamp = 9;
-    int32 id = 10;
-    string resultKey = 11;
-    string statusKey = 12;
+    bytes inputData = 8;
+    bytes outputData = 9;
 
-    string executedHost = 15;
-    int64 finishTimestamp = 16;
+    int32 funcPtr = 10;
+    int32 returnValue = 11;
 
-    bool isAsync = 17;
-    bool isPython = 18;
-    bool isTypescript = 19;
-    bool isStatusRequest = 20;
-    bool isExecGraphRequest = 21;
+    string snapshotKey = 12;
+    int32 snapshotSize = 13;
 
-    bytes inputData = 23;
-    bytes outputData = 24;
+    int64 timestamp = 14;
+    string resultKey = 15;
+    string statusKey = 16;
 
-    string pythonUser = 25;
-    string pythonFunction = 26;
-    string pythonEntry = 27;
+    string executedHost = 17;
+    int64 finishTimestamp = 18;
 
-    bool isMpi = 29;
-    int32 mpiWorldId = 30;
-    int32 mpiRank = 31;
-    int32 mpiWorldSize = 32;
+    bool isAsync = 19;
+    bool isPython = 20;
+    bool isTypescript = 21;
+    bool isStatusRequest = 22;
+    bool isExecGraphRequest = 23;
 
-    int32 ompThreadNum = 33;
-    repeated uint32 ompFunctionArgs = 34;
-    int32 ompDepth = 35;
-    int32 ompEffDepth = 36;
-    int32 ompMAL = 37;
-    int32 ompNumThreads = 38;
+    string pythonUser = 24;
+    string pythonFunction = 25;
+    string pythonEntry = 26;
 
-    string cmdline = 39;
+    bool isMpi = 27;
+    int32 mpiWorldId = 28;
+    int32 mpiRank = 29;
+    int32 mpiWorldSize = 30;
 
-    bool isSgx = 40;
+    string cmdline = 31;
 
-    // fields for SGX attesation
-    string sgxSid = 41;
-    string sgxNonce = 42;
-    string sgxTag = 43;
-    bytes sgxPolicy = 44;
-    bytes sgxResult = 45;
-    
-    string masterHost = 46;
+    // SGX
+    bool isSgx = 32;
+
+    string sgxSid = 33;
+    string sgxNonce = 34;
+    string sgxTag = 35;
+    bytes sgxPolicy = 36;
+    bytes sgxResult = 37;
 }
 
 // ---------------------------------------------

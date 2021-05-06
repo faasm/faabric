@@ -5,6 +5,7 @@ option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
 option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
 
 # Top-level CMake config
+set(CMAKE_CXX_FLAGS "-Wall")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,12 +59,12 @@ function(faabric_lib lib_name lib_deps)
 endfunction()
 
 add_subdirectory(src/endpoint)
-add_subdirectory(src/executor)
 add_subdirectory(src/flat)
 add_subdirectory(src/mpi)
 add_subdirectory(src/mpi_native)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
+add_subdirectory(src/runner)
 add_subdirectory(src/rpc)
 add_subdirectory(src/scheduler)
 add_subdirectory(src/snapshot)
@@ -83,11 +84,11 @@ add_library(faabric
     ${FAABRIC_LIB_TYPE}
     faabric.cpp
     $<TARGET_OBJECTS:endpoint_obj>
-    $<TARGET_OBJECTS:executor_obj>
     $<TARGET_OBJECTS:flat_obj>
     $<TARGET_OBJECTS:proto_obj>
     $<TARGET_OBJECTS:redis_obj>
     $<TARGET_OBJECTS:rpc_obj>
+    $<TARGET_OBJECTS:runner_obj>
     $<TARGET_OBJECTS:scheduler_obj>
     $<TARGET_OBJECTS:snapshot_obj>
     $<TARGET_OBJECTS:state_obj>

@@ -35,6 +35,19 @@ class Queue
         enqueueNotifier.notify_one();
     }
 
+    void dequeueIfPresent(T* res)
+    {
+        UniqueLock lock(mx);
+
+        if (!mq.empty()) {
+            T value = std::move(mq.front());
+            mq.pop();
+            emptyNotifier.notify_one();
+
+            *res = value;
+        }
+    }
+
     T dequeue(long timeoutMs = 0)
     {
         UniqueLock lock(mx);

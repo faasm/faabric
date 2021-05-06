@@ -47,5 +47,7 @@ class FunctionCallServer final
     void recvGetResources(const void* msgData, int size);
 
     void recvUnregister(const void* msgData, int size);
+
+    void recvSetThreadResult(const void* msgData, int size);
 };
 }
