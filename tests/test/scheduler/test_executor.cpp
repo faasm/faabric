@@ -169,6 +169,10 @@ TEST_CASE("Test executing threads directly", "[executor]")
     restoreCount = 0;
 
     int nThreads = 10;
+    SECTION("Underloaded") { nThreads = 10; }
+
+    SECTION("Overloaded") { nThreads = 200; }
+
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
@@ -200,7 +204,11 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     cleanFaabric();
     restoreCount = 0;
 
-    int nThreads = 8;
+    int nThreads;
+    SECTION("Underloaded") { nThreads = 8; }
+
+    SECTION("Overloaded") { nThreads = 100; }
+
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "thread-check", 1);
     faabric::Message& msg = req->mutable_messages()->at(0);

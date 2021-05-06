@@ -139,7 +139,7 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
 {
     faabric::util::FullLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
-        const auto& logger = faabric::util::getLogger();
+    const auto& logger = faabric::util::getLogger();
 
     logger->debug("{} finished message {}", exec->id, msg.id());
 
@@ -344,8 +344,11 @@ std::vector<std::string> Scheduler::callFunctions(
         // At this point there's no more capacity in the system, so we
         // just need to execute locally
         if (offset < nMessages) {
-            logger->debug(
-              "Overloading {}/{} {} locally", nLocally, nMessages, funcStr);
+            int overloadCount = nMessages - offset;
+            logger->debug("Overloading {}/{} {} locally",
+                          overloadCount,
+                          nMessages,
+                          funcStr);
 
             for (; offset < nMessages; offset++) {
                 localMessageIdxs.emplace_back(offset);
