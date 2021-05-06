@@ -17,6 +17,17 @@ StateServer::StateServer(State& stateIn)
   , state(stateIn)
 {}
 
+void StateServer::sendEmptyResponse(const std::string& returnHost)
+{
+    faabric::StateResponse response;
+    size_t responseSize = response.ByteSizeLong();
+    char* serialisedMsg = new char[responseSize];
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    sendResponse(serialisedMsg, responseSize, returnHost, STATE_PORT);
+}
+
 void StateServer::doRecv(const void* headerData,
                          int headerSize,
                          const void* bodyData,
@@ -57,37 +68,6 @@ void StateServer::doRecv(const void* headerData,
     }
 }
 
-// Send empty response notifying we are done
-void StateServer::sendEmptyResponse(const std::string& returnHost)
-{
-    faabric::StateResponse response;
-    size_t responseSize = response.ByteSizeLong();
-    char* serialisedMsg = new char[responseSize];
-    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
-        throw std::runtime_error("Error serialising message");
-    }
-    sendResponse(serialisedMsg, responseSize, returnHost);
-}
-
-/* Send response to the client
- *
- * Current state implementation _always_ blocks even with methods that return
- * nothing. We create a new endpoint every time. Re-using them would be a
- * possible optimisation if needed.
- */
-void StateServer::sendResponse(char* serialisedMsg,
-                               int size,
-                               const std::string& returnHost)
-{
-    // Open the endpoint socket, server always binds
-    faabric::transport::SimpleMessageEndpoint endpoint(
-      returnHost, STATE_PORT + REPLY_PORT_OFFSET);
-    endpoint.open(faabric::transport::getGlobalMessageContext(),
-                  faabric::transport::SocketType::PUSH,
-                  true);
-    endpoint.send(serialisedMsg, size);
-}
-
 void StateServer::recvSize(const void* data, int size)
 {
     // Read input request
@@ -115,7 +95,7 @@ void StateServer::recvSize(const void* data, int size)
     if (!response.SerializeToArray(serialisedMsg, responseSize)) {
         throw std::runtime_error("Error serialising message");
     }
-    sendResponse(serialisedMsg, responseSize, request.returnhost());
+    sendResponse(serialisedMsg, responseSize, request.returnhost(), STATE_PORT);
 }
 
 void StateServer::recvPull(const void* data, int size)
@@ -153,7 +133,7 @@ void StateServer::recvPull(const void* data, int size)
     if (!response.SerializeToArray(serialisedMsg, responseSize)) {
         throw std::runtime_error("Error serialising message");
     }
-    sendResponse(serialisedMsg, responseSize, request.returnhost());
+    sendResponse(serialisedMsg, responseSize, request.returnhost(), STATE_PORT);
 }
 
 void StateServer::recvPush(const void* data, int size)
@@ -227,7 +207,7 @@ void StateServer::recvPullAppended(const void* data, int size)
     if (!response.SerializeToArray(serialisedMsg, responseSize)) {
         throw std::runtime_error("Error serialising message");
     }
-    sendResponse(serialisedMsg, responseSize, request.returnhost());
+    sendResponse(serialisedMsg, responseSize, request.returnhost(), STATE_PORT);
 }
 
 void StateServer::recvDelete(const void* data, int size)

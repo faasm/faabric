@@ -2,7 +2,7 @@
 
 #include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
-#include <faabric/transport/SimpleMessageEndpoint.h>
+#include <faabric/transport/MessageEndpointClient.h>
 
 #include <thread>
 
@@ -38,7 +38,8 @@ class MessageEndpointServer
 
     void stop();
 
-    void recv(faabric::transport::SimpleMessageEndpoint& endpoint);
+  protected:
+    void recv(faabric::transport::MessageEndpointClient& endpoint);
 
     /* Template function to handle message reception
      *
@@ -53,13 +54,14 @@ class MessageEndpointServer
 
     /* Send response to the client
      *
-     * Send the serialised message back to the client identified with a
-     * host:port pair. Together with a blocking recv at the client side, this
+     * Send a one-off response to a client identified by host:port pair.
+     * Together with a blocking recv at the client side, this
      * method can be used to achieve synchronous client-server communication.
      */
-    void sendResponse(char* serialisedMsg, int size, const std::string& returnHost, int returnPort);
-
-    // void sendEmptyResponse(const std::string& returnHost, int returnPort);
+    void sendResponse(char* serialisedMsg,
+                      int size,
+                      const std::string& returnHost,
+                      int returnPort);
 
   private:
     const std::string host;

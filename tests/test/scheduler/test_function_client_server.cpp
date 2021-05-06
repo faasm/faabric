@@ -70,8 +70,7 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     std::shared_ptr<InMemoryMpiQueue> queue =
       localWorld.getLocalQueue(rankRemote, rankLocal);
     REQUIRE(queue->size() == 1);
-    const std::shared_ptr<faabric::MPIMessage> actualMessage =
-      queue->dequeue();
+    const std::shared_ptr<faabric::MPIMessage> actualMessage = queue->dequeue();
 
     REQUIRE(actualMessage->worldid() == worldId);
     REQUIRE(actualMessage->sender() == rankRemote);
@@ -272,9 +271,8 @@ TEST_CASE("Test get resources request", "[scheduler]")
     usleep(1000 * 100);
 
     // Make the request
-    faabric::ResourceRequest req;
     FunctionCallClient cli(LOCALHOST);
-    faabric::HostResources resResponse = cli.getResources(req);
+    faabric::HostResources resResponse = cli.getResources();
 
     REQUIRE(resResponse.boundexecutors() == expectedExecutors);
     REQUIRE(resResponse.cores() == expectedCores);

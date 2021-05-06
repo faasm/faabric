@@ -1,14 +1,11 @@
 #include <faabric/state/StateClient.h>
-
-#include <faabric/rpc/macros.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
 namespace faabric::state {
 StateClient::StateClient(const std::string& userIn,
                          const std::string& keyIn,
                          const std::string& hostIn)
-  : faabric::transport::MessageEndpoint(hostIn, STATE_PORT)
+  : faabric::transport::MessageEndpointClient(hostIn, STATE_PORT)
   , user(userIn)
   , key(keyIn)
   , host(hostIn)
@@ -21,12 +18,7 @@ StateClient::StateClient(const std::string& userIn,
 
 StateClient::~StateClient()
 {
-    this->close();
-}
-
-void StateClient::close()
-{
-    MessageEndpoint::close();
+    close();
 }
 
 void StateClient::sendHeader(faabric::state::StateCalls call)
@@ -46,22 +38,17 @@ void StateClient::awaitResponse()
     char* data;
     int size;
     awaitResponse(data, size);
+    delete data;
 }
 
-// Block until we receive a response from the server
 void StateClient::awaitResponse(char*& data, int& size)
 {
-    // Wait for the response, open a temporary endpoint for it
-    // Note - we use a different host/port not to clash with existing server
-    faabric::transport::SimpleMessageEndpoint endpoint(
+    // Call the superclass implementation
+    MessageEndpointClient::awaitResponse(
       faabric::util::getSystemConfig().endpointHost,
-      STATE_PORT + REPLY_PORT_OFFSET);
-    // Open the socket, client does not bind
-    endpoint.open(faabric::transport::getGlobalMessageContext(),
-                  faabric::transport::SocketType::PULL,
-                  false);
-    endpoint.recv(data, size);
-    endpoint.close();
+      STATE_PORT + REPLY_PORT_OFFSET,
+      data,
+      size);
 }
 
 void StateClient::sendStateRequest(bool expectReply)
@@ -151,6 +138,7 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
         if (!response.ParseFromArray(msgData, size)) {
             throw std::runtime_error("Error deserialising message");
         }
+        delete msgData;
         std::copy(response.data().begin(),
                   response.data().end(),
                   bufferStart + response.offset());
@@ -196,18 +184,16 @@ void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
     if (!response.ParseFromArray(msgData, size)) {
         throw std::runtime_error("Error deserialising message");
     }
+    delete msgData;
 
     // Process response
     size_t offset = 0;
     for (auto& value : response.values()) {
         if (offset > length) {
-            faabric::util::getLogger()->error(
-              "Buffer not large enough for appended data (offset={}, "
-              "length={})",
+            throw std::runtime_error(fmt::format(
+              "Buffer not large enough for appended data (offset={}, length{})",
               offset,
-              length);
-            throw std::runtime_error(
-              "Buffer not large enough for appended data");
+              length));
         }
 
         auto valueData = BYTES_CONST(value.data().c_str());
@@ -244,6 +230,7 @@ size_t StateClient::stateSize()
     if (!response.ParseFromArray(msgData, size)) {
         throw std::runtime_error("Error deserialising message");
     }
+    delete msgData;
     return response.statesize();
 }
 
@@ -256,13 +243,7 @@ void StateClient::deleteState()
     sendStateRequest(true);
 
     // Wait for the response
-    faabric::StateResponse response;
-    char* msgData;
-    int size;
-    awaitResponse(msgData, size);
-    if (!response.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
+    awaitResponse();
 }
 
 void StateClient::lock()
@@ -288,8 +269,10 @@ void StateClient::unlock()
     awaitResponse();
 }
 
+/*
 void StateClient::doRecv(void* msgData, int size)
 {
     throw std::runtime_error("Calling recv from a producer client.");
 }
+*/
 }

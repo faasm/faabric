@@ -3,24 +3,25 @@
 # ----------------------------------------------
 
 set(HEADERS
+    "${FAABRIC_INCLUDE_DIR}/faabric/transport/common.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageContext.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpoint.h"
+    "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpointClient.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpointServer.h"
-    "${FAABRIC_INCLUDE_DIR}/faabric/transport/SimpleMessageEndpoint.h"
 )
 
 set(LIB_FILES 
     MessageContext.cpp
     MessageEndpoint.cpp
+    MessageEndpointClient.cpp
     MessageEndpointServer.cpp
-    SimpleMessageEndpoint.cpp
     ${HEADERS}
 )
 
 faabric_lib(transport "${LIB_FILES}")
 
 # Add include directories for zeromq themselves
-target_include_directories(transport PUBLIC ${ZEROMQ_INCLUDE_DIRS})
+target_include_directories(transport PUBLIC ${ZEROMQ_INCLUDE_DIR})
 
 # ----------------------------------------------
 # Add dependency with ZeroMQ

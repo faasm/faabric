@@ -1,10 +1,14 @@
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/util/locks.h>
 
+#include <faabric/util/gids.h>
+#include <faabric/util/logging.h>
+
 namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
+  , id(faabric::util::generateGid())
 {}
 
 MessageEndpoint::~MessageEndpoint()
@@ -18,6 +22,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                            faabric::transport::SocketType sockType,
                            bool bind)
 {
+    faabric::util::getLogger()->info("Opening socket: {}", id);
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
 
@@ -82,12 +87,12 @@ void MessageEndpoint::recv()
         throw std::runtime_error("Error receiving message through socket");
     }
 
-    // Implementation specific message handling
     doRecv(msg.data(), msg.size());
 }
 
 void MessageEndpoint::close()
 {
+    faabric::util::getLogger()->info("Closing socket: {}", id);
     this->socket->close();
 }
 }

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <faabric/transport/common.h>
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/transport/common.h>
 
 namespace faabric::transport {
 /* Simple message endpoint implementation
@@ -9,18 +9,19 @@ namespace faabric::transport {
  * Low-level and simple message endpoint to run outstanding connections together
  * with higher-level client/server pairs.
  */
-class SimpleMessageEndpoint : public faabric::transport::MessageEndpoint
+class MessageEndpointClient : public faabric::transport::MessageEndpoint
 {
   public:
-    SimpleMessageEndpoint(const std::string& host, int port);
+    MessageEndpointClient(const std::string& host, int port);
 
-    ~SimpleMessageEndpoint();
-
-    void close();
+    ~MessageEndpointClient();
 
     void recv(char*& msgData, int& msgSize);
 
-    void awaitResponse(const std::string& host, int port, char*& data, int& size);
+    void awaitResponse(const std::string& host,
+                       int port,
+                       char*& data,
+                       int& size);
 
   private:
     char* msgData;

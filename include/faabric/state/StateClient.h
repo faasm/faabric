@@ -3,10 +3,10 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/state/InMemoryStateRegistry.h>
 #include <faabric/state/State.h>
-#include <faabric/transport/SimpleMessageEndpoint.h>
+#include <faabric/transport/MessageEndpointClient.h>
 
 namespace faabric::state {
-class StateClient : faabric::transport::SimpleMessageEndpoint
+class StateClient : public faabric::transport::MessageEndpointClient
 {
   public:
     explicit StateClient(const std::string& userIn,
@@ -15,13 +15,13 @@ class StateClient : faabric::transport::SimpleMessageEndpoint
 
     ~StateClient();
 
-    void close();
-
     const std::string user;
     const std::string key;
     const std::string host;
 
     InMemoryStateRegistry& reg;
+
+    /* External state client API */
 
     void pushChunks(const std::vector<StateChunk>& chunks);
 
