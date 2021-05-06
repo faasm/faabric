@@ -23,6 +23,18 @@ void FunctionCallServer::stop()
     MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
 }
 
+// Send empty response notifying we are done
+void FunctionCallServer::sendEmptyResponse(const std::string& returnHost)
+{
+    faabric::EmptyResponse response;
+    size_t responseSize = response.ByteSizeLong();
+    char* serialisedMsg = new char[responseSize];
+    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+    sendResponse(serialisedMsg, responseSize, returnHost, FUNCTION_CALL_PORT);
+}
+
 void FunctionCallServer::doRecv(const void* headerData,
                                 int headerSize,
                                 const void* bodyData,
@@ -51,21 +63,8 @@ void FunctionCallServer::doRecv(const void* headerData,
     }
 }
 
-// Send empty response notifying we are done
-void FunctionCallServer::sendEmptyResponse(const std::string& returnHost)
-{
-    faabric::EmptyResponse response;
-    size_t responseSize = response.ByteSizeLong();
-    char* serialisedMsg = new char[responseSize];
-    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
-        throw std::runtime_error("Error serialising message");
-    }
-    sendResponse(serialisedMsg, responseSize, returnHost, FUNCTION_CALL_PORT);
-}
-
 void FunctionCallServer::recvMpiMessage(const void* msgData, int size)
 {
-    // TODO - can we avoid this copy here?
     faabric::MPIMessage mpiMsg;
 
     // Deserialise message string
@@ -140,18 +139,6 @@ void FunctionCallServer::recvGetResources(const void* msgData, int size)
         throw std::runtime_error("Error deserialising message");
     }
 
-    // Read the return address from the received data
-    // const std::string returnHost((const char*)data, size);
-
-    // Open the endpoint socket, server always binds
-    /*
-    faabric::transport::SimpleMessageEndpoint endpoint(
-      request.returnhost(), FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
-    endpoint.open(faabric::transport::getGlobalMessageContext(),
-                  faabric::transport::SocketType::PUSH,
-                  true);
-    */
-
     // Send the response body
     faabric::HostResources response = scheduler.getThisHostResources();
     size_t responseSize = response.ByteSizeLong();
@@ -161,6 +148,7 @@ void FunctionCallServer::recvGetResources(const void* msgData, int size)
     if (!response.SerializeToArray(serialisedMsg, responseSize)) {
         throw std::runtime_error("Error serialising message");
     }
-    sendResponse(serialisedMsg, responseSize, request.returnhost(), FUNCTION_CALL_PORT);
+    sendResponse(
+      serialisedMsg, responseSize, request.returnhost(), FUNCTION_CALL_PORT);
 }
 }

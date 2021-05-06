@@ -738,9 +738,7 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
-    // Get the resources for that host
-    faabric::ResourceRequest resourceReq;
-    return getFunctionCallClient(host).getResources(resourceReq);
+    return getFunctionCallClient(host).getResources();
 }
 
 // --------------------------------------------

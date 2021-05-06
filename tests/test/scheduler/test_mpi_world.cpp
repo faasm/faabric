@@ -441,72 +441,72 @@ TEST_CASE("Test send across hosts", "[mpi]")
     cleanFaabric();
 
     // Start a server on this host
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
+    // Set up the world on this host
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpiworldsize(worldSize);
+
+    scheduler::MpiWorld& localWorld =
+      getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+
+    // Set up a world on the "remote" host
+    std::string otherHost =
+      faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
+    scheduler::MpiWorld remoteWorld;
+    remoteWorld.overrideHost(otherHost);
+    remoteWorld.initialiseFromState(msg, worldId);
+
+    // Register two ranks (one on each host)
+    int rankA = 1;
+    int rankB = 2;
+    remoteWorld.registerRank(rankA);
+    localWorld.registerRank(rankB);
+
+    std::vector<int> messageData = { 0, 1, 2 };
+
+    // Send a message that should get sent to this host
+    remoteWorld.send(
+      rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
+    usleep(1000 * 100);
+
+    SECTION("Check queueing")
     {
-        // Set up the world on this host
-        faabric::Message msg = faabric::util::messageFactory(user, func);
-        msg.set_mpiworldid(worldId);
-        msg.set_mpiworldsize(worldSize);
+        REQUIRE(localWorld.getLocalQueueSize(rankA, rankB) == 1);
 
-        scheduler::MpiWorld& localWorld =
-          getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
-
-        // Set up a world on the "remote" host
-        std::string otherHost =
-          faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
-        scheduler::MpiWorld remoteWorld;
-        remoteWorld.overrideHost(otherHost);
-        remoteWorld.initialiseFromState(msg, worldId);
-
-        // Register two ranks (one on each host)
-        int rankA = 1;
-        int rankB = 2;
-        remoteWorld.registerRank(rankA);
-        localWorld.registerRank(rankB);
-
-        std::vector<int> messageData = { 0, 1, 2 };
-
-        // Send a message that should get sent to this host
-        remoteWorld.send(
-          rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
-        usleep(1000 * 100);
-
-        SECTION("Check queueing")
-        {
-            REQUIRE(localWorld.getLocalQueueSize(rankA, rankB) == 1);
-
-            // Check message content
-            faabric::MPIMessage actualMessage =
-              *(localWorld.getLocalQueue(rankA, rankB)->dequeue());
-            checkMessage(actualMessage, rankA, rankB, messageData);
-        }
-
-        SECTION("Check recv")
-        {
-            // Receive the message for the given rank
-            MPI_Status status{};
-            auto buffer = new int[messageData.size()];
-            localWorld.recv(rankA,
-                            rankB,
-                            BYTES(buffer),
-                            MPI_INT,
-                            messageData.size(),
-                            &status);
-
-            std::vector<int> actual(buffer, buffer + messageData.size());
-            REQUIRE(actual == messageData);
-
-            REQUIRE(status.MPI_SOURCE == rankA);
-            REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
-            REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
-        }
+        // Check message content
+        faabric::MPIMessage actualMessage =
+          *(localWorld.getLocalQueue(rankA, rankB)->dequeue());
+        checkMessage(actualMessage, rankA, rankB, messageData);
     }
 
-    server.stop(context);
+    SECTION("Check recv")
+    {
+        // Receive the message for the given rank
+        MPI_Status status{};
+        auto buffer = new int[messageData.size()];
+        localWorld.recv(rankA,
+                        rankB,
+                        BYTES(buffer),
+                        MPI_INT,
+                        messageData.size(),
+                        &status);
+
+        std::vector<int> actual(buffer, buffer + messageData.size());
+        REQUIRE(actual == messageData);
+
+        REQUIRE(status.MPI_SOURCE == rankA);
+        REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
+        REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
+    }
+
+    localWorld.closeFunctionCallClients();
+    remoteWorld.closeFunctionCallClients();
+
+    server.stop();
 }
 
 TEST_CASE("Test send/recv message with no data", "[mpi]")
@@ -699,9 +699,8 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 {
     cleanFaabric();
 
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
     {
@@ -995,7 +994,7 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
         //        }
     }
 
-    server.stop(context);
+    server.stop();
 }
 
 template<typename T>
@@ -1701,9 +1700,8 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
 {
     cleanFaabric();
 
-    auto& context = faabric::transport::getGlobalMessageContext();
     FunctionCallServer server;
-    server.start(context);
+    server.start();
     usleep(1000 * 100);
 
     {
@@ -1784,6 +1782,6 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
         }
     }
 
-    server.stop(context);
+    server.stop();
 }
 }

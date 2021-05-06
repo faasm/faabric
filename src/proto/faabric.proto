@@ -3,6 +3,14 @@ syntax = "proto3";
 package faabric;
 
 // ---------------------------------------------
+// UTIL MESSAGES
+// ---------------------------------------------
+
+message EmptyResponse {
+    int32 empty = 1;
+}
+
+// ---------------------------------------------
 // FUNCTION SCHEDULING
 // ---------------------------------------------
 
@@ -25,8 +33,8 @@ message BatchExecuteRequest {
     repeated int32 returnValues = 7;
 }
 
-message ResourceRequest {
-    int32 empty = 1;
+message ResponseRequest {
+    string returnHost = 1;
 }
 
 message HostResources {

@@ -12,14 +12,14 @@ namespace faabric::scheduler {
 // -----------------------------------
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
-static std::vector<std::pair<std::string, faabric::Message>> flushCalls;
+static std::vector<std::pair<std::string, faabric::ResponseRequest>> flushCalls;
 
 static std::vector<std::pair<std::string, faabric::BatchExecuteRequest>>
   batchMessages;
 
 static std::vector<std::pair<std::string, faabric::MPIMessage>> mpiMessages;
 
-static std::vector<std::pair<std::string, faabric::ResourceRequest>>
+static std::vector<std::pair<std::string, faabric::ResponseRequest>>
   resourceRequests;
 
 static std::unordered_map<std::string,
@@ -34,7 +34,7 @@ std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
     return functionCalls;
 }
 
-std::vector<std::pair<std::string, faabric::Message>> getFlushCalls()
+std::vector<std::pair<std::string, faabric::ResponseRequest>> getFlushCalls()
 {
     return flushCalls;
 }
@@ -50,7 +50,7 @@ std::vector<std::pair<std::string, faabric::MPIMessage>> getMPIMessages()
     return mpiMessages;
 }
 
-std::vector<std::pair<std::string, faabric::ResourceRequest>>
+std::vector<std::pair<std::string, faabric::ResponseRequest>>
 getResourceRequests()
 {
     return resourceRequests;
@@ -85,7 +85,7 @@ void clearMockRequests()
 // Message Client
 // -----------------------------------
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : faabric::transport::SimpleMessageEndpoint(hostIn, FUNCTION_CALL_PORT)
+  : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
 {
     this->open(faabric::transport::getGlobalMessageContext(),
                faabric::transport::SocketType::PUSH,
@@ -97,11 +97,6 @@ FunctionCallClient::~FunctionCallClient()
     if (!faabric::util::isMockMode()) {
         this->close();
     }
-}
-
-void FunctionCallClient::close()
-{
-    SimpleMessageEndpoint::close();
 }
 
 void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
@@ -125,21 +120,19 @@ void FunctionCallClient::awaitResponse()
 void FunctionCallClient::awaitResponse(char*& data, int& size)
 {
     // Call the superclass implementation
-    SimpleMessageEndpoint::awaitResponse(faabric::util::getSystemConfig().endpointHost,
-                                         FUNCTION_CALL_PORT + REPLY_PORT_OFFSET,
-                                         data,
-                                         size);
+    MessageEndpointClient::awaitResponse(
+      faabric::util::getSystemConfig().endpointHost,
+      FUNCTION_CALL_PORT + REPLY_PORT_OFFSET,
+      data,
+      size);
 }
-
 
 void FunctionCallClient::sendFlush()
 {
+    faabric::ResponseRequest call;
     if (faabric::util::isMockMode()) {
-        faabric::Message call;
         flushCalls.emplace_back(host, call);
     } else {
-        faabric::ResponseRequest call;
-
         // Send the header first
         sendHeader(faabric::scheduler::FunctionCalls::Flush);
 
@@ -177,13 +170,13 @@ void FunctionCallClient::sendMPIMessage(
     }
 }
 
-faabric::HostResources FunctionCallClient::getResources(
-  const faabric::ResourceRequest& req)
+faabric::HostResources FunctionCallClient::getResources()
 {
+    faabric::ResponseRequest request;
     faabric::HostResources response;
     if (faabric::util::isMockMode()) {
         // Register the request
-        resourceRequests.emplace_back(host, req);
+        resourceRequests.emplace_back(host, request);
 
         // See if we have a queued response
         if (queuedResourceResponses[host].size() > 0) {
@@ -193,7 +186,6 @@ faabric::HostResources FunctionCallClient::getResources(
         // Send the header first
         sendHeader(faabric::scheduler::FunctionCalls::GetResources);
 
-        faabric::ResponseRequest request;
         request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
         size_t msgSize = request.ByteSizeLong();
         char* serialisedMsg = new char[msgSize];

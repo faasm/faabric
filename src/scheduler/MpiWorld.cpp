@@ -86,16 +86,6 @@ faabric::scheduler::FunctionCallClient& MpiWorld::getRemoteEndpoint(
     return it->second;
 }
 
-// Clear thread local state
-void MpiWorld::clearTLS()
-{
-    // Close all open sockets
-    for (auto& s : remoteEndpoints) {
-        s.second.close();
-    }
-    remoteEndpoints.clear();
-}
-
 int MpiWorld::getMpiThreadPoolSize()
 {
     auto logger = faabric::util::getLogger();
@@ -167,6 +157,18 @@ void MpiWorld::closeFunctionCallClients()
           QUEUE_SHUTDOWN, std::bind(&MpiWorld::clearTLS, this), std::move(p)));
     }
 
+    // Lastly clean the main thread as well
+    clearTLS();
+}
+
+// Clear thread local state
+void MpiWorld::clearTLS()
+{
+    // Close all open sockets
+    for (auto& s : remoteEndpoints) {
+        s.second.close();
+    }
+    remoteEndpoints.clear();
 }
 
 void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
