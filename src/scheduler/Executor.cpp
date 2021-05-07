@@ -128,7 +128,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                 threadPoolThreads.emplace(
                   std::make_pair(threadPoolIdx, [this, threadPoolIdx] {
                       auto logger = faabric::util::getLogger();
-                      logger->debug("Thread pool thread {} starting up",
+                      logger->debug("Thread pool thread {}:{} starting up",
+                                    id,
                                     threadPoolIdx);
 
                       auto& sch = faabric::scheduler::getScheduler();
@@ -168,7 +169,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                               break;
                           }
 
-                          logger->trace("Thread {} executing task {} ({})",
+                          logger->trace("Thread {}:{} executing task {} ({})",
+                                        id,
                                         threadPoolIdx,
                                         msgIdx,
                                         msg.id());

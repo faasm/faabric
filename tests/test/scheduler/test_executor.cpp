@@ -45,11 +45,12 @@ class TestExecutor final : public Executor
 
     int32_t executeTask(int threadPoolIdx,
                         int msgIdx,
-                        std::shared_ptr<faabric::BatchExecuteRequest> req)
+                        std::shared_ptr<faabric::BatchExecuteRequest> reqOrig)
     {
         auto logger = faabric::util::getLogger();
-        faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-        bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
+        faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
+        bool isThread =
+          reqOrig->type() == faabric::BatchExecuteRequest::THREADS;
 
         // Check we're being asked to execute the message we've bound to
         REQUIRE(msg.user() == boundMessage.user());
@@ -66,26 +67,59 @@ class TestExecutor final : public Executor
                 nThreads = std::stoi(msg.inputdata());
             }
 
-            std::shared_ptr<faabric::BatchExecuteRequest> req =
+            std::shared_ptr<faabric::BatchExecuteRequest> chainedReq =
               faabric::util::batchExecFactory(
                 "dummy", "thread-check", nThreads);
-            req->set_type(faabric::BatchExecuteRequest::THREADS);
+            chainedReq->set_type(faabric::BatchExecuteRequest::THREADS);
 
             std::string snapKey = setUpDummySnapshot();
 
-            for (int i = 0; i < req->messages_size(); i++) {
-                faabric::Message& m = req->mutable_messages()->at(i);
+            for (int i = 0; i < chainedReq->messages_size(); i++) {
+                faabric::Message& m = chainedReq->mutable_messages()->at(i);
                 m.set_snapshotkey(snapKey);
                 m.set_appindex(i + 1);
             }
 
             // Call the threads
             Scheduler& sch = getScheduler();
-            sch.callFunctions(req);
+            sch.callFunctions(chainedReq);
 
-            for (auto& m : req->messages()) {
+            for (auto& m : chainedReq->messages()) {
                 sch.awaitThreadResult(m.id());
             }
+        } else if (msg.function() == "chain-check-a") {
+            if (msg.inputdata() == "chained") {
+                // Set up output data for the chained call
+                msg.set_outputdata("chain-check-a successful");
+            } else {
+                // Chain this function and another
+                std::shared_ptr<faabric::BatchExecuteRequest> reqThis =
+                  faabric::util::batchExecFactory("dummy", "chain-check-a", 1);
+                reqThis->mutable_messages()->at(0).set_inputdata("chained");
+
+                std::shared_ptr<faabric::BatchExecuteRequest> reqOther =
+                  faabric::util::batchExecFactory("dummy", "chain-check-b", 1);
+
+                Scheduler& sch = getScheduler();
+                sch.callFunctions(reqThis);
+                sch.callFunctions(reqOther);
+
+                for (auto& m : reqThis->messages()) {
+                    faabric::Message res =
+                      sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+                    REQUIRE(res.outputdata() == "chain-check-a successful");
+                }
+
+                for (auto& m : reqOther->messages()) {
+                    faabric::Message res =
+                      sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+                    REQUIRE(res.outputdata() == "chain-check-b successful");
+                }
+
+                msg.set_outputdata("All chain checks successful");
+            }
+        } else if (msg.function() == "chain-check-b") {
+            msg.set_outputdata("chain-check-b successful");
         } else if (msg.function() == "echo") {
             msg.set_outputdata(msg.inputdata());
             return 0;
@@ -93,7 +127,7 @@ class TestExecutor final : public Executor
             return 1;
         } else if (msg.function() == "error") {
             throw std::runtime_error("This is a test error");
-        } else if (req->type() == faabric::BatchExecuteRequest::THREADS) {
+        } else if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
             auto logger = faabric::util::getLogger();
             logger->debug("TestExecutor executing thread {}", msg.id());
 
@@ -160,6 +194,27 @@ TEST_CASE("Test executing simple function", "[executor]")
     // Check that restore has not been called
     REQUIRE(restoreCount == 0);
 
+    sch.shutdown();
+}
+
+TEST_CASE("Test executing chained functions", "[executor]")
+{
+    cleanFaabric();
+    restoreCount = 0;
+
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "chain-check-a", 1);
+    uint32_t msgId = req->messages().at(0).id();
+
+    executeWithTestExecutor(req, false);
+
+    auto& sch = faabric::scheduler::getScheduler();
+    faabric::Message result =
+      sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
+    REQUIRE(result.outputdata() == "All chain checks successful");
+
+    // Check that restore has not been called
+    REQUIRE(restoreCount == 0);
     sch.shutdown();
 }
 
