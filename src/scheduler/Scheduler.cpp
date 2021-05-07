@@ -62,6 +62,8 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::reset()
 {
+    faabric::util::FullLock lock(mx);
+
     // Shut down all Executors
     for (auto p : warmExecutors) {
         for (auto e : p.second) {
@@ -165,8 +167,8 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
     // Add back to pool of warm executors
     warmExecutors[funcStr].emplace_back(execPtr);
 
-    // Reset the executor
-    execPtr->reset(msg);
+    // Rest this executor ready for next invocation
+    exec->reset(msg);
 }
 
 void Scheduler::notifyExecutorShutdown(Executor* exec,

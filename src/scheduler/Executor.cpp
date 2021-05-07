@@ -31,10 +31,17 @@ Executor::~Executor()
 
 void Executor::finish()
 {
-    faabric::util::getLogger()->debug("Shutting down executor {}", id);
+    const auto& logger = faabric::util::getLogger();
+    logger->debug("Executor {} shutting down", id);
+
+    assert(threadQueues.size() == threadPoolThreads.size());
+
+    bool isThreads = threadPoolThreads.size() > 1;
 
     // Shut down thread pool with a series of kill messages
     for (auto& queuePair : threadQueues) {
+        logger->trace(
+          "Executor {} killing thread pool {}", id, queuePair.first);
         std::shared_ptr<BatchExecuteRequest> killReq =
           faabric::util::batchExecFactory();
 
@@ -43,16 +50,32 @@ void Executor::finish()
     }
 
     // Wait
+    logger->trace("Executor {} awaiting all non-master threads", id);
     for (auto& t : threadPoolThreads) {
+        if (isThreads && t.first == 0) {
+            continue;
+        }
+
         if (t.second.joinable()) {
             t.second.join();
         }
     }
 
-    threadQueues.clear();
+    if (threadPoolThreads.count(0) == 0) {
+        logger->trace("Executor {} has no master thread", id);
+    } else {
+        logger->trace("Executor {} awaiting master thread", id);
+
+        if (threadPoolThreads[0].joinable()) {
+            threadPoolThreads[0].join();
+        }
+    }
 
     // Hook
     this->postFinish();
+
+    threadQueues.clear();
+    threadPoolThreads.clear();
 }
 
 void Executor::executeTasks(std::vector<int> msgIdxs,
@@ -134,6 +157,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                   auto& conf = faabric::util::getSystemConfig();
 
                   for (;;) {
+                      logger->trace(
+                        "Thread starting loop {}:{}", id, threadPoolIdx);
                       std::pair<int,
                                 std::shared_ptr<faabric::BatchExecuteRequest>>
                         task;
@@ -184,20 +209,25 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                                         ex.what()));
                       }
 
+                      logger->trace("Task {} finished by thread {}:{}",
+                                    msg.id(),
+                                    id,
+                                    threadPoolIdx);
                       msg.set_returnvalue(returnValue);
-
-                      // Notify finished
-                      if (isThread) {
-                          sch.setThreadResult(msg, returnValue);
-                      } else {
-                          sch.setFunctionResult(msg);
-                      }
 
                       // Decrement task count and notify if we're completely
                       // done
                       int oldTaskCount = executingTaskCount.fetch_sub(1);
                       if (oldTaskCount == 1) {
                           sch.notifyExecutorFinished(this, msg);
+                      }
+
+                      // Notify the scheduler last, as this executor may be
+                      // killed instantly afterwards
+                      if (isThread) {
+                          sch.setThreadResult(msg, returnValue);
+                      } else {
+                          sch.setFunctionResult(msg);
                       }
                   }
               }));

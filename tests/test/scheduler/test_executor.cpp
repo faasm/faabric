@@ -84,9 +84,14 @@ class TestExecutor final : public Executor
             Scheduler& sch = getScheduler();
             sch.callFunctions(chainedReq);
 
-            for (auto& m : chainedReq->messages()) {
-                sch.awaitThreadResult(m.id());
+            for (int i = 0; i < chainedReq->messages_size(); i++) {
+                uint32_t mid = chainedReq->messages().at(i).id();
+                sch.awaitThreadResult(mid);
             }
+
+            logger->trace("TestExecutor got {} thread results",
+                          chainedReq->messages_size());
+            return 0;
         } else if (msg.function() == "chain-check-a") {
             if (msg.inputdata() == "chained") {
                 // Set up output data for the chained call
@@ -128,7 +133,6 @@ class TestExecutor final : public Executor
         } else if (msg.function() == "error") {
             throw std::runtime_error("This is a test error");
         } else if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
-            auto logger = faabric::util::getLogger();
             logger->debug("TestExecutor executing thread {}", msg.id());
 
             return msg.id() / 100;
