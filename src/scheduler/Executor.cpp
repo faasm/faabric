@@ -63,10 +63,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     const std::string funcStr = faabric::util::funcToString(req);
     logger->trace("{} executing {}/{} tasks of {}",
-                 id,
-                 nMessages,
-                 req->messages_size(),
-                 funcStr);
+                  id,
+                  nMessages,
+                  req->messages_size(),
+                  funcStr);
 
     // Restore if necessary. If we're executing threads on the master host we
     // assume we don't need to restore, but for everything else we do. If we've
