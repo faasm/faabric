@@ -83,7 +83,7 @@ void DummyStateServer::start()
     });
 
     // Give it time to start
-    usleep(500 * 1000);
+    usleep(1000 * 1000);
 }
 
 void DummyStateServer::stop()
