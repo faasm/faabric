@@ -68,6 +68,12 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                   req->messages_size(),
                   funcStr);
 
+    // Note that this lock is specific to this executor, so will only block when
+    // multiple threads are trying to schedule tasks.
+    // This will only happen when child threads of the same function are
+    // competing, hence is rare.
+    faabric::util::UniqueLock lock(threadsMutex);
+
     // Restore if necessary. If we're executing threads on the master host we
     // assume we don't need to restore, but for everything else we do. If we've
     // already restored from this snapshot, we don't do so again.
@@ -82,8 +88,6 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     if (isSnapshot && !alreadyRestored) {
         if ((!isMaster && isThreads) || !isThreads) {
-            faabric::util::UniqueLock lock(threadsMutex);
-
             logger->debug(
               "Performing snapshot restore {} [{}]", funcStr, snapshotKey);
             lastSnapshot = snapshotKey;
@@ -120,92 +124,83 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Lazily create the thread
         if (threadPoolThreads.count(threadPoolIdx) == 0) {
-            // Get mutex and re-check
-            faabric::util::UniqueLock lock(threadsMutex);
+            threadPoolThreads.emplace(
+              std::make_pair(threadPoolIdx, [this, threadPoolIdx] {
+                  auto logger = faabric::util::getLogger();
+                  logger->debug(
+                    "Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
-            if (threadPoolThreads.count(threadPoolIdx) == 0) {
+                  auto& sch = faabric::scheduler::getScheduler();
+                  auto& conf = faabric::util::getSystemConfig();
 
-                threadPoolThreads.emplace(
-                  std::make_pair(threadPoolIdx, [this, threadPoolIdx] {
-                      auto logger = faabric::util::getLogger();
-                      logger->debug("Thread pool thread {}:{} starting up",
-                                    id,
-                                    threadPoolIdx);
+                  for (;;) {
+                      std::pair<int,
+                                std::shared_ptr<faabric::BatchExecuteRequest>>
+                        task;
 
-                      auto& sch = faabric::scheduler::getScheduler();
-                      auto& conf = faabric::util::getSystemConfig();
-
-                      for (;;) {
-                          std::pair<
-                            int,
-                            std::shared_ptr<faabric::BatchExecuteRequest>>
-                            task;
-
-                          try {
-                              task = threadQueues[threadPoolIdx].dequeue(
-                                conf.boundTimeout);
-                          } catch (faabric::util::QueueTimeoutException& ex) {
-                              // If the thread has had no messages, it needs to
-                              // remove itself
-                              shutdownThreadPoolThread(threadPoolIdx);
-                              break;
-                          }
-
-                          int msgIdx = task.first;
-                          std::shared_ptr<faabric::BatchExecuteRequest> req =
-                            task.second;
-                          bool isThread = req->type() ==
-                                          faabric::BatchExecuteRequest::THREADS;
-
-                          faabric::Message& msg =
-                            req->mutable_messages()->at(msgIdx);
-
-                          // If the thread is being killed, the executor itself
-                          // will handle the clean-up
-                          if (msg.type() == faabric::Message::KILL) {
-                              logger->debug("Killing thread pool thread {}:{}",
-                                            id,
-                                            threadPoolIdx);
-                              break;
-                          }
-
-                          logger->trace("Thread {}:{} executing task {} ({})",
-                                        id,
-                                        threadPoolIdx,
-                                        msgIdx,
-                                        msg.id());
-
-                          int32_t returnValue;
-                          try {
-                              returnValue =
-                                executeTask(threadPoolIdx, msgIdx, req);
-                          } catch (const std::exception& ex) {
-                              returnValue = 1;
-
-                              msg.set_outputdata(
-                                fmt::format("Task {} threw exception. What: {}",
-                                            msg.id(),
-                                            ex.what()));
-                          }
-
-                          msg.set_returnvalue(returnValue);
-
-                          // Notify finished
-                          if (isThread) {
-                              sch.setThreadResult(msg, returnValue);
-                          } else {
-                              sch.setFunctionResult(msg);
-                          }
-
-                          // Decrement task count and notify if we're completely
-                          // done
-                          int oldTaskCount = executingTaskCount.fetch_sub(1);
-                          if (oldTaskCount == 1) {
-                              sch.notifyExecutorFinished(this, msg);
-                          }
+                      try {
+                          task = threadQueues[threadPoolIdx].dequeue(
+                            conf.boundTimeout);
+                      } catch (faabric::util::QueueTimeoutException& ex) {
+                          // If the thread has had no messages, it needs to
+                          // remove itself
+                          shutdownThreadPoolThread(threadPoolIdx);
+                          break;
                       }
-                  }));
-            }
+
+                      int msgIdx = task.first;
+                      std::shared_ptr<faabric::BatchExecuteRequest> req =
+                        task.second;
+                      bool isThread =
+                        req->type() == faabric::BatchExecuteRequest::THREADS;
+
+                      faabric::Message& msg =
+                        req->mutable_messages()->at(msgIdx);
+
+                      // If the thread is being killed, the executor itself
+                      // will handle the clean-up
+                      if (msg.type() == faabric::Message::KILL) {
+                          logger->debug("Killing thread pool thread {}:{}",
+                                        id,
+                                        threadPoolIdx);
+                          break;
+                      }
+
+                      logger->trace("Thread {}:{} executing task {} ({})",
+                                    id,
+                                    threadPoolIdx,
+                                    msgIdx,
+                                    msg.id());
+
+                      int32_t returnValue;
+                      try {
+                          returnValue = executeTask(threadPoolIdx, msgIdx, req);
+                      } catch (const std::exception& ex) {
+                          returnValue = 1;
+
+                          msg.set_outputdata(
+                            fmt::format("Task {} threw exception. What: {}",
+                                        msg.id(),
+                                        ex.what()));
+                      }
+
+                      msg.set_returnvalue(returnValue);
+
+                      // Notify finished
+                      if (isThread) {
+                          sch.setThreadResult(msg, returnValue);
+                      } else {
+                          sch.setFunctionResult(msg);
+                      }
+
+                      // Decrement task count and notify if we're completely
+                      // done
+                      int oldTaskCount = executingTaskCount.fetch_sub(1);
+                      if (oldTaskCount == 1) {
+                          sch.notifyExecutorFinished(this, msg);
+                      }
+                  }
+              }));
         }
     }
 }

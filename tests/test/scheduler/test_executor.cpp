@@ -52,7 +52,7 @@ class TestExecutor final : public Executor
         bool isThread =
           reqOrig->type() == faabric::BatchExecuteRequest::THREADS;
 
-        // Check we're being asked to execute the message we've bound to
+        // Check we're being asked to execute the function we've bound to
         REQUIRE(msg.user() == boundMessage.user());
         REQUIRE(msg.function() == boundMessage.function());
 
@@ -259,7 +259,7 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     cleanFaabric();
     restoreCount = 0;
 
-    int nThreads = 100;
+    int nThreads;
     SECTION("Underloaded") { nThreads = 8; }
 
     SECTION("Overloaded") { nThreads = 100; }
@@ -272,13 +272,53 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     executeWithTestExecutor(req, false);
 
     auto& sch = faabric::scheduler::getScheduler();
-    faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
+    faabric::Message res = sch.getFunctionResult(msg.id(), 5000);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that restore has not been called as we're on the master
     REQUIRE(restoreCount == 0);
 
     sch.shutdown();
+}
+
+TEST_CASE("Test repeatedly executing threads indirectly", "[executor]")
+{
+    cleanFaabric();
+
+    // In the past this test would periodically fail. Bumping up the number of
+    // repeats flushed out the error, so we should keep this relatively high
+    int nRepeats = 50;
+    int nThreads = 100;
+
+    auto& sch = faabric::scheduler::getScheduler();
+
+    std::shared_ptr<TestExecutorFactory> fac =
+      std::make_shared<TestExecutorFactory>();
+    setExecutorFactory(fac);
+
+    auto& conf = faabric::util::getSystemConfig();
+    int boundOriginal = conf.boundTimeout;
+    int overrideCpuOriginal = conf.overrideCpuCount;
+
+    conf.overrideCpuCount = 10;
+    conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
+
+    for (int i = 0; i < nRepeats; i++) {
+        std::shared_ptr<BatchExecuteRequest> req =
+          faabric::util::batchExecFactory("dummy", "thread-check", 1);
+        faabric::Message& msg = req->mutable_messages()->at(0);
+        msg.set_inputdata(std::to_string(nThreads));
+
+        executeWithTestExecutor(req, false);
+
+        faabric::Message res = sch.getFunctionResult(msg.id(), 5000);
+        REQUIRE(res.returnvalue() == 0);
+
+        sch.reset();
+    }
+
+    conf.boundTimeout = boundOriginal;
+    conf.overrideCpuCount = overrideCpuOriginal;
 }
 
 TEST_CASE("Test executing remote threads indirectly", "[executor]")
