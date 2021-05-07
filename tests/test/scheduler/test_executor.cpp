@@ -204,7 +204,7 @@ TEST_CASE("Test executing threads indirectly", "[executor]")
     cleanFaabric();
     restoreCount = 0;
 
-    int nThreads;
+    int nThreads = 100;
     SECTION("Underloaded") { nThreads = 8; }
 
     SECTION("Overloaded") { nThreads = 100; }

@@ -62,7 +62,11 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     int nMessages = msgIdxs.size();
 
     const std::string funcStr = faabric::util::funcToString(req);
-    logger->info("{} executing {} tasks of {}", id, nMessages, funcStr);
+    logger->trace("{} executing {}/{} tasks of {}",
+                 id,
+                 nMessages,
+                 req->messages_size(),
+                 funcStr);
 
     // Restore if necessary. If we're executing threads on the master host we
     // assume we don't need to restore, but for everything else we do. If we've
@@ -100,9 +104,18 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Iterate through and invoke tasks
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
-        int threadPoolIdx = msg.appindex() % threadPoolSize;
+
+        // If executing threads, we must always keep thread pool index zero
+        // free, as this may be executing the function that spawned them
+        int threadPoolIdx;
+        if (isThreads) {
+            threadPoolIdx = (msg.appindex() % (threadPoolSize - 1)) + 1;
+        } else {
+            threadPoolIdx = msg.appindex() % threadPoolSize;
+        }
 
         // Enqueue the task
+        logger->trace("Assigning task {} to {}", msgIdx, threadPoolIdx);
         threadQueues[threadPoolIdx].enqueue(std::make_pair(msgIdx, req));
 
         // Lazily create the thread
@@ -154,6 +167,11 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                                             threadPoolIdx);
                               break;
                           }
+
+                          logger->trace("Thread {} executing task {} ({})",
+                                        threadPoolIdx,
+                                        msgIdx,
+                                        msg.id());
 
                           int32_t returnValue;
                           try {
