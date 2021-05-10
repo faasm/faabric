@@ -89,7 +89,8 @@ class TestExecutor final : public Executor
 
             for (int i = 0; i < chainedReq->messages_size(); i++) {
                 uint32_t mid = chainedReq->messages().at(i).id();
-                sch.awaitThreadResult(mid);
+                int threadRes = sch.awaitThreadResult(mid);
+                assert(threadRes == mid / 100);
             }
 
             logger->trace("TestExecutor got {} thread results",
@@ -136,8 +137,6 @@ class TestExecutor final : public Executor
         } else if (msg.function() == "error") {
             throw std::runtime_error("This is a test error");
         } else if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
-            logger->debug("TestExecutor executing thread {}", msg.id());
-
             return msg.id() / 100;
         } else {
             msg.set_outputdata(

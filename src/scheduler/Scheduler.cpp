@@ -75,6 +75,7 @@ void Scheduler::reset()
     // Reset scheduler state
     availableHostsCache.clear();
     registeredHosts.clear();
+    threadResults.clear();
 
     // Records
     recordedMessagesAll.clear();

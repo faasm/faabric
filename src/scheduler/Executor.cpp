@@ -57,6 +57,14 @@ void Executor::finish()
     // Hook
     this->postFinish();
 
+    // Reset variables
+    boundMessage.Clear();
+    executingTaskCount = 0;
+
+    lastSnapshot = "";
+
+    claimed = false;
+
     threadPoolThreads.clear();
     threadQueues.clear();
 }
