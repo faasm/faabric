@@ -70,6 +70,8 @@ class Executor
       std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
       threadQueues;
 
+    void threadPoolThread(int threadPoolIdx);
+
     void shutdownThreadPoolThread(int threadPoolIdx);
 };
 
