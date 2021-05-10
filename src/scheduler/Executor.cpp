@@ -20,6 +20,9 @@ Executor::Executor(const faabric::Message& msg)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
+    assert(!boundMessage.user().empty());
+    assert(!boundMessage.function().empty());
+
     // Set an ID for this Executor
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
     faabric::util::getLogger()->debug("Starting executor {}", id);
@@ -120,13 +123,17 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         // free, as this may be executing the function that spawned them
         int threadPoolIdx;
         if (isThreads) {
+            assert(threadPoolSize > 1);
             threadPoolIdx = (msg.appindex() % (threadPoolSize - 1)) + 1;
         } else {
             threadPoolIdx = msg.appindex() % threadPoolSize;
         }
 
         // Enqueue the task
-        logger->trace("Assigning task {} to {}", msgIdx, threadPoolIdx);
+        logger->trace("Assigning task {} ({}) to {}",
+                      msgIdx,
+                      msg.appindex(),
+                      threadPoolIdx);
         threadQueues[threadPoolIdx].enqueue(std::make_pair(msgIdx, req));
 
         // Lazily create the thread
@@ -206,9 +213,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                           sch.setFunctionResult(msg);
                       }
 
-                      // Notify the scheduler last, as this executor may be
-                      // killed instantly afterwards
+                      // Notify the scheduler
                       int oldTaskCount = executingTaskCount.fetch_sub(1);
+                      assert(oldTaskCount >= 0);
+
                       if (oldTaskCount == 1) {
                           sch.notifyExecutorFinished(this, msg);
                       }

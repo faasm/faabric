@@ -63,12 +63,6 @@ void Scheduler::addHostToGlobalSet()
 void Scheduler::reset()
 {
     // Shut down all Executors
-    for (auto p : executors) {
-        for (auto e : p.second) {
-            e->finish();
-        }
-    }
-
     executors.clear();
 
     // Ensure host is set correctly
@@ -144,6 +138,8 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
                                        const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
+
+    faabric::util::getLogger()->trace("Shutting down executor {}", exec->id);
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
@@ -356,6 +352,8 @@ std::vector<std::string> Scheduler::callFunctions(
                   "Expected only one executor for threaded function");
             }
 
+            assert(e != nullptr);
+
             // Execute the tasks
             e->executeTasks(localMessageIdxs, req);
         } else {
@@ -552,6 +550,7 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
         assert(claimed->tryClaim());
     }
 
+    assert(claimed != nullptr);
     return claimed;
 }
 

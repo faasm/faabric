@@ -15,6 +15,9 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
+// Some tests in here run for longer
+#define LONG_TEST_TIMEOUT_MS 10000
+
 std::atomic<int> restoreCount = 0;
 
 std::string setUpDummySnapshot()
@@ -53,8 +56,8 @@ class TestExecutor final : public Executor
           reqOrig->type() == faabric::BatchExecuteRequest::THREADS;
 
         // Check we're being asked to execute the function we've bound to
-        REQUIRE(msg.user() == boundMessage.user());
-        REQUIRE(msg.function() == boundMessage.function());
+        assert(msg.user() == boundMessage.user());
+        assert(msg.function() == boundMessage.function());
 
         // Custom thread-check function
         if (msg.function() == "thread-check" && !isThread) {
@@ -112,13 +115,13 @@ class TestExecutor final : public Executor
                 for (auto& m : reqThis->messages()) {
                     faabric::Message res =
                       sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
-                    REQUIRE(res.outputdata() == "chain-check-a successful");
+                    assert(res.outputdata() == "chain-check-a successful");
                 }
 
                 for (auto& m : reqOther->messages()) {
                     faabric::Message res =
                       sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
-                    REQUIRE(res.outputdata() == "chain-check-b successful");
+                    assert(res.outputdata() == "chain-check-b successful");
                 }
 
                 msg.set_outputdata("All chain checks successful");
@@ -226,8 +229,8 @@ TEST_CASE("Test executing threads directly", "[executor]")
 {
     cleanFaabric();
     restoreCount = 0;
+    int nThreads = 0;
 
-    int nThreads = 10;
     SECTION("Underloaded") { nThreads = 10; }
 
     SECTION("Overloaded") { nThreads = 200; }
@@ -239,7 +242,10 @@ TEST_CASE("Test executing threads directly", "[executor]")
     std::vector<uint32_t> messageIds;
     std::string snapKey = setUpDummySnapshot();
     for (int i = 0; i < nThreads; i++) {
-        req->mutable_messages()->at(i).set_snapshotkey(snapKey);
+        faabric::Message& msg = req->mutable_messages()->at(i);
+        msg.set_snapshotkey(snapKey);
+        msg.set_appindex(i);
+
         messageIds.emplace_back(req->messages().at(i).id());
     }
 
@@ -289,10 +295,10 @@ TEST_CASE("Test repeatedly executing threads indirectly", "[executor]")
 {
     cleanFaabric();
 
-    // In the past this test would periodically fail. Bumping up the number of
-    // repeats flushed out the error, so we should keep this relatively high
-    int nRepeats = 50;
-    int nThreads = 100;
+    // We really want to stress things here, but it's quite quick to run, so
+    // don't be afraid to bump up the number of threads
+    int nRepeats = 10;
+    int nThreads = 1000;
 
     auto& sch = faabric::scheduler::getScheduler();
 
@@ -305,7 +311,7 @@ TEST_CASE("Test repeatedly executing threads indirectly", "[executor]")
     int overrideCpuOriginal = conf.overrideCpuCount;
 
     conf.overrideCpuCount = 10;
-    conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
+    conf.boundTimeout = LONG_TEST_TIMEOUT_MS;
 
     for (int i = 0; i < nRepeats; i++) {
         std::shared_ptr<BatchExecuteRequest> req =
@@ -315,7 +321,8 @@ TEST_CASE("Test repeatedly executing threads indirectly", "[executor]")
 
         executeWithTestExecutor(req, false);
 
-        faabric::Message res = sch.getFunctionResult(msg.id(), 5000);
+        faabric::Message res =
+          sch.getFunctionResult(msg.id(), LONG_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
 
         sch.reset();
