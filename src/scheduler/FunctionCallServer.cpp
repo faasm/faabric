@@ -97,7 +97,8 @@ void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
     }
 
     // This host has now been told to execute these functions no matter what
-    scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(request), true);
+    scheduler.callFunctions(
+      std::make_shared<faabric::BatchExecuteRequest>(request), true);
 }
 
 void FunctionCallServer::recvUnregister(const void* msgData, int size)

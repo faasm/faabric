@@ -455,8 +455,7 @@ TEST_CASE("Test send across hosts", "[mpi]")
       getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
 
     // Set up a world on the "remote" host
-    std::string otherHost =
-      faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
+    std::string otherHost = faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
     remoteWorld.initialiseFromState(msg, worldId);
@@ -489,12 +488,8 @@ TEST_CASE("Test send across hosts", "[mpi]")
         // Receive the message for the given rank
         MPI_Status status{};
         auto buffer = new int[messageData.size()];
-        localWorld.recv(rankA,
-                        rankB,
-                        BYTES(buffer),
-                        MPI_INT,
-                        messageData.size(),
-                        &status);
+        localWorld.recv(
+          rankA, rankB, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
         std::vector<int> actual(buffer, buffer + messageData.size());
         REQUIRE(actual == messageData);
