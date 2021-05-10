@@ -63,6 +63,12 @@ void Scheduler::addHostToGlobalSet()
 void Scheduler::reset()
 {
     // Shut down all Executors
+    for (auto& p : executors) {
+        for (auto& e : p.second) {
+            e->finish();
+        }
+    }
+
     executors.clear();
 
     // Ensure host is set correctly
@@ -574,22 +580,24 @@ void Scheduler::broadcastFlush()
         c.sendFlush();
     }
 
-    // Perform flush locally
     flushLocally();
 }
 
 void Scheduler::flushLocally()
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+    const auto& logger = faabric::util::getLogger();
     logger->info("Flushing host {}",
                  faabric::util::getSystemConfig().endpointHost);
 
-    // Flush each executor
+    // Call flush on all executors
     for (auto& p : executors) {
-        for (auto& f : p.second) {
-            f->flush();
+        for (auto& e : p.second) {
+            e->flush();
         }
     }
+
+    // Reset this scheduler
+    reset();
 }
 
 void Scheduler::setFunctionResult(faabric::Message& msg)

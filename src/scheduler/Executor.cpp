@@ -28,10 +28,7 @@ Executor::Executor(const faabric::Message& msg)
     faabric::util::getLogger()->debug("Starting executor {}", id);
 }
 
-Executor::~Executor()
-{
-    finish();
-}
+Executor::~Executor() {}
 
 void Executor::finish()
 {
