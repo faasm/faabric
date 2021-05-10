@@ -584,4 +584,35 @@ TEST_CASE("Test executing different functions", "[executor]")
     sch.shutdown();
 }
 
+TEST_CASE("Test claiming and releasing executor", "[executor]")
+{
+    cleanFaabric();
+
+    faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
+    faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
+
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      faabric::scheduler::getExecutorFactory();
+    std::shared_ptr<faabric::scheduler::Executor> execA =
+      fac->createExecutor(msgA);
+    std::shared_ptr<faabric::scheduler::Executor> execB =
+      fac->createExecutor(msgB);
+
+    // Claim one
+    REQUIRE(execA->tryClaim());
+
+    // Check can't claim again
+    REQUIRE(!execA->tryClaim());
+
+    // Same for the other
+    REQUIRE(execB->tryClaim());
+    REQUIRE(!execB->tryClaim());
+
+    // Release one and check can claim again
+    execA->releaseClaim();
+
+    REQUIRE(execA->tryClaim());
+    REQUIRE(!execB->tryClaim());
+}
+
 }

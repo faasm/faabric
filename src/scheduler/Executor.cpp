@@ -14,10 +14,11 @@ namespace faabric::scheduler {
 // TODO - avoid the copy of the message here?
 Executor::Executor(const faabric::Message& msg)
   : boundMessage(msg)
+  , threadPoolSize(faabric::util::getUsableCores())
+  , threadPoolThreads(threadPoolSize)
+  , threadQueues(threadPoolSize)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-
-    threadPoolSize = faabric::util::getUsableCores();
 
     // Set an ID for this Executor
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
@@ -34,48 +35,31 @@ void Executor::finish()
     const auto& logger = faabric::util::getLogger();
     logger->debug("Executor {} shutting down", id);
 
-    assert(threadQueues.size() == threadPoolThreads.size());
+    // Shut down thread pools and wait
+    for (int i = 0; i < threadPoolThreads.size(); i++) {
+        if (threadPoolThreads.at(i) == nullptr) {
+            continue;
+        }
 
-    bool isThreads = threadPoolThreads.size() > 1;
-
-    // Shut down thread pool with a series of kill messages
-    for (auto& queuePair : threadQueues) {
-        logger->trace(
-          "Executor {} killing thread pool {}", id, queuePair.first);
+        // Send a kill message
+        logger->trace("Executor {} killing thread pool {}", id, i);
         std::shared_ptr<BatchExecuteRequest> killReq =
           faabric::util::batchExecFactory();
 
         killReq->add_messages()->set_type(faabric::Message::KILL);
-        queuePair.second.enqueue(std::make_pair(0, killReq));
-    }
+        threadQueues.at(i).enqueue(std::make_pair(0, killReq));
 
-    // Wait
-    logger->trace("Executor {} awaiting all non-master threads", id);
-    for (auto& t : threadPoolThreads) {
-        if (isThreads && t.first == 0) {
-            continue;
-        }
-
-        if (t.second.joinable()) {
-            t.second.join();
-        }
-    }
-
-    if (threadPoolThreads.count(0) == 0) {
-        logger->trace("Executor {} has no master thread", id);
-    } else {
-        logger->trace("Executor {} awaiting master thread", id);
-
-        if (threadPoolThreads[0].joinable()) {
-            threadPoolThreads[0].join();
+        // Await the thread
+        if (threadPoolThreads.at(i)->joinable()) {
+            threadPoolThreads.at(i)->join();
         }
     }
 
     // Hook
     this->postFinish();
 
-    threadQueues.clear();
     threadPoolThreads.clear();
+    threadQueues.clear();
 }
 
 void Executor::executeTasks(std::vector<int> msgIdxs,
@@ -94,7 +78,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Note that this lock is specific to this executor, so will only block when
     // multiple threads are trying to schedule tasks.
     // This will only happen when child threads of the same function are
-    // competing, hence is rare.
+    // competing, hence is rare so we can afford to be conservative here.
     faabric::util::UniqueLock lock(threadsMutex);
 
     // Restore if necessary. If we're executing threads on the master host we
@@ -146,9 +130,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         threadQueues[threadPoolIdx].enqueue(std::make_pair(msgIdx, req));
 
         // Lazily create the thread
-        if (threadPoolThreads.count(threadPoolIdx) == 0) {
-            threadPoolThreads.emplace(
-              std::make_pair(threadPoolIdx, [this, threadPoolIdx] {
+        if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
+            threadPoolThreads.at(threadPoolIdx) =
+              std::make_shared<std::thread>([this, threadPoolIdx] {
                   auto logger = faabric::util::getLogger();
                   logger->debug(
                     "Thread pool thread {}:{} starting up", id, threadPoolIdx);
@@ -215,22 +199,21 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                                     threadPoolIdx);
                       msg.set_returnvalue(returnValue);
 
-                      // Decrement task count and notify if we're completely
-                      // done
-                      int oldTaskCount = executingTaskCount.fetch_sub(1);
-                      if (oldTaskCount == 1) {
-                          sch.notifyExecutorFinished(this, msg);
-                      }
-
-                      // Notify the scheduler last, as this executor may be
-                      // killed instantly afterwards
+                      // Set function result
                       if (isThread) {
                           sch.setThreadResult(msg, returnValue);
                       } else {
                           sch.setFunctionResult(msg);
                       }
+
+                      // Notify the scheduler last, as this executor may be
+                      // killed instantly afterwards
+                      int oldTaskCount = executingTaskCount.fetch_sub(1);
+                      if (oldTaskCount == 1) {
+                          sch.notifyExecutorFinished(this, msg);
+                      }
                   }
-              }));
+              });
         }
     }
 }
@@ -240,13 +223,25 @@ void Executor::shutdownThreadPoolThread(int threadPoolIdx)
     const auto& logger = faabric::util::getLogger();
     logger->debug("Shutting down thread pool thread {}:{}", id, threadPoolIdx);
 
-    threadPoolThreads.erase(threadPoolIdx);
+    threadPoolThreads.at(threadPoolIdx) = nullptr;
 
     if (threadPoolThreads.empty()) {
         // Notify that we're done
         auto& sch = faabric::scheduler::getScheduler();
         sch.notifyExecutorShutdown(this, boundMessage);
     }
+}
+
+bool Executor::tryClaim()
+{
+    bool expected = false;
+    bool wasClaimed = claimed.compare_exchange_strong(expected, true);
+    return wasClaimed;
+}
+
+void Executor::releaseClaim()
+{
+    claimed.store(false);
 }
 
 // ------------------------------------------

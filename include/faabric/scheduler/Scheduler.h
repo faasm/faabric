@@ -43,6 +43,12 @@ class Executor
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
+    bool tryClaim();
+
+    void claim();
+
+    void releaseClaim();
+
   protected:
     virtual void restore(const faabric::Message& msg);
 
@@ -53,16 +59,15 @@ class Executor
   private:
     std::string lastSnapshot;
 
+    std::atomic<bool> claimed = false;
+
     std::atomic<int> executingTaskCount = 0;
 
     std::mutex threadsMutex;
     uint32_t threadPoolSize = 0;
-    std::unordered_map<int, std::thread> threadPoolThreads;
-
-    std::unordered_map<
-      int,
-      faabric::util::Queue<
-        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
+    std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
+    std::vector<faabric::util::Queue<
+      std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
       threadQueues;
 
     void shutdownThreadPoolThread(int threadPoolIdx);
@@ -162,10 +167,7 @@ class Scheduler
     faabric::util::SystemConfig& conf;
 
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
-      executingExecutors;
-
-    std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
-      warmExecutors;
+      executors;
 
     std::shared_mutex mx;
 

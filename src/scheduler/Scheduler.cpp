@@ -62,23 +62,14 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::reset()
 {
-    faabric::util::FullLock lock(mx);
-
     // Shut down all Executors
-    for (auto p : warmExecutors) {
+    for (auto p : executors) {
         for (auto e : p.second) {
             e->finish();
         }
     }
 
-    for (auto p : executingExecutors) {
-        for (auto e : p.second) {
-            e->finish();
-        }
-    }
-
-    warmExecutors.clear();
-    executingExecutors.clear();
+    executors.clear();
 
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -107,7 +98,7 @@ void Scheduler::shutdown()
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 {
     const std::string funcStr = faabric::util::funcToString(msg, false);
-    return warmExecutors[funcStr].size() + executingExecutors[funcStr].size();
+    return executors[funcStr].size();
 }
 
 int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
@@ -140,34 +131,12 @@ void Scheduler::notifyExecutorFinished(Executor* exec,
                                        const faabric::Message& msg)
 {
     faabric::util::FullLock lock(mx);
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    const auto& logger = faabric::util::getLogger();
 
+    const auto& logger = faabric::util::getLogger();
     logger->debug("{} finished message {}", exec->id, msg.id());
 
-    std::vector<std::shared_ptr<Executor>>& executing =
-      executingExecutors[funcStr];
-
-    // Find and remove from executing executors
-    std::shared_ptr<Executor> execPtr = nullptr;
-    for (int i = 0; i < executing.size(); i++) {
-        if (executing.at(i)->id == exec->id) {
-            execPtr = executing.at(i);
-            executing.erase(executing.begin() + i);
-            break;
-        }
-    }
-
-    // Check if not found
-    if (execPtr == nullptr) {
-        logger->error("Unable to find record of executor {}", exec->id);
-        throw std::runtime_error("Unable to find record of executor");
-    }
-
-    // Add back to pool of warm executors
-    warmExecutors[funcStr].emplace_back(execPtr);
-
-    // Rest this executor ready for next invocation
+    // Reset this executor ready for next invocation
+    exec->releaseClaim();
     exec->reset(msg);
 }
 
@@ -178,24 +147,14 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    std::vector<std::shared_ptr<Executor>>& warm = warmExecutors[funcStr];
-    std::vector<std::shared_ptr<Executor>>& executing =
-      executingExecutors[funcStr];
-
-    std::string execId = exec->id;
-
     // Remove from warm executors
-    std::remove_if(warm.begin(), warm.end(), [&execId](const auto& p) {
-        return p->id == execId;
-    });
-
-    // Remove from executing executors
-    std::remove_if(executing.begin(),
-                   executing.end(),
+    std::string execId = exec->id;
+    std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
+    std::remove_if(thisExecutors.begin(),
+                   thisExecutors.end(),
                    [&execId](const auto& p) { return p->id == execId; });
 
-    int count = getFunctionExecutorCount(msg);
-    if (count == 0) {
+    if (thisExecutors.empty()) {
         // Unregister if this was the last executor for that function
         bool isMaster = thisHost == msg.masterhost();
         if (!isMaster) {
@@ -286,7 +245,7 @@ std::vector<std::string> Scheduler::callFunctions(
             nLocally = std::min<int>(available, nMessages);
         }
 
-        // Handle those that can be executed locally
+        // Add those that can be executed locally
         if (nLocally > 0) {
             logger->debug(
               "Executing {}/{} {} locally", nLocally, nMessages, funcStr);
@@ -357,29 +316,50 @@ std::vector<std::string> Scheduler::callFunctions(
                 executed.at(offset) = thisHost;
             }
         }
+
+        // Sanity check
+        assert(offset == nMessages);
     }
 
-    // Register thread results if need be
+    // Register thread results if necessary
     if (isThreads) {
         for (auto& m : req->messages()) {
             registerThread(m.id());
         }
     }
 
-    // Schedule messages locally if need be. For threads we only need one
+    // Schedule messages locally if necessary. For threads we only need one
     // executor, for anything else we want one Executor per function in flight
     if (!localMessageIdxs.empty()) {
         // Update slots
         thisHostResources.set_usedslots(thisHostResources.usedslots() +
                                         localMessageIdxs.size());
 
-        if (isThreads && !executingExecutors.empty()) {
-            std::shared_ptr<Executor> e = executingExecutors[funcStr].back();
-            e->executeTasks(localMessageIdxs, req);
-        } else if (isThreads) {
-            std::shared_ptr<Executor> e = claimExecutor(firstMsg);
+        if (isThreads) {
+            // Threads use the existing executor. We assume there's only one
+            // running at a time.
+            std::vector<std::shared_ptr<Executor>>& thisExecutors =
+              executors[funcStr];
+
+            std::shared_ptr<Executor> e = nullptr;
+            if (thisExecutors.empty()) {
+                // Create executor if not exists
+                e = claimExecutor(firstMsg);
+            } else if (thisExecutors.size() == 1) {
+                // Use existing executor if exists
+                e = thisExecutors.back();
+            } else {
+                logger->error("Found {} executors for threaded function {}",
+                              thisExecutors.size(),
+                              funcStr);
+                throw std::runtime_error(
+                  "Expected only one executor for threaded function");
+            }
+
+            // Execute the tasks
             e->executeTasks(localMessageIdxs, req);
         } else {
+            // Non-threads require one executor per task
             for (auto i : localMessageIdxs) {
                 std::shared_ptr<Executor> e = claimExecutor(firstMsg);
                 e->executeTasks({ i }, req);
@@ -544,31 +524,35 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
     const auto& logger = faabric::util::getLogger();
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    int nWarmExecutors = warmExecutors[funcStr].size();
-    int nExecutingExecutors = executingExecutors[funcStr].size();
-    int nTotal = nWarmExecutors + nExecutingExecutors;
+    std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
+    int nExecutors = thisExecutors.size();
 
     std::shared_ptr<faabric::scheduler::ExecutorFactory> factory =
       getExecutorFactory();
 
-    if (nWarmExecutors > 0) {
-        // Here we have warm executors that we can reuse
-        logger->debug("Reusing warm executor for {}", funcStr);
-
-        // Take the warm one
-        std::shared_ptr<Executor> exec = warmExecutors[funcStr].back();
-        warmExecutors[funcStr].pop_back();
-
-        // Add it to the list of executing
-        executingExecutors[funcStr].emplace_back(exec);
-    } else {
-        // We have no warm executors available, so scale up
-        logger->debug("Scaling {} from {} -> {}", funcStr, nTotal, nTotal + 1);
-
-        executingExecutors[funcStr].emplace_back(factory->createExecutor(msg));
+    std::shared_ptr<Executor> claimed = nullptr;
+    for (auto& e : thisExecutors) {
+        if (e->tryClaim()) {
+            claimed = e;
+            logger->debug(
+              "Reusing warm executor {} for {}", claimed->id, funcStr);
+            break;
+        }
     }
 
-    return executingExecutors[funcStr].back();
+    // We have no warm executors available, so scale up
+    if (claimed == nullptr) {
+        logger->debug(
+          "Scaling {} from {} -> {}", funcStr, nExecutors, nExecutors + 1);
+
+        thisExecutors.emplace_back(factory->createExecutor(msg));
+        claimed = thisExecutors.back();
+
+        // Claim it
+        assert(claimed->tryClaim());
+    }
+
+    return claimed;
 }
 
 std::string Scheduler::getThisHost()
@@ -600,8 +584,8 @@ void Scheduler::flushLocally()
     logger->info("Flushing host {}",
                  faabric::util::getSystemConfig().endpointHost);
 
-    // Flush each warm executor
-    for (auto& p : warmExecutors) {
+    // Flush each executor
+    for (auto& p : executors) {
         for (auto& f : p.second) {
             f->flush();
         }
