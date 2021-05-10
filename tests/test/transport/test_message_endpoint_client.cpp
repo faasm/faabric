@@ -83,7 +83,6 @@ TEST_CASE("Test await response", "[transport]")
     std::string expectedMsg = "Hello ";
     std::string expectedResponse = "world!";
 
-    // MUST open and close threads from the _same_ socket
     std::thread senderThread([&context, expectedMsg, expectedResponse] {
         // Open the source endpoint client, don't bind
         MessageEndpointClient src(thisHost, testPort);

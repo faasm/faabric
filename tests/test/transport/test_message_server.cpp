@@ -20,6 +20,9 @@ class DummyServer final : public MessageEndpointServer
     // Variable to keep track of the received messages
     int messageCount;
 
+    // This method is protected in the base class, as it's always called from
+    // the doRecv implementation. To ease testing, we make it public with this
+    // workaround.
     void sendResponse(char* serialisedMsg,
                       int size,
                       const std::string& returnHost,
@@ -67,7 +70,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     char* headerMsg = new char[header.size()]();
     memcpy(headerMsg, header.c_str(), header.size());
     // Mark we are sending the header
-    src.send(headerMsg, header.size(), true);
+    REQUIRE_NOTHROW(src.send(headerMsg, header.size(), true));
     // Send the body
     std::string body = "body";
     char* bodyMsg = new char[body.size()]();
@@ -113,6 +116,49 @@ TEST_CASE("Test send one-off response to client", "[transport]")
       server.sendResponse(msg, expectedMsg.size(), thisHost, testPort));
 
     clientThread.join();
+
+    server.stop();
+}
+
+TEST_CASE("Test multiple clients talking to one server", "[transport]")
+{
+    DummyServer server;
+    server.start();
+
+    std::vector<std::thread> clientThreads;
+    int numClients = 10;
+    int numMessages = 1000;
+
+    for (int i = 0; i < numClients; i++) {
+        clientThreads.emplace_back(std::thread([numMessages] {
+            // Prepare client
+            auto& context = getGlobalMessageContext();
+            MessageEndpointClient cli(thisHost, testPort);
+            cli.open(context, SocketType::PUSH, false);
+
+            std::string clientMsg = "Message from threaded client";
+            for (int j = 0; j < numMessages; j++) {
+                // Send header
+                char* header = new char[clientMsg.size()]();
+                memcpy(header, clientMsg.c_str(), clientMsg.size());
+                cli.send(header, clientMsg.size(), true);
+                // Send body
+                char* body = new char[clientMsg.size()]();
+                memcpy(body, clientMsg.c_str(), clientMsg.size());
+                cli.send(body, clientMsg.size());
+            }
+
+            usleep(1000 * 300);
+
+            cli.close();
+        }));
+    }
+
+    for (auto& t : clientThreads) {
+        t.join();
+    }
+
+    REQUIRE(server.messageCount == numMessages * numClients);
 
     server.stop();
 }
