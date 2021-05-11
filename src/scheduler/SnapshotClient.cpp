@@ -1,7 +1,7 @@
 #include <faabric/scheduler/SnapshotClient.h>
-
-#include <faabric/rpc/macros.h>
 #include <faabric/util/logging.h>
+
+/* Mocking includes */
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
@@ -34,7 +34,7 @@ void clearMockSnapshotRequests()
 }
 
 // -----------------------------------
-// gRPC client
+// Snapshot client
 // -----------------------------------
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)

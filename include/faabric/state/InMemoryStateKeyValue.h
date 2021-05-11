@@ -4,7 +4,6 @@
 #include <faabric/state/StateClient.h>
 #include <faabric/state/StateKeyValue.h>
 
-#include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
 
 #include <faabric/util/clock.h>

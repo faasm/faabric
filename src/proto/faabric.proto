@@ -154,27 +154,6 @@ message Message {
 // STATE SERVICE
 // ---------------------------------------------
 
-service StateRPCService {
-    rpc Pull (stream StateChunkRequest) returns (stream StatePart) {
-    }
-    rpc Push (stream StatePart) returns (StateResponse) {
-    }
-    rpc Size(StateRequest) returns (StateSizeResponse) {
-    }
-    rpc Append (StateRequest) returns (StateResponse) {
-    }
-    rpc ClearAppended (StateRequest) returns (StateResponse) {
-    }
-    rpc PullAppended (StateAppendedRequest) returns (StateAppendedResponse) {
-    }
-    rpc Lock (StateRequest) returns (StateResponse) {
-    }
-    rpc Unlock (StateRequest) returns (StateResponse) {
-    }
-    rpc Delete (StateRequest) returns (StateResponse) {
-    }
-}
-
 message StateRequest {
     string user = 1;
     string key = 2;

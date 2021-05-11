@@ -3,38 +3,49 @@ find_package(Git)
 include (ExternalProject)
 include (FetchContent)
 
-# Protobuf/ grpc config
-# See the example in the gRPC repo here:
-# https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/CMakeLists.txt
+# Protobuf config
 if(BUILD_SHARED_LIBS)
     set(Protobuf_USE_STATIC_LIBS OFF)
 else()
     set(Protobuf_USE_STATIC_LIBS ON)
 endif()
 
-include(FindProtobuf)
-set(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf REQUIRED)
+# Protobuf
+ExternalProject_Add(protobuf_ext
+    GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
+    GIT_TAG "v3.16.0"
+    SOURCE_SUBDIR "cmake"
+    CMAKE_CACHE_ARGS "-DCMAKE_BUILD_TYPE:STRING=Release"
+        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+        "-Dprotobuf_BUILD_TESTS:BOOL=OFF"
+    BUILD_BYPRODUCTS ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.a
+)
+ExternalProject_Get_Property(protobuf_ext SOURCE_DIR)
+set(PROTOBUF_INCLUDE_DIR ${SOURCE_DIR}/include)
+add_library(protobuf SHARED IMPORTED)
+add_dependencies(protobuf protobuf_ext)
+set_target_properties(protobuf
+    PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.a
+)
 
-message(STATUS "Using protobuf  \
-    ${PROTOBUF_LIBRARY} \
-    ${PROTOBUF_PROTOC_LIBRARY} \
-    ${PROTOBUF_PROTOC_EXECUTABLE} \
-")
-
-find_package(gRPC CONFIG REQUIRED)
-message(STATUS "Using gRPC ${gRPC_VERSION}")
-
-include_directories(${PROTOBUF_INCLUDE_DIR})
-
-set(PROTOC_EXE /usr/local/bin/protoc)
-set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
-
-# Include FlatBuffers
-# I couldn't get the proper find_package working, so we have this hack now, and
-# assume that FB is installed where we think it should be.
-set(FLATBUFFERS_FLATC_EXECUTABLE "/usr/local/bin/flatc")
-set(FLATBUFFERS_INCLUDE_DIRS "/usr/local/include/flatbuffers")
+# FlatBuffers
+ExternalProject_Add(flatbuffers_ext
+    GIT_REPOSITORY https://github.com/google/flatbuffers.git
+    GIT_TAG "v2.0.0"
+    CMAKE_CACHE_ARGS "-DCMAKE_BUILD_TYPE:STRING=Release"
+        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+        "-DFLATBUFFERS_BUILD_SHAREDLIB:BOOL=ON"
+        "-DFLATBUFFERS_BUILD_TESTS:BOOL=OFF"
+    BUILD_BYPRODUCTS ${CMAKE_INSTALL_PREFIX}/lib/libflatbuffers.so
+)
+ExternalProject_Get_Property(flatbuffers_ext SOURCE_DIR)
+set(FLATBUFFERS_INCLUDE_DIRS ${SOURCE_DIR}/include)
+set(FLATBUFFERS_FLATC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/flatc)
+add_library(flatbuffers SHARED IMPORTED)
+add_dependencies(flatbuffers flatbuffers_ext)
+set_target_properties(flatbuffers
+    PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libflatbuffers.so
+)
 
 # Pistache
 ExternalProject_Add(pistache_ext
@@ -52,13 +63,16 @@ set_target_properties(pistache
 )
 
 # RapidJSON
-set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
-set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
+# set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
+# set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
+# set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
 ExternalProject_Add(rapidjson_ext
     GIT_REPOSITORY "https://github.com/Tencent/rapidjson"
     GIT_TAG "2ce91b823c8b4504b9c40f99abf00917641cef6c"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+        "-DRAPIDJSON_BUILD_DOC:BOOL=OFF"
+        "-DRAPIDJSON_BUILD_EXAMPLES:BOOL=OFF"
+        "-DRAPIDJSON_BUILD_TESTS:BOOL=OFF"
 )
 ExternalProject_Get_Property(rapidjson_ext SOURCE_DIR)
 set(RAPIDJSON_INCLUDE_DIR ${SOURCE_DIR}/include)

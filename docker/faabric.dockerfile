@@ -1,4 +1,4 @@
-FROM faasm/grpc-root:0.0.20
+FROM faasm/grpc-root:0.1.0
 ARG FAABRIC_VERSION
 
 # Note - the version of grpc-root here can be quite behind as it's rebuilt very

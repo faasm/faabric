@@ -36,6 +36,7 @@ function(faabric_lib lib_name lib_deps)
         PUBLIC ${RAPIDJSON_INCLUDE_DIR}
         PUBLIC ${CPPCODEC_INCLUDE_DIR}
         PUBLIC ${ZEROMQ_INCLUDE_DIR}
+        PUBLIC ${PROTOBUF_INCLUDE_DIR}
         )
 
     # Object library for bundling everything together (should have the same
@@ -48,6 +49,7 @@ function(faabric_lib lib_name lib_deps)
         PUBLIC ${RAPIDJSON_INCLUDE_DIR}
         PUBLIC ${CPPCODEC_INCLUDE_DIR}
         PUBLIC ${ZEROMQ_INCLUDE_DIR}
+        PUBLIC ${PROTOBUF_INCLUDE_DIR}
         )
 
     target_link_libraries(${lib_name}_obj ${lib_name})
@@ -65,7 +67,6 @@ add_subdirectory(src/mpi_native)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
 add_subdirectory(src/runner)
-add_subdirectory(src/rpc)
 add_subdirectory(src/scheduler)
 add_subdirectory(src/snapshot)
 add_subdirectory(src/state)
@@ -87,7 +88,6 @@ add_library(faabric
     $<TARGET_OBJECTS:flat_obj>
     $<TARGET_OBJECTS:proto_obj>
     $<TARGET_OBJECTS:redis_obj>
-    $<TARGET_OBJECTS:rpc_obj>
     $<TARGET_OBJECTS:runner_obj>
     $<TARGET_OBJECTS:scheduler_obj>
     $<TARGET_OBJECTS:snapshot_obj>
@@ -99,12 +99,10 @@ add_library(faabric
 add_dependencies(faabric pistache spdlog_ext)
 
 target_link_libraries(faabric PUBLIC
-    ${Protobuf_LIBRARIES}
     faabricmpi
-    gRPC::grpc++
-    gRPC::grpc++_reflection
     hiredis
     pistache
+    protobuf
     boost_system
     boost_filesystem
     zstd::libzstd_static

@@ -37,14 +37,8 @@ docker-compose down
 
 The only external dependencies not installed through CMake are:
 
-- `gRPC` - instructions [here](https://grpc.io/docs/languages/cpp/quickstart/)
 - `flatbuffers` - instructions
   [here](https://google.github.io/flatbuffers/flatbuffers_guide_building.html)
-
-*NOTE* - at the time of writing, compatibility between gRPC and FlatBuffers
-depends on getting a precise version match. See
-[`grpc-root.dockerfile`](docker/grpc-root.dockerfile) to see the latest
-compatible installation steps.
 
 Use of Clang and Ninja is recommended. From the root of this project you can
 run:

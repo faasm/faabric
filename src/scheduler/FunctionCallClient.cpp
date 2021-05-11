@@ -1,7 +1,7 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 
-#include <faabric/rpc/macros.h>
+/* Mocking includes */
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 

@@ -2,7 +2,6 @@
 
 #include "faabric_utils.h"
 
-#include <faabric/rpc/macros.h>
 #include <faabric/state/DummyStateServer.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
@@ -72,7 +71,7 @@ TEST_CASE("Test request/ response", "[state]")
       InMemoryStateKeyValue(userA, keyA, dataB.size(), thisIP);
     kvADuplicate.set(dataB.data());
 
-    StateClient client(userA, keyA, DEFAULT_RPC_HOST);
+    StateClient client(userA, keyA, DEFAULT_STATE_HOST);
 
     SECTION("State size")
     {
