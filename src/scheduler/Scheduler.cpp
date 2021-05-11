@@ -128,19 +128,6 @@ void Scheduler::vacateSlot()
     thisHostResources.set_usedslots(thisHostResources.usedslots() - 1);
 }
 
-void Scheduler::notifyExecutorFinished(Executor* exec,
-                                       const faabric::Message& msg)
-{
-    faabric::util::FullLock lock(mx);
-
-    const auto& logger = faabric::util::getLogger();
-    logger->debug("{} finished message {}", exec->id, msg.id());
-
-    // Reset this executor ready for next invocation
-    exec->releaseClaim();
-    exec->reset(msg);
-}
-
 void Scheduler::notifyExecutorShutdown(Executor* exec,
                                        const faabric::Message& msg)
 {

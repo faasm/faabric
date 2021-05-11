@@ -216,7 +216,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Notify the scheduler
         if (oldTaskCount == 1) {
-            sch.notifyExecutorFinished(this, msg);
+            // Reset this executor ready for next invocation
+            releaseClaim();
+            reset(msg);
         }
     }
 }

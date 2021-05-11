@@ -120,8 +120,6 @@ class Scheduler
 
     void vacateSlot();
 
-    void notifyExecutorFinished(Executor* exec, const faabric::Message& msg);
-
     void notifyExecutorShutdown(Executor* exec, const faabric::Message& msg);
 
     std::string getThisHost();
