@@ -97,9 +97,9 @@ TEST_CASE("Test await response", "[transport]")
         char* recvMsg;
         int size;
         src.awaitResponse(thisHost, testReplyPort, recvMsg, size);
-        REQUIRE(size == expectedResponse.size());
+        assert(size == expectedResponse.size());
         std::string actualResponse(recvMsg, size);
-        REQUIRE(actualResponse == expectedResponse);
+        assert(actualResponse == expectedResponse);
 
         src.close();
     });

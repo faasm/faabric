@@ -103,9 +103,9 @@ TEST_CASE("Test send one-off response to client", "[transport]")
         char* msg;
         int size;
         cli.awaitResponse(thisHost, testPort + REPLY_PORT_OFFSET, msg, size);
-        REQUIRE(size == expectedMsg.size());
+        assert(size == expectedMsg.size());
         std::string actualMsg(msg, size);
-        REQUIRE(actualMsg == expectedMsg);
+        assert(actualMsg == expectedMsg);
 
         cli.close();
     });
