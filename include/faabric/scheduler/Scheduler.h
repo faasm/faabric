@@ -56,6 +56,8 @@ class Executor
 
     faabric::Message boundMessage;
 
+    uint32_t threadPoolSize = 0;
+
   private:
     std::string lastSnapshot;
 
@@ -64,7 +66,6 @@ class Executor
     std::atomic<int> executingTaskCount = 0;
 
     std::mutex threadsMutex;
-    uint32_t threadPoolSize = 0;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<faabric::util::Queue<
       std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
