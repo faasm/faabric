@@ -5,8 +5,6 @@
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
-#include <faabric/rpc/macros.h>
-
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
   : faabric::transport::MessageEndpointServer(DEFAULT_FUNCTION_CALL_HOST,

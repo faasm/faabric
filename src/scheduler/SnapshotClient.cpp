@@ -1,8 +1,5 @@
 #include <faabric/scheduler/SnapshotClient.h>
 
-#include <grpcpp/create_channel.h>
-#include <grpcpp/security/credentials.h>
-
 #include <faabric/rpc/macros.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
@@ -41,11 +38,28 @@ void clearMockSnapshotRequests()
 // -----------------------------------
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)
-  : host(hostIn)
-  , channel(grpc::CreateChannel(host + ":" + std::to_string(SNAPSHOT_RPC_PORT),
-                                grpc::InsecureChannelCredentials()))
-  , stub(SnapshotService::NewStub(channel))
-{}
+  : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
+{
+    this->open(faabric::transport::getGlobalMessageContext(),
+               faabric::transport::SocketType::PUSH,
+               false);
+}
+
+SnapshotClient::~SnapshotClient()
+{
+    close();
+}
+
+void SnapshotClient::sendHeader(faabric::scheduler::SnapshotCalls call)
+{
+    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
+    int functionNum = static_cast<int>(call);
+    size_t headerSize = sizeof(faabric::scheduler::SnapshotCalls);
+    char* header = new char[headerSize];
+    memcpy(header, &functionNum, headerSize);
+    // Mark that we are sending more messages
+    send(header, headerSize, true);
+}
 
 void SnapshotClient::pushSnapshot(const std::string& key,
                                   const faabric::util::SnapshotData& req)
@@ -57,21 +71,20 @@ void SnapshotClient::pushSnapshot(const std::string& key,
     } else {
         logger->debug("Pushing snapshot {} to {}", key, host);
 
-        ClientContext context;
+        // Send the header first
+        sendHeader(faabric::scheduler::SnapshotCalls::PushSnapshot);
 
         // TODO - avoid copying data here
-        flatbuffers::grpc::MessageBuilder mb;
+        flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto dataOffset = mb.CreateVector<uint8_t>(req.data, req.size);
         auto requestOffset =
           CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
 
         mb.Finish(requestOffset);
-        auto requestMsg = mb.ReleaseMessage<SnapshotPushRequest>();
-
-        flatbuffers::grpc::Message<SnapshotPushResponse> responseMsg;
-        CHECK_RPC("snapshotPush",
-                  stub->PushSnapshot(&context, requestMsg, &responseMsg));
+        uint8_t* msg = mb.GetBufferPointer();
+        int size = mb.GetSize();
+        sendFb(msg, size);
     }
 }
 
@@ -84,19 +97,18 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
     } else {
         logger->debug("Deleting snapshot {} from {}", key, host);
 
-        ClientContext context;
+        // Send the header first
+        sendHeader(faabric::scheduler::SnapshotCalls::DeleteSnapshot);
 
         // TODO - avoid copying data here
-        flatbuffers::grpc::MessageBuilder mb;
+        flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto requestOffset = CreateSnapshotDeleteRequest(mb, keyOffset);
+
         mb.Finish(requestOffset);
-
-        auto requestMsg = mb.ReleaseMessage<SnapshotDeleteRequest>();
-
-        flatbuffers::grpc::Message<SnapshotDeleteResponse> responseMsg;
-        CHECK_RPC("snapshotDelete",
-                  stub->DeleteSnapshot(&context, requestMsg, &responseMsg));
+        uint8_t* msg = mb.GetBufferPointer();
+        int size = mb.GetSize();
+        sendFb(msg, size);
     }
 }
 }

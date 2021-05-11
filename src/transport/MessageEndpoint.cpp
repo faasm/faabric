@@ -76,6 +76,26 @@ void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
     }
 }
 
+void MessageEndpoint::sendFb(uint8_t* serialisedMsg, size_t msgSize, bool more)
+{
+    if (!this->socket) {
+        throw std::runtime_error("Trying to send from a null-pointing socket");
+    }
+
+    // Pass a deallocation function for ZeroMQ to be zero-copy
+    zmq::message_t msg(serialisedMsg, msgSize);
+
+    if (more) {
+        if (!this->socket->send(msg, zmq::send_flags::sndmore)) {
+            throw std::runtime_error("Error sending message through socket");
+        }
+    } else {
+        if (!this->socket->send(msg, zmq::send_flags::none)) {
+            throw std::runtime_error("Error sending message through socket");
+        }
+    }
+}
+
 void MessageEndpoint::recv()
 {
     if (!this->socket) {

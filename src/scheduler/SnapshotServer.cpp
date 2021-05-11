@@ -1,40 +1,39 @@
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/SnapshotServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
-#include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
-#include <faabric/rpc/macros.h>
-#include <grpcpp/grpcpp.h>
-
 namespace faabric::scheduler {
 SnapshotServer::SnapshotServer()
-  : RPCServer(DEFAULT_SNAPSHOT_HOST, SNAPSHOT_RPC_PORT)
+  : faabric::transport::MessageEndpointServer(DEFAULT_SNAPSHOT_HOST,
+                                              SNAPSHOT_PORT)
 {}
 
-void SnapshotServer::doStart(const std::string& serverAddr)
+void SnapshotServer::doRecv(const void* headerData,
+                            int headerSize,
+                            const void* bodyData,
+                            int bodySize)
 {
-    // Build the server
-    ServerBuilder builder;
-    builder.AddListeningPort(serverAddr, InsecureServerCredentials());
-    builder.RegisterService(this);
-
-    // Start it
-    server = builder.BuildAndStart();
-    faabric::util::getLogger()->info("Snapshot server listening on {}",
-                                     serverAddr);
-
-    server->Wait();
+    int call = static_cast<int>(*static_cast<const char*>(headerData));
+    switch (call) {
+        case faabric::scheduler::SnapshotCalls::PushSnapshot:
+            this->recvPushSnapshot(bodyData, bodySize);
+            break;
+        case faabric::scheduler::SnapshotCalls::DeleteSnapshot:
+            this->recvDeleteSnapshot(bodyData, bodySize);
+            break;
+        default:
+            throw std::runtime_error(
+              fmt::format("Unrecognized call header: {}", call));
+    }
 }
 
-Status SnapshotServer::PushSnapshot(
-  ServerContext* context,
-  const flatbuffers::grpc::Message<SnapshotPushRequest>* request,
-  flatbuffers::grpc::Message<SnapshotPushResponse>* response)
+void SnapshotServer::recvPushSnapshot(const void* msgData, int size)
 {
-    const SnapshotPushRequest* r = request->GetRoot();
+    // const SnapshotPushRequest* r = request->GetRoot();
+    const SnapshotPushRequest* r =
+      flatbuffers::GetRoot<SnapshotPushRequest>(msgData);
     faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
                                      r->key()->c_str(),
                                      r->contents()->size());
@@ -47,35 +46,17 @@ Status SnapshotServer::PushSnapshot(
     data.size = r->contents()->size();
     data.data = r->contents()->Data();
     reg.takeSnapshot(r->key()->str(), data, true);
-
-    flatbuffers::grpc::MessageBuilder mb;
-    auto messageOffset = mb.CreateString("Success");
-    auto responseOffset = CreateSnapshotPushResponse(mb, messageOffset);
-    mb.Finish(responseOffset);
-    *response = mb.ReleaseMessage<SnapshotPushResponse>();
-
-    return Status::OK;
 }
 
-Status SnapshotServer::DeleteSnapshot(
-  ServerContext* context,
-  const flatbuffers::grpc::Message<SnapshotDeleteRequest>* request,
-  flatbuffers::grpc::Message<SnapshotDeleteResponse>* response)
+void SnapshotServer::recvDeleteSnapshot(const void* msgData, int size)
 {
-    const SnapshotDeleteRequest* r = request->GetRoot();
+    const SnapshotDeleteRequest* r =
+      flatbuffers::GetRoot<SnapshotDeleteRequest>(msgData);
     faabric::util::getLogger()->info("Deleting shapshot {}", r->key()->c_str());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
     reg.deleteSnapshot(r->key()->str());
-
-    flatbuffers::grpc::MessageBuilder mb;
-    auto messageOffset = mb.CreateString("Success");
-    auto responseOffset = CreateSnapshotPushResponse(mb, messageOffset);
-    mb.Finish(responseOffset);
-    *response = mb.ReleaseMessage<SnapshotDeleteResponse>();
-
-    return Status::OK;
 }
 }

@@ -1,33 +1,25 @@
 #pragma once
 
-#include <faabric/flat/faabric.grpc.fb.h>
 #include <faabric/flat/faabric_generated.h>
-#include <faabric/rpc/RPCServer.h>
 #include <faabric/scheduler/Scheduler.h>
-
-#include <grpcpp/grpcpp.h>
-
-using namespace grpc;
+#include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::scheduler {
-class SnapshotServer final
-  : public rpc::RPCServer
-  , public SnapshotService::Service
+class SnapshotServer final : public faabric::transport::MessageEndpointServer
 {
   public:
     SnapshotServer();
 
-    virtual Status PushSnapshot(
-      ServerContext* context,
-      const flatbuffers::grpc::Message<SnapshotPushRequest>* request,
-      flatbuffers::grpc::Message<SnapshotPushResponse>* response) override;
-
-    virtual Status DeleteSnapshot(
-      ServerContext* context,
-      const flatbuffers::grpc::Message<SnapshotDeleteRequest>* request,
-      flatbuffers::grpc::Message<SnapshotDeleteResponse>* response) override;
-
   protected:
-    void doStart(const std::string& serverAddr) override;
+    void doRecv(const void* headerData,
+                int headerSize,
+                const void* bodyData,
+                int bodySize) override;
+
+    /* Snapshot server API */
+
+    void recvPushSnapshot(const void* msgData, int size);
+
+    void recvDeleteSnapshot(const void* msgData, int size);
 };
 }

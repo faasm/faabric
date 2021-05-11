@@ -16,7 +16,6 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     cleanFaabric();
 
     // Start the server
-    ServerContext serverContext;
     scheduler::SnapshotServer server;
     server.start();
     usleep(1000 * 100);
@@ -46,6 +45,7 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     scheduler::SnapshotClient cli(LOCALHOST);
     cli.pushSnapshot(snapKeyA, snapA);
     cli.pushSnapshot(snapKeyB, snapB);
+    usleep(1000 * 100);
 
     // Check snapshots created in regsitry
     REQUIRE(registry.getSnapshotCount() == 2);
@@ -61,6 +61,8 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
 
+    // Close the client
+    cli.close();
     // Stop the server
     server.stop();
 }

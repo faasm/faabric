@@ -41,6 +41,8 @@ class MessageEndpoint
 
     void send(char* serialisedMsg, size_t msgSize, bool more = false);
 
+    void sendFb(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
+
     void recv();
 
     std::unique_ptr<zmq::socket_t> socket;
