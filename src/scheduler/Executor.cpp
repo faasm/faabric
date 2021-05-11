@@ -214,11 +214,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
             sch.setFunctionResult(msg);
         }
 
-        // Notify the scheduler
+        // Notify the scheduler, note that we have to release the claim _after_
+        // resetting, once the executor is ready to be reused
         if (oldTaskCount == 1) {
-            // Reset this executor ready for next invocation
-            releaseClaim();
             reset(msg);
+            releaseClaim();
         }
     }
 }
