@@ -23,6 +23,7 @@ function(add_example example_name)
         hiredis
         boost_system
         boost_filesystem
+        ${ZEROMQ_LIBRARY}
     )
 
     set(ALL_EXAMPLES ${ALL_EXAMPLES} ${example_name} PARENT_SCOPE)
