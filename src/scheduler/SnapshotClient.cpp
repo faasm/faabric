@@ -84,7 +84,7 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         mb.Finish(requestOffset);
         uint8_t* msg = mb.GetBufferPointer();
         int size = mb.GetSize();
-        sendFb(msg, size);
+        send(msg, size);
     }
 }
 
@@ -108,7 +108,7 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
         mb.Finish(requestOffset);
         uint8_t* msg = mb.GetBufferPointer();
         int size = mb.GetSize();
-        sendFb(msg, size);
+        send(msg, size);
     }
 }
 }

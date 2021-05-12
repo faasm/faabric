@@ -1,14 +1,10 @@
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/util/locks.h>
 
-#include <faabric/util/gids.h>
-#include <faabric/util/logging.h>
-
 namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
-  , id(faabric::util::generateGid())
 {}
 
 MessageEndpoint::~MessageEndpoint()
@@ -22,7 +18,6 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                            faabric::transport::SocketType sockType,
                            bool bind)
 {
-    faabric::util::getLogger()->info("Opening socket: {}", id);
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
 
@@ -76,13 +71,14 @@ void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
     }
 }
 
-void MessageEndpoint::sendFb(uint8_t* serialisedMsg, size_t msgSize, bool more)
+// This method overload is used to send flatbuffers that deal with unsigned
+// chars, and are stack-allocated.
+void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
 {
     if (!this->socket) {
         throw std::runtime_error("Trying to send from a null-pointing socket");
     }
 
-    // Pass a deallocation function for ZeroMQ to be zero-copy
     zmq::message_t msg(serialisedMsg, msgSize);
 
     if (more) {
@@ -112,7 +108,6 @@ void MessageEndpoint::recv()
 
 void MessageEndpoint::close()
 {
-    faabric::util::getLogger()->info("Closing socket: {}", id);
     this->socket->close();
 }
 }

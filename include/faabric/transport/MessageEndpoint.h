@@ -41,7 +41,8 @@ class MessageEndpoint
 
     void send(char* serialisedMsg, size_t msgSize, bool more = false);
 
-    void sendFb(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
+    // Overload for sending flatbuffers
+    void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
     void recv();
 

@@ -699,296 +699,295 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
     server.start();
     usleep(1000 * 100);
 
+    std::string otherHost = "123.45.67.8";
+
+    int thisWorldSize = 6;
+
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpiworldsize(thisWorldSize);
+
+    MpiWorld& localWorld =
+      getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+
+    scheduler::MpiWorld remoteWorld;
+    remoteWorld.initialiseFromState(msg, worldId);
+    remoteWorld.overrideHost(otherHost);
+
+    // Register ranks on both hosts
+    int remoteRankA = 1;
+    int remoteRankB = 2;
+    int remoteRankC = 3;
+    remoteWorld.registerRank(remoteRankA);
+    remoteWorld.registerRank(remoteRankB);
+    remoteWorld.registerRank(remoteRankC);
+
+    int localRankA = 4;
+    int localRankB = 5;
+    localWorld.registerRank(localRankA);
+    localWorld.registerRank(localRankB);
+
+    // Note that ranks are deliberately out of order
+    std::vector<int> remoteWorldRanks = { remoteRankB,
+                                          remoteRankC,
+                                          remoteRankA };
+    std::vector<int> localWorldRanks = { localRankB, localRankA, 0 };
+
+    SECTION("Broadcast")
     {
-        std::string otherHost = "123.45.67.8";
+        // Broadcast a message
+        std::vector<int> messageData = { 0, 1, 2 };
+        remoteWorld.broadcast(
+          remoteRankB, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-        int thisWorldSize = 6;
+        // Check the host that the root is on
+        for (int rank : remoteWorldRanks) {
+            if (rank == remoteRankB) {
+                continue;
+            }
 
-        faabric::Message msg = faabric::util::messageFactory(user, func);
-        msg.set_mpiworldid(worldId);
-        msg.set_mpiworldsize(thisWorldSize);
+            std::vector<int> actual(3, -1);
+            remoteWorld.recv(
+              remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            REQUIRE(actual == messageData);
+        }
 
-        MpiWorld& localWorld =
-          getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+        // Check the local host
+        for (int rank : localWorldRanks) {
+            std::vector<int> actual(3, -1);
+            localWorld.recv(
+              remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            REQUIRE(actual == messageData);
+        }
+    }
 
-        scheduler::MpiWorld remoteWorld;
-        remoteWorld.initialiseFromState(msg, worldId);
-        remoteWorld.overrideHost(otherHost);
+    SECTION("Scatter")
+    {
+        // Build the data
+        int nPerRank = 4;
+        int dataSize = nPerRank * worldSize;
+        std::vector<int> messageData(dataSize, 0);
+        for (int i = 0; i < dataSize; i++) {
+            messageData[i] = i;
+        }
 
-        // Register ranks on both hosts
-        int remoteRankA = 1;
-        int remoteRankB = 2;
-        int remoteRankC = 3;
-        remoteWorld.registerRank(remoteRankA);
-        remoteWorld.registerRank(remoteRankB);
-        remoteWorld.registerRank(remoteRankC);
+        // Do the scatter
+        std::vector<int> actual(nPerRank, -1);
+        remoteWorld.scatter(remoteRankB,
+                            remoteRankB,
+                            BYTES(messageData.data()),
+                            MPI_INT,
+                            nPerRank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            nPerRank);
 
-        int localRankA = 4;
-        int localRankB = 5;
-        localWorld.registerRank(localRankA);
-        localWorld.registerRank(localRankB);
+        // Check for root
+        REQUIRE(actual == std::vector<int>({ 8, 9, 10, 11 }));
 
-        // Note that ranks are deliberately out of order
-        std::vector<int> remoteWorldRanks = { remoteRankB,
-                                              remoteRankC,
-                                              remoteRankA };
-        std::vector<int> localWorldRanks = { localRankB, localRankA, 0 };
+        // Check for other remote ranks
+        remoteWorld.scatter(remoteRankB,
+                            remoteRankA,
+                            nullptr,
+                            MPI_INT,
+                            nPerRank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            nPerRank);
+        REQUIRE(actual == std::vector<int>({ 4, 5, 6, 7 }));
 
-        SECTION("Broadcast")
+        remoteWorld.scatter(remoteRankB,
+                            remoteRankC,
+                            nullptr,
+                            MPI_INT,
+                            nPerRank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            nPerRank);
+        REQUIRE(actual == std::vector<int>({ 12, 13, 14, 15 }));
+
+        // Check for local ranks
+        localWorld.scatter(remoteRankB,
+                           0,
+                           nullptr,
+                           MPI_INT,
+                           nPerRank,
+                           BYTES(actual.data()),
+                           MPI_INT,
+                           nPerRank);
+        REQUIRE(actual == std::vector<int>({ 0, 1, 2, 3 }));
+
+        localWorld.scatter(remoteRankB,
+                           localRankB,
+                           nullptr,
+                           MPI_INT,
+                           nPerRank,
+                           BYTES(actual.data()),
+                           MPI_INT,
+                           nPerRank);
+        REQUIRE(actual == std::vector<int>({ 20, 21, 22, 23 }));
+
+        localWorld.scatter(remoteRankB,
+                           localRankA,
+                           nullptr,
+                           MPI_INT,
+                           nPerRank,
+                           BYTES(actual.data()),
+                           MPI_INT,
+                           nPerRank);
+        REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
+    }
+
+    SECTION("Gather and allgather")
+    {
+        // Build the data for each rank
+        int nPerRank = 4;
+        std::vector<std::vector<int>> rankData;
+        for (int i = 0; i < thisWorldSize; i++) {
+            std::vector<int> thisRankData;
+            for (int j = 0; j < nPerRank; j++) {
+                thisRankData.push_back((i * nPerRank) + j);
+            }
+
+            rankData.push_back(thisRankData);
+        }
+
+        // Build the expectation
+        std::vector<int> expected;
+        for (int i = 0; i < thisWorldSize * nPerRank; i++) {
+            expected.push_back(i);
+        }
+
+        SECTION("Gather")
         {
-            // Broadcast a message
-            std::vector<int> messageData = { 0, 1, 2 };
-            remoteWorld.broadcast(remoteRankB,
-                                  BYTES(messageData.data()),
-                                  MPI_INT,
-                                  messageData.size());
+            std::vector<int> actual(thisWorldSize * nPerRank, -1);
 
-            // Check the host that the root is on
+            // Call gather for each rank other than the root (out of order)
+            int root = localRankA;
             for (int rank : remoteWorldRanks) {
-                if (rank == remoteRankB) {
+                remoteWorld.gather(rank,
+                                   root,
+                                   BYTES(rankData[rank].data()),
+                                   MPI_INT,
+                                   nPerRank,
+                                   nullptr,
+                                   MPI_INT,
+                                   nPerRank);
+            }
+
+            for (int rank : localWorldRanks) {
+                if (rank == root) {
                     continue;
                 }
-
-                std::vector<int> actual(3, -1);
-                remoteWorld.recv(
-                  remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
-                REQUIRE(actual == messageData);
-            }
-
-            // Check the local host
-            for (int rank : localWorldRanks) {
-                std::vector<int> actual(3, -1);
-                localWorld.recv(
-                  remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
-                REQUIRE(actual == messageData);
-            }
-        }
-
-        SECTION("Scatter")
-        {
-            // Build the data
-            int nPerRank = 4;
-            int dataSize = nPerRank * worldSize;
-            std::vector<int> messageData(dataSize, 0);
-            for (int i = 0; i < dataSize; i++) {
-                messageData[i] = i;
-            }
-
-            // Do the scatter
-            std::vector<int> actual(nPerRank, -1);
-            remoteWorld.scatter(remoteRankB,
-                                remoteRankB,
-                                BYTES(messageData.data()),
-                                MPI_INT,
-                                nPerRank,
-                                BYTES(actual.data()),
-                                MPI_INT,
-                                nPerRank);
-
-            // Check for root
-            REQUIRE(actual == std::vector<int>({ 8, 9, 10, 11 }));
-
-            // Check for other remote ranks
-            remoteWorld.scatter(remoteRankB,
-                                remoteRankA,
-                                nullptr,
-                                MPI_INT,
-                                nPerRank,
-                                BYTES(actual.data()),
-                                MPI_INT,
-                                nPerRank);
-            REQUIRE(actual == std::vector<int>({ 4, 5, 6, 7 }));
-
-            remoteWorld.scatter(remoteRankB,
-                                remoteRankC,
-                                nullptr,
-                                MPI_INT,
-                                nPerRank,
-                                BYTES(actual.data()),
-                                MPI_INT,
-                                nPerRank);
-            REQUIRE(actual == std::vector<int>({ 12, 13, 14, 15 }));
-
-            // Check for local ranks
-            localWorld.scatter(remoteRankB,
-                               0,
-                               nullptr,
-                               MPI_INT,
-                               nPerRank,
-                               BYTES(actual.data()),
-                               MPI_INT,
-                               nPerRank);
-            REQUIRE(actual == std::vector<int>({ 0, 1, 2, 3 }));
-
-            localWorld.scatter(remoteRankB,
-                               localRankB,
-                               nullptr,
-                               MPI_INT,
-                               nPerRank,
-                               BYTES(actual.data()),
-                               MPI_INT,
-                               nPerRank);
-            REQUIRE(actual == std::vector<int>({ 20, 21, 22, 23 }));
-
-            localWorld.scatter(remoteRankB,
-                               localRankA,
-                               nullptr,
-                               MPI_INT,
-                               nPerRank,
-                               BYTES(actual.data()),
-                               MPI_INT,
-                               nPerRank);
-            REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
-        }
-
-        SECTION("Gather and allgather")
-        {
-            // Build the data for each rank
-            int nPerRank = 4;
-            std::vector<std::vector<int>> rankData;
-            for (int i = 0; i < thisWorldSize; i++) {
-                std::vector<int> thisRankData;
-                for (int j = 0; j < nPerRank; j++) {
-                    thisRankData.push_back((i * nPerRank) + j);
-                }
-
-                rankData.push_back(thisRankData);
-            }
-
-            // Build the expectation
-            std::vector<int> expected;
-            for (int i = 0; i < thisWorldSize * nPerRank; i++) {
-                expected.push_back(i);
-            }
-
-            SECTION("Gather")
-            {
-                std::vector<int> actual(thisWorldSize * nPerRank, -1);
-
-                // Call gather for each rank other than the root (out of order)
-                int root = localRankA;
-                for (int rank : remoteWorldRanks) {
-                    remoteWorld.gather(rank,
-                                       root,
-                                       BYTES(rankData[rank].data()),
-                                       MPI_INT,
-                                       nPerRank,
-                                       nullptr,
-                                       MPI_INT,
-                                       nPerRank);
-                }
-
-                for (int rank : localWorldRanks) {
-                    if (rank == root) {
-                        continue;
-                    }
-                    localWorld.gather(rank,
-                                      root,
-                                      BYTES(rankData[rank].data()),
-                                      MPI_INT,
-                                      nPerRank,
-                                      nullptr,
-                                      MPI_INT,
-                                      nPerRank);
-                }
-
-                // Call gather for root
-                localWorld.gather(root,
+                localWorld.gather(rank,
                                   root,
-                                  BYTES(rankData[root].data()),
+                                  BYTES(rankData[rank].data()),
                                   MPI_INT,
                                   nPerRank,
-                                  BYTES(actual.data()),
+                                  nullptr,
                                   MPI_INT,
                                   nPerRank);
-
-                // Check data
-                REQUIRE(actual == expected);
             }
 
-            //            SECTION("Allgather") {
-            //                int fullSize = nPerRank * thisWorldSize;
-            //
-            //                // Call allgather for ranks on the first world
-            //                std::vector<std::thread> threads;
-            //                for (int rank : remoteWorldRanks) {
-            //                    if (rank == 0) {
-            //                        continue;
-            //                    }
-            //
-            //                    threads.emplace_back([&, rank] {
-            //                        std::vector actual(fullSize, -1);
-            //
-            //                        remoteWorld.allGather(rank,
-            //                        BYTES(rankData[rank].data()), MPI_INT,
-            //                        nPerRank,
-            //                                              BYTES(actual.data()),
-            //                                              MPI_INT, nPerRank);
-            //
-            //                        REQUIRE(actual == expected);
-            //                    });
-            //                }
-            //
-            //                // Call allgather for the threads in the other
-            //                world for (int rank : localWorldRanks) {
-            //                    threads.emplace_back([&, rank] {
-            //                        std::vector actual(fullSize, -1);
-            //
-            //                        localWorld.allGather(rank,
-            //                        BYTES(rankData[rank].data()), MPI_INT,
-            //                        nPerRank,
-            //                                             BYTES(actual.data()),
-            //                                             MPI_INT, nPerRank);
-            //
-            //                        REQUIRE(actual == expected);
-            //                    });
-            //                }
-            //
-            //                // Now call allgather in the root rank
-            //                threads.emplace_back([&] {
-            //                    std::vector actual(fullSize, -1);
-            //                    remoteWorld.allGather(0,
-            //                    BYTES(rankData[0].data()), MPI_INT, nPerRank,
-            //                                          BYTES(actual.data()),
-            //                                          MPI_INT, nPerRank);
-            //
-            //                    REQUIRE(actual == expected);
-            //                });
-            //
-            //                // All threads should now be able to resolve
-            //                themselves for (auto &t: threads) {
-            //                    if (t.joinable()) {
-            //                        t.join();
-            //                    }
-            //                }
-            //            }
+            // Call gather for root
+            localWorld.gather(root,
+                              root,
+                              BYTES(rankData[root].data()),
+                              MPI_INT,
+                              nPerRank,
+                              BYTES(actual.data()),
+                              MPI_INT,
+                              nPerRank);
+
+            // Check data
+            REQUIRE(actual == expected);
         }
+
+        //            SECTION("Allgather") {
+        //                int fullSize = nPerRank * thisWorldSize;
         //
-        //        SECTION("Barrier") {
-        //            // Call barrier with all the ranks
-        //            std::thread threadA1([&remoteWorld, &remoteRankA] {
-        //            remoteWorld.barrier(remoteRankA); }); std::thread
-        //            threadA2([&remoteWorld, &remoteRankB] {
-        //            remoteWorld.barrier(remoteRankB); }); std::thread
-        //            threadA3([&remoteWorld, &remoteRankC] {
-        //            remoteWorld.barrier(remoteRankC); });
+        //                // Call allgather for ranks on the first world
+        //                std::vector<std::thread> threads;
+        //                for (int rank : remoteWorldRanks) {
+        //                    if (rank == 0) {
+        //                        continue;
+        //                    }
         //
-        //            std::thread threadB1([&localWorld, &localRankA] {
-        //            localWorld.barrier(localRankA); }); std::thread
-        //            threadB2([&localWorld, &localRankB] {
-        //            localWorld.barrier(localRankB); });
+        //                    threads.emplace_back([&, rank] {
+        //                        std::vector actual(fullSize, -1);
         //
-        //            // Call barrier with master (should not block)
-        //            localWorld.barrier(0);
+        //                        remoteWorld.allGather(rank,
+        //                        BYTES(rankData[rank].data()), MPI_INT,
+        //                        nPerRank,
+        //                                              BYTES(actual.data()),
+        //                                              MPI_INT, nPerRank);
         //
-        //            // Join all threads
-        //            if (threadA1.joinable()) threadA1.join();
-        //            if (threadA2.joinable()) threadA2.join();
-        //            if (threadA3.joinable()) threadA3.join();
-        //            if (threadB1.joinable()) threadB1.join();
-        //            if (threadB2.joinable()) threadB2.join();
-        //        }
+        //                        REQUIRE(actual == expected);
+        //                    });
+        //                }
+        //
+        //                // Call allgather for the threads in the other world
+        //                for (int rank : localWorldRanks) {
+        //                    threads.emplace_back([&, rank] {
+        //                        std::vector actual(fullSize, -1);
+        //
+        //                        localWorld.allGather(rank,
+        //                        BYTES(rankData[rank].data()), MPI_INT,
+        //                        nPerRank,
+        //                                             BYTES(actual.data()),
+        //                                             MPI_INT, nPerRank);
+        //
+        //                        REQUIRE(actual == expected);
+        //                    });
+        //                }
+        //
+        //                // Now call allgather in the root rank
+        //                threads.emplace_back([&] {
+        //                    std::vector actual(fullSize, -1);
+        //                    remoteWorld.allGather(0,
+        //                    BYTES(rankData[0].data()), MPI_INT, nPerRank,
+        //                                          BYTES(actual.data()),
+        //                                          MPI_INT, nPerRank);
+        //
+        //                    REQUIRE(actual == expected);
+        //                });
+        //
+        //                // All threads should now be able to resolve
+        //                themselves for (auto &t: threads) {
+        //                    if (t.joinable()) {
+        //                        t.join();
+        //                    }
+        //                }
+        //            }
     }
+    //
+    //        SECTION("Barrier") {
+    //            // Call barrier with all the ranks
+    //            std::thread threadA1([&remoteWorld, &remoteRankA] {
+    //            remoteWorld.barrier(remoteRankA); }); std::thread
+    //            threadA2([&remoteWorld, &remoteRankB] {
+    //            remoteWorld.barrier(remoteRankB); }); std::thread
+    //            threadA3([&remoteWorld, &remoteRankC] {
+    //            remoteWorld.barrier(remoteRankC); });
+    //
+    //            std::thread threadB1([&localWorld, &localRankA] {
+    //            localWorld.barrier(localRankA); }); std::thread
+    //            threadB2([&localWorld, &localRankB] {
+    //            localWorld.barrier(localRankB); });
+    //
+    //            // Call barrier with master (should not block)
+    //            localWorld.barrier(0);
+    //
+    //            // Join all threads
+    //            if (threadA1.joinable()) threadA1.join();
+    //            if (threadA2.joinable()) threadA2.join();
+    //            if (threadA3.joinable()) threadA3.join();
+    //            if (threadB1.joinable()) threadB1.join();
+    //            if (threadB2.joinable()) threadB2.join();
+    //        }
+
+    localWorld.closeFunctionCallClients();
+    remoteWorld.closeFunctionCallClients();
 
     server.stop();
 }
@@ -1696,86 +1695,75 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
 {
     cleanFaabric();
 
+    std::string otherHost = "192.168.9.2";
+
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpiworldsize(worldSize);
+
+    MpiWorldRegistry& registry = getMpiWorldRegistry();
+    scheduler::MpiWorld& localWorld =
+      registry.createWorld(msg, worldId, LOCALHOST);
+
+    scheduler::MpiWorld remoteWorld;
+    remoteWorld.overrideHost(otherHost);
+    remoteWorld.initialiseFromState(msg, worldId);
+
     FunctionCallServer server;
     server.start();
     usleep(1000 * 100);
 
+    // Register four ranks
+    int rankA1 = 1;
+    int rankA2 = 2;
+    int rankB1 = 3;
+    int rankB2 = 4;
+    localWorld.registerRank(rankA1);
+    localWorld.registerRank(rankA2);
+    remoteWorld.registerRank(rankB1);
+    remoteWorld.registerRank(rankB2);
+
+    std::vector<int> dataA1 = { 0, 1, 2, 3 };
+    int dataCount = (int)dataA1.size();
+    int bufferSize = dataCount * sizeof(int);
+
+    // Create a window
+    faabric_win_t winA1{
+        .worldId = localWorld.getId(),
+        .rank = rankA1,
+        .size = bufferSize,
+    };
+    localWorld.createWindow(winA1.rank, winA1.size, BYTES(dataA1.data()));
+
+    SECTION("RMA Get from another world")
     {
-        std::string otherHost = "192.168.9.2";
+        // Get the window on another host
+        std::vector<int> actual = { 0, 0, 0, 0 };
+        remoteWorld.rmaGet(
+          rankA1, MPI_INT, dataCount, BYTES(actual.data()), MPI_INT, dataCount);
+        REQUIRE(actual == dataA1);
+    }
 
-        faabric::Message msg = faabric::util::messageFactory(user, func);
-        msg.set_mpiworldid(worldId);
-        msg.set_mpiworldsize(worldSize);
+    SECTION("RMA Put to another world")
+    {
+        // Do the put
+        std::vector<int> putData = { 10, 11, 12, 13 };
+        remoteWorld.rmaPut(rankB1,
+                           BYTES(putData.data()),
+                           MPI_INT,
+                           dataCount,
+                           rankA1,
+                           MPI_INT,
+                           dataCount);
 
-        MpiWorldRegistry& registry = getMpiWorldRegistry();
-        scheduler::MpiWorld& localWorld =
-          registry.createWorld(msg, worldId, LOCALHOST);
+        // Make sure it's been copied to the memory location
+        REQUIRE(dataA1 == putData);
 
-        scheduler::MpiWorld remoteWorld;
-        remoteWorld.overrideHost(otherHost);
-        remoteWorld.initialiseFromState(msg, worldId);
-
-        // Register four ranks
-        int rankA1 = 1;
-        int rankA2 = 2;
-        int rankB1 = 3;
-        int rankB2 = 4;
-        localWorld.registerRank(rankA1);
-        localWorld.registerRank(rankA2);
-        remoteWorld.registerRank(rankB1);
-        remoteWorld.registerRank(rankB2);
-
-        std::vector<int> dataA1 = { 0, 1, 2, 3 };
-        int dataCount = (int)dataA1.size();
-        int bufferSize = dataCount * sizeof(int);
-
-        // Create a window
-        faabric_win_t winA1{
-            .worldId = localWorld.getId(),
-            .rank = rankA1,
-            .size = bufferSize,
-        };
-        localWorld.createWindow(winA1.rank, winA1.size, BYTES(dataA1.data()));
-
-        SECTION("RMA Get from another world")
-        {
-            // Get the window on another host
-            std::vector<int> actual = { 0, 0, 0, 0 };
-            remoteWorld.rmaGet(rankA1,
-                               MPI_INT,
-                               dataCount,
-                               BYTES(actual.data()),
-                               MPI_INT,
-                               dataCount);
-            REQUIRE(actual == dataA1);
-        }
-
-        SECTION("RMA Put to another world")
-        {
-            // Do the put
-            std::vector<int> putData = { 10, 11, 12, 13 };
-            remoteWorld.rmaPut(rankB1,
-                               BYTES(putData.data()),
-                               MPI_INT,
-                               dataCount,
-                               rankA1,
-                               MPI_INT,
-                               dataCount);
-            usleep(1000 * 100);
-
-            // Make sure it's been copied to the memory location
-            REQUIRE(dataA1 == putData);
-
-            // Check that getting still works
-            std::vector<int> actual = { 0, 0, 0, 0 };
-            localWorld.rmaGet(rankA1,
-                              MPI_INT,
-                              dataCount,
-                              BYTES(actual.data()),
-                              MPI_INT,
-                              dataCount);
-            REQUIRE(actual == putData);
-        }
+        // Check that getting still works
+        std::vector<int> actual = { 0, 0, 0, 0 };
+        localWorld.rmaGet(
+          rankA1, MPI_INT, dataCount, BYTES(actual.data()), MPI_INT, dataCount);
+        REQUIRE(actual == putData);
     }
 
     server.stop();

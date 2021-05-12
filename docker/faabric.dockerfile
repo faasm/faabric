@@ -12,16 +12,17 @@ RUN apt install -y \
     build-essential \
     clang-10 \
     clang-format-10 \
+    clang-tidy-10 \
     git \
     libhiredis-dev \
     libtool \
     libboost-filesystem-dev \
     libpython3-dev \
     ninja-build \
+    pkg-config \
     python3-dev \
     python3-pip \
     python3-venv \
-    pkg-config \
     redis-tools \
     wget
 
