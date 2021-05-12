@@ -16,7 +16,8 @@ ExternalProject_Add(protobuf_ext
     BUILD_BYPRODUCTS ${PROTOBUF_LIBRARY}
 )
 ExternalProject_Get_Property(protobuf_ext SOURCE_DIR)
-set(PROTOBUF_INCLUDE_DIR ${SOURCE_DIR}/include)
+set(PROTOBUF_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
+set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/protoc)
 add_library(protobuf SHARED IMPORTED)
 add_dependencies(protobuf protobuf_ext)
 set_target_properties(protobuf

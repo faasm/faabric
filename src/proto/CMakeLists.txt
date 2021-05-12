@@ -8,7 +8,7 @@ set(PB_SRC "${CMAKE_CURRENT_BINARY_DIR}/faabric.pb.cc")
 
 add_custom_command(
     OUTPUT "${PB_HEADER}" "${PB_SRC}"
-    COMMAND protoc
+    COMMAND ${PROTOBUF_PROTOC_EXECUTABLE}
     ARGS --cpp_out "${CMAKE_CURRENT_BINARY_DIR}"
     -I "${CMAKE_CURRENT_LIST_DIR}"
     faabric.proto
