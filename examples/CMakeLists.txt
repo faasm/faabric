@@ -21,8 +21,6 @@ function(add_example example_name)
         pthread
         pistache
         hiredis
-        grpc++
-        grpc++_reflection
         boost_system
         boost_filesystem
     )

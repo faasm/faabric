@@ -1755,6 +1755,7 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
                            rankA1,
                            MPI_INT,
                            dataCount);
+        usleep(1000 * 100);
 
         // Make sure it's been copied to the memory location
         REQUIRE(dataA1 == putData);
@@ -1765,6 +1766,9 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
           rankA1, MPI_INT, dataCount, BYTES(actual.data()), MPI_INT, dataCount);
         REQUIRE(actual == putData);
     }
+
+    localWorld.closeFunctionCallClients();
+    remoteWorld.closeFunctionCallClients();
 
     server.stop();
 }
