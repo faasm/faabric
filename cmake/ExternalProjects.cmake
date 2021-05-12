@@ -2,15 +2,9 @@ include(FindGit)
 find_package(Git)
 include (ExternalProject)
 include (FetchContent)
-
-# Protobuf config
-if(BUILD_SHARED_LIBS)
-    set(Protobuf_USE_STATIC_LIBS OFF)
-else()
-    set(Protobuf_USE_STATIC_LIBS ON)
-endif()
-
+ 
 # Protobuf
+set(PROTOBUF_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.so)
 ExternalProject_Add(protobuf_ext
     GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
     GIT_TAG "v3.16.0"
@@ -18,17 +12,19 @@ ExternalProject_Add(protobuf_ext
     CMAKE_CACHE_ARGS "-DCMAKE_BUILD_TYPE:STRING=Release"
         "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
         "-Dprotobuf_BUILD_TESTS:BOOL=OFF"
-    BUILD_BYPRODUCTS ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.a
+        "-Dprotobuf_BUILD_SHARED_LIBS:BOOL=ON"
+    BUILD_BYPRODUCTS ${PROTOBUF_LIBRARY}
 )
 ExternalProject_Get_Property(protobuf_ext SOURCE_DIR)
 set(PROTOBUF_INCLUDE_DIR ${SOURCE_DIR}/include)
 add_library(protobuf SHARED IMPORTED)
 add_dependencies(protobuf protobuf_ext)
 set_target_properties(protobuf
-    PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.a
+    PROPERTIES IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
 )
 
 # FlatBuffers
+set(FLATBUFFERS_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libflatbuffers.so)
 ExternalProject_Add(flatbuffers_ext
     GIT_REPOSITORY https://github.com/google/flatbuffers.git
     GIT_TAG "v2.0.0"
@@ -36,7 +32,7 @@ ExternalProject_Add(flatbuffers_ext
         "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
         "-DFLATBUFFERS_BUILD_SHAREDLIB:BOOL=ON"
         "-DFLATBUFFERS_BUILD_TESTS:BOOL=OFF"
-    BUILD_BYPRODUCTS ${CMAKE_INSTALL_PREFIX}/lib/libflatbuffers.so
+    BUILD_BYPRODUCTS ${FLATBUFFERS_LIBRARY}
 )
 ExternalProject_Get_Property(flatbuffers_ext SOURCE_DIR)
 set(FLATBUFFERS_INCLUDE_DIRS ${SOURCE_DIR}/include)
@@ -44,7 +40,7 @@ set(FLATBUFFERS_FLATC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/flatc)
 add_library(flatbuffers SHARED IMPORTED)
 add_dependencies(flatbuffers flatbuffers_ext)
 set_target_properties(flatbuffers
-    PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libflatbuffers.so
+    PROPERTIES IMPORTED_LOCATION ${FLATBUFFERS_LIBRARY}
 )
 
 # Pistache
