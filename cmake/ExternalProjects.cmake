@@ -116,17 +116,26 @@ target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${zstd_ext
 add_library(zstd::libzstd_static ALIAS libzstd_static)
 
 # ZeroMQ
+set(ZEROMQ_LIBRARY /usr/local/lib/libzmq.so)
 ExternalProject_Add(libzeromq_ext
     GIT_REPOSITORY "https://github.com/zeromq/libzmq.git"
     GIT_TAG "v4.3.4"
+    BUILD_BYPRODUCTS ${ZEROMQ_LIBRARY}
 )
 ExternalProject_Add(cppzeromq_ext
     GIT_REPOSITORY "https://github.com/faasm/cppzmq.git"
-    GIT_TAG "faasm"
+    GIT_TAG "v4.7.1"
+    CMAKE_CACHE_ARGS "-DCPPZMQ_BUILD_TESTS:BOOL=OFF"
 )
 add_dependencies(cppzeromq_ext libzeromq_ext)
 ExternalProject_Get_Property(cppzeromq_ext SOURCE_DIR)
 set(ZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
+add_library(zeromq SHARED IMPORTED)
+add_dependencies(zeromq cppzeromq_ext)
+set_target_properties(zeromq
+    PROPERTIES IMPORTED_LOCATION ${ZEROMQ_LIBRARY}
+)
+
 
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)

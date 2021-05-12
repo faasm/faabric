@@ -24,8 +24,5 @@ faabric_lib(transport "${LIB_FILES}")
 # Add dependency with ZeroMQ
 # ----------------------------------------------
 
-add_dependencies(transport libzeromq_ext)
-add_dependencies(transport cppzeromq_ext)
-
-target_link_libraries(transport proto zmq)
+target_link_libraries(transport proto zeromq)
 
