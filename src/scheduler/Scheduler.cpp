@@ -541,7 +541,7 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
         claimed = thisExecutors.back();
 
         // Claim it
-        assert(claimed->tryClaim());
+        claimed->tryClaim();
     }
 
     assert(claimed != nullptr);
