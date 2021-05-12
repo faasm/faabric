@@ -12,7 +12,7 @@
 namespace faabric::scheduler {
 enum FunctionCalls
 {
-    None = 0,
+    NoFunctionCall = 0,
     MpiMessage = 1,
     ExecuteFunctions = 2,
     Flush = 3,
@@ -23,7 +23,7 @@ enum FunctionCalls
 
 enum SnapshotCalls
 {
-    Empty = 0,
+    NoSnapshotCall = 0,
     PushSnapshot = 1,
     DeleteSnapshot = 2,
 };
@@ -32,7 +32,7 @@ enum SnapshotCalls
 namespace faabric::state {
 enum StateCalls
 {
-    None = 0,
+    NoStateCall = 0,
     Pull = 1,
     Push = 2,
     Size = 3,

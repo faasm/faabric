@@ -3,8 +3,8 @@
 
 namespace faabric::scheduler {
 MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
-  : shutdown(false)
-  , size(nThreads)
+  : size(nThreads)
+  , shutdown(false)
 {
     faabric::util::getLogger()->debug(
       "Starting an MpiAsyncThreadPool of size {}", nThreads);

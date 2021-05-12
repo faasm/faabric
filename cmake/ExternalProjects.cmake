@@ -63,9 +63,6 @@ set_target_properties(pistache
 )
 
 # RapidJSON
-# set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
-# set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-# set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
 ExternalProject_Add(rapidjson_ext
     GIT_REPOSITORY "https://github.com/Tencent/rapidjson"
     GIT_TAG "2ce91b823c8b4504b9c40f99abf00917641cef6c"
@@ -131,7 +128,7 @@ ExternalProject_Add(cppzeromq_ext
     GIT_TAG "faasm"
 )
 add_dependencies(cppzeromq_ext libzeromq_ext)
-ExternalProject_Get_Property(cppcodec_ext SOURCE_DIR)
+ExternalProject_Get_Property(cppzeromq_ext SOURCE_DIR)
 set(ZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
 
 if(FAABRIC_BUILD_TESTS)

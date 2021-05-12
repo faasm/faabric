@@ -20,9 +20,6 @@ set(LIB_FILES
 
 faabric_lib(transport "${LIB_FILES}")
 
-# Add include directories for zeromq themselves
-target_include_directories(transport PUBLIC ${ZEROMQ_INCLUDE_DIR})
-
 # ----------------------------------------------
 # Add dependency with ZeroMQ
 # ----------------------------------------------
