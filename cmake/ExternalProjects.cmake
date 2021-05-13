@@ -116,16 +116,19 @@ target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${zstd_ext
 add_library(zstd::libzstd_static ALIAS libzstd_static)
 
 # ZeroMQ
-set(ZEROMQ_LIBRARY /usr/local/lib/libzmq.so)
+# set(ZEROMQ_LIBRARY /usr/local/lib/libzmq.so)
+set(ZEROMQ_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libzmq.so)
 ExternalProject_Add(libzeromq_ext
     GIT_REPOSITORY "https://github.com/zeromq/libzmq.git"
     GIT_TAG "v4.3.4"
+    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
     BUILD_BYPRODUCTS ${ZEROMQ_LIBRARY}
 )
 ExternalProject_Add(cppzeromq_ext
     GIT_REPOSITORY "https://github.com/faasm/cppzmq.git"
     GIT_TAG "v4.7.1"
     CMAKE_CACHE_ARGS "-DCPPZMQ_BUILD_TESTS:BOOL=OFF"
+        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
 )
 add_dependencies(cppzeromq_ext libzeromq_ext)
 ExternalProject_Get_Property(cppzeromq_ext SOURCE_DIR)
