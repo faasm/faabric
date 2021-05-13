@@ -20,18 +20,10 @@ SystemConfig::SystemConfig()
 void SystemConfig::initialise()
 {
     // System
-    hostType = getEnvVar("HOST_TYPE", "default");
-    functionStorage = getEnvVar("FUNCTION_STORAGE", "local");
-    fileserverUrl = getEnvVar("FILESERVER_URL", "");
     serialisation = getEnvVar("SERIALISATION", "json");
-    cgroupMode = getEnvVar("CGROUP_MODE", "on");
-    netNsMode = getEnvVar("NETNS_MODE", "off");
     logLevel = getEnvVar("LOG_LEVEL", "info");
     logFile = getEnvVar("LOG_FILE", "off");
-    pythonPreload = getEnvVar("PYTHON_PRELOAD", "off");
-    captureStdout = getEnvVar("CAPTURE_STDOUT", "off");
     stateMode = getEnvVar("STATE_MODE", "inmemory");
-    wasmVm = getEnvVar("WASM_VM", "wavm");
     deltaSnapshotEncoding =
       getEnvVar("DELTA_SNAPSHOT_ENCODING", "pages=4096;xor;zstd=1");
 
@@ -48,17 +40,6 @@ void SystemConfig::initialise()
     globalMessageTimeout =
       this->getSystemConfIntParam("GLOBAL_MESSAGE_TIMEOUT", "60000");
     boundTimeout = this->getSystemConfIntParam("BOUND_TIMEOUT", "30000");
-    chainedCallTimeout =
-      this->getSystemConfIntParam("CHAINED_CALL_TIMEOUT", "300000");
-
-    // Filesystem storage
-    std::string faasmLocalDir =
-      getEnvVar("FAASM_LOCAL_DIR", "/usr/local/faasm");
-    functionDir = fmt::format("{}/{}", faasmLocalDir, "wasm");
-    objectFileDir = fmt::format("{}/{}", faasmLocalDir, "object");
-    runtimeFilesDir = fmt::format("{}/{}", faasmLocalDir, "runtime_root");
-    sharedFilesDir = fmt::format("{}/{}", faasmLocalDir, "shared");
-    sharedFilesStorageDir = fmt::format("{}/{}", faasmLocalDir, "shared_store");
 
     // MPI
     defaultMpiWorldSize =
