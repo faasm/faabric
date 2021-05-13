@@ -24,7 +24,6 @@ void checkMessageEquality(const faabric::Message& msgA,
     REQUIRE(msgA.pythonentry() == msgB.pythonentry());
     REQUIRE(msgA.isasync() == msgB.isasync());
     REQUIRE(msgA.ispython() == msgB.ispython());
-    REQUIRE(msgA.istypescript() == msgB.istypescript());
     REQUIRE(msgA.isstatusrequest() == msgB.isstatusrequest());
     REQUIRE(msgA.isexecgraphrequest() == msgB.isexecgraphrequest());
 

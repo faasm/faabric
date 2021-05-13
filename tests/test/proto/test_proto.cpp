@@ -49,7 +49,6 @@ TEST_CASE("Test protobuf classes", "[proto]")
 
     funcCall.set_isasync(true);
     funcCall.set_ispython(true);
-    funcCall.set_istypescript(true);
     funcCall.set_isstatusrequest(true);
 
     funcCall.set_type(faabric::Message_MessageType_KILL);
@@ -79,7 +78,6 @@ TEST_CASE("Test protobuf classes", "[proto]")
 
     REQUIRE(newFuncCall.isasync());
     REQUIRE(newFuncCall.ispython());
-    REQUIRE(newFuncCall.istypescript());
     REQUIRE(newFuncCall.isstatusrequest());
 
     REQUIRE(cmdline == newFuncCall.cmdline());

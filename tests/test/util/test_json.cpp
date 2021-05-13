@@ -22,7 +22,6 @@ TEST_CASE("Test message to JSON round trip", "[util]")
 
     msg.set_isasync(true);
     msg.set_ispython(true);
-    msg.set_istypescript(true);
     msg.set_isstatusrequest(true);
     msg.set_isexecgraphrequest(true);
 

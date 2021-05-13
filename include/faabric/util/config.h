@@ -14,18 +14,10 @@ class SystemConfig
 
   public:
     // System
-    std::string hostType;
-    std::string functionStorage;
-    std::string fileserverUrl;
     std::string serialisation;
-    std::string cgroupMode;
-    std::string netNsMode;
     std::string logLevel;
     std::string logFile;
-    std::string pythonPreload;
-    std::string captureStdout;
     std::string stateMode;
-    std::string wasmVm;
     std::string deltaSnapshotEncoding;
 
     // Redis
@@ -40,14 +32,6 @@ class SystemConfig
     // Worker-related timeouts
     int globalMessageTimeout;
     int boundTimeout;
-    int chainedCallTimeout;
-
-    // Filesystem storage
-    std::string functionDir;
-    std::string objectFileDir;
-    std::string runtimeFilesDir;
-    std::string sharedFilesDir;
-    std::string sharedFilesStorageDir;
 
     // MPI
     int defaultMpiWorldSize;
