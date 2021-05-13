@@ -81,7 +81,6 @@ void SystemConfig::print()
     logger->info("LOG_LEVEL                  {}", logLevel);
     logger->info("LOG_FILE                   {}", logFile);
     logger->info("STATE_MODE                 {}", stateMode);
-    logger->info("WASM_VM                    {}", wasmVm);
     logger->info("DELTA_SNAPSHOT_ENCODING    {}", deltaSnapshotEncoding);
 
     logger->info("--- Redis ---");

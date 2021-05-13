@@ -18,7 +18,6 @@ class SystemConfig
     std::string logLevel;
     std::string logFile;
     std::string stateMode;
-    std::string wasmVm;
     std::string deltaSnapshotEncoding;
 
     // Redis

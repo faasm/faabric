@@ -17,7 +17,6 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.logLevel == "info");
     REQUIRE(conf.logFile == "off");
     REQUIRE(conf.stateMode == "inmemory");
-    REQUIRE(conf.wasmVm == "wavm");
 
     REQUIRE(conf.redisPort == "6379");
 
@@ -56,7 +55,6 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.logLevel == "debug");
     REQUIRE(conf.logFile == "on");
     REQUIRE(conf.stateMode == "foobar");
-    REQUIRE(conf.wasmVm == "blah");
 
     REQUIRE(conf.redisStateHost == "not-localhost");
     REQUIRE(conf.redisQueueHost == "other-host");
