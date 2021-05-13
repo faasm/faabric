@@ -101,8 +101,6 @@ add_dependencies(faabric pistache_ext spdlog_ext)
 target_link_libraries(faabric PUBLIC
     faabricmpi
     hiredis
-    pistache
-    protobuf
     boost_system
     boost_filesystem
     zstd::libzstd_static

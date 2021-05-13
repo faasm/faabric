@@ -35,8 +35,8 @@ target_include_directories(faabricmpi_native
 
 set(FAABRIC_LIB_DIR "/build/faabric/install/lib")
 target_link_libraries(faabricmpi_native 
-    ${FAABRIC_LIB_DIR}/libfaabric.so
-    ${FAABRIC_LIB_DIR}/libfaabricmpi.so
+    faabric
+    faabricmpi
     ${FAABRIC_LIB_DIR}/libpistache.so
     ${FAABRIC_LIB_DIR}/libprotobuf.so
     ${FAABRIC_LIB_DIR}/libzmq.so
