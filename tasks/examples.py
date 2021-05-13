@@ -12,7 +12,7 @@ EXAMPLES_DIR = join(PROJ_ROOT, "examples")
 BUILD_DIR = join(EXAMPLES_DIR, "build")
 
 INCLUDE_DIR = "{}/include".format(FAABRIC_INSTALL_PREFIX)
-LIB_DIR = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
+LIB_DIR = "{}/lib:/usr/local/lib".format(FAABRIC_INSTALL_PREFIX)
 
 
 @task(default=True)

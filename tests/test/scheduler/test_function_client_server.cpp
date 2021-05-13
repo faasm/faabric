@@ -183,7 +183,7 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Make the request
     FunctionCallClient cli(LOCALHOST);
     cli.executeFunctions(req);
-    usleep(1000 * 100);
+    usleep(1000 * 300);
 
     // Close the client
     cli.close();
