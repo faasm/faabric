@@ -77,16 +77,9 @@ void SystemConfig::print()
     const std::shared_ptr<spdlog::logger>& logger = getLogger();
 
     logger->info("--- System ---");
-    logger->info("HOST_TYPE                  {}", hostType);
-    logger->info("FUNCTION_STORAGE           {}", functionStorage);
-    logger->info("FILESERVER_URL             {}", fileserverUrl);
     logger->info("SERIALISATION              {}", serialisation);
-    logger->info("CGROUP_MODE                {}", cgroupMode);
-    logger->info("NETNS_MODE                 {}", netNsMode);
     logger->info("LOG_LEVEL                  {}", logLevel);
     logger->info("LOG_FILE                   {}", logFile);
-    logger->info("PYTHON_PRELOAD             {}", pythonPreload);
-    logger->info("CAPTURE_STDOUT             {}", captureStdout);
     logger->info("STATE_MODE                 {}", stateMode);
     logger->info("WASM_VM                    {}", wasmVm);
     logger->info("DELTA_SNAPSHOT_ENCODING    {}", deltaSnapshotEncoding);
@@ -103,14 +96,6 @@ void SystemConfig::print()
     logger->info("--- Timeouts ---");
     logger->info("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
     logger->info("BOUND_TIMEOUT              {}", boundTimeout);
-    logger->info("CHAINED_CALL_TIMEOUT       {}", chainedCallTimeout);
-
-    logger->info("--- Storage ---");
-    logger->info("FUNC_DIR                  {}", functionDir);
-    logger->info("OBJ_DIR                   {}", objectFileDir);
-    logger->info("RUNTIME_FILES_DIR         {}", runtimeFilesDir);
-    logger->info("SHARED_FILES_DIR          {}", sharedFilesDir);
-    logger->info("SHARED_FILES_STORAGE_DIR  {}", sharedFilesStorageDir);
 
     logger->info("--- MPI ---");
     logger->info("DEFAULT_MPI_WORLD_SIZE  {}", defaultMpiWorldSize);
