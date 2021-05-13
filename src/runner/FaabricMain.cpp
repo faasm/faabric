@@ -42,9 +42,6 @@ void FaabricMain::startRunner()
     auto& sch = faabric::scheduler::getScheduler();
     sch.addHostToGlobalSet();
 
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    conf.print();
-
 #if (FAASM_SGX)
     // Check for SGX capability and create shared enclave
     sgx::checkSgxSetup();

@@ -14,14 +14,6 @@ class QueueTimeoutException : public faabric::util::FaabricException
     {}
 };
 
-class ExecutorFinishedException : public faabric::util::FaabricException
-{
-  public:
-    explicit ExecutorFinishedException(std::string message)
-      : FaabricException(std::move(message))
-    {}
-};
-
 template<typename T>
 class Queue
 {

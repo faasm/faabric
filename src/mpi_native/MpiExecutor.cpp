@@ -22,7 +22,7 @@ int32_t MpiExecutor::executeTask(
         logger->error("There was an error running the MPI function");
     }
 
-    throw faabric::util::ExecutorFinishedException("Finished MPI Execution!");
+    return 0;
 }
 
 int mpiNativeMain(int argc, char** argv)
