@@ -96,7 +96,7 @@ add_library(faabric
     $<TARGET_OBJECTS:util_obj>
 )
 
-add_dependencies(faabric pistache spdlog_ext)
+add_dependencies(faabric pistache_ext spdlog_ext)
 
 target_link_libraries(faabric PUBLIC
     faabricmpi

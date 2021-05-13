@@ -43,4 +43,4 @@ faabric_lib(proto "${LIB_FILES}")
 
 add_dependencies(proto spdlog_ext)
 
-target_link_libraries(proto protobuf)
+target_link_libraries(proto protobuf_imported)

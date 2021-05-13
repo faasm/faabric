@@ -18,9 +18,9 @@ ExternalProject_Add(protobuf_ext
 ExternalProject_Get_Property(protobuf_ext SOURCE_DIR)
 set(PROTOBUF_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
 set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/protoc)
-add_library(protobuf SHARED IMPORTED)
-add_dependencies(protobuf protobuf_ext)
-set_target_properties(protobuf
+add_library(protobuf_imported SHARED IMPORTED)
+add_dependencies(protobuf_imported protobuf_ext)
+set_target_properties(protobuf_imported
     PROPERTIES IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
 )
 
@@ -38,9 +38,9 @@ ExternalProject_Add(flatbuffers_ext
 ExternalProject_Get_Property(flatbuffers_ext SOURCE_DIR)
 set(FLATBUFFERS_INCLUDE_DIRS ${SOURCE_DIR}/include)
 set(FLATBUFFERS_FLATC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/flatc)
-add_library(flatbuffers SHARED IMPORTED)
-add_dependencies(flatbuffers flatbuffers_ext)
-set_target_properties(flatbuffers
+add_library(flatbuffers_imported SHARED IMPORTED)
+add_dependencies(flatbuffers_imported flatbuffers_ext)
+set_target_properties(flatbuffers_imported
     PROPERTIES IMPORTED_LOCATION ${FLATBUFFERS_LIBRARY}
 )
 
@@ -53,9 +53,9 @@ ExternalProject_Add(pistache_ext
 )
 ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
 set(PISTACHE_INCLUDE_DIR ${SOURCE_DIR}/include)
-add_library(pistache SHARED IMPORTED)
-add_dependencies(pistache pistache_ext)
-set_target_properties(pistache
+add_library(pistache_imported SHARED IMPORTED)
+add_dependencies(pistache_imported pistache_ext)
+set_target_properties(pistache_imported
     PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so
 )
 
@@ -132,9 +132,9 @@ ExternalProject_Add(cppzeromq_ext
 add_dependencies(cppzeromq_ext libzeromq_ext)
 ExternalProject_Get_Property(cppzeromq_ext SOURCE_DIR)
 set(ZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
-add_library(zeromq SHARED IMPORTED)
-add_dependencies(zeromq cppzeromq_ext)
-set_target_properties(zeromq
+add_library(zeromq_imported SHARED IMPORTED)
+add_dependencies(zeromq_imported cppzeromq_ext)
+set_target_properties(zeromq_imported
     PROPERTIES IMPORTED_LOCATION ${ZEROMQ_LIBRARY}
 )
 

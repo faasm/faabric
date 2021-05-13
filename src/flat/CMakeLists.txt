@@ -42,4 +42,4 @@ faabric_lib(flat "${LIB_FILES}")
 # Add include directories for flatbuffers themselves
 target_include_directories(flat PUBLIC ${FLATBUFFERS_INCLUDE_DIRS})
 
-target_link_libraries(flat flatbuffers)
+target_link_libraries(flat flatbuffers_imported)
