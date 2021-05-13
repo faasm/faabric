@@ -116,7 +116,6 @@ target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${zstd_ext
 add_library(zstd::libzstd_static ALIAS libzstd_static)
 
 # ZeroMQ
-# set(ZEROMQ_LIBRARY /usr/local/lib/libzmq.so)
 set(ZEROMQ_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libzmq.so)
 ExternalProject_Add(libzeromq_ext
     GIT_REPOSITORY "https://github.com/zeromq/libzmq.git"
