@@ -5,6 +5,7 @@ from invoke import task
 from tasks.util.env import get_version, PROJ_ROOT
 
 FAABRIC_IMAGE_NAME = "faabric"
+FAABRIC_BASE_IMAGE_NAME = "faabric-base"
 MPI_NATIVE_IMAGE_NAME = "faabric-mpi-native"
 
 
@@ -58,6 +59,14 @@ def build(ctx, nocache=False, push=False):
 
 
 @task
+def build_base(ctx, nocache=False, push=False):
+    """
+    Build current native MPI container
+    """
+    _do_container_build(FAABRIC_BASE_IMAGE_NAME, nocache=nocache, push=push)
+
+
+@task
 def build_mpi_native(ctx, nocache=False, push=False):
     """
     Build current native MPI container
@@ -71,6 +80,14 @@ def push(ctx):
     Push current version of faabric container
     """
     _do_push(FAABRIC_IMAGE_NAME)
+
+
+@task
+def push_base(ctx):
+    """
+    Push current version of the native MPI container
+    """
+    _do_push(FAABRIC_BASE_IMAGE_NAME)
 
 
 @task
