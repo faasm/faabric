@@ -137,7 +137,6 @@ message Message {
 
     bool isAsync = 19;
     bool isPython = 20;
-    bool isTypescript = 21;
     bool isStatusRequest = 22;
     bool isExecGraphRequest = 23;
 
