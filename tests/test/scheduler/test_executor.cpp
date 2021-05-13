@@ -9,6 +9,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
@@ -90,6 +91,7 @@ class TestExecutor final : public Executor
             for (int i = 0; i < chainedReq->messages_size(); i++) {
                 uint32_t mid = chainedReq->messages().at(i).id();
                 int threadRes = sch.awaitThreadResult(mid);
+                UNUSED(threadRes);
                 assert(threadRes == mid / 100);
             }
 
