@@ -51,12 +51,11 @@ void SnapshotClient::pushSnapshot(const std::string& key,
                                   const faabric::util::SnapshotData& req)
 {
     auto logger = faabric::util::getLogger();
+    logger->debug("Pushing snapshot {} to {}", key, host);
 
     if (faabric::util::isMockMode()) {
         snapshotPushes.emplace_back(host, req);
     } else {
-        logger->debug("Pushing snapshot {} to {}", key, host);
-
         ClientContext context;
 
         // TODO - avoid copying data here
