@@ -1,0 +1,40 @@
+version: "3"
+
+services:
+  redis:
+    image: redis
+
+  worker:
+    image: ${FAABRIC_CLI_IMAGE}
+    volumes:
+      - .:${FAABRIC_CODE_MOUNT}
+      - ./build:${FAABRIC_BUILD_MOUNT}
+    working_dir: /code/faabric
+    stdin_open: true
+    tty: true
+    privileged: true
+    environment:
+      - LOG_LEVEL=debug
+      - REDIS_STATE_HOST=redis
+      - REDIS_QUEUE_HOST=redis
+    depends_on:
+      - redis
+    command: /code/faabric/dist-test/worker.sh
+
+  master:
+    image: ${FAABRIC_CLI_IMAGE}
+    volumes:
+      - .:${FAABRIC_CODE_MOUNT}
+      - ./build:${FAABRIC_BUILD_MOUNT}
+    working_dir: /code/faabric
+    stdin_open: true
+    tty: true
+    privileged: true
+    environment:
+      - LOG_LEVEL=debug
+      - REDIS_STATE_HOST=redis
+      - REDIS_QUEUE_HOST=redis
+    depends_on:
+      - worker
+      - redis
+    command: /code/faabric/bin/dist-test/master.sh

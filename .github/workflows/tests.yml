@@ -3,7 +3,7 @@ name: Tests
 on:
   push:
     branches: [master]
-  pull_request: 
+  pull_request:
     branches: [master]
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -32,12 +32,12 @@ jobs:
       - name: "Run cmake"
         run: inv dev.cmake
       - name: "Rerun build to ensure code is up to date"
-        run: inv dev.cc faabric_tests 
+        run: inv dev.cc faabric_tests
       # --- Formatting checks ---
       - name: "Python formatting check"
         run: ./bin/check_python.sh
       - name: "Run C/C++ formatting"
-        run: ./bin/run_clang_format.sh 
+        run: ./bin/run_clang_format.sh
       - name: "Check C/C++ formatting changes"
         run: git diff --exit-code
       - name: "Run C/C++ linter"
@@ -76,6 +76,13 @@ jobs:
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static
+
+  dist-tests:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Run the distributed tests"
+        run: docker-compose -f dist-test/docker-compose.yml run master /code/faabric/dist-test/master.sh
 
   examples:
     if: github.event.pull_request.draft == false
