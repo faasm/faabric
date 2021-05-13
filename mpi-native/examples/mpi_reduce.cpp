@@ -66,3 +66,4 @@ int mpiFunc()
 
     return MPI_SUCCESS;
 }
+}

@@ -307,11 +307,14 @@ TEST_CASE("Test sendrecv", "[mpi]")
     std::vector<int> messageDataAB = { 0, 1, 2 };
     std::vector<int> messageDataBA = { 3, 2, 1, 0 };
 
+    // Results
+    std::vector<int> recvBufferA(messageDataBA.size(), 0);
+    std::vector<int> recvBufferB(messageDataAB.size(), 0);
+
     // sendRecv is blocking, so we run two threads.
     // Run sendrecv from A
     std::vector<std::thread> threads;
     threads.emplace_back([&] {
-        std::vector<int> recvBufferA(messageDataBA.size(), 0);
         world.sendRecv(BYTES(messageDataAB.data()),
                        messageDataAB.size(),
                        MPI_INT,
@@ -322,12 +325,9 @@ TEST_CASE("Test sendrecv", "[mpi]")
                        rankB,
                        rankA,
                        &status);
-        // Test integrity of results
-        REQUIRE(recvBufferA == messageDataBA);
     });
     // Run sendrecv from B
     threads.emplace_back([&] {
-        std::vector<int> recvBufferB(messageDataAB.size(), 0);
         world.sendRecv(BYTES(messageDataBA.data()),
                        messageDataBA.size(),
                        MPI_INT,
@@ -338,15 +338,18 @@ TEST_CASE("Test sendrecv", "[mpi]")
                        rankA,
                        rankB,
                        &status);
-        // Test integrity of results
-        REQUIRE(recvBufferB == messageDataAB);
     });
+
     // Wait for both to finish
     for (auto& t : threads) {
         if (t.joinable()) {
             t.join();
         }
     }
+
+    // Test integrity of results
+    REQUIRE(recvBufferA == messageDataBA);
+    REQUIRE(recvBufferB == messageDataAB);
 }
 
 TEST_CASE("Test ring sendrecv", "[mpi]")
@@ -386,7 +389,8 @@ TEST_CASE("Test ring sendrecv", "[mpi]")
                            ranks[i],
                            &status);
             // Test integrity of results
-            REQUIRE(recvData == left);
+            // TODO - no REQUIRE in the test case now
+            assert(recvData == left);
         });
     }
     // Wait for all threads to finish
@@ -902,89 +906,7 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
             // Check data
             REQUIRE(actual == expected);
         }
-
-        //            SECTION("Allgather") {
-        //                int fullSize = nPerRank * thisWorldSize;
-        //
-        //                // Call allgather for ranks on the first world
-        //                std::vector<std::thread> threads;
-        //                for (int rank : remoteWorldRanks) {
-        //                    if (rank == 0) {
-        //                        continue;
-        //                    }
-        //
-        //                    threads.emplace_back([&, rank] {
-        //                        std::vector actual(fullSize, -1);
-        //
-        //                        remoteWorld.allGather(rank,
-        //                        BYTES(rankData[rank].data()), MPI_INT,
-        //                        nPerRank,
-        //                                              BYTES(actual.data()),
-        //                                              MPI_INT, nPerRank);
-        //
-        //                        REQUIRE(actual == expected);
-        //                    });
-        //                }
-        //
-        //                // Call allgather for the threads in the other world
-        //                for (int rank : localWorldRanks) {
-        //                    threads.emplace_back([&, rank] {
-        //                        std::vector actual(fullSize, -1);
-        //
-        //                        localWorld.allGather(rank,
-        //                        BYTES(rankData[rank].data()), MPI_INT,
-        //                        nPerRank,
-        //                                             BYTES(actual.data()),
-        //                                             MPI_INT, nPerRank);
-        //
-        //                        REQUIRE(actual == expected);
-        //                    });
-        //                }
-        //
-        //                // Now call allgather in the root rank
-        //                threads.emplace_back([&] {
-        //                    std::vector actual(fullSize, -1);
-        //                    remoteWorld.allGather(0,
-        //                    BYTES(rankData[0].data()), MPI_INT, nPerRank,
-        //                                          BYTES(actual.data()),
-        //                                          MPI_INT, nPerRank);
-        //
-        //                    REQUIRE(actual == expected);
-        //                });
-        //
-        //                // All threads should now be able to resolve
-        //                themselves for (auto &t: threads) {
-        //                    if (t.joinable()) {
-        //                        t.join();
-        //                    }
-        //                }
-        //            }
     }
-    //
-    //        SECTION("Barrier") {
-    //            // Call barrier with all the ranks
-    //            std::thread threadA1([&remoteWorld, &remoteRankA] {
-    //            remoteWorld.barrier(remoteRankA); }); std::thread
-    //            threadA2([&remoteWorld, &remoteRankB] {
-    //            remoteWorld.barrier(remoteRankB); }); std::thread
-    //            threadA3([&remoteWorld, &remoteRankC] {
-    //            remoteWorld.barrier(remoteRankC); });
-    //
-    //            std::thread threadB1([&localWorld, &localRankA] {
-    //            localWorld.barrier(localRankA); }); std::thread
-    //            threadB2([&localWorld, &localRankB] {
-    //            localWorld.barrier(localRankB); });
-    //
-    //            // Call barrier with master (should not block)
-    //            localWorld.barrier(0);
-    //
-    //            // Join all threads
-    //            if (threadA1.joinable()) threadA1.join();
-    //            if (threadA2.joinable()) threadA2.join();
-    //            if (threadA3.joinable()) threadA3.join();
-    //            if (threadB1.joinable()) threadB1.join();
-    //            if (threadB2.joinable()) threadB2.join();
-    //        }
 
     localWorld.closeFunctionCallClients();
     remoteWorld.closeFunctionCallClients();
@@ -1057,7 +979,7 @@ void doReduceTest(scheduler::MpiWorld& world,
                                 datatype,
                                 3,
                                 op);
-                REQUIRE(thisRankData == expected);
+                assert(thisRankData == expected);
             } else {
                 std::vector<T> actual(3, 0);
                 world.allReduce(r,
@@ -1066,7 +988,7 @@ void doReduceTest(scheduler::MpiWorld& world,
                                 datatype,
                                 3,
                                 op);
-                REQUIRE(actual == expected);
+                assert(actual == expected);
             }
         });
     }
@@ -1561,7 +1483,8 @@ TEST_CASE("Test gather and allgather", "[mpi]")
                                     nPerRank);
                 }
 
-                REQUIRE(actual == expected);
+                // TODO remove
+                assert(actual == expected);
             });
         }
 
@@ -1570,6 +1493,8 @@ TEST_CASE("Test gather and allgather", "[mpi]")
                 t.join();
             }
         }
+
+        REQUIRE(actual == expected);
     }
 }
 
@@ -1680,7 +1605,7 @@ TEST_CASE("Test all-to-all", "[mpi]")
                            2);
 
             std::vector<int> thisExpected(expected[r], expected[r] + 8);
-            REQUIRE(actual == thisExpected);
+            assert(actual == thisExpected);
         });
     }
 

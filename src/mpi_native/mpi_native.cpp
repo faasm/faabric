@@ -235,7 +235,6 @@ int MPI_Bcast(void* buffer,
         world.broadcast(
           rank, (uint8_t*)buffer, datatype, count, faabric::MPIMessage::NORMAL);
     } else {
-        auto fptr = &faabric::scheduler::MpiWorld::recv;
         logger->debug(fmt::format("MPI_Bcast {} <- {}", rank, root));
         world.recv(root,
                    rank,
