@@ -372,7 +372,7 @@ TEST_CASE("Test executing remote threads indirectly", "[executor]")
         sch.callFunctions(req, false);
 
         faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
-        REQUIRE(res.returnvalue() == 0);
+        assert(res.returnvalue() == 0);
     });
 
     // Give it time to have made the request

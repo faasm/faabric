@@ -9,6 +9,8 @@
 #include <faabric/util/queue.h>
 #include <faabric/util/timing.h>
 
+#define POOL_SHUTDOWN -1
+
 namespace faabric::scheduler {
 
 // TODO - avoid the copy of the message here?
@@ -43,7 +45,7 @@ void Executor::finish()
 
         // Send a kill message
         logger->trace("Executor {} killing thread pool {}", id, i);
-        threadQueues.at(i).enqueue(std::make_pair(-1, nullptr));
+        threadQueues.at(i).enqueue(std::make_pair(POOL_SHUTDOWN, nullptr));
 
         // Await the thread
         if (threadPoolThreads.at(i)->joinable()) {
@@ -168,7 +170,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // If the thread is being killed, the executor itself
         // will handle the clean-up
-        if (msgIdx == -1) {
+        if (msgIdx == POOL_SHUTDOWN) {
             logger->debug(
               "Killing thread pool thread {}:{}", id, threadPoolIdx);
             break;
