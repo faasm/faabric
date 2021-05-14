@@ -7,14 +7,10 @@ namespace tests {
 TEST_CASE("Test available hosts", "[scheduler][dist]")
 {
     auto& sch = faabric::scheduler::getScheduler();
+    sch.addHostToGlobalSet();
 
     std::set<std::string> actual = sch.getAvailableHosts();
 
-    std::set<std::string> expected = {
-        "master",
-        "worker",
-    };
-
-    REQUIRE(actual == expected);
+    REQUIRE(actual.size() == 2);
 }
 }
