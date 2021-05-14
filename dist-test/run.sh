@@ -43,5 +43,4 @@ docker-compose \
     /code/faabric/dist-test/master.sh
 
 popd >> /dev/null
-
 popd >> /dev/null

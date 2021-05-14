@@ -113,6 +113,7 @@ target_include_directories(faabric PUBLIC
 
 # Tests
 if(FAABRIC_BUILD_TESTS)
+    add_subdirectory(tests/dist)
     add_subdirectory(tests/test)
     add_subdirectory(tests/utils)
 endif()

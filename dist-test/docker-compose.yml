@@ -4,32 +4,13 @@ services:
   redis:
     image: redis
 
-  worker:
-    image: ${FAABRIC_CLI_IMAGE}
-    volumes:
-      - ${PROJ_ROOT}:/code/faabric
-      - ${FAABRIC_LOCAL_BUILD_DIR}:${FAABRIC_BUILD_MOUNT}
-    working_dir: /code/faabric
-    stdin_open: true
-    tty: true
-    privileged: true
-    environment:
-      - LOG_LEVEL=debug
-      - REDIS_STATE_HOST=redis
-      - REDIS_QUEUE_HOST=redis
-    depends_on:
-      - redis
-    entrypoint: /bin/bash /code/faabric/dist-test/worker.sh
-
   master:
     image: ${FAABRIC_CLI_IMAGE}
     volumes:
       - ${PROJ_ROOT}:/code/faabric
       - ${FAABRIC_LOCAL_BUILD_DIR}:${FAABRIC_BUILD_MOUNT}
+      - ${PROJ_ROOT}/dist-test/build:/build/faabric-copy
     working_dir: /code/faabric
-    stdin_open: true
-    tty: true
-    privileged: true
     environment:
       - LOG_LEVEL=debug
       - REDIS_STATE_HOST=redis
@@ -37,4 +18,16 @@ services:
     depends_on:
       - redis
       - worker
-    command: /code/faabric/dist-test/master.sh
+
+  worker:
+    image: ${FAABRIC_CLI_IMAGE}
+    volumes:
+      - ${PROJ_ROOT}:/code/faabric
+      - ${FAABRIC_LOCAL_BUILD_DIR}:${FAABRIC_BUILD_MOUNT}
+      - ${PROJ_ROOT}/dist-test/build:/build/faabric-copy
+    working_dir: /code/faabric
+    environment:
+      - LOG_LEVEL=debug
+      - REDIS_STATE_HOST=redis
+      - REDIS_QUEUE_HOST=redis
+    command: /build/faabric/static/bin/faabric_dist_test_server

@@ -2,5 +2,6 @@
 
 set -e
 
-echo "This is the master"
+echo "Running the tests"
+/build/faabric/static/bin/faabric_dist_tests
 
