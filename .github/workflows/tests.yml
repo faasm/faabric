@@ -81,6 +81,8 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
+      - name: "Build distributed tests"
+        run: ./dist-test/build.sh
       - name: "Run the distributed tests"
         run: ./dist-test/run.sh ci
 

@@ -34,4 +34,3 @@ services:
       - REDIS_QUEUE_HOST=redis
     depends_on:
       - redis
-    command: /build/faabric/static/bin/faabric_dist_test_server

@@ -38,21 +38,37 @@ export FAABRIC_CLI_IMAGE=faasm/faabric:${VERSION}
 pushd dist-test >> /dev/null
 
 if [ "$1" == "local" ]; then
-    # Start everything in the background if running locally
-    docker-compose \
-        up \
-        --no-recreate \
-        -d \
-        master
-
     INNER_SHELL=${SHELL:-"/bin/bash"}
+
+# Start everything in the background
+    docker-compose \
+    up \
+    --no-recreate \
+    -d \
+    master
 
     docker-compose \
         exec \
         master \
         ${INNER_SHELL}
 else
-    # Run one-off if not running locally
+    # TODO - do both builds in parallel
+    docker-compose \
+        run \
+        worker \
+        /code/faabric/dist-test/build_internal.sh
+
+    docker-compose \
+        run \
+        master \
+        /code/faabric/dist-test/build_internal.sh
+
+    docker-compose \
+        run \
+        -d \
+        worker \
+        /build/faabric/static/bin/faabric_dist_test_server
+
     docker-compose \
         run \
         master \
