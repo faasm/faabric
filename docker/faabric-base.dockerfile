@@ -22,7 +22,7 @@ RUN apt install -y \
     redis-tools \
     wget
 
-# Latest cmake
+# CMake
 RUN apt remove --purge --auto-remove cmake
 WORKDIR /setup
 RUN wget -q -O \

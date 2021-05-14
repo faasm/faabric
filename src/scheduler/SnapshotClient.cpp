@@ -1,7 +1,5 @@
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/logging.h>
-
-/* Mocking includes */
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 

@@ -1,6 +1,7 @@
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
@@ -54,26 +55,16 @@ void FunctionCallServer::doRecv(const void* headerData,
 
 void FunctionCallServer::recvMpiMessage(const void* msgData, int size)
 {
-    faabric::MPIMessage mpiMsg;
-
-    // Deserialise message string
-    if (!mpiMsg.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
+    PARSE_MSG(faabric::MPIMessage, msgData, size)
 
     MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getWorld(mpiMsg.worldid());
-    world.enqueueMessage(mpiMsg);
+    MpiWorld& world = registry.getWorld(msg.worldid());
+    world.enqueueMessage(msg);
 }
 
 void FunctionCallServer::recvFlush(const void* msgData, int size)
 {
-    faabric::ResponseRequest request;
-
-    // Deserialise message string
-    if (!request.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
+    PARSE_MSG(faabric::ResponseRequest, msgData, size);
 
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
@@ -87,44 +78,29 @@ void FunctionCallServer::recvFlush(const void* msgData, int size)
 
 void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
 {
-    faabric::BatchExecuteRequest request;
-
-    // Deserialise message string
-    if (!request.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
+    PARSE_MSG(faabric::BatchExecuteRequest, msgData, size)
 
     // This host has now been told to execute these functions no matter what
     scheduler.callFunctions(
-      std::make_shared<faabric::BatchExecuteRequest>(request), true);
+      std::make_shared<faabric::BatchExecuteRequest>(msg), true);
 }
 
 void FunctionCallServer::recvUnregister(const void* msgData, int size)
 {
-    faabric::UnregisterRequest request;
-
-    // Deserialise message string
-    if (!request.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
+    PARSE_MSG(faabric::UnregisterRequest, msgData, size)
 
     std::string funcStr =
-      faabric::util::funcToString(request.function(), false);
+      faabric::util::funcToString(msg.function(), false);
     faabric::util::getLogger()->info(
-      "Unregistering host {} for {}", request.host(), funcStr);
+      "Unregistering host {} for {}", msg.host(), funcStr);
 
     // Remove the host from the warm set
-    scheduler.removeRegisteredHost(request.host(), request.function());
+    scheduler.removeRegisteredHost(msg.host(), msg.function());
 }
 
 void FunctionCallServer::recvGetResources(const void* msgData, int size)
 {
-    faabric::ResponseRequest request;
-
-    // Deserialise message string
-    if (!request.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
+    PARSE_MSG(faabric::ResponseRequest, msgData, size)
 
     // Send the response body
     faabric::HostResources response = scheduler.getThisHostResources();
@@ -136,22 +112,17 @@ void FunctionCallServer::recvGetResources(const void* msgData, int size)
         throw std::runtime_error("Error serialising message");
     }
     sendResponse(
-      serialisedMsg, responseSize, request.returnhost(), FUNCTION_CALL_PORT);
+      serialisedMsg, responseSize, msg.returnhost(), FUNCTION_CALL_PORT);
 }
 
 void FunctionCallServer::recvSetThreadResult(const void* msgData, int size)
 {
-    faabric::ThreadResultRequest request;
-
-    // Deserialise message string
-    if (!request.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
+    PARSE_MSG(faabric::ThreadResultRequest, msgData, size)
 
     faabric::util::getLogger()->info("Setting thread {} result to {}",
-                                     request.messageid(),
-                                     request.returnvalue());
+                                     msg.messageid(),
+                                     msg.returnvalue());
 
-    scheduler.setThreadResult(request.messageid(), request.returnvalue());
+    scheduler.setThreadResult(msg.messageid(), msg.returnvalue());
 }
 }

@@ -1,10 +1,10 @@
 #include <faabric/transport/MessageEndpoint.h>
-#include <faabric/util/locks.h>
 
 namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
+  , tid(std::this_thread::get_id())
 {}
 
 MessageEndpoint::~MessageEndpoint()
@@ -18,6 +18,13 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                            faabric::transport::SocketType sockType,
                            bool bind)
 {
+    // Check we are opening from the same thread. We assert not to incur in 
+    // costly checks when running a Release build.
+    assert(tid == std::this_thread::get_id());
+
+    // TODO remove
+    faabric::util::getLogger()->info("Open socket: {}", std::hash<std::thread::id>{}(tid));
+
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
 
@@ -51,9 +58,8 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
 
 void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
 {
-    if (!this->socket) {
-        throw std::runtime_error("Trying to send from a null-pointing socket");
-    }
+    assert(tid == std::this_thread::get_id());
+    assert(this->socket != nullptr);
 
     // Pass a deallocation function for ZeroMQ to be zero-copy
     zmq::message_t msg(serialisedMsg, msgSize, [](void* data, void* hint) {
@@ -75,9 +81,8 @@ void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
 // chars, and are stack-allocated.
 void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
 {
-    if (!this->socket) {
-        throw std::runtime_error("Trying to send from a null-pointing socket");
-    }
+    assert(tid == std::this_thread::get_id());
+    assert(this->socket != nullptr);
 
     zmq::message_t msg(serialisedMsg, msgSize);
 
@@ -94,9 +99,8 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
 
 void MessageEndpoint::recv()
 {
-    if (!this->socket) {
-        throw std::runtime_error("Trying to recv from a null-pointing socket");
-    }
+    assert(tid == std::this_thread::get_id());
+    assert(this->socket != nullptr);
 
     zmq::message_t msg;
     if (!this->socket->recv(msg)) {
@@ -108,6 +112,21 @@ void MessageEndpoint::recv()
 
 void MessageEndpoint::close()
 {
+    // assert(tid == std::this_thread::get_id());
+
+    // TODO remove
+    faabric::util::getLogger()->info("Close socket: {}", std::hash<std::thread::id>{}(tid));
+
     this->socket->close();
+}
+
+std::string MessageEndpoint::getHost()
+{
+    return host;
+}
+
+int MessageEndpoint::getPort()
+{
+    return port;
 }
 }

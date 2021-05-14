@@ -61,7 +61,7 @@ def build(ctx, nocache=False, push=False):
 @task
 def build_base(ctx, nocache=False, push=False):
     """
-    Build current native MPI container
+    Build faabric's base container
     """
     _do_container_build(FAABRIC_BASE_IMAGE_NAME, nocache=nocache, push=push)
 
@@ -85,7 +85,7 @@ def push(ctx):
 @task
 def push_base(ctx):
     """
-    Push current version of the native MPI container
+    Push faabric's base container
     """
     _do_push(FAABRIC_BASE_IMAGE_NAME)
 

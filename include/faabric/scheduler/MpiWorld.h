@@ -246,6 +246,6 @@ class MpiWorld
 
     void pushToState();
 
-    void clearTLS();
+    void closeThreadLocalClients();
 };
 }

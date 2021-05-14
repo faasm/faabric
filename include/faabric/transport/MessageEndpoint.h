@@ -5,7 +5,7 @@
 #include <faabric/transport/MessageContext.h>
 #include <faabric/util/logging.h>
 
-#include <atomic>
+#include <thread>
 #include <zmq.hpp>
 
 namespace faabric::transport {
@@ -27,8 +27,11 @@ class MessageEndpoint
   public:
     MessageEndpoint(const std::string& hostIn, int portIn);
 
-    // Message endpoints shouldn't be copied as ZeroMQ sockets are not thread
+    // Message endpoints shouldn't be assigned as ZeroMQ sockets are not thread
     // safe
+    MessageEndpoint& operator= (const MessageEndpoint&) = delete;
+
+    // Neither copied
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
 
     ~MessageEndpoint();
@@ -46,12 +49,17 @@ class MessageEndpoint
 
     void recv();
 
+    // The MessageEndpointServer needs direct access to the socket
     std::unique_ptr<zmq::socket_t> socket;
+
+    std::string getHost();
+
+    int getPort();
 
   protected:
     const std::string host;
     const int port;
-    int id;
+    std::thread::id tid;
 
     virtual void doRecv(void* msgData, int size) = 0;
 };

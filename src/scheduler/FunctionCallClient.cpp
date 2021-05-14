@@ -1,7 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-
-/* Mocking includes */
+#include <faabric/transport/macros.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
@@ -137,18 +136,10 @@ void FunctionCallClient::sendFlush()
     if (faabric::util::isMockMode()) {
         flushCalls.emplace_back(host, call);
     } else {
-        // Send the header first
-        sendHeader(faabric::scheduler::FunctionCalls::Flush);
-
-        // Send the message body
+        // Prepare the message body
         call.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-        size_t msgSize = call.ByteSizeLong();
-        char* serialisedMsg = new char[msgSize];
-        // Serialise using protobuf
-        if (!call.SerializeToArray(serialisedMsg, msgSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, msgSize);
+
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::Flush, call);
     }
 }
 
@@ -158,17 +149,7 @@ void FunctionCallClient::sendMPIMessage(
     if (faabric::util::isMockMode()) {
         mpiMessages.emplace_back(host, *msg);
     } else {
-        // Send the header first
-        sendHeader(faabric::scheduler::FunctionCalls::MpiMessage);
-
-        // Send the message body
-        size_t msgSize = msg->ByteSizeLong();
-        char* serialisedMsg = new char[msgSize];
-        // Serialise using protobuf
-        if (!msg->SerializeToArray(serialisedMsg, msgSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, msgSize);
+        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::MpiMessage, msg);
     }
 }
 
@@ -185,17 +166,9 @@ faabric::HostResources FunctionCallClient::getResources()
             response = queuedResourceResponses[host].dequeue();
         }
     } else {
-        // Send the header first
-        sendHeader(faabric::scheduler::FunctionCalls::GetResources);
-
         request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-        size_t msgSize = request.ByteSizeLong();
-        char* serialisedMsg = new char[msgSize];
-        // Serialise using protobuf
-        if (!request.SerializeToArray(serialisedMsg, msgSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, msgSize);
+
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::GetResources, request);
 
         // Receive message
         char* msgData;
@@ -217,17 +190,7 @@ void FunctionCallClient::executeFunctions(
     if (faabric::util::isMockMode()) {
         batchMessages.emplace_back(host, req);
     } else {
-        // Send the header first
-        sendHeader(faabric::scheduler::FunctionCalls::ExecuteFunctions);
-
-        // Send the message body
-        size_t msgSize = req->ByteSizeLong();
-        char* serialisedMsg = new char[msgSize];
-        // Serialise using protobuf
-        if (!req->SerializeToArray(serialisedMsg, msgSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, msgSize);
+        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::ExecuteFunctions, req);
     }
 }
 
@@ -236,17 +199,7 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
     if (faabric::util::isMockMode()) {
         unregisterRequests.emplace_back(host, req);
     } else {
-        // Send the header first
-        sendHeader(faabric::scheduler::FunctionCalls::Unregister);
-
-        // Send the message body
-        size_t msgSize = req.ByteSizeLong();
-        char* serialisedMsg = new char[msgSize];
-        // Serialise using protobuf
-        if (!req.SerializeToArray(serialisedMsg, msgSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, msgSize);
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::Unregister, req);
     }
 }
 
@@ -256,17 +209,7 @@ void FunctionCallClient::setThreadResult(
     if (faabric::util::isMockMode()) {
         threadResults.emplace_back(host, req);
     } else {
-        // Send the header first
-        sendHeader(faabric::scheduler::FunctionCalls::SetThreadResult);
-
-        // Send the message body
-        size_t msgSize = req.ByteSizeLong();
-        char* serialisedMsg = new char[msgSize];
-        // Serialise using protobuf
-        if (!req.SerializeToArray(serialisedMsg, msgSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, msgSize);
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::SetThreadResult, req);
     }
 }
 }

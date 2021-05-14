@@ -35,10 +35,10 @@ docker-compose down
 
 ### Native
 
-The only external dependencies not installed through CMake are:
-
-- `flatbuffers` - instructions
-  [here](https://google.github.io/flatbuffers/flatbuffers_guide_building.html)
+Most external dependencies are installed through CMake in
+[cmake/ExternalProjects.cmake](./cmake/ExternalProjects.cmake).
+The remaining installed packages can be inspected in the [`faabric-base`](
+./docker/faabric-base.dockerfile) dockerfile.
 
 Use of Clang and Ninja is recommended. From the root of this project you can
 run:

@@ -51,9 +51,10 @@ class StateClient : public faabric::transport::MessageEndpointClient
     // Block waiting for client's response
     void awaitResponse(char*& data, int& size);
 
-    void sendStateRequest(bool expectReply);
+    void sendStateRequest(faabric::state::StateCalls header, bool expectReply);
 
-    void sendStateRequest(const uint8_t* data = nullptr,
+    void sendStateRequest(faabric::state::StateCalls header,
+                          const uint8_t* data = nullptr,
                           int length = 0,
                           bool expectReply = false);
 };

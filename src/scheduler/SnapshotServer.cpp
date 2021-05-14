@@ -31,7 +31,6 @@ void SnapshotServer::doRecv(const void* headerData,
 
 void SnapshotServer::recvPushSnapshot(const void* msgData, int size)
 {
-    // const SnapshotPushRequest* r = request->GetRoot();
     const SnapshotPushRequest* r =
       flatbuffers::GetRoot<SnapshotPushRequest>(msgData);
     faabric::util::getLogger()->info("Pushing shapshot {} (size {})",

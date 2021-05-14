@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/flat/faabric_generated.h>
+#include <faabric/scheduler/SnapshotApi.h>
 #include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/util/snapshot.h>
 

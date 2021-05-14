@@ -1,4 +1,5 @@
 #include <faabric/state/StateClient.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/macros.h>
 
 namespace faabric::state {
@@ -51,12 +52,13 @@ void StateClient::awaitResponse(char*& data, int& size)
       size);
 }
 
-void StateClient::sendStateRequest(bool expectReply)
+void StateClient::sendStateRequest(faabric::state::StateCalls header, bool expectReply)
 {
-    sendStateRequest(nullptr, 0, expectReply);
+    sendStateRequest(header, nullptr, 0, expectReply);
 }
 
-void StateClient::sendStateRequest(const uint8_t* data,
+void StateClient::sendStateRequest(faabric::state::StateCalls header,
+                                   const uint8_t* data,
                                    int length,
                                    bool expectReply)
 {
@@ -67,21 +69,12 @@ void StateClient::sendStateRequest(const uint8_t* data,
         request.set_data(data, length);
     }
     request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-    size_t requestSize = request.ByteSizeLong();
-    char* serialisedMsg = new char[requestSize];
-    // Serialise using protobuf
-    if (!request.SerializeToArray(serialisedMsg, requestSize)) {
-        throw std::runtime_error("Error serialising message");
-    }
-    send(serialisedMsg, requestSize);
+    SEND_MESSAGE(header, request)
 }
 
 void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
 {
     for (const auto& chunk : chunks) {
-        // Send the header first
-        sendHeader(faabric::state::StateCalls::Push);
-
         faabric::StatePart stateChunk;
         stateChunk.set_user(user);
         stateChunk.set_key(key);
@@ -89,13 +82,7 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
         stateChunk.set_data(chunk.data, chunk.length);
         stateChunk.set_returnhost(
           faabric::util::getSystemConfig().endpointHost);
-        size_t chunkSize = stateChunk.ByteSizeLong();
-        char* serialisedMsg = new char[chunkSize];
-        // Serialise using protobuf
-        if (!stateChunk.SerializeToArray(serialisedMsg, chunkSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, chunkSize);
+        SEND_MESSAGE(faabric::state::StateCalls::Push, stateChunk)
 
         // Await for a response
         awaitResponse();
@@ -106,9 +93,6 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
                              uint8_t* bufferStart)
 {
     for (const auto& chunk : chunks) {
-        // Send the header first
-        sendHeader(faabric::state::StateCalls::Pull);
-
         // Prepare request
         faabric::StateChunkRequest request;
         request.set_user(user);
@@ -116,13 +100,7 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
         request.set_offset(chunk.offset);
         request.set_chunksize(chunk.length);
         request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-        size_t requestSize = request.ByteSizeLong();
-        char* serialisedMsg = new char[requestSize];
-        // Serialise using protobuf
-        if (!request.SerializeToArray(serialisedMsg, requestSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        send(serialisedMsg, requestSize);
+        SEND_MESSAGE(faabric::state::StateCalls::Pull, request)
 
         // Receive message
         char* msgData;
@@ -141,11 +119,8 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
 
 void StateClient::append(const uint8_t* data, size_t length)
 {
-    // Send the header first
-    sendHeader(faabric::state::StateCalls::Append);
-
     // Send request
-    sendStateRequest(data, length);
+    sendStateRequest(faabric::state::StateCalls::Append, data, length);
 
     // Await for response to finish
     awaitResponse();
@@ -153,22 +128,13 @@ void StateClient::append(const uint8_t* data, size_t length)
 
 void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 {
-    // Send the header first
-    sendHeader(faabric::state::StateCalls::PullAppended);
-
     // Prepare request
     faabric::StateAppendedRequest request;
     request.set_user(user);
     request.set_key(key);
     request.set_nvalues(nValues);
     request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-    size_t requestSize = request.ByteSizeLong();
-    char* serialisedMsg = new char[requestSize];
-    // Serialise using protobuf
-    if (!request.SerializeToArray(serialisedMsg, requestSize)) {
-        throw std::runtime_error("Error serialising message");
-    }
-    send(serialisedMsg, requestSize);
+    SEND_MESSAGE(faabric::state::StateCalls::PullAppended, request)
 
     // Receive response
     faabric::StateAppendedResponse response;
@@ -198,11 +164,8 @@ void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 
 void StateClient::clearAppended()
 {
-    // Send the header first
-    sendHeader(faabric::state::StateCalls::ClearAppended);
-
     // Send request
-    sendStateRequest();
+    sendStateRequest(faabric::state::StateCalls::ClearAppended);
 
     // Await for response to finish
     awaitResponse();
@@ -210,11 +173,8 @@ void StateClient::clearAppended()
 
 size_t StateClient::stateSize()
 {
-    // Send the header first
-    sendHeader(faabric::state::StateCalls::Size);
-
     // Include the return address in the message body
-    sendStateRequest(true);
+    sendStateRequest(faabric::state::StateCalls::Size, true);
 
     faabric::StateSizeResponse response;
     // Receive message
@@ -230,11 +190,8 @@ size_t StateClient::stateSize()
 
 void StateClient::deleteState()
 {
-    // Send the header first
-    sendHeader(faabric::state::StateCalls::Delete);
-
     // Send request
-    sendStateRequest(true);
+    sendStateRequest(faabric::state::StateCalls::Delete, true);
 
     // Wait for the response
     awaitResponse();
@@ -242,11 +199,8 @@ void StateClient::deleteState()
 
 void StateClient::lock()
 {
-    // Send the header first
-    sendHeader(faabric::state::StateCalls::Lock);
-
     // Send request
-    sendStateRequest();
+    sendStateRequest(faabric::state::StateCalls::Lock);
 
     // Await for response to finish
     awaitResponse();
@@ -254,10 +208,7 @@ void StateClient::lock()
 
 void StateClient::unlock()
 {
-    // Send the header first
-    sendHeader(faabric::state::StateCalls::Unlock);
-
-    sendStateRequest();
+    sendStateRequest(faabric::state::StateCalls::Unlock);
 
     // Await for response to finish
     awaitResponse();

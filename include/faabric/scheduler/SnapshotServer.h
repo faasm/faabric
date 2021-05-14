@@ -2,6 +2,7 @@
 
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/SnapshotApi.h>
 #include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::scheduler {

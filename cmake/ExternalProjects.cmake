@@ -123,6 +123,8 @@ ExternalProject_Add(libzeromq_ext
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
     BUILD_BYPRODUCTS ${ZEROMQ_LIBRARY}
 )
+ExternalProject_Get_Property(libzeromq_ext SOURCE_DIR)
+set(LIBZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
 ExternalProject_Add(cppzeromq_ext
     GIT_REPOSITORY "https://github.com/faasm/cppzmq.git"
     GIT_TAG "v4.7.1"
@@ -131,7 +133,8 @@ ExternalProject_Add(cppzeromq_ext
 )
 add_dependencies(cppzeromq_ext libzeromq_ext)
 ExternalProject_Get_Property(cppzeromq_ext SOURCE_DIR)
-set(ZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
+set(CPPZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
+set(ZEROMQ_INCLUDE_DIR ${LIBZEROMQ_INCLUDE_DIR} ${CPPZEROMQ_INCLUDE_DIR})
 add_library(zeromq_imported SHARED IMPORTED)
 add_dependencies(zeromq_imported cppzeromq_ext)
 set_target_properties(zeromq_imported

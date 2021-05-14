@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -18,7 +19,7 @@ class FunctionCallServer final
      *
      * Override the base stop method to do some implementation-specific cleanup.
      */
-    void stop();
+    void stop() override;
 
   private:
     Scheduler& scheduler;

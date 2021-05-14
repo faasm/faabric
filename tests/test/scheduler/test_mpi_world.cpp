@@ -1362,6 +1362,8 @@ TEST_CASE("Test operator reduce", "[mpi]")
                                            (uint8_t*)output.data()));
         }
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test gather and allgather", "[mpi]")
@@ -1496,6 +1498,8 @@ TEST_CASE("Test gather and allgather", "[mpi]")
 
         REQUIRE(actual == expected);
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test scan", "[mpi]")

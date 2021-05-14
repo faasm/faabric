@@ -139,8 +139,8 @@ void MpiWorld::destroy()
 {
     closeFunctionCallClients();
 
-    // TODO - what to do here?
-    // state::getGlobalState().deleteKV(stateKV->user, stateKV->key);
+    // Note - we are deliberately not deleting the KV in the global state
+    // TODO - find a way to do this only from the master client
 
     for (auto& s : rankHostMap) {
         const std::shared_ptr<state::StateKeyValue>& rankState =
@@ -154,19 +154,20 @@ void MpiWorld::destroy()
 void MpiWorld::closeFunctionCallClients()
 {
     // When shutting down the thread pool, we also make sure we clean all thread
-    // local state by sending a clear message to the queue.
+    // local state by sending a clear message to the queue. Currently, we only
+    // need to close the function call clients
     for (int i = 0; i < threadPool->size; i++) {
         std::promise<void> p;
         threadPool->getMpiReqQueue()->enqueue(std::make_tuple(
-          QUEUE_SHUTDOWN, std::bind(&MpiWorld::clearTLS, this), std::move(p)));
+          QUEUE_SHUTDOWN, std::bind(&MpiWorld::closeThreadLocalClients, this), std::move(p)));
     }
 
     // Lastly clean the main thread as well
-    clearTLS();
+    closeThreadLocalClients();
 }
 
 // Clear thread local state
-void MpiWorld::clearTLS()
+void MpiWorld::closeThreadLocalClients()
 {
     // Close all open sockets
     for (auto& s : functionCallClients) {

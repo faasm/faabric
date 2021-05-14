@@ -24,6 +24,7 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
         // Open message endpoint, and bind
         serverEndpoint.open(
           context, faabric::transport::SocketType::PULL, true);
+        assert(serverEndpoint.socket != nullptr);
 
         // Loop until context is terminated
         while (true) {
@@ -35,7 +36,9 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
                     break;
                 }
                 throw std::runtime_error(fmt::format(
-                  "Errror in socket receiving message: {}", e.what()));
+                  "Errror in server socket loop (bound to {}:{}) receiving message: {}",
+                  serverEndpoint.getHost(), serverEndpoint.getPort(), e.what()
+                ));
             }
         }
     });
@@ -60,11 +63,9 @@ void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
 
 void MessageEndpointServer::recv(MessageEndpointClient& endpoint)
 {
-    // Receive header
-    if (!endpoint.socket) {
-        throw std::runtime_error("Trying to recv from a null-pointing socket");
-    }
+    assert(endpoint.socket != nullptr);
 
+    // Receive header
     zmq::message_t header;
     if (!endpoint.socket->recv(header)) {
         throw std::runtime_error("Error receiving message through socket");

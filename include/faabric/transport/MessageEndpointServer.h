@@ -36,7 +36,7 @@ class MessageEndpointServer
      */
     void start();
 
-    void stop();
+    virtual void stop();
 
   protected:
     void recv(faabric::transport::MessageEndpointClient& endpoint);
