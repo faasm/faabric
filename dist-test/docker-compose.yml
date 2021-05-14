@@ -7,8 +7,8 @@ services:
   worker:
     image: ${FAABRIC_CLI_IMAGE}
     volumes:
-      - .:${FAABRIC_CODE_MOUNT}
-      - ./build:${FAABRIC_BUILD_MOUNT}
+      - ${PROJ_ROOT}:/code/faabric
+      - ${FAABRIC_LOCAL_BUILD_DIR}:${FAABRIC_BUILD_MOUNT}
     working_dir: /code/faabric
     stdin_open: true
     tty: true
@@ -19,13 +19,13 @@ services:
       - REDIS_QUEUE_HOST=redis
     depends_on:
       - redis
-    command: /code/faabric/dist-test/worker.sh
+    entrypoint: /bin/bash /code/faabric/dist-test/worker.sh
 
   master:
     image: ${FAABRIC_CLI_IMAGE}
     volumes:
-      - .:${FAABRIC_CODE_MOUNT}
-      - ./build:${FAABRIC_BUILD_MOUNT}
+      - ${PROJ_ROOT}:/code/faabric
+      - ${FAABRIC_LOCAL_BUILD_DIR}:${FAABRIC_BUILD_MOUNT}
     working_dir: /code/faabric
     stdin_open: true
     tty: true
@@ -35,6 +35,6 @@ services:
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
     depends_on:
-      - worker
       - redis
-    command: /code/faabric/bin/dist-test/master.sh
+      - worker
+    command: /code/faabric/dist-test/master.sh
