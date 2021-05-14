@@ -11,6 +11,8 @@ services:
       - ${FAABRIC_LOCAL_BUILD_DIR}:${FAABRIC_BUILD_MOUNT}
       - ${PROJ_ROOT}/dist-test/build:/build/faabric-copy
     working_dir: /code/faabric
+    stdin_open: true
+    tty: true
     environment:
       - LOG_LEVEL=debug
       - REDIS_STATE_HOST=redis
@@ -30,4 +32,6 @@ services:
       - LOG_LEVEL=debug
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
+    depends_on:
+      - redis
     command: /build/faabric/static/bin/faabric_dist_test_server
