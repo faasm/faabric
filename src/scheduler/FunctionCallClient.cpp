@@ -102,13 +102,6 @@ FunctionCallClient::FunctionCallClient(const std::string& hostIn)
                false);
 }
 
-FunctionCallClient::~FunctionCallClient()
-{
-    if (!faabric::util::isMockMode()) {
-        this->close();
-    }
-}
-
 void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
 {
     // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
@@ -118,16 +111,6 @@ void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
     memcpy(header, &functionNum, headerSize);
     // Mark that we are sending more messages
     send(header, headerSize, true);
-}
-
-void FunctionCallClient::awaitResponse(char*& data, int& size)
-{
-    // Call the superclass implementation
-    MessageEndpointClient::awaitResponse(
-      faabric::util::getSystemConfig().endpointHost,
-      FUNCTION_CALL_PORT + REPLY_PORT_OFFSET,
-      data,
-      size);
 }
 
 void FunctionCallClient::sendFlush()
@@ -171,14 +154,13 @@ faabric::HostResources FunctionCallClient::getResources()
         SEND_MESSAGE(faabric::scheduler::FunctionCalls::GetResources, request);
 
         // Receive message
-        char* msgData;
-        int size;
-        awaitResponse(msgData, size);
+        faabric::transport::Message msg =
+          awaitResponse(faabric::util::getSystemConfig().endpointHost,
+                        FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
         // Deserialise message string
-        if (!response.ParseFromArray(msgData, size)) {
+        if (!response.ParseFromArray(msg.data(), msg.size())) {
             throw std::runtime_error("Error deserialising message");
         }
-        delete msgData;
     }
 
     return response;
@@ -190,7 +172,8 @@ void FunctionCallClient::executeFunctions(
     if (faabric::util::isMockMode()) {
         batchMessages.emplace_back(host, req);
     } else {
-        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::ExecuteFunctions, req);
+        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::ExecuteFunctions,
+                         req);
     }
 }
 

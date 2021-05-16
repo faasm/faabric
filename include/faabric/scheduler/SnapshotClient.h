@@ -27,8 +27,6 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
   public:
     explicit SnapshotClient(const std::string& hostIn);
 
-    ~SnapshotClient();
-
     /* Snapshot client external API */
 
     void pushSnapshot(const std::string& key,

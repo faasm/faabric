@@ -24,23 +24,21 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    void doRecv(const void* headerData,
-                int headerSize,
-                const void* bodyData,
-                int bodySize) override;
+    void doRecv(faabric::transport::Message header,
+                faabric::transport::Message body) override;
 
     /* Function call server API */
 
-    void recvMpiMessage(const void* msgData, int size);
+    void recvMpiMessage(faabric::transport::Message body);
 
-    void recvFlush(const void* msgData, int size);
+    void recvFlush(faabric::transport::Message body);
 
-    void recvExecuteFunctions(const void* msgData, int size);
+    void recvExecuteFunctions(faabric::transport::Message body);
 
-    void recvGetResources(const void* msgData, int size);
+    void recvGetResources(faabric::transport::Message body);
 
-    void recvUnregister(const void* msgData, int size);
+    void recvUnregister(faabric::transport::Message body);
 
-    void recvSetThreadResult(const void* msgData, int size);
+    void recvSetThreadResult(faabric::transport::Message body);
 };
 }

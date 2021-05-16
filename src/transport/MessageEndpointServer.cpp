@@ -19,7 +19,7 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
     // Start serving thread in background
     this->servingThread = std::thread([this, &context] {
-        MessageEndpointClient serverEndpoint(this->host, this->port);
+        MessageEndpoint serverEndpoint(this->host, this->port);
 
         // Open message endpoint, and bind
         serverEndpoint.open(
@@ -35,10 +35,12 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
                     serverEndpoint.close();
                     break;
                 }
-                throw std::runtime_error(fmt::format(
-                  "Errror in server socket loop (bound to {}:{}) receiving message: {}",
-                  serverEndpoint.getHost(), serverEndpoint.getPort(), e.what()
-                ));
+                throw std::runtime_error(
+                  fmt::format("Errror in server socket loop (bound to {}:{}) "
+                              "receiving message: {}",
+                              serverEndpoint.getHost(),
+                              serverEndpoint.getPort(),
+                              e.what()));
             }
         }
     });
@@ -61,34 +63,24 @@ void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
     }
 }
 
-void MessageEndpointServer::recv(MessageEndpointClient& endpoint)
+void MessageEndpointServer::recv(MessageEndpoint& endpoint)
 {
     assert(endpoint.socket != nullptr);
 
-    // Receive header
-    zmq::message_t header;
-    if (!endpoint.socket->recv(header)) {
-        throw std::runtime_error("Error receiving message through socket");
-    }
-
+    // Receive header and body
+    Message header = endpoint.recv();
     // Check the header was sent with ZMQ_SNDMORE flag
     if (!header.more()) {
         throw std::runtime_error("Header sent without SNDMORE flag");
     }
-
-    // Receive body
-    zmq::message_t body;
-    if (!endpoint.socket->recv(body)) {
-        throw std::runtime_error("Error receiving message through socket");
-    }
-
+    Message body = endpoint.recv();
     // Check that there are no more messages to receive
     if (body.more()) {
         throw std::runtime_error("Body sent with SNDMORE flag");
     }
 
     // Server-specific message handling
-    doRecv(header.data(), header.size(), body.data(), body.size());
+    doRecv(header, body);
 }
 
 // We create a new endpoint every time. Re-using them would be a possible
@@ -105,5 +97,6 @@ void MessageEndpointServer::sendResponse(char* serialisedMsg,
                   faabric::transport::SocketType::PUSH,
                   true);
     endpoint.send(serialisedMsg, size);
+    endpoint.close();
 }
 }

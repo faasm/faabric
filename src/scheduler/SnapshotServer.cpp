@@ -10,18 +10,17 @@ SnapshotServer::SnapshotServer()
                                               SNAPSHOT_PORT)
 {}
 
-void SnapshotServer::doRecv(const void* headerData,
-                            int headerSize,
-                            const void* bodyData,
-                            int bodySize)
+void SnapshotServer::doRecv(faabric::transport::Message header,
+                            faabric::transport::Message body)
 {
-    int call = static_cast<int>(*static_cast<const char*>(headerData));
+    assert(header.size() == sizeof(int));
+    int call = static_cast<int>(*header.data());
     switch (call) {
         case faabric::scheduler::SnapshotCalls::PushSnapshot:
-            this->recvPushSnapshot(bodyData, bodySize);
+            this->recvPushSnapshot(body);
             break;
         case faabric::scheduler::SnapshotCalls::DeleteSnapshot:
-            this->recvDeleteSnapshot(bodyData, bodySize);
+            this->recvDeleteSnapshot(body);
             break;
         default:
             throw std::runtime_error(
@@ -29,10 +28,10 @@ void SnapshotServer::doRecv(const void* headerData,
     }
 }
 
-void SnapshotServer::recvPushSnapshot(const void* msgData, int size)
+void SnapshotServer::recvPushSnapshot(faabric::transport::Message msg)
 {
     const SnapshotPushRequest* r =
-      flatbuffers::GetRoot<SnapshotPushRequest>(msgData);
+      flatbuffers::GetRoot<SnapshotPushRequest>(msg.udata());
     faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
                                      r->key()->c_str(),
                                      r->contents()->size());
@@ -47,10 +46,10 @@ void SnapshotServer::recvPushSnapshot(const void* msgData, int size)
     reg.takeSnapshot(r->key()->str(), data, true);
 }
 
-void SnapshotServer::recvDeleteSnapshot(const void* msgData, int size)
+void SnapshotServer::recvDeleteSnapshot(faabric::transport::Message msg)
 {
     const SnapshotDeleteRequest* r =
-      flatbuffers::GetRoot<SnapshotDeleteRequest>(msgData);
+      flatbuffers::GetRoot<SnapshotDeleteRequest>(msg.udata());
     faabric::util::getLogger()->info("Deleting shapshot {}", r->key()->c_str());
 
     faabric::snapshot::SnapshotRegistry& reg =

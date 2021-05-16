@@ -43,8 +43,6 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
   public:
     explicit FunctionCallClient(const std::string& hostIn);
 
-    ~FunctionCallClient();
-
     /* Function call client external API */
 
     void sendFlush();
@@ -62,7 +60,5 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
-
-    void awaitResponse(char*& data, int& size);
 };
 }

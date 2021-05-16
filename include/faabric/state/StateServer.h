@@ -13,37 +13,27 @@ class StateServer final : public faabric::transport::MessageEndpointServer
   private:
     State& state;
 
-    /* Send ACK to the client
-     *
-     * This method is used by calls that want to block, but have no return
-     * value. Together with a blocking receive from the client, receiving this
-     * message ACKs the remote call.
-     */
-    void sendEmptyResponse(const std::string& returnHost);
-
-    void doRecv(const void* headerData,
-                int headerSize,
-                const void* bodyData,
-                int bodySize) override;
+    void doRecv(faabric::transport::Message header,
+                faabric::transport::Message body) override;
 
     /* State server API */
 
-    void recvSize(const void* data, int size);
+    void recvSize(faabric::transport::Message body);
 
-    void recvPull(const void* data, int size);
+    void recvPull(faabric::transport::Message body);
 
-    void recvPush(const void* data, int size);
+    void recvPush(faabric::transport::Message body);
 
-    void recvAppend(const void* data, int size);
+    void recvAppend(faabric::transport::Message body);
 
-    void recvPullAppended(const void* data, int size);
+    void recvPullAppended(faabric::transport::Message body);
 
-    void recvClearAppended(const void* data, int size);
+    void recvClearAppended(faabric::transport::Message body);
 
-    void recvDelete(const void* data, int size);
+    void recvDelete(faabric::transport::Message body);
 
-    void recvLock(const void* data, int size);
+    void recvLock(faabric::transport::Message body);
 
-    void recvUnlock(const void* data, int size);
+    void recvUnlock(faabric::transport::Message body);
 };
 }

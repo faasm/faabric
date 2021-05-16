@@ -33,10 +33,8 @@ class DummyServer final : public MessageEndpointServer
     }
 
   private:
-    void doRecv(const void* headerData,
-                int headerSize,
-                const void* bodyData,
-                int bodySize) override
+    void doRecv(faabric::transport::Message header,
+                faabric::transport::Message body) override
     {
         // Dummy server, do nothing but increment the message count
         this->messageCount++;
@@ -100,11 +98,9 @@ TEST_CASE("Test send one-off response to client", "[transport]")
         MessageEndpointClient cli(thisHost, testPort);
         cli.open(context, SocketType::PUSH, false);
 
-        char* msg;
-        int size;
-        cli.awaitResponse(thisHost, testPort + REPLY_PORT_OFFSET, msg, size);
-        assert(size == expectedMsg.size());
-        std::string actualMsg(msg, size);
+        Message msg = cli.awaitResponse(thisHost, testPort + REPLY_PORT_OFFSET);
+        assert(msg.size() == expectedMsg.size());
+        std::string actualMsg(msg.data(), msg.size());
         assert(actualMsg == expectedMsg);
 
         cli.close();

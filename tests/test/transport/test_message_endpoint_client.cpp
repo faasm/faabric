@@ -59,11 +59,9 @@ TEST_CASE("Test send/recv one message", "[transport]")
     REQUIRE_NOTHROW(src.send(msg, expectedMsg.size()));
 
     // Receive message
-    char* recvMsg;
-    int size;
-    REQUIRE_NOTHROW(dst.recv(recvMsg, size));
-    REQUIRE(size == expectedMsg.size());
-    std::string actualMsg(recvMsg, size);
+    Message recvMsg = dst.recv();
+    REQUIRE(recvMsg.size() == expectedMsg.size());
+    std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
 
     // Close endpoints
@@ -94,11 +92,9 @@ TEST_CASE("Test await response", "[transport]")
         src.send(msg, expectedMsg.size());
 
         // Block waiting for a response
-        char* recvMsg;
-        int size;
-        src.awaitResponse(thisHost, testReplyPort, recvMsg, size);
-        assert(size == expectedResponse.size());
-        std::string actualResponse(recvMsg, size);
+        Message recvMsg = src.awaitResponse(thisHost, testReplyPort);
+        assert(recvMsg.size() == expectedResponse.size());
+        std::string actualResponse(recvMsg.data(), recvMsg.size());
         assert(actualResponse == expectedResponse);
 
         src.close();
@@ -107,11 +103,9 @@ TEST_CASE("Test await response", "[transport]")
     // Receive message
     MessageEndpointClient dst(thisHost, testPort);
     dst.open(context, SocketType::PULL, true);
-    char* recvMsg;
-    int size;
-    dst.recv(recvMsg, size);
-    REQUIRE(size == expectedMsg.size());
-    std::string actualMsg(recvMsg, size);
+    Message recvMsg = dst.recv();
+    REQUIRE(recvMsg.size() == expectedMsg.size());
+    std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
 
     // Send response, open a new endpoint for it
@@ -157,15 +151,13 @@ TEST_CASE("Test send/recv many messages", "[transport]")
     MessageEndpointClient dst(thisHost, testPort);
     dst.open(context, SocketType::PULL, true);
     for (int i = 0; i < numMessages; i++) {
-        char* recvMsg;
-        int size;
-        dst.recv(recvMsg, size);
+        Message recvMsg = dst.recv();
         // Check just a subset of the messages
         // Note - this implicitly tests in-order message delivery
         if ((i % (numMessages / 10)) == 0) {
             std::string expectedMsg = baseMsg + std::to_string(i);
-            REQUIRE(size == expectedMsg.size());
-            std::string actualMsg(recvMsg, size);
+            REQUIRE(recvMsg.size() == expectedMsg.size());
+            std::string actualMsg(recvMsg.data(), recvMsg.size());
             REQUIRE(actualMsg == expectedMsg);
         }
     }
@@ -214,13 +206,11 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
     MessageEndpointClient dst(thisHost, testPort);
     dst.open(context, SocketType::PULL, true);
     for (int i = 0; i < numSenders * numMessages; i++) {
-        char* recvMsg;
-        int size;
-        dst.recv(recvMsg, size);
+        Message recvMsg = dst.recv();
         // Check just a subset of the messages
         if ((i % numMessages) == 0) {
-            REQUIRE(size == expectedMsg.size());
-            std::string actualMsg(recvMsg, size);
+            REQUIRE(recvMsg.size() == expectedMsg.size());
+            std::string actualMsg(recvMsg.data(), recvMsg.size());
             REQUIRE(actualMsg == expectedMsg);
         }
     }

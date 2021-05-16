@@ -17,11 +17,6 @@ StateClient::StateClient(const std::string& userIn,
                false);
 }
 
-StateClient::~StateClient()
-{
-    close();
-}
-
 void StateClient::sendHeader(faabric::state::StateCalls call)
 {
     // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
@@ -33,26 +28,16 @@ void StateClient::sendHeader(faabric::state::StateCalls call)
     send(header, headerSize, true);
 }
 
-// Block until call finishes, but ignore response
-void StateClient::awaitResponse()
-{
-    char* data;
-    int size;
-    awaitResponse(data, size);
-    delete data;
-}
-
-void StateClient::awaitResponse(char*& data, int& size)
+faabric::transport::Message StateClient::awaitResponse()
 {
     // Call the superclass implementation
-    MessageEndpointClient::awaitResponse(
+    return MessageEndpointClient::awaitResponse(
       faabric::util::getSystemConfig().endpointHost,
-      STATE_PORT + REPLY_PORT_OFFSET,
-      data,
-      size);
+      STATE_PORT + REPLY_PORT_OFFSET);
 }
 
-void StateClient::sendStateRequest(faabric::state::StateCalls header, bool expectReply)
+void StateClient::sendStateRequest(faabric::state::StateCalls header,
+                                   bool expectReply)
 {
     sendStateRequest(header, nullptr, 0, expectReply);
 }
@@ -84,8 +69,8 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
           faabric::util::getSystemConfig().endpointHost);
         SEND_MESSAGE(faabric::state::StateCalls::Push, stateChunk)
 
-        // Await for a response
-        awaitResponse();
+        // Await for a response, but discard it as it is empty
+        (void)awaitResponse();
     }
 }
 
@@ -103,14 +88,8 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
         SEND_MESSAGE(faabric::state::StateCalls::Pull, request)
 
         // Receive message
-        char* msgData;
-        int size;
-        awaitResponse(msgData, size);
-        faabric::StatePart response;
-        if (!response.ParseFromArray(msgData, size)) {
-            throw std::runtime_error("Error deserialising message");
-        }
-        delete msgData;
+        faabric::transport::Message recvMsg = awaitResponse();
+        PARSE_RESPONSE(faabric::StatePart, recvMsg.data(), recvMsg.size())
         std::copy(response.data().begin(),
                   response.data().end(),
                   bufferStart + response.offset());
@@ -122,8 +101,8 @@ void StateClient::append(const uint8_t* data, size_t length)
     // Send request
     sendStateRequest(faabric::state::StateCalls::Append, data, length);
 
-    // Await for response to finish
-    awaitResponse();
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
@@ -137,14 +116,9 @@ void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
     SEND_MESSAGE(faabric::state::StateCalls::PullAppended, request)
 
     // Receive response
-    faabric::StateAppendedResponse response;
-    char* msgData;
-    int size;
-    awaitResponse(msgData, size);
-    if (!response.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
-    delete msgData;
+    faabric::transport::Message recvMsg = awaitResponse();
+    PARSE_RESPONSE(
+      faabric::StateAppendedResponse, recvMsg.data(), recvMsg.size())
 
     // Process response
     size_t offset = 0;
@@ -167,8 +141,8 @@ void StateClient::clearAppended()
     // Send request
     sendStateRequest(faabric::state::StateCalls::ClearAppended);
 
-    // Await for response to finish
-    awaitResponse();
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 size_t StateClient::stateSize()
@@ -176,15 +150,9 @@ size_t StateClient::stateSize()
     // Include the return address in the message body
     sendStateRequest(faabric::state::StateCalls::Size, true);
 
-    faabric::StateSizeResponse response;
     // Receive message
-    char* msgData;
-    int size;
-    awaitResponse(msgData, size);
-    if (!response.ParseFromArray(msgData, size)) {
-        throw std::runtime_error("Error deserialising message");
-    }
-    delete msgData;
+    faabric::transport::Message recvMsg = awaitResponse();
+    PARSE_RESPONSE(faabric::StateSizeResponse, recvMsg.data(), recvMsg.size())
     return response.statesize();
 }
 
@@ -193,8 +161,8 @@ void StateClient::deleteState()
     // Send request
     sendStateRequest(faabric::state::StateCalls::Delete, true);
 
-    // Wait for the response
-    awaitResponse();
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 void StateClient::lock()
@@ -202,15 +170,15 @@ void StateClient::lock()
     // Send request
     sendStateRequest(faabric::state::StateCalls::Lock);
 
-    // Await for response to finish
-    awaitResponse();
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 void StateClient::unlock()
 {
     sendStateRequest(faabric::state::StateCalls::Unlock);
 
-    // Await for response to finish
-    awaitResponse();
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 }

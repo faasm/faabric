@@ -13,8 +13,6 @@ class StateClient : public faabric::transport::MessageEndpointClient
                          const std::string& keyIn,
                          const std::string& hostIn);
 
-    ~StateClient();
-
     const std::string user;
     const std::string key;
     const std::string host;
@@ -46,10 +44,7 @@ class StateClient : public faabric::transport::MessageEndpointClient
     void sendHeader(faabric::state::StateCalls call);
 
     // Block, but ignore return value
-    void awaitResponse();
-
-    // Block waiting for client's response
-    void awaitResponse(char*& data, int& size);
+    faabric::transport::Message awaitResponse();
 
     void sendStateRequest(faabric::state::StateCalls header, bool expectReply);
 

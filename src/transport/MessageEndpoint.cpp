@@ -10,6 +10,8 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
 MessageEndpoint::~MessageEndpoint()
 {
     if (this->socket) {
+        faabric::util::getLogger()->warn(
+          "Destroying an open message endpoint!");
         this->close();
     }
 }
@@ -18,12 +20,13 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                            faabric::transport::SocketType sockType,
                            bool bind)
 {
-    // Check we are opening from the same thread. We assert not to incur in 
+    // Check we are opening from the same thread. We assert not to incur in
     // costly checks when running a Release build.
     assert(tid == std::this_thread::get_id());
 
     // TODO remove
-    faabric::util::getLogger()->info("Open socket: {}", std::hash<std::thread::id>{}(tid));
+    faabric::util::getLogger()->info("Open socket: {}",
+                                     std::hash<std::thread::id>{}(tid));
 
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
@@ -43,10 +46,6 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
         default:
             throw std::runtime_error("Unrecognized socket type");
     }
-
-    // Set linger period to zero. This avoids blocking if closing a socket with
-    // outstanding messages.
-    this->socket->set(zmq::sockopt::linger, 0);
 
     // Bind or connect the socket
     if (bind) {
@@ -97,7 +96,7 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     }
 }
 
-void MessageEndpoint::recv()
+Message MessageEndpoint::recv()
 {
     assert(tid == std::this_thread::get_id());
     assert(this->socket != nullptr);
@@ -107,17 +106,19 @@ void MessageEndpoint::recv()
         throw std::runtime_error("Error receiving message through socket");
     }
 
-    doRecv(msg.data(), msg.size());
+    // Copy the received message to a buffer whose scope we control
+    // TODO - can we avoid this copy?
+    return Message(msg);
 }
 
 void MessageEndpoint::close()
 {
-    // assert(tid == std::this_thread::get_id());
-
     // TODO remove
-    faabric::util::getLogger()->info("Close socket: {}", std::hash<std::thread::id>{}(tid));
+    faabric::util::getLogger()->info("Close socket: {}",
+                                     std::hash<std::thread::id>{}(tid));
 
     this->socket->close();
+    this->socket = nullptr;
 }
 
 std::string MessageEndpoint::getHost()

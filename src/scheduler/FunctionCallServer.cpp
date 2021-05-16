@@ -22,30 +22,29 @@ void FunctionCallServer::stop()
     MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
 }
 
-void FunctionCallServer::doRecv(const void* headerData,
-                                int headerSize,
-                                const void* bodyData,
-                                int bodySize)
+void FunctionCallServer::doRecv(faabric::transport::Message header,
+                                faabric::transport::Message body)
 {
-    int call = static_cast<int>(*static_cast<const char*>(headerData));
+    assert(header.size() == sizeof(int));
+    int call = static_cast<int>(*header.data());
     switch (call) {
         case faabric::scheduler::FunctionCalls::MpiMessage:
-            this->recvMpiMessage(bodyData, bodySize);
+            this->recvMpiMessage(body);
             break;
         case faabric::scheduler::FunctionCalls::Flush:
-            this->recvFlush(bodyData, bodySize);
+            this->recvFlush(body);
             break;
         case faabric::scheduler::FunctionCalls::ExecuteFunctions:
-            this->recvExecuteFunctions(bodyData, bodySize);
+            this->recvExecuteFunctions(body);
             break;
         case faabric::scheduler::FunctionCalls::Unregister:
-            this->recvUnregister(bodyData, bodySize);
+            this->recvUnregister(body);
             break;
         case faabric::scheduler::FunctionCalls::GetResources:
-            this->recvGetResources(bodyData, bodySize);
+            this->recvGetResources(body);
             break;
         case faabric::scheduler::FunctionCalls::SetThreadResult:
-            this->recvSetThreadResult(bodyData, bodySize);
+            this->recvSetThreadResult(body);
             break;
         default:
             throw std::runtime_error(
@@ -53,18 +52,18 @@ void FunctionCallServer::doRecv(const void* headerData,
     }
 }
 
-void FunctionCallServer::recvMpiMessage(const void* msgData, int size)
+void FunctionCallServer::recvMpiMessage(faabric::transport::Message body)
 {
-    PARSE_MSG(faabric::MPIMessage, msgData, size)
+    PARSE_MSG(faabric::MPIMessage, body.data(), body.size())
 
     MpiWorldRegistry& registry = getMpiWorldRegistry();
     MpiWorld& world = registry.getWorld(msg.worldid());
     world.enqueueMessage(msg);
 }
 
-void FunctionCallServer::recvFlush(const void* msgData, int size)
+void FunctionCallServer::recvFlush(faabric::transport::Message body)
 {
-    PARSE_MSG(faabric::ResponseRequest, msgData, size);
+    PARSE_MSG(faabric::ResponseRequest, body.data(), body.size());
 
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
@@ -76,21 +75,20 @@ void FunctionCallServer::recvFlush(const void* msgData, int size)
     scheduler.reset();
 }
 
-void FunctionCallServer::recvExecuteFunctions(const void* msgData, int size)
+void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message body)
 {
-    PARSE_MSG(faabric::BatchExecuteRequest, msgData, size)
+    PARSE_MSG(faabric::BatchExecuteRequest, body.data(), body.size())
 
     // This host has now been told to execute these functions no matter what
-    scheduler.callFunctions(
-      std::make_shared<faabric::BatchExecuteRequest>(msg), true);
+    scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(msg),
+                            true);
 }
 
-void FunctionCallServer::recvUnregister(const void* msgData, int size)
+void FunctionCallServer::recvUnregister(faabric::transport::Message body)
 {
-    PARSE_MSG(faabric::UnregisterRequest, msgData, size)
+    PARSE_MSG(faabric::UnregisterRequest, body.data(), body.size())
 
-    std::string funcStr =
-      faabric::util::funcToString(msg.function(), false);
+    std::string funcStr = faabric::util::funcToString(msg.function(), false);
     faabric::util::getLogger()->info(
       "Unregistering host {} for {}", msg.host(), funcStr);
 
@@ -98,30 +96,21 @@ void FunctionCallServer::recvUnregister(const void* msgData, int size)
     scheduler.removeRegisteredHost(msg.host(), msg.function());
 }
 
-void FunctionCallServer::recvGetResources(const void* msgData, int size)
+void FunctionCallServer::recvGetResources(faabric::transport::Message body)
 {
-    PARSE_MSG(faabric::ResponseRequest, msgData, size)
+    PARSE_MSG(faabric::ResponseRequest, body.data(), body.size())
 
     // Send the response body
     faabric::HostResources response = scheduler.getThisHostResources();
-    size_t responseSize = response.ByteSizeLong();
-    // Deliberately use heap-allocation for zero-copy sending
-    char* serialisedMsg = new char[responseSize];
-    // Serialise using protobuf
-    if (!response.SerializeToArray(serialisedMsg, responseSize)) {
-        throw std::runtime_error("Error serialising message");
-    }
-    sendResponse(
-      serialisedMsg, responseSize, msg.returnhost(), FUNCTION_CALL_PORT);
+    SEND_SERVER_RESPONSE(response, msg.returnhost(), FUNCTION_CALL_PORT)
 }
 
-void FunctionCallServer::recvSetThreadResult(const void* msgData, int size)
+void FunctionCallServer::recvSetThreadResult(faabric::transport::Message body)
 {
-    PARSE_MSG(faabric::ThreadResultRequest, msgData, size)
+    PARSE_MSG(faabric::ThreadResultRequest, body.data(), body.size())
 
-    faabric::util::getLogger()->info("Setting thread {} result to {}",
-                                     msg.messageid(),
-                                     msg.returnvalue());
+    faabric::util::getLogger()->info(
+      "Setting thread {} result to {}", msg.messageid(), msg.returnvalue());
 
     scheduler.setThreadResult(msg.messageid(), msg.returnvalue());
 }

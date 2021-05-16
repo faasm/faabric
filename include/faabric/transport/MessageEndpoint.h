@@ -2,6 +2,7 @@
 
 #include <google/protobuf/message.h>
 
+#include <faabric/transport/Message.h>
 #include <faabric/transport/MessageContext.h>
 #include <faabric/util/logging.h>
 
@@ -29,7 +30,7 @@ class MessageEndpoint
 
     // Message endpoints shouldn't be assigned as ZeroMQ sockets are not thread
     // safe
-    MessageEndpoint& operator= (const MessageEndpoint&) = delete;
+    MessageEndpoint& operator=(const MessageEndpoint&) = delete;
 
     // Neither copied
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
@@ -47,7 +48,7 @@ class MessageEndpoint
     // Overload for sending flatbuffers
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
-    void recv();
+    Message recv();
 
     // The MessageEndpointServer needs direct access to the socket
     std::unique_ptr<zmq::socket_t> socket;
@@ -60,7 +61,5 @@ class MessageEndpoint
     const std::string host;
     const int port;
     std::thread::id tid;
-
-    virtual void doRecv(void* msgData, int size) = 0;
 };
 }

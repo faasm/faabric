@@ -43,11 +43,6 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
                false);
 }
 
-SnapshotClient::~SnapshotClient()
-{
-    close();
-}
-
 void SnapshotClient::sendHeader(faabric::scheduler::SnapshotCalls call)
 {
     // Deliberately using heap allocation, so that ZeroMQ can use zero-copy

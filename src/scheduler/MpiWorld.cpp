@@ -158,8 +158,10 @@ void MpiWorld::closeFunctionCallClients()
     // need to close the function call clients
     for (int i = 0; i < threadPool->size; i++) {
         std::promise<void> p;
-        threadPool->getMpiReqQueue()->enqueue(std::make_tuple(
-          QUEUE_SHUTDOWN, std::bind(&MpiWorld::closeThreadLocalClients, this), std::move(p)));
+        threadPool->getMpiReqQueue()->enqueue(
+          std::make_tuple(QUEUE_SHUTDOWN,
+                          std::bind(&MpiWorld::closeThreadLocalClients, this),
+                          std::move(p)));
     }
 
     // Lastly clean the main thread as well

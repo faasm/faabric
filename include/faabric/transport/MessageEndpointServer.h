@@ -1,5 +1,6 @@
 #pragma once
 
+#include <faabric/transport/Message.h>
 #include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/MessageEndpointClient.h>
@@ -39,7 +40,7 @@ class MessageEndpointServer
     virtual void stop();
 
   protected:
-    void recv(faabric::transport::MessageEndpointClient& endpoint);
+    void recv(faabric::transport::MessageEndpoint& endpoint);
 
     /* Template function to handle message reception
      *
@@ -47,10 +48,8 @@ class MessageEndpointServer
      * a multi-part 0MQ message. One message containing the header, and another
      * one with the body. Note that 0MQ _guarantees_ in-order delivery.
      */
-    virtual void doRecv(const void* headerBody,
-                        int headerSize,
-                        const void* bodyData,
-                        int bodySize) = 0;
+    virtual void doRecv(faabric::transport::Message header,
+                        faabric::transport::Message body) = 0;
 
     /* Send response to the client
      *
