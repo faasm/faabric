@@ -45,18 +45,19 @@ set_target_properties(flatbuffers_imported
 )
 
 # Pistache
+set(PISTACHE_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so)
 ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-    BUILD_BYPRODUCTS ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so
+    BUILD_BYPRODUCTS ${PISTACHE_LIBRARY}
 )
 ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
 set(PISTACHE_INCLUDE_DIR ${SOURCE_DIR}/include)
 add_library(pistache_imported SHARED IMPORTED)
 add_dependencies(pistache_imported pistache_ext)
 set_target_properties(pistache_imported
-    PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so
+    PROPERTIES IMPORTED_LOCATION ${PISTACHE_LIBRARY}
 )
 
 # RapidJSON

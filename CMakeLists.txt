@@ -104,10 +104,9 @@ target_link_libraries(faabric PUBLIC
     boost_system
     boost_filesystem
     zstd::libzstd_static
-    # TODO: use fully-qualified path
-    pistache
-    protobuf
-    zmq
+    ${PISTACHE_LIBRARY}
+    ${PROTOBUF_LIBRARY}
+    ${ZEROMQ_LIBRARY}
     )
 
 target_include_directories(faabric PUBLIC
