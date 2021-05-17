@@ -92,18 +92,31 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     }
 }
 
-Message MessageEndpoint::recv()
+// TODO - use optional size parameter
+Message MessageEndpoint::recv(int size)
 {
     assert(tid == std::this_thread::get_id());
     assert(this->socket != nullptr);
+    assert(size >= 0);
 
+    // Pre-allocate buffer to avoid copying data
+    if (size > 0) {
+        Message msg(size);
+
+        if (!this->socket->recv(zmq::buffer(msg.udata(), msg.size()))) {
+            throw std::runtime_error("Error receiving message through socket");
+        }
+
+        return msg;
+    }
+
+    // Allocate a message to receive data
     zmq::message_t msg;
     if (!this->socket->recv(msg)) {
         throw std::runtime_error("Error receiving message through socket");
     }
 
     // Copy the received message to a buffer whose scope we control
-    // TODO - can we avoid this copy?
     return Message(msg);
 }
 

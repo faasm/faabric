@@ -12,7 +12,13 @@ namespace faabric::transport {
 class Message
 {
   public:
-    Message(const zmq::message_t& msg);
+    Message(const zmq::message_t& msgIn);
+
+    Message(int sizeIn);
+
+    Message(Message& msg);
+
+    Message& operator=(Message& message);
 
     char* data();
 
@@ -23,7 +29,9 @@ class Message
     bool more();
 
   private:
-    std::basic_string<uint8_t> msg;
+    // std::basic_string<uint8_t> msg;
+    uint8_t* msg;
+    int _size;
     bool _more;
 };
 }

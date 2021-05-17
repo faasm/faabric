@@ -48,8 +48,8 @@ class MessageEndpointServer
      * a multi-part 0MQ message. One message containing the header, and another
      * one with the body. Note that 0MQ _guarantees_ in-order delivery.
      */
-    virtual void doRecv(faabric::transport::Message header,
-                        faabric::transport::Message body) = 0;
+    virtual void doRecv(faabric::transport::Message& header,
+                        faabric::transport::Message& body) = 0;
 
     /* Send response to the client
      *

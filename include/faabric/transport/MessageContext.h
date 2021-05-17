@@ -26,6 +26,11 @@ class MessageContext
 
     zmq::context_t& get();
 
+    /* Close the message context
+     *
+     * In 0MQ terms, this method calls close() on the context, which in turn
+     * first shutdowns (i.e. stop blocking operations) and then closes.
+     */
     void close();
 
     inline static bool isContextShutDown = false;

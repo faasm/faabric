@@ -22,8 +22,8 @@ void FunctionCallServer::stop()
     MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
 }
 
-void FunctionCallServer::doRecv(faabric::transport::Message header,
-                                faabric::transport::Message body)
+void FunctionCallServer::doRecv(faabric::transport::Message& header,
+                                faabric::transport::Message& body)
 {
     assert(header.size() == sizeof(int));
     int call = static_cast<int>(*header.data());
@@ -52,7 +52,7 @@ void FunctionCallServer::doRecv(faabric::transport::Message header,
     }
 }
 
-void FunctionCallServer::recvMpiMessage(faabric::transport::Message body)
+void FunctionCallServer::recvMpiMessage(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::MPIMessage, body.data(), body.size())
 
@@ -61,7 +61,7 @@ void FunctionCallServer::recvMpiMessage(faabric::transport::Message body)
     world.enqueueMessage(msg);
 }
 
-void FunctionCallServer::recvFlush(faabric::transport::Message body)
+void FunctionCallServer::recvFlush(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::ResponseRequest, body.data(), body.size());
 
@@ -75,7 +75,7 @@ void FunctionCallServer::recvFlush(faabric::transport::Message body)
     scheduler.reset();
 }
 
-void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message body)
+void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::BatchExecuteRequest, body.data(), body.size())
 
@@ -84,7 +84,7 @@ void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message body)
                             true);
 }
 
-void FunctionCallServer::recvUnregister(faabric::transport::Message body)
+void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::UnregisterRequest, body.data(), body.size())
 
@@ -96,7 +96,7 @@ void FunctionCallServer::recvUnregister(faabric::transport::Message body)
     scheduler.removeRegisteredHost(msg.host(), msg.function());
 }
 
-void FunctionCallServer::recvGetResources(faabric::transport::Message body)
+void FunctionCallServer::recvGetResources(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::ResponseRequest, body.data(), body.size())
 
@@ -105,7 +105,7 @@ void FunctionCallServer::recvGetResources(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(response, msg.returnhost(), FUNCTION_CALL_PORT)
 }
 
-void FunctionCallServer::recvSetThreadResult(faabric::transport::Message body)
+void FunctionCallServer::recvSetThreadResult(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::ThreadResultRequest, body.data(), body.size())
 

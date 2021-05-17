@@ -13,27 +13,27 @@ class StateServer final : public faabric::transport::MessageEndpointServer
   private:
     State& state;
 
-    void doRecv(faabric::transport::Message header,
-                faabric::transport::Message body) override;
+    void doRecv(faabric::transport::Message& header,
+                faabric::transport::Message& body) override;
 
     /* State server API */
 
-    void recvSize(faabric::transport::Message body);
+    void recvSize(faabric::transport::Message& body);
 
-    void recvPull(faabric::transport::Message body);
+    void recvPull(faabric::transport::Message& body);
 
-    void recvPush(faabric::transport::Message body);
+    void recvPush(faabric::transport::Message& body);
 
-    void recvAppend(faabric::transport::Message body);
+    void recvAppend(faabric::transport::Message& body);
 
-    void recvPullAppended(faabric::transport::Message body);
+    void recvPullAppended(faabric::transport::Message& body);
 
-    void recvClearAppended(faabric::transport::Message body);
+    void recvClearAppended(faabric::transport::Message& body);
 
-    void recvDelete(faabric::transport::Message body);
+    void recvDelete(faabric::transport::Message& body);
 
-    void recvLock(faabric::transport::Message body);
+    void recvLock(faabric::transport::Message& body);
 
-    void recvUnlock(faabric::transport::Message body);
+    void recvUnlock(faabric::transport::Message& body);
 };
 }

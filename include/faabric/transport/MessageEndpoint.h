@@ -48,7 +48,8 @@ class MessageEndpoint
     // Overload for sending flatbuffers
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
-    Message recv();
+    // If known, pass a size parameter to pre-allocate a recv buffer
+    Message recv(int size = 0);
 
     // The MessageEndpointServer needs direct access to the socket
     std::unique_ptr<zmq::socket_t> socket;

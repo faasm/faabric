@@ -10,8 +10,8 @@ SnapshotServer::SnapshotServer()
                                               SNAPSHOT_PORT)
 {}
 
-void SnapshotServer::doRecv(faabric::transport::Message header,
-                            faabric::transport::Message body)
+void SnapshotServer::doRecv(faabric::transport::Message& header,
+                            faabric::transport::Message& body)
 {
     assert(header.size() == sizeof(int));
     int call = static_cast<int>(*header.data());
@@ -28,7 +28,7 @@ void SnapshotServer::doRecv(faabric::transport::Message header,
     }
 }
 
-void SnapshotServer::recvPushSnapshot(faabric::transport::Message msg)
+void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
 {
     const SnapshotPushRequest* r =
       flatbuffers::GetRoot<SnapshotPushRequest>(msg.udata());
@@ -36,7 +36,7 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message msg)
     flatbuffers::Verifier verifier(msg.udata(), msg.size());
     if (!r->Verify(verifier)) {
         throw std::runtime_error("Error verifying snapshot");
-    } 
+    }
 
     faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
                                      r->key()->c_str(),
@@ -53,7 +53,7 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message msg)
     reg.takeSnapshot(r->key()->str(), data, true);
 }
 
-void SnapshotServer::recvDeleteSnapshot(faabric::transport::Message msg)
+void SnapshotServer::recvDeleteSnapshot(faabric::transport::Message& msg)
 {
     const SnapshotDeleteRequest* r =
       flatbuffers::GetRoot<SnapshotDeleteRequest>(msg.udata());
@@ -62,6 +62,8 @@ void SnapshotServer::recvDeleteSnapshot(faabric::transport::Message msg)
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
+    // Delete the registry entry
     reg.deleteSnapshot(r->key()->str());
+    // TODO - free the underlying resources
 }
 }

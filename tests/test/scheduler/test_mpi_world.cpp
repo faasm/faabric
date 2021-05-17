@@ -51,6 +51,8 @@ TEST_CASE("Test world creation", "[mpi]")
     // Check that this host is registered as the master
     const std::string actualHost = world.getHostForRank(0);
     REQUIRE(actualHost == faabric::util::getSystemConfig().endpointHost);
+
+    world.destroy();
 }
 
 TEST_CASE("Test world loading from state", "[mpi]")
@@ -70,6 +72,9 @@ TEST_CASE("Test world loading from state", "[mpi]")
     REQUIRE(worldB.getId() == worldId);
     REQUIRE(worldB.getUser() == user);
     REQUIRE(worldB.getFunction() == func);
+
+    worldA.destroy();
+    worldB.destroy();
 }
 
 TEST_CASE("Test registering a rank", "[mpi]")
@@ -106,6 +111,9 @@ TEST_CASE("Test registering a rank", "[mpi]")
     REQUIRE(worldA.getHostForRank(rankB) == hostB);
     REQUIRE(worldB.getHostForRank(rankA) == hostA);
     REQUIRE(worldB.getHostForRank(rankB) == hostB);
+
+    worldA.destroy();
+    worldB.destroy();
 }
 
 TEST_CASE("Test cartesian communicator", "[mpi]")
@@ -202,6 +210,8 @@ TEST_CASE("Test cartesian communicator", "[mpi]")
             REQUIRE(dst == expectedShift[rank][5]);
         }
     }
+
+    world.destroy();
 }
 
 void checkMessage(faabric::MPIMessage& actualMessage,
@@ -286,6 +296,8 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
                                   nullptr,
                                   faabric::MPIMessage::SENDRECV));
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test sendrecv", "[mpi]")
@@ -350,6 +362,8 @@ TEST_CASE("Test sendrecv", "[mpi]")
     // Test integrity of results
     REQUIRE(recvBufferA == messageDataBA);
     REQUIRE(recvBufferB == messageDataAB);
+
+    world.destroy();
 }
 
 TEST_CASE("Test ring sendrecv", "[mpi]")
@@ -399,6 +413,8 @@ TEST_CASE("Test ring sendrecv", "[mpi]")
             t.join();
         }
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test async send and recv", "[mpi]")
@@ -439,6 +455,8 @@ TEST_CASE("Test async send and recv", "[mpi]")
 
     REQUIRE(actualA == messageDataA);
     REQUIRE(actualB == messageDataB);
+
+    world.destroy();
 }
 
 TEST_CASE("Test send across hosts", "[mpi]")
@@ -503,8 +521,8 @@ TEST_CASE("Test send across hosts", "[mpi]")
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
 
-    localWorld.closeFunctionCallClients();
-    remoteWorld.closeFunctionCallClients();
+    localWorld.destroy();
+    remoteWorld.destroy();
 
     server.stop();
 }
@@ -555,6 +573,8 @@ TEST_CASE("Test send/recv message with no data", "[mpi]")
         REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
         REQUIRE(status.bytesSize == 0);
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test recv with partial data", "[mpi]")
@@ -583,6 +603,8 @@ TEST_CASE("Test recv with partial data", "[mpi]")
     REQUIRE(status.MPI_SOURCE == 1);
     REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
     REQUIRE(status.bytesSize == actualSize * sizeof(int));
+
+    world.destroy();
 }
 
 TEST_CASE("Test probe", "[mpi]")
@@ -632,6 +654,8 @@ TEST_CASE("Test probe", "[mpi]")
     // Receive the next message
     auto bufferB = new int[sizeB];
     world.recv(1, 2, BYTES(bufferB), MPI_INT, sizeB * sizeof(int), nullptr);
+
+    world.destroy();
 }
 
 TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
@@ -666,6 +690,9 @@ TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
     // Double check even when we've retrieved the rank
     REQUIRE(worldA.getHostForRank(rankB) == hostB);
     REQUIRE_THROWS(worldA.getLocalQueue(0, rankB));
+
+    worldA.destroy();
+    worldB.destroy();
 }
 
 TEST_CASE("Check sending to invalid rank", "[mpi]")
@@ -679,6 +706,8 @@ TEST_CASE("Check sending to invalid rank", "[mpi]")
     std::vector<int> input = { 0, 1, 2, 3 };
     int invalidRank = worldSize + 2;
     REQUIRE_THROWS(world.send(0, invalidRank, BYTES(input.data()), MPI_INT, 4));
+
+    world.destroy();
 }
 
 TEST_CASE("Check sending to unregistered rank", "[mpi]")
@@ -693,6 +722,8 @@ TEST_CASE("Check sending to unregistered rank", "[mpi]")
     int destRank = 2;
     std::vector<int> input = { 0, 1 };
     REQUIRE_THROWS(world.send(0, destRank, BYTES(input.data()), MPI_INT, 2));
+
+    world.destroy();
 }
 
 TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
@@ -908,8 +939,8 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
         }
     }
 
-    localWorld.closeFunctionCallClients();
-    remoteWorld.closeFunctionCallClients();
+    localWorld.destroy();
+    remoteWorld.destroy();
 
     server.stop();
 }
@@ -1016,8 +1047,6 @@ template void doReduceTest<double>(scheduler::MpiWorld& world,
 
 TEST_CASE("Test reduce", "[mpi]")
 {
-    cleanFaabric();
-
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     int thisWorldSize = 5;
@@ -1176,12 +1205,12 @@ TEST_CASE("Test reduce", "[mpi]")
               world, root, MPI_MIN, MPI_DOUBLE, rankData, expected);
         }
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test operator reduce", "[mpi]")
 {
-    cleanFaabric();
-
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     int thisWorldSize = 5;
@@ -1368,8 +1397,6 @@ TEST_CASE("Test operator reduce", "[mpi]")
 
 TEST_CASE("Test gather and allgather", "[mpi]")
 {
-    cleanFaabric();
-
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     int thisWorldSize = 5;
@@ -1504,8 +1531,6 @@ TEST_CASE("Test gather and allgather", "[mpi]")
 
 TEST_CASE("Test scan", "[mpi]")
 {
-    cleanFaabric();
-
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     int thisWorldSize = 5;
@@ -1565,12 +1590,12 @@ TEST_CASE("Test scan", "[mpi]")
             REQUIRE(result[r] == expected[r]);
         }
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test all-to-all", "[mpi]")
 {
-    cleanFaabric();
-
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     int thisWorldSize = 4;
@@ -1618,12 +1643,13 @@ TEST_CASE("Test all-to-all", "[mpi]")
             t.join();
         }
     }
+
+    world.destroy();
 }
 
 TEST_CASE("Test RMA across hosts", "[mpi]")
 {
     cleanFaabric();
-
     std::string otherHost = "192.168.9.2";
 
     faabric::Message msg = faabric::util::messageFactory(user, func);
@@ -1696,9 +1722,11 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
         REQUIRE(actual == putData);
     }
 
-    localWorld.closeFunctionCallClients();
-    remoteWorld.closeFunctionCallClients();
+    localWorld.destroy();
+    remoteWorld.destroy();
 
     server.stop();
+
+    getScheduler().reset();
 }
 }

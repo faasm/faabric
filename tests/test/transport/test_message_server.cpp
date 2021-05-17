@@ -33,8 +33,8 @@ class DummyServer final : public MessageEndpointServer
     }
 
   private:
-    void doRecv(faabric::transport::Message header,
-                faabric::transport::Message body) override
+    void doRecv(faabric::transport::Message& header,
+                faabric::transport::Message& body) override
     {
         // Dummy server, do nothing but increment the message count
         this->messageCount++;

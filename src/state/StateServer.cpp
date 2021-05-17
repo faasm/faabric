@@ -17,8 +17,8 @@ StateServer::StateServer(State& stateIn)
   , state(stateIn)
 {}
 
-void StateServer::doRecv(faabric::transport::Message header,
-                         faabric::transport::Message body)
+void StateServer::doRecv(faabric::transport::Message& header,
+                         faabric::transport::Message& body)
 {
     assert(header.size() == sizeof(int));
     int call = static_cast<int>(*header.data());
@@ -56,7 +56,7 @@ void StateServer::doRecv(faabric::transport::Message header,
     }
 }
 
-void StateServer::recvSize(faabric::transport::Message body)
+void StateServer::recvSize(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
@@ -70,7 +70,7 @@ void StateServer::recvSize(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(response, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvPull(faabric::transport::Message body)
+void StateServer::recvPull(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateChunkRequest, body.data(), body.size())
 
@@ -94,7 +94,7 @@ void StateServer::recvPull(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(response, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvPush(faabric::transport::Message body)
+void StateServer::recvPush(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StatePart, body.data(), body.size())
 
@@ -112,7 +112,7 @@ void StateServer::recvPush(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvAppend(faabric::transport::Message body)
+void StateServer::recvAppend(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
@@ -126,7 +126,7 @@ void StateServer::recvAppend(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvPullAppended(faabric::transport::Message body)
+void StateServer::recvPullAppended(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateAppendedRequest, body.data(), body.size())
 
@@ -146,7 +146,7 @@ void StateServer::recvPullAppended(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(response, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvDelete(faabric::transport::Message body)
+void StateServer::recvDelete(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
@@ -158,7 +158,7 @@ void StateServer::recvDelete(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvClearAppended(faabric::transport::Message body)
+void StateServer::recvClearAppended(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
@@ -172,7 +172,7 @@ void StateServer::recvClearAppended(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvLock(faabric::transport::Message body)
+void StateServer::recvLock(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
@@ -185,7 +185,7 @@ void StateServer::recvLock(faabric::transport::Message body)
     SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
 }
 
-void StateServer::recvUnlock(faabric::transport::Message body)
+void StateServer::recvUnlock(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 

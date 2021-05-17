@@ -12,13 +12,13 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
     SnapshotServer();
 
   protected:
-    void doRecv(faabric::transport::Message header,
-                faabric::transport::Message body) override;
+    void doRecv(faabric::transport::Message& header,
+                faabric::transport::Message& body) override;
 
     /* Snapshot server API */
 
-    void recvPushSnapshot(faabric::transport::Message msg);
+    void recvPushSnapshot(faabric::transport::Message& msg);
 
-    void recvDeleteSnapshot(faabric::transport::Message msg);
+    void recvDeleteSnapshot(faabric::transport::Message& msg);
 };
 }
