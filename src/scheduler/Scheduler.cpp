@@ -427,6 +427,7 @@ void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
     for (auto host : thisRegisteredHosts) {
         SnapshotClient c(host);
         c.deleteSnapshot(snapshotKey);
+        c.close();
     }
 }
 
@@ -474,6 +475,7 @@ int Scheduler::scheduleFunctionsOnHost(
         const SnapshotData& d =
           snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
         c.pushSnapshot(snapshotKey, d);
+        c.close();
     }
 
     logger->debug(

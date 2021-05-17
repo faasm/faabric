@@ -25,11 +25,6 @@ MpiWorld::MpiWorld()
   , cartProcsPerDim(2)
 {}
 
-MpiWorld::~MpiWorld()
-{
-    this->destroy();
-}
-
 std::string getWorldStateKey(int worldId)
 {
     if (worldId <= 0) {

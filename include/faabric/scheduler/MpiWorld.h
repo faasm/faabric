@@ -27,8 +27,6 @@ class MpiWorld
   public:
     MpiWorld();
 
-    ~MpiWorld();
-
     void create(const faabric::Message& call, int newId, int newSize);
 
     void initialiseFromState(const faabric::Message& msg, int worldId);

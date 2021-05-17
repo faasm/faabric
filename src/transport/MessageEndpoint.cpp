@@ -24,10 +24,6 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // costly checks when running a Release build.
     assert(tid == std::this_thread::get_id());
 
-    // TODO remove
-    faabric::util::getLogger()->info("Open socket: {}",
-                                     std::hash<std::thread::id>{}(tid));
-
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
 
@@ -113,10 +109,6 @@ Message MessageEndpoint::recv()
 
 void MessageEndpoint::close()
 {
-    // TODO remove
-    faabric::util::getLogger()->info("Close socket: {}",
-                                     std::hash<std::thread::id>{}(tid));
-
     this->socket->close();
     this->socket = nullptr;
 }

@@ -32,6 +32,12 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message msg)
 {
     const SnapshotPushRequest* r =
       flatbuffers::GetRoot<SnapshotPushRequest>(msg.udata());
+
+    flatbuffers::Verifier verifier(msg.udata(), msg.size());
+    if (!r->Verify(verifier)) {
+        throw std::runtime_error("Error verifying snapshot");
+    } 
+
     faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
                                      r->key()->c_str(),
                                      r->contents()->size());
@@ -40,6 +46,7 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message msg)
       faabric::snapshot::getSnapshotRegistry();
 
     // Set up the snapshot
+    // TODO - ownership problem with the SnapshotData!
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
     data.data = r->contents()->Data();
