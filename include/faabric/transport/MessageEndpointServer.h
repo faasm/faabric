@@ -57,7 +57,7 @@ class MessageEndpointServer
      * Together with a blocking recv at the client side, this
      * method can be used to achieve synchronous client-server communication.
      */
-    void sendResponse(char* serialisedMsg,
+    void sendResponse(uint8_t* serialisedMsg,
                       int size,
                       const std::string& returnHost,
                       int returnPort);

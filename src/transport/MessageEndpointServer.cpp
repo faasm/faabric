@@ -85,7 +85,7 @@ void MessageEndpointServer::recv(MessageEndpoint& endpoint)
 
 // We create a new endpoint every time. Re-using them would be a possible
 // optimisation if needed.
-void MessageEndpointServer::sendResponse(char* serialisedMsg,
+void MessageEndpointServer::sendResponse(uint8_t* serialisedMsg,
                                          int size,
                                          const std::string& returnHost,
                                          int returnPort)

@@ -19,13 +19,8 @@ StateClient::StateClient(const std::string& userIn,
 
 void StateClient::sendHeader(faabric::state::StateCalls call)
 {
-    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
-    int functionNum = static_cast<int>(call);
-    size_t headerSize = sizeof(faabric::state::StateCalls);
-    char* header = new char[headerSize];
-    memcpy(header, &functionNum, headerSize);
-    // Mark that we are sending more messages
-    send(header, headerSize, true);
+    uint8_t header = static_cast<uint8_t>(call);
+    send(&header, sizeof(header), true);
 }
 
 faabric::transport::Message StateClient::awaitResponse()

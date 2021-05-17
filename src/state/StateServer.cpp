@@ -20,8 +20,8 @@ StateServer::StateServer(State& stateIn)
 void StateServer::doRecv(faabric::transport::Message& header,
                          faabric::transport::Message& body)
 {
-    assert(header.size() == sizeof(int));
-    int call = static_cast<int>(*header.data());
+    assert(header.size() == sizeof(uint8_t));
+    uint8_t call = static_cast<uint8_t>(*header.data());
     switch (call) {
         case faabric::state::StateCalls::Pull:
             this->recvPull(body);

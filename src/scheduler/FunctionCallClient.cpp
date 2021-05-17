@@ -104,13 +104,8 @@ FunctionCallClient::FunctionCallClient(const std::string& hostIn)
 
 void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
 {
-    // Deliberately using heap allocation, so that ZeroMQ can use zero-copy
-    int functionNum = static_cast<int>(call);
-    size_t headerSize = sizeof(faabric::scheduler::FunctionCalls);
-    char* header = new char[headerSize];
-    memcpy(header, &functionNum, headerSize);
-    // Mark that we are sending more messages
-    send(header, headerSize, true);
+    uint8_t header = static_cast<uint8_t>(call);
+    send(&header, sizeof(header), true);
 }
 
 void FunctionCallClient::sendFlush()

@@ -5,6 +5,7 @@ namespace faabric::transport {
 Message::Message(const zmq::message_t& msgIn)
   : _size(msgIn.size())
   , _more(msgIn.more())
+  , _persist(false)
 {
     // TODO - never freeing this
     faabric::util::getLogger()->warn("allocating memory");
@@ -15,33 +16,22 @@ Message::Message(const zmq::message_t& msgIn)
 Message::Message(int sizeIn)
   : _size(sizeIn)
   , _more(false)
+  , _persist(false)
 {
-    // TODO - never freeing this
-    faabric::util::getLogger()->warn("allocating memory");
     msg = reinterpret_cast<uint8_t*>(malloc(_size * sizeof(uint8_t)));
 }
 
 Message::Message(Message& msg)
-  : msg(msg.udata())
-  , _size(msg.size())
-  , _more(msg.more())
 {
     faabric::util::getLogger()->warn("calling overloaded copy");
 }
 
-Message& Message::operator=(Message& message)
+Message::~Message()
 {
-    faabric::util::getLogger()->warn("calling overloaded assignment");
-    // Check for self-assignment
-    if (this == &message) {
-        return *this;
+    if (!_persist)
+    {
+        free(reinterpret_cast<void*>(msg));
     }
-
-    _size = message.size();
-    _more = message.more();
-    msg = message.udata();
-
-    return *this;
 }
 
 char* Message::data()
@@ -62,5 +52,11 @@ int Message::size()
 bool Message::more()
 {
     return _more;
+}
+
+void Message::persist()
+{
+    assert(_persist == false);
+    _persist = true;
 }
 }

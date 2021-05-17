@@ -20,6 +20,8 @@ class Message
 
     Message& operator=(Message& message);
 
+    ~Message();
+
     char* data();
 
     uint8_t* udata();
@@ -28,10 +30,12 @@ class Message
 
     bool more();
 
+    void persist();
+
   private:
-    // std::basic_string<uint8_t> msg;
     uint8_t* msg;
     int _size;
     bool _more;
+    bool _persist;
 };
 }

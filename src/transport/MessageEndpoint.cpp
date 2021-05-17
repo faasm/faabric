@@ -51,34 +51,12 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     }
 }
 
-void MessageEndpoint::send(char* serialisedMsg, size_t msgSize, bool more)
-{
-    assert(tid == std::this_thread::get_id());
-    assert(this->socket != nullptr);
-
-    // Pass a deallocation function for ZeroMQ to be zero-copy
-    zmq::message_t msg(serialisedMsg, msgSize, [](void* data, void* hint) {
-        delete[](char*) data;
-    });
-
-    if (more) {
-        if (!this->socket->send(msg, zmq::send_flags::sndmore)) {
-            throw std::runtime_error("Error sending message through socket");
-        }
-    } else {
-        if (!this->socket->send(msg, zmq::send_flags::none)) {
-            throw std::runtime_error("Error sending message through socket");
-        }
-    }
-}
-
-// This method overload is used to send flatbuffers that deal with unsigned
-// chars, and are stack-allocated.
 void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
 {
     assert(tid == std::this_thread::get_id());
     assert(this->socket != nullptr);
 
+    // TODO - can we avoid this copy?
     zmq::message_t msg(serialisedMsg, msgSize);
 
     if (more) {

@@ -43,9 +43,6 @@ class MessageEndpoint
 
     void close();
 
-    void send(char* serialisedMsg, size_t msgSize, bool more = false);
-
-    // Overload for sending flatbuffers
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
     // If known, pass a size parameter to pre-allocate a recv buffer

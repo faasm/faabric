@@ -54,7 +54,7 @@ TEST_CASE("Test send/recv one message", "[transport]")
 
     // Send message
     std::string expectedMsg = "Hello world!";
-    char* msg = new char[expectedMsg.size()]();
+    uint8_t msg[expectedMsg.size()];
     memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
     REQUIRE_NOTHROW(src.send(msg, expectedMsg.size()));
 
@@ -87,7 +87,7 @@ TEST_CASE("Test await response", "[transport]")
         src.open(context, SocketType::PUSH, false);
 
         // Send message and wait for response
-        char* msg = new char[expectedMsg.size()]();
+        uint8_t msg[expectedMsg.size()];
         memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
         src.send(msg, expectedMsg.size());
 
@@ -111,7 +111,7 @@ TEST_CASE("Test await response", "[transport]")
     // Send response, open a new endpoint for it
     MessageEndpointClient dstResponse(thisHost, testReplyPort);
     dstResponse.open(context, SocketType::PUSH, true);
-    char* msg = new char[expectedResponse.size()]();
+    uint8_t msg[expectedResponse.size()];
     memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
     dstResponse.send(msg, expectedResponse.size());
 
@@ -139,7 +139,7 @@ TEST_CASE("Test send/recv many messages", "[transport]")
         src.open(context, SocketType::PUSH, false);
         for (int i = 0; i < numMessages; i++) {
             std::string expectedMsg = baseMsg + std::to_string(i);
-            char* msg = new char[expectedMsg.size()]();
+            uint8_t msg[expectedMsg.size()];
             memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
             src.send(msg, expectedMsg.size());
         }
@@ -188,7 +188,7 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
               MessageEndpointClient src(thisHost, testPort);
               src.open(context, SocketType::PUSH, false);
               for (int i = 0; i < numMessages; i++) {
-                  char* msg = new char[expectedMsg.size()]();
+                  uint8_t msg[expectedMsg.size()];
                   memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
                   src.send(msg, expectedMsg.size());
               }

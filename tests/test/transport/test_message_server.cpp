@@ -23,7 +23,7 @@ class DummyServer final : public MessageEndpointServer
     // This method is protected in the base class, as it's always called from
     // the doRecv implementation. To ease testing, we make it public with this
     // workaround.
-    void sendResponse(char* serialisedMsg,
+    void sendResponse(uint8_t* serialisedMsg,
                       int size,
                       const std::string& returnHost,
                       int returnPort)
@@ -65,13 +65,13 @@ TEST_CASE("Test send one message to server", "[transport]")
 
     // Send message: server expects header + body
     std::string header = "header";
-    char* headerMsg = new char[header.size()]();
+    uint8_t headerMsg[header.size()];
     memcpy(headerMsg, header.c_str(), header.size());
     // Mark we are sending the header
     REQUIRE_NOTHROW(src.send(headerMsg, header.size(), true));
     // Send the body
     std::string body = "body";
-    char* bodyMsg = new char[body.size()]();
+    uint8_t bodyMsg[body.size()]; 
     memcpy(bodyMsg, body.c_str(), body.size());
     src.send(bodyMsg, body.size(), false);
 
@@ -106,7 +106,7 @@ TEST_CASE("Test send one-off response to client", "[transport]")
         cli.close();
     });
 
-    char* msg = new char[expectedMsg.size()]();
+    uint8_t msg[expectedMsg.size()];
     memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
     REQUIRE_NOTHROW(
       server.sendResponse(msg, expectedMsg.size(), thisHost, testPort));
@@ -135,11 +135,11 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
             std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {
                 // Send header
-                char* header = new char[clientMsg.size()]();
+                uint8_t header[clientMsg.size()];
                 memcpy(header, clientMsg.c_str(), clientMsg.size());
                 cli.send(header, clientMsg.size(), true);
                 // Send body
-                char* body = new char[clientMsg.size()]();
+                uint8_t body[clientMsg.size()];
                 memcpy(body, clientMsg.c_str(), clientMsg.size());
                 cli.send(body, clientMsg.size());
             }

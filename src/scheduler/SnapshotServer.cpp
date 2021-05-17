@@ -13,8 +13,8 @@ SnapshotServer::SnapshotServer()
 void SnapshotServer::doRecv(faabric::transport::Message& header,
                             faabric::transport::Message& body)
 {
-    assert(header.size() == sizeof(int));
-    int call = static_cast<int>(*header.data());
+    assert(header.size() == sizeof(uint8_t));
+    uint8_t call = static_cast<uint8_t>(*header.data());
     switch (call) {
         case faabric::scheduler::SnapshotCalls::PushSnapshot:
             this->recvPushSnapshot(body);
@@ -30,6 +30,10 @@ void SnapshotServer::doRecv(faabric::transport::Message& header,
 
 void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
 {
+    // Persist message to ensure contents are not cleared
+    // Note that these are currently not free-d, see TODO in next function
+    msg.persist();
+
     const SnapshotPushRequest* r =
       flatbuffers::GetRoot<SnapshotPushRequest>(msg.udata());
 
@@ -46,7 +50,6 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
       faabric::snapshot::getSnapshotRegistry();
 
     // Set up the snapshot
-    // TODO - ownership problem with the SnapshotData!
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
     data.data = r->contents()->Data();
