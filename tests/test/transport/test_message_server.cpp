@@ -71,7 +71,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     REQUIRE_NOTHROW(src.send(headerMsg, header.size(), true));
     // Send the body
     std::string body = "body";
-    uint8_t bodyMsg[body.size()]; 
+    uint8_t bodyMsg[body.size()];
     memcpy(bodyMsg, body.c_str(), body.size());
     src.send(bodyMsg, body.size(), false);
 

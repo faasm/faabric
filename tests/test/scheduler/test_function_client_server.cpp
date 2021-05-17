@@ -16,6 +16,13 @@
 
 using namespace scheduler;
 
+static void tearDown(FunctionCallClient& cli, FunctionCallServer& server)
+{
+    cli.close();
+    server.stop();
+    faabric::scheduler::getScheduler().reset();
+}
+
 namespace tests {
 
 TEST_CASE("Test sending MPI message", "[scheduler]")
@@ -74,14 +81,10 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     REQUIRE(actualMessage->worldid() == worldId);
     REQUIRE(actualMessage->sender() == rankRemote);
 
-    // First close the client and the worlds
-    cli.close();
+    localWorld.destroy();
+    remoteWorld.destroy();
 
-    localWorld.closeFunctionCallClients();
-    remoteWorld.closeFunctionCallClients();
-
-    // Stop the server and messaging context
-    server.stop();
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test sending flush message", "[scheduler]")
@@ -126,9 +129,7 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);
 
-    // Close the client, and then stop the server
-    cli.close();
-    server.stop();
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test broadcasting flush message", "[scheduler]")
@@ -163,7 +164,7 @@ TEST_CASE("Test broadcasting flush message", "[scheduler]")
 
     faabric::util::setMockMode(false);
 
-    sch.closeFunctionCallClients();
+    faabric::scheduler::getScheduler().reset();
 }
 
 TEST_CASE("Test client batch execution request", "[scheduler]")
@@ -185,11 +186,6 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     cli.executeFunctions(req);
     usleep(1000 * 300);
 
-    // Close the client
-    cli.close();
-    // Stop the server
-    server.stop();
-
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
     // Check no other hosts have been registered
@@ -199,6 +195,8 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Check calls have been registered
     REQUIRE(sch.getRecordedMessagesLocal().size() == nCalls);
     REQUIRE(sch.getRecordedMessagesShared().empty());
+
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test get resources request", "[scheduler]")
@@ -240,10 +238,7 @@ TEST_CASE("Test get resources request", "[scheduler]")
     REQUIRE(resResponse.slots() == expectedSlots);
     REQUIRE(resResponse.usedslots() == expectedUsedSlots);
 
-    // Close the client
-    cli.close();
-    // Stop the server
-    server.stop();
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test unregister request", "[scheduler]")
@@ -295,9 +290,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     usleep(1000 * 100);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
-    // Stop the server
-    cli.close();
-    server.stop();
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test set thread result", "[scheduler]")
@@ -353,9 +346,6 @@ TEST_CASE("Test set thread result", "[scheduler]")
         tB.join();
     }
 
-    // Stop the client
-    cli.close();
-    // Stop the server
-    server.stop();
+    tearDown(cli, server);
 }
 }

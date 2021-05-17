@@ -4,7 +4,7 @@
     sendHeader(header);                                                        \
     size_t msgSize = msg.ByteSizeLong();                                       \
     {                                                                          \
-        uint8_t sMsg[msgSize];                                            \
+        uint8_t sMsg[msgSize];                                                 \
         if (!msg.SerializeToArray(sMsg, msgSize)) {                            \
             throw std::runtime_error("Error serialising message");             \
         }                                                                      \
@@ -14,23 +14,23 @@
 #define SEND_MESSAGE_PTR(header, msg)                                          \
     sendHeader(header);                                                        \
     size_t msgSize = msg->ByteSizeLong();                                      \
-    { \
-        uint8_t sMsg[msgSize];                                            \
-        if (!msg->SerializeToArray(sMsg, msgSize)) {                               \
-            throw std::runtime_error("Error serialising message");                 \
-        }                                                                          \
-        send(sMsg, msgSize); \
-    } \
+    {                                                                          \
+        uint8_t sMsg[msgSize];                                                 \
+        if (!msg->SerializeToArray(sMsg, msgSize)) {                           \
+            throw std::runtime_error("Error serialising message");             \
+        }                                                                      \
+        send(sMsg, msgSize);                                                   \
+    }
 
 #define SEND_SERVER_RESPONSE(msg, host, port)                                  \
     size_t msgSize = msg.ByteSizeLong();                                       \
-    { \
-        uint8_t sMsg[msgSize];                                            \
-        if (!msg.SerializeToArray(sMsg, msgSize)) {                                \
-            throw std::runtime_error("Error serialising message");                 \
-        }                                                                          \
-        sendResponse(sMsg, msgSize, host, port); \
-    } \
+    {                                                                          \
+        uint8_t sMsg[msgSize];                                                 \
+        if (!msg.SerializeToArray(sMsg, msgSize)) {                            \
+            throw std::runtime_error("Error serialising message");             \
+        }                                                                      \
+        sendResponse(sMsg, msgSize, host, port);                               \
+    }
 
 #define PARSE_MSG(T, data, size)                                               \
     T msg;                                                                     \

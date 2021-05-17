@@ -1,5 +1,4 @@
 #include <faabric/transport/Message.h>
-#include <faabric/util/logging.h>
 
 namespace faabric::transport {
 Message::Message(const zmq::message_t& msgIn)
@@ -7,8 +6,6 @@ Message::Message(const zmq::message_t& msgIn)
   , _more(msgIn.more())
   , _persist(false)
 {
-    // TODO - never freeing this
-    faabric::util::getLogger()->warn("allocating memory");
     msg = reinterpret_cast<uint8_t*>(malloc(_size * sizeof(uint8_t)));
     memcpy(msg, msgIn.data(), _size);
 }
@@ -21,15 +18,9 @@ Message::Message(int sizeIn)
     msg = reinterpret_cast<uint8_t*>(malloc(_size * sizeof(uint8_t)));
 }
 
-Message::Message(Message& msg)
-{
-    faabric::util::getLogger()->warn("calling overloaded copy");
-}
-
 Message::~Message()
 {
-    if (!_persist)
-    {
+    if (!_persist) {
         free(reinterpret_cast<void*>(msg));
     }
 }

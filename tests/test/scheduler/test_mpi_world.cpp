@@ -12,6 +12,15 @@
 
 using namespace faabric::scheduler;
 
+static void tearDown(std::vector<MpiWorld*> worlds)
+{
+    for (auto& world : worlds) {
+        world->destroy();
+    }
+
+    getScheduler().reset();
+}
+
 namespace tests {
 
 static int worldId = 123;
@@ -52,7 +61,7 @@ TEST_CASE("Test world creation", "[mpi]")
     const std::string actualHost = world.getHostForRank(0);
     REQUIRE(actualHost == faabric::util::getSystemConfig().endpointHost);
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test world loading from state", "[mpi]")
@@ -73,8 +82,7 @@ TEST_CASE("Test world loading from state", "[mpi]")
     REQUIRE(worldB.getUser() == user);
     REQUIRE(worldB.getFunction() == func);
 
-    worldA.destroy();
-    worldB.destroy();
+    tearDown({ &worldA, &worldB });
 }
 
 TEST_CASE("Test registering a rank", "[mpi]")
@@ -112,8 +120,7 @@ TEST_CASE("Test registering a rank", "[mpi]")
     REQUIRE(worldB.getHostForRank(rankA) == hostA);
     REQUIRE(worldB.getHostForRank(rankB) == hostB);
 
-    worldA.destroy();
-    worldB.destroy();
+    tearDown({ &worldA, &worldB });
 }
 
 TEST_CASE("Test cartesian communicator", "[mpi]")
@@ -211,7 +218,7 @@ TEST_CASE("Test cartesian communicator", "[mpi]")
         }
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 void checkMessage(faabric::MPIMessage& actualMessage,
@@ -297,7 +304,7 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
                                   faabric::MPIMessage::SENDRECV));
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test sendrecv", "[mpi]")
@@ -363,7 +370,7 @@ TEST_CASE("Test sendrecv", "[mpi]")
     REQUIRE(recvBufferA == messageDataBA);
     REQUIRE(recvBufferB == messageDataAB);
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test ring sendrecv", "[mpi]")
@@ -414,7 +421,7 @@ TEST_CASE("Test ring sendrecv", "[mpi]")
         }
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test async send and recv", "[mpi]")
@@ -456,7 +463,7 @@ TEST_CASE("Test async send and recv", "[mpi]")
     REQUIRE(actualA == messageDataA);
     REQUIRE(actualB == messageDataB);
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test send across hosts", "[mpi]")
@@ -521,8 +528,7 @@ TEST_CASE("Test send across hosts", "[mpi]")
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
 
-    localWorld.destroy();
-    remoteWorld.destroy();
+    tearDown({ &localWorld, &remoteWorld });
 
     server.stop();
 }
@@ -574,7 +580,7 @@ TEST_CASE("Test send/recv message with no data", "[mpi]")
         REQUIRE(status.bytesSize == 0);
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test recv with partial data", "[mpi]")
@@ -604,7 +610,7 @@ TEST_CASE("Test recv with partial data", "[mpi]")
     REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
     REQUIRE(status.bytesSize == actualSize * sizeof(int));
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test probe", "[mpi]")
@@ -655,7 +661,7 @@ TEST_CASE("Test probe", "[mpi]")
     auto bufferB = new int[sizeB];
     world.recv(1, 2, BYTES(bufferB), MPI_INT, sizeB * sizeof(int), nullptr);
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
@@ -691,8 +697,7 @@ TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
     REQUIRE(worldA.getHostForRank(rankB) == hostB);
     REQUIRE_THROWS(worldA.getLocalQueue(0, rankB));
 
-    worldA.destroy();
-    worldB.destroy();
+    tearDown({ &worldA, &worldB });
 }
 
 TEST_CASE("Check sending to invalid rank", "[mpi]")
@@ -707,7 +712,7 @@ TEST_CASE("Check sending to invalid rank", "[mpi]")
     int invalidRank = worldSize + 2;
     REQUIRE_THROWS(world.send(0, invalidRank, BYTES(input.data()), MPI_INT, 4));
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Check sending to unregistered rank", "[mpi]")
@@ -723,7 +728,7 @@ TEST_CASE("Check sending to unregistered rank", "[mpi]")
     std::vector<int> input = { 0, 1 };
     REQUIRE_THROWS(world.send(0, destRank, BYTES(input.data()), MPI_INT, 2));
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
@@ -939,8 +944,7 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
         }
     }
 
-    localWorld.destroy();
-    remoteWorld.destroy();
+    tearDown({ &localWorld, &remoteWorld });
 
     server.stop();
 }
@@ -1206,7 +1210,7 @@ TEST_CASE("Test reduce", "[mpi]")
         }
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test operator reduce", "[mpi]")
@@ -1392,7 +1396,7 @@ TEST_CASE("Test operator reduce", "[mpi]")
         }
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test gather and allgather", "[mpi]")
@@ -1526,7 +1530,7 @@ TEST_CASE("Test gather and allgather", "[mpi]")
         REQUIRE(actual == expected);
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test scan", "[mpi]")
@@ -1591,7 +1595,7 @@ TEST_CASE("Test scan", "[mpi]")
         }
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test all-to-all", "[mpi]")
@@ -1644,7 +1648,7 @@ TEST_CASE("Test all-to-all", "[mpi]")
         }
     }
 
-    world.destroy();
+    tearDown({ &world });
 }
 
 TEST_CASE("Test RMA across hosts", "[mpi]")
@@ -1722,11 +1726,8 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
         REQUIRE(actual == putData);
     }
 
-    localWorld.destroy();
-    remoteWorld.destroy();
+    tearDown({ &localWorld, &remoteWorld });
 
     server.stop();
-
-    getScheduler().reset();
 }
 }
