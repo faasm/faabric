@@ -202,8 +202,7 @@ std::vector<std::string> Scheduler::callFunctions(
         logger->debug(
           "Forwarding {} {} back to master {}", nMessages, funcStr, masterHost);
 
-        FunctionCallClient c(masterHost);
-        c.executeFunctions(req);
+        getFunctionCallClient(masterHost).executeFunctions(req);
         return executed;
 
     } else if (forceLocal) {
@@ -665,11 +664,10 @@ void Scheduler::setThreadResult(const faabric::Message& msg,
                       msg.id(),
                       msg.masterhost());
 
-        FunctionCallClient c(msg.masterhost());
         faabric::ThreadResultRequest req;
         req.set_messageid(msg.id());
         req.set_returnvalue(returnValue);
-        c.setThreadResult(req);
+        getFunctionCallClient(msg.masterhost()).setThreadResult(req);
     }
 }
 

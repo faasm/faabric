@@ -9,7 +9,7 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
 
 MessageEndpoint::~MessageEndpoint()
 {
-    if (this->socket) {
+    if (this->socket != nullptr) {
         faabric::util::getLogger()->warn(
           "Destroying an open message endpoint!");
         this->close();
