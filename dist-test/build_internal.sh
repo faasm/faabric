@@ -2,9 +2,8 @@
 
 set -e
 
-THIS_DIR=$(dirname $(readlink -f $0))
-export PROJ_ROOT=${THIS_DIR}/..
-pushd $PROJ_ROOT >> /dev/null
+export PROJ_ROOT=$(dirname $(dirname $(readlink -f $0)))
+pushd ${PROJ_ROOT}/dist-test >> /dev/null
 
 # Run the build
 inv dev.cmake
