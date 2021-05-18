@@ -47,7 +47,6 @@ bool Message::more()
 
 void Message::persist()
 {
-    assert(_persist == false);
     _persist = true;
 }
 }

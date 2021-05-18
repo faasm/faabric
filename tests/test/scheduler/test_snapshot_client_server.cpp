@@ -11,6 +11,13 @@
 
 namespace tests {
 
+static void tearDown(faabric::scheduler::SnapshotClient& cli,
+                     faabric::scheduler::SnapshotServer& server)
+{
+    cli.close();
+    server.stop();
+}
+
 TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
 {
     cleanFaabric();
@@ -61,9 +68,6 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
 
-    // Close the client
-    cli.close();
-    // Stop the server
-    server.stop();
+    tearDown(cli, server);
 }
 }
