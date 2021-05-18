@@ -7,6 +7,8 @@
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/state/StateKeyValue.h>
+
+#include <atomic>
 #include <thread>
 
 namespace faabric::scheduler {
@@ -216,6 +218,7 @@ class MpiWorld
     faabric::util::TimePoint creationTime;
 
     std::shared_mutex worldMutex;
+    std::atomic_flag isDestroyed = false;
 
     std::string user;
     std::string function;

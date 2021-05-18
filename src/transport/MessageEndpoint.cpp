@@ -42,6 +42,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
         default:
             throw std::runtime_error("Unrecognized socket type");
     }
+    assert(this->socket != nullptr);
 
     // Bind or connect the socket
     if (bind) {
@@ -155,8 +156,15 @@ Message MessageEndpoint::recv(int size)
 
 void MessageEndpoint::close()
 {
-    this->socket->close();
-    this->socket = nullptr;
+    if (this->socket != nullptr) {
+        if (tid != std::this_thread::get_id()) {
+            faabric::util::getLogger()->warn(
+              "Closing socket from a different thread");
+        }
+
+        this->socket->close();
+        this->socket = nullptr;
+    }
 }
 
 std::string MessageEndpoint::getHost()

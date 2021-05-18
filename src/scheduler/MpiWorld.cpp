@@ -132,18 +132,21 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
-    closeFunctionCallClients();
+    // Destroy once per host
+    if (!isDestroyed.test_and_set()) {
+        closeFunctionCallClients();
 
-    // Note - we are deliberately not deleting the KV in the global state
-    // TODO - find a way to do this only from the master client
+        // Note - we are deliberately not deleting the KV in the global state
+        // TODO - find a way to do this only from the master client
 
-    for (auto& s : rankHostMap) {
-        const std::shared_ptr<state::StateKeyValue>& rankState =
-          getRankHostState(s.first);
-        state::getGlobalState().deleteKV(rankState->user, rankState->key);
+        for (auto& s : rankHostMap) {
+            const std::shared_ptr<state::StateKeyValue>& rankState =
+              getRankHostState(s.first);
+            state::getGlobalState().deleteKV(rankState->user, rankState->key);
+        }
+
+        localQueueMap.clear();
     }
-
-    localQueueMap.clear();
 }
 
 void MpiWorld::closeFunctionCallClients()

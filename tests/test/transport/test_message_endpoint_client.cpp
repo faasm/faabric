@@ -110,7 +110,7 @@ TEST_CASE("Test await response", "[transport]")
 
     // Send response, open a new endpoint for it
     MessageEndpointClient dstResponse(thisHost, testReplyPort);
-    dstResponse.open(context, SocketType::PUSH, true);
+    dstResponse.open(context, SocketType::PUSH, false);
     uint8_t msg[expectedResponse.size()];
     memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
     dstResponse.send(msg, expectedResponse.size());
