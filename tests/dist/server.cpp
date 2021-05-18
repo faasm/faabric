@@ -11,7 +11,6 @@ int main()
 {
     const auto& logger = faabric::util::getLogger();
 
-    // Start the worker pool
     logger->info("Starting executor pool in the background");
     std::shared_ptr<ExecutorFactory> fac =
       std::make_shared<DummyExecutorFactory>();
