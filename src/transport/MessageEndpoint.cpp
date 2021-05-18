@@ -155,8 +155,6 @@ Message MessageEndpoint::recv(int size)
 
 void MessageEndpoint::close()
 {
-    assert(tid == std::this_thread::get_id());
-
     this->socket->close();
     this->socket = nullptr;
 }

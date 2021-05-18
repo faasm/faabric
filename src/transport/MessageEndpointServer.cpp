@@ -86,12 +86,12 @@ void MessageEndpointServer::sendResponse(uint8_t* serialisedMsg,
                                          const std::string& returnHost,
                                          int returnPort)
 {
-    // Open the endpoint socket, server always binds
+    // Open the endpoint socket, server connects (not bind) to remote address
     faabric::transport::MessageEndpointClient endpoint(
       returnHost, returnPort + REPLY_PORT_OFFSET);
     endpoint.open(faabric::transport::getGlobalMessageContext(),
                   faabric::transport::SocketType::PUSH,
-                  true);
+                  false);
     endpoint.send(serialisedMsg, size);
     endpoint.close();
 }
