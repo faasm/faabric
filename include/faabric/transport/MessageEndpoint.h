@@ -9,6 +9,9 @@
 #include <thread>
 #include <zmq.hpp>
 
+// Defined in libzmq/include/zmq.h
+#define ZMQ_ETERM ETERM
+
 namespace faabric::transport {
 enum class SocketType
 {

@@ -1,8 +1,5 @@
 #include <faabric/transport/MessageEndpointServer.h>
 
-// Defined in libzmq/include/zmq.h (156384765)
-#define ZMQ_ETERM ETERM
-
 namespace faabric::transport {
 MessageEndpointServer::MessageEndpointServer(const std::string& hostIn,
                                              int portIn)
@@ -26,13 +23,12 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
           context, faabric::transport::SocketType::PULL, true);
         assert(serverEndpoint.socket != nullptr);
 
-        // Loop until context is terminated
+        // Loop until context is terminated (will throw ETERM)
         while (true) {
             try {
                 this->recv(serverEndpoint);
             } catch (zmq::error_t& e) {
                 if (e.num() == ZMQ_ETERM) {
-                    serverEndpoint.close();
                     break;
                 }
                 throw std::runtime_error(

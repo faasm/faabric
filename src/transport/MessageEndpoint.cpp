@@ -45,9 +45,19 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
 
     // Bind or connect the socket
     if (bind) {
-        this->socket->bind(address);
+        try {
+            this->socket->bind(address);
+        } catch (zmq::error_t& e) {
+            throw std::runtime_error(
+              fmt::format("Error binding socket to {}: {}", address, e.what()));
+        }
     } else {
-        this->socket->connect(address);
+        try {
+            this->socket->connect(address);
+        } catch (zmq::error_t& e) {
+            throw std::runtime_error(fmt::format(
+              "Error connecting socket to {}: {}", address, e.what()));
+        }
     }
 }
 
@@ -56,16 +66,33 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     assert(tid == std::this_thread::get_id());
     assert(this->socket != nullptr);
 
-    // TODO - can we avoid this copy?
-    zmq::message_t msg(serialisedMsg, msgSize);
-
     if (more) {
-        if (!this->socket->send(msg, zmq::send_flags::sndmore)) {
-            throw std::runtime_error("Error sending message through socket");
+        try {
+            auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
+                                          zmq::send_flags::sndmore);
+            if (res != msgSize) {
+                throw std::runtime_error(fmt::format(
+                  "Sent different bytes than expected (sent {}, expected {})",
+                  res.value_or(0),
+                  msgSize));
+            }
+        } catch (zmq::error_t& e) {
+            throw std::runtime_error(
+              fmt::format("Error sending message: {}", e.what()));
         }
     } else {
-        if (!this->socket->send(msg, zmq::send_flags::none)) {
-            throw std::runtime_error("Error sending message through socket");
+        try {
+            auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
+                                          zmq::send_flags::none);
+            if (res != msgSize) {
+                throw std::runtime_error(fmt::format(
+                  "Sent different bytes than expected (sent {}, expected {})",
+                  res.value_or(0),
+                  msgSize));
+            }
+        } catch (zmq::error_t& e) {
+            throw std::runtime_error(
+              fmt::format("Error sending message: {}", e.what()));
         }
     }
 }
@@ -81,8 +108,24 @@ Message MessageEndpoint::recv(int size)
     if (size > 0) {
         Message msg(size);
 
-        if (!this->socket->recv(zmq::buffer(msg.udata(), msg.size()))) {
-            throw std::runtime_error("Error receiving message through socket");
+        try {
+            auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
+            if (res.has_value() && (res->size != res->untruncated_size)) {
+                throw std::runtime_error(
+                  fmt::format("Received more bytes than buffer can hold. "
+                              "Received: {}, capacity {}",
+                              res->untruncated_size,
+                              res->size));
+            }
+        } catch (zmq::error_t& e) {
+            if (e.num() == ZMQ_ETERM) {
+                close();
+                // Re-throw to either notify error or unblock servers
+                throw;
+            } else {
+                throw std::runtime_error(
+                  fmt::format("Error receiving message: {}", e.what()));
+            }
         }
 
         return msg;
@@ -90,8 +133,20 @@ Message MessageEndpoint::recv(int size)
 
     // Allocate a message to receive data
     zmq::message_t msg;
-    if (!this->socket->recv(msg)) {
-        throw std::runtime_error("Error receiving message through socket");
+    try {
+        auto res = this->socket->recv(msg);
+        if (!res.has_value()) {
+            throw std::runtime_error("Receive failed with EAGAIN");
+        }
+    } catch (zmq::error_t& e) {
+        if (e.num() == ZMQ_ETERM) {
+            close();
+            // Re-throw to either notify error or unblock servers
+            throw;
+        } else {
+            throw std::runtime_error(
+              fmt::format("Error receiving message: {}", e.what()));
+        }
     }
 
     // Copy the received message to a buffer whose scope we control
@@ -100,6 +155,8 @@ Message MessageEndpoint::recv(int size)
 
 void MessageEndpoint::close()
 {
+    assert(tid == std::this_thread::get_id());
+
     this->socket->close();
     this->socket = nullptr;
 }
