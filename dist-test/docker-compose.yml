@@ -10,10 +10,6 @@ services:
       - ${PROJ_ROOT}:/code/faabric
       - ./build/dist-test/:/build/faabric/dist-test
     working_dir: /code/faabric
-    environment:
-      - LOG_LEVEL=debug
-      - REDIS_STATE_HOST=redis
-      - REDIS_QUEUE_HOST=redis
 
   master:
     image: ${FAABRIC_CLI_IMAGE}
