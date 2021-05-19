@@ -56,14 +56,14 @@ TEST_CASE_METHOD(DistTestsFixture,
     for (int i = 0; i < nLocalSlots; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
         int res = sch.awaitThreadResult(m.id());
-        REQUIRE(res == 12 * m.id());
+        REQUIRE(res == m.id() / 2);
     }
 
     // Check threads executed on the other host
     for (int i = nLocalSlots; i < nThreads; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
         int res = sch.awaitThreadResult(m.id());
-        REQUIRE(res == 12 * m.id());
+        REQUIRE(res == m.id() / 2);
     }
 }
 }

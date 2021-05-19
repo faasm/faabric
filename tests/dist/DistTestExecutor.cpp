@@ -50,9 +50,7 @@ int32_t DistTestExecutor::executeTask(
 
     // Look up function and invoke
     ExecutorFunction callback = getDistTestExecutorCallback(msg);
-    callback(threadPoolIdx, msgIdx, req);
-
-    return 0;
+    return callback(threadPoolIdx, msgIdx, req);
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

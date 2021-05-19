@@ -18,11 +18,16 @@ int handleSimpleThread(int threadPoolIdx,
 
     auto const& logger = faabric::util::getLogger();
 
-    const faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    logger->debug("Thread {} executed on host {}", msg.id(), conf.endpointHost);
-
     // Return a distinctive value
-    return 12 * msg.id();
+    int returnValue = msg.id() / 2;
+
+    const faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    logger->debug("Thread {} executed on host {}. Returning {}",
+                  msg.id(),
+                  conf.endpointHost,
+                  returnValue);
+
+    return returnValue;
 }
 
 int handleSimpleFunction(int threadPoolIdx,
@@ -33,6 +38,9 @@ int handleSimpleFunction(int threadPoolIdx,
     const faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     std::string output = fmt::format(
       "Function {} executed on host {}", msg.id(), conf.endpointHost);
+
+    auto const& logger = faabric::util::getLogger();
+    logger->debug(output);
 
     msg.set_outputdata(output);
 
