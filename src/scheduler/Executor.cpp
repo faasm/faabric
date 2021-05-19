@@ -53,6 +53,13 @@ void Executor::finish()
         }
     }
 
+    // Await dead threads
+    for (auto dt : deadThreads) {
+        if (dt->joinable()) {
+            dt->join();
+        }
+    }
+
     // Hook
     this->postFinish();
 
@@ -153,6 +160,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
     auto& sch = faabric::scheduler::getScheduler();
     auto& conf = faabric::util::getSystemConfig();
 
+    bool selfShutdown = false;
+
     for (;;) {
         logger->trace("Thread starting loop {}:{}", id, threadPoolIdx);
         std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>> task;
@@ -162,7 +171,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
         } catch (faabric::util::QueueTimeoutException& ex) {
             // If the thread has had no messages, it needs to
             // remove itself
-            shutdownThreadPoolThread(threadPoolIdx);
+            logger->trace("Thread {}:{} got no messages in timeout {}ms",
+                          id,
+                          threadPoolIdx,
+                          conf.boundTimeout);
+            selfShutdown = true;
             break;
         }
 
@@ -173,6 +186,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         if (msgIdx == POOL_SHUTDOWN) {
             logger->debug(
               "Killing thread pool thread {}:{}", id, threadPoolIdx);
+            selfShutdown = false;
             break;
         }
 
@@ -223,19 +237,33 @@ void Executor::threadPoolThread(int threadPoolIdx)
             releaseClaim();
         }
     }
-}
 
-void Executor::shutdownThreadPoolThread(int threadPoolIdx)
-{
-    const auto& logger = faabric::util::getLogger();
-    logger->debug("Shutting down thread pool thread {}:{}", id, threadPoolIdx);
+    if (selfShutdown) {
+        logger->debug(
+          "Shutting down thread pool thread {}:{}", id, threadPoolIdx);
 
-    threadPoolThreads.at(threadPoolIdx) = nullptr;
+        // Note - we have to keep a record of dead threads so we can join them
+        // all when the executor shuts down
+        std::shared_ptr<std::thread> thisThread =
+          threadPoolThreads.at(threadPoolIdx);
+        deadThreads.emplace_back(thisThread);
 
-    if (threadPoolThreads.empty()) {
-        // Notify that we're done
-        auto& sch = faabric::scheduler::getScheduler();
-        sch.notifyExecutorShutdown(this, boundMessage);
+        // Set this thread to nullptr
+        threadPoolThreads.at(threadPoolIdx) = nullptr;
+
+        // See if any threads are still running
+        bool isFinished = true;
+        for (auto t : threadPoolThreads) {
+            if (t != nullptr) {
+                isFinished = false;
+                break;
+            }
+        }
+
+        if (isFinished) {
+            // Notify that this executor is finished
+            sch.notifyExecutorShutdown(this, boundMessage);
+        }
     }
 }
 

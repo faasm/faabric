@@ -69,7 +69,12 @@ void Scheduler::reset()
         }
     }
 
+    for (auto& e : deadExecutors) {
+        e->finish();
+    }
+
     executors.clear();
+    deadExecutors.clear();
 
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -137,14 +142,29 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    // Remove from warm executors
-    std::string execId = exec->id;
+    // Find in list of executors
+    int execIdx = -1;
     std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
-    std::remove_if(thisExecutors.begin(),
-                   thisExecutors.end(),
-                   [&execId](const auto& p) { return p->id == execId; });
+    for (int i = 0; i < thisExecutors.size(); i++) {
+        if (thisExecutors.at(i)->id == exec->id) {
+            execIdx = i;
+            break;
+        }
+    }
+
+    // We assume it's been found or something has gone very wrong
+    assert(execIdx >= 0);
+
+    // Record as dead, remove from live executors
+    // Note that this is necessary as this method may be called from a worker
+    // thread, so we can't fully clean up the executor without having a deadlock
+    deadExecutors.emplace_back(thisExecutors.at(execIdx));
+    thisExecutors.erase(thisExecutors.begin() + execIdx);
 
     if (thisExecutors.empty()) {
+        faabric::util::getLogger()->trace("No remaining executors for {}",
+                                          funcStr);
+
         // Unregister if this was the last executor for that function
         bool isMaster = thisHost == msg.masterhost();
         if (!isMaster) {
@@ -651,14 +671,15 @@ void Scheduler::setThreadResult(const faabric::Message& msg,
 
 void Scheduler::setThreadResult(uint32_t msgId, int32_t returnValue)
 {
+    const auto& logger = faabric::util::getLogger();
+    logger->debug("Setting result for thread {} to {}", msgId, returnValue);
     threadResults[msgId].set_value(returnValue);
 }
 
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
-    const auto& logger = faabric::util::getLogger();
-
     if (threadResults.count(messageId) == 0) {
+        const auto& logger = faabric::util::getLogger();
         logger->error("Thread {} not registered on this host", messageId);
         throw std::runtime_error("Awaiting unregistered thread");
     }
