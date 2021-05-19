@@ -11,7 +11,7 @@ add_library(faabric_dist_tests_lib
     init.cpp
     DistTestExecutor.h
     DistTestExecutor.cpp
-    scheduler/thread_funcs.cpp
+    scheduler/functions.cpp
     )
 
 target_link_libraries(faabric_dist_tests_lib faabric_test_utils)

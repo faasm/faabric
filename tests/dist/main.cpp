@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
     tests::initDistTests();
 
     // Start everything up
-    logger->info("Starting executor pool in the background");
+    logger->info("Starting distributed test server on master");
     std::shared_ptr<ExecutorFactory> fac =
       std::make_shared<tests::DistTestExecutorFactory>();
     faabric::runner::FaabricMain m(fac);

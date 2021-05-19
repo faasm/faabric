@@ -2,6 +2,7 @@
 #include <catch.hpp>
 
 #include "fixtures.h"
+#include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -32,17 +33,11 @@ TEST_CASE_METHOD(DistTestsFixture,
                  "[threads]")
 {
     // Set up this host's resources
+    int nLocalSlots = 2;
+    int nThreads = 4;
     faabric::HostResources res;
-    res.set_slots(2);
+    res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);
-
-    // Set up hosts
-    REQUIRE(otherHosts.size() == 1);
-    std::string thisHost = conf.endpointHost;
-    std::string otherHost;
-    for (auto h : otherHosts) {
-        otherHost = h;
-    }
 
     // Set up the messages
     std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -57,22 +52,18 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Call the functions
     sch.callFunctions(req);
 
-    // First two should be executed on this host, the other two on the other
-    // host
-    for (int i = 0; i < req->messages().size(); i++) {
+    // Check threads executed on this host
+    for (int i = 0; i < nLocalSlots; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
-        sch.awaitThreadResult(m.id());
+        int res = sch.awaitThreadResult(m.id());
+        REQUIRE(res == 12 * m.id());
+    }
 
-        std::string expectedHost;
-        if (i < 2) {
-            expectedHost = thisHost;
-        } else {
-            expectedHost = otherHost;
-        }
-
-        std::string expected =
-          fmt::format("Thread {} executed on host {}", m.id(), expectedHost);
-        REQUIRE(m.outputdata() == expected);
+    // Check threads executed on the other host
+    for (int i = nLocalSlots; i < nThreads; i++) {
+        faabric::Message& m = req->mutable_messages()->at(i);
+        int res = sch.awaitThreadResult(m.id());
+        REQUIRE(res == 12 * m.id());
     }
 }
 }
