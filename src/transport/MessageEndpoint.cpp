@@ -176,4 +176,24 @@ int MessageEndpoint::getPort()
 {
     return port;
 }
+
+/* Send and Recv Message Endpoints */
+
+SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
+  : MessageEndpoint(hostIn, portIn)
+{}
+
+void SendMessageEndpoint::open(MessageContext& context)
+{
+    MessageEndpoint::open(context, SocketType::PUSH, false);
+}
+
+RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
+  : MessageEndpoint(ANY_HOST, portIn)
+{}
+
+void RecvMessageEndpoint::open(MessageContext& context)
+{
+    MessageEndpoint::open(context, SocketType::PULL, true);
+}
 }

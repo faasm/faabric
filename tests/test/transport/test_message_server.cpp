@@ -13,7 +13,7 @@ class DummyServer final : public MessageEndpointServer
 {
   public:
     DummyServer()
-      : MessageEndpointServer(thisHost, testPort)
+      : MessageEndpointServer(testPort)
       , messageCount(0)
     {}
 
@@ -61,7 +61,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     // Open the source endpoint client, don't bind
     auto& context = getGlobalMessageContext();
     MessageEndpointClient src(thisHost, testPort);
-    src.open(context, SocketType::PUSH, false);
+    src.open(context);
 
     // Send message: server expects header + body
     std::string header = "header";
@@ -96,9 +96,9 @@ TEST_CASE("Test send one-off response to client", "[transport]")
         // Open the source endpoint client, don't bind
         auto& context = getGlobalMessageContext();
         MessageEndpointClient cli(thisHost, testPort);
-        cli.open(context, SocketType::PUSH, false);
+        cli.open(context);
 
-        Message msg = cli.awaitResponse(thisHost, testPort + REPLY_PORT_OFFSET);
+        Message msg = cli.awaitResponse(testPort + REPLY_PORT_OFFSET);
         assert(msg.size() == expectedMsg.size());
         std::string actualMsg(msg.data(), msg.size());
         assert(actualMsg == expectedMsg);
@@ -130,7 +130,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
             // Prepare client
             auto& context = getGlobalMessageContext();
             MessageEndpointClient cli(thisHost, testPort);
-            cli.open(context, SocketType::PUSH, false);
+            cli.open(context);
 
             std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {

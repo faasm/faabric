@@ -18,7 +18,7 @@ namespace faabric::transport {
 class MessageEndpointServer
 {
   public:
-    MessageEndpointServer(const std::string& hostIn, int portIn);
+    MessageEndpointServer(int portIn);
 
     /* Start and stop the server
      *
@@ -40,7 +40,7 @@ class MessageEndpointServer
     virtual void stop();
 
   protected:
-    void recv(faabric::transport::MessageEndpoint& endpoint);
+    void recv(faabric::transport::RecvMessageEndpoint& endpoint);
 
     /* Template function to handle message reception
      *
@@ -63,7 +63,6 @@ class MessageEndpointServer
                       int returnPort);
 
   private:
-    const std::string host;
     const int port;
 
     std::thread servingThread;

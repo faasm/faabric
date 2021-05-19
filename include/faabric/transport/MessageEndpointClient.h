@@ -9,7 +9,7 @@ namespace faabric::transport {
  * Low-level and minimal message endpoint client to run in companion with
  * a background-running server.
  */
-class MessageEndpointClient : public faabric::transport::MessageEndpoint
+class MessageEndpointClient : public faabric::transport::SendMessageEndpoint
 {
   public:
     MessageEndpointClient(const std::string& host, int port);
@@ -20,6 +20,6 @@ class MessageEndpointClient : public faabric::transport::MessageEndpoint
      * the specified host:port pair. When pointed at a server, this method
      * allows for blocking communications.
      */
-    Message awaitResponse(const std::string& host, int port);
+    Message awaitResponse(int port);
 };
 }

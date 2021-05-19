@@ -8,8 +8,7 @@
 
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
-  : faabric::transport::MessageEndpointServer(DEFAULT_FUNCTION_CALL_HOST,
-                                              FUNCTION_CALL_PORT)
+  : faabric::transport::MessageEndpointServer(FUNCTION_CALL_PORT)
   , scheduler(getScheduler())
 {}
 

@@ -6,8 +6,7 @@
 
 namespace faabric::scheduler {
 SnapshotServer::SnapshotServer()
-  : faabric::transport::MessageEndpointServer(DEFAULT_SNAPSHOT_HOST,
-                                              SNAPSHOT_PORT)
+  : faabric::transport::MessageEndpointServer(SNAPSHOT_PORT)
 {}
 
 void SnapshotServer::doRecv(faabric::transport::Message& header,
@@ -30,8 +29,7 @@ void SnapshotServer::doRecv(faabric::transport::Message& header,
 
 void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
 {
-    // Persist message to ensure contents are not cleared
-    // Note that these are currently not free-d, see TODO in next function
+    // We assume the application to free the underlying message pointer
     msg.persist();
 
     const SnapshotPushRequest* r =
@@ -67,6 +65,5 @@ void SnapshotServer::recvDeleteSnapshot(faabric::transport::Message& msg)
 
     // Delete the registry entry
     reg.deleteSnapshot(r->key()->str());
-    // TODO - free the underlying resources
 }
 }

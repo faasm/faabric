@@ -12,6 +12,8 @@
 // Defined in libzmq/include/zmq.h
 #define ZMQ_ETERM ETERM
 
+#define ANY_HOST "0.0.0.0"
+
 namespace faabric::transport {
 enum class SocketType
 {
@@ -62,5 +64,23 @@ class MessageEndpoint
     const std::string host;
     const int port;
     std::thread::id tid;
+};
+
+/* Send and Recv Message Endpoints */
+
+class SendMessageEndpoint : public MessageEndpoint
+{
+  public:
+    SendMessageEndpoint(const std::string& hostIn, int portIn);
+
+    void open(MessageContext& context);
+};
+
+class RecvMessageEndpoint : public MessageEndpoint
+{
+  public:
+    RecvMessageEndpoint(int portIn);
+
+    void open(MessageContext& context);
 };
 }

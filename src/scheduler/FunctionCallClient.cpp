@@ -97,9 +97,7 @@ void clearMockRequests()
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
 {
-    this->open(faabric::transport::getGlobalMessageContext(),
-               faabric::transport::SocketType::PUSH,
-               false);
+    this->open(faabric::transport::getGlobalMessageContext());
 }
 
 void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
@@ -150,8 +148,7 @@ faabric::HostResources FunctionCallClient::getResources()
 
         // Receive message
         faabric::transport::Message msg =
-          awaitResponse(faabric::util::getSystemConfig().endpointHost,
-                        FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+          awaitResponse(FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
         // Deserialise message string
         if (!response.ParseFromArray(msg.data(), msg.size())) {
             throw std::runtime_error("Error deserialising message");

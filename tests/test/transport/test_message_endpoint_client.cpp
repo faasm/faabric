@@ -18,16 +18,16 @@ TEST_CASE("Test open/close one client", "[transport]")
     auto& context = getGlobalMessageContext();
 
     // Open an endpoint client, don't bind
-    MessageEndpointClient cli(thisHost, testPort);
-    REQUIRE_NOTHROW(cli.open(context, SocketType::PUSH, false));
+    MessageEndpoint cli(thisHost, testPort);
+    REQUIRE_NOTHROW(cli.open(context, SocketType::PULL, false));
 
     // Open another endpoint client, bind
-    MessageEndpointClient secondCli(thisHost, testPort);
+    MessageEndpoint secondCli(thisHost, testPort);
     REQUIRE_NOTHROW(secondCli.open(context, SocketType::PUSH, true));
 
     // Open a third endpoint, bind as well. Should fail: can't bind two clients
     // to the same address
-    MessageEndpointClient thirdCli(thisHost, testPort);
+    MessageEndpoint thirdCli(thisHost, testPort);
     REQUIRE_THROWS(thirdCli.open(context, SocketType::PUSH, true));
 
     // Close all endpoint clients
@@ -45,12 +45,12 @@ TEST_CASE("Test send/recv one message", "[transport]")
     auto& context = getGlobalMessageContext();
 
     // Open the source endpoint client, don't bind
-    MessageEndpointClient src(thisHost, testPort);
-    src.open(context, SocketType::PUSH, false);
+    SendMessageEndpoint src(thisHost, testPort);
+    src.open(context);
 
     // Open the destination endpoint client, bind
-    MessageEndpointClient dst(thisHost, testPort);
-    dst.open(context, SocketType::PULL, true);
+    RecvMessageEndpoint dst(testPort);
+    dst.open(context);
 
     // Send message
     std::string expectedMsg = "Hello world!";
@@ -84,7 +84,7 @@ TEST_CASE("Test await response", "[transport]")
     std::thread senderThread([&context, expectedMsg, expectedResponse] {
         // Open the source endpoint client, don't bind
         MessageEndpointClient src(thisHost, testPort);
-        src.open(context, SocketType::PUSH, false);
+        src.open(context);
 
         // Send message and wait for response
         uint8_t msg[expectedMsg.size()];
@@ -92,7 +92,7 @@ TEST_CASE("Test await response", "[transport]")
         src.send(msg, expectedMsg.size());
 
         // Block waiting for a response
-        Message recvMsg = src.awaitResponse(thisHost, testReplyPort);
+        Message recvMsg = src.awaitResponse(testReplyPort);
         assert(recvMsg.size() == expectedResponse.size());
         std::string actualResponse(recvMsg.data(), recvMsg.size());
         assert(actualResponse == expectedResponse);
@@ -101,16 +101,16 @@ TEST_CASE("Test await response", "[transport]")
     });
 
     // Receive message
-    MessageEndpointClient dst(thisHost, testPort);
-    dst.open(context, SocketType::PULL, true);
+    RecvMessageEndpoint dst(testPort);
+    dst.open(context);
     Message recvMsg = dst.recv();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
 
     // Send response, open a new endpoint for it
-    MessageEndpointClient dstResponse(thisHost, testReplyPort);
-    dstResponse.open(context, SocketType::PUSH, false);
+    SendMessageEndpoint dstResponse(thisHost, testReplyPort);
+    dstResponse.open(context);
     uint8_t msg[expectedResponse.size()];
     memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
     dstResponse.send(msg, expectedResponse.size());
@@ -135,8 +135,8 @@ TEST_CASE("Test send/recv many messages", "[transport]")
 
     std::thread senderThread([&context, numMessages, baseMsg] {
         // Open the source endpoint client, don't bind
-        MessageEndpointClient src(thisHost, testPort);
-        src.open(context, SocketType::PUSH, false);
+        SendMessageEndpoint src(thisHost, testPort);
+        src.open(context);
         for (int i = 0; i < numMessages; i++) {
             std::string expectedMsg = baseMsg + std::to_string(i);
             uint8_t msg[expectedMsg.size()];
@@ -148,8 +148,8 @@ TEST_CASE("Test send/recv many messages", "[transport]")
     });
 
     // Receive messages
-    MessageEndpointClient dst(thisHost, testPort);
-    dst.open(context, SocketType::PULL, true);
+    RecvMessageEndpoint dst(testPort);
+    dst.open(context);
     for (int i = 0; i < numMessages; i++) {
         Message recvMsg = dst.recv();
         // Check just a subset of the messages
@@ -185,8 +185,8 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
         senderThreads.emplace_back(
           std::thread([&context, numMessages, expectedMsg] {
               // Open the source endpoint client, don't bind
-              MessageEndpointClient src(thisHost, testPort);
-              src.open(context, SocketType::PUSH, false);
+              SendMessageEndpoint src(thisHost, testPort);
+              src.open(context);
               for (int i = 0; i < numMessages; i++) {
                   uint8_t msg[expectedMsg.size()];
                   memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
@@ -196,15 +196,15 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
               // Give the receiver time to ingest all messages. Otherwise,
               // closing the endpoint will remove all outstanding messages. This
               // is because we, by default, set the LINGER period to 0.
-              usleep(1000 * 200);
+              // usleep(1000 * 200);
 
               src.close();
           }));
     }
 
     // Receive messages
-    MessageEndpointClient dst(thisHost, testPort);
-    dst.open(context, SocketType::PULL, true);
+    RecvMessageEndpoint dst(testPort);
+    dst.open(context);
     for (int i = 0; i < numSenders * numMessages; i++) {
         Message recvMsg = dst.recv();
         // Check just a subset of the messages

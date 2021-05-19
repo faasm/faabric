@@ -1,10 +1,8 @@
 #include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::transport {
-MessageEndpointServer::MessageEndpointServer(const std::string& hostIn,
-                                             int portIn)
-  : host(hostIn)
-  , port(portIn)
+MessageEndpointServer::MessageEndpointServer(int portIn)
+  : port(portIn)
 {}
 
 void MessageEndpointServer::start()
@@ -16,11 +14,10 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
     // Start serving thread in background
     this->servingThread = std::thread([this, &context] {
-        MessageEndpoint serverEndpoint(this->host, this->port);
+        RecvMessageEndpoint serverEndpoint(this->port);
 
         // Open message endpoint, and bind
-        serverEndpoint.open(
-          context, faabric::transport::SocketType::PULL, true);
+        serverEndpoint.open(context);
         assert(serverEndpoint.socket != nullptr);
 
         // Loop until context is terminated (will throw ETERM)
@@ -59,7 +56,7 @@ void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
     }
 }
 
-void MessageEndpointServer::recv(MessageEndpoint& endpoint)
+void MessageEndpointServer::recv(RecvMessageEndpoint& endpoint)
 {
     assert(endpoint.socket != nullptr);
 
@@ -87,11 +84,8 @@ void MessageEndpointServer::sendResponse(uint8_t* serialisedMsg,
                                          int returnPort)
 {
     // Open the endpoint socket, server connects (not bind) to remote address
-    faabric::transport::MessageEndpoint endpoint(
-      returnHost, returnPort + REPLY_PORT_OFFSET);
-    endpoint.open(faabric::transport::getGlobalMessageContext(),
-                  faabric::transport::SocketType::PUSH,
-                  false);
+    SendMessageEndpoint endpoint(returnHost, returnPort + REPLY_PORT_OFFSET);
+    endpoint.open(faabric::transport::getGlobalMessageContext());
     endpoint.send(serialisedMsg, size);
     endpoint.close();
 }

@@ -15,9 +15,7 @@ StateClient::StateClient(const std::string& userIn,
   , host(hostIn)
   , reg(state::getInMemoryStateRegistry())
 {
-    this->open(faabric::transport::getGlobalMessageContext(),
-               faabric::transport::SocketType::PUSH,
-               false);
+    this->open(faabric::transport::getGlobalMessageContext());
 }
 
 void StateClient::sendHeader(faabric::state::StateCalls call)
@@ -30,9 +28,7 @@ faabric::transport::Message StateClient::awaitResponse()
 {
     // Call the superclass implementation
     faabric::util::getLogger()->warn("Client awaiting for response");
-    return MessageEndpointClient::awaitResponse(
-      faabric::util::getSystemConfig().endpointHost,
-      STATE_PORT + REPLY_PORT_OFFSET);
+    return MessageEndpointClient::awaitResponse(STATE_PORT + REPLY_PORT_OFFSET);
 }
 
 void StateClient::sendStateRequest(faabric::state::StateCalls header,
