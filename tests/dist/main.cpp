@@ -4,6 +4,8 @@
 #include "faabric_utils.h"
 #include <catch.hpp>
 
+#include "init.h"
+
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -28,19 +30,26 @@ CATCH_REGISTER_LISTENER(LogListener)
 
 int main(int argc, char* argv[])
 {
-    // We have to run our own server to receive calls from the other hosts
     const auto& logger = faabric::util::getLogger();
 
+    // Set up the distributed tests
+    tests::initDistTests();
+
+    // Start everything up
     logger->info("Starting executor pool in the background");
     std::shared_ptr<ExecutorFactory> fac =
       std::make_shared<tests::DistTestExecutorFactory>();
     faabric::runner::FaabricMain m(fac);
     m.startBackground();
 
-    int result = Catch::Session().run(argc, argv);
+    // Wait for things to start
+    usleep(3000 * 1000);
 
+    // Run the tests
+    int result = Catch::Session().run(argc, argv);
     fflush(stdout);
 
+    // Shut down
     logger->info("Shutting down");
     m.shutdown();
 

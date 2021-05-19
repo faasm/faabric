@@ -1,8 +1,8 @@
 #include "faabric_utils.h"
 #include <catch.hpp>
 
-#include "../DistTestExecutor.h"
-#include "server.h"
+#include "DistTestExecutor.h"
+#include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/util/config.h>
@@ -17,7 +17,7 @@ int handleSimpleThread(int threadPoolIdx,
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
     const faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     std::string output =
-      fmt::format("Executed thread on host {}", conf.endpointHost);
+      fmt::format("Thread {} executed on host {}", msg.id(), conf.endpointHost);
 
     msg.set_outputdata(output);
 

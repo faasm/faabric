@@ -1,5 +1,5 @@
-#include "server.h"
-#include "../DistTestExecutor.h"
+#include "init.h"
+#include "DistTestExecutor.h"
 
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
@@ -12,8 +12,7 @@ int main()
 {
     const auto& logger = faabric::util::getLogger();
 
-    logger->info("Registering distributed test server functions");
-    tests::registerThreadFunctions();
+    tests::initDistTests();
 
     logger->info("Starting executor pool in the background");
     std::shared_ptr<ExecutorFactory> fac =
