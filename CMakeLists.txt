@@ -112,7 +112,9 @@ target_include_directories(faabric PUBLIC
 )
 
 # Tests - only include in static builds _and_ when requested
-if(FAABRIC_BUILD_TESTS AND BUILD_SHARED_LIBS=OFF)
+if(BUILD_SHARED_LIBS)
+    message(STATUS "Skipping test build with shared libs")
+elseif(FAABRIC_BUILD_TESTS)
     add_subdirectory(tests/dist)
     add_subdirectory(tests/test)
     add_subdirectory(tests/utils)
