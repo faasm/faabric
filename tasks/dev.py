@@ -14,7 +14,7 @@ from invoke import task
 
 
 @task
-def cmake(ctx, clean=False, shared=False):
+def cmake(ctx, clean=False, shared=False, build="Debug"):
     """
     Configures the build
     """
@@ -28,11 +28,15 @@ def cmake(ctx, clean=False, shared=False):
     if not exists(build_dir):
         makedirs(build_dir)
 
+    build_types = ["Release", "Debug"]
+    if build not in build_types:
+        raise RuntimeError("Expected build to be in {}".format(build_types))
+
     cmd = [
         "cmake",
         "-GNinja",
         "-DCMAKE_INSTALL_PREFIX={}".format(FAABRIC_INSTALL_PREFIX),
-        "-DCMAKE_BUILD_TYPE=Debug",
+        "-DCMAKE_BUILD_TYPE={}".format(build),
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
         "-DCMAKE_C_COMPILER=/usr/bin/clang-10",

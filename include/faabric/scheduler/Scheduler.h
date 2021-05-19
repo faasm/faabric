@@ -68,13 +68,13 @@ class Executor
 
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
+    std::vector<std::shared_ptr<std::thread>> deadThreads;
+
     std::vector<faabric::util::Queue<
       std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
       threadQueues;
 
     void threadPoolThread(int threadPoolIdx);
-
-    void shutdownThreadPoolThread(int threadPoolIdx);
 };
 
 class Scheduler
@@ -169,6 +169,8 @@ class Scheduler
     std::string thisHost;
 
     faabric::util::SystemConfig& conf;
+
+    std::vector<std::shared_ptr<Executor>> deadExecutors;
 
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
       executors;
