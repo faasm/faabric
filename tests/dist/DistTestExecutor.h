@@ -13,8 +13,8 @@ typedef int (*ExecutorFunction)(
   std::shared_ptr<faabric::BatchExecuteRequest> req);
 
 void registerDistTestExecutorCallback(const char* user,
-                                  const char* funcName,
-                                  ExecutorFunction func);
+                                      const char* funcName,
+                                      ExecutorFunction func);
 
 class DistTestExecutor final : public faabric::scheduler::Executor
 {
