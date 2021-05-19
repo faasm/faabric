@@ -9,6 +9,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
@@ -90,6 +91,7 @@ class TestExecutor final : public Executor
             for (int i = 0; i < chainedReq->messages_size(); i++) {
                 uint32_t mid = chainedReq->messages().at(i).id();
                 int threadRes = sch.awaitThreadResult(mid);
+                UNUSED(threadRes);
                 assert(threadRes == mid / 100);
             }
 
@@ -621,4 +623,29 @@ TEST_CASE("Test claiming and releasing executor", "[executor]")
     REQUIRE(!execB->tryClaim());
 }
 
+TEST_CASE("Test executor timing out waiting", "[executor]")
+{
+    cleanFaabric();
+
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("foo", "bar", 1);
+    faabric::Message& msg = req->mutable_messages()->at(0);
+
+    // Set a very short bound timeout so we can check it works
+    auto& conf = faabric::util::getSystemConfig();
+    conf.boundTimeout = 300;
+
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.callFunctions(req);
+
+    REQUIRE(sch.getFunctionExecutorCount(msg) == 1);
+
+    usleep((conf.boundTimeout + 500) * 1000);
+
+    REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
+
+    conf.reset();
+
+    sch.shutdown();
+}
 }

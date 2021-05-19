@@ -109,10 +109,6 @@ std::string messageToJson(const faabric::Message& msg)
         d.AddMember("python", msg.ispython(), a);
     }
 
-    if (msg.istypescript()) {
-        d.AddMember("typescript", msg.istypescript(), a);
-    }
-
     if (msg.isstatusrequest()) {
         d.AddMember("status", msg.isstatusrequest(), a);
     }
@@ -314,7 +310,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
 
     msg.set_isasync(getBoolFromJson(d, "async", false));
     msg.set_ispython(getBoolFromJson(d, "python", false));
-    msg.set_istypescript(getBoolFromJson(d, "typescript", false));
     msg.set_isstatusrequest(getBoolFromJson(d, "status", false));
     msg.set_isexecgraphrequest(getBoolFromJson(d, "exec_graph", false));
 

@@ -29,8 +29,9 @@ jobs:
         run: git fetch origin ${GITHUB_REF}:ci-branch
       - name: "Check out branch"
         run: git checkout --force ci-branch
+      # Note - here we build a release build to be the same as the container
       - name: "Run cmake"
-        run: inv dev.cmake
+        run: inv dev.cmake --build=Release
       - name: "Rerun build to ensure code is up to date"
         run: inv dev.cc faabric_tests
       # --- Formatting checks ---
@@ -67,9 +68,9 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      # --- Tests build ---
-      - name: "Run cmake static"
-        run: inv dev.cmake
+      # --- Tests build - need a debug build for actually running tests ---
+      - name: "Run cmake for tests"
+        run: inv dev.cmake --build=Debug
       - name: "Build tests"
         run: inv dev.cc faabric_tests
       # --- Tests ---
@@ -113,7 +114,7 @@ jobs:
         run: git checkout --force ci-branch
       # --- Examples ---
       - name: "Run cmake shared"
-        run: inv dev.cmake --shared
+        run: inv dev.cmake --shared --build=Release
       - name: "Build Faabric shared library"
         run: inv dev.cc faabric --shared
       - name: "Install Faabric shared library"

@@ -25,12 +25,12 @@ WORKDIR /code/faabric
 RUN pip3 install -r requirements.txt
 
 # Static build
-RUN inv dev.cmake
+RUN inv dev.cmake --build=Release
 RUN inv dev.cc faabric
 RUN inv dev.cc faabric_tests
 
 # Shared build
-RUN inv dev.cmake --shared
+RUN inv dev.cmake --shared --build=Release
 RUN inv dev.cc faabric --shared
 RUN inv dev.install faabric --shared
 
