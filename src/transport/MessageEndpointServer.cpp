@@ -87,7 +87,7 @@ void MessageEndpointServer::sendResponse(uint8_t* serialisedMsg,
                                          int returnPort)
 {
     // Open the endpoint socket, server connects (not bind) to remote address
-    faabric::transport::MessageEndpointClient endpoint(
+    faabric::transport::MessageEndpoint endpoint(
       returnHost, returnPort + REPLY_PORT_OFFSET);
     endpoint.open(faabric::transport::getGlobalMessageContext(),
                   faabric::transport::SocketType::PUSH,
