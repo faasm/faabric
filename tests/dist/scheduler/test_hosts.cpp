@@ -4,7 +4,7 @@
 #include <faabric/scheduler/Scheduler.h>
 
 namespace tests {
-TEST_CASE("Test available hosts", "[scheduler][dist]")
+TEST_CASE("Test available hosts", "[scheduler]")
 {
     auto& sch = faabric::scheduler::getScheduler();
     sch.addHostToGlobalSet();

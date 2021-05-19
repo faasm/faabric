@@ -1,4 +1,5 @@
-#include "DummyExecutorFactory.h"
+#include "server.h"
+#include "../DistTestExecutor.h"
 
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
@@ -11,9 +12,12 @@ int main()
 {
     const auto& logger = faabric::util::getLogger();
 
+    logger->info("Registering distributed test server functions");
+    tests::registerThreadFunctions();
+
     logger->info("Starting executor pool in the background");
     std::shared_ptr<ExecutorFactory> fac =
-      std::make_shared<DummyExecutorFactory>();
+      std::make_shared<tests::DistTestExecutorFactory>();
     faabric::runner::FaabricMain m(fac);
     m.startBackground();
 
