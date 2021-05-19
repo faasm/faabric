@@ -629,7 +629,7 @@ TEST_CASE("Test executor timing out waiting", "[executor]")
 
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("foo", "bar", 1);
-    faabric::Message &msg = req->mutable_messages()->at(0);
+    faabric::Message& msg = req->mutable_messages()->at(0);
 
     // Set a very short bound timeout so we can check it works
     auto& conf = faabric::util::getSystemConfig();
