@@ -27,9 +27,6 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // costly checks when running a Release build.
     assert(tid == std::this_thread::get_id());
 
-    // TODO -remove
-    faabric::util::getLogger()->warn(fmt::format("Opening socket: {}", id));
-
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
 
@@ -195,6 +192,10 @@ SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
 
 void SendMessageEndpoint::open(MessageContext& context)
 {
+    // TODO -remove
+    faabric::util::getLogger()->warn(fmt::format("Opening socket: {} (SEND {}:{})",
+                id, host, port));
+
     MessageEndpoint::open(context, SocketType::PUSH, false);
 }
 
@@ -204,6 +205,10 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
 
 void RecvMessageEndpoint::open(MessageContext& context)
 {
+    // TODO -remove
+    faabric::util::getLogger()->warn(fmt::format("Opening socket: {} (RECV {}:{})",
+                id, ANY_HOST, port));
+
     MessageEndpoint::open(context, SocketType::PULL, true);
 }
 }
