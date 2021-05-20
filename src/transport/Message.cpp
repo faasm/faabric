@@ -22,7 +22,6 @@ Message::Message(int sizeIn)
 
 Message::~Message()
 {
-    faabric::util::getLogger()->warn("deleting message!");
     if (!_persist) {
         free(reinterpret_cast<void*>(msg));
     }

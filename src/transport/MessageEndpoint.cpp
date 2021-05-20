@@ -2,6 +2,25 @@
 
 #include <faabric/util/gids.h>
 
+/* Paste this on the file you want to debug. */
+#include <stdio.h>
+#include <execinfo.h>
+static void print_trace(void) {
+    char **strings;
+    size_t i, size;
+    enum Constexpr { MAX_SIZE = 1024 };
+    void *array[MAX_SIZE];
+    size = backtrace(array, MAX_SIZE);
+    strings = backtrace_symbols(array, size);
+    auto logger = faabric::util::getLogger();
+    logger->warn("---------- BACKTRACE ----------");
+    for (i = 0; i < size; i++) {
+        logger->warn(strings[i]);
+    }
+    logger->warn("-------------------------------");
+    free(strings);
+}
+
 namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
@@ -15,6 +34,7 @@ MessageEndpoint::~MessageEndpoint()
     if (this->socket != nullptr) {
         faabric::util::getLogger()->warn(
           "Destroying an open message endpoint!");
+        print_trace();
         this->close();
     }
 }
