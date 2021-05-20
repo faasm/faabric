@@ -1,10 +1,13 @@
 #include <faabric/transport/MessageEndpoint.h>
 
+#include <faabric/util/gids.h>
+
 namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
   , tid(std::this_thread::get_id())
+  , id(faabric::util::generateGid()) // REMOVE
 {}
 
 MessageEndpoint::~MessageEndpoint()
@@ -23,6 +26,9 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // Check we are opening from the same thread. We assert not to incur in
     // costly checks when running a Release build.
     assert(tid == std::this_thread::get_id());
+
+    // TODO -remove
+    faabric::util::getLogger()->warn(fmt::format("Opening socket: {}", id));
 
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
@@ -157,6 +163,10 @@ Message MessageEndpoint::recv(int size)
 void MessageEndpoint::close()
 {
     if (this->socket != nullptr) {
+
+        // TODO -remove
+        faabric::util::getLogger()->warn(fmt::format("Closing socket: {}", id));
+
         if (tid != std::this_thread::get_id()) {
             faabric::util::getLogger()->warn(
               "Closing socket from a different thread");

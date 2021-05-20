@@ -64,6 +64,9 @@ class MessageEndpoint
     const std::string host;
     const int port;
     std::thread::id tid;
+
+    // TODO -remove
+    int id;
 };
 
 /* Send and Recv Message Endpoints */
