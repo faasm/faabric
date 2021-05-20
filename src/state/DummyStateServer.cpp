@@ -6,7 +6,7 @@
 
 namespace faabric::state {
 DummyStateServer::DummyStateServer()
-  : remoteState(LOCALHOST)
+  : remoteState(faabric::util::getSystemConfig().endpointHost)
   , stateServer(remoteState)
 {}
 
