@@ -49,38 +49,34 @@ void DummyStateServer::start()
     // To do this we run the server in a separate thread, forcing it to
     // have a localhost IP, then the main thread is the "client" with a
     // junk IP.
+    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
-    serverThread = std::thread([this] {
-        const std::shared_ptr<spdlog::logger>& logger =
-          faabric::util::getLogger();
+    // Override the host endpoint for the server thread. Must be localhost
+    // faabric::util::getSystemConfig().endpointHost = LOCALHOST;
 
-        // Override the host endpoint for the server thread. Must be localhost
-        faabric::util::getSystemConfig().endpointHost = LOCALHOST;
+    // Master the dummy data in this thread
+    if (!dummyData.empty()) {
+        const std::shared_ptr<state::StateKeyValue>& kv =
+          remoteState.getKV(dummyUser, dummyKey, dummyData.size());
+        std::shared_ptr<InMemoryStateKeyValue> inMemKv =
+          std::static_pointer_cast<InMemoryStateKeyValue>(kv);
 
-        // Master the dummy data in this thread
-        if (!dummyData.empty()) {
-            const std::shared_ptr<state::StateKeyValue>& kv =
-              remoteState.getKV(dummyUser, dummyKey, dummyData.size());
-            std::shared_ptr<InMemoryStateKeyValue> inMemKv =
-              std::static_pointer_cast<InMemoryStateKeyValue>(kv);
-
-            // Check this kv "thinks" it's master
-            if (!inMemKv->isMaster()) {
-                logger->error("Dummy state server not master for data");
-                throw std::runtime_error("Remote state server failed");
-            }
-
-            // Set the data
-            kv->set(dummyData.data());
-            logger->debug(
-              "Finished setting master for test {}/{}", kv->user, kv->key);
+        // Check this kv "thinks" it's master
+        if (!inMemKv->isMaster()) {
+            logger->error("Dummy state server not master for data");
+            throw std::runtime_error("Remote state server failed");
         }
 
-        // Start the state server in this thread
-        // (as it's already in a background thread)
-        logger->debug("Running state server");
-        stateServer.start(false);
-    });
+        // Set the data
+        kv->set(dummyData.data());
+        logger->debug(
+          "Finished setting master for test {}/{}", kv->user, kv->key);
+    }
+
+    // Start the state server
+    // Note - by default the state server runs in a background thread
+    logger->debug("Running state server");
+    stateServer.start();
 
     // Give it time to start
     usleep(1000 * 1000);
@@ -89,9 +85,5 @@ void DummyStateServer::start()
 void DummyStateServer::stop()
 {
     stateServer.stop();
-
-    if (serverThread.joinable()) {
-        serverThread.join();
-    }
 }
 }

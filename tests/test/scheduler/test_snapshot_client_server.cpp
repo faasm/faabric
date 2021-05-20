@@ -11,12 +11,18 @@
 
 namespace tests {
 
+static void tearDown(faabric::scheduler::SnapshotClient& cli,
+                     faabric::scheduler::SnapshotServer& server)
+{
+    cli.close();
+    server.stop();
+}
+
 TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
 {
     cleanFaabric();
 
     // Start the server
-    ServerContext serverContext;
     scheduler::SnapshotServer server;
     server.start();
     usleep(1000 * 100);
@@ -46,6 +52,7 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     scheduler::SnapshotClient cli(LOCALHOST);
     cli.pushSnapshot(snapKeyA, snapA);
     cli.pushSnapshot(snapKeyB, snapB);
+    usleep(1000 * 100);
 
     // Check snapshots created in regsitry
     REQUIRE(registry.getSnapshotCount() == 2);
@@ -61,7 +68,6 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
 
-    // Stop the server
-    server.stop();
+    tearDown(cli, server);
 }
 }

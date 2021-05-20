@@ -2,6 +2,7 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -162,6 +163,8 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    void closeFunctionCallClients();
+
   private:
     std::string thisHost;
 
@@ -175,6 +178,11 @@ class Scheduler
     std::shared_mutex mx;
 
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
+
+    std::unordered_map<std::string, faabric::scheduler::FunctionCallClient>
+      functionCallClients;
+    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+      const std::string& otherHost);
 
     faabric::HostResources thisHostResources;
     std::set<std::string> availableHostsCache;

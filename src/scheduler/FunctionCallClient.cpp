@@ -1,10 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-
-#include <grpcpp/create_channel.h>
-#include <grpcpp/security/credentials.h>
-
-#include <faabric/rpc/macros.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
@@ -15,7 +11,7 @@ namespace faabric::scheduler {
 // -----------------------------------
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
-static std::vector<std::pair<std::string, faabric::Message>> flushCalls;
+static std::vector<std::pair<std::string, faabric::ResponseRequest>> flushCalls;
 
 static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
@@ -23,7 +19,7 @@ static std::vector<
 
 static std::vector<std::pair<std::string, faabric::MPIMessage>> mpiMessages;
 
-static std::vector<std::pair<std::string, faabric::ResourceRequest>>
+static std::vector<std::pair<std::string, faabric::ResponseRequest>>
   resourceRequests;
 
 static std::unordered_map<std::string,
@@ -41,7 +37,7 @@ std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
     return functionCalls;
 }
 
-std::vector<std::pair<std::string, faabric::Message>> getFlushCalls()
+std::vector<std::pair<std::string, faabric::ResponseRequest>> getFlushCalls()
 {
     return flushCalls;
 }
@@ -58,7 +54,7 @@ std::vector<std::pair<std::string, faabric::MPIMessage>> getMPIMessages()
     return mpiMessages;
 }
 
-std::vector<std::pair<std::string, faabric::ResourceRequest>>
+std::vector<std::pair<std::string, faabric::ResponseRequest>>
 getResourceRequests()
 {
     return resourceRequests;
@@ -96,24 +92,30 @@ void clearMockRequests()
 }
 
 // -----------------------------------
-// gRPC client
+// Message Client
 // -----------------------------------
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : host(hostIn)
-  , channel(grpc::CreateChannel(host + ":" + std::to_string(FUNCTION_CALL_PORT),
-                                grpc::InsecureChannelCredentials()))
-  , stub(faabric::FunctionRPCService::NewStub(channel))
-{}
+  : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
+{
+    this->open(faabric::transport::getGlobalMessageContext());
+}
+
+void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
+{
+    uint8_t header = static_cast<uint8_t>(call);
+    send(&header, sizeof(header), true);
+}
 
 void FunctionCallClient::sendFlush()
 {
-    faabric::Message call;
+    faabric::ResponseRequest call;
     if (faabric::util::isMockMode()) {
         flushCalls.emplace_back(host, call);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("function_flush", stub->Flush(&context, call, &response));
+        // Prepare the message body
+        call.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::Flush, call);
     }
 }
 
@@ -123,29 +125,34 @@ void FunctionCallClient::sendMPIMessage(
     if (faabric::util::isMockMode()) {
         mpiMessages.emplace_back(host, *msg);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("mpi_message", stub->MPICall(&context, *msg, &response));
+        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::MpiMessage, msg);
     }
 }
 
-faabric::HostResources FunctionCallClient::getResources(
-  const faabric::ResourceRequest& req)
+faabric::HostResources FunctionCallClient::getResources()
 {
+    faabric::ResponseRequest request;
     faabric::HostResources response;
-
     if (faabric::util::isMockMode()) {
         // Register the request
-        resourceRequests.emplace_back(host, req);
+        resourceRequests.emplace_back(host, request);
 
         // See if we have a queued response
         if (queuedResourceResponses[host].size() > 0) {
             response = queuedResourceResponses[host].dequeue();
         }
     } else {
-        ClientContext context;
-        CHECK_RPC("get_resources",
-                  stub->GetResources(&context, req, &response));
+        request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::GetResources, request);
+
+        // Receive message
+        faabric::transport::Message msg =
+          awaitResponse(FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+        // Deserialise message string
+        if (!response.ParseFromArray(msg.data(), msg.size())) {
+            throw std::runtime_error("Error deserialising message");
+        }
     }
 
     return response;
@@ -157,10 +164,8 @@ void FunctionCallClient::executeFunctions(
     if (faabric::util::isMockMode()) {
         batchMessages.emplace_back(host, req);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("exec_funcs",
-                  stub->ExecuteFunctions(&context, *req, &response));
+        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::ExecuteFunctions,
+                         req);
     }
 }
 
@@ -169,9 +174,7 @@ void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
     if (faabric::util::isMockMode()) {
         unregisterRequests.emplace_back(host, req);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("unregister", stub->Unregister(&context, req, &response));
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::Unregister, req);
     }
 }
 
@@ -181,10 +184,7 @@ void FunctionCallClient::setThreadResult(
     if (faabric::util::isMockMode()) {
         threadResults.emplace_back(host, req);
     } else {
-        ClientContext context;
-        faabric::FunctionStatusResponse response;
-        CHECK_RPC("thread_result",
-                  stub->SetThreadResult(&context, req, &response));
+        SEND_MESSAGE(faabric::scheduler::FunctionCalls::SetThreadResult, req);
     }
 }
 }

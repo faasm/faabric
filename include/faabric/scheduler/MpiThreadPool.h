@@ -11,6 +11,8 @@
 #include <faabric/util/exception.h>
 #include <faabric/util/queue.h>
 
+#define QUEUE_SHUTDOWN -1
+
 namespace faabric::scheduler {
 typedef std::tuple<int, std::function<void(void)>, std::promise<void>>
   ReqQueueType;
@@ -22,6 +24,8 @@ class MpiAsyncThreadPool
     explicit MpiAsyncThreadPool(int nThreads);
 
     ~MpiAsyncThreadPool();
+
+    int size;
 
     std::shared_ptr<MpiReqQueue> getMpiReqQueue();
 

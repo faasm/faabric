@@ -3,9 +3,12 @@
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/state/StateKeyValue.h>
+
+#include <atomic>
 #include <thread>
 
 namespace faabric::scheduler {
@@ -43,6 +46,8 @@ class MpiWorld
     int getSize();
 
     void destroy();
+
+    void closeFunctionCallClients();
 
     void enqueueMessage(faabric::MPIMessage& msg);
 
@@ -213,6 +218,7 @@ class MpiWorld
     faabric::util::TimePoint creationTime;
 
     std::shared_mutex worldMutex;
+    std::atomic_flag isDestroyed = false;
 
     std::string user;
     std::string function;
@@ -224,7 +230,9 @@ class MpiWorld
 
     std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
       localQueueMap;
+
     std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
+    int getMpiThreadPoolSize();
 
     std::vector<int> cartProcsPerDim;
 
@@ -232,10 +240,13 @@ class MpiWorld
 
     std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
 
-    int getMpiThreadPoolSize();
+    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+      const std::string& otherHost);
 
     void checkRankOnThisHost(int rank);
 
     void pushToState();
+
+    void closeThreadLocalClients();
 };
 }

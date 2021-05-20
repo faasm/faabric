@@ -6,6 +6,22 @@
 #include <string>
 
 namespace faabric::state {
+
+// State client-server API
+enum StateCalls
+{
+    NoStateCall = 0,
+    Pull = 1,
+    Push = 2,
+    Size = 3,
+    Append = 4,
+    ClearAppended = 5,
+    PullAppended = 6,
+    Lock = 7,
+    Unlock = 8,
+    Delete = 9,
+};
+
 class State
 {
   public:

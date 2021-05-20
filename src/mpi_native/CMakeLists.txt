@@ -29,10 +29,17 @@ set_target_properties(faabricmpi_native
     PROPERTIES PUBLIC_HEADER "${MPI_NATIVE_HEADERS}"
 )
 
+target_include_directories(faabricmpi_native
+    PUBLIC /build/faabric/install/include
+    )
+
+set(FAABRIC_LIB_DIR "/build/faabric/install/lib")
 target_link_libraries(faabricmpi_native 
     faabric
     faabricmpi
-    pistache
+    ${FAABRIC_LIB_DIR}/libpistache.so
+    ${FAABRIC_LIB_DIR}/libprotobuf.so
+    ${FAABRIC_LIB_DIR}/libzmq.so
 )
 
 install(TARGETS faabricmpi_native

@@ -1,122 +1,116 @@
 #include <faabric/scheduler/FunctionCallServer.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
-#include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
-#include <faabric/rpc/macros.h>
-#include <grpcpp/grpcpp.h>
-
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
-  : RPCServer(DEFAULT_RPC_HOST, FUNCTION_CALL_PORT)
+  : faabric::transport::MessageEndpointServer(FUNCTION_CALL_PORT)
+  , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doStart(const std::string& serverAddr)
+void FunctionCallServer::stop()
 {
-    // Build the server
-    ServerBuilder builder;
-    builder.AddListeningPort(serverAddr, InsecureServerCredentials());
-    builder.RegisterService(this);
+    // Close the dangling scheduler endpoints
+    faabric::scheduler::getScheduler().closeFunctionCallClients();
 
-    // Start it
-    server = builder.BuildAndStart();
-    faabric::util::getLogger()->info("Function call server listening on {}",
-                                     serverAddr);
-
-    server->Wait();
+    // Call the parent stop
+    MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
 }
 
-Status FunctionCallServer::Flush(ServerContext* context,
-                                 const faabric::Message* request,
-                                 faabric::FunctionStatusResponse* response)
+void FunctionCallServer::doRecv(faabric::transport::Message& header,
+                                faabric::transport::Message& body)
 {
-    auto logger = faabric::util::getLogger();
+    assert(header.size() == sizeof(uint8_t));
+    uint8_t call = static_cast<uint8_t>(*header.data());
+    switch (call) {
+        case faabric::scheduler::FunctionCalls::MpiMessage:
+            this->recvMpiMessage(body);
+            break;
+        case faabric::scheduler::FunctionCalls::Flush:
+            this->recvFlush(body);
+            break;
+        case faabric::scheduler::FunctionCalls::ExecuteFunctions:
+            this->recvExecuteFunctions(body);
+            break;
+        case faabric::scheduler::FunctionCalls::Unregister:
+            this->recvUnregister(body);
+            break;
+        case faabric::scheduler::FunctionCalls::GetResources:
+            this->recvGetResources(body);
+            break;
+        case faabric::scheduler::FunctionCalls::SetThreadResult:
+            this->recvSetThreadResult(body);
+            break;
+        default:
+            throw std::runtime_error(
+              fmt::format("Unrecognized call header: {}", call));
+    }
+}
+
+void FunctionCallServer::recvMpiMessage(faabric::transport::Message& body)
+{
+    PARSE_MSG(faabric::MPIMessage, body.data(), body.size())
+
+    MpiWorldRegistry& registry = getMpiWorldRegistry();
+    MpiWorld& world = registry.getWorld(msg.worldid());
+    world.enqueueMessage(msg);
+}
+
+void FunctionCallServer::recvFlush(faabric::transport::Message& body)
+{
+    PARSE_MSG(faabric::ResponseRequest, body.data(), body.size());
 
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
 
     // Clear the scheduler
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.flushLocally();
+    scheduler.flushLocally();
 
     // Reset the scheduler
-    sch.reset();
-
-    return Status::OK;
+    scheduler.reset();
 }
 
-Status FunctionCallServer::MPICall(ServerContext* context,
-                                   const faabric::MPIMessage* request,
-                                   faabric::FunctionStatusResponse* response)
+void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message& body)
 {
-
-    // TODO - avoid copying message
-    faabric::MPIMessage m = *request;
-
-    MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getWorld(m.worldid());
-    world.enqueueMessage(m);
-
-    return Status::OK;
-}
-
-Status FunctionCallServer::GetResources(ServerContext* context,
-                                        const faabric::ResourceRequest* request,
-                                        faabric::HostResources* response)
-{
-    auto& sch = faabric::scheduler::getScheduler();
-    *response = sch.getThisHostResources();
-
-    return Status::OK;
-}
-
-Status FunctionCallServer::ExecuteFunctions(
-  ServerContext* context,
-  const faabric::BatchExecuteRequest* request,
-  faabric::FunctionStatusResponse* response)
-{
-    // TODO - avoiding having to copy the message here
-    std::shared_ptr<faabric::BatchExecuteRequest> requestCopy =
-      std::make_shared<faabric::BatchExecuteRequest>(*request);
+    PARSE_MSG(faabric::BatchExecuteRequest, body.data(), body.size())
 
     // This host has now been told to execute these functions no matter what
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(requestCopy, true);
-
-    return Status::OK;
+    scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(msg),
+                            true);
 }
 
-Status FunctionCallServer::Unregister(ServerContext* context,
-                                      const faabric::UnregisterRequest* request,
-                                      faabric::FunctionStatusResponse* response)
+void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
 {
-    std::string funcStr =
-      faabric::util::funcToString(request->function(), false);
+    PARSE_MSG(faabric::UnregisterRequest, body.data(), body.size())
+
+    std::string funcStr = faabric::util::funcToString(msg.function(), false);
     faabric::util::getLogger()->info(
-      "Unregistering host {} for {}", request->host(), funcStr);
+      "Unregistering host {} for {}", msg.host(), funcStr);
 
     // Remove the host from the warm set
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.removeRegisteredHost(request->host(), request->function());
-    return Status::OK;
+    scheduler.removeRegisteredHost(msg.host(), msg.function());
 }
 
-Status FunctionCallServer::SetThreadResult(
-  ServerContext* context,
-  const faabric::ThreadResultRequest* request,
-  faabric::FunctionStatusResponse* response)
+void FunctionCallServer::recvGetResources(faabric::transport::Message& body)
 {
-    faabric::util::getLogger()->info("Setting thread {} result to {}",
-                                     request->messageid(),
-                                     request->returnvalue());
+    PARSE_MSG(faabric::ResponseRequest, body.data(), body.size())
 
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResult(request->messageid(), request->returnvalue());
+    // Send the response body
+    faabric::HostResources response = scheduler.getThisHostResources();
+    SEND_SERVER_RESPONSE(response, msg.returnhost(), FUNCTION_CALL_PORT)
+}
 
-    return Status::OK;
+void FunctionCallServer::recvSetThreadResult(faabric::transport::Message& body)
+{
+    PARSE_MSG(faabric::ThreadResultRequest, body.data(), body.size())
+
+    faabric::util::getLogger()->info(
+      "Setting thread {} result to {}", msg.messageid(), msg.returnvalue());
+
+    scheduler.setThreadResult(msg.messageid(), msg.returnvalue());
 }
 }

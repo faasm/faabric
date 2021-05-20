@@ -1,18 +1,9 @@
 #pragma once
 
-#include <grpcpp/channel.h>
-#include <grpcpp/client_context.h>
-#include <grpcpp/support/channel_arguments.h>
-
-#include <faabric/flat/faabric.grpc.fb.h>
 #include <faabric/flat/faabric_generated.h>
+#include <faabric/scheduler/SnapshotApi.h>
+#include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/util/snapshot.h>
-
-using namespace grpc;
-
-using grpc::Channel;
-using grpc::ClientContext;
-using grpc::Status;
 
 namespace faabric::scheduler {
 
@@ -31,10 +22,12 @@ void clearMockSnapshotRequests();
 // gRPC client
 // -----------------------------------
 
-class SnapshotClient
+class SnapshotClient final : public faabric::transport::MessageEndpointClient
 {
   public:
     explicit SnapshotClient(const std::string& hostIn);
+
+    /* Snapshot client external API */
 
     void pushSnapshot(const std::string& key,
                       const faabric::util::SnapshotData& data);
@@ -42,9 +35,6 @@ class SnapshotClient
     void deleteSnapshot(const std::string& key);
 
   private:
-    const std::string host;
-
-    std::shared_ptr<Channel> channel;
-    std::unique_ptr<SnapshotService::Stub> stub;
+    void sendHeader(faabric::scheduler::SnapshotCalls call);
 };
 }

@@ -14,7 +14,16 @@
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
 
+#define TEST_TIMEOUT_MS 500
+
 using namespace scheduler;
+
+static void tearDown(FunctionCallClient& cli, FunctionCallServer& server)
+{
+    cli.close();
+    server.stop();
+    faabric::scheduler::getScheduler().reset();
+}
 
 namespace tests {
 
@@ -25,21 +34,24 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     // Start the server
     FunctionCallServer server;
     server.start();
-    usleep(1000 * 100);
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Create an MPI world on this host and one on a "remote" host
     std::string otherHost = "192.168.9.2";
 
     const char* user = "mpi";
     const char* func = "hellompi";
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
     int worldId = 123;
-    int worldSize = 2;
+    faabric::Message msg;
+    msg.set_user(user);
+    msg.set_function(func);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpiworldsize(2);
+    faabric::util::messageFactory(user, func);
 
     scheduler::MpiWorldRegistry& registry = getMpiWorldRegistry();
-    scheduler::MpiWorld& localWorld = registry.createWorld(msg, worldId);
-    localWorld.overrideHost(LOCALHOST);
-    localWorld.create(msg, worldId, worldSize);
+    scheduler::MpiWorld& localWorld =
+      registry.createWorld(msg, worldId, LOCALHOST);
 
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
@@ -60,6 +72,7 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     // Send the message
     FunctionCallClient cli(LOCALHOST);
     cli.sendMPIMessage(std::make_shared<faabric::MPIMessage>(mpiMsg));
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Make sure the message has been put on the right queue locally
     std::shared_ptr<InMemoryMpiQueue> queue =
@@ -70,8 +83,10 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     REQUIRE(actualMessage->worldid() == worldId);
     REQUIRE(actualMessage->sender() == rankRemote);
 
-    // Stop the server
-    server.stop();
+    localWorld.destroy();
+    remoteWorld.destroy();
+
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test sending flush message", "[scheduler]")
@@ -81,7 +96,7 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     // Start the server
     FunctionCallServer server;
     server.start();
-    usleep(1000 * 100);
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Set up some state
     faabric::state::State& state = faabric::state::getGlobalState();
@@ -107,8 +122,7 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     // Send flush message
     FunctionCallClient cli(LOCALHOST);
     cli.sendFlush();
-
-    server.stop();
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
@@ -116,6 +130,8 @@ TEST_CASE("Test sending flush message", "[scheduler]")
 
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);
+
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test broadcasting flush message", "[scheduler]")
@@ -149,6 +165,8 @@ TEST_CASE("Test broadcasting flush message", "[scheduler]")
     }
 
     faabric::util::setMockMode(false);
+
+    faabric::scheduler::getScheduler().reset();
 }
 
 TEST_CASE("Test client batch execution request", "[scheduler]")
@@ -158,7 +176,7 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Start the server
     FunctionCallServer server;
     server.start();
-    usleep(1000 * 100);
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Set up a load of calls
     int nCalls = 30;
@@ -168,9 +186,7 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Make the request
     FunctionCallClient cli(LOCALHOST);
     cli.executeFunctions(req);
-
-    // Stop the server
-    server.stop();
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
@@ -181,6 +197,8 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     // Check calls have been registered
     REQUIRE(sch.getRecordedMessagesLocal().size() == nCalls);
     REQUIRE(sch.getRecordedMessagesShared().empty());
+
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test get resources request", "[scheduler]")
@@ -213,18 +231,16 @@ TEST_CASE("Test get resources request", "[scheduler]")
     // Start the server
     FunctionCallServer server;
     server.start();
-    usleep(1000 * 100);
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Make the request
-    faabric::ResourceRequest req;
     FunctionCallClient cli(LOCALHOST);
-    faabric::HostResources resResponse = cli.getResources(req);
+    faabric::HostResources resResponse = cli.getResources();
 
     REQUIRE(resResponse.slots() == expectedSlots);
     REQUIRE(resResponse.usedslots() == expectedUsedSlots);
 
-    // Stop the server
-    server.stop();
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test unregister request", "[scheduler]")
@@ -257,7 +273,7 @@ TEST_CASE("Test unregister request", "[scheduler]")
     // Start the server
     FunctionCallServer server;
     server.start();
-    usleep(1000 * 100);
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Make the request with a host that's not registered
     faabric::UnregisterRequest reqA;
@@ -273,10 +289,10 @@ TEST_CASE("Test unregister request", "[scheduler]")
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
     cli.unregister(reqB);
+    usleep(1000 * TEST_TIMEOUT_MS);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
-    // Stop the server
-    server.stop();
+    tearDown(cli, server);
 }
 
 TEST_CASE("Test set thread result", "[scheduler]")
@@ -295,7 +311,7 @@ TEST_CASE("Test set thread result", "[scheduler]")
     // Start the server
     FunctionCallServer server;
     server.start();
-    usleep(1000 * 100);
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Make the request
     faabric::ThreadResultRequest reqA;
@@ -332,7 +348,6 @@ TEST_CASE("Test set thread result", "[scheduler]")
         tB.join();
     }
 
-    // Stop the server
-    server.stop();
+    tearDown(cli, server);
 }
 }

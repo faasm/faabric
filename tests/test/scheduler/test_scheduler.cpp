@@ -737,6 +737,8 @@ TEST_CASE("Test non-master batch request returned to master", "[scheduler]")
     faabric::util::setMockMode(false);
 
     unsetSlowExecutor();
+
+    sch.reset();
 }
 
 TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
@@ -792,5 +794,7 @@ TEST_CASE("Test broadcast snapshot deletion", "[scheduler]")
     REQUIRE(actualDeleteRequests == expectedDeleteRequests);
 
     unsetSlowExecutor();
+
+    sch.reset();
 }
 }
