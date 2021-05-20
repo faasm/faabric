@@ -379,13 +379,13 @@ std::vector<std::string> Scheduler::callFunctions(
         }
     }
 
-    // Accounting
-    for (int i = 0; i < nMessages; i++) {
-        std::string executedHost = executed.at(i);
-        faabric::Message msg = req->messages().at(i);
+    // Records for tests
+    if (faabric::util::isTestMode()) {
+        for (int i = 0; i < nMessages; i++) {
+            std::string executedHost = executed.at(i);
+            faabric::Message msg = req->messages().at(i);
 
-        // Log results if in test mode
-        if (faabric::util::isTestMode()) {
+            // Log results if in test mode
             recordedMessagesAll.push_back(msg);
             if (executedHost.empty() || executedHost == thisHost) {
                 recordedMessagesLocal.push_back(msg);
