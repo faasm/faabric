@@ -1,5 +1,8 @@
 #include <faabric/transport/MessageEndpointServer.h>
 
+#include <csignal>
+#include <cstdlib>
+
 namespace faabric::transport {
 MessageEndpointServer::MessageEndpointServer(int portIn)
   : port(portIn)
@@ -10,8 +13,17 @@ void MessageEndpointServer::start()
     start(faabric::transport::getGlobalMessageContext());
 }
 
+void abortHandler(int x)
+{
+    faabric::util::getLogger()->warn("SIGABRT handler");
+    faabric::transport::print_trace();
+    exit(1);
+}
+
 void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
+    signal(SIGABRT, abortHandler);
+
     // Start serving thread in background
     this->servingThread = std::thread([this, &context] {
         RecvMessageEndpoint serverEndpoint(this->port);

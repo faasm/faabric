@@ -15,6 +15,8 @@
 #define ANY_HOST "0.0.0.0"
 
 namespace faabric::transport {
+void print_trace(void);
+
 enum class SocketType
 {
     PUSH,

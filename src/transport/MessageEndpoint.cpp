@@ -5,7 +5,9 @@
 /* Paste this on the file you want to debug. */
 #include <stdio.h>
 #include <execinfo.h>
-static void print_trace(void) {
+namespace faabric::transport {
+
+void print_trace(void) {
     char **strings;
     size_t i, size;
     enum Constexpr { MAX_SIZE = 1024 };
@@ -21,7 +23,6 @@ static void print_trace(void) {
     free(strings);
 }
 
-namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
@@ -55,12 +56,26 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // connect does not matter.
     switch (sockType) {
         case faabric::transport::SocketType::PUSH:
-            this->socket = std::make_unique<zmq::socket_t>(
-              context.get(), zmq::socket_type::push);
+            try {
+                this->socket = std::make_unique<zmq::socket_t>(
+                  context.get(), zmq::socket_type::push);
+            } catch (zmq::error_t& e) {
+                throw std::runtime_error(
+                  fmt::format("Error opening SEND socket to {}: {}",
+                              address, e.what()));
+                  
+            }
             break;
         case faabric::transport::SocketType::PULL:
-            this->socket = std::make_unique<zmq::socket_t>(
-              context.get(), zmq::socket_type::pull);
+            try {
+                this->socket = std::make_unique<zmq::socket_t>(
+                  context.get(), zmq::socket_type::pull);
+            } catch (zmq::error_t& e) {
+                throw std::runtime_error(
+                  fmt::format("Error opening RECV socket bound to {}: {}",
+                              address, e.what()));
+                  
+            }
             break;
         default:
             throw std::runtime_error("Unrecognized socket type");
