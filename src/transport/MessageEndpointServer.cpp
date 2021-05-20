@@ -34,6 +34,8 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
                               serverEndpoint.getHost(),
                               serverEndpoint.getPort(),
                               e.what()));
+            } catch (std::exception& e) {
+                throw std::runtime_error(fmt::format("Another error receiving: {}", e.what()));
             }
         }
     });

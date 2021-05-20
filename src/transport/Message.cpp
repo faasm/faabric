@@ -1,5 +1,7 @@
 #include <faabric/transport/Message.h>
 
+#include <faabric/util/logging.h>
+
 namespace faabric::transport {
 Message::Message(const zmq::message_t& msgIn)
   : _size(msgIn.size())
@@ -20,6 +22,7 @@ Message::Message(int sizeIn)
 
 Message::~Message()
 {
+    faabric::util::getLogger()->warn("deleting message!");
     if (!_persist) {
         free(reinterpret_cast<void*>(msg));
     }

@@ -53,7 +53,7 @@ void DummyStateServer::start()
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Override the host endpoint for the server thread. Must be localhost
-    // faabric::util::getSystemConfig().endpointHost = LOCALHOST;
+    faabric::util::getSystemConfig().endpointHost = LOCALHOST;
 
     // Master the dummy data in this thread
     if (!dummyData.empty()) {
