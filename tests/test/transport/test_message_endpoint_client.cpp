@@ -116,7 +116,9 @@ TEST_CASE("Test await response", "[transport]")
     dstResponse.send(msg, expectedResponse.size());
 
     // Wait for sender thread
-    senderThread.join();
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
 
     // Close receiving endpoints
     dst.close();
@@ -163,7 +165,9 @@ TEST_CASE("Test send/recv many messages", "[transport]")
     }
 
     // Wait for the sender thread to finish
-    senderThread.join();
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
 
     // Close the destination endpoint
     dst.close();
@@ -217,7 +221,9 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
 
     // Wait for the sender thread to finish
     for (auto& t : senderThreads) {
-        t.join();
+        if (t.joinable()) {
+            t.join();
+        }
     }
 
     // Close the destination endpoint

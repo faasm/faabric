@@ -74,6 +74,9 @@ jobs:
       - name: "Build tests"
         run: inv dev.cc faabric_tests
       # --- Tests ---
+      - name: "Run one test"
+        run: ./bin/faabric_tests "TODO remove"
+        working-directory: /build/faabric/static
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static

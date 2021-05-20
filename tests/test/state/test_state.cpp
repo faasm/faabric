@@ -97,39 +97,18 @@ TEST_CASE("TODO remove", "[state]")
     std::vector<uint8_t> values = { 0, 0, 1, 1, 2, 2, 3, 3, 4, 4 };
     setUpDummyServer(server, values);
 
+    std::vector<uint8_t> expected = { 0, 0, 1, 8, 8, 8, 3, 3, 4, 4 };
+
     // Start the server
     server.start();
-
-    // Get locally
-    // Culprit of all EVIL
-    std::vector<uint8_t> actual = server.getLocalKvValue();
-    REQUIRE(actual == values);
 
     // Update a subsection
     std::vector<uint8_t> update = { 8, 8, 8 };
     std::shared_ptr<state::StateKeyValue> localKv = server.getLocalKv();
     localKv->setChunk(3, update.data(), 3);
-
-    std::vector<uint8_t> expected = { 0, 0, 1, 8, 8, 8, 3, 3, 4, 4 };
-    localKv->get(actual.data());
-    REQUIRE(actual == expected);
-
-    // Check remote is unchanged
-    REQUIRE(server.getRemoteKvValue() == values);
-
-    // Try getting a chunk locally
-    std::vector<uint8_t> actualChunk(3);
-    localKv->getChunk(3, actualChunk.data(), 3);
-    REQUIRE(actualChunk == update);
-
-    // Run push and check remote is updated
-    // localKv->pushPartial();
-    /*
-    std::shared_ptr<state::StateKeyValue> localKv = server.getLocalKv();
-    std::vector<uint8_t> update = { 8, 8, 8 };
-    localKv->setChunk(3, update.data(), 3);
     localKv->pushPartial();
-    */
+    REQUIRE(server.getRemoteKvValue() == expected);
+
     server.stop();
 }
 

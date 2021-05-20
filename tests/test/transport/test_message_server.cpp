@@ -111,7 +111,9 @@ TEST_CASE("Test send one-off response to client", "[transport]")
     REQUIRE_NOTHROW(
       server.sendResponse(msg, expectedMsg.size(), thisHost, testPort));
 
-    clientThread.join();
+    if (clientThread.joinable()) {
+        clientThread.join();
+    }
 
     server.stop();
 }
@@ -151,7 +153,9 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     }
 
     for (auto& t : clientThreads) {
-        t.join();
+        if (t.joinable()) {
+            t.join();
+        }
     }
 
     REQUIRE(server.messageCount == numMessages * numClients);
