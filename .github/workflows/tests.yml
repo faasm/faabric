@@ -74,9 +74,6 @@ jobs:
       - name: "Build tests"
         run: inv dev.cc faabric_tests
       # --- Tests ---
-      - name: "Run single test"
-        run: ./bin/faabric_tests "Test in memory get/ set chunk"
-        working-directory: /build/faabric/static
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static

@@ -91,27 +91,6 @@ TEST_CASE("Test simple in memory state get/set", "[state]")
     REQUIRE(actual == values);
 }
 
-TEST_CASE("TODO remove", "[state]")
-{
-    DummyStateServer server;
-    std::vector<uint8_t> values = { 0, 0, 1, 1, 2, 2, 3, 3, 4, 4 };
-    setUpDummyServer(server, values);
-
-    std::vector<uint8_t> expected = { 0, 0, 1, 8, 8, 8, 3, 3, 4, 4 };
-
-    // Start the server
-    server.start();
-
-    // Update a subsection
-    std::vector<uint8_t> update = { 8, 8, 8 };
-    std::shared_ptr<state::StateKeyValue> localKv = server.getLocalKv();
-    localKv->setChunk(3, update.data(), 3);
-    localKv->pushPartial();
-    REQUIRE(server.getRemoteKvValue() == expected);
-
-    server.stop();
-}
-
 TEST_CASE("Test in memory get/ set chunk", "[state]")
 {
     DummyStateServer server;
@@ -144,7 +123,6 @@ TEST_CASE("Test in memory get/ set chunk", "[state]")
 
     // Run push and check remote is updated
     localKv->pushPartial();
-    // TODO - this is the failing check
     REQUIRE(server.getRemoteKvValue() == expected);
 
     // Wait for server to finish

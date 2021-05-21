@@ -1,6 +1,16 @@
 #include <faabric/transport/MessageEndpointClient.h>
 
 namespace faabric::transport {
+/*
+class ClosedMonitor : public zmq::monitor_t {
+public:
+    void on_event_closed(const zmq_event_t& event, const char* addr) override
+    {
+        faabric::util::getLogger()->error("socket disconnected");
+    }
+};
+*/
+
 MessageEndpointClient::MessageEndpointClient(const std::string& host, int port)
   : SendMessageEndpoint(host, port)
 {}
