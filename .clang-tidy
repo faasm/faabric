@@ -1,0 +1,13 @@
+---
+
+Checks: >
+    clang-analyzer-*,
+    -clang-diagnostic-unknown-attributes,
+    -clang-diagnostic-return-type
+    modernize-*,
+    -modernize-use-trailing-return-type,
+    readability-*,
+    -readability-magic-numbers,
+    -readability-redundant-string-cstr,
+    -readability-implicit-bool-conversion
+

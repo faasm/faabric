@@ -3,4 +3,5 @@ black
 docker
 flake8
 invoke
+numpy
 redis
