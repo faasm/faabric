@@ -42,15 +42,18 @@ MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(const faabric::Message& msg,
                                                  int worldId)
 {
     // Create world locally if not exists
-    if (worldMap.count(worldId) == 0) {
+    if (worldMap.find(worldId) == worldMap.end()) {
         faabric::util::FullLock lock(registryMutex);
-        if (worldMap.count(worldId) == 0) {
+        if (worldMap.find(worldId) == worldMap.end()) {
             MpiWorld& world = worldMap[worldId];
             world.initialiseFromState(msg, worldId);
         }
     }
 
-    return worldMap[worldId];
+    {
+        faabric::util::SharedLock lock(registryMutex);
+        return worldMap[worldId];
+    }
 }
 
 MpiWorld& MpiWorldRegistry::getWorld(int worldId)
