@@ -48,7 +48,7 @@ class MessageEndpoint
               faabric::transport::SocketType sockTypeIn,
               bool bind);
 
-    void close();
+    void close(bool bind);
 
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
@@ -79,6 +79,8 @@ class SendMessageEndpoint : public MessageEndpoint
     SendMessageEndpoint(const std::string& hostIn, int portIn);
 
     void open(MessageContext& context);
+
+    void close();
 };
 
 class RecvMessageEndpoint : public MessageEndpoint
@@ -87,5 +89,7 @@ class RecvMessageEndpoint : public MessageEndpoint
     RecvMessageEndpoint(int portIn);
 
     void open(MessageContext& context);
+
+    void close();
 };
 }

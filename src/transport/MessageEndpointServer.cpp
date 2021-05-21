@@ -46,7 +46,7 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
         } catch (...) {
             faabric::util::getLogger()->error(
               "Exception caught inside main server thread");
-            std::exit(1);
+            throw;
         }
     });
 }

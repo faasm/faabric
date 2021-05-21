@@ -1,28 +1,9 @@
 #include <faabric/transport/MessageEndpoint.h>
 
 #include <faabric/util/gids.h>
+#include <unistd.h>
 
-/* Paste this on the file you want to debug. */
-#include <stdio.h>
-#include <execinfo.h>
 namespace faabric::transport {
-
-void print_trace(void) {
-    char **strings;
-    size_t i, size;
-    enum Constexpr { MAX_SIZE = 1024 };
-    void *array[MAX_SIZE];
-    size = backtrace(array, MAX_SIZE);
-    strings = backtrace_symbols(array, size);
-    auto logger = faabric::util::getLogger();
-    logger->warn("---------- BACKTRACE ----------");
-    for (i = 0; i < size; i++) {
-        logger->warn(strings[i]);
-    }
-    logger->warn("-------------------------------");
-    free(strings);
-}
-
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
@@ -36,7 +17,8 @@ MessageEndpoint::~MessageEndpoint()
         faabric::util::getLogger()->warn(
           "Destroying an open message endpoint!");
         // print_trace();
-        this->close();
+        // TODO -defaulting to false here?
+        this->close(false);
     }
 }
 
@@ -187,12 +169,14 @@ Message MessageEndpoint::recv(int size)
                 }
             } catch (zmq::error_t& e) {
                 if (e.num() == ZMQ_ETERM) {
-                    close();
                     // Re-throw to either notify error or unblock servers
-                    throw;
+                    faabric::util::getLogger()->warn(
+                      "Shutting endpoint down after receiving ETERM");
+                return Message();
                 } else {
-                    throw std::runtime_error(
-                      fmt::format("Error receiving message: {}", e.what()));
+                    faabric::util::getLogger()->error(
+                      "Error receiving message: {}", e.what());
+                    throw;
                 }
             }
 
@@ -208,15 +192,14 @@ Message MessageEndpoint::recv(int size)
             }
         } catch (zmq::error_t& e) {
             if (e.num() == ZMQ_ETERM) {
-                // close();
                 // Return empty message to signify termination
                 // TODO - change warn to trace
                 faabric::util::getLogger()->warn(
                   "Shutting endpoint down after receiving ETERM");
                 return Message();
             } else {
-                throw std::runtime_error(
-                  fmt::format("ZeroMQ error receiving message: {}", e.what()));
+                faabric::util::getLogger()->error("Error receiving message: {}", e.what());
+                throw;
             }
         } catch (...) {
             throw std::runtime_error(
@@ -231,20 +214,33 @@ Message MessageEndpoint::recv(int size)
     }
 }
 
-void MessageEndpoint::close()
+void MessageEndpoint::close(bool bind)
 {
     try {
         if (this->socket != nullptr) {
 
-            // TODO -remove
-            faabric::util::getLogger()->warn(fmt::format("Closing socket: {}", id));
-
             if (tid != std::this_thread::get_id()) {
-                faabric::util::getLogger()->warn(
+                faabric::util::getLogger()->error(
                   "Closing socket from a different thread");
             }
 
-            this->socket->close();
+            std::string address =
+              "tcp://" + this->host + ":" + std::to_string(this->port);
+            try {
+                if (bind) {
+                    this->socket->unbind(address);
+                    usleep(1000 * 500);
+                } else {
+                    this->socket->disconnect(address);
+                }
+                this->socket->close();
+            } catch (zmq::error_t& e) {
+                if (e.num() != ZMQ_ETERM) {
+                    faabric::util::getLogger()->error("Error closing socket: {}",
+                                                      e.what());
+                    throw;
+                }
+            }
             this->socket = nullptr;
         }
     } catch (...) {
@@ -278,6 +274,15 @@ void SendMessageEndpoint::open(MessageContext& context)
     MessageEndpoint::open(context, SocketType::PUSH, false);
 }
 
+void SendMessageEndpoint::close()
+{
+    // TODO -remove
+    faabric::util::getLogger()->warn(fmt::format("Closing socket: {} (SEND {}:{})",
+                id, host, port));
+
+    MessageEndpoint::close(false);
+}
+
 RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
   : MessageEndpoint(ANY_HOST, portIn)
 {}
@@ -289,5 +294,14 @@ void RecvMessageEndpoint::open(MessageContext& context)
                 id, ANY_HOST, port));
 
     MessageEndpoint::open(context, SocketType::PULL, true);
+}
+
+void RecvMessageEndpoint::close()
+{
+    // TODO -remove
+    faabric::util::getLogger()->warn(fmt::format("Closing socket: {} (RECV {}:{})",
+                id, ANY_HOST, port));
+
+    MessageEndpoint::close(true);
 }
 }
