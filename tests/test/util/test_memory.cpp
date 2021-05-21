@@ -86,6 +86,11 @@ TEST_CASE("Check CoW memory mapping", "[memory]")
         REQUIRE(regionAInt[i] == 2 * i);
         REQUIRE(regionBInt[i] == 0);
     }
+
+    // Tidy up
+    munmap(sharedVoid, memSize);
+    munmap(regionAVoid, 3 * memSize);
+    munmap(regionBVoid, 3 * memSize);
 }
 
 TEST_CASE("Check shared memory mapping", "[memory]")
@@ -169,6 +174,10 @@ TEST_CASE("Check shared memory mapping", "[memory]")
     REQUIRE(regionAInt[1] == 0);
     REQUIRE(regionBInt[0] == 55);
     REQUIRE(regionBInt[1] == 66);
+
+    munmap(sharedVoid, memSize);
+    munmap(regionAVoid, memSize);
+    munmap(regionBVoid, memSize);
 }
 
 TEST_CASE("Test small aligned memory chunk", "[util]")
@@ -227,5 +236,72 @@ TEST_CASE("Test already aligned memory chunk", "[util]")
     REQUIRE(actual.nBytesOffset == 10 * faabric::util::HOST_PAGE_SIZE);
     REQUIRE(actual.nBytesLength == 5 * faabric::util::HOST_PAGE_SIZE);
     REQUIRE(actual.offsetRemainder == 0);
+}
+
+TEST_CASE("Test dirty page checking", "[util]")
+{
+    // Create several pages of memory
+    int nPages = 6;
+    size_t memSize = faabric::util::HOST_PAGE_SIZE * nPages;
+    auto* sharedMemory = (uint8_t*)mmap(
+      nullptr, memSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    if (sharedMemory == nullptr) {
+        FAIL("Could not provision memory");
+    }
+
+    resetDirtyTracking();
+
+    std::vector<bool> allFalse(nPages, false);
+    std::vector<bool> actual =
+      faabric::util::getDirtyPages(sharedMemory, nPages);
+    REQUIRE(actual == allFalse);
+
+    // Dirty two of the pages
+    uint8_t* pageZero = sharedMemory;
+    uint8_t* pageOne = pageZero + faabric::util::HOST_PAGE_SIZE;
+    uint8_t* pageThree = pageOne + (2 * faabric::util::HOST_PAGE_SIZE);
+
+    pageOne[10] = 1;
+    pageThree[123] = 4;
+
+    std::vector<bool> expected = { false, true, false, true, false, false };
+    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    REQUIRE(actual == expected);
+
+    // And another
+    uint8_t* pageFive = pageThree + (2 * faabric::util::HOST_PAGE_SIZE);
+    pageFive[99] = 3;
+
+    expected = { false, true, false, true, false, true };
+    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    REQUIRE(actual == expected);
+
+    // Reset
+    resetDirtyTracking();
+
+    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    REQUIRE(actual == allFalse);
+
+    // Check the data hasn't changed
+    REQUIRE(pageOne[10] == 1);
+    REQUIRE(pageThree[123] == 4);
+    REQUIRE(pageFive[99] == 3);
+
+    // Set some other data
+    uint8_t* pageFour = pageThree + faabric::util::HOST_PAGE_SIZE;
+    pageThree[100] = 2;
+    pageFour[22] = 5;
+
+    expected = { false, false, false, true, true, false };
+    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    REQUIRE(actual == expected);
+
+    // Final reset and check
+    resetDirtyTracking();
+    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    REQUIRE(actual == allFalse);
+
+    munmap(sharedMemory, memSize);
 }
 }

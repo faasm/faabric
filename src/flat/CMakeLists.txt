@@ -5,12 +5,13 @@
 set(FB_HEADER "${CMAKE_CURRENT_LIST_DIR}/faabric_generated.h")
 set(FB_HEADER_COPIED "${FAABRIC_INCLUDE_DIR}/faabric/flat/faabric_generated.h")
 
+# flatc command to generate flatbuffers files
 add_custom_command(
     OUTPUT "${FB_HEADER}"
     DEPENDS faabric.fbs
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     COMMAND ${FLATBUFFERS_FLATC_EXECUTABLE}
-    ARGS --cpp --raw-binary faabric.fbs
+    ARGS --cpp --gen-mutable --raw-binary faabric.fbs
 )
 
 # Copy the generated headers into place

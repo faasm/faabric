@@ -1,3 +1,4 @@
+#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include <thread>
@@ -12,7 +13,7 @@ const int testPort = 9999;
 const int testReplyPort = 9996;
 
 namespace tests {
-class MessageContextFixture
+class MessageContextFixture : public BaseTestFixture
 {
   protected:
     MessageContext& context;
@@ -61,7 +62,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     REQUIRE_NOTHROW(src.send(msg, expectedMsg.size()));
 
     // Receive message
-    Message recvMsg = dst.recv();
+    faabric::transport::Message recvMsg = dst.recv();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
@@ -88,7 +89,7 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
         src.send(msg, expectedMsg.size());
 
         // Block waiting for a response
-        Message recvMsg = src.awaitResponse(testReplyPort);
+        faabric::transport::Message recvMsg = src.awaitResponse(testReplyPort);
         assert(recvMsg.size() == expectedResponse.size());
         std::string actualResponse(recvMsg.data(), recvMsg.size());
         assert(actualResponse == expectedResponse);
@@ -99,7 +100,7 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
     // Receive message
     RecvMessageEndpoint dst(testPort);
     dst.open(context);
-    Message recvMsg = dst.recv();
+    faabric::transport::Message recvMsg = dst.recv();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
@@ -146,7 +147,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     RecvMessageEndpoint dst(testPort);
     dst.open(context);
     for (int i = 0; i < numMessages; i++) {
-        Message recvMsg = dst.recv();
+        faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
         // Note - this implicitly tests in-order message delivery
         if ((i % (numMessages / 10)) == 0) {
@@ -195,7 +196,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     RecvMessageEndpoint dst(testPort);
     dst.open(context);
     for (int i = 0; i < numSenders * numMessages; i++) {
-        Message recvMsg = dst.recv();
+        faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
         if ((i % numMessages) == 0) {
             REQUIRE(recvMsg.size() == expectedMsg.size());

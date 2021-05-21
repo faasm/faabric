@@ -11,24 +11,36 @@
 
 namespace tests {
 
-static void tearDown(faabric::scheduler::SnapshotClient& cli,
-                     faabric::scheduler::SnapshotServer& server)
+class SnapshotClientServerFixture : public BaseTestFixture
 {
-    cli.close();
-    server.stop();
-}
+  protected:
+    faabric::scheduler::SnapshotServer server;
+    faabric::scheduler::SnapshotClient cli;
+    snapshot::SnapshotRegistry& registry;
 
-TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
+  public:
+    SnapshotClientServerFixture()
+      : cli(LOCALHOST)
+      , registry(snapshot::getSnapshotRegistry())
+    {
+        registry.clear();
+
+        server.start();
+        usleep(1000 * SHORT_TEST_TIMEOUT_MS);
+    }
+
+    ~SnapshotClientServerFixture()
+    {
+        cli.close();
+        server.stop();
+        registry.clear();
+    }
+};
+
+TEST_CASE_METHOD(SnapshotClientServerFixture,
+                 "Test pushing and deleting snapshots",
+                 "[scheduler]")
 {
-    cleanFaabric();
-
-    // Start the server
-    scheduler::SnapshotServer server;
-    server.start();
-    usleep(1000 * 100);
-
-    snapshot::SnapshotRegistry& registry = snapshot::getSnapshotRegistry();
-
     // Check nothing to start with
     REQUIRE(registry.getSnapshotCount() == 0);
 
@@ -42,17 +54,17 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
     snapA.size = snapSizeA;
     snapB.size = snapSizeB;
 
-    std::vector<uint8_t> dataA = { 0, 1, 2, 3, 4 };
-    std::vector<uint8_t> dataB = { 3, 3, 2, 2 };
+    std::vector<uint8_t> dataA(snapSizeA, 1);
+    std::vector<uint8_t> dataB(snapSizeB, 2);
 
     snapA.data = dataA.data();
     snapB.data = dataB.data();
 
     // Send the message
-    scheduler::SnapshotClient cli(LOCALHOST);
     cli.pushSnapshot(snapKeyA, snapA);
     cli.pushSnapshot(snapKeyB, snapB);
-    usleep(1000 * 100);
+
+    usleep(1000 * 500);
 
     // Check snapshots created in regsitry
     REQUIRE(registry.getSnapshotCount() == 2);
@@ -67,7 +79,42 @@ TEST_CASE("Test pushing and deleting snapshots", "[scheduler]")
 
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
+}
 
-    tearDown(cli, server);
+TEST_CASE_METHOD(SnapshotClientServerFixture,
+                 "Test set thread result",
+                 "[scheduler]")
+{
+    // Register threads on this host
+    int threadIdA = 123;
+    int threadIdB = 345;
+    int returnValueA = 88;
+    int returnValueB = 99;
+    sch.registerThread(threadIdA);
+    sch.registerThread(threadIdB);
+
+    // Set up two threads to await the results
+    std::thread tA([threadIdA, returnValueA] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        int32_t r = sch.awaitThreadResult(threadIdA);
+        REQUIRE(r == returnValueA);
+    });
+
+    std::thread tB([threadIdB, returnValueB] {
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        int32_t r = sch.awaitThreadResult(threadIdB);
+        REQUIRE(r == returnValueB);
+    });
+
+    cli.pushThreadResult(threadIdA, returnValueA);
+    cli.pushThreadResult(threadIdB, returnValueB);
+
+    if (tA.joinable()) {
+        tA.join();
+    }
+
+    if (tB.joinable()) {
+        tB.join();
+    }
 }
 }

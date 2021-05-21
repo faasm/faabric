@@ -27,7 +27,8 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
     faabric::util::SnapshotData d = getSnapshot(key);
 
     if (!faabric::util::isPageAligned((void*)target)) {
-        logger->error("Mapping snapshot to non page-aligned address");
+        logger->error(
+          "Mapping snapshot {} to non page-aligned address {}", key, target);
         throw std::runtime_error(
           "Mapping snapshot to non page-aligned address");
     }

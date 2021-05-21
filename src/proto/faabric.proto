@@ -50,11 +50,6 @@ message UnregisterRequest {
     Message function = 2;
 }
 
-message ThreadResultRequest {
-    int32 messageId = 1;
-    int32 returnValue = 2;
-}
-
 message FunctionStatusResponse {
     enum FunctionStatus {
         OK = 0;

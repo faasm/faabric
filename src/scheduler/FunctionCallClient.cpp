@@ -9,6 +9,8 @@ namespace faabric::scheduler {
 // -----------------------------------
 // Mocking
 // -----------------------------------
+std::mutex mockMutex;
+
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
 static std::vector<std::pair<std::string, faabric::ResponseRequest>> flushCalls;
@@ -28,9 +30,6 @@ static std::unordered_map<std::string,
 
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
-
-static std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
-  threadResults;
 
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
@@ -64,12 +63,6 @@ std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests()
 {
     return unregisterRequests;
-}
-
-std::vector<std::pair<std::string, faabric::ThreadResultRequest>>
-getThreadResults()
-{
-    return threadResults;
 }
 
 void queueResourceResponse(const std::string& host, faabric::HostResources& res)
@@ -110,6 +103,7 @@ void FunctionCallClient::sendFlush()
 {
     faabric::ResponseRequest call;
     if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
         flushCalls.emplace_back(host, call);
     } else {
         // Prepare the message body
@@ -123,6 +117,7 @@ void FunctionCallClient::sendMPIMessage(
   const std::shared_ptr<faabric::MPIMessage> msg)
 {
     if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
         mpiMessages.emplace_back(host, *msg);
     } else {
         SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::MpiMessage, msg);
@@ -134,6 +129,8 @@ faabric::HostResources FunctionCallClient::getResources()
     faabric::ResponseRequest request;
     faabric::HostResources response;
     if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
+
         // Register the request
         resourceRequests.emplace_back(host, request);
 
@@ -162,6 +159,7 @@ void FunctionCallClient::executeFunctions(
   const std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
         batchMessages.emplace_back(host, req);
     } else {
         SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::ExecuteFunctions,
@@ -172,19 +170,10 @@ void FunctionCallClient::executeFunctions(
 void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
 {
     if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
         unregisterRequests.emplace_back(host, req);
     } else {
         SEND_MESSAGE(faabric::scheduler::FunctionCalls::Unregister, req);
-    }
-}
-
-void FunctionCallClient::setThreadResult(
-  const faabric::ThreadResultRequest& req)
-{
-    if (faabric::util::isMockMode()) {
-        threadResults.emplace_back(host, req);
-    } else {
-        SEND_MESSAGE(faabric::scheduler::FunctionCalls::SetThreadResult, req);
     }
 }
 }

@@ -4,10 +4,12 @@
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
+#include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
 
 #include <future>
@@ -51,6 +53,8 @@ class Executor
     void releaseClaim();
 
   protected:
+    virtual faabric::util::SnapshotData snapshot();
+
     virtual void restore(const faabric::Message& msg);
 
     virtual void postFinish();
@@ -114,6 +118,10 @@ class Scheduler
 
     void setThreadResult(const faabric::Message& msg, int32_t returnValue);
 
+    void setThreadResult(const faabric::Message& msg,
+                         int32_t returnValue,
+                         const std::vector<faabric::util::SnapshotDiff>& diffs);
+
     void setThreadResult(uint32_t msgId, int32_t returnValue);
 
     int32_t awaitThreadResult(uint32_t messageId);
@@ -165,10 +173,14 @@ class Scheduler
 
     void closeFunctionCallClients();
 
+    void closeSnapshotClients();
+
   private:
     std::string thisHost;
 
     faabric::util::SystemConfig& conf;
+
+    const std::shared_ptr<spdlog::logger> logger;
 
     std::vector<std::shared_ptr<Executor>> deadExecutors;
 
@@ -184,6 +196,11 @@ class Scheduler
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
+    std::unordered_map<std::string, faabric::scheduler::SnapshotClient>
+      snapshotClients;
+    faabric::scheduler::SnapshotClient& getSnapshotClient(
+      const std::string& otherHost);
+
     faabric::HostResources thisHostResources;
     std::set<std::string> availableHostsCache;
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
@@ -193,7 +210,7 @@ class Scheduler
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 
-    std::vector<std::string> getUnregisteredHosts(const std::string funcStr,
+    std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
                                                   bool noCache = false);
 
     std::shared_ptr<Executor> claimExecutor(const faabric::Message& msg);
@@ -208,7 +225,8 @@ class Scheduler
       const std::string& host,
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       std::vector<std::string>& records,
-      int offset);
+      int offset,
+      faabric::util::SnapshotData* snapshot);
 };
 
 }

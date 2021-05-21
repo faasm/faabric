@@ -11,6 +11,8 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
   public:
     SnapshotServer();
 
+    void stop() override;
+
   protected:
     void doRecv(faabric::transport::Message& header,
                 faabric::transport::Message& body) override;
@@ -20,5 +22,14 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
     void recvPushSnapshot(faabric::transport::Message& msg);
 
     void recvDeleteSnapshot(faabric::transport::Message& msg);
+
+    void recvPushSnapshotDiffs(faabric::transport::Message& msg);
+
+    void recvThreadResult(faabric::transport::Message& msg);
+
+  private:
+    void applyDiffsToSnapshot(
+      const std::string& snapshotKey,
+      const flatbuffers::Vector<flatbuffers::Offset<SnapshotDiffChunk>>* diffs);
 };
 }

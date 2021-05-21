@@ -3,15 +3,23 @@ table SnapshotPushRequest {
   contents:[ubyte];
 }
 
-table SnapshotPushResponse {
-  message:string;
-}
-
 table SnapshotDeleteRequest {
   key:string;
 }
 
-table SnapshotDeleteResponse {
-  message:string;
+table SnapshotDiffChunk {
+  offset:int;
+  data:[ubyte];
 }
 
+table SnapshotDiffPushRequest {
+  key:string;
+  chunks:[SnapshotDiffChunk];
+}
+
+table ThreadResultRequest {
+  message_id:int;
+  return_value:int;
+  key:string;
+  chunks:[SnapshotDiffChunk];
+}

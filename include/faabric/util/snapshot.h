@@ -1,13 +1,32 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace faabric::util {
 
-struct SnapshotData
+struct SnapshotDiff
 {
+    uint32_t offset = 0;
     size_t size = 0;
     const uint8_t* data = nullptr;
-    int fd = 0;
+
+    SnapshotDiff(uint32_t offsetIn, const uint8_t* dataIn, size_t sizeIn)
+    {
+        offset = offsetIn;
+        data = dataIn;
+        size = sizeIn;
+    }
 };
+
+class SnapshotData
+{
+  public:
+    size_t size = 0;
+    uint8_t* data = nullptr;
+    int fd = 0;
+
+    std::vector<SnapshotDiff> getDirtyPages();
+};
+
 }
