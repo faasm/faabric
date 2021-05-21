@@ -76,6 +76,19 @@ jobs:
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static
 
+  dist-tests:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      # --- Code update ---
+      - name: "Check out code"
+        uses: actions/checkout@v2
+      # --- Build and test ---
+      - name: "Build distributed tests"
+        run: ./dist-test/build.sh
+      - name: "Run the distributed tests"
+        run: ./dist-test/run.sh ci
+
   examples:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -116,18 +129,11 @@ jobs:
   mpi_native:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    env:
-      HOST_TYPE: ci
-      REDIS_QUEUE_HOST: redis
-      REDIS_STATE_HOST: redis
-    services:
-      redis:
-        image: redis
     steps:
       - name: "Compose version"
         run: docker-compose --version
       # --- Code update ---
-      - name: "Fetch ref"
+      - name: "Check out code"
         uses: actions/checkout@v2
       # --- Examples ---
       - name: "Build docker compose images"
