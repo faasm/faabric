@@ -65,8 +65,12 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
         SEND_MESSAGE(faabric::state::StateCalls::Push, stateChunk)
 
         // Await for a response, but discard it as it is empty
-        // (void)awaitResponse();
-        faabric::transport::Message msg = awaitResponse();
+        try {
+            (void)awaitResponse();
+        } catch (...) {
+            faabric::util::getLogger()->warn("Error in awaitReponse");
+            throw;
+        }
     }
 }
 

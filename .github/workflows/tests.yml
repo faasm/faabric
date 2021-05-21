@@ -74,8 +74,8 @@ jobs:
       - name: "Build tests"
         run: inv dev.cc faabric_tests
       # --- Tests ---
-      - name: "Run state tests out of order"
-        run: ./bin/faabric_tests \[state\] --order rand
+      - name: "Run single test"
+        run: ./bin/faabric_tests "Test in memory get/ set chunk"
         working-directory: /build/faabric/static
       - name: "Run tests"
         run: ./bin/faabric_tests

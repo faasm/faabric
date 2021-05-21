@@ -13,40 +13,40 @@ void MessageEndpointServer::start()
     start(faabric::transport::getGlobalMessageContext());
 }
 
+/*
 void abortHandler(int x)
 {
     faabric::util::getLogger()->warn("SIGABRT handler");
     faabric::transport::print_trace();
     exit(1);
 }
+*/
 
 void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
-    signal(SIGABRT, abortHandler);
+    // signal(SIGABRT, abortHandler);
 
     // Start serving thread in background
     this->servingThread = std::thread([this, &context] {
-        RecvMessageEndpoint serverEndpoint(this->port);
+        try {
+            RecvMessageEndpoint serverEndpoint(this->port);
 
-        // Open message endpoint, and bind
-        serverEndpoint.open(context);
-        assert(serverEndpoint.socket != nullptr);
+            // Open message endpoint, and bind
+            serverEndpoint.open(context);
+            assert(serverEndpoint.socket != nullptr);
 
-        // Loop until context is terminated (will throw ETERM)
-        while (true) {
-            try {
-                this->recv(serverEndpoint);
-            } catch (zmq::error_t& e) {
-                if (e.num() == ZMQ_ETERM) {
+            // Loop until context is terminated (will throw ETERM)
+            while (true) {
+                int rc = this->recv(serverEndpoint);
+                if (rc == ENDPOINT_SERVER_SHUTDOWN) {
+                    serverEndpoint.close();
                     break;
                 }
-                throw std::runtime_error(
-                  fmt::format("Errror in server socket loop (bound to {}:{}) "
-                              "receiving message: {}",
-                              serverEndpoint.getHost(),
-                              serverEndpoint.getPort(),
-                              e.what()));
-            } 
+            }
+        } catch (...) {
+            faabric::util::getLogger()->error(
+              "Exception caught inside main server thread");
+            std::exit(1);
         }
     });
 }
@@ -68,24 +68,32 @@ void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
     }
 }
 
-void MessageEndpointServer::recv(RecvMessageEndpoint& endpoint)
+int MessageEndpointServer::recv(RecvMessageEndpoint& endpoint)
 {
     assert(endpoint.socket != nullptr);
 
     // Receive header and body
     Message header = endpoint.recv();
+    // Detect shutdown condition
+    if (header.udata() == nullptr) {
+        return ENDPOINT_SERVER_SHUTDOWN;
+    }
     // Check the header was sent with ZMQ_SNDMORE flag
     if (!header.more()) {
         throw std::runtime_error("Header sent without SNDMORE flag");
     }
+
     Message body = endpoint.recv();
     // Check that there are no more messages to receive
     if (body.more()) {
         throw std::runtime_error("Body sent with SNDMORE flag");
     }
+    assert(body.udata() != nullptr);
 
     // Server-specific message handling
     doRecv(header, body);
+
+    return 0;
 }
 
 // We create a new endpoint every time. Re-using them would be a possible

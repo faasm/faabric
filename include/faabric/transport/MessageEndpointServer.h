@@ -7,6 +7,8 @@
 
 #include <thread>
 
+#define ENDPOINT_SERVER_SHUTDOWN -1
+
 namespace faabric::transport {
 /* Server handling a long-running 0MQ socket
  *
@@ -40,7 +42,7 @@ class MessageEndpointServer
     virtual void stop();
 
   protected:
-    void recv(faabric::transport::RecvMessageEndpoint& endpoint);
+    int recv(faabric::transport::RecvMessageEndpoint& endpoint);
 
     /* Template function to handle message reception
      *

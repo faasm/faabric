@@ -16,6 +16,8 @@ class Message
 
     Message(int sizeIn);
 
+    Message();
+
     ~Message();
 
     char* data();

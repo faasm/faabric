@@ -20,6 +20,11 @@ Message::Message(int sizeIn)
     msg = reinterpret_cast<uint8_t*>(malloc(_size * sizeof(uint8_t)));
 }
 
+// Empty message signals shutdown
+Message::Message()
+  : msg(nullptr)
+{}
+
 Message::~Message()
 {
     if (!_persist) {
