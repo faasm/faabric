@@ -146,9 +146,8 @@ Message MessageEndpoint::recv(int size)
             }
         } catch (zmq::error_t& e) {
             if (e.num() == ZMQ_ETERM) {
-                // Re-throw to either notify error or unblock servers
-                faabric::util::getLogger()->warn(
-                  "Shutting endpoint down after receiving ETERM");
+                // Return empty message to signify termination
+                logger->trace("Shutting endpoint down after receiving ETERM");
                 return Message();
             } else {
                 logger->error("Error receiving message: {}", e.what());

@@ -191,11 +191,6 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
                   src.send(msg, expectedMsg.size());
               }
 
-              // Give the receiver time to ingest all messages. Otherwise,
-              // closing the endpoint will remove all outstanding messages. This
-              // is because we, by default, set the LINGER period to 0.
-              // usleep(1000 * 200);
-
               src.close();
           }));
     }

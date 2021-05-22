@@ -17,25 +17,19 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
     // Start serving thread in background
     this->servingThread = std::thread([this, &context] {
-        try {
-            RecvMessageEndpoint serverEndpoint(this->port);
+        RecvMessageEndpoint serverEndpoint(this->port);
 
-            // Open message endpoint, and bind
-            serverEndpoint.open(context);
-            assert(serverEndpoint.socket != nullptr);
+        // Open message endpoint, and bind
+        serverEndpoint.open(context);
+        assert(serverEndpoint.socket != nullptr);
 
-            // Loop until context is terminated (will throw ETERM)
-            while (true) {
-                int rc = this->recv(serverEndpoint);
-                if (rc == ENDPOINT_SERVER_SHUTDOWN) {
-                    serverEndpoint.close();
-                    break;
-                }
+        // Loop until context is terminated
+        while (true) {
+            int rc = this->recv(serverEndpoint);
+            if (rc == ENDPOINT_SERVER_SHUTDOWN) {
+                serverEndpoint.close();
+                break;
             }
-        } catch (...) {
-            faabric::util::getLogger()->error(
-              "Exception caught inside main server thread");
-            throw;
         }
     });
 }

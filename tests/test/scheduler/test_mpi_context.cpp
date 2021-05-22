@@ -7,11 +7,9 @@
 
 using namespace faabric::scheduler;
 
-static void tearDown(std::vector<MpiWorld*> worlds)
+static void tearDown(MpiWorld& world)
 {
-    for (auto& world : worlds) {
-        world->destroy();
-    }
+    world.destroy();
 
     getScheduler().reset();
 }
@@ -45,7 +43,7 @@ TEST_CASE("Check world creation", "[mpi]")
     REQUIRE(world.getFunction() == "hellompi");
 
     world.destroy();
-    tearDown({ &world });
+    tearDown(world);
 }
 
 TEST_CASE("Check world cannot be created for non-zero rank", "[mpi]")
@@ -95,7 +93,7 @@ TEST_CASE("Check default world size is set", "[mpi]")
     // Reset config
     conf.defaultMpiWorldSize = origSize;
 
-    tearDown({ &world });
+    tearDown(world);
 }
 
 TEST_CASE("Check joining world", "[mpi]")
@@ -136,6 +134,6 @@ TEST_CASE("Check joining world", "[mpi]")
     MpiWorld& world = reg.getOrInitialiseWorld(msgB, worldId);
     const std::string actualHost = world.getHostForRank(1);
 
-    tearDown({ &world });
+    tearDown(world);
 }
 }
