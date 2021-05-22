@@ -25,15 +25,9 @@ TEST_CASE("Test open/close one client", "[transport]")
     MessageEndpoint secondCli(thisHost, testPort);
     REQUIRE_NOTHROW(secondCli.open(context, SocketType::PUSH, true));
 
-    // Open a third endpoint, bind as well. Should fail: can't bind two clients
-    // to the same address
-    MessageEndpoint thirdCli(thisHost, testPort);
-    // REQUIRE_THROWS(thirdCli.open(context, SocketType::PUSH, true));
-
     // Close all endpoint clients
     REQUIRE_NOTHROW(cli.close(false));
     REQUIRE_NOTHROW(secondCli.close(true));
-    // REQUIRE_THROWS(thirdCli.close(true));
 
     // Close message context
     context.close();

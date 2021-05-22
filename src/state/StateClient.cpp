@@ -2,9 +2,6 @@
 #include <faabric/transport/macros.h>
 #include <faabric/util/macros.h>
 
-// TODO - remove
-#include <faabric/util/logging.h>
-
 namespace faabric::state {
 StateClient::StateClient(const std::string& userIn,
                          const std::string& keyIn,
@@ -27,7 +24,6 @@ void StateClient::sendHeader(faabric::state::StateCalls call)
 faabric::transport::Message StateClient::awaitResponse()
 {
     // Call the superclass implementation
-    faabric::util::getLogger()->warn("Client awaiting for response");
     return MessageEndpointClient::awaitResponse(STATE_PORT + REPLY_PORT_OFFSET);
 }
 

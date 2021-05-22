@@ -92,7 +92,6 @@ void StateServer::recvPull(faabric::transport::Message& body)
     // TODO: avoid copying here
     response.set_data(chunk, chunkLen);
     SEND_SERVER_RESPONSE(response, msg.returnhost(), STATE_PORT)
-    faabric::util::getLogger()->warn("Server is finished");
 }
 
 void StateServer::recvPush(faabric::transport::Message& body)
