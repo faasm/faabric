@@ -7,4 +7,4 @@ set(LIB_FILES
 
 faabric_lib(snapshot "${LIB_FILES}")
 
-target_link_libraries(snapshot proto)
+target_link_libraries(snapshot proto util)

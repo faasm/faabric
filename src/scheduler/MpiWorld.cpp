@@ -225,10 +225,10 @@ void MpiWorld::registerRank(int rank)
 std::string MpiWorld::getHostForRank(int rank)
 {
     // Pull from state if not present
-    if (rankHostMap.count(rank) == 0) {
+    if (rankHostMap.find(rank) == rankHostMap.end()) {
         faabric::util::FullLock lock(worldMutex);
 
-        if (rankHostMap.count(rank) == 0) {
+        if (rankHostMap.find(rank) == rankHostMap.end()) {
             auto buffer = new uint8_t[MPI_HOST_STATE_LEN];
             const std::shared_ptr<state::StateKeyValue>& kv =
               getRankHostState(rank);
@@ -249,7 +249,10 @@ std::string MpiWorld::getHostForRank(int rank)
         }
     }
 
-    return rankHostMap[rank];
+    {
+        faabric::util::SharedLock lock(worldMutex);
+        return rankHostMap[rank];
+    }
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -1166,17 +1169,20 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
     checkRankOnThisHost(recvRank);
 
     std::string key = std::to_string(sendRank) + "_" + std::to_string(recvRank);
-    if (localQueueMap.count(key) == 0) {
+    if (localQueueMap.find(key) == localQueueMap.end()) {
         faabric::util::FullLock lock(worldMutex);
 
-        if (localQueueMap.count(key) == 0) {
+        if (localQueueMap.find(key) == localQueueMap.end()) {
             auto mq = new InMemoryMpiQueue();
             localQueueMap.emplace(
               std::pair<std::string, InMemoryMpiQueue*>(key, mq));
         }
     }
 
-    return localQueueMap[key];
+    {
+        faabric::util::SharedLock lock(worldMutex);
+        return localQueueMap[key];
+    }
 }
 
 void MpiWorld::rmaGet(int sendRank,
