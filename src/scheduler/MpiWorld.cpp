@@ -1,6 +1,5 @@
 #include <faabric/mpi/mpi.h>
-#include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallClient.h>
+
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -13,6 +12,9 @@
 #include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
+static thread_local std::unordered_map<std::string,
+                                       faabric::scheduler::FunctionCallClient>
+  functionCallClients;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -65,6 +67,21 @@ std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
     return state.getKV(user, stateKey, MPI_HOST_STATE_LEN);
 }
 
+faabric::scheduler::FunctionCallClient& MpiWorld::getFunctionCallClient(
+  const std::string& otherHost)
+{
+    auto it = functionCallClients.find(otherHost);
+    if (it == functionCallClients.end()) {
+        // The second argument is forwarded to the client's constructor
+        auto _it = functionCallClients.try_emplace(otherHost, otherHost);
+        if (!_it.second) {
+            throw std::runtime_error("Error inserting remote endpoint");
+        }
+        it = _it.first;
+    }
+    return it->second;
+}
+
 int MpiWorld::getMpiThreadPoolSize()
 {
     auto logger = faabric::util::getLogger();
@@ -115,16 +132,48 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
-    setUpStateKV();
-    state::getGlobalState().deleteKV(stateKV->user, stateKV->key);
+    // Destroy once per host
+    if (!isDestroyed.test_and_set()) {
+        closeFunctionCallClients();
 
-    for (auto& s : rankHostMap) {
-        const std::shared_ptr<state::StateKeyValue>& rankState =
-          getRankHostState(s.first);
-        state::getGlobalState().deleteKV(rankState->user, rankState->key);
+        // Note - we are deliberately not deleting the KV in the global state
+        // TODO - find a way to do this only from the master client
+
+        for (auto& s : rankHostMap) {
+            const std::shared_ptr<state::StateKeyValue>& rankState =
+              getRankHostState(s.first);
+            state::getGlobalState().deleteKV(rankState->user, rankState->key);
+        }
+
+        localQueueMap.clear();
+    }
+}
+
+void MpiWorld::closeFunctionCallClients()
+{
+    // When shutting down the thread pool, we also make sure we clean all thread
+    // local state by sending a clear message to the queue. Currently, we only
+    // need to close the function call clients
+    for (int i = 0; i < threadPool->size; i++) {
+        std::promise<void> p;
+        threadPool->getMpiReqQueue()->enqueue(
+          std::make_tuple(QUEUE_SHUTDOWN,
+                          std::bind(&MpiWorld::closeThreadLocalClients, this),
+                          std::move(p)));
     }
 
-    localQueueMap.clear();
+    // Lastly clean the main thread as well
+    closeThreadLocalClients();
+}
+
+// Clear thread local state
+void MpiWorld::closeThreadLocalClients()
+{
+    // Close all open sockets
+    for (auto& s : functionCallClients) {
+        s.second.close();
+    }
+    functionCallClients.clear();
 }
 
 void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
@@ -433,10 +482,7 @@ void MpiWorld::send(int sendRank,
         }
     } else {
         logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
-
-        // TODO - avoid creating a client each time?
-        scheduler::FunctionCallClient client(otherHost);
-        client.sendMPIMessage(m);
+        getFunctionCallClient(otherHost).sendMPIMessage(m);
     }
 }
 

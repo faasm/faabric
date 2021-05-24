@@ -5,7 +5,7 @@ from invoke import task
 from tasks.util.env import get_version, PROJ_ROOT
 
 FAABRIC_IMAGE_NAME = "faabric"
-GRPC_IMAGE_NAME = "grpc-root"
+FAABRIC_BASE_IMAGE_NAME = "faabric-base"
 MPI_NATIVE_IMAGE_NAME = "faabric-mpi-native"
 
 
@@ -59,11 +59,11 @@ def build(ctx, nocache=False, push=False):
 
 
 @task
-def build_grpc(ctx, nocache=False, push=False):
+def build_base(ctx, nocache=False, push=False):
     """
-    Build current base gRPC container
+    Build faabric's base container
     """
-    _do_container_build(GRPC_IMAGE_NAME, nocache=nocache, push=push)
+    _do_container_build(FAABRIC_BASE_IMAGE_NAME, nocache=nocache, push=push)
 
 
 @task
@@ -83,11 +83,11 @@ def push(ctx):
 
 
 @task
-def push_grpc(ctx):
+def push_base(ctx):
     """
-    Push current version of gRPC container
+    Push faabric's base container
     """
-    _do_push(GRPC_IMAGE_NAME)
+    _do_push(FAABRIC_BASE_IMAGE_NAME)
 
 
 @task

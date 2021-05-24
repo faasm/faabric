@@ -15,8 +15,3 @@ table SnapshotDeleteResponse {
   message:string;
 }
 
-rpc_service SnapshotService {
-  PushSnapshot(SnapshotPushRequest):SnapshotPushResponse;
-  DeleteSnapshot(SnapshotDeleteRequest):SnapshotDeleteResponse;
-}
-

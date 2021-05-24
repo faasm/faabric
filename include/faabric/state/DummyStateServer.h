@@ -24,7 +24,6 @@ class DummyStateServer
 
     void stop();
 
-    std::thread serverThread;
     state::State remoteState;
     state::StateServer stateServer;
 };

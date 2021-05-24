@@ -2,63 +2,72 @@ include(FindGit)
 find_package(Git)
 include (ExternalProject)
 include (FetchContent)
+ 
+# Protobuf
+set(PROTOBUF_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.so)
+ExternalProject_Add(protobuf_ext
+    GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
+    GIT_TAG "v3.16.0"
+    SOURCE_SUBDIR "cmake"
+    CMAKE_CACHE_ARGS "-DCMAKE_BUILD_TYPE:STRING=Release"
+        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+        "-Dprotobuf_BUILD_TESTS:BOOL=OFF"
+        "-Dprotobuf_BUILD_SHARED_LIBS:BOOL=ON"
+    BUILD_BYPRODUCTS ${PROTOBUF_LIBRARY}
+)
+ExternalProject_Get_Property(protobuf_ext SOURCE_DIR)
+set(PROTOBUF_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
+set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/protoc)
+add_library(protobuf_imported SHARED IMPORTED)
+add_dependencies(protobuf_imported protobuf_ext)
+set_target_properties(protobuf_imported
+    PROPERTIES IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
+)
 
-# Protobuf/ grpc config
-# See the example in the gRPC repo here:
-# https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/CMakeLists.txt
-if(BUILD_SHARED_LIBS)
-    set(Protobuf_USE_STATIC_LIBS OFF)
-else()
-    set(Protobuf_USE_STATIC_LIBS ON)
-endif()
-
-include(FindProtobuf)
-set(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf REQUIRED)
-
-message(STATUS "Using protobuf  \
-    ${PROTOBUF_LIBRARY} \
-    ${PROTOBUF_PROTOC_LIBRARY} \
-    ${PROTOBUF_PROTOC_EXECUTABLE} \
-")
-
-find_package(gRPC CONFIG REQUIRED)
-message(STATUS "Using gRPC ${gRPC_VERSION}")
-
-include_directories(${PROTOBUF_INCLUDE_DIR})
-
-set(PROTOC_EXE /usr/local/bin/protoc)
-set(GRPC_PLUGIN /usr/local/bin/grpc_cpp_plugin)
-
-# Include FlatBuffers
-# I couldn't get the proper find_package working, so we have this hack now, and
-# assume that FB is installed where we think it should be.
-set(FLATBUFFERS_FLATC_EXECUTABLE "/usr/local/bin/flatc")
-set(FLATBUFFERS_INCLUDE_DIRS "/usr/local/include/flatbuffers")
+# FlatBuffers
+set(FLATBUFFERS_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libflatbuffers.so)
+ExternalProject_Add(flatbuffers_ext
+    GIT_REPOSITORY https://github.com/google/flatbuffers.git
+    GIT_TAG "v2.0.0"
+    CMAKE_CACHE_ARGS "-DCMAKE_BUILD_TYPE:STRING=Release"
+        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+        "-DFLATBUFFERS_BUILD_SHAREDLIB:BOOL=ON"
+        "-DFLATBUFFERS_BUILD_TESTS:BOOL=OFF"
+    BUILD_BYPRODUCTS ${FLATBUFFERS_LIBRARY}
+)
+ExternalProject_Get_Property(flatbuffers_ext SOURCE_DIR)
+set(FLATBUFFERS_INCLUDE_DIRS ${SOURCE_DIR}/include)
+set(FLATBUFFERS_FLATC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/flatc)
+add_library(flatbuffers_imported SHARED IMPORTED)
+add_dependencies(flatbuffers_imported flatbuffers_ext)
+set_target_properties(flatbuffers_imported
+    PROPERTIES IMPORTED_LOCATION ${FLATBUFFERS_LIBRARY}
+)
 
 # Pistache
+set(PISTACHE_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so)
 ExternalProject_Add(pistache_ext
     GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"
     GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-    BUILD_BYPRODUCTS ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so
+    BUILD_BYPRODUCTS ${PISTACHE_LIBRARY}
 )
 ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
 set(PISTACHE_INCLUDE_DIR ${SOURCE_DIR}/include)
-add_library(pistache SHARED IMPORTED)
-add_dependencies(pistache pistache_ext)
-set_target_properties(pistache
-    PROPERTIES IMPORTED_LOCATION ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so
+add_library(pistache_imported SHARED IMPORTED)
+add_dependencies(pistache_imported pistache_ext)
+set_target_properties(pistache_imported
+    PROPERTIES IMPORTED_LOCATION ${PISTACHE_LIBRARY}
 )
 
 # RapidJSON
-set(RAPIDJSON_BUILD_DOC OFF CACHE INTERNAL "")
-set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE INTERNAL "")
-set(RAPIDJSON_BUILD_TESTS OFF CACHE INTERNAL "")
 ExternalProject_Add(rapidjson_ext
     GIT_REPOSITORY "https://github.com/Tencent/rapidjson"
     GIT_TAG "2ce91b823c8b4504b9c40f99abf00917641cef6c"
     CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+        "-DRAPIDJSON_BUILD_DOC:BOOL=OFF"
+        "-DRAPIDJSON_BUILD_EXAMPLES:BOOL=OFF"
+        "-DRAPIDJSON_BUILD_TESTS:BOOL=OFF"
 )
 ExternalProject_Get_Property(rapidjson_ext SOURCE_DIR)
 set(RAPIDJSON_INCLUDE_DIR ${SOURCE_DIR}/include)
@@ -106,6 +115,33 @@ FetchContent_MakeAvailable(zstd_ext)
 # Work around zstd not declaring its targets properly
 target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
 add_library(zstd::libzstd_static ALIAS libzstd_static)
+
+# ZeroMQ
+set(ZEROMQ_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libzmq.so)
+ExternalProject_Add(libzeromq_ext
+    GIT_REPOSITORY "https://github.com/zeromq/libzmq.git"
+    GIT_TAG "v4.3.4"
+    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+    BUILD_BYPRODUCTS ${ZEROMQ_LIBRARY}
+)
+ExternalProject_Get_Property(libzeromq_ext SOURCE_DIR)
+set(LIBZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
+ExternalProject_Add(cppzeromq_ext
+    GIT_REPOSITORY "https://github.com/faasm/cppzmq.git"
+    GIT_TAG "v4.7.1"
+    CMAKE_CACHE_ARGS "-DCPPZMQ_BUILD_TESTS:BOOL=OFF"
+        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+)
+add_dependencies(cppzeromq_ext libzeromq_ext)
+ExternalProject_Get_Property(cppzeromq_ext SOURCE_DIR)
+set(CPPZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
+set(ZEROMQ_INCLUDE_DIR ${LIBZEROMQ_INCLUDE_DIR} ${CPPZEROMQ_INCLUDE_DIR})
+add_library(zeromq_imported SHARED IMPORTED)
+add_dependencies(zeromq_imported cppzeromq_ext)
+set_target_properties(zeromq_imported
+    PROPERTIES IMPORTED_LOCATION ${ZEROMQ_LIBRARY}
+)
+
 
 if(FAABRIC_BUILD_TESTS)
     # Catch (tests)

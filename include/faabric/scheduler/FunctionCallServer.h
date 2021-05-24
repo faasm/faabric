@@ -1,44 +1,44 @@
 #pragma once
 
-#include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/rpc/RPCServer.h>
-
-using namespace grpc;
+#include <faabric/scheduler/FunctionCallApi.h>
+#include <faabric/scheduler/MpiWorld.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::scheduler {
 class FunctionCallServer final
-  : public rpc::RPCServer
-  , public faabric::FunctionRPCService::Service
+  : public faabric::transport::MessageEndpointServer
 {
   public:
     FunctionCallServer();
 
-    Status Flush(ServerContext* context,
-                 const faabric::Message* request,
-                 faabric::FunctionStatusResponse* response) override;
+    /* Stop the function call server
+     *
+     * Override the base stop method to do some implementation-specific cleanup.
+     */
+    void stop() override;
 
-    Status MPICall(ServerContext* context,
-                   const faabric::MPIMessage* request,
-                   faabric::FunctionStatusResponse* response) override;
+  private:
+    Scheduler& scheduler;
 
-    Status GetResources(ServerContext* context,
-                        const faabric::ResourceRequest* request,
-                        faabric::HostResources* response) override;
+    void doRecv(faabric::transport::Message& header,
+                faabric::transport::Message& body) override;
 
-    Status ExecuteFunctions(ServerContext* context,
-                            const faabric::BatchExecuteRequest* request,
-                            faabric::FunctionStatusResponse* response) override;
+    /* Function call server API */
 
-    Status Unregister(ServerContext* context,
-                      const faabric::UnregisterRequest* request,
-                      faabric::FunctionStatusResponse* response) override;
+    void recvMpiMessage(faabric::transport::Message& body);
 
-    Status SetThreadResult(ServerContext* context,
-                           const faabric::ThreadResultRequest* request,
-                           faabric::FunctionStatusResponse* response) override;
+    void recvFlush(faabric::transport::Message& body);
 
-  protected:
-    void doStart(const std::string& serverAddr) override;
+    void recvExecuteFunctions(faabric::transport::Message& body);
+
+    void recvGetResources(faabric::transport::Message& body);
+
+    void recvUnregister(faabric::transport::Message& body);
+
+    void recvSetThreadResult(faabric::transport::Message& body);
 };
 }

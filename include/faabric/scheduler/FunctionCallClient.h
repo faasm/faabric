@@ -1,17 +1,10 @@
 #pragma once
 
-#include <grpcpp/channel.h>
-#include <grpcpp/client_context.h>
-#include <grpcpp/support/channel_arguments.h>
-
-#include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
-
-using namespace grpc;
-
-using grpc::Channel;
-using grpc::ClientContext;
-using grpc::Status;
+#include <faabric/scheduler/FunctionCallApi.h>
+#include <faabric/transport/MessageContext.h>
+#include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/util/config.h>
 
 namespace faabric::scheduler {
 
@@ -20,7 +13,7 @@ namespace faabric::scheduler {
 // -----------------------------------
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls();
 
-std::vector<std::pair<std::string, faabric::Message>> getFlushCalls();
+std::vector<std::pair<std::string, faabric::ResponseRequest>> getFlushCalls();
 
 std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
@@ -28,7 +21,7 @@ getBatchRequests();
 
 std::vector<std::pair<std::string, faabric::MPIMessage>> getMPIMessages();
 
-std::vector<std::pair<std::string, faabric::ResourceRequest>>
+std::vector<std::pair<std::string, faabric::ResponseRequest>>
 getResourceRequests();
 
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
@@ -43,23 +36,20 @@ void queueResourceResponse(const std::string& host,
 void clearMockRequests();
 
 // -----------------------------------
-// gRPC client
+// Message client
 // -----------------------------------
-class FunctionCallClient
+class FunctionCallClient : public faabric::transport::MessageEndpointClient
 {
   public:
     explicit FunctionCallClient(const std::string& hostIn);
 
-    const std::string host;
-
-    std::shared_ptr<Channel> channel;
-    std::unique_ptr<faabric::FunctionRPCService::Stub> stub;
+    /* Function call client external API */
 
     void sendFlush();
 
     void sendMPIMessage(const std::shared_ptr<faabric::MPIMessage> msg);
 
-    faabric::HostResources getResources(const faabric::ResourceRequest& req);
+    faabric::HostResources getResources();
 
     void executeFunctions(
       const std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -67,5 +57,8 @@ class FunctionCallClient
     void unregister(const faabric::UnregisterRequest& req);
 
     void setThreadResult(const faabric::ThreadResultRequest& req);
+
+  private:
+    void sendHeader(faabric::scheduler::FunctionCalls call);
 };
 }

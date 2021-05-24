@@ -1,7 +1,10 @@
 #include <catch.hpp>
 
+#include <DummyExecutor.h>
+#include <DummyExecutorFactory.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorld.h>
@@ -14,32 +17,58 @@
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
 
+#define TEST_TIMEOUT_MS 500
+
 using namespace scheduler;
 
 namespace tests {
-
-TEST_CASE("Test sending MPI message", "[scheduler]")
+class ClientServerFixture
 {
-    cleanFaabric();
-
-    // Start the server
+  protected:
+    Scheduler& sch;
     FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
+    FunctionCallClient cli;
 
+  public:
+    ClientServerFixture()
+      : sch(faabric::scheduler::getScheduler())
+      , cli(LOCALHOST)
+    {
+        server.start();
+        usleep(1000 * TEST_TIMEOUT_MS);
+
+        // Set up executor
+        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        faabric::scheduler::setExecutorFactory(fac);
+    }
+
+    ~ClientServerFixture()
+    {
+        cli.close();
+        sch.reset();
+        server.stop();
+    }
+};
+
+TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
+{
     // Create an MPI world on this host and one on a "remote" host
     std::string otherHost = "192.168.9.2";
 
     const char* user = "mpi";
     const char* func = "hellompi";
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
     int worldId = 123;
-    int worldSize = 2;
+    faabric::Message msg;
+    msg.set_user(user);
+    msg.set_function(func);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpiworldsize(2);
+    faabric::util::messageFactory(user, func);
 
     scheduler::MpiWorldRegistry& registry = getMpiWorldRegistry();
-    scheduler::MpiWorld& localWorld = registry.createWorld(msg, worldId);
-    localWorld.overrideHost(LOCALHOST);
-    localWorld.create(msg, worldId, worldSize);
+    scheduler::MpiWorld& localWorld =
+      registry.createWorld(msg, worldId, LOCALHOST);
 
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
@@ -58,8 +87,8 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     mpiMsg.set_destination(rankLocal);
 
     // Send the message
-    FunctionCallClient cli(LOCALHOST);
     cli.sendMPIMessage(std::make_shared<faabric::MPIMessage>(mpiMsg));
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Make sure the message has been put on the right queue locally
     std::shared_ptr<InMemoryMpiQueue> queue =
@@ -70,19 +99,17 @@ TEST_CASE("Test sending MPI message", "[scheduler]")
     REQUIRE(actualMessage->worldid() == worldId);
     REQUIRE(actualMessage->sender() == rankRemote);
 
-    // Stop the server
-    server.stop();
+    localWorld.destroy();
+    remoteWorld.destroy();
+    registry.clear();
+
+    state::getGlobalState().forceClearAll(true);
 }
 
-TEST_CASE("Test sending flush message", "[scheduler]")
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test sending flush message",
+                 "[scheduler]")
 {
-    cleanFaabric();
-
-    // Start the server
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
-
     // Set up some state
     faabric::state::State& state = faabric::state::getGlobalState();
     state.getKV("demo", "blah", 10);
@@ -93,7 +120,6 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     // Execute a couple of functions
     faabric::Message msgA = faabric::util::messageFactory("dummy", "foo");
     faabric::Message msgB = faabric::util::messageFactory("dummy", "bar");
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.callFunction(msgA);
     sch.callFunction(msgB);
 
@@ -105,10 +131,8 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     sch.clearRecordedMessages();
 
     // Send flush message
-    FunctionCallClient cli(LOCALHOST);
     cli.sendFlush();
-
-    server.stop();
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
@@ -118,13 +142,11 @@ TEST_CASE("Test sending flush message", "[scheduler]")
     REQUIRE(state.getKVCount() == 0);
 }
 
-TEST_CASE("Test broadcasting flush message", "[scheduler]")
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test broadcasting flush message",
+                 "[scheduler]")
 {
-    cleanFaabric();
     faabric::util::setMockMode(true);
-
-    // Add hosts to global set
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
 
     std::string hostA = "alpha";
     std::string hostB = "beta";
@@ -149,30 +171,21 @@ TEST_CASE("Test broadcasting flush message", "[scheduler]")
     }
 
     faabric::util::setMockMode(false);
+    faabric::scheduler::clearMockRequests();
 }
 
-TEST_CASE("Test client batch execution request", "[scheduler]")
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test client batch execution request",
+                 "[scheduler]")
 {
-    cleanFaabric();
-
-    // Start the server
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
-
     // Set up a load of calls
     int nCalls = 30;
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("foo", "bar", nCalls);
 
     // Make the request
-    FunctionCallClient cli(LOCALHOST);
     cli.executeFunctions(req);
-
-    // Stop the server
-    server.stop();
-
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Check no other hosts have been registered
     faabric::Message m = req->messages().at(0);
@@ -183,14 +196,15 @@ TEST_CASE("Test client batch execution request", "[scheduler]")
     REQUIRE(sch.getRecordedMessagesShared().empty());
 }
 
-TEST_CASE("Test get resources request", "[scheduler]")
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test get resources request",
+                 "[scheduler]")
 {
-    cleanFaabric();
-
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-
     int expectedSlots;
     int expectedUsedSlots;
+
+    faabric::HostResources originalResources;
+    originalResources.set_slots(sch.getThisHostResources().slots());
 
     SECTION("Override resources")
     {
@@ -210,29 +224,23 @@ TEST_CASE("Test get resources request", "[scheduler]")
         expectedUsedSlots = 0;
     }
 
-    // Start the server
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
-
     // Make the request
-    faabric::ResourceRequest req;
-    FunctionCallClient cli(LOCALHOST);
-    faabric::HostResources resResponse = cli.getResources(req);
+    faabric::HostResources resResponse = cli.getResources();
 
     REQUIRE(resResponse.slots() == expectedSlots);
     REQUIRE(resResponse.usedslots() == expectedUsedSlots);
 
-    // Stop the server
-    server.stop();
+    // Reset the host resources
+    sch.setThisHostResources(originalResources);
 }
 
-TEST_CASE("Test unregister request", "[scheduler]")
+TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
 {
-    cleanFaabric();
-
     faabric::util::setMockMode(true);
     std::string otherHost = "other";
+
+    faabric::HostResources originalResources;
+    originalResources.set_slots(sch.getThisHostResources().slots());
 
     // Remove capacity from this host and add on other
     faabric::HostResources thisResources;
@@ -240,7 +248,6 @@ TEST_CASE("Test unregister request", "[scheduler]")
     thisResources.set_slots(0);
     otherResources.set_slots(5);
 
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThisHostResources(thisResources);
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
@@ -254,17 +261,11 @@ TEST_CASE("Test unregister request", "[scheduler]")
     faabric::util::setMockMode(false);
     faabric::scheduler::clearMockRequests();
 
-    // Start the server
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
-
     // Make the request with a host that's not registered
     faabric::UnregisterRequest reqA;
     reqA.set_host("foobar");
     *reqA.mutable_function() = msg;
 
-    FunctionCallClient cli(LOCALHOST);
     cli.unregister(reqA);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
@@ -273,29 +274,22 @@ TEST_CASE("Test unregister request", "[scheduler]")
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
     cli.unregister(reqB);
+    usleep(1000 * TEST_TIMEOUT_MS);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
-    // Stop the server
-    server.stop();
+    sch.setThisHostResources(originalResources);
+    faabric::scheduler::clearMockRequests();
 }
 
-TEST_CASE("Test set thread result", "[scheduler]")
+TEST_CASE_METHOD(ClientServerFixture, "Test set thread result", "[scheduler]")
 {
-    cleanFaabric();
-
     // Register threads on this host
     int threadIdA = 123;
     int threadIdB = 345;
     int returnValueA = 88;
     int returnValueB = 99;
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.registerThread(threadIdA);
     sch.registerThread(threadIdB);
-
-    // Start the server
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
 
     // Make the request
     faabric::ThreadResultRequest reqA;
@@ -320,7 +314,6 @@ TEST_CASE("Test set thread result", "[scheduler]")
         REQUIRE(r == returnValueB);
     });
 
-    FunctionCallClient cli(LOCALHOST);
     cli.setThreadResult(reqA);
     cli.setThreadResult(reqB);
 
@@ -331,8 +324,5 @@ TEST_CASE("Test set thread result", "[scheduler]")
     if (tB.joinable()) {
         tB.join();
     }
-
-    // Stop the server
-    server.stop();
 }
 }

@@ -4,7 +4,6 @@
 #include <faabric/state/StateClient.h>
 #include <faabric/state/StateKeyValue.h>
 
-#include <faabric/proto/faabric.grpc.pb.h>
 #include <faabric/proto/faabric.pb.h>
 
 #include <faabric/util/clock.h>
@@ -57,7 +56,6 @@ class InMemoryStateKeyValue final : public StateKeyValue
   private:
     const std::string thisIP;
     const std::string masterIP;
-    StateClient masterClient;
     InMemoryStateKeyStatus status;
 
     InMemoryStateRegistry& stateRegistry;

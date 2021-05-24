@@ -1,21 +1,12 @@
-FROM faasm/grpc-root:0.0.20
+FROM faasm/faabric-base:0.1.0
 ARG FAABRIC_VERSION
 
-# Note - the version of grpc-root here can be quite behind as it's rebuilt very
-# rarely
+# faabic-base image is not re-built often, so tag may be behind
 
 # Flag to say we're in a container
 ENV FAABRIC_DOCKER="on"
 
-# Redis
-RUN apt update
-RUN apt install -y \
-    clang-tidy-10 \
-    libpython3-dev \
-    python3-dev \
-    python3-pip \
-    python3-venv \
-    redis-tools
+RUN apt-get update
 
 # Put the code in place
 WORKDIR /code

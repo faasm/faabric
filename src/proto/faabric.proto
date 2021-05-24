@@ -3,6 +3,14 @@ syntax = "proto3";
 package faabric;
 
 // ---------------------------------------------
+// UTIL MESSAGES
+// ---------------------------------------------
+
+message EmptyResponse {
+    int32 empty = 1;
+}
+
+// ---------------------------------------------
 // FUNCTION SCHEDULING
 // ---------------------------------------------
 
@@ -28,8 +36,8 @@ message BatchExecuteRequest {
     bytes contextData = 7;
 }
 
-message ResourceRequest {
-    int32 empty = 1;
+message ResponseRequest {
+    string returnHost = 1;
 }
 
 message HostResources {
@@ -45,26 +53,6 @@ message UnregisterRequest {
 message ThreadResultRequest {
     int32 messageId = 1;
     int32 returnValue = 2;
-}
-
-service FunctionRPCService {
-    rpc Flush (Message) returns (FunctionStatusResponse) {
-    }
-
-    rpc MPICall (MPIMessage) returns (FunctionStatusResponse) {
-    }
-
-    rpc GetResources (ResourceRequest) returns (HostResources) {
-    }
-
-    rpc ExecuteFunctions (BatchExecuteRequest) returns (FunctionStatusResponse) {
-    }
-
-    rpc Unregister (UnregisterRequest) returns (FunctionStatusResponse) {
-    }
-
-    rpc SetThreadResult (ThreadResultRequest) returns (FunctionStatusResponse) {
-    }
 }
 
 message FunctionStatusResponse {
@@ -165,31 +153,11 @@ message Message {
 // STATE SERVICE
 // ---------------------------------------------
 
-service StateRPCService {
-    rpc Pull (stream StateChunkRequest) returns (stream StatePart) {
-    }
-    rpc Push (stream StatePart) returns (StateResponse) {
-    }
-    rpc Size(StateRequest) returns (StateSizeResponse) {
-    }
-    rpc Append (StateRequest) returns (StateResponse) {
-    }
-    rpc ClearAppended (StateRequest) returns (StateResponse) {
-    }
-    rpc PullAppended (StateAppendedRequest) returns (StateAppendedResponse) {
-    }
-    rpc Lock (StateRequest) returns (StateResponse) {
-    }
-    rpc Unlock (StateRequest) returns (StateResponse) {
-    }
-    rpc Delete (StateRequest) returns (StateResponse) {
-    }
-}
-
 message StateRequest {
     string user = 1;
     string key = 2;
     bytes data = 3;
+    string returnHost = 4;
 }
 
 message StateChunkRequest {
@@ -197,6 +165,7 @@ message StateChunkRequest {
     string key = 2;
     uint64 offset = 3;
     uint64 chunkSize = 4;
+    string returnHost = 5;
 }
 
 message StateResponse {
@@ -210,6 +179,7 @@ message StatePart {
     string key = 2;
     uint64 offset = 3;
     bytes data = 4;
+    string returnHost = 5;
 }
 
 message StateSizeResponse {
@@ -222,6 +192,7 @@ message StateAppendedRequest {
     string user = 1;
     string key = 2;
     uint32 nValues = 3;
+    string returnHost = 4;
 }
 
 message StateAppendedResponse {

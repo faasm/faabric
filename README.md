@@ -35,16 +35,10 @@ docker-compose down
 
 ### Native
 
-The only external dependencies not installed through CMake are:
-
-- `gRPC` - instructions [here](https://grpc.io/docs/languages/cpp/quickstart/)
-- `flatbuffers` - instructions
-  [here](https://google.github.io/flatbuffers/flatbuffers_guide_building.html)
-
-*NOTE* - at the time of writing, compatibility between gRPC and FlatBuffers
-depends on getting a precise version match. See
-[`grpc-root.dockerfile`](docker/grpc-root.dockerfile) to see the latest
-compatible installation steps.
+Most external dependencies are installed through CMake in
+[cmake/ExternalProjects.cmake](./cmake/ExternalProjects.cmake).
+The remaining installed packages can be inspected in the [`faabric-base`](
+./docker/faabric-base.dockerfile) dockerfile.
 
 Use of Clang and Ninja is recommended. From the root of this project you can
 run:

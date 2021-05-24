@@ -13,8 +13,6 @@ class MpiExecutor final : public Executor
   public:
     explicit MpiExecutor(const faabric::Message& msg);
 
-    virtual ~MpiExecutor();
-
     int32_t executeTask(
       int threadPoolIdx,
       int msgIdx,

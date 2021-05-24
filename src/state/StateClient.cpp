@@ -1,138 +1,129 @@
 #include <faabric/state/StateClient.h>
-
-#include <faabric/rpc/macros.h>
-#include <faabric/util/logging.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/macros.h>
-#include <grpcpp/create_channel.h>
-#include <grpcpp/security/credentials.h>
 
 namespace faabric::state {
-ChannelArguments getChannelArgs()
-{
-    ChannelArguments channelArgs;
-
-    // Can set channel properties here if need be
-
-    return channelArgs;
-}
-
 StateClient::StateClient(const std::string& userIn,
                          const std::string& keyIn,
                          const std::string& hostIn)
-  : user(userIn)
+  : faabric::transport::MessageEndpointClient(hostIn, STATE_PORT)
+  , user(userIn)
   , key(keyIn)
   , host(hostIn)
   , reg(state::getInMemoryStateRegistry())
-  , channel(grpc::CreateCustomChannel(host + ":" + std::to_string(STATE_PORT),
-                                      grpc::InsecureChannelCredentials(),
-                                      getChannelArgs()))
-  , stub(faabric::StateRPCService::NewStub(channel))
-{}
+{
+    this->open(faabric::transport::getGlobalMessageContext());
+}
+
+void StateClient::sendHeader(faabric::state::StateCalls call)
+{
+    uint8_t header = static_cast<uint8_t>(call);
+    send(&header, sizeof(header), true);
+}
+
+faabric::transport::Message StateClient::awaitResponse()
+{
+    // Call the superclass implementation
+    return MessageEndpointClient::awaitResponse(STATE_PORT + REPLY_PORT_OFFSET);
+}
+
+void StateClient::sendStateRequest(faabric::state::StateCalls header,
+                                   bool expectReply)
+{
+    sendStateRequest(header, nullptr, 0, expectReply);
+}
+
+void StateClient::sendStateRequest(faabric::state::StateCalls header,
+                                   const uint8_t* data,
+                                   int length,
+                                   bool expectReply)
+{
+    faabric::StateRequest request;
+    request.set_user(user);
+    request.set_key(key);
+    if (length > 0) {
+        request.set_data(data, length);
+    }
+    request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+    SEND_MESSAGE(header, request)
+}
 
 void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
 {
-    faabric::StateResponse response;
-    ClientContext clientContext;
-    auto stream = stub->Push(&clientContext, &response);
+    for (const auto& chunk : chunks) {
+        faabric::StatePart stateChunk;
+        stateChunk.set_user(user);
+        stateChunk.set_key(key);
+        stateChunk.set_offset(chunk.offset);
+        stateChunk.set_data(chunk.data, chunk.length);
+        stateChunk.set_returnhost(
+          faabric::util::getSystemConfig().endpointHost);
+        SEND_MESSAGE(faabric::state::StateCalls::Push, stateChunk)
 
-    for (auto chunk : chunks) {
-        faabric::StatePart c;
-        c.set_user(user);
-        c.set_key(key);
-        c.set_offset(chunk.offset);
-        c.set_data(chunk.data, chunk.length);
-
-        if (!stream->Write(c)) {
-            break;
-        };
+        // Await for a response, but discard it as it is empty
+        try {
+            (void)awaitResponse();
+        } catch (...) {
+            faabric::util::getLogger()->error("Error in awaitReponse");
+            throw;
+        }
     }
-
-    stream->WritesDone();
-
-    CHECK_RPC("push_chunks", stream->Finish());
 }
 
 void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
                              uint8_t* bufferStart)
 {
-    ClientContext context;
-    auto stream = stub->Pull(&context);
+    for (const auto& chunk : chunks) {
+        // Prepare request
+        faabric::StateChunkRequest request;
+        request.set_user(user);
+        request.set_key(key);
+        request.set_offset(chunk.offset);
+        request.set_chunksize(chunk.length);
+        request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+        SEND_MESSAGE(faabric::state::StateCalls::Pull, request)
 
-    // Writer thread in background
-    std::thread writer([this, &chunks, &stream] {
-        for (const auto& chunk : chunks) {
-            faabric::StateChunkRequest request;
-            request.set_user(user);
-            request.set_key(key);
-            request.set_offset(chunk.offset);
-            request.set_chunksize(chunk.length);
-
-            if (!stream->Write(request)) {
-                faabric::util::getLogger()->error(
-                  "Failed to request {}/{} ({} -> {})",
-                  user,
-                  key,
-                  chunk.offset,
-                  chunk.offset + chunk.length);
-                break;
-            }
-        }
-
-        stream->WritesDone();
-    });
-
-    // Read responses in this thread
-    faabric::StatePart response;
-    while (stream->Read(&response)) {
+        // Receive message
+        faabric::transport::Message recvMsg = awaitResponse();
+        PARSE_RESPONSE(faabric::StatePart, recvMsg.data(), recvMsg.size())
         std::copy(response.data().begin(),
                   response.data().end(),
                   bufferStart + response.offset());
     }
-
-    // Wait for the writer thread
-    if (writer.joinable()) {
-        writer.join();
-    }
-
-    CHECK_RPC("pull_chunks", stream->Finish())
 }
 
 void StateClient::append(const uint8_t* data, size_t length)
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send request
+    sendStateRequest(faabric::state::StateCalls::Append, data, length);
 
-    request.set_user(user);
-    request.set_key(key);
-    request.set_data(data, length);
-
-    ClientContext context;
-    CHECK_RPC("state_append", stub->Append(&context, request, &response))
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 {
+    // Prepare request
     faabric::StateAppendedRequest request;
-    faabric::StateAppendedResponse response;
-
     request.set_user(user);
     request.set_key(key);
     request.set_nvalues(nValues);
+    request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
+    SEND_MESSAGE(faabric::state::StateCalls::PullAppended, request)
 
-    ClientContext context;
-    CHECK_RPC("state_pull_appended",
-              stub->PullAppended(&context, request, &response))
+    // Receive response
+    faabric::transport::Message recvMsg = awaitResponse();
+    PARSE_RESPONSE(
+      faabric::StateAppendedResponse, recvMsg.data(), recvMsg.size())
 
+    // Process response
     size_t offset = 0;
     for (auto& value : response.values()) {
         if (offset > length) {
-            faabric::util::getLogger()->error(
-              "Buffer not large enough for appended data (offset={}, "
-              "length={})",
+            throw std::runtime_error(fmt::format(
+              "Buffer not large enough for appended data (offset={}, length{})",
               offset,
-              length);
-            throw std::runtime_error(
-              "Buffer not large enough for appended data");
+              length));
         }
 
         auto valueData = BYTES_CONST(value.data().c_str());
@@ -143,62 +134,47 @@ void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 
 void StateClient::clearAppended()
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send request
+    sendStateRequest(faabric::state::StateCalls::ClearAppended);
 
-    request.set_user(user);
-    request.set_key(key);
-
-    ClientContext context;
-    CHECK_RPC("state_clear_appended",
-              stub->ClearAppended(&context, request, &response))
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 size_t StateClient::stateSize()
 {
-    faabric::StateRequest request;
-    request.set_user(user);
-    request.set_key(key);
+    // Include the return address in the message body
+    sendStateRequest(faabric::state::StateCalls::Size, true);
 
-    faabric::StateSizeResponse response;
-    ClientContext context;
-    CHECK_RPC("state_size", stub->Size(&context, request, &response))
+    // Receive message
+    faabric::transport::Message recvMsg = awaitResponse();
+    PARSE_RESPONSE(faabric::StateSizeResponse, recvMsg.data(), recvMsg.size())
     return response.statesize();
 }
 
 void StateClient::deleteState()
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send request
+    sendStateRequest(faabric::state::StateCalls::Delete, true);
 
-    request.set_user(user);
-    request.set_key(key);
-
-    ClientContext context;
-    CHECK_RPC("state_delete", stub->Delete(&context, request, &response))
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 void StateClient::lock()
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    // Send request
+    sendStateRequest(faabric::state::StateCalls::Lock);
 
-    request.set_user(user);
-    request.set_key(key);
-
-    ClientContext context;
-    CHECK_RPC("state_lock", stub->Lock(&context, request, &response))
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 
 void StateClient::unlock()
 {
-    faabric::StateRequest request;
-    faabric::StateResponse response;
+    sendStateRequest(faabric::state::StateCalls::Unlock);
 
-    request.set_user(user);
-    request.set_key(key);
-
-    ClientContext context;
-    CHECK_RPC("state_unlock", stub->Unlock(&context, request, &response))
+    // Await for a response, but discard it as it is empty
+    (void)awaitResponse();
 }
 }

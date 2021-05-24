@@ -14,4 +14,4 @@ set(LIB_FILES
 
 faabric_lib(state "${LIB_FILES}")
 
-target_link_libraries(state proto redis)
+target_link_libraries(state proto redis transport)
