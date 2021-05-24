@@ -94,11 +94,11 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
             auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
                                           zmq::send_flags::sndmore);
             if (res != msgSize) {
-                throw std::runtime_error(
-                  fmt::format("Sent different bytes than expected (sent "
+                logger->error("Sent different bytes than expected (sent "
                               "{}, expected {})",
                               res.value_or(0),
-                              msgSize));
+                              msgSize);
+                throw std::runtime_error("Error sending message");
             }
         } catch (zmq::error_t& e) {
             logger->error("Error sending message: {}", e.what());
@@ -109,11 +109,11 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
             auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
                                           zmq::send_flags::none);
             if (res != msgSize) {
-                throw std::runtime_error(
-                  fmt::format("Sent different bytes than expected (sent "
+                logger->error("Sent different bytes than expected (sent "
                               "{}, expected {})",
                               res.value_or(0),
-                              msgSize));
+                              msgSize);
+                throw std::runtime_error("Error sending message");
             }
         } catch (zmq::error_t& e) {
             logger->error("Error sending message: {}", e.what());
@@ -122,7 +122,8 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     }
 }
 
-// TODO - use optional size parameter
+// By passing the expected recv buffer size, we instrument zeromq to receive on
+// our provisioned buffer
 Message MessageEndpoint::recv(int size)
 {
     assert(tid == std::this_thread::get_id());
@@ -138,11 +139,11 @@ Message MessageEndpoint::recv(int size)
         try {
             auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
             if (res.has_value() && (res->size != res->untruncated_size)) {
-                throw std::runtime_error(
-                  fmt::format("Received more bytes than buffer can hold. "
+                logger->error("Received more bytes than buffer can hold. "
                               "Received: {}, capacity {}",
                               res->untruncated_size,
-                              res->size));
+                              res->size);
+                throw std::runtime_error("Error receiving message");
             }
         } catch (zmq::error_t& e) {
             if (e.num() == ZMQ_ETERM) {
@@ -163,7 +164,8 @@ Message MessageEndpoint::recv(int size)
     try {
         auto res = this->socket->recv(msg);
         if (!res.has_value()) {
-            throw std::runtime_error("Receive failed with EAGAIN");
+            logger->error("Error receiving message: EAGAIN");
+            throw std::runtime_error("Error receiving message");
         }
     } catch (zmq::error_t& e) {
         if (e.num() == ZMQ_ETERM) {
@@ -186,7 +188,7 @@ void MessageEndpoint::close(bool bind)
         const auto& logger = faabric::util::getLogger();
 
         if (tid != std::this_thread::get_id()) {
-            logger->error("Closing socket from a different thread");
+            logger->warn("Closing socket from a different thread");
         }
 
         std::string address =

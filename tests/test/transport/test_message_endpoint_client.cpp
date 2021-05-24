@@ -12,11 +12,23 @@ const int testPort = 9999;
 const int testReplyPort = 9996;
 
 namespace tests {
-TEST_CASE("Test open/close one client", "[transport]")
+class MessageContextFixture
 {
-    // Get message context
-    auto& context = getGlobalMessageContext();
+  protected:
+    MessageContext& context;
 
+  public:
+    MessageContextFixture()
+      : context(getGlobalMessageContext())
+    {}
+
+    ~MessageContextFixture() { context.close(); }
+};
+
+TEST_CASE_METHOD(MessageContextFixture,
+                 "Test open/close one client",
+                 "[transport]")
+{
     // Open an endpoint client, don't bind
     MessageEndpoint cli(thisHost, testPort);
     REQUIRE_NOTHROW(cli.open(context, SocketType::PULL, false));
@@ -28,16 +40,12 @@ TEST_CASE("Test open/close one client", "[transport]")
     // Close all endpoint clients
     REQUIRE_NOTHROW(cli.close(false));
     REQUIRE_NOTHROW(secondCli.close(true));
-
-    // Close message context
-    context.close();
 }
 
-TEST_CASE("Test send/recv one message", "[transport]")
+TEST_CASE_METHOD(MessageContextFixture,
+                 "Test send/recv one message",
+                 "[transport]")
 {
-    // Get message context
-    auto& context = getGlobalMessageContext();
-
     // Open the source endpoint client, don't bind
     SendMessageEndpoint src(thisHost, testPort);
     src.open(context);
@@ -61,21 +69,15 @@ TEST_CASE("Test send/recv one message", "[transport]")
     // Close endpoints
     src.close();
     dst.close();
-
-    // Close message context
-    context.close();
 }
 
-TEST_CASE("Test await response", "[transport]")
+TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
 {
-    // Get message context
-    auto& context = getGlobalMessageContext();
-
     // Prepare common message/response
     std::string expectedMsg = "Hello ";
     std::string expectedResponse = "world!";
 
-    std::thread senderThread([&context, expectedMsg, expectedResponse] {
+    std::thread senderThread([this, expectedMsg, expectedResponse] {
         // Open the source endpoint client, don't bind
         MessageEndpointClient src(thisHost, testPort);
         src.open(context);
@@ -117,19 +119,16 @@ TEST_CASE("Test await response", "[transport]")
     // Close receiving endpoints
     dst.close();
     dstResponse.close();
-
-    // Close message context
-    context.close();
 }
 
-TEST_CASE("Test send/recv many messages", "[transport]")
+TEST_CASE_METHOD(MessageContextFixture,
+                 "Test send/recv many messages",
+                 "[transport]")
 {
-    auto& context = getGlobalMessageContext();
-
     int numMessages = 10000;
     std::string baseMsg = "Hello ";
 
-    std::thread senderThread([&context, numMessages, baseMsg] {
+    std::thread senderThread([this, numMessages, baseMsg] {
         // Open the source endpoint client, don't bind
         SendMessageEndpoint src(thisHost, testPort);
         src.open(context);
@@ -165,15 +164,12 @@ TEST_CASE("Test send/recv many messages", "[transport]")
 
     // Close the destination endpoint
     dst.close();
-
-    // Close the messaging context
-    context.close();
 }
 
-TEST_CASE("Test send/recv many messages from many clients", "[transport]")
+TEST_CASE_METHOD(MessageContextFixture,
+                 "Test send/recv many messages from many clients",
+                 "[transport]")
 {
-    auto& context = getGlobalMessageContext();
-
     int numMessages = 10000;
     int numSenders = 10;
     std::string expectedMsg = "Hello from client";
@@ -181,7 +177,7 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
 
     for (int j = 0; j < numSenders; j++) {
         senderThreads.emplace_back(
-          std::thread([&context, numMessages, expectedMsg] {
+          std::thread([this, numMessages, expectedMsg] {
               // Open the source endpoint client, don't bind
               SendMessageEndpoint src(thisHost, testPort);
               src.open(context);
@@ -217,8 +213,5 @@ TEST_CASE("Test send/recv many messages from many clients", "[transport]")
 
     // Close the destination endpoint
     dst.close();
-
-    // Close the messaging context
-    context.close();
 }
 }
