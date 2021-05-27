@@ -584,11 +584,21 @@ FunctionCallClient& Scheduler::getFunctionCallClient(
 
 SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
 {
-    auto it = snapshotClients.find(otherHost);
+    // Note, our keys here have to include the tid as the clients can only be
+    // used within the same thread
+    std::thread::id tid = std::this_thread::get_id();
+    std::stringstream ss;
+    ss << otherHost << "_" << tid;
+    std::string key = ss.str();
+
+    auto it = snapshotClients.find(key);
     if (it == snapshotClients.end()) {
-        auto _it = snapshotClients.try_emplace(otherHost, otherHost);
+        auto _it = snapshotClients.try_emplace(key, otherHost);
         if (!_it.second) {
-            throw std::runtime_error("Error inserting function call client");
+            logger->error("Could not add snapshot client key {} for host {}",
+                          key,
+                          otherHost);
+            throw std::runtime_error("Error inserting snapshot client");
         }
         it = _it.first;
     }

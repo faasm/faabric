@@ -486,7 +486,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (auto& r : results) {
         REQUIRE(r.first == thisHost);
         auto args = r.second;
-        sch.setThreadResult(std::get<0>(args), std::get<1>(args));
+        sch.setThreadResultLocally(std::get<0>(args), std::get<1>(args));
     }
 
     // Rejoin the other thread

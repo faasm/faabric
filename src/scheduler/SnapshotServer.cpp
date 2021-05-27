@@ -1,7 +1,9 @@
 #include <faabric/flat/faabric_generated.h>
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/SnapshotServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
@@ -64,6 +66,10 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
     // Note that now the snapshot data is owned by Faabric and will be deleted
     // later, so we don't want the message to delete it
     msg.persist();
+
+    // Send response
+    faabric::EmptyResponse response;
+    SEND_SERVER_RESPONSE(response, r->return_host()->str(), SNAPSHOT_PORT)
 }
 
 void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
@@ -100,6 +106,10 @@ void SnapshotServer::recvPushSnapshotDiffs(faabric::transport::Message& msg)
                                      r->key()->c_str());
 
     applyDiffsToSnapshot(r->key()->str(), r->chunks());
+
+    // Send response
+    faabric::EmptyResponse response;
+    SEND_SERVER_RESPONSE(response, r->return_host()->str(), SNAPSHOT_PORT)
 }
 
 void SnapshotServer::applyDiffsToSnapshot(

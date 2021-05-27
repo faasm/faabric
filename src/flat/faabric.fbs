@@ -1,4 +1,5 @@
 table SnapshotPushRequest {
+  return_host:string;
   key:string;
   contents:[ubyte];
 }
@@ -13,6 +14,7 @@ table SnapshotDiffChunk {
 }
 
 table SnapshotDiffPushRequest {
+  return_host:string;
   key:string;
   chunks:[SnapshotDiffChunk];
 }
