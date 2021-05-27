@@ -29,11 +29,6 @@ jobs:
         run: git fetch origin ${GITHUB_REF}:ci-branch
       - name: "Check out branch"
         run: git checkout --force ci-branch
-      # Note - here we build a release build to be the same as the container
-      - name: "Run cmake"
-        run: inv dev.cmake --build=Release
-      - name: "Rerun build to ensure code is up to date"
-        run: inv dev.cc faabric_tests
       # --- Formatting checks ---
       - name: "Python formatting check"
         run: ./bin/check_python.sh
