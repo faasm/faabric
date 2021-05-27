@@ -192,7 +192,11 @@ void SnapshotClient::pushThreadResult(
 
     } else {
         const auto& logger = faabric::util::getLogger();
-        logger->debug("Sending thread result for {} to {}", messageId, host);
+        logger->debug(
+          "Sending thread result for {} to {} (plus {} snapshot diffs)",
+          messageId,
+          host,
+          diffs.size());
 
         flatbuffers::FlatBufferBuilder mb;
 

@@ -3,7 +3,7 @@
 
 namespace faabric::util {
 
-std::vector<faabric::util::SnapshotDiff> SnapshotData::getDirtyPages()
+std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
 {
     if (data == nullptr || size == 0) {
         std::vector<faabric::util::SnapshotDiff> empty;
@@ -11,12 +11,12 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::getDirtyPages()
     }
 
     // Get dirty pages
-    int nPages = faabric::util::getRequiredHostPages(size);
+    int nPages = getRequiredHostPages(size);
     std::vector<bool> dirtyFlags = faabric::util::getDirtyPages(data, nPages);
 
     // Convert to snapshot diffs
     // TODO - reduce number of diffs by merging adjacent dirty pages
-    std::vector<faabric::util::SnapshotDiff> diffs;
+    std::vector<SnapshotDiff> diffs;
     for (int i = 0; i < nPages; i++) {
         if (dirtyFlags.at(i)) {
             uint32_t offset = i * faabric::util::HOST_PAGE_SIZE;

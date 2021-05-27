@@ -233,18 +233,19 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
         if (isLastTask && isThreads) {
-            logger->debug("Task {} finished, returning snapshot diffs",
-                          msg.id());
-
             // Get diffs
             faabric::util::SnapshotData d = snapshot();
             std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
 
+            logger->debug("Task {} finished, returning {} snapshot diffs",
+                          msg.id(),
+                          diffs.size());
+
+            // Reset dirty page tracking now that we've got the diffs
+            faabric::util::resetDirtyTracking();
+
             // Send diffs along with thread result
             sch.setThreadResult(msg, returnValue, diffs);
-
-            // Reset dirty page tracking
-            faabric::util::resetDirtyTracking();
         } else if (isThreads) {
             // Set non-final thread result
             sch.setThreadResult(msg, returnValue);

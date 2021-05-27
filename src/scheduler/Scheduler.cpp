@@ -276,6 +276,10 @@ std::vector<std::string> Scheduler::callFunctions(
             // Do the snapshot diff pushing
             if (!snapshotDiffs.empty()) {
                 for (const auto& h : thisRegisteredHosts) {
+                    logger->debug("Pushing {} snapshot diffs for {} to {}",
+                                  snapshotDiffs.size(),
+                                  funcStr,
+                                  h);
                     SnapshotClient& c = getSnapshotClient(h);
                     c.pushSnapshotDiffs(snapshotKey, snapshotDiffs);
                 }
@@ -284,6 +288,8 @@ std::vector<std::string> Scheduler::callFunctions(
             // Now reset the dirty page tracking, as we want the next batch of
             // diffs to contain everything from now on (including the updates
             // sent back from all the threads)
+            logger->debug("Restting dirty tracking after pushing diffs {}",
+                          funcStr);
             faabric::util::resetDirtyTracking();
         }
 
@@ -525,7 +531,7 @@ int Scheduler::scheduleFunctionsOnHost(
     }
 
     logger->debug(
-      "Sending {}/{} {} to {}", available, nMessages, funcStr, host);
+      "Sending {}/{} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
     getFunctionCallClient(host).executeFunctions(hostRequest);
 
@@ -723,29 +729,19 @@ void Scheduler::setThreadResult(
     bool isMaster = msg.masterhost() == conf.endpointHost;
 
     if (isMaster) {
-        setThreadResult(msg.id(), returnValue);
+        setThreadResultLocally(msg.id(), returnValue);
     } else {
         SnapshotClient& c = getSnapshotClient(msg.masterhost());
 
         if (diffs.empty()) {
-            logger->debug("Sending thread result {} for {} to {}",
-                          returnValue,
-                          msg.id(),
-                          msg.masterhost());
             c.pushThreadResult(msg.id(), returnValue);
-
         } else {
-            logger->debug("Sending thread result {} for {} to {} plus {} diffs",
-                          returnValue,
-                          msg.id(),
-                          msg.masterhost(),
-                          diffs.size());
             c.pushThreadResult(msg.id(), returnValue, msg.snapshotkey(), diffs);
         }
     }
 }
 
-void Scheduler::setThreadResult(uint32_t msgId, int32_t returnValue)
+void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
     logger->debug("Setting result for thread {} to {}", msgId, returnValue);
     threadResults[msgId].set_value(returnValue);

@@ -7,12 +7,13 @@
 #include <sys/mman.h>
 
 namespace faabric::snapshot {
-SnapshotRegistry::SnapshotRegistry() {}
+SnapshotRegistry::SnapshotRegistry()
+  : logger(faabric::util::getLogger())
+{}
 
 faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
   const std::string& key)
 {
-    auto logger = faabric::util::getLogger();
     if (snapshotMap.count(key) == 0) {
         logger->error("Snapshot for {} does not exist", key);
         throw std::runtime_error("Snapshot doesn't exist");
@@ -23,7 +24,6 @@ faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
 
 void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
-    auto logger = faabric::util::getLogger();
     faabric::util::SnapshotData d = getSnapshot(key);
 
     if (!faabric::util::isPageAligned((void*)target)) {
@@ -108,8 +108,6 @@ void SnapshotRegistry::clear()
 
 int SnapshotRegistry::writeSnapshotToFd(const std::string& key)
 {
-    auto logger = faabric::util::getLogger();
-
     int fd = ::memfd_create(key.c_str(), 0);
     faabric::util::SnapshotData snapData = getSnapshot(key);
 

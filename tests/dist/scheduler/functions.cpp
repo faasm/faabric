@@ -12,7 +12,8 @@
 
 namespace tests {
 
-int handleSimpleThread(int threadPoolIdx,
+int handleSimpleThread(faabric::scheduler::Executor* exec,
+                       int threadPoolIdx,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -32,7 +33,8 @@ int handleSimpleThread(int threadPoolIdx,
     return returnValue;
 }
 
-int handleSimpleFunction(int threadPoolIdx,
+int handleSimpleFunction(faabric::scheduler::Executor* exec,
+                         int threadPoolIdx,
                          int msgIdx,
                          std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -49,33 +51,29 @@ int handleSimpleFunction(int threadPoolIdx,
     return 0;
 }
 
-int handleFakeDiffsFunction(int threadPoolIdx,
+int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
+                            int threadPoolIdx,
                             int msgIdx,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
+    faabric::util::SnapshotData snap = exec->snapshot();
+
     std::string msgInput = msg.inputdata();
     std::string snapshotKey = msg.snapshotkey();
 
-    // Create some fake diffs
+    // Modify the executor's memory
     std::vector<uint8_t> inputBytes = faabric::util::stringToBytes(msgInput);
     std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
 
     uint32_t offsetA = 10;
     uint32_t offsetB = 100;
 
-    faabric::util::SnapshotDiff diffA(
-      offsetA, keyBytes.data(), keyBytes.size());
-    faabric::util::SnapshotDiff diffB(
-      offsetB, inputBytes.data(), inputBytes.size());
+    std::memcpy(snap.data + offsetA, keyBytes.data(), keyBytes.size());
+    std::memcpy(snap.data + offsetB, inputBytes.data(), inputBytes.size());
 
-    std::vector<faabric::util::SnapshotDiff> diffs = { diffA, diffB };
-
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResult(msg, 123, diffs);
-
-    return 0;
+    return 123;
 }
 
 void registerSchedulerTestFunctions()

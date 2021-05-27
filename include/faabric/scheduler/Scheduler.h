@@ -52,9 +52,9 @@ class Executor
 
     void releaseClaim();
 
-  protected:
     virtual faabric::util::SnapshotData snapshot();
 
+  protected:
     virtual void restore(const faabric::Message& msg);
 
     virtual void postFinish();
@@ -122,7 +122,7 @@ class Scheduler
                          int32_t returnValue,
                          const std::vector<faabric::util::SnapshotDiff>& diffs);
 
-    void setThreadResult(uint32_t msgId, int32_t returnValue);
+    void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
 
     int32_t awaitThreadResult(uint32_t messageId);
 

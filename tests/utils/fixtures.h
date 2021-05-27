@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faabric/util/memory.h"
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/testing.h>
@@ -13,6 +14,8 @@ class BaseTestFixture
       , conf(faabric::util::getSystemConfig())
       , redis(faabric::redis::Redis::getQueue())
     {
+        faabric::util::resetDirtyTracking();
+
         faabric::util::setMockMode(false);
         faabric::util::setTestMode(true);
 
@@ -39,6 +42,8 @@ class BaseTestFixture
         conf.reset();
 
         redis.flushAll();
+
+        faabric::util::resetDirtyTracking();
     };
 
   protected:

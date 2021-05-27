@@ -246,7 +246,7 @@ class TestExecutorFixture : public BaseTestFixture
     faabric::snapshot::SnapshotRegistry& reg;
 
     std::string snapshotKey = "foobar";
-    uint8_t* snapshotData;
+    uint8_t* snapshotData = nullptr;
     int snapshotNPages = 10;
     size_t snapshotSize = snapshotNPages * faabric::util::HOST_PAGE_SIZE;
 
@@ -453,7 +453,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     });
 
     // Give it time to have made the request
-    usleep(SHORT_TEST_TIMEOUT_MS * 500);
+    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
 
     // Check restore hasn't been called yet
     REQUIRE(restoreCount == 0);
@@ -820,29 +820,33 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(faabric::scheduler::getSnapshotDiffPushes().empty());
 
     // Check that we're not registering any dirty pages on the snapshot
-    faabric::util::SnapshotData& snapData = reg.getSnapshot(snapshotKey);
-    REQUIRE(snapData.getDirtyPages().empty());
+    faabric::util::SnapshotData& snap = reg.getSnapshot(snapshotKey);
+    REQUIRE(snap.getDirtyPages().empty());
 
     // Now reset snapshot pushes of all kinds
     faabric::scheduler::clearMockSnapshotRequests();
 
     // Make an edit to the snapshot memory and get the expected diffs
-    snapshotData[0] = 2;
-    snapshotData[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 3;
+    snap.data[0] = 9;
+    snap.data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-      snapData.getDirtyPages();
+      snap.getDirtyPages();
     REQUIRE(expectedDiffs.size() == 2);
 
-    // Invoke just one more function
+    // Set up another function
     std::shared_ptr<BatchExecuteRequest> reqB =
       faabric::util::batchExecFactory("dummy", "blah", 1);
     reqB->set_type(faabric::BatchExecuteRequest::THREADS);
     reqB->mutable_messages()->at(0).set_snapshotkey(snapshotKey);
 
+    // Invoke the function
     std::vector<std::string> expectedHostsB = { thisHost };
     std::vector<std::string> actualHostsB =
       executeWithTestExecutor(reqB, false);
     REQUIRE(actualHostsB == expectedHostsB);
+
+    // Wait for it to finish locally
+    sch.awaitThreadResult(reqB->mutable_messages()->at(0).id());
 
     // Check the full snapshot hasn't been pushed
     REQUIRE(faabric::scheduler::getSnapshotPushes().empty());

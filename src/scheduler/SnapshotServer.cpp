@@ -48,7 +48,7 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
     SnapshotPushRequest* r =
       flatbuffers::GetMutableRoot<SnapshotPushRequest>(msg.udata());
 
-    faabric::util::getLogger()->info("Pushing shapshot {} (size {})",
+    faabric::util::getLogger()->info("Receiving shapshot {} (size {})",
                                      r->key()->c_str(),
                                      r->contents()->size());
 
@@ -87,7 +87,7 @@ void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
       r->return_value());
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResult(r->message_id(), r->return_value());
+    sch.setThreadResultLocally(r->message_id(), r->return_value());
 }
 
 void SnapshotServer::recvPushSnapshotDiffs(faabric::transport::Message& msg)
