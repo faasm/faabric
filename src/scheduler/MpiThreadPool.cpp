@@ -4,7 +4,7 @@
 namespace faabric::scheduler {
 MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
   : size(nThreads)
-  , shutdown(false)
+  , isShutdown(false)
 {
     faabric::util::getLogger()->debug(
       "Starting an MpiAsyncThreadPool of size {}", nThreads);
@@ -19,7 +19,7 @@ MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
     }
 }
 
-MpiAsyncThreadPool::~MpiAsyncThreadPool()
+void MpiAsyncThreadPool::shutdown()
 {
     faabric::util::getLogger()->debug("Shutting down MpiAsyncThreadPool");
 
@@ -39,7 +39,7 @@ void MpiAsyncThreadPool::entrypoint(int i)
 {
     faabric::scheduler::ReqQueueType req;
 
-    while (!this->shutdown) {
+    while (!this->isShutdown) {
         req = getMpiReqQueue()->dequeue();
 
         int id = std::get<0>(req);
@@ -51,9 +51,11 @@ void MpiAsyncThreadPool::entrypoint(int i)
             // The shutdown tuple includes a TLS cleanup function that we run
             // _once per thread_ and exit
             func();
-            if (!this->shutdown) {
-                this->shutdown = true;
+            if (!this->isShutdown) {
+                this->isShutdown = true;
             }
+            faabric::util::getLogger()->trace(
+              "Mpi thread {}/{} shut down", i + 1, size);
             break;
         }
 

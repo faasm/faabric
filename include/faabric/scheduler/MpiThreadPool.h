@@ -23,7 +23,7 @@ class MpiAsyncThreadPool
   public:
     explicit MpiAsyncThreadPool(int nThreads);
 
-    ~MpiAsyncThreadPool();
+    void shutdown();
 
     int size;
 
@@ -31,7 +31,7 @@ class MpiAsyncThreadPool
 
   private:
     std::vector<std::thread> threadPool;
-    std::atomic<bool> shutdown;
+    std::atomic<bool> isShutdown;
 
     std::shared_ptr<MpiReqQueue> localReqQueue;
 
