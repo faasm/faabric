@@ -4,6 +4,7 @@
 
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 
 namespace tests {
 class DistTestsFixture
@@ -11,15 +12,21 @@ class DistTestsFixture
   protected:
     faabric::scheduler::Scheduler& sch;
     faabric::util::SystemConfig& conf;
+    faabric::snapshot::SnapshotRegistry& reg;
+
     std::set<std::string> otherHosts;
 
   public:
     DistTestsFixture()
       : sch(faabric::scheduler::getScheduler())
       , conf(faabric::util::getSystemConfig())
+      , reg(faabric::snapshot::getSnapshotRegistry())
     {
         // Make sure this host is available
         sch.addHostToGlobalSet();
+
+        // Clear local snapshot info
+        reg.clear();
 
         // Get other hosts
         std::string thisHost = conf.endpointHost;
@@ -34,6 +41,7 @@ class DistTestsFixture
 
     ~DistTestsFixture()
     {
+        reg.clear();
         sch.reset();
         conf.reset();
     }

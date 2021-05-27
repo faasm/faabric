@@ -10,6 +10,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/gids.h>
 
 namespace tests {
 
@@ -19,7 +20,7 @@ std::string setUpDummySnapshot()
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData snap;
-    std::string snapKey = "foobar";
+    std::string snapKey = std::to_string(faabric::util::generateGid());
     snap.data = snapData.data();
     snap.size = snapData.size();
 

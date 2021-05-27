@@ -1,4 +1,3 @@
-#include "faabric/util/memory.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -9,6 +8,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/random.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
@@ -113,12 +113,6 @@ void Scheduler::reset()
 
     closeFunctionCallClients();
     closeSnapshotClients();
-
-    // Close snapshot clients
-    for (auto& iter : snapshotClients) {
-        iter.second.close();
-    }
-    snapshotClients.clear();
 }
 
 void Scheduler::shutdown()
