@@ -3,6 +3,7 @@
 namespace faabric::transport {
 MessageContext::MessageContext()
   : ctx(1)
+  , isContextShutDown(false)
 {}
 
 MessageContext::MessageContext(int overrideIoThreads)
@@ -35,7 +36,6 @@ faabric::transport::MessageContext& getGlobalMessageContext()
     // context.
     if (msgContext->isContextShutDown) {
         msgContext = std::make_unique<faabric::transport::MessageContext>();
-        msgContext->isContextShutDown = false;
     }
     return *msgContext;
 }
