@@ -145,6 +145,13 @@ void MpiWorld::destroy()
             state::getGlobalState().deleteKV(rankState->user, rankState->key);
         }
 
+        // Wait (forever) until all ranks are done consuming their queues to
+        // clear them.
+        // Note - this means that an application with outstanding messages, i.e.
+        // send without recv, will block forever.
+        for (auto& k : localQueueMap) {
+            k.second->waitToDrain(-1);
+        }
         localQueueMap.clear();
     }
 }
