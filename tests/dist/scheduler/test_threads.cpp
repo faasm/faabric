@@ -41,9 +41,6 @@ TEST_CASE_METHOD(DistTestsFixture,
     snap.data = snapshotData;
     snap.size = snapshotSize;
 
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-
     std::string snapKey = std::to_string(faabric::util::generateGid());
     reg.takeSnapshot(snapKey, snap);
 

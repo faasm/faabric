@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faabric/snapshot/SnapshotRegistry.h"
 #include "faabric/util/memory.h"
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -20,7 +21,7 @@ class RedisTestFixture
     faabric::redis::Redis& redis;
 };
 
-class SchedulerTestFixture : public RedisTestFixture
+class SchedulerTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -54,6 +55,21 @@ class SchedulerTestFixture : public RedisTestFixture
 
   protected:
     faabric::scheduler::Scheduler& sch;
+};
+
+class SnapshotTestFixture
+{
+  public:
+    SnapshotTestFixture()
+      : reg(faabric::snapshot::getSnapshotRegistry())
+    {
+        reg.clear();
+    }
+
+    ~SnapshotTestFixture() { reg.clear(); }
+
+  protected:
+    faabric::snapshot::SnapshotRegistry& reg;
 };
 
 class ConfTestFixture

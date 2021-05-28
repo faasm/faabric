@@ -22,7 +22,9 @@
 using namespace scheduler;
 
 namespace tests {
-class ClientServerFixture : public SchedulerTestFixture
+class ClientServerFixture
+  : public SchedulerTestFixture
+  , public RedisTestFixture
 {
   protected:
     FunctionCallServer server;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "faabric_utils.h"
+
 #include "DistTestExecutor.h"
 
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -8,26 +10,16 @@
 
 namespace tests {
 class DistTestsFixture
+  : public SchedulerTestFixture
+  , public ConfTestFixture
+  , public SnapshotTestFixture
 {
   protected:
-    faabric::scheduler::Scheduler& sch;
-    faabric::util::SystemConfig& conf;
-    faabric::snapshot::SnapshotRegistry& reg;
-
     std::set<std::string> otherHosts;
 
   public:
     DistTestsFixture()
-      : sch(faabric::scheduler::getScheduler())
-      , conf(faabric::util::getSystemConfig())
-      , reg(faabric::snapshot::getSnapshotRegistry())
     {
-        // Make sure this host is available
-        sch.addHostToGlobalSet();
-
-        // Clear local snapshot info
-        reg.clear();
-
         // Get other hosts
         std::string thisHost = conf.endpointHost;
         otherHosts = sch.getAvailableHosts();
@@ -37,13 +29,6 @@ class DistTestsFixture
         std::shared_ptr<tests::DistTestExecutorFactory> fac =
           std::make_shared<tests::DistTestExecutorFactory>();
         faabric::scheduler::setExecutorFactory(fac);
-    }
-
-    ~DistTestsFixture()
-    {
-        reg.clear();
-        sch.reset();
-        conf.reset();
     }
 };
 }

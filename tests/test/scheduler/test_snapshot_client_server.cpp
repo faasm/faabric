@@ -11,7 +11,9 @@
 
 namespace tests {
 
-class SnapshotClientServerFixture : public SchedulerTestFixture
+class SnapshotClientServerFixture
+  : public SchedulerTestFixture
+  , public RedisTestFixture
 {
   protected:
     faabric::scheduler::SnapshotServer server;

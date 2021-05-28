@@ -33,8 +33,6 @@ TEST_CASE_METHOD(DistTestsFixture,
     snap.data = snapMemory;
     snap.size = snapSize;
 
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
     reg.takeSnapshot(snapshotKey, snap);
 
     // Invoke the function that ought to send back some snapshot diffs that
