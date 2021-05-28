@@ -78,6 +78,7 @@ jobs:
       # --- Tidy up ---
       - name: "Remove existing containers"
         run: "docker ps -aq | xargs docker stop | xargs docker rm"
+        continue-on-error: true
       # --- Code update ---
       - name: "Check out code"
         uses: actions/checkout@v2
