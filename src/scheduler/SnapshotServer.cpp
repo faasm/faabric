@@ -87,7 +87,7 @@ void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
         applyDiffsToSnapshot(r->key()->str(), r->chunks());
     }
 
-    faabric::util::getLogger()->info(
+    faabric::util::getLogger()->debug(
       "Receiving thread result {} for message {}",
       r->message_id(),
       r->return_value());
@@ -101,9 +101,9 @@ void SnapshotServer::recvPushSnapshotDiffs(faabric::transport::Message& msg)
     const SnapshotDiffPushRequest* r =
       flatbuffers::GetMutableRoot<SnapshotDiffPushRequest>(msg.udata());
 
-    faabric::util::getLogger()->info("Receiving {} diffs to snapshot {}",
-                                     r->chunks()->size(),
-                                     r->key()->c_str());
+    faabric::util::getLogger()->debug("Receiving {} diffs to snapshot {}",
+                                      r->chunks()->size(),
+                                      r->key()->c_str());
 
     applyDiffsToSnapshot(r->key()->str(), r->chunks());
 

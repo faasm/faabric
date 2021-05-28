@@ -4,6 +4,8 @@
 #include "fixtures.h"
 #include "init.h"
 
+#include <sys/mman.h>
+
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/scheduler/SnapshotClient.h>
@@ -13,21 +15,6 @@
 #include <faabric/util/gids.h>
 
 namespace tests {
-
-std::string setUpDummySnapshot()
-{
-    std::vector<uint8_t> snapData = { 0, 1, 2, 3, 4 };
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-    faabric::util::SnapshotData snap;
-    std::string snapKey = std::to_string(faabric::util::generateGid());
-    snap.data = snapData.data();
-    snap.size = snapData.size();
-
-    reg.takeSnapshot(snapKey, snap);
-
-    return snapKey;
-}
 
 TEST_CASE_METHOD(DistTestsFixture,
                  "Test executing threads on multiple hosts",
@@ -46,7 +33,20 @@ TEST_CASE_METHOD(DistTestsFixture,
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
     // Set up a snapshot
-    std::string snapKey = setUpDummySnapshot();
+    size_t snapshotSize = 5 * faabric::util::HOST_PAGE_SIZE;
+    auto* snapshotData = (uint8_t*)mmap(
+      nullptr, snapshotSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    faabric::util::SnapshotData snap;
+    snap.data = snapshotData;
+    snap.size = snapshotSize;
+
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+
+    std::string snapKey = std::to_string(faabric::util::generateGid());
+    reg.takeSnapshot(snapKey, snap);
+
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     firstMsg.set_snapshotkey(snapKey);
 
@@ -66,5 +66,7 @@ TEST_CASE_METHOD(DistTestsFixture,
         int res = sch.awaitThreadResult(m.id());
         REQUIRE(res == m.id() / 2);
     }
+
+    munmap(snapshotData, snapshotSize);
 }
 }
