@@ -588,15 +588,22 @@ SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
     auto it = snapshotClients.find(key);
     if (it == snapshotClients.end()) {
         faabric::util::UniqueLock lock(snapshotClientsMutex);
-        auto _it = snapshotClients.try_emplace(key, otherHost);
-        if (!_it.second) {
-            logger->error("Could not add snapshot client key {} for host {}",
-                          key,
-                          otherHost);
-            throw std::runtime_error("Error inserting snapshot client");
+
+        auto it = snapshotClients.find(key);
+        if (it == snapshotClients.end()) {
+
+            auto _it = snapshotClients.try_emplace(key, otherHost);
+            if (!_it.second) {
+                logger->error(
+                  "Could not add snapshot client key {} for host {}",
+                  key,
+                  otherHost);
+                throw std::runtime_error("Error inserting snapshot client");
+            }
+            it = _it.first;
         }
-        it = _it.first;
     }
+
     return it->second;
 }
 
