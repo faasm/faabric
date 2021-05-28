@@ -195,26 +195,41 @@ void SnapshotClient::pushThreadResult(
           host, std::make_tuple(messageId, returnValue, snapshotKey, diffs)));
 
     } else {
-        logger->debug(
-          "Sending thread result for {} to {} (plus {} snapshot diffs)",
-          messageId,
-          host,
-          diffs.size());
-
         flatbuffers::FlatBufferBuilder mb;
-
-        // Create objects for all the chunks
-        std::vector<flatbuffers::Offset<SnapshotDiffChunk>> diffsFbVector;
-        for (const auto& d : diffs) {
-            auto dataOffset = mb.CreateVector<uint8_t>(d.data, d.size);
-            auto chunk = CreateSnapshotDiffChunk(mb, d.offset, dataOffset);
-            diffsFbVector.push_back(chunk);
-        }
+        flatbuffers::Offset<ThreadResultRequest> requestOffset;
 
         auto keyOffset = mb.CreateString(snapshotKey);
-        auto diffsOffset = mb.CreateVector(diffsFbVector);
-        auto requestOffset = CreateThreadResultRequest(
-          mb, messageId, returnValue, keyOffset, diffsOffset);
+
+        if (!diffs.empty()) {
+            logger->debug(
+              "Sending thread result for {} to {} (plus {} snapshot diffs)",
+              messageId,
+              host,
+              diffs.size());
+
+            // Create objects for the diffs
+            std::vector<flatbuffers::Offset<SnapshotDiffChunk>> diffsFbVector;
+            for (const auto& d : diffs) {
+                auto dataOffset = mb.CreateVector<uint8_t>(d.data, d.size);
+                auto chunk = CreateSnapshotDiffChunk(mb, d.offset, dataOffset);
+                diffsFbVector.push_back(chunk);
+            }
+
+            // Create message with diffs
+            auto diffsOffset = mb.CreateVector(diffsFbVector);
+
+            requestOffset = CreateThreadResultRequest(
+              mb, messageId, returnValue, keyOffset, diffsOffset);
+        } else {
+            logger->debug(
+              "Sending thread result for {} to {} (with no snapshot diffs)",
+              messageId,
+              host);
+
+            // Create message without diffs
+            requestOffset =
+              CreateThreadResultRequest(mb, messageId, returnValue, keyOffset);
+        }
 
         SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::ThreadResult)
     }

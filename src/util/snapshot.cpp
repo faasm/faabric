@@ -1,3 +1,4 @@
+#include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
 
@@ -24,6 +25,9 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
               offset, data + offset, faabric::util::HOST_PAGE_SIZE);
         }
     }
+
+    faabric::util::getLogger()->debug(
+      "Snapshot has {}/{} dirty pages", diffs.size(), nPages);
 
     return diffs;
 }
