@@ -196,6 +196,7 @@ class Scheduler
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
+    std::mutex snapshotClientsMutex;
     std::unordered_map<std::string, faabric::scheduler::SnapshotClient>
       snapshotClients;
     faabric::scheduler::SnapshotClient& getSnapshotClient(

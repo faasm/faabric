@@ -13,7 +13,7 @@ const int testPort = 9999;
 const int testReplyPort = 9996;
 
 namespace tests {
-class MessageContextFixture : public BaseTestFixture
+class MessageContextFixture : public SchedulerTestFixture
 {
   protected:
     MessageContext& context;

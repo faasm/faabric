@@ -50,9 +50,9 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
     SnapshotPushRequest* r =
       flatbuffers::GetMutableRoot<SnapshotPushRequest>(msg.udata());
 
-    faabric::util::getLogger()->info("Receiving shapshot {} (size {})",
-                                     r->key()->c_str(),
-                                     r->contents()->size());
+    faabric::util::getLogger()->debug("Receiving shapshot {} (size {})",
+                                      r->key()->c_str(),
+                                      r->contents()->size());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
@@ -80,9 +80,9 @@ void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
     // Apply snapshot diffs *first* (these must be applied before other threads
     // can continue)
     if (r->chunks()->size() > 0) {
-        faabric::util::getLogger()->info("Receiving {} diffs to snapshot {}",
-                                         r->chunks()->size(),
-                                         r->key()->c_str());
+        faabric::util::getLogger()->debug("Receiving {} diffs to snapshot {}",
+                                          r->chunks()->size(),
+                                          r->key()->c_str());
 
         applyDiffsToSnapshot(r->key()->str(), r->chunks());
     }

@@ -225,7 +225,9 @@ class TestExecutorFactory : public ExecutorFactory
     }
 };
 
-class TestExecutorFixture : public BaseTestFixture
+class TestExecutorFixture
+  : public SchedulerTestFixture
+  , public ConfTestFixture
 {
   public:
     TestExecutorFixture()

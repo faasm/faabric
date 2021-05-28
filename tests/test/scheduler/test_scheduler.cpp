@@ -50,17 +50,19 @@ class SlowExecutorFactory : public ExecutorFactory
     }
 };
 
-class SchedulerTestFixture : public BaseTestFixture
+class SlowExecutorFixture
+  : public SchedulerTestFixture
+  , public ConfTestFixture
 {
   public:
-    SchedulerTestFixture()
+    SlowExecutorFixture()
     {
         std::shared_ptr<ExecutorFactory> fac =
           std::make_shared<SlowExecutorFactory>();
         setExecutorFactory(fac);
     };
 
-    ~SchedulerTestFixture()
+    ~SlowExecutorFixture()
     {
         std::shared_ptr<DummyExecutorFactory> fac =
           std::make_shared<DummyExecutorFactory>();
@@ -68,7 +70,7 @@ class SchedulerTestFixture : public BaseTestFixture
     };
 };
 
-TEST_CASE_METHOD(SchedulerTestFixture, "Test scheduler clear-up", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
 {
     faabric::util::setMockMode(true);
 
@@ -126,7 +128,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test scheduler clear-up", "[scheduler]")
     REQUIRE(resCheck.usedslots() == 0);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Test scheduler available hosts",
                  "[scheduler]")
 {
@@ -154,7 +156,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(actualHosts == expectedHosts);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture, "Test batch scheduling", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 {
     std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
@@ -338,7 +340,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test batch scheduling", "[scheduler]")
     REQUIRE(pTwo.second->messages_size() == nCallsTwo);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Test overloaded scheduler",
                  "[scheduler]")
 {
@@ -420,7 +422,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == expectedExecutors);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture, "Test unregistering host", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorFixture, "Test unregistering host", "[scheduler]")
 {
     faabric::util::setMockMode(true);
 
@@ -458,7 +460,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test unregistering host", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture, "Check test mode", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
 {
     faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
     faabric::Message msgB = faabric::util::messageFactory("demo", "echo");
@@ -490,7 +492,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Check test mode", "[scheduler]")
     }
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Global message queue tests",
                  "[scheduler]")
 {
@@ -516,7 +518,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     checkMessageEquality(call, actualCall2);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Check multithreaded function results",
                  "[scheduler]")
 {
@@ -552,7 +554,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     }
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Check getting function status",
                  "[scheduler]")
 {
@@ -605,7 +607,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(result.executedhost() == expectedHost);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Check setting long-lived function status",
                  "[scheduler]")
 {
@@ -629,7 +631,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     checkMessageEquality(actualMsg, expected);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Check logging chained functions",
                  "[scheduler]")
 {
@@ -654,7 +656,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Test non-master batch request returned to master",
                  "[scheduler]")
 {
@@ -677,7 +679,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(actualReqs.at(0).second->id() == req->id());
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Test broadcast snapshot deletion",
                  "[scheduler]")
 {
@@ -730,7 +732,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(actualDeleteRequests == expectedDeleteRequests);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SlowExecutorFixture,
                  "Test set thread results on remote host",
                  "[scheduler]")
 {

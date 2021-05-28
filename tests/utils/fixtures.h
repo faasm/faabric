@@ -6,13 +6,25 @@
 #include <faabric/util/testing.h>
 
 namespace tests {
-class BaseTestFixture
+class RedisTestFixture
 {
   public:
-    BaseTestFixture()
+    RedisTestFixture()
+      : redis(faabric::redis::Redis::getQueue())
+    {
+        redis.flushAll();
+    }
+    ~RedisTestFixture() { redis.flushAll(); }
+
+  protected:
+    faabric::redis::Redis& redis;
+};
+
+class SchedulerTestFixture : public RedisTestFixture
+{
+  public:
+    SchedulerTestFixture()
       : sch(faabric::scheduler::getScheduler())
-      , conf(faabric::util::getSystemConfig())
-      , redis(faabric::redis::Redis::getQueue())
     {
         faabric::util::resetDirtyTracking();
 
@@ -22,13 +34,11 @@ class BaseTestFixture
         faabric::scheduler::clearMockRequests();
         faabric::scheduler::clearMockSnapshotRequests();
 
-        redis.flushAll();
-
         sch.shutdown();
         sch.addHostToGlobalSet();
     };
 
-    ~BaseTestFixture()
+    ~SchedulerTestFixture()
     {
         faabric::util::setMockMode(false);
         faabric::util::setTestMode(true);
@@ -38,17 +48,23 @@ class BaseTestFixture
 
         sch.shutdown();
         sch.addHostToGlobalSet();
-
-        conf.reset();
-
-        redis.flushAll();
 
         faabric::util::resetDirtyTracking();
     };
 
   protected:
     faabric::scheduler::Scheduler& sch;
+};
+
+class ConfTestFixture
+{
+  public:
+    ConfTestFixture()
+      : conf(faabric::util::getSystemConfig()){};
+
+    ~ConfTestFixture() { conf.reset(); };
+
+  protected:
     faabric::util::SystemConfig& conf;
-    faabric::redis::Redis& redis;
 };
 }

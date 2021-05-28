@@ -22,7 +22,7 @@
 using namespace scheduler;
 
 namespace tests {
-class ClientServerFixture : public BaseTestFixture
+class ClientServerFixture : public SchedulerTestFixture
 {
   protected:
     FunctionCallServer server;

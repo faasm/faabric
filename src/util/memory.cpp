@@ -1,3 +1,4 @@
+#include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 
 #include <fcntl.h>
@@ -83,6 +84,8 @@ void resetDirtyTracking()
 {
     FILE* fd = fopen(CLEAR_REFS, "w");
     if (fd == nullptr) {
+        faabric::util::getLogger()->error("Could not open clear_refs ({})",
+                                          strerror(errno));
         throw std::runtime_error("Could not open clear_refs");
     }
 
@@ -91,6 +94,8 @@ void resetDirtyTracking()
     char value[] = "4";
     size_t nWritten = fwrite(value, sizeof(char), 1, fd);
     if (nWritten != 1) {
+        faabric::util::getLogger()->error("Failed to write to clear_refs ({})",
+                                          nWritten);
         throw std::runtime_error("Failed to write to clear_refs");
     }
 
@@ -105,19 +110,24 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     // Open the pagemap
     FILE* fd = fopen(PAGEMAP, "rb");
     if (fd == nullptr) {
+        faabric::util::getLogger()->error("Could not open pagemap ({})",
+                                          strerror(errno));
         throw std::runtime_error("Could not open pagemap");
     }
 
     // Skip to location of this page
     int r = fseek(fd, offset, SEEK_SET);
     if (r < 0) {
+        faabric::util::getLogger()->error("Could not seek pagemap ({})", r);
         throw std::runtime_error("Could not seek pagemap");
     }
 
     // Read the entries
     std::vector<uint64_t> entries(nEntries, 0);
-    fread(entries.data(), PAGEMAP_ENTRY_BYTES, nEntries, fd);
-    if (ferror(fd)) {
+    int nRead = fread(entries.data(), PAGEMAP_ENTRY_BYTES, nEntries, fd);
+    if (nRead != nEntries) {
+        faabric::util::getLogger()->error(
+          "Could not read pagemap ({} != {})", nRead, nEntries);
         throw std::runtime_error("Could not read pagemap");
     }
 

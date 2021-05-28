@@ -68,6 +68,13 @@ void clearMockSnapshotRequests()
 // Snapshot client
 // -----------------------------------
 
+#define SEND_FB_REQUEST(T)                                                     \
+    sendHeader(T);                                                             \
+    mb.Finish(requestOffset);                                                  \
+    uint8_t* buffer = mb.GetBufferPointer();                                   \
+    int size = mb.GetSize();                                                   \
+    send(buffer, size);
+
 SnapshotClient::SnapshotClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
   , logger(faabric::util::getLogger())
@@ -90,11 +97,10 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         faabric::util::UniqueLock lock(mockMutex);
         snapshotPushes.emplace_back(host, data);
     } else {
-        // Send the header first
-        sendHeader(faabric::scheduler::SnapshotCalls::PushSnapshot);
+        const faabric::util::SystemConfig& conf =
+          faabric::util::getSystemConfig();
 
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-
+        // Set up the main request
         // TODO - avoid copying data here
         flatbuffers::FlatBufferBuilder mb;
         auto returnHostOffset = mb.CreateString(conf.endpointHost);
@@ -103,11 +109,8 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         auto requestOffset = CreateSnapshotPushRequest(
           mb, returnHostOffset, keyOffset, dataOffset);
 
-        // Send the data
-        mb.Finish(requestOffset);
-        uint8_t* msg = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        send(msg, size);
+        // Send it
+        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::PushSnapshot)
 
         // Await a response as this call must be synchronous
         awaitResponse(SNAPSHOT_PORT + REPLY_PORT_OFFSET);
@@ -127,10 +130,9 @@ void SnapshotClient::pushSnapshotDiffs(
                       snapshotKey,
                       host);
 
-        // Send the header first
-        sendHeader(faabric::scheduler::SnapshotCalls::PushSnapshotDiffs);
+        const faabric::util::SystemConfig& conf =
+          faabric::util::getSystemConfig();
 
-        // TODO - avoid copying data here
         flatbuffers::FlatBufferBuilder mb;
 
         // Create objects for all the chunks
@@ -141,10 +143,8 @@ void SnapshotClient::pushSnapshotDiffs(
             diffsFbVector.push_back(chunk);
         }
 
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-
-        // TODO - avoid copying data here
         // Set up the main request
+        // TODO - avoid copying data here
         auto returnHostOffset = mb.CreateString(conf.endpointHost);
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
@@ -152,10 +152,7 @@ void SnapshotClient::pushSnapshotDiffs(
           mb, returnHostOffset, keyOffset, diffsOffset);
 
         // Send it
-        mb.Finish(requestOffset);
-        uint8_t* msg = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        send(msg, size);
+        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::PushSnapshotDiffs)
 
         // Await a response as this call must be synchronous
         awaitResponse(SNAPSHOT_PORT + REPLY_PORT_OFFSET);
@@ -171,18 +168,12 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
     } else {
         logger->debug("Deleting snapshot {} from {}", key, host);
 
-        // Send the header first
-        sendHeader(faabric::scheduler::SnapshotCalls::DeleteSnapshot);
-
         // TODO - avoid copying data here
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto requestOffset = CreateSnapshotDeleteRequest(mb, keyOffset);
 
-        mb.Finish(requestOffset);
-        uint8_t* msg = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        send(msg, size);
+        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::DeleteSnapshot)
     }
 }
 
@@ -225,14 +216,7 @@ void SnapshotClient::pushThreadResult(
         auto requestOffset = CreateThreadResultRequest(
           mb, messageId, returnValue, keyOffset, diffsOffset);
 
-        mb.Finish(requestOffset);
-
-        // Send the header first
-        sendHeader(faabric::scheduler::SnapshotCalls::ThreadResult);
-
-        uint8_t* msg = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        send(msg, size);
+        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::ThreadResult)
     }
 }
 }

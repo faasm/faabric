@@ -30,7 +30,7 @@ class SnapshotRegistry
     void clear();
 
   private:
-    std::shared_ptr<spdlog::logger> logger;
+    const std::shared_ptr<spdlog::logger> logger;
 
     std::unordered_map<std::string, faabric::util::SnapshotData> snapshotMap;
 
