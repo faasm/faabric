@@ -47,7 +47,7 @@ class MpiWorld
 
     void destroy();
 
-    void closeFunctionCallClients();
+    void shutdownThreadPool();
 
     void enqueueMessage(faabric::MPIMessage& msg);
 
