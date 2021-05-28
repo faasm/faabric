@@ -134,7 +134,7 @@ void MpiWorld::destroy()
 {
     // Destroy once per host
     if (!isDestroyed.test_and_set()) {
-        closeFunctionCallClients();
+        shutdownThreadPool();
 
         // Note - we are deliberately not deleting the KV in the global state
         // TODO - find a way to do this only from the master client
@@ -149,7 +149,7 @@ void MpiWorld::destroy()
     }
 }
 
-void MpiWorld::closeFunctionCallClients()
+void MpiWorld::shutdownThreadPool()
 {
     // When shutting down the thread pool, we also make sure we clean all thread
     // local state by sending a clear message to the queue. Currently, we only
@@ -161,6 +161,8 @@ void MpiWorld::closeFunctionCallClients()
                           std::bind(&MpiWorld::closeThreadLocalClients, this),
                           std::move(p)));
     }
+
+    threadPool->shutdown();
 
     // Lastly clean the main thread as well
     closeThreadLocalClients();
