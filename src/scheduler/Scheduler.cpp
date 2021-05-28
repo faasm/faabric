@@ -282,7 +282,7 @@ std::vector<std::string> Scheduler::callFunctions(
             // Now reset the dirty page tracking, as we want the next batch of
             // diffs to contain everything from now on (including the updates
             // sent back from all the threads)
-            logger->debug("Restting dirty tracking after pushing diffs {}",
+            logger->debug("Resetting dirty tracking after pushing diffs {}",
                           funcStr);
             faabric::util::resetDirtyTracking();
         }
@@ -517,15 +517,15 @@ int Scheduler::scheduleFunctionsOnHost(
         records.at(i) = host;
     }
 
+    logger->debug(
+      "Sending {}/{} {} to {}", nOnThisHost, nMessages, funcStr, host);
+
     // Handle snapshots
     std::string snapshotKey = firstMsg.snapshotkey();
     if (snapshot != nullptr && !snapshotKey.empty()) {
         SnapshotClient& c = getSnapshotClient(host);
         c.pushSnapshot(snapshotKey, *snapshot);
     }
-
-    logger->debug(
-      "Sending {}/{} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
     getFunctionCallClient(host).executeFunctions(hostRequest);
 
@@ -562,21 +562,7 @@ std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
     return recordedMessagesLocal;
 }
 
-FunctionCallClient& Scheduler::getFunctionCallClient(
-  const std::string& otherHost)
-{
-    auto it = functionCallClients.find(otherHost);
-    if (it == functionCallClients.end()) {
-        auto _it = functionCallClients.try_emplace(otherHost, otherHost);
-        if (!_it.second) {
-            throw std::runtime_error("Error inserting function call client");
-        }
-        it = _it.first;
-    }
-    return it->second;
-}
-
-SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
+std::string getClientKey(const std::string& otherHost)
 {
     // Note, our keys here have to include the tid as the clients can only be
     // used within the same thread.
@@ -584,27 +570,46 @@ SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
     std::stringstream ss;
     ss << otherHost << "_" << tid;
     std::string key = ss.str();
+    return key;
+}
 
-    auto it = snapshotClients.find(key);
-    if (it == snapshotClients.end()) {
-        faabric::util::UniqueLock lock(snapshotClientsMutex);
+FunctionCallClient& Scheduler::getFunctionCallClient(
+  const std::string& otherHost)
+{
+    std::string key = getClientKey(otherHost);
+    if (functionCallClients.find(key) == functionCallClients.end()) {
+        faabric::util::FullLock lock(functionCallClientsMx);
 
-        auto it = snapshotClients.find(key);
-        if (it == snapshotClients.end()) {
-
-            auto _it = snapshotClients.try_emplace(key, otherHost);
-            if (!_it.second) {
-                logger->error(
-                  "Could not add snapshot client key {} for host {}",
-                  key,
-                  otherHost);
-                throw std::runtime_error("Error inserting snapshot client");
-            }
-            it = _it.first;
+        if (functionCallClients.find(key) == functionCallClients.end()) {
+            logger->debug(
+              "Adding new function call client for {} ({})", otherHost, key);
+            functionCallClients.emplace(key, otherHost);
         }
     }
 
-    return it->second;
+    {
+        faabric::util::SharedLock lock(functionCallClientsMx);
+        return functionCallClients.at(key);
+    }
+}
+
+SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
+{
+    std::string key = getClientKey(otherHost);
+    if (snapshotClients.find(key) == snapshotClients.end()) {
+        faabric::util::FullLock lock(snapshotClientsMx);
+
+        if (snapshotClients.find(key) == snapshotClients.end()) {
+            logger->debug(
+              "Adding new snapshot client for {} ({})", otherHost, key);
+            snapshotClients.emplace(key, otherHost);
+        }
+    }
+
+    {
+        faabric::util::SharedLock lock(snapshotClientsMx);
+        return snapshotClients.at(key);
+    }
 }
 
 std::vector<std::pair<std::string, faabric::Message>>
