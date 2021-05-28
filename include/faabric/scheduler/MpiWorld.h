@@ -217,6 +217,8 @@ class MpiWorld
     std::string thisHost;
     faabric::util::TimePoint creationTime;
 
+    const std::shared_ptr<spdlog::logger> logger;
+
     std::shared_mutex worldMutex;
     std::atomic_flag isDestroyed = false;
 
