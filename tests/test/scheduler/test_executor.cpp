@@ -226,12 +226,13 @@ class TestExecutorFactory : public ExecutorFactory
 };
 
 class TestExecutorFixture
-  : public SchedulerTestFixture
+  : public RedisTestFixture
+  , public SchedulerTestFixture
   , public ConfTestFixture
+  , public SnapshotTestFixture
 {
   public:
     TestExecutorFixture()
-      : reg(faabric::snapshot::getSnapshotRegistry())
     {
         std::shared_ptr<TestExecutorFactory> fac =
           std::make_shared<TestExecutorFactory>();
@@ -245,8 +246,6 @@ class TestExecutorFixture
     ~TestExecutorFixture() { munmap(snapshotData, snapshotSize); }
 
   protected:
-    faabric::snapshot::SnapshotRegistry& reg;
-
     std::string snapshotKey = "foobar";
     uint8_t* snapshotData = nullptr;
     int snapshotNPages = 10;
