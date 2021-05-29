@@ -2,8 +2,8 @@
 
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
+
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
@@ -23,8 +23,9 @@ using namespace scheduler;
 
 namespace tests {
 class ClientServerFixture
-  : public SchedulerTestFixture
-  , public RedisTestFixture
+  : public RedisTestFixture
+  , public SchedulerTestFixture
+  , public StateTestFixture
 {
   protected:
     FunctionCallServer server;
@@ -101,8 +102,6 @@ TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
     localWorld.destroy();
     remoteWorld.destroy();
     registry.clear();
-
-    state::getGlobalState().forceClearAll(true);
 }
 
 TEST_CASE_METHOD(ClientServerFixture,

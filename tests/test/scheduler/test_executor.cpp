@@ -226,8 +226,8 @@ class TestExecutorFactory : public ExecutorFactory
 };
 
 class TestExecutorFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
+  : public SchedulerTestFixture
+  , public RedisTestFixture
   , public ConfTestFixture
   , public SnapshotTestFixture
 {

@@ -1,9 +1,10 @@
 #pragma once
 
-#include "faabric/snapshot/SnapshotRegistry.h"
-#include "faabric/util/memory.h"
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/state/State.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
 
 namespace tests {
@@ -19,6 +20,32 @@ class RedisTestFixture
 
   protected:
     faabric::redis::Redis& redis;
+};
+
+class StateTestFixture
+{
+  public:
+    StateTestFixture()
+      : state(faabric::state::getGlobalState())
+    {
+        doCleanUp();
+    }
+
+    ~StateTestFixture() { doCleanUp(); }
+
+  protected:
+    faabric::state::State& state;
+    void doCleanUp()
+    {
+        // Clear out any cached state, do so for both modes
+        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+        std::string& originalStateMode = conf.stateMode;
+        conf.stateMode = "inmemory";
+        state.forceClearAll(true);
+        conf.stateMode = "redis";
+        state.forceClearAll(true);
+        conf.stateMode = originalStateMode;
+    }
 };
 
 class SchedulerTestFixture
