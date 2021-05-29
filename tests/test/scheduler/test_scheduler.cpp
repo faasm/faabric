@@ -51,8 +51,8 @@ class SlowExecutorFactory : public ExecutorFactory
 };
 
 class SlowExecutorFixture
-  : public SchedulerTestFixture
-  , public RedisTestFixture
+  : public RedisTestFixture
+  , public SchedulerTestFixture
   , public ConfTestFixture
 {
   public:

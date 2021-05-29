@@ -57,10 +57,6 @@ std::string messageToJson(const faabric::Message& msg)
           a);
     }
 
-    if (msg.snapshotsize() > 0) {
-        d.AddMember("snapshot_size", msg.snapshotsize(), a);
-    }
-
     if (msg.funcptr() > 0) {
         d.AddMember("func_ptr", msg.funcptr(), a);
     }
@@ -298,7 +294,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_finishtimestamp(getInt64FromJson(d, "finished", 0));
 
     msg.set_snapshotkey(getStringFromJson(d, "snapshot_key", ""));
-    msg.set_snapshotsize(getIntFromJson(d, "snapshot_size", 0));
     msg.set_funcptr(getIntFromJson(d, "func_ptr", 0));
 
     msg.set_pythonuser(getStringFromJson(d, "py_user", ""));

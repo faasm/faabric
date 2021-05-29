@@ -507,7 +507,6 @@ int Scheduler::scheduleFunctionsOnHost(
     std::shared_ptr<faabric::BatchExecuteRequest> hostRequest =
       faabric::util::batchExecFactory();
     hostRequest->set_snapshotkey(req->snapshotkey());
-    hostRequest->set_snapshotsize(req->snapshotsize());
     hostRequest->set_type(req->type());
 
     // Add messages

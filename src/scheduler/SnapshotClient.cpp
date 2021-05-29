@@ -198,8 +198,6 @@ void SnapshotClient::pushThreadResult(
         flatbuffers::FlatBufferBuilder mb;
         flatbuffers::Offset<ThreadResultRequest> requestOffset;
 
-        auto keyOffset = mb.CreateString(snapshotKey);
-
         if (!diffs.empty()) {
             logger->debug(
               "Sending thread result for {} to {} (plus {} snapshot diffs)",
@@ -218,6 +216,7 @@ void SnapshotClient::pushThreadResult(
             // Create message with diffs
             auto diffsOffset = mb.CreateVector(diffsFbVector);
 
+            auto keyOffset = mb.CreateString(snapshotKey);
             requestOffset = CreateThreadResultRequest(
               mb, messageId, returnValue, keyOffset, diffsOffset);
         } else {
@@ -228,7 +227,7 @@ void SnapshotClient::pushThreadResult(
 
             // Create message without diffs
             requestOffset =
-              CreateThreadResultRequest(mb, messageId, returnValue, keyOffset);
+              CreateThreadResultRequest(mb, messageId, returnValue);
         }
 
         SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::ThreadResult)
