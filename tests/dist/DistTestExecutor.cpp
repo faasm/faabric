@@ -1,15 +1,14 @@
 #include "DistTestExecutor.h"
 
+#include <sys/mman.h>
+
+#include <faabric/snapshot/SnapshotRegistry.h>
+
 using namespace faabric::scheduler;
 
-typedef int (*ExecutorFunction)(
-  int threadPoolIdx,
-  int msgIdx,
-  std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-std::unordered_map<std::string, ExecutorFunction> executorFunctions;
-
 namespace tests {
+
+static std::unordered_map<std::string, ExecutorFunction> executorFunctions;
 
 void registerDistTestExecutorCallback(const char* user,
                                       const char* funcName,
@@ -50,7 +49,31 @@ int32_t DistTestExecutor::executeTask(
 
     // Look up function and invoke
     ExecutorFunction callback = getDistTestExecutorCallback(msg);
-    return callback(threadPoolIdx, msgIdx, req);
+    return callback(this, threadPoolIdx, msgIdx, req);
+}
+
+faabric::util::SnapshotData DistTestExecutor::snapshot()
+{
+    faabric::util::SnapshotData snap;
+    snap.data = snapshotMemory;
+    snap.size = snapshotSize;
+
+    return snap;
+}
+
+void DistTestExecutor::restore(const faabric::Message& msg)
+{
+    // Initialise the dummy memory and map to snapshot
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+    faabric::util::SnapshotData& snap = reg.getSnapshot(msg.snapshotkey());
+
+    // Note this has to be mmapped to be page-aligned
+    snapshotMemory = (uint8_t*)mmap(
+      nullptr, snap.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    snapshotSize = snap.size;
+
+    reg.mapSnapshot(msg.snapshotkey(), snapshotMemory);
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

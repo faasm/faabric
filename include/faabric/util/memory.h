@@ -1,8 +1,14 @@
 #pragma once
 
+#include <cstdint>
 #include <unistd.h>
+#include <vector>
 
 namespace faabric::util {
+
+// -------------------------
+// Alignment
+// -------------------------
 struct AlignedChunk
 {
     long originalOffset = 0;
@@ -25,4 +31,11 @@ size_t getRequiredHostPagesRoundDown(size_t nBytes);
 size_t alignOffsetDown(size_t offset);
 
 AlignedChunk getPageAlignedChunk(long offset, long length);
+
+// -------------------------
+// Dirty pages
+// -------------------------
+void resetDirtyTracking();
+
+std::vector<bool> getDirtyPages(const uint8_t* ptr, int nPages);
 }

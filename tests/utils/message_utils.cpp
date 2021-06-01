@@ -16,7 +16,6 @@ void checkMessageEquality(const faabric::Message& msgA,
 
     REQUIRE(msgA.timestamp() == msgB.timestamp());
     REQUIRE(msgA.snapshotkey() == msgB.snapshotkey());
-    REQUIRE(msgA.snapshotsize() == msgB.snapshotsize());
     REQUIRE(msgA.funcptr() == msgB.funcptr());
 
     REQUIRE(msgA.pythonuser() == msgB.pythonuser());

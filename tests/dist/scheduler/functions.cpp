@@ -5,12 +5,15 @@
 #include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 
 namespace tests {
 
-int handleSimpleThread(int threadPoolIdx,
+int handleSimpleThread(faabric::scheduler::Executor* exec,
+                       int threadPoolIdx,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -30,7 +33,8 @@ int handleSimpleThread(int threadPoolIdx,
     return returnValue;
 }
 
-int handleSimpleFunction(int threadPoolIdx,
+int handleSimpleFunction(faabric::scheduler::Executor* exec,
+                         int threadPoolIdx,
                          int msgIdx,
                          std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -47,9 +51,38 @@ int handleSimpleFunction(int threadPoolIdx,
     return 0;
 }
 
-void registerThreadFunctions()
+int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
+                            int threadPoolIdx,
+                            int msgIdx,
+                            std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
+    faabric::util::SnapshotData snap = exec->snapshot();
+
+    std::string msgInput = msg.inputdata();
+    std::string snapshotKey = msg.snapshotkey();
+
+    // Modify the executor's memory
+    std::vector<uint8_t> inputBytes = faabric::util::stringToBytes(msgInput);
+    std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
+
+    uint32_t offsetA = 10;
+    uint32_t offsetB = 100;
+
+    std::memcpy(snap.data + offsetA, keyBytes.data(), keyBytes.size());
+    std::memcpy(snap.data + offsetB, inputBytes.data(), inputBytes.size());
+
+    return 123;
+}
+
+void registerSchedulerTestFunctions()
 {
     registerDistTestExecutorCallback("threads", "simple", handleSimpleThread);
+
     registerDistTestExecutorCallback("funcs", "simple", handleSimpleFunction);
+
+    registerDistTestExecutorCallback(
+      "snapshots", "fake-diffs", handleFakeDiffsFunction);
 }
 }

@@ -4,6 +4,7 @@ set(LIB_FILES
     DummyExecutorFactory.cpp
     DummyExecutorFactory.h
     exec_graph_utils.cpp
+    fixtures.h
     message_utils.cpp
     system_utils.cpp
     faabric_utils.h

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 export PROJ_ROOT=$(dirname $(dirname $(readlink -f $0)))
 pushd ${PROJ_ROOT}/dist-test >> /dev/null
 
@@ -10,6 +8,8 @@ if [[ -z "${FAABRIC_CLI_IMAGE}" ]]; then
     VERSION=$(cat ../VERSION)
     export FAABRIC_CLI_IMAGE=faasm/faabric:${VERSION}
 fi
+
+RETURN_VAL=0
 
 if [ "$1" == "local" ]; then
     INNER_SHELL=${SHELL:-"/bin/bash"}
@@ -32,9 +32,16 @@ else
         run \
         master \
         /build/faabric/static/bin/faabric_dist_tests
+    RETURN_VAL=$?
 
-    docker-compose \
-        stop
+    echo "-------------------------------------------"
+    echo "                WORKER LOGS                "
+    echo "-------------------------------------------"
+    docker-compose logs worker
+
+    docker-compose stop
 fi
 
 popd >> /dev/null
+
+exit $RETURN_VAL

@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/snapshot.h>
 
 namespace faabric::snapshot {
@@ -29,6 +30,8 @@ class SnapshotRegistry
     void clear();
 
   private:
+    const std::shared_ptr<spdlog::logger> logger;
+
     std::unordered_map<std::string, faabric::util::SnapshotData> snapshotMap;
 
     std::mutex snapshotsMx;

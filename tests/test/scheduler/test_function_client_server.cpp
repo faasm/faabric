@@ -2,8 +2,8 @@
 
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
+
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
@@ -23,16 +23,17 @@ using namespace scheduler;
 
 namespace tests {
 class ClientServerFixture
+  : public RedisTestFixture
+  , public SchedulerTestFixture
+  , public StateTestFixture
 {
   protected:
-    Scheduler& sch;
     FunctionCallServer server;
     FunctionCallClient cli;
 
   public:
     ClientServerFixture()
-      : sch(faabric::scheduler::getScheduler())
-      , cli(LOCALHOST)
+      : cli(LOCALHOST)
     {
         server.start();
         usleep(1000 * TEST_TIMEOUT_MS);
@@ -46,7 +47,6 @@ class ClientServerFixture
     ~ClientServerFixture()
     {
         cli.close();
-        sch.reset();
         server.stop();
     }
 };
@@ -102,8 +102,6 @@ TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
     localWorld.destroy();
     remoteWorld.destroy();
     registry.clear();
-
-    state::getGlobalState().forceClearAll(true);
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
@@ -279,50 +277,5 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
 
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();
-}
-
-TEST_CASE_METHOD(ClientServerFixture, "Test set thread result", "[scheduler]")
-{
-    // Register threads on this host
-    int threadIdA = 123;
-    int threadIdB = 345;
-    int returnValueA = 88;
-    int returnValueB = 99;
-    sch.registerThread(threadIdA);
-    sch.registerThread(threadIdB);
-
-    // Make the request
-    faabric::ThreadResultRequest reqA;
-    faabric::ThreadResultRequest reqB;
-
-    reqA.set_messageid(threadIdA);
-    reqA.set_returnvalue(returnValueA);
-
-    reqB.set_messageid(threadIdB);
-    reqB.set_returnvalue(returnValueB);
-
-    // Set up two threads to await the results
-    std::thread tA([threadIdA, returnValueA] {
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        int32_t r = sch.awaitThreadResult(threadIdA);
-        REQUIRE(r == returnValueA);
-    });
-
-    std::thread tB([threadIdB, returnValueB] {
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        int32_t r = sch.awaitThreadResult(threadIdB);
-        REQUIRE(r == returnValueB);
-    });
-
-    cli.setThreadResult(reqA);
-    cli.setThreadResult(reqB);
-
-    if (tA.joinable()) {
-        tA.join();
-    }
-
-    if (tB.joinable()) {
-        tB.join();
-    }
 }
 }

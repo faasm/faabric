@@ -1,10 +1,13 @@
 #include <faabric/util/config.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace faabric::util {
+
+std::shared_mutex loggerMx;
 static std::unordered_map<std::string, std::shared_ptr<spdlog::logger>> loggers;
 
 static void initLogging(const std::string& name)
@@ -51,10 +54,16 @@ static void initLogging(const std::string& name)
 std::shared_ptr<spdlog::logger> getLogger(const std::string& name)
 {
     // Lazy-initialize logger
-    if (loggers.count(name) == 0) {
-        initLogging(name);
+    if (loggers.find(name) == loggers.end()) {
+        faabric::util::FullLock lock(loggerMx);
+        if (loggers.find(name) == loggers.end()) {
+            initLogging(name);
+        }
     }
 
-    return loggers[name];
+    {
+        faabric::util::SharedLock lock(loggerMx);
+        return loggers[name];
+    }
 }
 }

@@ -29,7 +29,7 @@ class MessageContext
     /* Close the message context
      *
      * In 0MQ terms, this method calls close() on the context, which in turn
-     * first shutdowns (i.e. stop blocking operations) and then closes.
+     * first shuts down (i.e. stop blocking operations) and then closes.
      */
     void close();
 

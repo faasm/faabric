@@ -15,10 +15,6 @@ class FunctionCallServer final
   public:
     FunctionCallServer();
 
-    /* Stop the function call server
-     *
-     * Override the base stop method to do some implementation-specific cleanup.
-     */
     void stop() override;
 
   private:

@@ -4,10 +4,12 @@
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
+#include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
 
 #include <future>
@@ -49,6 +51,8 @@ class Executor
     void claim();
 
     void releaseClaim();
+
+    virtual faabric::util::SnapshotData snapshot();
 
   protected:
     virtual void restore(const faabric::Message& msg);
@@ -114,7 +118,11 @@ class Scheduler
 
     void setThreadResult(const faabric::Message& msg, int32_t returnValue);
 
-    void setThreadResult(uint32_t msgId, int32_t returnValue);
+    void setThreadResult(const faabric::Message& msg,
+                         int32_t returnValue,
+                         const std::vector<faabric::util::SnapshotDiff>& diffs);
+
+    void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
 
     int32_t awaitThreadResult(uint32_t messageId);
 
@@ -165,10 +173,14 @@ class Scheduler
 
     void closeFunctionCallClients();
 
+    void closeSnapshotClients();
+
   private:
     std::string thisHost;
 
     faabric::util::SystemConfig& conf;
+
+    const std::shared_ptr<spdlog::logger> logger;
 
     std::vector<std::shared_ptr<Executor>> deadExecutors;
 
@@ -179,9 +191,16 @@ class Scheduler
 
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
 
+    std::shared_mutex functionCallClientsMx;
     std::unordered_map<std::string, faabric::scheduler::FunctionCallClient>
       functionCallClients;
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+      const std::string& otherHost);
+
+    std::shared_mutex snapshotClientsMx;
+    std::unordered_map<std::string, faabric::scheduler::SnapshotClient>
+      snapshotClients;
+    faabric::scheduler::SnapshotClient& getSnapshotClient(
       const std::string& otherHost);
 
     faabric::HostResources thisHostResources;
@@ -193,7 +212,7 @@ class Scheduler
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 
-    std::vector<std::string> getUnregisteredHosts(const std::string funcStr,
+    std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
                                                   bool noCache = false);
 
     std::shared_ptr<Executor> claimExecutor(const faabric::Message& msg);
@@ -208,7 +227,8 @@ class Scheduler
       const std::string& host,
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       std::vector<std::string>& records,
-      int offset);
+      int offset,
+      faabric::util::SnapshotData* snapshot);
 };
 
 }

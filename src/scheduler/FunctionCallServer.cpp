@@ -42,9 +42,6 @@ void FunctionCallServer::doRecv(faabric::transport::Message& header,
         case faabric::scheduler::FunctionCalls::GetResources:
             this->recvGetResources(body);
             break;
-        case faabric::scheduler::FunctionCalls::SetThreadResult:
-            this->recvSetThreadResult(body);
-            break;
         default:
             throw std::runtime_error(
               fmt::format("Unrecognized call header: {}", call));
@@ -102,15 +99,5 @@ void FunctionCallServer::recvGetResources(faabric::transport::Message& body)
     // Send the response body
     faabric::HostResources response = scheduler.getThisHostResources();
     SEND_SERVER_RESPONSE(response, msg.returnhost(), FUNCTION_CALL_PORT)
-}
-
-void FunctionCallServer::recvSetThreadResult(faabric::transport::Message& body)
-{
-    PARSE_MSG(faabric::ThreadResultRequest, body.data(), body.size())
-
-    faabric::util::getLogger()->info(
-      "Setting thread {} result to {}", msg.messageid(), msg.returnvalue());
-
-    scheduler.setThreadResult(msg.messageid(), msg.returnvalue());
 }
 }

@@ -9,6 +9,6 @@ namespace tests {
 void initDistTests();
 
 // Specific test functions
-void registerThreadFunctions();
+void registerSchedulerTestFunctions();
 
 }

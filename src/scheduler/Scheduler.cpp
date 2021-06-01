@@ -8,6 +8,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/random.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
@@ -30,6 +31,7 @@ Scheduler& getScheduler()
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
+  , logger(faabric::util::getLogger())
 {
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
@@ -62,11 +64,18 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::closeFunctionCallClients()
 {
-    // Close function call clients
     for (auto& iter : functionCallClients) {
         iter.second.close();
     }
     functionCallClients.clear();
+}
+
+void Scheduler::closeSnapshotClients()
+{
+    for (auto& iter : snapshotClients) {
+        iter.second.close();
+    }
+    snapshotClients.clear();
 }
 
 void Scheduler::reset()
@@ -103,6 +112,7 @@ void Scheduler::reset()
     recordedMessagesShared.clear();
 
     closeFunctionCallClients();
+    closeSnapshotClients();
 }
 
 void Scheduler::shutdown()
@@ -149,7 +159,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 {
     faabric::util::FullLock lock(mx);
 
-    faabric::util::getLogger()->trace("Shutting down executor {}", exec->id);
+    logger->trace("Shutting down executor {}", exec->id);
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
@@ -173,8 +183,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
     thisExecutors.erase(thisExecutors.begin() + execIdx);
 
     if (thisExecutors.empty()) {
-        faabric::util::getLogger()->trace("No remaining executors for {}",
-                                          funcStr);
+        logger->trace("No remaining executors for {}", funcStr);
 
         // Unregister if this was the last executor for that function
         bool isMaster = thisHost == msg.masterhost();
@@ -192,14 +201,13 @@ std::vector<std::string> Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   bool forceLocal)
 {
-    const auto& logger = faabric::util::getLogger();
-
     // Extract properties of the request
     int nMessages = req->messages_size();
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     std::vector<std::string> executed(nMessages);
 
-    // Note, we assume all the messages are for the same function and master
+    // Note, we assume all the messages are for the same function and have the
+    // same master host
     const faabric::Message& firstMsg = req->messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     std::string masterHost = firstMsg.masterhost();
@@ -212,20 +220,18 @@ std::vector<std::string> Scheduler::callFunctions(
     // TODO - more granular locking, this is incredibly conservative
     faabric::util::FullLock lock(mx);
 
-    // We want to dispatch remote calls here, and record what's left to be done
-    // locally
+    // If we're not the master host, we need to forward the request back to the
+    // master host. This will only happen if a nested batch execution happens.
     std::vector<int> localMessageIdxs;
     if (!forceLocal && masterHost != thisHost) {
-        // If we're not the master host, we need to forward the request back to
-        // the master host. This will only happen if a nested batch execution
-        // happens.
         logger->debug(
           "Forwarding {} {} back to master {}", nMessages, funcStr, masterHost);
 
         getFunctionCallClient(masterHost).executeFunctions(req);
         return executed;
+    }
 
-    } else if (forceLocal) {
+    if (forceLocal) {
         // We're forced to execute locally here so we do all the messages
         for (int i = 0; i < nMessages; i++) {
             localMessageIdxs.emplace_back(i);
@@ -235,9 +241,17 @@ std::vector<std::string> Scheduler::callFunctions(
         // At this point we know we're the master host, and we've not been
         // asked to force full local execution.
 
+        // Get a list of other registered hosts
+        std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+
         // For threads/ processes we need to have a snapshot key and be
-        // ready to push the snapshot to other hosts
+        // ready to push the snapshot to other hosts.
+        // We also have to broadcast the latest snapshots to all registered
+        // hosts, regardless of whether they're going to execute a function.
+        // This ensures everything is up to date, and we don't have to
+        // maintain different records of which hosts hold which updates.
         faabric::util::SnapshotData snapshotData;
+        std::vector<faabric::util::SnapshotDiff> snapshotDiffs;
         std::string snapshotKey = firstMsg.snapshotkey();
         bool snapshotNeeded =
           req->type() == req->THREADS || req->type() == req->PROCESSES;
@@ -246,9 +260,31 @@ std::vector<std::string> Scheduler::callFunctions(
             logger->error("No snapshot provided for {}", funcStr);
             throw std::runtime_error(
               "Empty snapshot for distributed threads/ processes");
-        } else if (snapshotNeeded) {
+        }
+
+        if (snapshotNeeded) {
             snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+            snapshotDiffs = snapshotData.getDirtyPages();
+
+            // Do the snapshot diff pushing
+            if (!snapshotDiffs.empty()) {
+                for (const auto& h : thisRegisteredHosts) {
+                    logger->debug("Pushing {} snapshot diffs for {} to {}",
+                                  snapshotDiffs.size(),
+                                  funcStr,
+                                  h);
+                    SnapshotClient& c = getSnapshotClient(h);
+                    c.pushSnapshotDiffs(snapshotKey, snapshotDiffs);
+                }
+            }
+
+            // Now reset the dirty page tracking, as we want the next batch of
+            // diffs to contain everything from now on (including the updates
+            // sent back from all the threads)
+            logger->debug("Resetting dirty tracking after pushing diffs {}",
+                          funcStr);
+            faabric::util::resetDirtyTracking();
         }
 
         // Work out how many we can handle locally
@@ -277,15 +313,10 @@ std::vector<std::string> Scheduler::callFunctions(
         // If some are left, we need to distribute
         int offset = nLocally;
         if (offset < nMessages) {
-            // At this point we have a remainder, so we need to distribute
-            // the rest over the registered hosts for this function
-            std::set<std::string>& thisRegisteredHosts =
-              registeredHosts[funcStr];
-
-            // Schedule the remainder on these other hosts
-            for (auto& h : thisRegisteredHosts) {
+            // Schedule first to already registered hosts
+            for (const auto& h : thisRegisteredHosts) {
                 int nOnThisHost =
-                  scheduleFunctionsOnHost(h, req, executed, offset);
+                  scheduleFunctionsOnHost(h, req, executed, offset, nullptr);
 
                 offset += nOnThisHost;
                 if (offset >= nMessages) {
@@ -294,6 +325,7 @@ std::vector<std::string> Scheduler::callFunctions(
             }
         }
 
+        // Now schedule to unregistered hosts if there are some left
         if (offset < nMessages) {
             std::vector<std::string> unregisteredHosts =
               getUnregisteredHosts(funcStr);
@@ -305,8 +337,8 @@ std::vector<std::string> Scheduler::callFunctions(
                 }
 
                 // Schedule functions on the host
-                int nOnThisHost =
-                  scheduleFunctionsOnHost(h, req, executed, offset);
+                int nOnThisHost = scheduleFunctionsOnHost(
+                  h, req, executed, offset, &snapshotData);
 
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
@@ -342,7 +374,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
     // Register thread results if necessary
     if (isThreads) {
-        for (auto& m : req->messages()) {
+        for (const auto& m : req->messages()) {
             registerThread(m.id());
         }
     }
@@ -408,7 +440,7 @@ std::vector<std::string> Scheduler::callFunctions(
 }
 
 std::vector<std::string> Scheduler::getUnregisteredHosts(
-  const std::string funcStr,
+  const std::string& funcStr,
   bool noCache)
 {
     // Load the list of available hosts
@@ -439,14 +471,12 @@ std::vector<std::string> Scheduler::getUnregisteredHosts(
 void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
                                         const std::string& snapshotKey)
 {
-
     std::string funcStr = faabric::util::funcToString(msg, false);
     std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
 
     for (auto host : thisRegisteredHosts) {
-        SnapshotClient c(host);
+        SnapshotClient& c = getSnapshotClient(host);
         c.deleteSnapshot(snapshotKey);
-        c.close();
     }
 }
 
@@ -454,16 +484,16 @@ int Scheduler::scheduleFunctionsOnHost(
   const std::string& host,
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   std::vector<std::string>& records,
-  int offset)
+  int offset,
+  faabric::util::SnapshotData* snapshot)
 {
-    auto logger = faabric::util::getLogger();
     const faabric::Message& firstMsg = req->messages().at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
     int nMessages = req->messages_size();
     int remainder = nMessages - offset;
 
-    // Execute as many as possible to this host
+    // Work out how many we can put on the host
     faabric::HostResources r = getHostResources(host);
     int available = r.slots() - r.usedslots();
 
@@ -477,7 +507,6 @@ int Scheduler::scheduleFunctionsOnHost(
     std::shared_ptr<faabric::BatchExecuteRequest> hostRequest =
       faabric::util::batchExecFactory();
     hostRequest->set_snapshotkey(req->snapshotkey());
-    hostRequest->set_snapshotsize(req->snapshotsize());
     hostRequest->set_type(req->type());
 
     // Add messages
@@ -487,18 +516,15 @@ int Scheduler::scheduleFunctionsOnHost(
         records.at(i) = host;
     }
 
-    // Push the snapshot if necessary
-    std::string snapshotKey = firstMsg.snapshotkey();
-    if (!snapshotKey.empty()) {
-        SnapshotClient c(host);
-        const SnapshotData& d =
-          snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
-        c.pushSnapshot(snapshotKey, d);
-        c.close();
-    }
-
     logger->debug(
       "Sending {}/{} {} to {}", nOnThisHost, nMessages, funcStr, host);
+
+    // Handle snapshots
+    std::string snapshotKey = firstMsg.snapshotkey();
+    if (snapshot != nullptr && !snapshotKey.empty()) {
+        SnapshotClient& c = getSnapshotClient(host);
+        c.pushSnapshot(snapshotKey, *snapshot);
+    }
 
     getFunctionCallClient(host).executeFunctions(hostRequest);
 
@@ -535,18 +561,54 @@ std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
     return recordedMessagesLocal;
 }
 
+std::string getClientKey(const std::string& otherHost)
+{
+    // Note, our keys here have to include the tid as the clients can only be
+    // used within the same thread.
+    std::thread::id tid = std::this_thread::get_id();
+    std::stringstream ss;
+    ss << otherHost << "_" << tid;
+    std::string key = ss.str();
+    return key;
+}
+
 FunctionCallClient& Scheduler::getFunctionCallClient(
   const std::string& otherHost)
 {
-    auto it = functionCallClients.find(otherHost);
-    if (it == functionCallClients.end()) {
-        auto _it = functionCallClients.try_emplace(otherHost, otherHost);
-        if (!_it.second) {
-            throw std::runtime_error("Error inserting function call client");
+    std::string key = getClientKey(otherHost);
+    if (functionCallClients.find(key) == functionCallClients.end()) {
+        faabric::util::FullLock lock(functionCallClientsMx);
+
+        if (functionCallClients.find(key) == functionCallClients.end()) {
+            logger->debug(
+              "Adding new function call client for {} ({})", otherHost, key);
+            functionCallClients.emplace(key, otherHost);
         }
-        it = _it.first;
     }
-    return it->second;
+
+    {
+        faabric::util::SharedLock lock(functionCallClientsMx);
+        return functionCallClients.at(key);
+    }
+}
+
+SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
+{
+    std::string key = getClientKey(otherHost);
+    if (snapshotClients.find(key) == snapshotClients.end()) {
+        faabric::util::FullLock lock(snapshotClientsMx);
+
+        if (snapshotClients.find(key) == snapshotClients.end()) {
+            logger->debug(
+              "Adding new snapshot client for {} ({})", otherHost, key);
+            snapshotClients.emplace(key, otherHost);
+        }
+    }
+
+    {
+        faabric::util::SharedLock lock(snapshotClientsMx);
+        return snapshotClients.at(key);
+    }
 }
 
 std::vector<std::pair<std::string, faabric::Message>>
@@ -557,7 +619,6 @@ Scheduler::getRecordedMessagesShared()
 
 std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
 {
-    const auto& logger = faabric::util::getLogger();
     std::string funcStr = faabric::util::funcToString(msg, false);
 
     std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
@@ -615,7 +676,6 @@ void Scheduler::broadcastFlush()
 
 void Scheduler::flushLocally()
 {
-    const auto& logger = faabric::util::getLogger();
     logger->info("Flushing host {}",
                  faabric::util::getSystemConfig().endpointHost);
 
@@ -670,30 +730,35 @@ void Scheduler::registerThread(uint32_t msgId)
 void Scheduler::setThreadResult(const faabric::Message& msg,
                                 int32_t returnValue)
 {
+    std::vector<faabric::util::SnapshotDiff> empty;
+    setThreadResult(msg, returnValue, empty);
+}
+
+void Scheduler::setThreadResult(
+  const faabric::Message& msg,
+  int32_t returnValue,
+  const std::vector<faabric::util::SnapshotDiff>& diffs)
+{
     // Vacate the slot taken by this thread
     vacateSlot();
 
     bool isMaster = msg.masterhost() == conf.endpointHost;
-    const auto& logger = faabric::util::getLogger();
 
     if (isMaster) {
-        setThreadResult(msg.id(), returnValue);
+        setThreadResultLocally(msg.id(), returnValue);
     } else {
-        logger->debug("Sending thread result {} for {} to {}",
-                      returnValue,
-                      msg.id(),
-                      msg.masterhost());
+        SnapshotClient& c = getSnapshotClient(msg.masterhost());
 
-        faabric::ThreadResultRequest req;
-        req.set_messageid(msg.id());
-        req.set_returnvalue(returnValue);
-        getFunctionCallClient(msg.masterhost()).setThreadResult(req);
+        if (diffs.empty()) {
+            c.pushThreadResult(msg.id(), returnValue);
+        } else {
+            c.pushThreadResult(msg.id(), returnValue, msg.snapshotkey(), diffs);
+        }
     }
 }
 
-void Scheduler::setThreadResult(uint32_t msgId, int32_t returnValue)
+void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
-    const auto& logger = faabric::util::getLogger();
     logger->debug("Setting result for thread {} to {}", msgId, returnValue);
     threadResults[msgId].set_value(returnValue);
 }
@@ -701,7 +766,6 @@ void Scheduler::setThreadResult(uint32_t msgId, int32_t returnValue)
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
     if (threadResults.count(messageId) == 0) {
-        const auto& logger = faabric::util::getLogger();
         logger->error("Thread {} not registered on this host", messageId);
         throw std::runtime_error("Awaiting unregistered thread");
     }

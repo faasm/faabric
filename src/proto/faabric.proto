@@ -27,7 +27,6 @@ message BatchExecuteRequest {
 
     // Shared snapshot used for threads
     string snapshotKey = 3;
-    int32 snapshotSize = 4;
 
     repeated Message messages = 5;
 
@@ -48,11 +47,6 @@ message HostResources {
 message UnregisterRequest {
     string host = 1;
     Message function = 2;
-}
-
-message ThreadResultRequest {
-    int32 messageId = 1;
-    int32 returnValue = 2;
 }
 
 message FunctionStatusResponse {
@@ -114,7 +108,6 @@ message Message {
     int32 returnValue = 11;
 
     string snapshotKey = 12;
-    int32 snapshotSize = 13;
 
     int64 timestamp = 14;
     string resultKey = 15;

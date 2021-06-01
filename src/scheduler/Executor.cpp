@@ -6,6 +6,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/timing.h>
 
@@ -122,6 +123,12 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
           "Skipping already restored snapshot {} [{}]", funcStr, snapshotKey);
     }
 
+    // Reset dirty page tracking if we're executing threads.
+    // Note this must be done after the restore has happened
+    if (isThreads && isSnapshot) {
+        faabric::util::resetDirtyTracking();
+    }
+
     // Set executing task count
     executingTaskCount += msgIdxs.size();
 
@@ -216,6 +223,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Decrement the task count
         int oldTaskCount = executingTaskCount.fetch_sub(1);
         assert(oldTaskCount >= 0);
+        bool isLastTask = oldTaskCount == 1;
 
         logger->trace("Task {} finished by thread {}:{} ({} left)",
                       msg.id(),
@@ -223,15 +231,31 @@ void Executor::threadPoolThread(int threadPoolIdx)
                       threadPoolIdx,
                       executingTaskCount);
 
-        // Set function result
-        if (req->type() == faabric::BatchExecuteRequest::THREADS) {
+        bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+        if (isLastTask && isThreads) {
+            // Get diffs
+            faabric::util::SnapshotData d = snapshot();
+            std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
+
+            logger->debug("Task {} finished, returning {} snapshot diffs",
+                          msg.id(),
+                          diffs.size());
+
+            // Reset dirty page tracking now that we've got the diffs
+            faabric::util::resetDirtyTracking();
+
+            // Send diffs along with thread result
+            sch.setThreadResult(msg, returnValue, diffs);
+        } else if (isThreads) {
+            // Set non-final thread result
             sch.setThreadResult(msg, returnValue);
         } else {
+            // Set normal function result
             sch.setFunctionResult(msg);
         }
 
-        // Notify the scheduler, note that we have to release the claim _after_
-        // resetting, once the executor is ready to be reused
+        // Reset and release claim. Note that we have to release the claim
+        // _after_ resetting, once the executor is ready to be reused
         if (oldTaskCount == 1) {
             reset(msg);
             releaseClaim();
@@ -296,5 +320,17 @@ void Executor::flush() {}
 
 void Executor::reset(const faabric::Message& msg) {}
 
-void Executor::restore(const faabric::Message& msg) {}
+faabric::util::SnapshotData Executor::snapshot()
+{
+    faabric::util::getLogger()->warn(
+      "Executor has not implemented snapshot method");
+    faabric::util::SnapshotData d;
+    return d;
+}
+
+void Executor::restore(const faabric::Message& msg)
+{
+    faabric::util::getLogger()->warn(
+      "Executor has not implemented restore method");
+}
 }
