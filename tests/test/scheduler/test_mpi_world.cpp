@@ -502,6 +502,7 @@ TEST_CASE("Test send across hosts", "[mpi]")
       rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
     usleep(1000 * 100);
 
+    /*
     SECTION("Check queueing")
     {
         REQUIRE(localWorld.getLocalQueueSize(rankA, rankB) == 1);
@@ -511,6 +512,7 @@ TEST_CASE("Test send across hosts", "[mpi]")
           *(localWorld.getLocalQueue(rankA, rankB)->dequeue());
         checkMessage(actualMessage, rankA, rankB, messageData);
     }
+    */
 
     SECTION("Check recv")
     {
