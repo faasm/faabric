@@ -55,6 +55,7 @@ TEST_CASE("Test world creation", "[mpi]")
         REQUIRE(actualCall.ismpi());
         REQUIRE(actualCall.mpiworldid() == worldId);
         REQUIRE(actualCall.mpirank() == i + 1);
+        REQUIRE(actualCall.mpiworldsize() == worldSize);
     }
 
     // Check that this host is registered as the master
@@ -64,18 +65,23 @@ TEST_CASE("Test world creation", "[mpi]")
     tearDown({ &world });
 }
 
-TEST_CASE("Test world loading from state", "[mpi]")
+TEST_CASE("Test world loading from msg", "[mpi]")
 {
     cleanFaabric();
 
     // Create a world
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
+    faabric::Message msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld worldA;
     worldA.create(msg, worldId, worldSize);
 
     // Create another copy from state
     scheduler::MpiWorld worldB;
-    worldB.initialiseFromState(msg, worldId);
+    // These would be set by the master rank, when invoking other ranks
+    msg.set_mpiworldsize(worldSize);
+    msg.set_mpiworldid(worldId);
+    // Force creating the second world in the _same_ host
+    bool forceLocal = true;
+    worldB.initialiseFromMsg(msg, forceLocal);
 
     REQUIRE(worldB.getSize() == worldSize);
     REQUIRE(worldB.getId() == worldId);
@@ -85,6 +91,7 @@ TEST_CASE("Test world loading from state", "[mpi]")
     tearDown({ &worldA, &worldB });
 }
 
+/*
 TEST_CASE("Test registering a rank", "[mpi]")
 {
     cleanFaabric();
@@ -109,7 +116,7 @@ TEST_CASE("Test registering a rank", "[mpi]")
     // Create a new instance of the world with a new host ID
     scheduler::MpiWorld worldB;
     worldB.overrideHost(hostB);
-    worldB.initialiseFromState(msg, worldId);
+    worldB.initialiseFromMsg(msg, worldId);
 
     int rankB = 4;
     worldB.registerRank(4);
@@ -122,6 +129,7 @@ TEST_CASE("Test registering a rank", "[mpi]")
 
     tearDown({ &worldA, &worldB });
 }
+*/
 
 TEST_CASE("Test cartesian communicator", "[mpi]")
 {
@@ -173,8 +181,8 @@ TEST_CASE("Test cartesian communicator", "[mpi]")
         };
     }
 
-    MpiWorld& world =
-      getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+    scheduler::MpiWorld world;
+    world.create(msg, worldId, worldSize);
 
     // Get coordinates from rank
     for (int i = 0; i < worldSize; i++) {
@@ -245,17 +253,14 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
 {
     cleanFaabric();
 
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    msg.set_mpiworldsize(2);
     scheduler::MpiWorld world;
     world.create(msg, worldId, worldSize);
 
-    // Register two ranks
-    int rankA1 = 1;
-    int rankA2 = 2;
-    world.registerRank(rankA1);
-    world.registerRank(rankA2);
-
     // Send a message between colocated ranks
+    int rankA1 = 0;
+    int rankA2 = 1;
     std::vector<int> messageData = { 0, 1, 2 };
     world.send(
       rankA1, rankA2, BYTES(messageData.data()), MPI_INT, messageData.size());
@@ -315,13 +320,9 @@ TEST_CASE("Test sendrecv", "[mpi]")
     scheduler::MpiWorld world;
     world.create(msg, worldId, worldSize);
 
-    // Register two ranks
+    // Prepare data
     int rankA = 1;
     int rankB = 2;
-    world.registerRank(rankA);
-    world.registerRank(rankB);
-
-    // Prepare data
     MPI_Status status{};
     std::vector<int> messageDataAB = { 0, 1, 2 };
     std::vector<int> messageDataBA = { 3, 2, 1, 0 };
@@ -381,11 +382,8 @@ TEST_CASE("Test ring sendrecv", "[mpi]")
     scheduler::MpiWorld world;
     world.create(msg, worldId, worldSize);
 
-    // Register five processes (0 already registered)
+    // Use five processes
     std::vector<int> ranks = { 0, 1, 2, 3, 4 };
-    for (int i = 1; i < ranks.size(); i++) {
-        world.registerRank(ranks[i]);
-    }
 
     // Prepare data
     MPI_Status status{};
@@ -432,13 +430,9 @@ TEST_CASE("Test async send and recv", "[mpi]")
     scheduler::MpiWorld world;
     world.create(msg, worldId, worldSize);
 
-    // Register two ranks
+    // Send a couple of async messages (from both to each other)
     int rankA = 1;
     int rankB = 2;
-    world.registerRank(rankA);
-    world.registerRank(rankB);
-
-    // Send a couple of async messages (from both to each other)
     std::vector<int> messageDataA = { 0, 1, 2 };
     std::vector<int> messageDataB = { 3, 4, 5, 6 };
     int sendIdA = world.isend(
@@ -475,41 +469,61 @@ TEST_CASE("Test send across hosts", "[mpi]")
     server.start();
     usleep(1000 * 100);
 
+    auto& sch = faabric::scheduler::getScheduler();
+
+    // Force the scheduler to initialise a world in the remote host by setting
+    // a worldSize bigger than the slots available locally
+    int worldSize = 2;
+    faabric::HostResources localResources;
+    localResources.set_slots(1);
+    localResources.set_usedslots(1);
+    faabric::HostResources otherResources;
+    otherResources.set_slots(1);
+
+    // Set up a remote host
+    std::string otherHost = LOCALHOST;
+    sch.addHostToGlobalSet(otherHost);
+
+    // Mock everything to make sure the other host has resources as well
+    faabric::util::setMockMode(true);
+    sch.setThisHostResources(localResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+
     // Set up the world on this host
     faabric::Message msg = faabric::util::messageFactory(user, func);
     msg.set_mpiworldid(worldId);
     msg.set_mpiworldsize(worldSize);
 
+    // Create the local world
     scheduler::MpiWorld& localWorld =
-      getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+      getMpiWorldRegistry().createWorld(msg, worldId);
 
-    // Set up a world on the "remote" host
-    std::string otherHost = faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
-    remoteWorld.initialiseFromState(msg, worldId);
+    remoteWorld.initialiseFromMsg(msg);
 
     // Register two ranks (one on each host)
-    int rankA = 1;
-    int rankB = 2;
-    remoteWorld.registerRank(rankA);
-    localWorld.registerRank(rankB);
+    int rankA = 0;
+    int rankB = 1;
 
     std::vector<int> messageData = { 0, 1, 2 };
 
+    // Undo the mocking, so we actually send the MPI message
+    faabric::util::setMockMode(false);
+
     // Send a message that should get sent to this host
     remoteWorld.send(
-      rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
+      rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
     usleep(1000 * 100);
 
     SECTION("Check queueing")
     {
-        REQUIRE(localWorld.getLocalQueueSize(rankA, rankB) == 1);
+        REQUIRE(localWorld.getLocalQueueSize(rankB, rankA) == 1);
 
         // Check message content
         faabric::MPIMessage actualMessage =
-          *(localWorld.getLocalQueue(rankA, rankB)->dequeue());
-        checkMessage(actualMessage, rankA, rankB, messageData);
+          *(localWorld.getLocalQueue(rankB, rankA)->dequeue());
+        checkMessage(actualMessage, rankB, rankA, messageData);
     }
 
     SECTION("Check recv")
@@ -518,12 +532,12 @@ TEST_CASE("Test send across hosts", "[mpi]")
         MPI_Status status{};
         auto buffer = new int[messageData.size()];
         localWorld.recv(
-          rankA, rankB, BYTES(buffer), MPI_INT, messageData.size(), &status);
+          rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
         std::vector<int> actual(buffer, buffer + messageData.size());
         REQUIRE(actual == messageData);
 
-        REQUIRE(status.MPI_SOURCE == rankA);
+        REQUIRE(status.MPI_SOURCE == rankB);
         REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
@@ -541,15 +555,8 @@ TEST_CASE("Test send/recv message with no data", "[mpi]")
     scheduler::MpiWorld world;
     world.create(msg, worldId, worldSize);
 
-    // Register two ranks
     int rankA1 = 1;
     int rankA2 = 2;
-    world.registerRank(rankA1);
-    world.registerRank(rankA2);
-
-    // Check we know the number of state keys
-    state::State& state = state::getGlobalState();
-    REQUIRE(state.getKVCount() == 4);
 
     // Send a message between colocated ranks
     std::vector<int> messageData = { 0 };
@@ -562,9 +569,6 @@ TEST_CASE("Test send/recv message with no data", "[mpi]")
           *(world.getLocalQueue(rankA1, rankA2)->dequeue());
         REQUIRE(actualMessage.count() == 0);
         REQUIRE(actualMessage.type() == FAABRIC_INT);
-
-        // Check no extra data in state
-        REQUIRE(state.getKVCount() == 4);
     }
 
     SECTION("Check receiving with null ptr")
@@ -573,8 +577,6 @@ TEST_CASE("Test send/recv message with no data", "[mpi]")
         MPI_Status status{};
         world.recv(rankA1, rankA2, nullptr, MPI_INT, 0, &status);
 
-        // Check no extra data in state
-        REQUIRE(state.getKVCount() == 4);
         REQUIRE(status.MPI_SOURCE == rankA1);
         REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
         REQUIRE(status.bytesSize == 0);
@@ -590,9 +592,6 @@ TEST_CASE("Test recv with partial data", "[mpi]")
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     world.create(msg, worldId, worldSize);
-
-    world.registerRank(1);
-    world.registerRank(2);
 
     // Send a message with size less than the recipient is expecting
     std::vector<int> messageData = { 0, 1, 2, 3 };
@@ -620,9 +619,6 @@ TEST_CASE("Test probe", "[mpi]")
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     world.create(msg, worldId, worldSize);
-
-    world.registerRank(1);
-    world.registerRank(2);
 
     // Send two messages of different sizes
     std::vector<int> messageData = { 0, 1, 2, 3, 4, 5, 6 };
@@ -668,35 +664,44 @@ TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
 {
     cleanFaabric();
 
-    std::string hostA = faabric::util::randomString(MPI_HOST_STATE_LEN - 5);
-    std::string hostB = faabric::util::randomString(MPI_HOST_STATE_LEN - 3);
+    std::string otherHost = LOCALHOST;
 
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
+    auto& sch = faabric::scheduler::getScheduler();
+
+    // Force the scheduler to initialise a world in the remote host by setting
+    // a worldSize bigger than the slots available locally
+    int worldSize = 4;
+    faabric::HostResources localResources;
+    localResources.set_slots(2);
+    localResources.set_usedslots(1);
+    faabric::HostResources otherResources;
+    otherResources.set_slots(2);
+
+    // Set up a remote host
+    sch.addHostToGlobalSet(otherHost);
+
+    // Mock everything to make sure the other host has resources as well
+    faabric::util::setMockMode(true);
+    sch.setThisHostResources(localResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    msg.set_mpiworldsize(worldSize);
     scheduler::MpiWorld worldA;
-    worldA.overrideHost(hostA);
     worldA.create(msg, worldId, worldSize);
 
     scheduler::MpiWorld worldB;
-    worldB.overrideHost(hostB);
-    worldB.initialiseFromState(msg, worldId);
-
-    // Register one rank on each host
-    int rankA = 1;
-    int rankB = 2;
-    worldA.registerRank(rankA);
-    worldB.registerRank(rankB);
-
-    // Check we can't access unregistered rank on either
-    REQUIRE_THROWS(worldA.getLocalQueue(0, 3));
-    REQUIRE_THROWS(worldB.getLocalQueue(0, 3));
+    worldB.overrideHost(otherHost);
+    worldB.initialiseFromMsg(msg);
 
     // Check that we can't access rank on another host locally
-    REQUIRE_THROWS(worldA.getLocalQueue(0, rankB));
+    REQUIRE_THROWS(worldA.getLocalQueue(0, 2));
 
     // Double check even when we've retrieved the rank
-    REQUIRE(worldA.getHostForRank(rankB) == hostB);
-    REQUIRE_THROWS(worldA.getLocalQueue(0, rankB));
+    REQUIRE(worldA.getHostForRank(2) == otherHost);
+    REQUIRE_THROWS(worldA.getLocalQueue(0, 2));
 
+    faabric::util::setMockMode(false);
     tearDown({ &worldA, &worldB });
 }
 
@@ -715,22 +720,6 @@ TEST_CASE("Check sending to invalid rank", "[mpi]")
     tearDown({ &world });
 }
 
-TEST_CASE("Check sending to unregistered rank", "[mpi]")
-{
-    cleanFaabric();
-
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
-    scheduler::MpiWorld world;
-    world.create(msg, worldId, worldSize);
-
-    // Rank hasn't yet been registered
-    int destRank = 2;
-    std::vector<int> input = { 0, 1 };
-    REQUIRE_THROWS(world.send(0, destRank, BYTES(input.data()), MPI_INT, 2));
-
-    tearDown({ &world });
-}
-
 TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 {
     cleanFaabric();
@@ -739,33 +728,47 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
     server.start();
     usleep(1000 * 100);
 
-    std::string otherHost = "123.45.67.8";
+    auto& sch = faabric::scheduler::getScheduler();
 
+    // Here we rely on the scheduler running out of resources, and overloading
+    // the localWorld with ranks 4 and 5
     int thisWorldSize = 6;
+    faabric::HostResources localResources;
+    localResources.set_slots(1);
+    localResources.set_usedslots(1);
+    faabric::HostResources otherResources;
+    otherResources.set_slots(3);
+
+    // Set up a remote host
+    std::string otherHost = LOCALHOST;
+    sch.addHostToGlobalSet(otherHost);
+
+    // Mock everything to make sure the other host has resources as well
+    faabric::util::setMockMode(true);
+    sch.setThisHostResources(localResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     faabric::Message msg = faabric::util::messageFactory(user, func);
     msg.set_mpiworldid(worldId);
     msg.set_mpiworldsize(thisWorldSize);
 
     MpiWorld& localWorld =
-      getMpiWorldRegistry().createWorld(msg, worldId, LOCALHOST);
+      getMpiWorldRegistry().createWorld(msg, worldId);
 
     scheduler::MpiWorld remoteWorld;
-    remoteWorld.initialiseFromState(msg, worldId);
     remoteWorld.overrideHost(otherHost);
+    remoteWorld.initialiseFromMsg(msg);
+
+    // Unset mock mode to actually send remote MPI messages
+    faabric::util::setMockMode(false);
 
     // Register ranks on both hosts
     int remoteRankA = 1;
     int remoteRankB = 2;
     int remoteRankC = 3;
-    remoteWorld.registerRank(remoteRankA);
-    remoteWorld.registerRank(remoteRankB);
-    remoteWorld.registerRank(remoteRankC);
 
     int localRankA = 4;
     int localRankB = 5;
-    localWorld.registerRank(localRankA);
-    localWorld.registerRank(localRankB);
 
     // Note that ranks are deliberately out of order
     std::vector<int> remoteWorldRanks = { remoteRankB,
@@ -1051,15 +1054,12 @@ template void doReduceTest<double>(scheduler::MpiWorld& world,
 
 TEST_CASE("Test reduce", "[mpi]")
 {
+    cleanFaabric();
+
     const faabric::Message& msg = faabric::util::messageFactory(user, func);
     scheduler::MpiWorld world;
     int thisWorldSize = 5;
     world.create(msg, worldId, thisWorldSize);
-
-    // Register the ranks (zero already registered by default
-    for (int r = 1; r < thisWorldSize; r++) {
-        world.registerRank(r);
-    }
 
     // Prepare inputs
     int root = 3;
@@ -1219,11 +1219,6 @@ TEST_CASE("Test operator reduce", "[mpi]")
     scheduler::MpiWorld world;
     int thisWorldSize = 5;
     world.create(msg, worldId, thisWorldSize);
-
-    // Register the ranks
-    for (int r = 1; r < thisWorldSize; r++) {
-        world.registerRank(r);
-    }
 
     SECTION("Max")
     {
@@ -1408,11 +1403,6 @@ TEST_CASE("Test gather and allgather", "[mpi]")
 
     world.create(msg, worldId, thisWorldSize);
 
-    // Register the ranks (zero already registered by default
-    for (int r = 1; r < thisWorldSize; r++) {
-        world.registerRank(r);
-    }
-
     // Build up per-rank data and expectation
     int nPerRank = 3;
     int gatheredSize = nPerRank * thisWorldSize;
@@ -1541,11 +1531,6 @@ TEST_CASE("Test scan", "[mpi]")
     int count = 3;
     world.create(msg, worldId, thisWorldSize);
 
-    // Register the ranks
-    for (int r = 1; r < thisWorldSize; r++) {
-        world.registerRank(r);
-    }
-
     // Prepare input data
     std::vector<std::vector<int>> rankData(thisWorldSize,
                                            std::vector<int>(count));
@@ -1605,11 +1590,6 @@ TEST_CASE("Test all-to-all", "[mpi]")
     int thisWorldSize = 4;
     world.create(msg, worldId, thisWorldSize);
 
-    // Register the ranks
-    for (int r = 1; r < thisWorldSize; r++) {
-        world.registerRank(r);
-    }
-
     // Build inputs and expected
     int inputs[4][8] = {
         { 0, 1, 2, 3, 4, 5, 6, 7 },
@@ -1654,19 +1634,39 @@ TEST_CASE("Test all-to-all", "[mpi]")
 TEST_CASE("Test RMA across hosts", "[mpi]")
 {
     cleanFaabric();
-    std::string otherHost = "192.168.9.2";
+
+    auto& sch = faabric::scheduler::getScheduler();
+
+    // Set up host resources
+    int worldSize = 5;
+    faabric::HostResources localResources;
+    localResources.set_slots(3);
+    localResources.set_usedslots(1);
+    faabric::HostResources otherResources;
+    otherResources.set_slots(2);
+
+    // Set up a remote host
+    std::string otherHost = LOCALHOST;
+    sch.addHostToGlobalSet(otherHost);
+
+    // Mock everything to make sure the other host has resources as well
+    faabric::util::setMockMode(true);
+    sch.setThisHostResources(localResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     faabric::Message msg = faabric::util::messageFactory(user, func);
     msg.set_mpiworldid(worldId);
     msg.set_mpiworldsize(worldSize);
 
-    MpiWorldRegistry& registry = getMpiWorldRegistry();
     scheduler::MpiWorld& localWorld =
-      registry.createWorld(msg, worldId, LOCALHOST);
+      getMpiWorldRegistry().createWorld(msg, worldId);
 
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
-    remoteWorld.initialiseFromState(msg, worldId);
+    remoteWorld.initialiseFromMsg(msg);
+
+    // Undo the mocking, so we actually send remote MPI messages
+    faabric::util::setMockMode(false);
 
     FunctionCallServer server;
     server.start();
@@ -1677,10 +1677,6 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
     int rankA2 = 2;
     int rankB1 = 3;
     int rankB2 = 4;
-    localWorld.registerRank(rankA1);
-    localWorld.registerRank(rankA2);
-    remoteWorld.registerRank(rankB1);
-    remoteWorld.registerRank(rankB2);
 
     std::vector<int> dataA1 = { 0, 1, 2, 3 };
     int dataCount = (int)dataA1.size();

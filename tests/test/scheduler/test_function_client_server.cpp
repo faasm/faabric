@@ -51,6 +51,7 @@ class ClientServerFixture
     }
 };
 
+/*
 TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
 {
     // Create an MPI world on this host and one on a "remote" host
@@ -103,6 +104,7 @@ TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
     remoteWorld.destroy();
     registry.clear();
 }
+*/
 
 TEST_CASE_METHOD(ClientServerFixture,
                  "Test sending flush message",
