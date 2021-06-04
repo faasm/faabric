@@ -8,6 +8,7 @@ set(HEADERS
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/Message.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageContext.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpoint.h"
+    "${FAABRIC_INCLUDE_DIR}/faabric/transport/MpiMessageEndpoint.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpointClient.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpointServer.h"
 )
@@ -16,6 +17,7 @@ set(LIB_FILES
     Message.cpp
     MessageContext.cpp
     MessageEndpoint.cpp
+    MpiMessageEndpoint.cpp
     MessageEndpointClient.cpp
     MessageEndpointServer.cpp
     ${HEADERS}

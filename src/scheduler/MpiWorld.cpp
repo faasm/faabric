@@ -11,6 +11,8 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/timing.h>
 
+#include <faabric/transport/MpiMessageEndpoint.h>
+
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
 static thread_local std::unordered_map<std::string,
                                        faabric::scheduler::FunctionCallClient>
@@ -162,6 +164,8 @@ void MpiWorld::destroy()
         }
         localQueueMap.clear();
     }
+
+    PROF_SUMMARY
 }
 
 void MpiWorld::shutdownThreadPool()
@@ -254,6 +258,7 @@ std::string MpiWorld::getHostForRank(int rank)
             char* bufferChar = reinterpret_cast<char*>(buffer);
             if (bufferChar[0] == '\0') {
                 // No entry for other rank
+                logger->error("No host entry for rank {}", rank);
                 throw std::runtime_error(
                   fmt::format("No host entry for rank {}", rank));
             }
@@ -478,6 +483,7 @@ void MpiWorld::send(int sendRank,
     m->set_messagetype(messageType);
 
     // Work out whether the message is sent locally or to another host
+    logger->debug("getHostForRank for send: {} -> {}", sendRank, recvRank);
     const std::string otherHost = getHostForRank(recvRank);
     bool isLocal = otherHost == thisHost;
 
@@ -497,7 +503,8 @@ void MpiWorld::send(int sendRank,
         }
     } else {
         logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
-        getFunctionCallClient(otherHost).sendMPIMessage(m);
+        // getFunctionCallClient(otherHost).sendMPIMessage(m);
+        faabric::transport::SendMpiMessage(otherHost, recvRank, m);
     }
 }
 
@@ -511,8 +518,15 @@ void MpiWorld::recv(int sendRank,
 {
     // Listen to the in-memory queue for this rank and message type
     logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
-    std::shared_ptr<faabric::MPIMessage> m =
-      getLocalQueue(sendRank, recvRank)->dequeue();
+    logger->debug("getHostForRank from recv");
+    const std::string otherHost = getHostForRank(sendRank);
+        std::shared_ptr<faabric::MPIMessage> m;
+    if (otherHost == thisHost) {
+        // TODO - nooo!!! chaaange!!!!
+        m = getLocalQueue(sendRank, recvRank)->dequeue();
+    } else {
+        m = faabric::transport::RecvMpiMessage(recvRank);
+    }
 
     if (messageType != m->messagetype()) {
         logger->error(
@@ -560,6 +574,7 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
                         int myRank,
                         MPI_Status* status)
 {
+    PROF_START(faabric_sendRecv)
     logger->trace(
       "MPI - Sendrecv. Rank {}. Sending to: {} - Receiving from: {}",
       myRank,
@@ -576,21 +591,29 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
     }
 
     // Post async recv
+    PROF_START(faabric_irecv)
     int recvId = irecv(recvRank,
                        myRank,
                        recvBuffer,
                        recvDataType,
                        recvCount,
                        faabric::MPIMessage::SENDRECV);
+    PROF_END(faabric_irecv)
     // Then send the message
+    PROF_START(faabric_send)
     send(myRank,
          sendRank,
          sendBuffer,
          sendDataType,
          sendCount,
          faabric::MPIMessage::SENDRECV);
+    PROF_END(faabric_send)
     // And wait
+    PROF_START(faabric_await)
     awaitAsyncRequest(recvId);
+    PROF_END(faabric_await)
+
+    PROF_END(faabric_sendRecv)
 }
 
 void MpiWorld::broadcast(int sendRank,
