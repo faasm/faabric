@@ -47,8 +47,8 @@ void MpiContext::joinWorld(const faabric::Message& msg)
 
     // Register with the world
     MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getOrInitialiseWorld(msg, worldId);
-    world.registerRank(rank);
+    // TODO - change return value? or do some assertions
+    MpiWorld& world = registry.getOrInitialiseWorld(msg);
 }
 
 bool MpiContext::getIsMpi()

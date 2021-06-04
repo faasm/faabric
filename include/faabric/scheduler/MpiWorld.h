@@ -15,14 +15,14 @@ namespace faabric::scheduler {
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 
-struct MpiWorldState
-{
-    int worldSize;
-};
-
 std::string getWorldStateKey(int worldId);
 
-std::string getRankStateKey(int worldId, int rankId);
+// TODO - move to transport eventually
+faabric::MpiHostRankMsg recvMpiHostRankMsg();
+
+// TODO - move to transport eventually
+void sendMpiHostRankMsg(const std::string& hostIn, 
+                        const faabric::MpiHostRankMsg msg);
 
 class MpiWorld
 {
@@ -31,11 +31,11 @@ class MpiWorld
 
     void create(const faabric::Message& call, int newId, int newSize);
 
-    void initialiseFromState(const faabric::Message& msg, int worldId);
-
-    void registerRank(int rank);
+    void initialiseFromMsg(const faabric::Message& msg, bool forceLocal = false);
 
     std::string getHostForRank(int rank);
+
+    void setHostForRank(const std::vector<std::string>& rankHostVec);
 
     std::string getUser();
 
@@ -238,16 +238,10 @@ class MpiWorld
 
     std::vector<int> cartProcsPerDim;
 
-    void setUpStateKV();
-
-    std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
-
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
     void checkRankOnThisHost(int rank);
-
-    void pushToState();
 
     void closeThreadLocalClients();
 };

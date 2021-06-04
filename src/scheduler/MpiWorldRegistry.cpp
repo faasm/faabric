@@ -38,15 +38,15 @@ scheduler::MpiWorld& MpiWorldRegistry::createWorld(const faabric::Message& msg,
     return worldMap[worldId];
 }
 
-MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(const faabric::Message& msg,
-                                                 int worldId)
+MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(const faabric::Message& msg)
 {
     // Create world locally if not exists
+    int worldId = msg.mpiworldid();
     if (worldMap.find(worldId) == worldMap.end()) {
         faabric::util::FullLock lock(registryMutex);
         if (worldMap.find(worldId) == worldMap.end()) {
             MpiWorld& world = worldMap[worldId];
-            world.initialiseFromState(msg, worldId);
+            world.initialiseFromMsg(msg);
         }
     }
 

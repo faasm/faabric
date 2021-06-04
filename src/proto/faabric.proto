@@ -84,6 +84,10 @@ message MPIMessage {
     bytes buffer = 8;
 }
 
+message MpiHostRankMsg {
+    repeated string hosts = 1;
+}
+
 message Message {
     int32 id = 1;
     int32 appId = 2;
