@@ -17,13 +17,6 @@ typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
 
 std::string getWorldStateKey(int worldId);
 
-// TODO - move to transport eventually
-faabric::MpiHostRankMsg recvMpiHostRankMsg();
-
-// TODO - move to transport eventually
-void sendMpiHostRankMsg(const std::string& hostIn, 
-                        const faabric::MpiHostRankMsg msg);
-
 class MpiWorld
 {
   public:
@@ -31,7 +24,8 @@ class MpiWorld
 
     void create(const faabric::Message& call, int newId, int newSize);
 
-    void initialiseFromMsg(const faabric::Message& msg, bool forceLocal = false);
+    void initialiseFromMsg(const faabric::Message& msg,
+                           bool forceLocal = false);
 
     std::string getHostForRank(int rank);
 
