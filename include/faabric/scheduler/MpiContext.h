@@ -9,7 +9,7 @@ class MpiContext
   public:
     MpiContext();
 
-    void createWorld(const faabric::Message& msg);
+    void createWorld(faabric::Message& msg);
 
     void joinWorld(const faabric::Message& msg);
 

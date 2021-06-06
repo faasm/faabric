@@ -113,7 +113,7 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
     // Broadcast the resulting rankHostMap to the other hosts
     std::set<std::string> hosts(executedAt.begin(), executedAt.end());
-    // Erase ourselves if we are in the set (could be that we are not)
+    // Erase ourselves if we are in the set
     hosts.erase(thisHost);
     // This will block until all other hosts have processed the message
     faabric::MpiHostRankMsg hostRankMsg;

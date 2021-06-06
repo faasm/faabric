@@ -12,7 +12,7 @@ MpiContext::MpiContext()
   , worldId(-1)
 {}
 
-void MpiContext::createWorld(const faabric::Message& msg)
+void MpiContext::createWorld(faabric::Message& msg)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
@@ -24,6 +24,9 @@ void MpiContext::createWorld(const faabric::Message& msg)
 
     worldId = (int)faabric::util::generateGid();
     logger->debug("Initialising world {}", worldId);
+
+    // Update the original message to contain the world ID
+    msg.set_mpiworldid(worldId);
 
     // Create the MPI world
     scheduler::MpiWorldRegistry& reg = scheduler::getMpiWorldRegistry();

@@ -5,10 +5,8 @@ faabric::MpiHostRankMsg recvMpiHostRankMsg()
 {
     faabric::transport::RecvMessageEndpoint endpoint(MPI_PORT);
     endpoint.open(faabric::transport::getGlobalMessageContext());
-    // TODO - preempt data size somehow
     faabric::transport::Message m = endpoint.recv();
     PARSE_MSG(faabric::MpiHostRankMsg, m.data(), m.size());
-    // Note - This may be very slow as we poll until unbound
     endpoint.close();
 
     return msg;
