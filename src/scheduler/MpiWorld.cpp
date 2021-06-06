@@ -4,15 +4,13 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/MpiMessageEndpoint.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/timing.h>
-
-// TODO -remove
-#include <faabric/transport/macros.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
 static thread_local std::unordered_map<std::string,
@@ -111,9 +109,6 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     assert(executedAt.size() == size - 1);
     // Add this host as executor for rank 0, i.e. prepend
     executedAt.insert(executedAt.begin(), thisHost);
-    for (int i = 0; i < executedAt.size(); i++) {
-        logger->info("Rank {} - Host {}", i, executedAt.at(i));
-    }
     setHostForRank(executedAt);
 
     // Broadcast the resulting rankHostMap to the other hosts
@@ -122,9 +117,9 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     hosts.erase(thisHost);
     // This will block until all other hosts have processed the message
     faabric::MpiHostRankMsg hostRankMsg;
-    *hostRankMsg.mutable_hosts() = {executedAt.begin(), executedAt.end()};
+    *hostRankMsg.mutable_hosts() = { executedAt.begin(), executedAt.end() };
     for (const auto& h : hosts) {
-        sendMpiHostRankMsg(h, hostRankMsg);
+        faabric::transport::sendMpiHostRankMsg(h, hostRankMsg);
     }
 }
 
@@ -191,44 +186,14 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
     // _same_ host we have created one (note that this would never happen in
     // reality). If so, we skip the rank-host map broadcasting.
     if (!forceLocal) {
-        // Block until we receive 
-        faabric::MpiHostRankMsg hostRankMsg = recvMpiHostRankMsg();
+        // Block until we receive
+        faabric::MpiHostRankMsg hostRankMsg =
+          faabric::transport::recvMpiHostRankMsg();
         std::vector<std::string> rankHostVec(hostRankMsg.hosts_size());
         for (int i = 0; i < rankHostVec.size(); i++) {
             rankHostVec.at(i) = hostRankMsg.hosts(i);
-            logger->info("Remote: Rank {} - Host {}", i, rankHostVec.at(i));
         }
         setHostForRank(rankHostVec);
-    }
-}
-
-// TODO - move to transport eventually
-faabric::MpiHostRankMsg recvMpiHostRankMsg()
-{
-    faabric::transport::RecvMessageEndpoint endpoint(MPI_PORT);
-    endpoint.open(faabric::transport::getGlobalMessageContext());
-    // TODO - preempt data size somehow
-    faabric::transport::Message m = endpoint.recv();
-    PARSE_MSG(faabric::MpiHostRankMsg, m.data(), m.size());
-    // Note - This may be very slow as we poll until unbound
-    endpoint.close();
-
-    return msg;
-}
-
-void sendMpiHostRankMsg(const std::string& hostIn, 
-                        const faabric::MpiHostRankMsg msg)
-{
-    size_t msgSize = msg.ByteSizeLong();
-    {
-        uint8_t sMsg[msgSize];
-        if (!msg.SerializeToArray(sMsg, msgSize)) {
-            throw std::runtime_error("Error serialising message");
-        }
-        faabric::transport::SendMessageEndpoint endpoint(hostIn, MPI_PORT);
-        endpoint.open(faabric::transport::getGlobalMessageContext());
-        endpoint.send(sMsg, msgSize, false);
-        endpoint.close();
     }
 }
 
@@ -250,11 +215,12 @@ void MpiWorld::setHostForRank(const std::vector<std::string>& rankHostVec)
 {
     assert(rankHostVec.size() == size);
     faabric::util::FullLock lock(worldMutex);
-    for (int i = 0; i < size; i ++) {
+    for (int i = 0; i < size; i++) {
         auto it = rankHostMap.try_emplace(i, rankHostVec.at(i));
         if (!it.second) {
             logger->error("Error emplacing in rankHostMap: {} -> {}",
-                          i + 1, rankHostVec.at(i));
+                          i + 1,
+                          rankHostVec.at(i));
             throw std::runtime_error("Error emplacing in rankHostMap");
         }
     }

@@ -752,8 +752,7 @@ TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
     msg.set_mpiworldid(worldId);
     msg.set_mpiworldsize(thisWorldSize);
 
-    MpiWorld& localWorld =
-      getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
 
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
@@ -1674,9 +1673,7 @@ TEST_CASE("Test RMA across hosts", "[mpi]")
 
     // Register four ranks
     int rankA1 = 1;
-    int rankA2 = 2;
     int rankB1 = 3;
-    int rankB2 = 4;
 
     std::vector<int> dataA1 = { 0, 1, 2, 3 };
     int dataCount = (int)dataA1.size();
