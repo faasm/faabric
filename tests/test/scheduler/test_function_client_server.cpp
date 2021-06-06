@@ -51,12 +51,29 @@ class ClientServerFixture
     }
 };
 
-/*
 TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
 {
-    // Create an MPI world on this host and one on a "remote" host
-    std::string otherHost = "192.168.9.2";
+    auto& sch = faabric::scheduler::getScheduler();
 
+    // Force the scheduler to initialise a world in the remote host by setting
+    // a worldSize bigger than the slots available locally
+    int worldSize = 2;
+    faabric::HostResources localResources;
+    localResources.set_slots(1);
+    localResources.set_usedslots(1);
+    faabric::HostResources otherResources;
+    otherResources.set_slots(1);
+
+    // Set up a remote host
+    std::string otherHost = LOCALHOST;
+    sch.addHostToGlobalSet(otherHost);
+
+    // Mock everything to make sure the other host has resources as well
+    faabric::util::setMockMode(true);
+    sch.setThisHostResources(localResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+
+    // Create an MPI world on this host and one on a "remote" host
     const char* user = "mpi";
     const char* func = "hellompi";
     int worldId = 123;
@@ -64,22 +81,22 @@ TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
     msg.set_user(user);
     msg.set_function(func);
     msg.set_mpiworldid(worldId);
-    msg.set_mpiworldsize(2);
+    msg.set_mpiworldsize(worldSize);
     faabric::util::messageFactory(user, func);
 
     scheduler::MpiWorldRegistry& registry = getMpiWorldRegistry();
-    scheduler::MpiWorld& localWorld =
-      registry.createWorld(msg, worldId, LOCALHOST);
+    scheduler::MpiWorld& localWorld = registry.createWorld(msg, worldId);
 
     scheduler::MpiWorld remoteWorld;
     remoteWorld.overrideHost(otherHost);
-    remoteWorld.initialiseFromState(msg, worldId);
+    remoteWorld.initialiseFromMsg(msg);
 
     // Register a rank on each
     int rankLocal = 0;
     int rankRemote = 1;
-    localWorld.registerRank(rankLocal);
-    remoteWorld.registerRank(rankRemote);
+
+    // Undo the mocking, so we actually send the MPI message
+    faabric::util::setMockMode(false);
 
     // Create a message
     faabric::MPIMessage mpiMsg;
@@ -104,7 +121,6 @@ TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
     remoteWorld.destroy();
     registry.clear();
 }
-*/
 
 TEST_CASE_METHOD(ClientServerFixture,
                  "Test sending flush message",

@@ -91,45 +91,50 @@ TEST_CASE("Test world loading from msg", "[mpi]")
     tearDown({ &worldA, &worldB });
 }
 
-/*
-TEST_CASE("Test registering a rank", "[mpi]")
+TEST_CASE("Test rank allocation", "[mpi]")
 {
     cleanFaabric();
 
-    // Note, we deliberately make the host names different lengths,
-    // shorter than the buffer
-    std::string hostA = faabric::util::randomString(MPI_HOST_STATE_LEN - 5);
-    std::string hostB = faabric::util::randomString(MPI_HOST_STATE_LEN - 10);
+    auto& sch = faabric::scheduler::getScheduler();
+
+    // Force the scheduler to initialise a world in the remote host by setting
+    // a worldSize bigger than the slots available locally
+    int worldSize = 2;
+    faabric::HostResources localResources;
+    localResources.set_slots(1);
+    localResources.set_usedslots(1);
+    faabric::HostResources otherResources;
+    otherResources.set_slots(1);
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    std::string otherHost = LOCALHOST;
+    sch.addHostToGlobalSet(otherHost);
+
+    // Mock everything to make sure the other host has resources as well
+    faabric::util::setMockMode(true);
+    sch.setThisHostResources(localResources);
+    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Create a world
-    const faabric::Message& msg = faabric::util::messageFactory(user, func);
-    scheduler::MpiWorld worldA;
-    worldA.overrideHost(hostA);
-    worldA.create(msg, worldId, worldSize);
+    faabric::Message msg = faabric::util::messageFactory(user, func);
+    msg.set_mpiworldid(worldId);
+    msg.set_mpiworldsize(worldSize);
 
-    // Register a rank to this host and check
-    int rankA = 5;
-    worldA.registerRank(5);
-    const std::string actualHost = worldA.getHostForRank(0);
-    REQUIRE(actualHost == hostA);
+    // Create the local world
+    scheduler::MpiWorld& localWorld =
+      getMpiWorldRegistry().createWorld(msg, worldId);
 
-    // Create a new instance of the world with a new host ID
-    scheduler::MpiWorld worldB;
-    worldB.overrideHost(hostB);
-    worldB.initialiseFromMsg(msg, worldId);
-
-    int rankB = 4;
-    worldB.registerRank(4);
+    scheduler::MpiWorld remoteWorld;
+    remoteWorld.overrideHost(otherHost);
+    remoteWorld.initialiseFromMsg(msg);
 
     // Now check both world instances report the same mappings
-    REQUIRE(worldA.getHostForRank(rankA) == hostA);
-    REQUIRE(worldA.getHostForRank(rankB) == hostB);
-    REQUIRE(worldB.getHostForRank(rankA) == hostA);
-    REQUIRE(worldB.getHostForRank(rankB) == hostB);
+    REQUIRE(localWorld.getHostForRank(0) == thisHost);
+    REQUIRE(localWorld.getHostForRank(1) == otherHost);
 
-    tearDown({ &worldA, &worldB });
+    faabric::util::setMockMode(false);
+    tearDown({ &localWorld, &remoteWorld });
 }
-*/
 
 TEST_CASE("Test cartesian communicator", "[mpi]")
 {

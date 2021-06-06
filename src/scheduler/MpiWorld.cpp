@@ -115,7 +115,6 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     std::set<std::string> hosts(executedAt.begin(), executedAt.end());
     // Erase ourselves if we are in the set
     hosts.erase(thisHost);
-    // This will block until all other hosts have processed the message
     faabric::MpiHostRankMsg hostRankMsg;
     *hostRankMsg.mutable_hosts() = { executedAt.begin(), executedAt.end() };
     for (const auto& h : hosts) {
