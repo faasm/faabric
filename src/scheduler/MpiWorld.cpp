@@ -413,10 +413,7 @@ void MpiWorld::send(int sendRank,
                     int count,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
-    if (recvRank > this->size - 1) {
-        throw std::runtime_error(fmt::format(
-          "Rank {} bigger than world size {}", recvRank, this->size));
-    }
+    assert(recvRank < this->size);
 
     // Generate a message ID
     int msgId = (int)faabric::util::generateGid();
@@ -468,21 +465,10 @@ void MpiWorld::recv(int sendRank,
     std::shared_ptr<faabric::MPIMessage> m =
       getLocalQueue(sendRank, recvRank)->dequeue();
 
-    if (messageType != m->messagetype()) {
-        logger->error(
-          "Message types mismatched on {}->{} (expected={}, got={})",
-          sendRank,
-          recvRank,
-          messageType,
-          m->messagetype());
-        throw std::runtime_error("Mismatched message types");
-    }
-
-    if (m->count() > count) {
-        logger->error(
-          "Message too long for buffer (msg={}, buffer={})", m->count(), count);
-        throw std::runtime_error("Message too long");
-    }
+    // Assert message integrity
+    // Note - this checks won't happen in Release builds
+    assert(m->messagetype() == messageType);
+    assert(m->count() <= count);
 
     // TODO - avoid copy here
     // Copy message data
@@ -1119,7 +1105,7 @@ void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
                                                           int recvRank)
 {
-    checkRankOnThisHost(recvRank);
+    assert(getHostForRank(recvRank) == thisHost);
 
     std::string key = std::to_string(sendRank) + "_" + std::to_string(recvRank);
     if (localQueueMap.find(key) == localQueueMap.end()) {
@@ -1225,21 +1211,6 @@ long MpiWorld::getLocalQueueSize(int sendRank, int recvRank)
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
     return queue->size();
-}
-
-void MpiWorld::checkRankOnThisHost(int rank)
-{
-    // Check if we know about this rank on this host
-    if (rankHostMap.count(rank) == 0) {
-        logger->error("No mapping found for rank {} on this host", rank);
-        throw std::runtime_error("No mapping found for rank");
-    } else if (rankHostMap[rank] != thisHost) {
-        logger->error("Trying to access rank {} on {} but it's on {}",
-                      rank,
-                      thisHost,
-                      rankHostMap[rank]);
-        throw std::runtime_error("Accessing in-memory queue for remote rank");
-    }
 }
 
 void MpiWorld::createWindow(const int winRank,

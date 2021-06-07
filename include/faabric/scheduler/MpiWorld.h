@@ -235,8 +235,6 @@ class MpiWorld
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
-    void checkRankOnThisHost(int rank);
-
     void closeThreadLocalClients();
 };
 }
