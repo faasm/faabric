@@ -29,6 +29,7 @@ TEST_CASE("Check world creation", "[mpi]")
     // Check a new world ID is created
     int worldId = c.getWorldId();
     REQUIRE(worldId > 0);
+    msg.set_mpiworldid(worldId);
 
     // Check this context is set up
     REQUIRE(c.getIsMpi());
@@ -36,13 +37,12 @@ TEST_CASE("Check world creation", "[mpi]")
 
     // Get the world and check it is set up
     MpiWorldRegistry& reg = getMpiWorldRegistry();
-    MpiWorld& world = reg.getOrInitialiseWorld(msg, worldId);
+    MpiWorld& world = reg.getOrInitialiseWorld(msg);
     REQUIRE(world.getId() == worldId);
     REQUIRE(world.getSize() == 10);
     REQUIRE(world.getUser() == "mpi");
     REQUIRE(world.getFunction() == "hellompi");
 
-    world.destroy();
     tearDown(world);
 }
 
@@ -84,10 +84,11 @@ TEST_CASE("Check default world size is set", "[mpi]")
     msg.set_mpiworldsize(requestedWorldSize);
     c.createWorld(msg);
     int worldId = c.getWorldId();
+    msg.set_mpiworldid(worldId);
 
     // Check that the size is set to the default
     MpiWorldRegistry& reg = getMpiWorldRegistry();
-    MpiWorld& world = reg.getOrInitialiseWorld(msg, worldId);
+    MpiWorld& world = reg.getOrInitialiseWorld(msg);
     REQUIRE(world.getSize() == defaultWorldSize);
 
     // Reset config
@@ -131,8 +132,9 @@ TEST_CASE("Check joining world", "[mpi]")
 
     // Check rank is registered to this host
     MpiWorldRegistry& reg = getMpiWorldRegistry();
-    MpiWorld& world = reg.getOrInitialiseWorld(msgB, worldId);
+    MpiWorld& world = reg.getOrInitialiseWorld(msgB);
     const std::string actualHost = world.getHostForRank(1);
+    REQUIRE(actualHost == expectedHost);
 
     tearDown(world);
 }

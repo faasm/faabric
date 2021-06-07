@@ -12,7 +12,7 @@ MpiContext::MpiContext()
   , worldId(-1)
 {}
 
-void MpiContext::createWorld(const faabric::Message& msg)
+int MpiContext::createWorld(const faabric::Message& msg)
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
@@ -32,6 +32,9 @@ void MpiContext::createWorld(const faabric::Message& msg)
     // Set up this context
     isMpi = true;
     rank = 0;
+
+    // Return the world id to store it in the original message
+    return worldId;
 }
 
 void MpiContext::joinWorld(const faabric::Message& msg)
@@ -47,8 +50,7 @@ void MpiContext::joinWorld(const faabric::Message& msg)
 
     // Register with the world
     MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getOrInitialiseWorld(msg, worldId);
-    world.registerRank(rank);
+    registry.getOrInitialiseWorld(msg);
 }
 
 bool MpiContext::getIsMpi()

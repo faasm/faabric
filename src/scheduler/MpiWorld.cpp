@@ -4,6 +4,7 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/MpiMessageEndpoint.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
@@ -35,37 +36,10 @@ std::string getWorldStateKey(int worldId)
     return "mpi_world_" + std::to_string(worldId);
 }
 
-std::string getRankStateKey(int worldId, int rankId)
-{
-    if (worldId <= 0 || rankId < 0) {
-        throw std::runtime_error(
-          fmt::format("World ID must be >0 and rank ID must be >=0 ({}, {})",
-                      worldId,
-                      rankId));
-    }
-    return "mpi_rank_" + std::to_string(worldId) + "_" + std::to_string(rankId);
-}
-
 std::string getWindowStateKey(int worldId, int rank, size_t size)
 {
     return "mpi_win_" + std::to_string(worldId) + "_" + std::to_string(rank) +
            "_" + std::to_string(size);
-}
-
-void MpiWorld::setUpStateKV()
-{
-    if (stateKV == nullptr) {
-        state::State& state = state::getGlobalState();
-        std::string stateKey = getWorldStateKey(id);
-        stateKV = state.getKV(user, stateKey, sizeof(MpiWorldState));
-    }
-}
-
-std::shared_ptr<state::StateKeyValue> MpiWorld::getRankHostState(int rank)
-{
-    state::State& state = state::getGlobalState();
-    std::string stateKey = getRankStateKey(id, rank);
-    return state.getKV(user, stateKey, MPI_HOST_STATE_LEN);
 }
 
 faabric::scheduler::FunctionCallClient& MpiWorld::getFunctionCallClient(
@@ -114,13 +88,6 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
       getMpiThreadPoolSize());
 
-    // Write this to state
-    setUpStateKV();
-    pushToState();
-
-    // Register this as the master
-    registerRank(0);
-
     auto& sch = faabric::scheduler::getScheduler();
 
     // Dispatch all the chained calls
@@ -133,9 +100,29 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
         msg.set_ismpi(true);
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
+        msg.set_mpiworldsize(size);
     }
 
-    sch.callFunctions(req);
+    // Send the init messages (note that message i corresponds to rank i+1)
+    std::vector<std::string> executedAt = sch.callFunctions(req);
+    assert(executedAt.size() == size - 1);
+
+    // Prepend this host for rank 0
+    executedAt.insert(executedAt.begin(), thisHost);
+
+    // Register hosts to rank mappings on this host
+    faabric::MpiHostsToRanksMessage hostRankMsg;
+    *hostRankMsg.mutable_hosts() = { executedAt.begin(), executedAt.end() };
+    setAllRankHosts(hostRankMsg);
+
+    // Set up a list of hosts to broadcast to (excluding this host)
+    std::set<std::string> hosts(executedAt.begin(), executedAt.end());
+    hosts.erase(thisHost);
+
+    // Do the broadcast
+    for (const auto& h : hosts) {
+        faabric::transport::sendMpiHostRankMsg(h, hostRankMsg);
+    }
 }
 
 void MpiWorld::destroy()
@@ -146,12 +133,6 @@ void MpiWorld::destroy()
 
         // Note - we are deliberately not deleting the KV in the global state
         // TODO - find a way to do this only from the master client
-
-        for (auto& s : rankHostMap) {
-            const std::shared_ptr<state::StateKeyValue>& rankState =
-              getRankHostState(s.first);
-            state::getGlobalState().deleteKV(rankState->user, rankState->key);
-        }
 
         // Wait (forever) until all ranks are done consuming their queues to
         // clear them.
@@ -193,82 +174,55 @@ void MpiWorld::closeThreadLocalClients()
     functionCallClients.clear();
 }
 
-void MpiWorld::initialiseFromState(const faabric::Message& msg, int worldId)
+void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
 {
-    id = worldId;
+    id = msg.mpiworldid();
     user = msg.user();
     function = msg.function();
+    size = msg.mpiworldsize();
 
-    setUpStateKV();
-
-    // Read from state
-    MpiWorldState s{};
-    stateKV->pull();
-    stateKV->get(BYTES(&s));
-    size = s.worldSize;
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
       getMpiThreadPoolSize());
-}
 
-void MpiWorld::pushToState()
-{
-    // Write to state
-    MpiWorldState s{
-        .worldSize = this->size,
-    };
-
-    stateKV->set(BYTES(&s));
-    stateKV->pushFull();
-}
-
-void MpiWorld::registerRank(int rank)
-{
-    {
-        faabric::util::FullLock lock(worldMutex);
-        rankHostMap[rank] = thisHost;
+    // Sometimes for testing purposes we may want to initialise a world in the
+    // _same_ host we have created one (note that this would never happen in
+    // reality). If so, we skip the rank-host map broadcasting.
+    if (!forceLocal) {
+        // Block until we receive
+        faabric::MpiHostsToRanksMessage hostRankMsg =
+          faabric::transport::recvMpiHostRankMsg();
+        setAllRankHosts(hostRankMsg);
     }
-
-    // Note that the host name may be shorter than the buffer, so we need to pad
-    // with nulls
-    uint8_t hostBytesBuffer[MPI_HOST_STATE_LEN];
-    memset(hostBytesBuffer, '\0', MPI_HOST_STATE_LEN);
-    ::strcpy((char*)hostBytesBuffer, thisHost.c_str());
-
-    const std::shared_ptr<state::StateKeyValue>& kv = getRankHostState(rank);
-    kv->set(hostBytesBuffer);
-    kv->pushFull();
 }
 
 std::string MpiWorld::getHostForRank(int rank)
 {
-    // Pull from state if not present
     if (rankHostMap.find(rank) == rankHostMap.end()) {
-        faabric::util::FullLock lock(worldMutex);
-
-        if (rankHostMap.find(rank) == rankHostMap.end()) {
-            auto buffer = new uint8_t[MPI_HOST_STATE_LEN];
-            const std::shared_ptr<state::StateKeyValue>& kv =
-              getRankHostState(rank);
-            kv->get(buffer);
-
-            char* bufferChar = reinterpret_cast<char*>(buffer);
-            if (bufferChar[0] == '\0') {
-                // No entry for other rank
-                throw std::runtime_error(
-                  fmt::format("No host entry for rank {}", rank));
-            }
-
-            // Note - we rely on C strings detecting the null terminator here,
-            // assuming the host will either be an IP or string of alphanumeric
-            // characters and dots
-            std::string otherHost(bufferChar);
-            rankHostMap[rank] = otherHost;
-        }
+        logger->error("No known host for rank {}", rank);
+        throw std::runtime_error("No known host for rank");
     }
 
     {
         faabric::util::SharedLock lock(worldMutex);
         return rankHostMap[rank];
+    }
+}
+
+// Prepare the host-rank map with a vector containing _all_ ranks
+void MpiWorld::setAllRankHosts(const faabric::MpiHostsToRanksMessage& msg)
+{
+    assert(msg.hosts().size() == size);
+    faabric::util::FullLock lock(worldMutex);
+    for (int i = 0; i < size; i++) {
+        auto it = rankHostMap.try_emplace(i, msg.hosts().at(i));
+        if (!it.second) {
+            logger->error("Tried to map host ({}) to rank ({}), but rank was "
+                          "already mapped to host ({})",
+                          msg.hosts().at(i),
+                          i + 1,
+                          rankHostMap[i]);
+            throw std::runtime_error("Rank already mapped to host");
+        }
     }
 }
 

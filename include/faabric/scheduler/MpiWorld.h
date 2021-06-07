@@ -15,14 +15,7 @@ namespace faabric::scheduler {
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 
-struct MpiWorldState
-{
-    int worldSize;
-};
-
 std::string getWorldStateKey(int worldId);
-
-std::string getRankStateKey(int worldId, int rankId);
 
 class MpiWorld
 {
@@ -31,11 +24,12 @@ class MpiWorld
 
     void create(const faabric::Message& call, int newId, int newSize);
 
-    void initialiseFromState(const faabric::Message& msg, int worldId);
-
-    void registerRank(int rank);
+    void initialiseFromMsg(const faabric::Message& msg,
+                           bool forceLocal = false);
 
     std::string getHostForRank(int rank);
+
+    void setAllRankHosts(const faabric::MpiHostsToRanksMessage& msg);
 
     std::string getUser();
 
@@ -238,16 +232,10 @@ class MpiWorld
 
     std::vector<int> cartProcsPerDim;
 
-    void setUpStateKV();
-
-    std::shared_ptr<state::StateKeyValue> getRankHostState(int rank);
-
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
     void checkRankOnThisHost(int rank);
-
-    void pushToState();
 
     void closeThreadLocalClients();
 };

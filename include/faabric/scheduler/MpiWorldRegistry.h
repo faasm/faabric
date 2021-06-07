@@ -12,8 +12,7 @@ class MpiWorldRegistry
                                      int worldId,
                                      std::string hostOverride = "");
 
-    scheduler::MpiWorld& getOrInitialiseWorld(const faabric::Message& msg,
-                                              int worldId);
+    scheduler::MpiWorld& getOrInitialiseWorld(const faabric::Message& msg);
 
     scheduler::MpiWorld& getWorld(int worldId);
 
