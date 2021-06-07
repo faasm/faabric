@@ -6,8 +6,8 @@
 #include <faabric/transport/macros.h>
 
 namespace faabric::transport {
-faabric::MpiHostRankMsg recvMpiHostRankMsg();
+faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
 
 void sendMpiHostRankMsg(const std::string& hostIn,
-                        const faabric::MpiHostRankMsg msg);
+                        const faabric::MpiHostsToRanksMessage msg);
 }

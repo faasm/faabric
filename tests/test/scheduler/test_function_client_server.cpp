@@ -56,7 +56,7 @@ TEST_CASE_METHOD(ClientServerFixture, "Test sending MPI message", "[scheduler]")
     auto& sch = faabric::scheduler::getScheduler();
 
     // Force the scheduler to initialise a world in the remote host by setting
-    // a worldSize bigger than the slots available locally
+    // a world size bigger than the slots available locally
     int worldSize = 2;
     faabric::HostResources localResources;
     localResources.set_slots(1);

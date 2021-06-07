@@ -103,20 +103,23 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldsize(size);
     }
 
-    // The scheduler returns at which host each message is scheduled
-    // Note - message `i` corresponds to rank `i+1`
+    // Send the init messages (note that message i corresponds to rank i+1)
     std::vector<std::string> executedAt = sch.callFunctions(req);
     assert(executedAt.size() == size - 1);
-    // Add this host as executor for rank 0, i.e. prepend
-    executedAt.insert(executedAt.begin(), thisHost);
-    setHostForRank(executedAt);
 
-    // Broadcast the resulting rankHostMap to the other hosts
-    std::set<std::string> hosts(executedAt.begin(), executedAt.end());
-    // Erase ourselves if we are in the set
-    hosts.erase(thisHost);
-    faabric::MpiHostRankMsg hostRankMsg;
+    // Prepend this host for rank 0
+    executedAt.insert(executedAt.begin(), thisHost);
+
+    // Register hosts to rank mappings on this host
+    faabric::MpiHostsToRanksMessage hostRankMsg;
     *hostRankMsg.mutable_hosts() = { executedAt.begin(), executedAt.end() };
+    setAllRankHosts(hostRankMsg);
+
+    // Set up a list of hosts to broadcast to (excluding this host)
+    std::set<std::string> hosts(executedAt.begin(), executedAt.end());
+    hosts.erase(thisHost);
+
+    // Do the broadcast
     for (const auto& h : hosts) {
         faabric::transport::sendMpiHostRankMsg(h, hostRankMsg);
     }
@@ -186,13 +189,9 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
     // reality). If so, we skip the rank-host map broadcasting.
     if (!forceLocal) {
         // Block until we receive
-        faabric::MpiHostRankMsg hostRankMsg =
+        faabric::MpiHostsToRanksMessage hostRankMsg =
           faabric::transport::recvMpiHostRankMsg();
-        std::vector<std::string> rankHostVec(hostRankMsg.hosts_size());
-        for (int i = 0; i < rankHostVec.size(); i++) {
-            rankHostVec.at(i) = hostRankMsg.hosts(i);
-        }
-        setHostForRank(rankHostVec);
+        setAllRankHosts(hostRankMsg);
     }
 }
 
@@ -210,17 +209,19 @@ std::string MpiWorld::getHostForRank(int rank)
 }
 
 // Prepare the host-rank map with a vector containing _all_ ranks
-void MpiWorld::setHostForRank(const std::vector<std::string>& rankHostVec)
+void MpiWorld::setAllRankHosts(const faabric::MpiHostsToRanksMessage& msg)
 {
-    assert(rankHostVec.size() == size);
+    assert(msg.hosts().size() == size);
     faabric::util::FullLock lock(worldMutex);
     for (int i = 0; i < size; i++) {
-        auto it = rankHostMap.try_emplace(i, rankHostVec.at(i));
+        auto it = rankHostMap.try_emplace(i, msg.hosts().at(i));
         if (!it.second) {
-            logger->error("Error emplacing in rankHostMap: {} -> {}",
+            logger->error("Tried to map host ({}) to rank ({}), but rank was "
+                          "already mapped to host ({})",
+                          msg.hosts().at(i),
                           i + 1,
-                          rankHostVec.at(i));
-            throw std::runtime_error("Error emplacing in rankHostMap");
+                          rankHostMap[i]);
+            throw std::runtime_error("Rank already mapped to host");
         }
     }
 }

@@ -29,7 +29,7 @@ class MpiWorld
 
     std::string getHostForRank(int rank);
 
-    void setHostForRank(const std::vector<std::string>& rankHostVec);
+    void setAllRankHosts(const faabric::MpiHostsToRanksMessage& msg);
 
     std::string getUser();
 

@@ -1,19 +1,19 @@
 #include <faabric/transport/MpiMessageEndpoint.h>
 
 namespace faabric::transport {
-faabric::MpiHostRankMsg recvMpiHostRankMsg()
+faabric::MpiHostsToRanksMessage recvMpiHostRankMsg()
 {
     faabric::transport::RecvMessageEndpoint endpoint(MPI_PORT);
     endpoint.open(faabric::transport::getGlobalMessageContext());
     faabric::transport::Message m = endpoint.recv();
-    PARSE_MSG(faabric::MpiHostRankMsg, m.data(), m.size());
+    PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
     endpoint.close();
 
     return msg;
 }
 
 void sendMpiHostRankMsg(const std::string& hostIn,
-                        const faabric::MpiHostRankMsg msg)
+                        const faabric::MpiHostsToRanksMessage msg)
 {
     size_t msgSize = msg.ByteSizeLong();
     {

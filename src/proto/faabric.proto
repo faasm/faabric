@@ -84,7 +84,10 @@ message MPIMessage {
     bytes buffer = 8;
 }
 
-message MpiHostRankMsg {
+// Instead of sending a map, or a list of ranks, we use the repeated string
+// index as rank. Note that protobuf guarantess in-order delivery of repeated
+// fields.
+message MpiHostsToRanksMessage {
     repeated string hosts = 1;
 }
 
