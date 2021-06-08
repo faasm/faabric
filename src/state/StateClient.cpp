@@ -64,7 +64,7 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
         try {
             (void)awaitResponse();
         } catch (...) {
-            faabric::util::getLogger()->error("Error in awaitReponse");
+            loggererror("Error in awaitReponse");
             throw;
         }
     }

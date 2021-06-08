@@ -84,7 +84,7 @@ void resetDirtyTracking()
 {
     FILE* fd = fopen(CLEAR_REFS, "w");
     if (fd == nullptr) {
-        faabric::util::getLogger()->error("Could not open clear_refs ({})",
+        loggererror("Could not open clear_refs ({})",
                                           strerror(errno));
         throw std::runtime_error("Could not open clear_refs");
     }
@@ -94,7 +94,7 @@ void resetDirtyTracking()
     char value[] = "4";
     size_t nWritten = fwrite(value, sizeof(char), 1, fd);
     if (nWritten != 1) {
-        faabric::util::getLogger()->error("Failed to write to clear_refs ({})",
+        loggererror("Failed to write to clear_refs ({})",
                                           nWritten);
         throw std::runtime_error("Failed to write to clear_refs");
     }
@@ -110,7 +110,7 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     // Open the pagemap
     FILE* fd = fopen(PAGEMAP, "rb");
     if (fd == nullptr) {
-        faabric::util::getLogger()->error("Could not open pagemap ({})",
+        loggererror("Could not open pagemap ({})",
                                           strerror(errno));
         throw std::runtime_error("Could not open pagemap");
     }
@@ -118,7 +118,7 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     // Skip to location of this page
     int r = fseek(fd, offset, SEEK_SET);
     if (r < 0) {
-        faabric::util::getLogger()->error("Could not seek pagemap ({})", r);
+        loggererror("Could not seek pagemap ({})", r);
         throw std::runtime_error("Could not seek pagemap");
     }
 
@@ -126,7 +126,7 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     std::vector<uint64_t> entries(nEntries, 0);
     int nRead = fread(entries.data(), PAGEMAP_ENTRY_BYTES, nEntries, fd);
     if (nRead != nEntries) {
-        faabric::util::getLogger()->error(
+        loggererror(
           "Could not read pagemap ({} != {})", nRead, nEntries);
         throw std::runtime_error("Could not read pagemap");
     }

@@ -16,7 +16,7 @@ scheduler::MpiWorld& MpiWorldRegistry::createWorld(const faabric::Message& msg,
                                                    std::string hostOverride)
 {
     if (worldMap.count(worldId) > 0) {
-        faabric::util::getLogger()->error("World {} already exists", worldId);
+        loggererror("World {} already exists", worldId);
         throw std::runtime_error("World already exists");
     }
 
@@ -59,7 +59,7 @@ MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(const faabric::Message& msg)
 MpiWorld& MpiWorldRegistry::getWorld(int worldId)
 {
     if (worldMap.count(worldId) == 0) {
-        faabric::util::getLogger()->error("World {} not initialised", worldId);
+        loggererror("World {} not initialised", worldId);
         throw std::runtime_error("World not initialised");
     }
 

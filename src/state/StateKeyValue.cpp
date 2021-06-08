@@ -196,7 +196,7 @@ void StateKeyValue::doSetChunk(long offset,
     // memory
     size_t chunkEnd = offset + length;
     if (chunkEnd > sharedMemSize) {
-        logger->error("Setting chunk out of bounds on {}/{} ({} > {})",
+        SPDLOG_ERROR("Setting chunk out of bounds on {}/{} ({} > {})",
                       user,
                       key,
                       chunkEnd,
@@ -258,7 +258,7 @@ void StateKeyValue::mapSharedMemory(void* destination,
     PROF_START(mapSharedMem)
 
     if (!isPageAligned(destination)) {
-        logger->error("Non-aligned destination for shared mapping of {}", key);
+        SPDLOG_ERROR("Non-aligned destination for shared mapping of {}", key);
         throw std::runtime_error("Mapping misaligned shared memory");
     }
 
@@ -279,7 +279,7 @@ void StateKeyValue::mapSharedMemory(void* destination,
 
     // Handle failure
     if (result == MAP_FAILED) {
-        logger->error(
+        SPDLOG_ERROR(
           "Failed mapping for {} at {} with size {}. errno: {} ({})",
           key,
           offset,
@@ -292,7 +292,7 @@ void StateKeyValue::mapSharedMemory(void* destination,
 
     // Check the mapping is where we expect it to be
     if (destination != result) {
-        logger->error("New mapped addr for {} doesn't match required {} != {}",
+        SPDLOG_ERROR("New mapped addr for {} doesn't match required {} != {}",
                       key,
                       destination,
                       result);
@@ -307,7 +307,7 @@ void StateKeyValue::unmapSharedMemory(void* mappedAddr)
     FullLock lock(valueMutex);
 
     if (!isPageAligned(mappedAddr)) {
-        logger->error(
+        SPDLOG_ERROR(
           "Attempting to unmap non-page-aligned memory at {} for {}",
           mappedAddr,
           key);
@@ -317,7 +317,7 @@ void StateKeyValue::unmapSharedMemory(void* mappedAddr)
     // Unmap the current memory so it can be reused
     int result = munmap(mappedAddr, sharedMemSize);
     if (result == -1) {
-        logger->error(
+        SPDLOG_ERROR(
           "Failed to unmap shared memory at {} with size {}. errno: {}",
           mappedAddr,
           sharedMemSize,
@@ -474,7 +474,7 @@ void StateKeyValue::doPullChunk(bool lazy, long offset, size_t length)
     // Check bounds
     size_t chunkEnd = offset + length;
     if (chunkEnd > valueSize) {
-        logger->error("Pulling chunk out of bounds on {}/{} ({} > {})",
+        SPDLOG_ERROR("Pulling chunk out of bounds on {}/{} ({} > {})",
                       user,
                       key,
                       chunkEnd,
@@ -558,7 +558,7 @@ uint32_t StateKeyValue::waitOnRedisRemoteLock(const std::string& redisKey)
           "Waiting on remote lock for {} (loop {})", redisKey, retryCount);
 
         if (retryCount >= REMOTE_LOCK_MAX_RETRIES) {
-            logger->error("Timed out waiting for lock on {}", redisKey);
+            SPDLOG_ERROR("Timed out waiting for lock on {}", redisKey);
             break;
         }
 

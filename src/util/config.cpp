@@ -76,33 +76,33 @@ void SystemConfig::print()
 {
     const std::shared_ptr<spdlog::logger>& logger = getLogger();
 
-    logger->info("--- System ---");
-    logger->info("SERIALISATION              {}", serialisation);
-    logger->info("LOG_LEVEL                  {}", logLevel);
-    logger->info("LOG_FILE                   {}", logFile);
-    logger->info("STATE_MODE                 {}", stateMode);
-    logger->info("DELTA_SNAPSHOT_ENCODING    {}", deltaSnapshotEncoding);
+    SPDLOG_INFO("--- System ---");
+    SPDLOG_INFO("SERIALISATION              {}", serialisation);
+    SPDLOG_INFO("LOG_LEVEL                  {}", logLevel);
+    SPDLOG_INFO("LOG_FILE                   {}", logFile);
+    SPDLOG_INFO("STATE_MODE                 {}", stateMode);
+    SPDLOG_INFO("DELTA_SNAPSHOT_ENCODING    {}", deltaSnapshotEncoding);
 
-    logger->info("--- Redis ---");
-    logger->info("REDIS_STATE_HOST           {}", redisStateHost);
-    logger->info("REDIS_QUEUE_HOST           {}", redisQueueHost);
-    logger->info("REDIS_PORT                 {}", redisPort);
+    SPDLOG_INFO("--- Redis ---");
+    SPDLOG_INFO("REDIS_STATE_HOST           {}", redisStateHost);
+    SPDLOG_INFO("REDIS_QUEUE_HOST           {}", redisQueueHost);
+    SPDLOG_INFO("REDIS_PORT                 {}", redisPort);
 
-    logger->info("--- Scheduling ---");
-    logger->info("NO_SCHEDULER               {}", noScheduler);
-    logger->info("OVERRIDE_CPU_COUNT         {}", overrideCpuCount);
+    SPDLOG_INFO("--- Scheduling ---");
+    SPDLOG_INFO("NO_SCHEDULER               {}", noScheduler);
+    SPDLOG_INFO("OVERRIDE_CPU_COUNT         {}", overrideCpuCount);
 
-    logger->info("--- Timeouts ---");
-    logger->info("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
-    logger->info("BOUND_TIMEOUT              {}", boundTimeout);
+    SPDLOG_INFO("--- Timeouts ---");
+    SPDLOG_INFO("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
+    SPDLOG_INFO("BOUND_TIMEOUT              {}", boundTimeout);
 
-    logger->info("--- MPI ---");
-    logger->info("DEFAULT_MPI_WORLD_SIZE  {}", defaultMpiWorldSize);
+    SPDLOG_INFO("--- MPI ---");
+    SPDLOG_INFO("DEFAULT_MPI_WORLD_SIZE  {}", defaultMpiWorldSize);
 
-    logger->info("--- Endpoint ---");
-    logger->info("ENDPOINT_INTERFACE         {}", endpointInterface);
-    logger->info("ENDPOINT_HOST              {}", endpointHost);
-    logger->info("ENDPOINT_PORT              {}", endpointPort);
-    logger->info("ENDPOINT_NUM_THREADS       {}", endpointNumThreads);
+    SPDLOG_INFO("--- Endpoint ---");
+    SPDLOG_INFO("ENDPOINT_INTERFACE         {}", endpointInterface);
+    SPDLOG_INFO("ENDPOINT_HOST              {}", endpointHost);
+    SPDLOG_INFO("ENDPOINT_PORT              {}", endpointPort);
+    SPDLOG_INFO("ENDPOINT_NUM_THREADS       {}", endpointNumThreads);
 }
 }

@@ -63,7 +63,7 @@ void DummyStateServer::start()
 
         // Check this kv "thinks" it's master
         if (!inMemKv->isMaster()) {
-            logger->error("Dummy state server not master for data");
+            SPDLOG_ERROR("Dummy state server not master for data");
             throw std::runtime_error("Remote state server failed");
         }
 

@@ -14,7 +14,7 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
 MessageEndpoint::~MessageEndpoint()
 {
     if (this->socket != nullptr) {
-        faabric::util::getLogger()->warn(
+        SPDLOG_WARN(
           "Destroying an open message endpoint!");
         this->close(false);
     }
@@ -42,7 +42,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                 this->socket = std::make_unique<zmq::socket_t>(
                   context.get(), zmq::socket_type::push);
             } catch (zmq::error_t& e) {
-                logger->error(
+                SPDLOG_ERROR(
                   "Error opening SEND socket to {}: {}", address, e.what());
                 throw;
             }
@@ -52,7 +52,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                 this->socket = std::make_unique<zmq::socket_t>(
                   context.get(), zmq::socket_type::pull);
             } catch (zmq::error_t& e) {
-                logger->error("Error opening RECV socket bound to {}: {}",
+                SPDLOG_ERROR("Error opening RECV socket bound to {}: {}",
                               address,
                               e.what());
                 throw;
@@ -68,14 +68,14 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
         try {
             this->socket->bind(address);
         } catch (zmq::error_t& e) {
-            logger->error("Error binding socket to {}: {}", address, e.what());
+            SPDLOG_ERROR("Error binding socket to {}: {}", address, e.what());
             throw;
         }
     } else {
         try {
             this->socket->connect(address);
         } catch (zmq::error_t& e) {
-            logger->error(
+            SPDLOG_ERROR(
               "Error connecting socket to {}: {}", address, e.what());
             throw;
         }
@@ -94,14 +94,14 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
             auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
                                           zmq::send_flags::sndmore);
             if (res != msgSize) {
-                logger->error("Sent different bytes than expected (sent "
+                SPDLOG_ERROR("Sent different bytes than expected (sent "
                               "{}, expected {})",
                               res.value_or(0),
                               msgSize);
                 throw std::runtime_error("Error sending message");
             }
         } catch (zmq::error_t& e) {
-            logger->error("Error sending message: {}", e.what());
+            SPDLOG_ERROR("Error sending message: {}", e.what());
             throw;
         }
     } else {
@@ -109,14 +109,14 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
             auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
                                           zmq::send_flags::none);
             if (res != msgSize) {
-                logger->error("Sent different bytes than expected (sent "
+                SPDLOG_ERROR("Sent different bytes than expected (sent "
                               "{}, expected {})",
                               res.value_or(0),
                               msgSize);
                 throw std::runtime_error("Error sending message");
             }
         } catch (zmq::error_t& e) {
-            logger->error("Error sending message: {}", e.what());
+            SPDLOG_ERROR("Error sending message: {}", e.what());
             throw;
         }
     }
@@ -139,7 +139,7 @@ Message MessageEndpoint::recv(int size)
         try {
             auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
             if (res.has_value() && (res->size != res->untruncated_size)) {
-                logger->error("Received more bytes than buffer can hold. "
+                SPDLOG_ERROR("Received more bytes than buffer can hold. "
                               "Received: {}, capacity {}",
                               res->untruncated_size,
                               res->size);
@@ -151,7 +151,7 @@ Message MessageEndpoint::recv(int size)
                 logger->trace("Shutting endpoint down after receiving ETERM");
                 return Message();
             } else {
-                logger->error("Error receiving message: {}", e.what());
+                SPDLOG_ERROR("Error receiving message: {}", e.what());
                 throw;
             }
         }
@@ -164,7 +164,7 @@ Message MessageEndpoint::recv(int size)
     try {
         auto res = this->socket->recv(msg);
         if (!res.has_value()) {
-            logger->error("Error receiving message: EAGAIN");
+            SPDLOG_ERROR("Error receiving message: EAGAIN");
             throw std::runtime_error("Error receiving message");
         }
     } catch (zmq::error_t& e) {
@@ -173,7 +173,7 @@ Message MessageEndpoint::recv(int size)
             logger->trace("Shutting endpoint down after receiving ETERM");
             return Message();
         } else {
-            logger->error("Error receiving message: {}", e.what());
+            SPDLOG_ERROR("Error receiving message: {}", e.what());
             throw;
         }
     }
@@ -188,7 +188,7 @@ void MessageEndpoint::close(bool bind)
         const auto& logger = faabric::util::getLogger();
 
         if (tid != std::this_thread::get_id()) {
-            logger->warn("Closing socket from a different thread");
+            SPDLOG_WARN("Closing socket from a different thread");
         }
 
         std::string address =
@@ -206,7 +206,7 @@ void MessageEndpoint::close(bool bind)
                 this->socket->unbind(address);
             } catch (zmq::error_t& e) {
                 if (e.num() != ZMQ_ETERM) {
-                    logger->error("Error unbinding socket: {}", e.what());
+                    SPDLOG_ERROR("Error unbinding socket: {}", e.what());
                     throw;
                 }
             }
@@ -224,7 +224,7 @@ void MessageEndpoint::close(bool bind)
                 }
             } catch (zmq::error_t& e) {
                 if (e.num() != ZMQ_ETERM) {
-                    logger->error("Error closing bind socket: {}", e.what());
+                    SPDLOG_ERROR("Error closing bind socket: {}", e.what());
                     throw;
                 }
             }
@@ -233,14 +233,14 @@ void MessageEndpoint::close(bool bind)
                 this->socket->disconnect(address);
             } catch (zmq::error_t& e) {
                 if (e.num() != ZMQ_ETERM) {
-                    logger->error("Error disconnecting socket: {}", e.what());
+                    SPDLOG_ERROR("Error disconnecting socket: {}", e.what());
                     throw;
                 }
             }
             try {
                 this->socket->close();
             } catch (zmq::error_t& e) {
-                logger->error("Error closing connect socket: {}", e.what());
+                SPDLOG_ERROR("Error closing connect socket: {}", e.what());
                 throw;
             }
         }
@@ -268,7 +268,7 @@ SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
 
 void SendMessageEndpoint::open(MessageContext& context)
 {
-    faabric::util::getLogger()->trace(
+    loggertrace(
       fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::open(context, SocketType::PUSH, false);
@@ -276,7 +276,7 @@ void SendMessageEndpoint::open(MessageContext& context)
 
 void SendMessageEndpoint::close()
 {
-    faabric::util::getLogger()->trace(
+    loggertrace(
       fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::close(false);
@@ -288,7 +288,7 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
 
 void RecvMessageEndpoint::open(MessageContext& context)
 {
-    faabric::util::getLogger()->trace(
+    loggertrace(
       fmt::format("Opening socket: {} (RECV {}:{})", id, ANY_HOST, port));
 
     MessageEndpoint::open(context, SocketType::PULL, true);
@@ -296,7 +296,7 @@ void RecvMessageEndpoint::open(MessageContext& context)
 
 void RecvMessageEndpoint::close()
 {
-    faabric::util::getLogger()->trace(
+    loggertrace(
       fmt::format("Closing socket: {} (RECV {}:{})", id, ANY_HOST, port));
 
     MessageEndpoint::close(true);

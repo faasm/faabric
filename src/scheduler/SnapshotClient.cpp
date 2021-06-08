@@ -77,7 +77,6 @@ void clearMockSnapshotRequests()
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
-  , logger(faabric::util::getLogger())
 {
     this->open(faabric::transport::getGlobalMessageContext());
 }

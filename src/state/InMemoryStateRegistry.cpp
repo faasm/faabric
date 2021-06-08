@@ -70,7 +70,7 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
     if (masterIPBytes.empty()) {
         uint32_t masterLockId = StateKeyValue::waitOnRedisRemoteLock(masterKey);
         if (masterLockId == 0) {
-            logger->error("Unable to acquire remote lock for {}", masterKey);
+            SPDLOG_ERROR("Unable to acquire remote lock for {}", masterKey);
             throw std::runtime_error("Unable to get remote lock");
         }
 
@@ -109,7 +109,7 @@ std::string InMemoryStateRegistry::getMasterIPForOtherMaster(
 
     // Sanity check that the master is *not* this machine
     if (masterIP == thisIP) {
-        faabric::util::getLogger()->error(
+        loggererror(
           "Attempting to pull state size on master ({}/{} on {})",
           userIn,
           keyIn,

@@ -19,7 +19,7 @@ int32_t MpiExecutor::executeTask(
 
     int error = mpiFunc();
     if (error) {
-        logger->error("There was an error running the MPI function");
+        SPDLOG_ERROR("There was an error running the MPI function");
     }
 
     return 0;
@@ -37,7 +37,7 @@ int mpiNativeMain(int argc, char** argv)
         logger->debug("Non-root process started");
         __isRoot = false;
     } else if (argc < 3) {
-        logger->error("Root process started without specifying world size!");
+        SPDLOG_ERROR("Root process started without specifying world size!");
         return 1;
     } else {
         logger->debug("Root process started");

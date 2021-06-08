@@ -192,7 +192,7 @@ int MPI_Get_count(const MPI_Status* status, MPI_Datatype datatype, int* count)
     logger->debug("MPI_Get_count");
 
     if (status->bytesSize % datatype->size != 0) {
-        logger->error("Incomplete message (bytes {}, datatype size {})",
+        SPDLOG_ERROR("Incomplete message (bytes {}, datatype size {})",
                       status->bytesSize,
                       datatype->size);
         return 1;

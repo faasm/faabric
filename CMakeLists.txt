@@ -22,6 +22,13 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Logging level
+if(CMAKE_BUILD_TYPE MATCHES DEBUG)
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=debug)
+else()
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=info)
+endif()
+
 # External libraries
 include(cmake/ExternalProjects.cmake)
 

@@ -280,7 +280,7 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     // Set the message type
     int msgType = getIntFromJson(d, "type", 0);
     if (!faabric::Message::MessageType_IsValid(msgType)) {
-        logger->error("Bad message type: {}", msgType);
+        SPDLOG_ERROR("Bad message type: {}", msgType);
         throw std::runtime_error("Invalid message type");
     }
     msg.set_type(static_cast<faabric::Message::MessageType>(msgType));

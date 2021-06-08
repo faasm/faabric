@@ -140,7 +140,7 @@ void getBytesFromReply(const std::string& key,
     if (resultLen > (int)bufferLen) {
         const std::shared_ptr<spdlog::logger>& logger =
           faabric::util::getLogger();
-        logger->error("Value ({}) too big for buffer ({}) - key {}",
+        SPDLOG_ERROR("Value ({}) too big for buffer ({}) - key {}",
                       resultLen,
                       bufferLen,
                       key);
@@ -285,7 +285,7 @@ void Redis::set(const std::string& key, const uint8_t* value, size_t size)
     if (reply->type == REDIS_REPLY_ERROR) {
         const std::shared_ptr<spdlog::logger>& logger =
           faabric::util::getLogger();
-        logger->error("Failed to SET {} - {}", key.c_str(), reply->str);
+        SPDLOG_ERROR("Failed to SET {} - {}", key.c_str(), reply->str);
     }
 
     freeReplyObject(reply);
@@ -308,7 +308,7 @@ void Redis::setRange(const std::string& key,
     if (reply->type != REDIS_REPLY_INTEGER) {
         const std::shared_ptr<spdlog::logger>& logger =
           faabric::util::getLogger();
-        logger->error("Failed SETRANGE {}", key);
+        SPDLOG_ERROR("Failed SETRANGE {}", key);
         throw std::runtime_error("Failed SETRANGE " + key);
     }
 
@@ -334,7 +334,7 @@ void Redis::flushPipeline(long pipelineLength)
             ((redisReply*)reply)->type == REDIS_REPLY_ERROR) {
             const std::shared_ptr<spdlog::logger>& logger =
               faabric::util::getLogger();
-            logger->error("Failed pipeline call {}", p);
+            SPDLOG_ERROR("Failed pipeline call {}", p);
             throw std::runtime_error("Failed pipeline call " +
                                      std::to_string(p));
         }
@@ -350,7 +350,7 @@ void Redis::sadd(const std::string& key, const std::string& value)
     if (reply->type == REDIS_REPLY_ERROR) {
         const std::shared_ptr<spdlog::logger>& logger =
           faabric::util::getLogger();
-        logger->error("Failed to add {} to set {}", value, key);
+        SPDLOG_ERROR("Failed to add {} to set {}", value, key);
         throw std::runtime_error("Failed to add element to set");
     }
 
@@ -581,7 +581,7 @@ bool Redis::setnxex(const std::string& key, long value, int expirySeconds)
     if (reply->type == REDIS_REPLY_ERROR) {
         const std::shared_ptr<spdlog::logger>& logger =
           faabric::util::getLogger();
-        logger->error("Failed to SET {} - {}", key.c_str(), reply->str);
+        SPDLOG_ERROR("Failed to SET {} - {}", key.c_str(), reply->str);
     } else if (reply->type == REDIS_REPLY_STATUS) {
         success = true;
     }

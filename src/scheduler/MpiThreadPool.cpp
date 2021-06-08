@@ -6,7 +6,7 @@ MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
   : size(nThreads)
   , isShutdown(false)
 {
-    faabric::util::getLogger()->debug(
+    SPDLOG_DEBUG(
       "Starting an MpiAsyncThreadPool of size {}", nThreads);
 
     // Initialize async. req queue
@@ -21,7 +21,7 @@ MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
 
 void MpiAsyncThreadPool::shutdown()
 {
-    faabric::util::getLogger()->debug("Shutting down MpiAsyncThreadPool");
+    SPDLOG_DEBUG("Shutting down MpiAsyncThreadPool");
 
     for (auto& thread : threadPool) {
         if (thread.joinable()) {
@@ -54,7 +54,7 @@ void MpiAsyncThreadPool::entrypoint(int i)
             if (!this->isShutdown) {
                 this->isShutdown = true;
             }
-            faabric::util::getLogger()->trace(
+            loggertrace(
               "Mpi thread {}/{} shut down", i + 1, size);
             break;
         }

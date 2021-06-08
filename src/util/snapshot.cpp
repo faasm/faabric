@@ -26,7 +26,7 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
         }
     }
 
-    faabric::util::getLogger()->debug(
+    SPDLOG_DEBUG(
       "Snapshot has {}/{} dirty pages", diffs.size(), nPages);
 
     return diffs;

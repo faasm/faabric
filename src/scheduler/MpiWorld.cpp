@@ -22,7 +22,6 @@ MpiWorld::MpiWorld()
   , size(-1)
   , thisHost(faabric::util::getSystemConfig().endpointHost)
   , creationTime(faabric::util::startTimer())
-  , logger(faabric::util::getLogger())
   , cartProcsPerDim(2)
 {}
 
@@ -47,9 +46,9 @@ int MpiWorld::getMpiThreadPoolSize()
     int worldSize = size;
 
     if ((worldSize > usableCores) && (worldSize % usableCores != 0)) {
-        logger->warn("Over-provisioning threads in the MPI thread pool.");
-        logger->warn("To avoid this, set an MPI world size multiple of the "
-                     "number of cores per machine.");
+        SPDLOG_WARN("Over-provisioning threads in the MPI thread pool.");
+        SPDLOG_WARN("To avoid this, set an MPI world size multiple of the "
+                    "number of cores per machine.");
     }
     // Note - adding one to the worldSize to prevent deadlocking in certain
     // corner-cases.
@@ -542,13 +541,11 @@ void checkSendRecvMatch(faabric_datatype_t* sendType,
                         int recvCount)
 {
     if (sendType->id != recvType->id && sendCount == recvCount) {
-        const std::shared_ptr<spdlog::logger>& logger =
-          faabric::util::getLogger();
-        logger->error("Must match type/ count (send {}:{}, recv {}:{})",
-                      sendType->id,
-                      sendCount,
-                      recvType->id,
-                      recvCount);
+        SPDLOG_ERROR("Must match type/ count (send {}:{}, recv {}:{})",
+                     sendType->id,
+                     sendCount,
+                     recvType->id,
+                     recvCount);
         throw std::runtime_error("Mismatching send/ recv");
     }
 }
@@ -850,8 +847,8 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                   std::max<long long>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else {
-            logger->error("Unsupported type for max reduction (datatype={})",
-                          datatype->id);
+            SPDLOG_ERROR("Unsupported type for max reduction (datatype={})",
+                         datatype->id);
             throw std::runtime_error("Unsupported type for max reduction");
         }
     } else if (operation->id == faabric_op_min.id) {
@@ -880,8 +877,8 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                   std::min<long long>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else {
-            logger->error("Unsupported type for min reduction (datatype={})",
-                          datatype->id);
+            SPDLOG_ERROR("Unsupported type for min reduction (datatype={})",
+                         datatype->id);
             throw std::runtime_error("Unsupported type for min reduction");
         }
     } else if (operation->id == faabric_op_sum.id) {
@@ -907,12 +904,12 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                 outBufferCast[slot] += inBufferCast[slot];
             }
         } else {
-            logger->error("Unsupported type for sum reduction (datatype={})",
-                          datatype->id);
+            SPDLOG_ERROR("Unsupported type for sum reduction (datatype={})",
+                         datatype->id);
             throw std::runtime_error("Unsupported type for sum reduction");
         }
     } else {
-        logger->error("Reduce operation not implemented: {}", operation->id);
+        SPDLOG_ERROR("Reduce operation not implemented: {}", operation->id);
         throw std::runtime_error("Not yet implemented reduce operation");
     }
 }
@@ -1067,7 +1064,7 @@ void MpiWorld::barrier(int thisRank)
 void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
 {
     if (msg.worldid() != id) {
-        logger->error(
+        SPDLOG_ERROR(
           "Queueing message not meant for this world (msg={}, this={})",
           msg.worldid(),
           id);

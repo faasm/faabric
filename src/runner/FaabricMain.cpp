@@ -51,14 +51,14 @@ void FaabricMain::startRunner()
 void FaabricMain::startFunctionCallServer()
 {
     const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-    logger->info("Starting function call server");
+    SPDLOG_INFO("Starting function call server");
     functionServer.start();
 }
 
 void FaabricMain::startSnapshotServer()
 {
     auto logger = faabric::util::getLogger();
-    logger->info("Starting snapshot server");
+    SPDLOG_INFO("Starting snapshot server");
     snapshotServer.start();
 }
 
@@ -69,33 +69,33 @@ void FaabricMain::startStateServer()
     // Skip state server if not in inmemory mode
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     if (conf.stateMode != "inmemory") {
-        logger->info("Not starting state server in state mode {}",
+        SPDLOG_INFO("Not starting state server in state mode {}",
                      conf.stateMode);
         return;
     }
 
     // Note that the state server spawns its own background thread
-    logger->info("Starting state server");
+    SPDLOG_INFO("Starting state server");
     stateServer.start();
 }
 
 void FaabricMain::shutdown()
 {
     const auto& logger = faabric::util::getLogger();
-    logger->info("Removing from global working set");
+    SPDLOG_INFO("Removing from global working set");
 
     auto& sch = faabric::scheduler::getScheduler();
     sch.shutdown();
 
-    logger->info("Waiting for the state server to finish");
+    SPDLOG_INFO("Waiting for the state server to finish");
     stateServer.stop();
 
-    logger->info("Waiting for the function server to finish");
+    SPDLOG_INFO("Waiting for the function server to finish");
     functionServer.stop();
 
-    logger->info("Waiting for the snapshot server to finish");
+    SPDLOG_INFO("Waiting for the snapshot server to finish");
     snapshotServer.stop();
 
-    logger->info("Faabric pool successfully shut down");
+    SPDLOG_INFO("Faabric pool successfully shut down");
 }
 }

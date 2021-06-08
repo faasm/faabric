@@ -85,7 +85,7 @@ void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
     PARSE_MSG(faabric::UnregisterRequest, body.data(), body.size())
 
     std::string funcStr = faabric::util::funcToString(msg.function(), false);
-    faabric::util::getLogger()->info(
+    SPDLOG_INFO(
       "Unregistering host {} for {}", msg.host(), funcStr);
 
     // Remove the host from the warm set
