@@ -512,8 +512,7 @@ int MPI_Alloc_mem(MPI_Aint size, MPI_Info info, void* baseptr)
 
 int MPI_Win_fence(int assert, MPI_Win win)
 {
-    getMpiLogger()->debug("MPI_Win_fence");
-    getExecutingWorld().barrier(executingContext.getRank());
+    notImplemented("MPI_Win_fence");
 
     return MPI_SUCCESS;
 }
@@ -527,13 +526,7 @@ int MPI_Get(void* origin_addr,
             MPI_Datatype target_datatype,
             MPI_Win win)
 {
-    getMpiLogger()->debug("MPI_Get");
-    getExecutingWorld().rmaGet(target_rank,
-                               target_datatype,
-                               target_count,
-                               (uint8_t*)origin_addr,
-                               origin_datatype,
-                               origin_count);
+    notImplemented("MPI_Get");
 
     return MPI_SUCCESS;
 }
@@ -547,22 +540,14 @@ int MPI_Put(const void* origin_addr,
             MPI_Datatype target_datatype,
             MPI_Win win)
 {
-    getMpiLogger()->debug("MPI_Put");
-    getExecutingWorld().rmaPut(executingContext.getRank(),
-                               (uint8_t*)origin_addr,
-                               origin_datatype,
-                               origin_count,
-                               target_rank,
-                               target_datatype,
-                               target_count);
+    notImplemented("MPI_Put");
 
     return MPI_SUCCESS;
 }
 
 int MPI_Win_free(MPI_Win* win)
 {
-    getMpiLogger()->debug("MPI_Win_free");
-    free(*win);
+    notImplemented("MPI_Win_free");
 
     return MPI_SUCCESS;
 }
@@ -574,16 +559,7 @@ int MPI_Win_create(void* base,
                    MPI_Comm comm,
                    MPI_Win* win)
 {
-    getMpiLogger()->debug("MPI_Win_create");
-    faabric::scheduler::MpiWorld& world = getExecutingWorld();
-
-    (*win) = (faabric_win_t*)malloc(sizeof(faabric_win_t));
-    (*win)->worldId = world.getId();
-    (*win)->size = size;
-    (*win)->dispUnit = disp_unit;
-    (*win)->rank = executingContext.getRank();
-    (*win)->basePtr = base;
-    world.createWindow((*win)->rank, (*win)->size, (uint8_t*)base);
+    notImplemented("MPI_Win_create");
 
     return MPI_SUCCESS;
 }
