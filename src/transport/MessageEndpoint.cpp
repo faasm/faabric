@@ -14,8 +14,7 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
 MessageEndpoint::~MessageEndpoint()
 {
     if (this->socket != nullptr) {
-        SPDLOG_WARN(
-          "Destroying an open message endpoint!");
+        SPDLOG_WARN("Destroying an open message endpoint!");
         this->close(false);
     }
 }
@@ -27,8 +26,6 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // Check we are opening from the same thread. We assert not to incur in
     // costly checks when running a Release build.
     assert(tid == std::this_thread::get_id());
-
-    const auto& logger = faabric::util::getLogger();
 
     std::string address =
       "tcp://" + this->host + ":" + std::to_string(this->port);
@@ -53,8 +50,8 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                   context.get(), zmq::socket_type::pull);
             } catch (zmq::error_t& e) {
                 SPDLOG_ERROR("Error opening RECV socket bound to {}: {}",
-                              address,
-                              e.what());
+                             address,
+                             e.what());
                 throw;
             }
             break;
@@ -87,17 +84,15 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     assert(tid == std::this_thread::get_id());
     assert(this->socket != nullptr);
 
-    const auto& logger = faabric::util::getLogger();
-
     if (more) {
         try {
             auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
                                           zmq::send_flags::sndmore);
             if (res != msgSize) {
                 SPDLOG_ERROR("Sent different bytes than expected (sent "
-                              "{}, expected {})",
-                              res.value_or(0),
-                              msgSize);
+                             "{}, expected {})",
+                             res.value_or(0),
+                             msgSize);
                 throw std::runtime_error("Error sending message");
             }
         } catch (zmq::error_t& e) {
@@ -110,9 +105,9 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
                                           zmq::send_flags::none);
             if (res != msgSize) {
                 SPDLOG_ERROR("Sent different bytes than expected (sent "
-                              "{}, expected {})",
-                              res.value_or(0),
-                              msgSize);
+                             "{}, expected {})",
+                             res.value_or(0),
+                             msgSize);
                 throw std::runtime_error("Error sending message");
             }
         } catch (zmq::error_t& e) {
@@ -130,8 +125,6 @@ Message MessageEndpoint::recv(int size)
     assert(this->socket != nullptr);
     assert(size >= 0);
 
-    const auto& logger = faabric::util::getLogger();
-
     // Pre-allocate buffer to avoid copying data
     if (size > 0) {
         Message msg(size);
@@ -140,9 +133,9 @@ Message MessageEndpoint::recv(int size)
             auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
             if (res.has_value() && (res->size != res->untruncated_size)) {
                 SPDLOG_ERROR("Received more bytes than buffer can hold. "
-                              "Received: {}, capacity {}",
-                              res->untruncated_size,
-                              res->size);
+                             "Received: {}, capacity {}",
+                             res->untruncated_size,
+                             res->size);
                 throw std::runtime_error("Error receiving message");
             }
         } catch (zmq::error_t& e) {
@@ -185,7 +178,6 @@ Message MessageEndpoint::recv(int size)
 void MessageEndpoint::close(bool bind)
 {
     if (this->socket != nullptr) {
-        const auto& logger = faabric::util::getLogger();
 
         if (tid != std::this_thread::get_id()) {
             SPDLOG_WARN("Closing socket from a different thread");
@@ -268,16 +260,14 @@ SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
 
 void SendMessageEndpoint::open(MessageContext& context)
 {
-    loggertrace(
-      fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
+    loggertrace(fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::open(context, SocketType::PUSH, false);
 }
 
 void SendMessageEndpoint::close()
 {
-    loggertrace(
-      fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
+    loggertrace(fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::close(false);
 }

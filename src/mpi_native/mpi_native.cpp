@@ -15,7 +15,6 @@ std::shared_ptr<spdlog::logger> getMpiLogger()
 {
     if (mpiLogger == nullptr) {
         int mpiRank = executingContext.getRank();
-        mpiLogger = faabric::util::getLogger(fmt::format("MPI-{}", mpiRank));
     }
 
     return mpiLogger;
@@ -42,7 +41,6 @@ static void notImplemented(const std::string& funcName)
 
 int MPI_Init(int* argc, char*** argv)
 {
-    auto logger = faabric::util::getLogger();
 
     faabric::Message* call = getExecutingCall();
 
@@ -193,8 +191,8 @@ int MPI_Get_count(const MPI_Status* status, MPI_Datatype datatype, int* count)
 
     if (status->bytesSize % datatype->size != 0) {
         SPDLOG_ERROR("Incomplete message (bytes {}, datatype size {})",
-                      status->bytesSize,
-                      datatype->size);
+                     status->bytesSize,
+                     datatype->size);
         return 1;
     }
 

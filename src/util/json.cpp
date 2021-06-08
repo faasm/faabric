@@ -269,7 +269,6 @@ std::string getStringFromJson(Document& doc,
 faabric::Message jsonToMessage(const std::string& jsonIn)
 {
     PROF_START(jsonDecode)
-    auto logger = faabric::util::getLogger();
 
     MemoryStream ms(jsonIn.c_str(), jsonIn.size());
     Document d;

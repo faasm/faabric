@@ -399,8 +399,8 @@ std::vector<std::string> Scheduler::callFunctions(
                 e = thisExecutors.back();
             } else {
                 SPDLOG_ERROR("Found {} executors for threaded function {}",
-                              thisExecutors.size(),
-                              funcStr);
+                             thisExecutors.size(),
+                             funcStr);
                 throw std::runtime_error(
                   "Expected only one executor for threaded function");
             }

@@ -14,11 +14,10 @@ MpiContext::MpiContext()
 
 int MpiContext::createWorld(const faabric::Message& msg)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     if (msg.mpirank() > 0) {
         SPDLOG_ERROR("Attempting to initialise world for non-zero rank {}",
-                      msg.mpirank());
+                     msg.mpirank());
         throw std::runtime_error("Initialising world on non-zero rank");
     }
 

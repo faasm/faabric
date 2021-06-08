@@ -74,7 +74,6 @@ void SystemConfig::reset()
 
 void SystemConfig::print()
 {
-    const std::shared_ptr<spdlog::logger>& logger = getLogger();
 
     SPDLOG_INFO("--- System ---");
     SPDLOG_INFO("SERIALISATION              {}", serialisation);

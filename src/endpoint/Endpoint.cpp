@@ -13,8 +13,6 @@ Endpoint::Endpoint(int portIn, int threadCountIn)
 
 void Endpoint::start()
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
     SPDLOG_INFO("Starting HTTP endpoint");
 
     // Set up signal handler

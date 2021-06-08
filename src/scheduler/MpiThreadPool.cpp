@@ -6,8 +6,7 @@ MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)
   : size(nThreads)
   , isShutdown(false)
 {
-    SPDLOG_DEBUG(
-      "Starting an MpiAsyncThreadPool of size {}", nThreads);
+    SPDLOG_DEBUG("Starting an MpiAsyncThreadPool of size {}", nThreads);
 
     // Initialize async. req queue
     localReqQueue = std::make_shared<MpiReqQueue>();
@@ -54,8 +53,7 @@ void MpiAsyncThreadPool::entrypoint(int i)
             if (!this->isShutdown) {
                 this->isShutdown = true;
             }
-            loggertrace(
-              "Mpi thread {}/{} shut down", i + 1, size);
+            loggertrace("Mpi thread {}/{} shut down", i + 1, size);
             break;
         }
 

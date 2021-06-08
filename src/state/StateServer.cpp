@@ -75,10 +75,10 @@ void StateServer::recvPull(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateChunkRequest, body.data(), body.size())
 
     loggertrace("Pull {}/{} ({}->{})",
-                                      msg.user(),
-                                      msg.key(),
-                                      msg.offset(),
-                                      msg.offset() + msg.chunksize());
+                msg.user(),
+                msg.key(),
+                msg.offset(),
+                msg.offset() + msg.chunksize());
 
     // Write the response
     faabric::StatePart response;
@@ -100,10 +100,10 @@ void StateServer::recvPush(faabric::transport::Message& body)
 
     // Update the KV store
     loggertrace("Push {}/{} ({}->{})",
-                                      msg.user(),
-                                      msg.key(),
-                                      msg.offset(),
-                                      msg.offset() + msg.data().size());
+                msg.user(),
+                msg.key(),
+                msg.offset(),
+                msg.offset() + msg.data().size());
     KV_FROM_REQUEST(msg)
     kv->setChunk(
       msg.offset(), BYTES_CONST(msg.data().c_str()), msg.data().size());
@@ -132,8 +132,7 @@ void StateServer::recvPullAppended(faabric::transport::Message& body)
 
     // Prepare response
     faabric::StateAppendedResponse response;
-    loggertrace(
-      "Pull appended {}/{}", msg.user(), msg.key());
+    loggertrace("Pull appended {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     response.set_user(msg.user());
     response.set_key(msg.key());
@@ -163,8 +162,7 @@ void StateServer::recvClearAppended(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Perform operation
-    loggertrace(
-      "Clear appended {}/{}", msg.user(), msg.key());
+    loggertrace("Clear appended {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     kv->clearAppended();
 

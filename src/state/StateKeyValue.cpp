@@ -27,7 +27,7 @@ StateKeyValue::StateKeyValue(const std::string& userIn,
                              size_t sizeIn)
   : user(userIn)
   , key(keyIn)
-  , logger(faabric::util::getLogger())
+
   , valueSize(sizeIn)
 {
 
@@ -197,10 +197,10 @@ void StateKeyValue::doSetChunk(long offset,
     size_t chunkEnd = offset + length;
     if (chunkEnd > sharedMemSize) {
         SPDLOG_ERROR("Setting chunk out of bounds on {}/{} ({} > {})",
-                      user,
-                      key,
-                      chunkEnd,
-                      valueSize);
+                     user,
+                     key,
+                     chunkEnd,
+                     valueSize);
         throw std::runtime_error("Attempting to set chunk out of bounds");
     }
 
@@ -279,13 +279,12 @@ void StateKeyValue::mapSharedMemory(void* destination,
 
     // Handle failure
     if (result == MAP_FAILED) {
-        SPDLOG_ERROR(
-          "Failed mapping for {} at {} with size {}. errno: {} ({})",
-          key,
-          offset,
-          length,
-          errno,
-          strerror(errno));
+        SPDLOG_ERROR("Failed mapping for {} at {} with size {}. errno: {} ({})",
+                     key,
+                     offset,
+                     length,
+                     errno,
+                     strerror(errno));
 
         throw std::runtime_error("Failed mapping shared memory");
     }
@@ -293,9 +292,9 @@ void StateKeyValue::mapSharedMemory(void* destination,
     // Check the mapping is where we expect it to be
     if (destination != result) {
         SPDLOG_ERROR("New mapped addr for {} doesn't match required {} != {}",
-                      key,
-                      destination,
-                      result);
+                     key,
+                     destination,
+                     result);
         throw std::runtime_error("Misaligned shared memory mapping");
     }
 
@@ -307,10 +306,9 @@ void StateKeyValue::unmapSharedMemory(void* mappedAddr)
     FullLock lock(valueMutex);
 
     if (!isPageAligned(mappedAddr)) {
-        SPDLOG_ERROR(
-          "Attempting to unmap non-page-aligned memory at {} for {}",
-          mappedAddr,
-          key);
+        SPDLOG_ERROR("Attempting to unmap non-page-aligned memory at {} for {}",
+                     mappedAddr,
+                     key);
         throw std::runtime_error("Unmapping misaligned shared memory");
     }
 
@@ -475,10 +473,10 @@ void StateKeyValue::doPullChunk(bool lazy, long offset, size_t length)
     size_t chunkEnd = offset + length;
     if (chunkEnd > valueSize) {
         SPDLOG_ERROR("Pulling chunk out of bounds on {}/{} ({} > {})",
-                      user,
-                      key,
-                      chunkEnd,
-                      valueSize);
+                     user,
+                     key,
+                     chunkEnd,
+                     valueSize);
         throw std::runtime_error("Out of bounds chunk");
     }
 
@@ -553,9 +551,9 @@ uint32_t StateKeyValue::waitOnRedisRemoteLock(const std::string& redisKey)
     unsigned int retryCount = 0;
     while (remoteLockId == 0) {
         const std::shared_ptr<spdlog::logger>& logger =
-          faabric::util::getLogger();
-        logger->debug(
-          "Waiting on remote lock for {} (loop {})", redisKey, retryCount);
+
+          logger->debug(
+            "Waiting on remote lock for {} (loop {})", redisKey, retryCount);
 
         if (retryCount >= REMOTE_LOCK_MAX_RETRIES) {
             SPDLOG_ERROR("Timed out waiting for lock on {}", redisKey);

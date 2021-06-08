@@ -16,7 +16,7 @@ void FaabricEndpointHandler::onTimeout(const Pistache::Http::Request& request,
 void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
                                        Pistache::Http::ResponseWriter response)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+
     logger->debug("Faabric handler received request");
 
     // Very permissive CORS
@@ -66,8 +66,8 @@ std::string FaabricEndpointHandler::handleFunction(
 
         } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
             const std::shared_ptr<spdlog::logger>& logger =
-              faabric::util::getLogger();
-            logger->debug("Broadcasting flush request");
+
+              logger->debug("Broadcasting flush request");
 
             sched.broadcastFlush();
         } else {
@@ -80,7 +80,7 @@ std::string FaabricEndpointHandler::handleFunction(
 
 std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
     if (msg.user().empty()) {

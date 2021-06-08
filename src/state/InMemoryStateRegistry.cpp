@@ -31,7 +31,6 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
                                                const std::string& thisIP,
                                                bool claim)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     std::string lookupKey = faabric::util::keyForUser(user, key);
 
@@ -109,11 +108,10 @@ std::string InMemoryStateRegistry::getMasterIPForOtherMaster(
 
     // Sanity check that the master is *not* this machine
     if (masterIP == thisIP) {
-        loggererror(
-          "Attempting to pull state size on master ({}/{} on {})",
-          userIn,
-          keyIn,
-          thisIP);
+        loggererror("Attempting to pull state size on master ({}/{} on {})",
+                    userIn,
+                    keyIn,
+                    thisIP);
         throw std::runtime_error("Attempting to pull state size on master");
     }
 

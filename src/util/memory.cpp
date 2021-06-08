@@ -84,8 +84,7 @@ void resetDirtyTracking()
 {
     FILE* fd = fopen(CLEAR_REFS, "w");
     if (fd == nullptr) {
-        loggererror("Could not open clear_refs ({})",
-                                          strerror(errno));
+        loggererror("Could not open clear_refs ({})", strerror(errno));
         throw std::runtime_error("Could not open clear_refs");
     }
 
@@ -94,8 +93,7 @@ void resetDirtyTracking()
     char value[] = "4";
     size_t nWritten = fwrite(value, sizeof(char), 1, fd);
     if (nWritten != 1) {
-        loggererror("Failed to write to clear_refs ({})",
-                                          nWritten);
+        loggererror("Failed to write to clear_refs ({})", nWritten);
         throw std::runtime_error("Failed to write to clear_refs");
     }
 
@@ -110,8 +108,7 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     // Open the pagemap
     FILE* fd = fopen(PAGEMAP, "rb");
     if (fd == nullptr) {
-        loggererror("Could not open pagemap ({})",
-                                          strerror(errno));
+        loggererror("Could not open pagemap ({})", strerror(errno));
         throw std::runtime_error("Could not open pagemap");
     }
 
@@ -126,8 +123,7 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     std::vector<uint64_t> entries(nEntries, 0);
     int nRead = fread(entries.data(), PAGEMAP_ENTRY_BYTES, nEntries, fd);
     if (nRead != nEntries) {
-        loggererror(
-          "Could not read pagemap ({} != {})", nRead, nEntries);
+        loggererror("Could not read pagemap ({} != {})", nRead, nEntries);
         throw std::runtime_error("Could not read pagemap");
     }
 

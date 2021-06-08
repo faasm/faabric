@@ -50,27 +50,26 @@ void FaabricMain::startRunner()
 
 void FaabricMain::startFunctionCallServer()
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
+
     SPDLOG_INFO("Starting function call server");
     functionServer.start();
 }
 
 void FaabricMain::startSnapshotServer()
 {
-    auto logger = faabric::util::getLogger();
+
     SPDLOG_INFO("Starting snapshot server");
     snapshotServer.start();
 }
 
 void FaabricMain::startStateServer()
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Skip state server if not in inmemory mode
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     if (conf.stateMode != "inmemory") {
         SPDLOG_INFO("Not starting state server in state mode {}",
-                     conf.stateMode);
+                    conf.stateMode);
         return;
     }
 
@@ -81,7 +80,7 @@ void FaabricMain::startStateServer()
 
 void FaabricMain::shutdown()
 {
-    const auto& logger = faabric::util::getLogger();
+
     SPDLOG_INFO("Removing from global working set");
 
     auto& sch = faabric::scheduler::getScheduler();

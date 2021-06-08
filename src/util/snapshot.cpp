@@ -26,8 +26,7 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
         }
     }
 
-    SPDLOG_DEBUG(
-      "Snapshot has {}/{} dirty pages", diffs.size(), nPages);
+    SPDLOG_DEBUG("Snapshot has {}/{} dirty pages", diffs.size(), nPages);
 
     return diffs;
 }

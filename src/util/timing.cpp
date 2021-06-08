@@ -38,7 +38,7 @@ void logEndTimer(const std::string& label,
                  const faabric::util::TimePoint& begin)
 {
     double millis = getTimeDiffMillis(begin);
-    const std::shared_ptr<spdlog::logger>& l = faabric::util::getLogger();
+
     l->trace("TIME = {:.2f}ms ({})", millis, label);
 
     // Record microseconds total

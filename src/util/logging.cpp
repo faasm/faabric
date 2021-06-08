@@ -51,7 +51,6 @@ static void initLogging(const std::string& name)
     }
 }
 
-std::shared_ptr<spdlog::logger> getLogger(const std::string& name)
 {
     // Lazy-initialize logger
     if (loggers.find(name) == loggers.end()) {

@@ -49,7 +49,6 @@ void DummyStateServer::start()
     // To do this we run the server in a separate thread, forcing it to
     // have a localhost IP, then the main thread is the "client" with a
     // junk IP.
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Override the host endpoint for the server thread. Must be localhost
     faabric::util::getSystemConfig().endpointHost = LOCALHOST;

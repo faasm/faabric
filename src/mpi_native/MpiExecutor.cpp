@@ -13,7 +13,6 @@ int32_t MpiExecutor::executeTask(
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    auto logger = faabric::util::getLogger();
 
     faabric::mpi_native::executingCall = &req->mutable_messages()->at(msgIdx);
 
@@ -27,7 +26,7 @@ int32_t MpiExecutor::executeTask(
 
 int mpiNativeMain(int argc, char** argv)
 {
-    auto logger = faabric::util::getLogger();
+
     auto& scheduler = faabric::scheduler::getScheduler();
     auto& conf = faabric::util::getSystemConfig();
 
