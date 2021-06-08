@@ -59,6 +59,8 @@ class MpiWorld
                               int* source,
                               int* destination);
 
+    int getMpiPort(int sendRank, int recvRank);
+
     void send(int sendRank,
               int recvRank,
               const uint8_t* buffer,

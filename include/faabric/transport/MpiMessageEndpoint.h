@@ -10,4 +10,10 @@ faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
 
 void sendMpiHostRankMsg(const std::string& hostIn,
                         const faabric::MpiHostsToRanksMessage msg);
+
+void sendMpiMessage(const std::string& hostIn,
+                    int portIn,
+                    const std::shared_ptr<faabric::MPIMessage> msg);
+
+std::shared_ptr<faabric::MPIMessage> recvMpiMessage(int portIn);
 }

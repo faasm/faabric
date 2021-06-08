@@ -396,6 +396,15 @@ int MpiWorld::irecv(int sendRank,
     return requestId;
 }
 
+int MpiWorld::getMpiPort(int sendRank, int recvRank)
+{
+    // TODO - get port in a multi-tenant-safe manner
+    int basePort = MPI_PORT;
+    int rankOffset = sendRank * size + recvRank;
+
+    return basePort + rankOffset;
+}
+
 void MpiWorld::send(int sendRank,
                     int recvRank,
                     const uint8_t* buffer,
@@ -443,10 +452,22 @@ void MpiWorld::recv(int sendRank,
                     MPI_Status* status,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
-    // Listen to the in-memory queue for this rank and message type
-    SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-    std::shared_ptr<faabric::MPIMessage> m =
-      getLocalQueue(sendRank, recvRank)->dequeue();
+    // Work out whether the message is sent locally or from another host
+    assert(thisHost == getHostForRank(recvRank));
+    const std::string otherHost = getHostForRank(sendRank);
+    bool isLocal = otherHost == thisHost;
+
+    // Recv message
+    std::shared_ptr<faabric::MPIMessage> m;
+    if (isLocal) {
+        SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
+        // TODO - change to ipc sockets
+        m = getLocalQueue(sendRank, recvRank)->dequeue();
+    } else {
+        SPDLOG_TRACE("MPI - recv remote {} -> {}", sendRank, recvRank);
+        m = faabric::transport::recvMpiMessage(getMpiPort(sendRank, recvRank));
+    }
+    assert(m != nullptr);
 
     // Assert message integrity
     // Note - this checks won't happen in Release builds
