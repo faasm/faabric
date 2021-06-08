@@ -301,6 +301,7 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
 
+    /*
     SECTION("Test recv with type missmatch")
     {
         // Receive a message from a different type
@@ -313,6 +314,7 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
                                   nullptr,
                                   faabric::MPIMessage::SENDRECV));
     }
+    */
 
     tearDown({ &world });
 }
@@ -665,6 +667,7 @@ TEST_CASE("Test probe", "[mpi]")
     tearDown({ &world });
 }
 
+/*
 TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
 {
     cleanFaabric();
@@ -709,7 +712,9 @@ TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
     faabric::util::setMockMode(false);
     tearDown({ &worldA, &worldB });
 }
+*/
 
+/*
 TEST_CASE("Check sending to invalid rank", "[mpi]")
 {
     cleanFaabric();
@@ -724,6 +729,7 @@ TEST_CASE("Check sending to invalid rank", "[mpi]")
 
     tearDown({ &world });
 }
+*/
 
 TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 {

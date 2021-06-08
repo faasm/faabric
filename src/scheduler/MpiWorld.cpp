@@ -123,6 +123,9 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     for (const auto& h : hosts) {
         faabric::transport::sendMpiHostRankMsg(h, hostRankMsg);
     }
+
+    // Initialise the memory queues for message reception
+    setLocalQueues();
 }
 
 void MpiWorld::destroy()
@@ -138,8 +141,10 @@ void MpiWorld::destroy()
         // clear them.
         // Note - this means that an application with outstanding messages, i.e.
         // send without recv, will block forever.
-        for (auto& k : localQueueMap) {
-            k.second->waitToDrain(-1);
+        for (auto& q : localQueueMap) {
+            if (q != nullptr) {
+                q->waitToDrain(-1);
+            }
         }
         localQueueMap.clear();
     }
@@ -186,44 +191,35 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
 
     // Sometimes for testing purposes we may want to initialise a world in the
     // _same_ host we have created one (note that this would never happen in
-    // reality). If so, we skip the rank-host map broadcasting.
+    // reality). If so, we skip initialising resources already initialised
     if (!forceLocal) {
         // Block until we receive
         faabric::MpiHostsToRanksMessage hostRankMsg =
           faabric::transport::recvMpiHostRankMsg();
         setAllRankHosts(hostRankMsg);
+
+        // Initialise the memory queues for message reception
+        setLocalQueues();
     }
 }
 
 std::string MpiWorld::getHostForRank(int rank)
 {
-    if (rankHostMap.find(rank) == rankHostMap.end()) {
-        logger->error("No known host for rank {}", rank);
-        throw std::runtime_error("No known host for rank");
-    }
+    assert(rankHostMap.size() == size);
 
-    {
-        faabric::util::SharedLock lock(worldMutex);
-        return rankHostMap[rank];
-    }
+    return rankHostMap[rank];
 }
 
 // Prepare the host-rank map with a vector containing _all_ ranks
+// Note - this method should be called by only one rank. This is enforced in
+// the world registry
 void MpiWorld::setAllRankHosts(const faabric::MpiHostsToRanksMessage& msg)
 {
+    // Assert we are only setting the values once
+    assert(rankHostMap.size() == 0);
+
     assert(msg.hosts().size() == size);
-    faabric::util::FullLock lock(worldMutex);
-    for (int i = 0; i < size; i++) {
-        auto it = rankHostMap.try_emplace(i, msg.hosts().at(i));
-        if (!it.second) {
-            logger->error("Tried to map host ({}) to rank ({}), but rank was "
-                          "already mapped to host ({})",
-                          msg.hosts().at(i),
-                          i + 1,
-                          rankHostMap[i]);
-            throw std::runtime_error("Rank already mapped to host");
-        }
-    }
+    rankHostMap = { msg.hosts().begin(), msg.hosts().end() };
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -1106,22 +1102,33 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
                                                           int recvRank)
 {
     assert(getHostForRank(recvRank) == thisHost);
+    assert(localQueueMap.size() == size * size);
 
-    std::string key = std::to_string(sendRank) + "_" + std::to_string(recvRank);
-    if (localQueueMap.find(key) == localQueueMap.end()) {
-        faabric::util::FullLock lock(worldMutex);
+    return localQueueMap[getKeyForRanks(sendRank, recvRank)];
+}
 
-        if (localQueueMap.find(key) == localQueueMap.end()) {
-            auto mq = new InMemoryMpiQueue();
-            localQueueMap.emplace(
-              std::pair<std::string, InMemoryMpiQueue*>(key, mq));
+// We pre-allocate all _potentially_ necessary queues in advance. Queues are
+// necessary to _receive_ messages, thus we initialise all queues whose
+// corresponding receiver is local to this host
+// Note - the queues themselves perform concurrency control
+void MpiWorld::setLocalQueues()
+{
+    // Assert we only allocate queues once
+    assert(localQueueMap.size() == 0);
+    localQueueMap.resize(size * size);
+    for (int recvRank = 0; recvRank < size; recvRank++) {
+        if (getHostForRank(recvRank) == thisHost) {
+            for (int sendRank = 0; sendRank < size; sendRank++) {
+                localQueueMap[getKeyForRanks(sendRank, recvRank)] =
+                  std::make_shared<InMemoryMpiQueue>();
+            }
         }
     }
+}
 
-    {
-        faabric::util::SharedLock lock(worldMutex);
-        return localQueueMap[key];
-    }
+int MpiWorld::getKeyForRanks(int sendRank, int recvRank)
+{
+    return sendRank * size + recvRank;
 }
 
 void MpiWorld::rmaGet(int sendRank,

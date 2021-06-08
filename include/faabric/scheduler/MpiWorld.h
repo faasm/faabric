@@ -195,6 +195,10 @@ class MpiWorld
 
     std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
 
+    void setLocalQueues();
+
+    int getKeyForRanks(int sendRank, int recvRank);
+
     long getLocalQueueSize(int sendRank, int recvRank);
 
     void overrideHost(const std::string& newHost);
@@ -220,12 +224,11 @@ class MpiWorld
     std::string function;
 
     std::shared_ptr<state::StateKeyValue> stateKV;
-    std::unordered_map<int, std::string> rankHostMap;
+    std::vector<std::string> rankHostMap;
 
     std::unordered_map<std::string, uint8_t*> windowPointerMap;
 
-    std::unordered_map<std::string, std::shared_ptr<InMemoryMpiQueue>>
-      localQueueMap;
+    std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueueMap;
 
     std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
     int getMpiThreadPoolSize();
