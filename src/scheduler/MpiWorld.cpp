@@ -461,7 +461,6 @@ void MpiWorld::recv(int sendRank,
     std::shared_ptr<faabric::MPIMessage> m;
     if (isLocal) {
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        // TODO - change to ipc sockets
         m = getLocalQueue(sendRank, recvRank)->dequeue();
     } else {
         SPDLOG_TRACE("MPI - recv remote {} -> {}", sendRank, recvRank);
