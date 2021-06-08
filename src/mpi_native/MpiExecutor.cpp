@@ -13,7 +13,6 @@ int32_t MpiExecutor::executeTask(
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-
     faabric::mpi_native::executingCall = &req->mutable_messages()->at(msgIdx);
 
     int error = mpiFunc();
@@ -26,23 +25,22 @@ int32_t MpiExecutor::executeTask(
 
 int mpiNativeMain(int argc, char** argv)
 {
-
     auto& scheduler = faabric::scheduler::getScheduler();
     auto& conf = faabric::util::getSystemConfig();
 
     bool __isRoot;
     int __worldSize;
     if (argc < 2) {
-        logger->debug("Non-root process started");
+        SPDLOG_DEBUG("Non-root process started");
         __isRoot = false;
     } else if (argc < 3) {
         SPDLOG_ERROR("Root process started without specifying world size!");
         return 1;
     } else {
-        logger->debug("Root process started");
+        SPDLOG_DEBUG("Root process started");
         __worldSize = std::stoi(argv[2]);
         __isRoot = true;
-        logger->debug("MPI World Size: {}", __worldSize);
+        SPDLOG_DEBUG("MPI World Size: {}", __worldSize);
     }
 
     // Force this host to run one thread

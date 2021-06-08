@@ -173,7 +173,7 @@ long extractScriptResult(redisReply* reply)
 void Redis::ping()
 {
 
-    logger->debug("Pinging redis at {}", instance.hostname);
+    SPDLOG_DEBUG("Pinging redis at {}", instance.hostname);
     auto reply = (redisReply*)redisCommand(context, "PING");
 
     std::string response(reply->str);
@@ -181,11 +181,11 @@ void Redis::ping()
     freeReplyObject(reply);
 
     if (response != "PONG") {
-        logger->debug("Failed pinging redis at {}", instance.hostname);
+        SPDLOG_DEBUG("Failed pinging redis at {}", instance.hostname);
         throw std::runtime_error("Failed to ping redis host");
     }
 
-    logger->debug("Successfully pinged redis");
+    SPDLOG_DEBUG("Successfully pinged redis");
 }
 
 size_t Redis::strlen(const std::string& key)

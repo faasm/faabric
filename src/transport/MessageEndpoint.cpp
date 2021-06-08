@@ -141,7 +141,7 @@ Message MessageEndpoint::recv(int size)
         } catch (zmq::error_t& e) {
             if (e.num() == ZMQ_ETERM) {
                 // Return empty message to signify termination
-                logger->trace("Shutting endpoint down after receiving ETERM");
+                SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
                 return Message();
             } else {
                 SPDLOG_ERROR("Error receiving message: {}", e.what());
@@ -163,7 +163,7 @@ Message MessageEndpoint::recv(int size)
     } catch (zmq::error_t& e) {
         if (e.num() == ZMQ_ETERM) {
             // Return empty message to signify termination
-            logger->trace("Shutting endpoint down after receiving ETERM");
+            SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
             return Message();
         } else {
             SPDLOG_ERROR("Error receiving message: {}", e.what());

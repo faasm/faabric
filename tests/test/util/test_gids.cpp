@@ -42,8 +42,8 @@ TEST_CASE("Test multithreaded gid generation", "[util]")
     for (auto g : generated) {
         if (uniques.count(g) > 0) {
             const std::shared_ptr<spdlog::logger>& logger =
-              faabric::util::getLogger();
-            logger->error("Found duplicate gid - {}", g);
+
+            SPDLOG_ERROR("Found duplicate gid - {}", g);
             FAIL();
         } else {
             uniques.insert(g);

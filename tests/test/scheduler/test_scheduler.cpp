@@ -31,9 +31,9 @@ class SlowExecutor final : public Executor
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override
     {
-        auto logger = faabric::util::getLogger();
+
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-        logger->debug("SlowExecutor executing task{}", msg.id());
+        SPDLOG_DEBUG("SlowExecutor executing task{}", msg.id());
 
         usleep(SHORT_TEST_TIMEOUT_MS * 1000);
         return 0;

@@ -22,7 +22,7 @@ int MpiContext::createWorld(const faabric::Message& msg)
     }
 
     worldId = (int)faabric::util::generateGid();
-    logger->debug("Initialising world {}", worldId);
+    SPDLOG_DEBUG("Initialising world {}", worldId);
 
     // Create the MPI world
     scheduler::MpiWorldRegistry& reg = scheduler::getMpiWorldRegistry();

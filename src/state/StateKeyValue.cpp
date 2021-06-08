@@ -60,7 +60,7 @@ void StateKeyValue::checkSizeConfigured()
 
 void StateKeyValue::pull()
 {
-    logger->debug("Pulling state for {}/{}", user, key);
+    SPDLOG_DEBUG("Pulling state for {}/{}", user, key);
     doPull(false);
 }
 
@@ -342,12 +342,12 @@ void StateKeyValue::allocateChunk(long offset, size_t length)
     int res = mprotect(
       BYTES(sharedMemory) + chunk.nBytesOffset, chunk.nBytesLength, PROT_WRITE);
     if (res != 0) {
-        logger->debug("Allocating memory for {}/{} of size {} failed: {} ({})",
-                      user,
-                      key,
-                      length,
-                      errno,
-                      strerror(errno));
+        SPDLOG_DEBUG("Allocating memory for {}/{} of size {} failed: {} ({})",
+                     user,
+                     key,
+                     length,
+                     errno,
+                     strerror(errno));
         throw std::runtime_error("Failed allocating memory for KV");
     }
 
@@ -377,15 +377,15 @@ void StateKeyValue::reserveStorage()
     sharedMemory = mmap(
       nullptr, sharedMemSize, PROT_NONE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if (sharedMemory == MAP_FAILED) {
-        logger->debug("Mmapping of storage size {} failed. errno: {}",
-                      sharedMemSize,
-                      errno);
+        SPDLOG_DEBUG("Mmapping of storage size {} failed. errno: {}",
+                     sharedMemSize,
+                     errno);
 
         throw std::runtime_error("Failed mapping memory for KV");
     }
 
     size_t nPages = sharedMemSize / HOST_PAGE_SIZE;
-    logger->debug("Reserved {} pages of shared storage for {}", nPages, key);
+    SPDLOG_DEBUG("Reserved {} pages of shared storage for {}", nPages, key);
 
     PROF_END(reserveStorage)
 }
@@ -519,7 +519,7 @@ void StateKeyValue::doPushPartial(const uint8_t* dirtyMaskBytes)
 
     // Double check condition
     if (!isDirty) {
-        logger->debug("No need for partial push on {}", key);
+        SPDLOG_DEBUG("No need for partial push on {}", key);
         return;
     }
 
@@ -552,7 +552,7 @@ uint32_t StateKeyValue::waitOnRedisRemoteLock(const std::string& redisKey)
     while (remoteLockId == 0) {
         const std::shared_ptr<spdlog::logger>& logger =
 
-          logger->debug(
+          SPDLOG_DEBUG(
             "Waiting on remote lock for {} (loop {})", redisKey, retryCount);
 
         if (retryCount >= REMOTE_LOCK_MAX_RETRIES) {

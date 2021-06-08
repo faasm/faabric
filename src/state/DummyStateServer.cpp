@@ -68,13 +68,13 @@ void DummyStateServer::start()
 
         // Set the data
         kv->set(dummyData.data());
-        logger->debug(
+        SPDLOG_DEBUG(
           "Finished setting master for test {}/{}", kv->user, kv->key);
     }
 
     // Start the state server
     // Note - by default the state server runs in a background thread
-    logger->debug("Running state server");
+    SPDLOG_DEBUG("Running state server");
     stateServer.start();
 
     // Give it time to start

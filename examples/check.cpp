@@ -9,7 +9,7 @@ int main()
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     std::string msgString = faabric::util::funcToString(msg, true);
 
-    logger->debug("Message: {}", msgString);
+    SPDLOG_DEBUG("Message: {}", msgString);
 
     return 0;
 }

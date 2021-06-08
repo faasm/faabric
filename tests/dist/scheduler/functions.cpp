@@ -19,16 +19,14 @@ int handleSimpleThread(faabric::scheduler::Executor* exec,
 {
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
-    auto const& logger = faabric::util::getLogger();
-
     // Return a distinctive value
     int returnValue = msg.id() / 2;
 
     const faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    logger->debug("Thread {} executed on host {}. Returning {}",
-                  msg.id(),
-                  conf.endpointHost,
-                  returnValue);
+    SPDLOG_DEBUG("Thread {} executed on host {}. Returning {}",
+                 msg.id(),
+                 conf.endpointHost,
+                 returnValue);
 
     return returnValue;
 }
@@ -43,8 +41,7 @@ int handleSimpleFunction(faabric::scheduler::Executor* exec,
     std::string output = fmt::format(
       "Function {} executed on host {}", msg.id(), conf.endpointHost);
 
-    auto const& logger = faabric::util::getLogger();
-    logger->debug(output);
+    SPDLOG_DEBUG(output);
 
     msg.set_outputdata(output);
 

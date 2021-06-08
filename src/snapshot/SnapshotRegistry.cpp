@@ -126,7 +126,7 @@ int SnapshotRegistry::writeSnapshotToFd(const std::string& key)
     // Record the fd
     getSnapshot(key).fd = fd;
 
-    logger->debug("Wrote snapshot {} to fd {}", key, fd);
+    SPDLOG_DEBUG("Wrote snapshot {} to fd {}", key, fd);
     return fd;
 }
 }
