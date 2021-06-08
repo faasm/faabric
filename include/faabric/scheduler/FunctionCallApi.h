@@ -4,11 +4,10 @@ namespace faabric::scheduler {
 enum FunctionCalls
 {
     NoFunctionCall = 0,
-    MpiMessage = 1,
-    ExecuteFunctions = 2,
-    Flush = 3,
-    Unregister = 4,
-    GetResources = 5,
-    SetThreadResult = 6,
+    ExecuteFunctions = 1,
+    Flush = 2,
+    Unregister = 3,
+    GetResources = 4,
+    SetThreadResult = 5,
 };
 }

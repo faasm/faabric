@@ -210,9 +210,6 @@ class MpiWorld
 
     std::vector<int> cartProcsPerDim;
 
-    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
-      const std::string& otherHost);
-
     void closeThreadLocalClients();
 
     int getIndexForRanks(int sendRank, int recvRank);

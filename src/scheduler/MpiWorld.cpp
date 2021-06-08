@@ -25,6 +25,7 @@ MpiWorld::MpiWorld()
   , cartProcsPerDim(2)
 {}
 
+/*
 faabric::scheduler::FunctionCallClient& MpiWorld::getFunctionCallClient(
   const std::string& otherHost)
 {
@@ -39,6 +40,7 @@ faabric::scheduler::FunctionCallClient& MpiWorld::getFunctionCallClient(
     }
     return it->second;
 }
+*/
 
 int MpiWorld::getMpiThreadPoolSize()
 {
@@ -152,6 +154,7 @@ void MpiWorld::shutdownThreadPool()
     closeThreadLocalClients();
 }
 
+// TODO - remove
 // Clear thread local state
 void MpiWorld::closeThreadLocalClients()
 {
@@ -440,7 +443,7 @@ void MpiWorld::send(int sendRank,
         getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
         SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
-        getFunctionCallClient(otherHost).sendMPIMessage(m);
+        faabric::transport::sendMpiMessage(otherHost, getMpiPort(sendRank, recvRank), m);
     }
 }
 
@@ -1078,22 +1081,6 @@ void MpiWorld::barrier(int thisRank)
              faabric::MPIMessage::BARRIER_DONE);
         SPDLOG_TRACE("MPI - barrier done {}", thisRank);
     }
-}
-
-void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
-{
-    if (msg.worldid() != id) {
-        SPDLOG_ERROR(
-          "Queueing message not meant for this world (msg={}, this={})",
-          msg.worldid(),
-          id);
-        throw std::runtime_error("Queueing message not for this world");
-    }
-
-    SPDLOG_TRACE(
-      "Queueing message locally {} -> {}", msg.sender(), msg.destination());
-    getLocalQueue(msg.sender(), msg.destination())
-      ->enqueue(std::make_shared<faabric::MPIMessage>(msg));
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,

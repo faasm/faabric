@@ -27,9 +27,6 @@ void FunctionCallServer::doRecv(faabric::transport::Message& header,
     assert(header.size() == sizeof(uint8_t));
     uint8_t call = static_cast<uint8_t>(*header.data());
     switch (call) {
-        case faabric::scheduler::FunctionCalls::MpiMessage:
-            this->recvMpiMessage(body);
-            break;
         case faabric::scheduler::FunctionCalls::Flush:
             this->recvFlush(body);
             break;
@@ -46,15 +43,6 @@ void FunctionCallServer::doRecv(faabric::transport::Message& header,
             throw std::runtime_error(
               fmt::format("Unrecognized call header: {}", call));
     }
-}
-
-void FunctionCallServer::recvMpiMessage(faabric::transport::Message& body)
-{
-    PARSE_MSG(faabric::MPIMessage, body.data(), body.size())
-
-    MpiWorldRegistry& registry = getMpiWorldRegistry();
-    MpiWorld& world = registry.getWorld(msg.worldid());
-    world.enqueueMessage(msg);
 }
 
 void FunctionCallServer::recvFlush(faabric::transport::Message& body)
