@@ -301,21 +301,6 @@ TEST_CASE("Test send and recv on same host", "[mpi]")
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
 
-    /*
-    SECTION("Test recv with type missmatch")
-    {
-        // Receive a message from a different type
-        auto buffer = new int[messageData.size()];
-        REQUIRE_THROWS(world.recv(rankA1,
-                                  rankA2,
-                                  BYTES(buffer),
-                                  MPI_INT,
-                                  messageData.size(),
-                                  nullptr,
-                                  faabric::MPIMessage::SENDRECV));
-    }
-    */
-
     tearDown({ &world });
 }
 
@@ -667,54 +652,6 @@ TEST_CASE("Test probe", "[mpi]")
     tearDown({ &world });
 }
 
-/*
-TEST_CASE("Test can't get in-memory queue for non-local ranks", "[mpi]")
-{
-    cleanFaabric();
-
-    std::string otherHost = LOCALHOST;
-
-    auto& sch = faabric::scheduler::getScheduler();
-
-    // Force the scheduler to initialise a world in the remote host by setting
-    // a worldSize bigger than the slots available locally
-    int worldSize = 4;
-    faabric::HostResources localResources;
-    localResources.set_slots(2);
-    localResources.set_usedslots(1);
-    faabric::HostResources otherResources;
-    otherResources.set_slots(2);
-
-    // Set up a remote host
-    sch.addHostToGlobalSet(otherHost);
-
-    // Mock everything to make sure the other host has resources as well
-    faabric::util::setMockMode(true);
-    sch.setThisHostResources(localResources);
-    faabric::scheduler::queueResourceResponse(otherHost, otherResources);
-
-    faabric::Message msg = faabric::util::messageFactory(user, func);
-    msg.set_mpiworldsize(worldSize);
-    scheduler::MpiWorld worldA;
-    worldA.create(msg, worldId, worldSize);
-
-    scheduler::MpiWorld worldB;
-    worldB.overrideHost(otherHost);
-    worldB.initialiseFromMsg(msg);
-
-    // Check that we can't access rank on another host locally
-    REQUIRE_THROWS(worldA.getLocalQueue(0, 2));
-
-    // Double check even when we've retrieved the rank
-    REQUIRE(worldA.getHostForRank(2) == otherHost);
-    REQUIRE_THROWS(worldA.getLocalQueue(0, 2));
-
-    faabric::util::setMockMode(false);
-    tearDown({ &worldA, &worldB });
-}
-*/
-
-/*
 TEST_CASE("Check sending to invalid rank", "[mpi]")
 {
     cleanFaabric();
@@ -729,7 +666,6 @@ TEST_CASE("Check sending to invalid rank", "[mpi]")
 
     tearDown({ &world });
 }
-*/
 
 TEST_CASE("Test collective messaging locally and across hosts", "[mpi]")
 {
