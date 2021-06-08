@@ -3,6 +3,8 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/util/exception.h>
 
+#include <spdlog/spdlog.h>
+
 namespace faabric::util {
 std::string messageToJson(const faabric::Message& msg);
 

@@ -1,5 +1,3 @@
-#include <faabric/util/logging.h>
-
 #include <faabric/mpi-native/MpiExecutor.h>
 #include <faabric/mpi/mpi.h>
 

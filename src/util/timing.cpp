@@ -1,5 +1,5 @@
-#include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
+#include <spdlog/spdlog.h>
 
 faabric::util::TimePoint globalStart;
 std::unordered_map<std::string, std::atomic<long>> timerTotals;

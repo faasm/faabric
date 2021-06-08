@@ -1,9 +1,9 @@
 #include <faabric/endpoint/Endpoint.h>
 
-#include <faabric/util/logging.h>
 #include <pistache/endpoint.h>
 #include <pistache/listener.h>
 #include <signal.h>
+#include <spdlog/spdlog.h>
 
 namespace faabric::endpoint {
 Endpoint::Endpoint(int portIn, int threadCountIn)

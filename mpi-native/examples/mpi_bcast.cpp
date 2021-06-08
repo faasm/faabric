@@ -3,7 +3,6 @@
 #include <stdio.h>
 
 #include <faabric/mpi-native/MpiExecutor.h>
-#include <faabric/util/logging.h>
 
 int main(int argc, char** argv)
 {

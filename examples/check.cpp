@@ -1,5 +1,4 @@
 #include <faabric/util/func.h>
-#include <faabric/util/logging.h>
 
 int main()
 {

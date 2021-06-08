@@ -4,7 +4,6 @@
 
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageContext.h>
-#include <faabric/util/logging.h>
 
 #include <thread>
 #include <zmq.hpp>

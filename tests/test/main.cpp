@@ -3,7 +3,6 @@
 #include <catch.hpp>
 
 #include "faabric_utils.h"
-#include <faabric/util/logging.h>
 #include <faabric/util/testing.h>
 
 struct LogListener : Catch::TestEventListenerBase

@@ -6,7 +6,6 @@
 #include <faabric/state/StateKeyValue.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/locks.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/state.h>
 
 #define MASTER_KEY_PREFIX "master_"

@@ -2,7 +2,6 @@
 
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
-#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 MpiWorldRegistry& getMpiWorldRegistry()

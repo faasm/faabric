@@ -7,13 +7,13 @@
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
 
 #include <future>
 #include <shared_mutex>
+#include <spdlog/spdlog.h>
 
 #define AVAILABLE_HOST_SET "available_hosts"
 

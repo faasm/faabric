@@ -2,7 +2,6 @@
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/util/config.h>
-#include <faabric/util/logging.h>
 
 #if (FAASM_SGX)
 namespace sgx {

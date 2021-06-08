@@ -1,4 +1,3 @@
-#include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
 

@@ -5,7 +5,6 @@
 #include <faabric/state/State.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
-#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 SnapshotServer::SnapshotServer()

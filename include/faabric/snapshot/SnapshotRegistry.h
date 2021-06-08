@@ -5,7 +5,6 @@
 #include <unordered_map>
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/snapshot.h>
 
 namespace faabric::snapshot {

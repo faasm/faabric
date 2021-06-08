@@ -4,8 +4,6 @@
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorld.h>
 
-#include <faabric/util/logging.h>
-
 using namespace faabric::mpi_native;
 
 static thread_local faabric::scheduler::MpiContext executingContext;
