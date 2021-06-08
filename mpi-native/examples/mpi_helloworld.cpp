@@ -11,7 +11,6 @@ int main(int argc, char** argv)
 namespace faabric::mpi_native {
 int mpiFunc()
 {
-    auto logger = faabric::util::getLogger();
     SPDLOG_INFO("Hello world from Faabric MPI Main!");
 
     MPI_Init(NULL, NULL);

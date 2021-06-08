@@ -23,10 +23,10 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Logging level
-if(CMAKE_BUILD_TYPE MATCHES DEBUG)
-    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=debug)
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 else()
-    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=info)
+    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_INFO)
 endif()
 
 # External libraries

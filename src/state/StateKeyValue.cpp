@@ -550,10 +550,8 @@ uint32_t StateKeyValue::waitOnRedisRemoteLock(const std::string& redisKey)
       redis.acquireLock(redisKey, REMOTE_LOCK_TIMEOUT_SECS);
     unsigned int retryCount = 0;
     while (remoteLockId == 0) {
-        const std::shared_ptr<spdlog::logger>& logger =
-
-          SPDLOG_DEBUG(
-            "Waiting on remote lock for {} (loop {})", redisKey, retryCount);
+        SPDLOG_DEBUG(
+          "Waiting on remote lock for {} (loop {})", redisKey, retryCount);
 
         if (retryCount >= REMOTE_LOCK_MAX_RETRIES) {
             SPDLOG_ERROR("Timed out waiting for lock on {}", redisKey);

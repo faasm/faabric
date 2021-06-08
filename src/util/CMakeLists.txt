@@ -14,7 +14,6 @@ set(LIB_FILES
         gids.cpp
         http.cpp
         json.cpp
-        logging.cpp
         memory.cpp
         network.cpp
         queue.cpp

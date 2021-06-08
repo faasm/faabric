@@ -18,8 +18,6 @@ class ExampleExecutor : public Executor
                         int msgIdx,
                         std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
-        auto logger = faabric::util::getLogger();
-
         SPDLOG_INFO("Hello world!");
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
         msg.set_outputdata("This is hello output!");
@@ -40,8 +38,6 @@ class ExampleExecutorFactory : public ExecutorFactory
 
 int main()
 {
-    const auto& logger = faabric::util::getLogger();
-
     // Start the worker pool
     SPDLOG_INFO("Starting executor pool in the background");
     std::shared_ptr<ExecutorFactory> fac =

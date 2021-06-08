@@ -39,7 +39,7 @@ void logEndTimer(const std::string& label,
 {
     double millis = getTimeDiffMillis(begin);
 
-    l->trace("TIME = {:.2f}ms ({})", millis, label);
+    SPDLOG_TRACE("TIME = {:.2f}ms ({})", millis, label);
 
     // Record microseconds total
     timerTotals[label] += long(millis * 1000L);

@@ -180,8 +180,6 @@ class Scheduler
 
     faabric::util::SystemConfig& conf;
 
-    const std::shared_ptr<spdlog::logger> logger;
-
     std::vector<std::shared_ptr<Executor>> deadExecutors;
 
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>

@@ -260,14 +260,14 @@ SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
 
 void SendMessageEndpoint::open(MessageContext& context)
 {
-    loggertrace(fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
+    SPDLOG_TRACE(fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::open(context, SocketType::PUSH, false);
 }
 
 void SendMessageEndpoint::close()
 {
-    loggertrace(fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
+    SPDLOG_TRACE(fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::close(false);
 }
@@ -278,7 +278,7 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
 
 void RecvMessageEndpoint::open(MessageContext& context)
 {
-    loggertrace(
+    SPDLOG_TRACE(
       fmt::format("Opening socket: {} (RECV {}:{})", id, ANY_HOST, port));
 
     MessageEndpoint::open(context, SocketType::PULL, true);
@@ -286,7 +286,7 @@ void RecvMessageEndpoint::open(MessageContext& context)
 
 void RecvMessageEndpoint::close()
 {
-    loggertrace(
+    SPDLOG_TRACE(
       fmt::format("Closing socket: {} (RECV {}:{})", id, ANY_HOST, port));
 
     MessageEndpoint::close(true);

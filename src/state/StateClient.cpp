@@ -64,7 +64,7 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
         try {
             (void)awaitResponse();
         } catch (...) {
-            loggererror("Error in awaitReponse");
+            SPDLOG_ERROR("Error in awaitReponse");
             throw;
         }
     }

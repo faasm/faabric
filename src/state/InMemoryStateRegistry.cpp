@@ -108,7 +108,7 @@ std::string InMemoryStateRegistry::getMasterIPForOtherMaster(
 
     // Sanity check that the master is *not* this machine
     if (masterIP == thisIP) {
-        loggererror("Attempting to pull state size on master ({}/{} on {})",
+        SPDLOG_ERROR("Attempting to pull state size on master ({}/{} on {})",
                     userIn,
                     keyIn,
                     thisIP);

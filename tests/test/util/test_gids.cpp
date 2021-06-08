@@ -41,8 +41,6 @@ TEST_CASE("Test multithreaded gid generation", "[util]")
     std::unordered_set<unsigned int> uniques;
     for (auto g : generated) {
         if (uniques.count(g) > 0) {
-            const std::shared_ptr<spdlog::logger>& logger =
-
             SPDLOG_ERROR("Found duplicate gid - {}", g);
             FAIL();
         } else {

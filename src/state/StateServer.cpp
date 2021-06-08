@@ -61,7 +61,7 @@ void StateServer::recvSize(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Prepare the response
-    loggertrace("Size {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Size {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     faabric::StateSizeResponse response;
     response.set_user(kv->user);
@@ -74,7 +74,7 @@ void StateServer::recvPull(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateChunkRequest, body.data(), body.size())
 
-    loggertrace("Pull {}/{} ({}->{})",
+    SPDLOG_TRACE("Pull {}/{} ({}->{})",
                 msg.user(),
                 msg.key(),
                 msg.offset(),
@@ -99,7 +99,7 @@ void StateServer::recvPush(faabric::transport::Message& body)
     PARSE_MSG(faabric::StatePart, body.data(), body.size())
 
     // Update the KV store
-    loggertrace("Push {}/{} ({}->{})",
+    SPDLOG_TRACE("Push {}/{} ({}->{})",
                 msg.user(),
                 msg.key(),
                 msg.offset(),
@@ -132,7 +132,7 @@ void StateServer::recvPullAppended(faabric::transport::Message& body)
 
     // Prepare response
     faabric::StateAppendedResponse response;
-    loggertrace("Pull appended {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Pull appended {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     response.set_user(msg.user());
     response.set_key(msg.key());
@@ -150,7 +150,7 @@ void StateServer::recvDelete(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Delete value
-    loggertrace("Delete {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Delete {}/{}", msg.user(), msg.key());
     state.deleteKV(msg.user(), msg.key());
 
     faabric::StateResponse emptyResponse;
@@ -162,7 +162,7 @@ void StateServer::recvClearAppended(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Perform operation
-    loggertrace("Clear appended {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Clear appended {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     kv->clearAppended();
 
@@ -175,7 +175,7 @@ void StateServer::recvLock(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Perform operation
-    loggertrace("Lock {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Lock {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     kv->lockWrite();
 
@@ -188,7 +188,7 @@ void StateServer::recvUnlock(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Perform operation
-    loggertrace("Unlock {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Unlock {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     kv->unlockWrite();
 

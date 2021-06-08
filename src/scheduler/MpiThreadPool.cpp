@@ -53,7 +53,7 @@ void MpiAsyncThreadPool::entrypoint(int i)
             if (!this->isShutdown) {
                 this->isShutdown = true;
             }
-            loggertrace("Mpi thread {}/{} shut down", i + 1, size);
+            SPDLOG_TRACE("Mpi thread {}/{} shut down", i + 1, size);
             break;
         }
 
