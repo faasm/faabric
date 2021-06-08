@@ -178,30 +178,11 @@ class MpiWorld
 
     void barrier(int thisRank);
 
-    void rmaGet(int sendRank,
-                faabric_datatype_t* sendType,
-                int sendCount,
-                uint8_t* recvBuffer,
-                faabric_datatype_t* recvType,
-                int recvCount);
-
-    void rmaPut(int sendRank,
-                uint8_t* sendBuffer,
-                faabric_datatype_t* sendType,
-                int sendCount,
-                int recvRank,
-                faabric_datatype_t* recvType,
-                int recvCount);
-
     std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
 
     long getLocalQueueSize(int sendRank, int recvRank);
 
     void overrideHost(const std::string& newHost);
-
-    void createWindow(const int winRank, const int winSize, uint8_t* windowPtr);
-
-    void synchronizeRmaWrite(const faabric::MPIMessage& msg, bool isRemote);
 
     double getWTime();
 
@@ -221,8 +202,6 @@ class MpiWorld
 
     std::shared_ptr<state::StateKeyValue> stateKV;
     std::vector<std::string> rankHosts;
-
-    std::unordered_map<std::string, uint8_t*> windowPointerMap;
 
     std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
 

@@ -3,7 +3,6 @@
 #include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/state/State.h>
 #include <faabric/transport/MpiMessageEndpoint.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
@@ -26,21 +25,6 @@ MpiWorld::MpiWorld()
   , logger(faabric::util::getLogger())
   , cartProcsPerDim(2)
 {}
-
-std::string getWorldStateKey(int worldId)
-{
-    if (worldId <= 0) {
-        throw std::runtime_error(
-          fmt::format("World ID must be bigger than zero ({})", worldId));
-    }
-    return "mpi_world_" + std::to_string(worldId);
-}
-
-std::string getWindowStateKey(int worldId, int rank, size_t size)
-{
-    return "mpi_win_" + std::to_string(worldId) + "_" + std::to_string(rank) +
-           "_" + std::to_string(size);
-}
 
 faabric::scheduler::FunctionCallClient& MpiWorld::getFunctionCallClient(
   const std::string& otherHost)
@@ -444,13 +428,8 @@ void MpiWorld::send(int sendRank,
 
     // Dispatch the message locally or globally
     if (isLocal) {
-        if (messageType == faabric::MPIMessage::RMA_WRITE) {
-            logger->trace("MPI - local RMA write {} -> {}", sendRank, recvRank);
-            synchronizeRmaWrite(*m, false);
-        } else {
-            logger->trace("MPI - send {} -> {}", sendRank, recvRank);
-            getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
-        }
+        logger->trace("MPI - send {} -> {}", sendRank, recvRank);
+        getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
         logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
         getFunctionCallClient(otherHost).sendMPIMessage(m);
@@ -1095,16 +1074,10 @@ void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
         throw std::runtime_error("Queueing message not for this world");
     }
 
-    if (msg.messagetype() == faabric::MPIMessage::RMA_WRITE) {
-        // NOTE - RMA notifications must be processed synchronously to ensure
-        // ordering
-        synchronizeRmaWrite(msg, true);
-    } else {
-        logger->trace(
-          "Queueing message locally {} -> {}", msg.sender(), msg.destination());
-        getLocalQueue(msg.sender(), msg.destination())
-          ->enqueue(std::make_shared<faabric::MPIMessage>(msg));
-    }
+    logger->trace(
+      "Queueing message locally {} -> {}", msg.sender(), msg.destination());
+    getLocalQueue(msg.sender(), msg.destination())
+      ->enqueue(std::make_shared<faabric::MPIMessage>(msg));
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
@@ -1140,113 +1113,11 @@ int MpiWorld::getIndexForRanks(int sendRank, int recvRank)
     return sendRank * size + recvRank;
 }
 
-void MpiWorld::rmaGet(int sendRank,
-                      faabric_datatype_t* sendType,
-                      int sendCount,
-                      uint8_t* recvBuffer,
-                      faabric_datatype_t* recvType,
-                      int recvCount)
-{
-    checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
-
-    // Get the state value that relates to this window
-    int buffLen = sendType->size * sendCount;
-    const std::string stateKey = getWindowStateKey(id, sendRank, buffLen);
-    state::State& state = state::getGlobalState();
-    const std::shared_ptr<state::StateKeyValue>& kv =
-      state.getKV(user, stateKey, buffLen);
-
-    // If it's remote, do a pull too
-    if (getHostForRank(sendRank) != thisHost) {
-        kv->pull();
-    }
-
-    // Do the read
-    kv->get(recvBuffer);
-}
-
-void MpiWorld::rmaPut(int sendRank,
-                      uint8_t* sendBuffer,
-                      faabric_datatype_t* sendType,
-                      int sendCount,
-                      int recvRank,
-                      faabric_datatype_t* recvType,
-                      int recvCount)
-{
-    checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
-
-    // Get the state value for the window to write to
-    int buffLen = sendType->size * sendCount;
-    const std::string stateKey = getWindowStateKey(id, recvRank, buffLen);
-    state::State& state = state::getGlobalState();
-    const std::shared_ptr<state::StateKeyValue>& kv =
-      state.getKV(user, stateKey, buffLen);
-
-    // Do the write
-    kv->set(sendBuffer);
-
-    // If it's remote, do a push too
-    if (getHostForRank(recvRank) != thisHost) {
-        kv->pushFull();
-    }
-
-    // Notify the receiver of the push
-    // NOTE - must specify a count here to say how big the change is
-    send(sendRank,
-         recvRank,
-         nullptr,
-         MPI_INT,
-         sendCount,
-         faabric::MPIMessage::RMA_WRITE);
-}
-
-void MpiWorld::synchronizeRmaWrite(const faabric::MPIMessage& msg,
-                                   bool isRemote)
-{
-    faabric_datatype_t* datatype = getFaabricDatatypeFromId(msg.type());
-    int winSize = msg.count() * datatype->size;
-    const std::string key = getWindowStateKey(id, msg.destination(), winSize);
-
-    // Get the state KV
-    state::State& state = state::getGlobalState();
-    const std::shared_ptr<state::StateKeyValue>& kv =
-      state.getKV(user, key, winSize);
-
-    // If remote, pull the state related to the window
-    if (isRemote) {
-        kv->pull();
-    }
-
-    // Write the state to the pointer
-    uint8_t* windowPtr = windowPointerMap[key];
-    kv->get(windowPtr);
-}
-
 long MpiWorld::getLocalQueueSize(int sendRank, int recvRank)
 {
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
     return queue->size();
-}
-
-void MpiWorld::createWindow(const int winRank,
-                            const int winSize,
-                            uint8_t* windowPtr)
-{
-    const std::string key = getWindowStateKey(id, winRank, winSize);
-    state::State& state = state::getGlobalState();
-    const std::shared_ptr<state::StateKeyValue> windowKv =
-      state.getKV(user, key, winSize);
-
-    // Set initial value
-    windowKv->set(windowPtr);
-    windowKv->pushFull();
-
-    // Add pointer to map
-    {
-        faabric::util::FullLock lock(worldMutex);
-        windowPointerMap[key] = windowPtr;
-    }
 }
 
 double MpiWorld::getWTime()

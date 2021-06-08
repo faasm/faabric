@@ -69,8 +69,7 @@ message MPIMessage {
         SCAN = 7;
         ALLREDUCE = 8;
         ALLTOALL = 9;
-        RMA_WRITE = 10;
-        SENDRECV = 11;
+        SENDRECV = 10;
     };
 
     MPIMessageType messageType = 1;
