@@ -7,6 +7,8 @@
 #include <faabric/util/macros.h>
 #include <faabric_utils.h>
 
+#include <thread>
+
 using namespace faabric::scheduler;
 
 namespace tests {
@@ -39,13 +41,19 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    remoteWorld.initialiseFromMsg(msg);
     faabric::util::setMockMode(false);
 
-    // Send a message that should get sent to this host
-    remoteWorld.send(
-      rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
-    usleep(1000 * 100);
+    std::thread senderThread([this, rankA, rankB] {
+        std::vector<int> messageData = { 0, 1, 2 };
+
+        remoteWorld.initialiseFromMsg(msg);
+
+        // Send a message that should get sent to this host
+        remoteWorld.send(
+          rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
+        usleep(1000 * 500);
+        remoteWorld.destroy();
+    });
 
     SECTION("Check recv")
     {
@@ -64,8 +72,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     }
 
     // Destroy worlds
+    senderThread.join();
     localWorld.destroy();
-    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,

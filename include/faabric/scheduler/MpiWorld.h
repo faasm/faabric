@@ -6,7 +6,9 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiThreadPool.h>
-#include <faabric/state/StateKeyValue.h>
+#include <faabric/transport/MpiMessageEndpoint.h>
+#include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
 
 #include <atomic>
 #include <thread>
@@ -14,8 +16,6 @@
 namespace faabric::scheduler {
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
-
-std::string getWorldStateKey(int worldId);
 
 class MpiWorld
 {
@@ -43,8 +43,6 @@ class MpiWorld
 
     void shutdownThreadPool();
 
-    void enqueueMessage(faabric::MPIMessage& msg);
-
     void getCartesianRank(int rank,
                           int maxDims,
                           const int* dims,
@@ -58,8 +56,6 @@ class MpiWorld
                               int disp,
                               int* source,
                               int* destination);
-
-    int getMpiPort(int sendRank, int recvRank);
 
     void send(int sendRank,
               int recvRank,
@@ -200,20 +196,28 @@ class MpiWorld
     std::string user;
     std::string function;
 
-    std::shared_ptr<state::StateKeyValue> stateKV;
-    std::vector<std::string> rankHosts;
-
-    std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
-
     std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
     int getMpiThreadPoolSize();
 
     std::vector<int> cartProcsPerDim;
 
-    void closeThreadLocalClients();
+    /* MPI internal messaging layer */
 
+    // Track at which host each rank lives
+    std::vector<std::string> rankHosts;
     int getIndexForRanks(int sendRank, int recvRank);
 
+    // In-memory queues for local messaging
+    std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
     void initLocalQueues();
+
+    // Rank-to-rank sockets for remote messaging
+    int getMpiPort(int sendRank, int recvRank);
+    void sendRemoteMpiMessage(int sendRank,
+                              int recvRank,
+                              const std::shared_ptr<faabric::MPIMessage>& msg);
+    std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
+                                                              int recvRank);
+    void closeMpiMessageEndpoints();
 };
 }

@@ -1,8 +1,8 @@
 #include <catch.hpp>
 
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/Scheduler.h>
 #include <faabric/scheduler/MpiWorld.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/random.h>

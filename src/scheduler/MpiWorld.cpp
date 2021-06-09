@@ -1,20 +1,14 @@
-#include <faabric/mpi/mpi.h>
-
-#include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/transport/MpiMessageEndpoint.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
-#include <faabric/util/timing.h>
 
 static thread_local std::unordered_map<int, std::future<void>> futureMap;
-static thread_local std::unordered_map<std::string,
-                                       faabric::scheduler::FunctionCallClient>
-  functionCallClients;
+static thread_local std::vector<
+  std::unique_ptr<faabric::transport::MpiMessageEndpoint>>
+  mpiMessageEndpoints;
 
 namespace faabric::scheduler {
 MpiWorld::MpiWorld()
@@ -25,22 +19,85 @@ MpiWorld::MpiWorld()
   , cartProcsPerDim(2)
 {}
 
-/*
-faabric::scheduler::FunctionCallClient& MpiWorld::getFunctionCallClient(
-  const std::string& otherHost)
+void MpiWorld::sendRemoteMpiMessage(
+  int sendRank,
+  int recvRank,
+  const std::shared_ptr<faabric::MPIMessage>& msg)
 {
-    auto it = functionCallClients.find(otherHost);
-    if (it == functionCallClients.end()) {
-        // The second argument is forwarded to the client's constructor
-        auto _it = functionCallClients.try_emplace(otherHost, otherHost);
-        if (!_it.second) {
-            throw std::runtime_error("Error inserting remote endpoint");
+    // Assert the ranks are sane
+    assert(0 <= sendRank && sendRank < size);
+    assert(0 <= recvRank && recvRank < size);
+
+    // Initialise the endpoint vector if not initialised
+    if (mpiMessageEndpoints.size() == 0) {
+        for (int i = 0; i < size * size; i++) {
+            mpiMessageEndpoints.emplace_back(nullptr);
         }
-        it = _it.first;
     }
-    return it->second;
+
+    // Get the index for the rank-host pair
+    int index = getIndexForRanks(sendRank, recvRank);
+    assert(index >= 0 && index < size * size);
+
+    // Lazily initialise send endpoints
+    if (mpiMessageEndpoints[index] == nullptr) {
+        // Get host for recv rank
+        std::string host = getHostForRank(recvRank);
+        assert(!host.empty());
+        assert(host != thisHost);
+
+        // Get port for send-recv pair
+        int port = getMpiPort(sendRank, recvRank);
+        // TODO - finer-grained checking when multi-tenant port scheme
+        assert(port > 0);
+
+        // Create MPI message endpoint
+        mpiMessageEndpoints.emplace(
+          mpiMessageEndpoints.begin() + index,
+          std::make_unique<faabric::transport::MpiMessageEndpoint>(host, port));
+    }
+
+    mpiMessageEndpoints[index]->sendMpiMessage(msg);
 }
-*/
+
+std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
+  int sendRank,
+  int recvRank)
+{
+    // Assert the ranks are sane
+    assert(0 <= sendRank && sendRank < size);
+    assert(0 <= recvRank && recvRank < size);
+
+    // Initialise the endpoint vector if not initialised
+    if (mpiMessageEndpoints.size() == 0) {
+        for (int i = 0; i < size * size; i++) {
+            mpiMessageEndpoints.emplace_back(nullptr);
+        }
+    }
+
+    // Get the index for the rank-host pair
+    int index = getIndexForRanks(sendRank, recvRank);
+    assert(index >= 0 && index < size * size);
+
+    // Lazily initialise send endpoints
+    if (mpiMessageEndpoints[index] == nullptr) {
+        // Get host for recv rank
+        std::string host = getHostForRank(sendRank);
+        assert(!host.empty());
+        assert(host != thisHost);
+
+        // Get port for send-recv pair
+        int port = getMpiPort(sendRank, recvRank);
+        // TODO - finer-grained checking when multi-tenant port scheme
+        assert(port > 0);
+
+        mpiMessageEndpoints.emplace(
+          mpiMessageEndpoints.begin() + index,
+          std::make_unique<faabric::transport::MpiMessageEndpoint>(host, port));
+    }
+
+    return mpiMessageEndpoints[index]->recvMpiMessage();
+}
 
 int MpiWorld::getMpiThreadPoolSize()
 {
@@ -144,25 +201,29 @@ void MpiWorld::shutdownThreadPool()
         std::promise<void> p;
         threadPool->getMpiReqQueue()->enqueue(
           std::make_tuple(QUEUE_SHUTDOWN,
-                          std::bind(&MpiWorld::closeThreadLocalClients, this),
+                          std::bind(&MpiWorld::closeMpiMessageEndpoints, this),
                           std::move(p)));
     }
 
     threadPool->shutdown();
 
     // Lastly clean the main thread as well
-    closeThreadLocalClients();
+    closeMpiMessageEndpoints();
 }
 
 // TODO - remove
 // Clear thread local state
-void MpiWorld::closeThreadLocalClients()
+void MpiWorld::closeMpiMessageEndpoints()
 {
-    // Close all open sockets
-    for (auto& s : functionCallClients) {
-        s.second.close();
+    if (mpiMessageEndpoints.size() > 0) {
+        // Close all open sockets
+        for (auto& e : mpiMessageEndpoints) {
+            if (e != nullptr) {
+                e->close();
+            }
+        }
+        mpiMessageEndpoints.clear();
     }
-    functionCallClients.clear();
 }
 
 void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
@@ -443,7 +504,7 @@ void MpiWorld::send(int sendRank,
         getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
         SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
-        faabric::transport::sendMpiMessage(otherHost, getMpiPort(sendRank, recvRank), m);
+        sendRemoteMpiMessage(sendRank, recvRank, m);
     }
 }
 
@@ -467,7 +528,7 @@ void MpiWorld::recv(int sendRank,
         m = getLocalQueue(sendRank, recvRank)->dequeue();
     } else {
         SPDLOG_TRACE("MPI - recv remote {} -> {}", sendRank, recvRank);
-        m = faabric::transport::recvMpiMessage(getMpiPort(sendRank, recvRank));
+        m = recvRemoteMpiMessage(sendRank, recvRank);
     }
     assert(m != nullptr);
 

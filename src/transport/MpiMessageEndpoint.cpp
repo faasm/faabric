@@ -28,35 +28,48 @@ void sendMpiHostRankMsg(const std::string& hostIn,
     }
 }
 
+MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn, int portIn)
+  : sendMessageEndpoint(hostIn, portIn)
+  , recvMessageEndpoint(portIn)
+{}
 
-// TODO - reuse clients!!
-void sendMpiMessage(const std::string& hostIn, int portIn,
-  const std::shared_ptr<faabric::MPIMessage> msg)
+void MpiMessageEndpoint::sendMpiMessage(
+  const std::shared_ptr<faabric::MPIMessage>& msg)
 {
+    // TODO - is this lazy init very expensive?
+    if (sendMessageEndpoint.socket == nullptr) {
+        sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    }
+
     size_t msgSize = msg->ByteSizeLong();
     {
         uint8_t sMsg[msgSize];
         if (!msg->SerializeToArray(sMsg, msgSize)) {
             throw std::runtime_error("Error serialising message");
         }
-        SendMessageEndpoint endpoint(hostIn, portIn);
-        endpoint.open(getGlobalMessageContext());
-        endpoint.send(sMsg, msgSize, false);
-        endpoint.close();
+        sendMessageEndpoint.send(sMsg, msgSize, false);
     }
 }
 
-std::shared_ptr<faabric::MPIMessage> recvMpiMessage(int portIn)
+std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
 {
-    RecvMessageEndpoint endpoint(portIn);
-    endpoint.open(getGlobalMessageContext());
-    // TODO - preempt data size somehow
-    Message m = endpoint.recv();
-    PARSE_MSG(faabric::MPIMessage, m.data(), m.size());
-    // Note - This may be very slow as we poll until unbound
-    endpoint.close();
+    if (recvMessageEndpoint.socket == nullptr) {
+        recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    }
 
-    // TODO - send normal message, not shared_ptr
+    Message m = recvMessageEndpoint.recv();
+    PARSE_MSG(faabric::MPIMessage, m.data(), m.size());
+
     return std::make_shared<faabric::MPIMessage>(msg);
+}
+
+void MpiMessageEndpoint::close()
+{
+    if (sendMessageEndpoint.socket != nullptr) {
+        sendMessageEndpoint.close();
+    }
+    if (recvMessageEndpoint.socket != nullptr) {
+        recvMessageEndpoint.close();
+    }
 }
 }
