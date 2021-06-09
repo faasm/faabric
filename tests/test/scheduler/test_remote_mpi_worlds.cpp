@@ -7,6 +7,8 @@
 #include <faabric/util/macros.h>
 #include <faabric_utils.h>
 
+#include <faabric/util/logging.h>
+
 #include <thread>
 
 using namespace faabric::scheduler;
@@ -69,6 +71,48 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
         REQUIRE(status.MPI_SOURCE == rankB);
         REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
+    }
+
+    // Destroy worlds
+    senderThread.join();
+    localWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test sending many messages across host",
+                 "[mpi]")
+{
+    // Register two ranks (one on each host)
+    this->setWorldsSizes(2, 1, 1);
+    int rankA = 0;
+    int rankB = 1;
+    int numMessages = 1000;
+
+    // Init worlds
+    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(false);
+
+    std::thread senderThread([this, rankA, rankB, numMessages] {
+        std::vector<int> messageData = { 0, 1, 2 };
+
+        remoteWorld.initialiseFromMsg(msg);
+
+        for (int i = 0; i < numMessages; i++) {
+            remoteWorld.send(rankB, rankA, BYTES(&i), MPI_INT, sizeof(int));
+        }
+        usleep(1000 * 500);
+        remoteWorld.destroy();
+    });
+
+    int recv;
+    for (int i = 0; i < numMessages; i++) {
+        localWorld.recv(
+          rankB, rankA, BYTES(&recv), MPI_INT, sizeof(int), MPI_STATUS_IGNORE);
+
+        // Check in-order delivery
+        if (i % (numMessages / 10) == 0) {
+            REQUIRE(recv == i);
+        }
     }
 
     // Destroy worlds
