@@ -5,7 +5,7 @@ namespace faabric::mpi_native {
 faabric::Message* executingCall;
 int mpiFunc();
 
-MpiExecutor::MpiExecutor(const faabric::Message& msg)
+MpiExecutor::MpiExecutor(faabric::Message& msg)
   : Executor(msg){};
 
 int32_t MpiExecutor::executeTask(
