@@ -1,9 +1,9 @@
-#include <faabric/state/StateServer.h>
-
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
+#include <faabric/state/StateServer.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
 #define KV_FROM_REQUEST(request)                                               \

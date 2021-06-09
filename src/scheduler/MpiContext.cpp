@@ -1,8 +1,8 @@
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
-
-#include <faabric/proto/faabric.pb.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 MpiContext::MpiContext()

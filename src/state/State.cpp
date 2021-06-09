@@ -1,9 +1,9 @@
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/RedisStateKeyValue.h>
 #include <faabric/state/State.h>
-
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/state.h>
 
 #include <unistd.h>

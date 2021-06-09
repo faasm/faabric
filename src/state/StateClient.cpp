@@ -1,5 +1,6 @@
 #include <faabric/state/StateClient.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
 namespace faabric::state {

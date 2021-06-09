@@ -1,11 +1,12 @@
 #include <faabric/state/StateKeyValue.h>
-
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/timing.h>
 
+#include <cstring>
 #include <sys/mman.h>
 
 using namespace faabric::util;
@@ -46,7 +47,7 @@ void StateKeyValue::configureSize()
     zeroDirtyMask();
 
     pulledMask = new uint8_t[valueSize];
-    memset(pulledMask, 0, valueSize);
+    ::memset(pulledMask, 0, valueSize);
 }
 
 void StateKeyValue::checkSizeConfigured()

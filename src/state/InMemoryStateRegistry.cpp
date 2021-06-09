@@ -1,12 +1,12 @@
-#include <faabric/state/InMemoryStateRegistry.h>
-
-#include <vector>
-
 #include <faabric/redis/Redis.h>
+#include <faabric/state/InMemoryStateRegistry.h>
 #include <faabric/state/StateKeyValue.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/state.h>
+
+#include <vector>
 
 #define MASTER_KEY_PREFIX "master_"
 

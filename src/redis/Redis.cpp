@@ -1,5 +1,6 @@
 #include <faabric/redis/Redis.h>
 
+#include <faabric/util/logging.h>
 #include <faabric/util/network.h>
 #include <faabric/util/random.h>
 

@@ -1,4 +1,5 @@
 #include <faabric/util/json.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
 #include <rapidjson/document.h>

@@ -2,13 +2,14 @@
 
 #include <faabric/util/config.h>
 #include <faabric/util/exception.h>
-#include <faabric/util/logging.h>
 
 #include <hiredis/hiredis.h>
+#include <mutex>
 #include <set>
 #include <string>
 #include <thread>
 #include <unordered_set>
+#include <vector>
 
 namespace faabric::redis {
 enum RedisRole
