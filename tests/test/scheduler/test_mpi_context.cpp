@@ -1,28 +1,16 @@
-#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/random.h>
+#include <faabric_utils.h>
 
 using namespace faabric::scheduler;
 
-static void tearDown(MpiWorld& world)
-{
-    world.destroy();
-
-    getScheduler().reset();
-}
-
 namespace tests {
 
-TEST_CASE("Check world creation", "[mpi]")
+TEST_CASE_METHOD(MpiBaseTestFixture, "Check world creation", "[mpi]")
 {
-    cleanFaabric();
-
-    faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
-    msg.set_mpiworldsize(10);
-
     MpiContext c;
     c.createWorld(msg);
 
@@ -39,33 +27,26 @@ TEST_CASE("Check world creation", "[mpi]")
     MpiWorldRegistry& reg = getMpiWorldRegistry();
     MpiWorld& world = reg.getOrInitialiseWorld(msg);
     REQUIRE(world.getId() == worldId);
-    REQUIRE(world.getSize() == 10);
-    REQUIRE(world.getUser() == "mpi");
-    REQUIRE(world.getFunction() == "hellompi");
+    REQUIRE(world.getSize() == worldSize);
+    REQUIRE(world.getUser() == user);
+    REQUIRE(world.getFunction() == func);
 
-    tearDown(world);
+    world.destroy();
 }
 
-TEST_CASE("Check world cannot be created for non-zero rank", "[mpi]")
+TEST_CASE_METHOD(MpiBaseTestFixture,
+                 "Check world cannot be created for non-zero rank",
+                 "[mpi]")
 {
-    cleanFaabric();
-
-    // Create message with non-zero rank
-    faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
     msg.set_mpirank(2);
-    msg.set_mpiworldsize(10);
 
     // Try creating world
     MpiContext c;
     REQUIRE_THROWS(c.createWorld(msg));
 }
 
-TEST_CASE("Check default world size is set", "[mpi]")
+TEST_CASE_METHOD(MpiBaseTestFixture, "Check default world size is set", "[mpi]")
 {
-    cleanFaabric();
-
-    // Create message with non-zero rank
-    faabric::Message msg = faabric::util::messageFactory("mpi", "hellompi");
     msg.set_mpirank(0);
 
     // Set a new world size
@@ -94,13 +75,11 @@ TEST_CASE("Check default world size is set", "[mpi]")
     // Reset config
     conf.defaultMpiWorldSize = origSize;
 
-    tearDown(world);
+    world.destroy();
 }
 
-TEST_CASE("Check joining world", "[mpi]")
+TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
 {
-    cleanFaabric();
-
     const std::string expectedHost =
       faabric::util::getSystemConfig().endpointHost;
 
@@ -136,6 +115,6 @@ TEST_CASE("Check joining world", "[mpi]")
     const std::string actualHost = world.getHostForRank(1);
     REQUIRE(actualHost == expectedHost);
 
-    tearDown(world);
+    world.destroy();
 }
 }
