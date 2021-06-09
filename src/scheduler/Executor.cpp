@@ -6,6 +6,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/timing.h>

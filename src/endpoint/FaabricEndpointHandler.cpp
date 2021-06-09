@@ -3,7 +3,10 @@
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/json.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
+
+#include <syscall.h>
 
 namespace faabric::endpoint {
 void FaabricEndpointHandler::onTimeout(const Pistache::Http::Request& request,

@@ -2,6 +2,7 @@
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/util/config.h>
+#include <faabric/util/logging.h>
 
 #if (FAASM_SGX)
 namespace sgx {
@@ -49,21 +50,18 @@ void FaabricMain::startRunner()
 
 void FaabricMain::startFunctionCallServer()
 {
-
     SPDLOG_INFO("Starting function call server");
     functionServer.start();
 }
 
 void FaabricMain::startSnapshotServer()
 {
-
     SPDLOG_INFO("Starting snapshot server");
     snapshotServer.start();
 }
 
 void FaabricMain::startStateServer()
 {
-
     // Skip state server if not in inmemory mode
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     if (conf.stateMode != "inmemory") {
@@ -79,7 +77,6 @@ void FaabricMain::startStateServer()
 
 void FaabricMain::shutdown()
 {
-
     SPDLOG_INFO("Removing from global working set");
 
     auto& sch = faabric::scheduler::getScheduler();
