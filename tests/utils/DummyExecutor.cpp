@@ -6,7 +6,7 @@
 
 namespace faabric::scheduler {
 
-DummyExecutor::DummyExecutor(const faabric::Message& msg)
+DummyExecutor::DummyExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 

@@ -20,7 +20,7 @@ namespace tests {
 class SlowExecutor final : public Executor
 {
   public:
-    SlowExecutor(const faabric::Message& msg)
+    SlowExecutor(faabric::Message& msg)
       : Executor(msg)
     {}
 
@@ -43,8 +43,7 @@ class SlowExecutor final : public Executor
 class SlowExecutorFactory : public ExecutorFactory
 {
   protected:
-    std::shared_ptr<Executor> createExecutor(
-      const faabric::Message& msg) override
+    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override
     {
         return std::make_shared<SlowExecutor>(msg);
     }

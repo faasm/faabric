@@ -28,7 +28,7 @@ std::atomic<int> restoreCount = 0;
 class TestExecutor final : public Executor
 {
   public:
-    TestExecutor(const faabric::Message& msg)
+    TestExecutor(faabric::Message& msg)
       : Executor(msg)
     {}
 
@@ -44,7 +44,7 @@ class TestExecutor final : public Executor
         }
     }
 
-    void restore(const faabric::Message& msg)
+    void restore(faabric::Message& msg)
     {
         restoreCount += 1;
 
@@ -218,8 +218,7 @@ class TestExecutor final : public Executor
 class TestExecutorFactory : public ExecutorFactory
 {
   protected:
-    std::shared_ptr<Executor> createExecutor(
-      const faabric::Message& msg) override
+    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override
     {
         return std::make_shared<TestExecutor>(msg);
     }
