@@ -1,7 +1,6 @@
 #include <catch.hpp>
 
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
@@ -32,11 +31,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
 
 TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 {
-    // Start a server on this host
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
-
     // Register two ranks (one on each host)
     this->setWorldsSizes(2, 1, 1);
     int rankA = 0;
@@ -52,19 +46,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     remoteWorld.send(
       rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
     usleep(1000 * 100);
-
-    SECTION("Check queueing")
-    {
-        REQUIRE(localWorld.getLocalQueueSize(rankB, rankA) == 1);
-
-        // Check message content
-        faabric::MPIMessage actualMessage =
-          *(localWorld.getLocalQueue(rankB, rankA)->dequeue());
-        REQUIRE(actualMessage.worldid() == worldId);
-        REQUIRE(actualMessage.count() == messageData.size());
-        REQUIRE(actualMessage.sender() == rankB);
-        REQUIRE(actualMessage.destination() == rankA);
-    }
 
     SECTION("Check recv")
     {
@@ -85,18 +66,12 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     // Destroy worlds
     localWorld.destroy();
     remoteWorld.destroy();
-
-    server.stop();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "Test collective messaging across hosts",
                  "[mpi]")
 {
-    FunctionCallServer server;
-    server.start();
-    usleep(1000 * 100);
-
     // Here we rely on the scheduler running out of resources, and overloading
     // the localWorld with ranks 4 and 5
     int thisWorldSize = 6;
@@ -292,7 +267,5 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     // Destroy worlds
     localWorld.destroy();
     remoteWorld.destroy();
-
-    server.stop();
 }
 }
