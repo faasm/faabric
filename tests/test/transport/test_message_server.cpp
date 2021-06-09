@@ -1,5 +1,6 @@
 #include <catch.hpp>
 
+#include <spdlog/spdlog.h>
 #include <thread>
 
 #include <faabric/transport/MessageEndpointServer.h>

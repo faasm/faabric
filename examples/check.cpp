@@ -1,5 +1,7 @@
 #include <faabric/util/func.h>
 
+#include <spdlog/spdlog.h>
+
 int main()
 {
     // Build a message just to check things work

@@ -1,6 +1,7 @@
 #include <faabric/transport/MessageEndpoint.h>
-
 #include <faabric/util/gids.h>
+
+#include <spdlog/spdlog.h>
 #include <unistd.h>
 
 namespace faabric::transport {
@@ -260,14 +261,16 @@ SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
 
 void SendMessageEndpoint::open(MessageContext& context)
 {
-    SPDLOG_TRACE(fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
+    SPDLOG_TRACE(
+      fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::open(context, SocketType::PUSH, false);
 }
 
 void SendMessageEndpoint::close()
 {
-    SPDLOG_TRACE(fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
+    SPDLOG_TRACE(
+      fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
 
     MessageEndpoint::close(false);
 }

@@ -3,6 +3,8 @@
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
+#include <spdlog/spdlog.h>
+
 namespace faabric::scheduler {
 
 // -----------------------------------

@@ -2,6 +2,8 @@
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 
+#include <spdlog/spdlog.h>
+
 using namespace faabric::scheduler;
 
 class ExampleExecutor : public Executor

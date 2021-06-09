@@ -1,6 +1,8 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
 
+#include <spdlog/spdlog.h>
+
 namespace faabric::util {
 
 std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
