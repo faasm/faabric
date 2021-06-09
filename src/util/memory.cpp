@@ -1,7 +1,7 @@
 #include <faabric/util/memory.h>
+#include <faabric/util/logging.h>
 
 #include <fcntl.h>
-#include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <stdint.h>
 #include <stdio.h>

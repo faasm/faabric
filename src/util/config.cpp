@@ -2,8 +2,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/network.h>
-
-#include <spdlog/spdlog.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::util {
 SystemConfig& getSystemConfig()

@@ -1,7 +1,6 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
-
-#include <spdlog/spdlog.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::util {
 

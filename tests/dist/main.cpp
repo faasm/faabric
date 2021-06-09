@@ -29,7 +29,7 @@ CATCH_REGISTER_LISTENER(LogListener)
 
 int main(int argc, char* argv[])
 {
-
+    faabric::util::initLogging();
 
     // Set up the distributed tests
     tests::initDistTests();

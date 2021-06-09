@@ -89,7 +89,6 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
     msg.set_masterhost(thisHost);
 
     auto tid = (pid_t)syscall(SYS_gettid);
-
     const std::string funcStr = faabric::util::funcToString(msg, true);
     SPDLOG_DEBUG("Worker HTTP thread {} scheduling {}", tid, funcStr);
 

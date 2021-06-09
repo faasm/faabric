@@ -1,6 +1,5 @@
 #include <faabric/scheduler/MpiThreadPool.h>
-
-#include <spdlog/spdlog.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 MpiAsyncThreadPool::MpiAsyncThreadPool(int nThreads)

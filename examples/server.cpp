@@ -1,8 +1,7 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
-
-#include <spdlog/spdlog.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
 
@@ -39,6 +38,8 @@ class ExampleExecutorFactory : public ExecutorFactory
 
 int main()
 {
+    faabric::util::initLogging();
+
     // Start the worker pool
     SPDLOG_INFO("Starting executor pool in the background");
     std::shared_ptr<ExecutorFactory> fac =

@@ -2,10 +2,10 @@
 
 #include <faabric/util/config.h>
 #include <faabric/util/exception.h>
+#include <faabric/util/logging.h>
 
 #include <hiredis/hiredis.h>
 #include <set>
-#include <spdlog/spdlog.h>
 #include <string>
 #include <thread>
 #include <unordered_set>

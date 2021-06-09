@@ -1,9 +1,8 @@
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/config.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
-
-#include <spdlog/spdlog.h>
 
 namespace faabric::scheduler {
 

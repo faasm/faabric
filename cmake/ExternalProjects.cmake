@@ -2,7 +2,7 @@ include(FindGit)
 find_package(Git)
 include (ExternalProject)
 include (FetchContent)
- 
+
 # Protobuf
 set(PROTOBUF_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.so)
 ExternalProject_Add(protobuf_ext

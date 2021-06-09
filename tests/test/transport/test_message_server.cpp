@@ -1,9 +1,9 @@
 #include <catch.hpp>
 
-#include <spdlog/spdlog.h>
 #include <thread>
 
 #include <faabric/transport/MessageEndpointServer.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::transport;
 

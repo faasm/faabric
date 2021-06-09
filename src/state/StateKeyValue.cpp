@@ -383,8 +383,9 @@ void StateKeyValue::reserveStorage()
         throw std::runtime_error("Failed mapping memory for KV");
     }
 
-    size_t nPages = sharedMemSize / HOST_PAGE_SIZE;
-    SPDLOG_DEBUG("Reserved {} pages of shared storage for {}", nPages, key);
+    SPDLOG_DEBUG("Reserved {} pages of shared storage for {}",
+                 sharedMemSize / HOST_PAGE_SIZE,
+                 key);
 
     PROF_END(reserveStorage)
 }

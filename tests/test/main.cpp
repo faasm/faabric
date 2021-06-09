@@ -23,6 +23,7 @@ CATCH_REGISTER_LISTENER(LogListener)
 int main(int argc, char* argv[])
 {
     faabric::util::setTestMode(true);
+    faabric::util::initLogging();
 
     int result = Catch::Session().run(argc, argv);
 

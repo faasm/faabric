@@ -354,9 +354,8 @@ std::vector<std::string> Scheduler::callFunctions(
         // At this point there's no more capacity in the system, so we
         // just need to execute locally
         if (offset < nMessages) {
-            int overloadCount = nMessages - offset;
             SPDLOG_DEBUG("Overloading {}/{} {} locally",
-                         overloadCount,
+                         nMessages - offset,
                          nMessages,
                          funcStr);
 
@@ -620,7 +619,6 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
     std::string funcStr = faabric::util::funcToString(msg, false);
 
     std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
-    int nExecutors = thisExecutors.size();
 
     std::shared_ptr<faabric::scheduler::ExecutorFactory> factory =
       getExecutorFactory();
@@ -637,6 +635,7 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
 
     // We have no warm executors available, so scale up
     if (claimed == nullptr) {
+        int nExecutors = thisExecutors.size();
         SPDLOG_DEBUG(
           "Scaling {} from {} -> {}", funcStr, nExecutors, nExecutors + 1);
 

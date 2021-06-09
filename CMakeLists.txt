@@ -54,15 +54,6 @@ function(faabric_lib lib_name lib_deps)
 
     target_link_libraries(${lib_name}_obj ${lib_name})
 
-    # Logging level. See spdlog source, SPDLOG_LEVEL_TRACE=0, SPDLOG_LEVEL_DEBUG=1
-    # https://github.com/gabime/spdlog/blob/v1.x/include/spdlog/common.h
-    if((CMAKE_BUILD_TYPE STREQUAL "Debug") OR (CMAKE_BUILD_TYPE STREQUAL ""))
-    	set(SPDLOG_ACTIVE_LEVEL 0)
-	    target_compile_definitions(${lib_name} PUBLIC SPDLOG_ACTIVE_LEVEL=${SPDLOG_ACTIVE_LEVEL})
-	    target_compile_definitions(${lib_name} PUBLIC SPDLOG_TRACE_ON=1)
-    	target_compile_definitions(${lib_name} PUBLIC SPDLOG_DEBUG_ON=1)
-    endif()
-
     if(BUILD_SHARED_LIBS)
         target_compile_options(${lib_name} PRIVATE "-fPIC")
         target_compile_options(${lib_name}_obj PRIVATE "-fPIC")

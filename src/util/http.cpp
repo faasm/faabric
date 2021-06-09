@@ -1,12 +1,12 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/http.h>
+#include <faabric/util/logging.h>
 
 #include <pistache/async.h>
 #include <pistache/client.h>
 #include <pistache/http.h>
 #include <pistache/http_header.h>
 #include <pistache/net.h>
-#include <spdlog/spdlog.h>
 
 #include <cstdlib>
 #include <cstring>

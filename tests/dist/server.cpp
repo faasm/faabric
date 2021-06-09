@@ -9,8 +9,7 @@ using namespace faabric::scheduler;
 
 int main()
 {
-
-
+    faabric::util::initLogging();
     tests::initDistTests();
 
     SPDLOG_INFO("Starting distributed test server on worker");

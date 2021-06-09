@@ -1,5 +1,5 @@
 #include <faabric/util/state.h>
-#include <spdlog/spdlog.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::util {
 std::string keyForUser(const std::string& user, const std::string& key)

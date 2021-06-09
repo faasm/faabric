@@ -2,8 +2,8 @@
 
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
 
-#include <spdlog/spdlog.h>
 #include <thread>
 #include <unordered_set>
 

@@ -1,7 +1,7 @@
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/logging.h>
 
-#include <spdlog/spdlog.h>
 #include <unistd.h>
 
 namespace faabric::transport {
