@@ -17,7 +17,6 @@ void registerDistTestExecutorCallback(const char* user,
     std::string key = std::string(user) + "_" + std::string(funcName);
     executorFunctions[key] = func;
 
-
     SPDLOG_DEBUG("Registered executor callback for {}", key);
 }
 

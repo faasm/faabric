@@ -74,10 +74,10 @@ void StateServer::recvPull(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateChunkRequest, body.data(), body.size())
 
     SPDLOG_TRACE("Pull {}/{} ({}->{})",
-                msg.user(),
-                msg.key(),
-                msg.offset(),
-                msg.offset() + msg.chunksize());
+                 msg.user(),
+                 msg.key(),
+                 msg.offset(),
+                 msg.offset() + msg.chunksize());
 
     // Write the response
     faabric::StatePart response;
@@ -99,10 +99,10 @@ void StateServer::recvPush(faabric::transport::Message& body)
 
     // Update the KV store
     SPDLOG_TRACE("Push {}/{} ({}->{})",
-                msg.user(),
-                msg.key(),
-                msg.offset(),
-                msg.offset() + msg.data().size());
+                 msg.user(),
+                 msg.key(),
+                 msg.offset(),
+                 msg.offset() + msg.data().size());
     KV_FROM_REQUEST(msg)
     kv->setChunk(
       msg.offset(), BYTES_CONST(msg.data().c_str()), msg.data().size());

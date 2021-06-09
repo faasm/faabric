@@ -7,10 +7,10 @@
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
-#include <faabric/util/logging.h>
 
 #include <future>
 #include <shared_mutex>

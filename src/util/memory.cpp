@@ -1,5 +1,5 @@
-#include <faabric/util/memory.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/memory.h>
 
 #include <fcntl.h>
 #include <stdexcept>
