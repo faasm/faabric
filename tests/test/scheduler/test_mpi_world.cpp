@@ -460,82 +460,46 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
     }
 
     // TODO - this is not scatter's behaviour, FIX
-    /*
     SECTION("Scatter")
     {
         // Build the data
         int nPerRank = 4;
+        std::vector<int> actual(nPerRank, -1);
         int dataSize = nPerRank * worldSize;
         std::vector<int> messageData(dataSize, 0);
         for (int i = 0; i < dataSize; i++) {
             messageData[i] = i;
         }
 
-        // Do the scatter
-        std::vector<int> actual(nPerRank, -1);
-        remoteWorld.scatter(remoteRankB,
-                            remoteRankB,
-                            BYTES(messageData.data()),
-                            MPI_INT,
-                            nPerRank,
-                            BYTES(actual.data()),
-                            MPI_INT,
-                            nPerRank);
+        // Do the root first
+        world.scatter(root,
+                      root,
+                      BYTES(messageData.data()),
+                      MPI_INT,
+                      nPerRank,
+                      BYTES(actual.data()),
+                      MPI_INT,
+                      nPerRank);
 
-        // Check for root
-        REQUIRE(actual == std::vector<int>({ 8, 9, 10, 11 }));
+        for (int rank = 0; rank < worldSize; rank++) {
+            // Do the scatter
+            if (rank == root) {
+                continue;
+            }
+            world.scatter(root,
+                          rank,
+                          BYTES(messageData.data()),
+                          MPI_INT,
+                          nPerRank,
+                          BYTES(actual.data()),
+                          MPI_INT,
+                          nPerRank);
 
-        // Check for other remote ranks
-        remoteWorld.scatter(remoteRankB,
-                            remoteRankA,
-                            nullptr,
-                            MPI_INT,
-                            nPerRank,
-                            BYTES(actual.data()),
-                            MPI_INT,
-                            nPerRank);
-        REQUIRE(actual == std::vector<int>({ 4, 5, 6, 7 }));
-
-        remoteWorld.scatter(remoteRankB,
-                            remoteRankC,
-                            nullptr,
-                            MPI_INT,
-                            nPerRank,
-                            BYTES(actual.data()),
-                            MPI_INT,
-                            nPerRank);
-        REQUIRE(actual == std::vector<int>({ 12, 13, 14, 15 }));
-
-        // Check for local ranks
-        localWorld.scatter(remoteRankB,
-                           0,
-                           nullptr,
-                           MPI_INT,
-                           nPerRank,
-                           BYTES(actual.data()),
-                           MPI_INT,
-                           nPerRank);
-        REQUIRE(actual == std::vector<int>({ 0, 1, 2, 3 }));
-
-        localWorld.scatter(remoteRankB,
-                           localRankB,
-                           nullptr,
-                           MPI_INT,
-                           nPerRank,
-                           BYTES(actual.data()),
-                           MPI_INT,
-                           nPerRank);
-        REQUIRE(actual == std::vector<int>({ 20, 21, 22, 23 }));
-
-        localWorld.scatter(remoteRankB,
-                           localRankA,
-                           nullptr,
-                           MPI_INT,
-                           nPerRank,
-                           BYTES(actual.data()),
-                           MPI_INT,
-                           nPerRank);
-        REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
+            // Check the results
+            REQUIRE(actual == std::vector<int>(
+                                messageData.begin() + rank * nPerRank,
+                                messageData.begin() + (rank + 1) * nPerRank));
+        }
     }
 
     SECTION("Gather and allgather")
@@ -543,7 +507,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
         // Build the data for each rank
         int nPerRank = 4;
         std::vector<std::vector<int>> rankData;
-        for (int i = 0; i < thisWorldSize; i++) {
+        for (int i = 0; i < worldSize; i++) {
             std::vector<int> thisRankData;
             for (int j = 0; j < nPerRank; j++) {
                 thisRankData.push_back((i * nPerRank) + j);
@@ -554,56 +518,43 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
 
         // Build the expectation
         std::vector<int> expected;
-        for (int i = 0; i < thisWorldSize * nPerRank; i++) {
+        for (int i = 0; i < worldSize * nPerRank; i++) {
             expected.push_back(i);
         }
 
         SECTION("Gather")
         {
-            std::vector<int> actual(thisWorldSize * nPerRank, -1);
+            std::vector<int> actual(worldSize * nPerRank, -1);
 
             // Call gather for each rank other than the root (out of order)
-            int root = localRankA;
-            for (int rank : remoteWorldRanks) {
-                remoteWorld.gather(rank,
-                                   root,
-                                   BYTES(rankData[rank].data()),
-                                   MPI_INT,
-                                   nPerRank,
-                                   nullptr,
-                                   MPI_INT,
-                                   nPerRank);
-            }
-
-            for (int rank : localWorldRanks) {
+            for (int rank = 0; rank < worldSize; rank++) {
                 if (rank == root) {
                     continue;
                 }
-                localWorld.gather(rank,
-                                  root,
-                                  BYTES(rankData[rank].data()),
-                                  MPI_INT,
-                                  nPerRank,
-                                  nullptr,
-                                  MPI_INT,
-                                  nPerRank);
+                world.gather(rank,
+                             root,
+                             BYTES(rankData[rank].data()),
+                             MPI_INT,
+                             nPerRank,
+                             nullptr,
+                             MPI_INT,
+                             nPerRank);
             }
 
             // Call gather for root
-            localWorld.gather(root,
-                              root,
-                              BYTES(rankData[root].data()),
-                              MPI_INT,
-                              nPerRank,
-                              BYTES(actual.data()),
-                              MPI_INT,
-                              nPerRank);
+            world.gather(root,
+                         root,
+                         BYTES(rankData[root].data()),
+                         MPI_INT,
+                         nPerRank,
+                         BYTES(actual.data()),
+                         MPI_INT,
+                         nPerRank);
 
             // Check data
             REQUIRE(actual == expected);
         }
     }
-    */
 }
 
 template<typename T>
