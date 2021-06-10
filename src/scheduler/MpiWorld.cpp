@@ -176,9 +176,9 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
     int msgWorldSize = msg.mpiworldsize();
     if (msgWorldSize <= 0) {
         size = conf.defaultMpiWorldSize;
-        logger->warn("Defaulting to default world size ({}) for {}",
-                     msgWorldSize,
-                     faabric::util::funcToString(msg, false));
+        SPDLOG_WARN("Defaulting to default world size ({}) for {}",
+                    msgWorldSize,
+                    faabric::util::funcToString(msg, false));
     } else {
         size = msgWorldSize;
     }
@@ -1092,7 +1092,7 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 {
     assert(getHostForRank(recvRank) == thisHost);
     if (localQueues.size() != size * size) {
-        logger->error(
+        SPDLOG_ERROR(
           "Number of local MPI queues does not match world size ({} != {})",
           localQueues.size(),
           size * size);
