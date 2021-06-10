@@ -172,10 +172,9 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
       getMpiThreadPoolSize());
 
     // Set the world size from the message if present, otherwise set to default
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     int msgWorldSize = msg.mpiworldsize();
     if (msgWorldSize <= 0) {
-        size = conf.defaultMpiWorldSize;
+        size = faabric::util::getSystemConfig().defaultMpiWorldSize;
         SPDLOG_WARN("Defaulting to default world size ({}) for {}",
                     msgWorldSize,
                     faabric::util::funcToString(msg, false));
