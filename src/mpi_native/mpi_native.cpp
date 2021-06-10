@@ -1,8 +1,8 @@
 #include <faabric/mpi-native/MpiExecutor.h>
 #include <faabric/mpi/mpi.h>
-
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorld.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::mpi_native;
 

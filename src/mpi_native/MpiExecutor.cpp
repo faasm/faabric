@@ -1,4 +1,5 @@
 #include <faabric/mpi-native/MpiExecutor.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::mpi_native {
 
