@@ -6,6 +6,8 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
+#include <syscall.h>
+
 namespace faabric::endpoint {
 void FaabricEndpointHandler::onTimeout(const Pistache::Http::Request& request,
                                        Pistache::Http::ResponseWriter writer)
@@ -16,8 +18,7 @@ void FaabricEndpointHandler::onTimeout(const Pistache::Http::Request& request,
 void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
                                        Pistache::Http::ResponseWriter response)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-    logger->debug("Faabric handler received request");
+    SPDLOG_DEBUG("Faabric handler received request");
 
     // Very permissive CORS
     response.headers().add<Pistache::Http::Header::AccessControlAllowOrigin>(
@@ -65,10 +66,7 @@ std::string FaabricEndpointHandler::handleFunction(
             responseStr = faabric::scheduler::execGraphToJson(execGraph);
 
         } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
-            const std::shared_ptr<spdlog::logger>& logger =
-              faabric::util::getLogger();
-            logger->debug("Broadcasting flush request");
-
+            SPDLOG_DEBUG("Broadcasting flush request");
             sched.broadcastFlush();
         } else {
             responseStr = executeFunction(msg);
@@ -80,7 +78,6 @@ std::string FaabricEndpointHandler::handleFunction(
 
 std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
     if (msg.user().empty()) {
@@ -95,9 +92,8 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
     msg.set_masterhost(thisHost);
 
     auto tid = (pid_t)syscall(SYS_gettid);
-
     const std::string funcStr = faabric::util::funcToString(msg, true);
-    logger->debug("Worker HTTP thread {} scheduling {}", tid, funcStr);
+    SPDLOG_DEBUG("Worker HTTP thread {} scheduling {}", tid, funcStr);
 
     // Schedule it
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
@@ -107,12 +103,12 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
     if (msg.isasync()) {
         return faabric::util::buildAsyncResponse(msg);
     } else {
-        logger->debug("Worker thread {} awaiting {}", tid, funcStr);
+        SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
 
         try {
             const faabric::Message result =
               sch.getFunctionResult(msg.id(), conf.globalMessageTimeout);
-            logger->debug("Worker thread {} result {}", tid, funcStr);
+            SPDLOG_DEBUG("Worker thread {} result {}", tid, funcStr);
 
             if (result.sgxresult().empty()) {
                 return result.outputdata() + "\n";

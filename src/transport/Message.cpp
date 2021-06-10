@@ -1,7 +1,5 @@
 #include <faabric/transport/Message.h>
 
-#include <faabric/util/logging.h>
-
 namespace faabric::transport {
 Message::Message(const zmq::message_t& msgIn)
   : _size(msgIn.size())

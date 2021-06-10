@@ -7,7 +7,6 @@
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
@@ -179,8 +178,6 @@ class Scheduler
     std::string thisHost;
 
     faabric::util::SystemConfig& conf;
-
-    const std::shared_ptr<spdlog::logger> logger;
 
     std::vector<std::shared_ptr<Executor>> deadExecutors;
 

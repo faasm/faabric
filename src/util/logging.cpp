@@ -1,69 +1,36 @@
 #include <faabric/util/config.h>
-#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
-
-#include <spdlog/sinks/basic_file_sink.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
 
 namespace faabric::util {
 
-std::shared_mutex loggerMx;
-static std::unordered_map<std::string, std::shared_ptr<spdlog::logger>> loggers;
-
-static void initLogging(const std::string& name)
+void initLogging()
 {
-    SystemConfig& conf = faabric::util::getSystemConfig();
+    // Docs: https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
+    spdlog::set_pattern("[%H:%M:%S:%e] [%t] [%l] %v");
 
-    // Configure the sink list. By default all loggers _at least_ log to
-    // the console
-    try {
-        std::vector<spdlog::sink_ptr> sinks;
-        auto stdout_sink =
-          std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-        sinks.push_back(stdout_sink);
+    // Set the current level for the level for the default logger (note that the
+    // minimum log level is determined in the header).
+    const SystemConfig& conf = getSystemConfig();
+    if (conf.logLevel == "trace") {
+        spdlog::set_level(spdlog::level::trace);
 
-        // If file logging is set, add an additional file sink
-        if (conf.logFile == "on") {
-            sinks.push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(
-              fmt::format("/var/log/faabric/{}.log", name)));
-        }
+        // Check the minimum level permits trace logging
+#if SPDLOG_ACTIVE_LEVEL > SPDLOG_LEVEL_TRACE
+        SPDLOG_WARN(
+          "Logging set to trace but minimum log level set too high ({})",
+          SPDLOG_ACTIVE_LEVEL);
+#endif
+    } else if (conf.logLevel == "debug") {
+        spdlog::set_level(spdlog::level::debug);
 
-        // Initialize the logger and set level
-        loggers[name] =
-          std::make_shared<spdlog::logger>(name, sinks.begin(), sinks.end());
-        if (conf.logLevel == "debug") {
-            loggers[name]->set_level(spdlog::level::debug);
-        } else if (conf.logLevel == "trace") {
-            loggers[name]->set_level(spdlog::level::trace);
-        } else if (conf.logLevel == "off") {
-            loggers[name]->set_level(spdlog::level::off);
-        } else {
-            loggers[name]->set_level(spdlog::level::info);
-        }
-
-        // Add custom pattern. See here the formatting options:
-        // https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags
-        // <timestamp> [logger-name] (log-level) <message>
-        loggers[name]->set_pattern("%^%D %T [%n] (%l)%$ %v");
-    } catch (const spdlog::spdlog_ex& e) {
-        throw std::runtime_error(
-          fmt::format("Error initializing {} logger: {}", name, e.what()));
-    }
-}
-
-std::shared_ptr<spdlog::logger> getLogger(const std::string& name)
-{
-    // Lazy-initialize logger
-    if (loggers.find(name) == loggers.end()) {
-        faabric::util::FullLock lock(loggerMx);
-        if (loggers.find(name) == loggers.end()) {
-            initLogging(name);
-        }
-    }
-
-    {
-        faabric::util::SharedLock lock(loggerMx);
-        return loggers[name];
+        // Check the minimum level permits debug logging
+#if SPDLOG_ACTIVE_LEVEL > SPDLOG_LEVEL_DEBUG
+        SPDLOG_WARN(
+          "Logging set to debug but minimum log level set too high ({})",
+          SPDLOG_ACTIVE_LEVEL);
+#endif
+    } else {
+        spdlog::set_level(spdlog::level::info);
     }
 }
 }

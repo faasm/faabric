@@ -11,6 +11,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
@@ -31,9 +32,8 @@ class SlowExecutor final : public Executor
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override
     {
-        auto logger = faabric::util::getLogger();
-        faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-        logger->debug("SlowExecutor executing task{}", msg.id());
+        SPDLOG_DEBUG("SlowExecutor executing task{}",
+                     req->mutable_messages()->at(msgIdx).id());
 
         usleep(SHORT_TEST_TIMEOUT_MS * 1000);
         return 0;

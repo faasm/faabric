@@ -4,11 +4,12 @@
 #include <faabric/util/exception.h>
 
 #include <hiredis/hiredis.h>
+#include <mutex>
 #include <set>
-#include <spdlog/spdlog.h>
 #include <string>
 #include <thread>
 #include <unordered_set>
+#include <vector>
 
 namespace faabric::redis {
 enum RedisRole

@@ -8,6 +8,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 
 namespace tests {
 

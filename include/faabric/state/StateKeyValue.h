@@ -109,8 +109,6 @@ class StateKeyValue
     virtual void unlockGlobal() = 0;
 
   protected:
-    const std::shared_ptr<spdlog::logger> logger;
-
     std::shared_mutex valueMutex;
 
     size_t valueSize;

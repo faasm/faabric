@@ -22,7 +22,6 @@ MpiWorld::MpiWorld()
   , size(-1)
   , thisHost(faabric::util::getSystemConfig().endpointHost)
   , creationTime(faabric::util::startTimer())
-  , logger(faabric::util::getLogger())
   , cartProcsPerDim(2)
 {}
 
@@ -47,9 +46,9 @@ int MpiWorld::getMpiThreadPoolSize()
     int worldSize = size;
 
     if ((worldSize > usableCores) && (worldSize % usableCores != 0)) {
-        logger->warn("Over-provisioning threads in the MPI thread pool.");
-        logger->warn("To avoid this, set an MPI world size multiple of the "
-                     "number of cores per machine.");
+        SPDLOG_WARN("Over-provisioning threads in the MPI thread pool.");
+        SPDLOG_WARN("To avoid this, set an MPI world size multiple of the "
+                    "number of cores per machine.");
     }
     // Note - adding one to the worldSize to prevent deadlocking in certain
     // corner-cases.
@@ -428,10 +427,10 @@ void MpiWorld::send(int sendRank,
 
     // Dispatch the message locally or globally
     if (isLocal) {
-        logger->trace("MPI - send {} -> {}", sendRank, recvRank);
+        SPDLOG_TRACE("MPI - send {} -> {}", sendRank, recvRank);
         getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
-        logger->trace("MPI - send remote {} -> {}", sendRank, recvRank);
+        SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
         getFunctionCallClient(otherHost).sendMPIMessage(m);
     }
 }
@@ -445,7 +444,7 @@ void MpiWorld::recv(int sendRank,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
     // Listen to the in-memory queue for this rank and message type
-    logger->trace("MPI - recv {} -> {}", sendRank, recvRank);
+    SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
     std::shared_ptr<faabric::MPIMessage> m =
       getLocalQueue(sendRank, recvRank)->dequeue();
 
@@ -484,11 +483,10 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
                         int myRank,
                         MPI_Status* status)
 {
-    logger->trace(
-      "MPI - Sendrecv. Rank {}. Sending to: {} - Receiving from: {}",
-      myRank,
-      sendRank,
-      recvRank);
+    SPDLOG_TRACE("MPI - Sendrecv. Rank {}. Sending to: {} - Receiving from: {}",
+                 myRank,
+                 sendRank,
+                 recvRank);
 
     if (recvRank > this->size - 1) {
         throw std::runtime_error(fmt::format(
@@ -523,7 +521,7 @@ void MpiWorld::broadcast(int sendRank,
                          int count,
                          faabric::MPIMessage::MPIMessageType messageType)
 {
-    logger->trace("MPI - bcast {} -> all", sendRank);
+    SPDLOG_TRACE("MPI - bcast {} -> all", sendRank);
 
     for (int r = 0; r < size; r++) {
         // Skip this rank (it's doing the broadcasting)
@@ -542,13 +540,11 @@ void checkSendRecvMatch(faabric_datatype_t* sendType,
                         int recvCount)
 {
     if (sendType->id != recvType->id && sendCount == recvCount) {
-        const std::shared_ptr<spdlog::logger>& logger =
-          faabric::util::getLogger();
-        logger->error("Must match type/ count (send {}:{}, recv {}:{})",
-                      sendType->id,
-                      sendCount,
-                      recvType->id,
-                      recvCount);
+        SPDLOG_ERROR("Must match type/ count (send {}:{}, recv {}:{})",
+                     sendType->id,
+                     sendCount,
+                     recvType->id,
+                     recvCount);
         throw std::runtime_error("Mismatching send/ recv");
     }
 }
@@ -568,7 +564,7 @@ void MpiWorld::scatter(int sendRank,
 
     // If we're the sender, do the sending
     if (recvRank == sendRank) {
-        logger->trace("MPI - scatter {} -> all", sendRank);
+        SPDLOG_TRACE("MPI - scatter {} -> all", sendRank);
 
         for (int r = 0; r < size; r++) {
             // Work out the chunk of the send buffer to send to this rank
@@ -617,7 +613,7 @@ void MpiWorld::gather(int sendRank,
 
     // If we're the root, do the gathering
     if (sendRank == recvRank) {
-        logger->trace("MPI - gather all -> {}", recvRank);
+        SPDLOG_TRACE("MPI - gather all -> {}", recvRank);
 
         // Iterate through each rank
         for (int r = 0; r < size; r++) {
@@ -716,7 +712,7 @@ void MpiWorld::allGather(int rank,
 
 void MpiWorld::awaitAsyncRequest(int requestId)
 {
-    logger->trace("MPI - await {}", requestId);
+    SPDLOG_TRACE("MPI - await {}", requestId);
 
     auto it = futureMap.find(requestId);
     if (it == futureMap.end()) {
@@ -728,7 +724,7 @@ void MpiWorld::awaitAsyncRequest(int requestId)
     it->second.wait();
     futureMap.erase(it);
 
-    logger->debug("Finished awaitAsyncRequest on {}", requestId);
+    SPDLOG_DEBUG("Finished awaitAsyncRequest on {}", requestId);
 }
 
 void MpiWorld::reduce(int sendRank,
@@ -741,7 +737,7 @@ void MpiWorld::reduce(int sendRank,
 {
     // If we're the receiver, await inputs
     if (sendRank == recvRank) {
-        logger->trace("MPI - reduce ({}) all -> {}", operation->id, recvRank);
+        SPDLOG_TRACE("MPI - reduce ({}) all -> {}", operation->id, recvRank);
 
         size_t bufferSize = datatype->size * count;
 
@@ -822,7 +818,7 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                          uint8_t* inBuffer,
                          uint8_t* outBuffer)
 {
-    logger->trace(
+    SPDLOG_TRACE(
       "MPI - reduce op: {} datatype {}", operation->id, datatype->id);
     if (operation->id == faabric_op_max.id) {
         if (datatype->id == FAABRIC_INT) {
@@ -850,8 +846,8 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                   std::max<long long>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else {
-            logger->error("Unsupported type for max reduction (datatype={})",
-                          datatype->id);
+            SPDLOG_ERROR("Unsupported type for max reduction (datatype={})",
+                         datatype->id);
             throw std::runtime_error("Unsupported type for max reduction");
         }
     } else if (operation->id == faabric_op_min.id) {
@@ -880,8 +876,8 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                   std::min<long long>(outBufferCast[slot], inBufferCast[slot]);
             }
         } else {
-            logger->error("Unsupported type for min reduction (datatype={})",
-                          datatype->id);
+            SPDLOG_ERROR("Unsupported type for min reduction (datatype={})",
+                         datatype->id);
             throw std::runtime_error("Unsupported type for min reduction");
         }
     } else if (operation->id == faabric_op_sum.id) {
@@ -907,12 +903,12 @@ void MpiWorld::op_reduce(faabric_op_t* operation,
                 outBufferCast[slot] += inBufferCast[slot];
             }
         } else {
-            logger->error("Unsupported type for sum reduction (datatype={})",
-                          datatype->id);
+            SPDLOG_ERROR("Unsupported type for sum reduction (datatype={})",
+                         datatype->id);
             throw std::runtime_error("Unsupported type for sum reduction");
         }
     } else {
-        logger->error("Reduce operation not implemented: {}", operation->id);
+        SPDLOG_ERROR("Reduce operation not implemented: {}", operation->id);
         throw std::runtime_error("Not yet implemented reduce operation");
     }
 }
@@ -924,7 +920,7 @@ void MpiWorld::scan(int rank,
                     int count,
                     faabric_op_t* operation)
 {
-    logger->trace("MPI - scan");
+    SPDLOG_TRACE("MPI - scan");
 
     if (rank > this->size - 1) {
         throw std::runtime_error(
@@ -1041,14 +1037,14 @@ void MpiWorld::barrier(int thisRank)
             MPI_Status s{};
             recv(
               r, 0, nullptr, MPI_INT, 0, &s, faabric::MPIMessage::BARRIER_JOIN);
-            logger->trace("MPI - recv barrier join {}", s.MPI_SOURCE);
+            SPDLOG_TRACE("MPI - recv barrier join {}", s.MPI_SOURCE);
         }
 
         // Broadcast that the barrier is done
         broadcast(0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
     } else {
         // Tell the root that we're waiting
-        logger->trace("MPI - barrier join {}", thisRank);
+        SPDLOG_TRACE("MPI - barrier join {}", thisRank);
         send(
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
 
@@ -1060,21 +1056,21 @@ void MpiWorld::barrier(int thisRank)
              0,
              nullptr,
              faabric::MPIMessage::BARRIER_DONE);
-        logger->trace("MPI - barrier done {}", thisRank);
+        SPDLOG_TRACE("MPI - barrier done {}", thisRank);
     }
 }
 
 void MpiWorld::enqueueMessage(faabric::MPIMessage& msg)
 {
     if (msg.worldid() != id) {
-        logger->error(
+        SPDLOG_ERROR(
           "Queueing message not meant for this world (msg={}, this={})",
           msg.worldid(),
           id);
         throw std::runtime_error("Queueing message not for this world");
     }
 
-    logger->trace(
+    SPDLOG_TRACE(
       "Queueing message locally {} -> {}", msg.sender(), msg.destination());
     getLocalQueue(msg.sender(), msg.destination())
       ->enqueue(std::make_shared<faabric::MPIMessage>(msg));

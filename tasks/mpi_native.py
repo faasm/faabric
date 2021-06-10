@@ -14,7 +14,7 @@ INCLUDE_DIR = "{}/include".format(FAABRIC_INSTALL_PREFIX)
 LIB_DIR = "{}/lib".format(FAABRIC_INSTALL_PREFIX)
 
 
-@task()
+@task(default=True)
 def build_mpi(ctx, clean=False):
     """
     Builds the examples

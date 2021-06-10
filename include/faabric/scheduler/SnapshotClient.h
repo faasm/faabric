@@ -56,7 +56,6 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
   private:
-    const std::shared_ptr<spdlog::logger> logger;
     void sendHeader(faabric::scheduler::SnapshotCalls call);
 };
 }

@@ -1,5 +1,4 @@
 #include <faabric/state/DummyStateServer.h>
-
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/network.h>
@@ -49,7 +48,6 @@ void DummyStateServer::start()
     // To do this we run the server in a separate thread, forcing it to
     // have a localhost IP, then the main thread is the "client" with a
     // junk IP.
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     // Override the host endpoint for the server thread. Must be localhost
     faabric::util::getSystemConfig().endpointHost = LOCALHOST;
@@ -63,19 +61,19 @@ void DummyStateServer::start()
 
         // Check this kv "thinks" it's master
         if (!inMemKv->isMaster()) {
-            logger->error("Dummy state server not master for data");
+            SPDLOG_ERROR("Dummy state server not master for data");
             throw std::runtime_error("Remote state server failed");
         }
 
         // Set the data
         kv->set(dummyData.data());
-        logger->debug(
+        SPDLOG_DEBUG(
           "Finished setting master for test {}/{}", kv->user, kv->key);
     }
 
     // Start the state server
     // Note - by default the state server runs in a background thread
-    logger->debug("Running state server");
+    SPDLOG_DEBUG("Running state server");
     stateServer.start();
 
     // Give it time to start

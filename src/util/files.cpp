@@ -1,6 +1,5 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/files.h>
-#include <faabric/util/logging.h>
 
 #include <cstdlib>
 #include <cstring>

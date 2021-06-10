@@ -50,9 +50,9 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
     SnapshotPushRequest* r =
       flatbuffers::GetMutableRoot<SnapshotPushRequest>(msg.udata());
 
-    faabric::util::getLogger()->debug("Receiving shapshot {} (size {})",
-                                      r->key()->c_str(),
-                                      r->contents()->size());
+    SPDLOG_DEBUG("Receiving shapshot {} (size {})",
+                 r->key()->c_str(),
+                 r->contents()->size());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
@@ -83,10 +83,9 @@ void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
         applyDiffsToSnapshot(r->key()->str(), r->chunks());
     }
 
-    faabric::util::getLogger()->debug(
-      "Receiving thread result {} for message {}",
-      r->return_value(),
-      r->message_id());
+    SPDLOG_DEBUG("Receiving thread result {} for message {}",
+                 r->return_value(),
+                 r->message_id());
 
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThreadResultLocally(r->message_id(), r->return_value());
@@ -108,7 +107,7 @@ void SnapshotServer::applyDiffsToSnapshot(
   const std::string& snapshotKey,
   const flatbuffers::Vector<flatbuffers::Offset<SnapshotDiffChunk>>* diffs)
 {
-    faabric::util::getLogger()->debug(
+    SPDLOG_DEBUG(
       "Applying {} diffs to snapshot {}", diffs->size(), snapshotKey);
 
     // Get the snapshot
@@ -128,7 +127,7 @@ void SnapshotServer::recvDeleteSnapshot(faabric::transport::Message& msg)
 {
     const SnapshotDeleteRequest* r =
       flatbuffers::GetRoot<SnapshotDeleteRequest>(msg.udata());
-    faabric::util::getLogger()->info("Deleting shapshot {}", r->key()->c_str());
+    SPDLOG_INFO("Deleting shapshot {}", r->key()->c_str());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
