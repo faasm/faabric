@@ -1084,11 +1084,7 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
                                                           int recvRank)
 {
     assert(getHostForRank(recvRank) == thisHost);
-    if (localQueues.size() != size * size) {
-        logger->error("Number of local queues not as expected {} != {}",
-                      localQueues.size(),
-                      size * size);
-    }
+    assert(localQueues.size() == size * size);
 
     return localQueues[getIndexForRanks(sendRank, recvRank)];
 }
