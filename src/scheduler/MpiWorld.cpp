@@ -168,10 +168,21 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
     id = msg.mpiworldid();
     user = msg.user();
     function = msg.function();
-    size = msg.mpiworldsize();
 
     threadPool = std::make_shared<faabric::scheduler::MpiAsyncThreadPool>(
       getMpiThreadPoolSize());
+
+    // Set the world size from the message if present, otherwise set to default
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    int msgWorldSize = msg.mpiworldsize();
+    if (msgWorldSize <= 0) {
+        size = conf.defaultMpiWorldSize;
+        logger->warn("Defaulting to default world size ({}) for {}",
+                     msgWorldSize,
+                     faabric::util::funcToString(msg, false));
+    } else {
+        size = msgWorldSize;
+    }
 
     // Sometimes for testing purposes we may want to initialise a world in the
     // _same_ host we have created one (note that this would never happen in
@@ -1084,7 +1095,14 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
                                                           int recvRank)
 {
     assert(getHostForRank(recvRank) == thisHost);
-    assert(localQueues.size() == size * size);
+    if (localQueues.size() != size * size) {
+        logger->error(
+          "Number of local MPI queues does not match world size ({} != {})",
+          localQueues.size(),
+          size * size);
+        throw std::runtime_error(
+          "Number of MPI queues does not match world size");
+    }
 
     return localQueues[getIndexForRanks(sendRank, recvRank)];
 }

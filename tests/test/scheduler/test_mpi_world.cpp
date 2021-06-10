@@ -47,16 +47,32 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
 
 TEST_CASE_METHOD(MpiTestFixture, "Test world loading from msg", "[mpi]")
 {
-    // Create another copy from state
     scheduler::MpiWorld worldB;
-    // Force creating the second world in the _same_ host
-    bool forceLocal = true;
-    worldB.initialiseFromMsg(msg, forceLocal);
 
-    REQUIRE(worldB.getSize() == worldSize);
+    int requestedWorldSize;
+    int expectedWorldSize;
+    int defaultWorldSize = faabric::util::getSystemConfig().defaultMpiWorldSize;
+
+    SECTION("Default world size")
+    {
+        requestedWorldSize = 0;
+        expectedWorldSize = defaultWorldSize;
+    }
+
+    SECTION("Custom world size")
+    {
+        requestedWorldSize = defaultWorldSize + 10;
+        expectedWorldSize = requestedWorldSize;
+    }
+
+    msg.set_mpiworldsize(requestedWorldSize);
+    worldB.initialiseFromMsg(msg, true);
+
     REQUIRE(worldB.getId() == worldId);
     REQUIRE(worldB.getUser() == user);
     REQUIRE(worldB.getFunction() == func);
+
+    REQUIRE(worldB.getSize() == expectedWorldSize);
 
     worldB.destroy();
 }
