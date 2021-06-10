@@ -366,4 +366,54 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     senderThread.join();
     localWorld.destroy();
 }
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test sending sync and async message to same host",
+                 "[mpi]")
+{
+    // Allocate two ranks in total, one rank per host
+    this->setWorldsSizes(2, 1, 1);
+    int sendRank = 1;
+    int recvRank = 0;
+    std::vector<int> messageData = { 0, 1, 2 };
+
+    // Initi world
+    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(false);
+
+    std::thread senderThread([this, sendRank, recvRank] {
+        std::vector<int> messageData = { 0, 1, 2 };
+
+        remoteWorld.initialiseFromMsg(msg);
+
+        // Send message twice
+        remoteWorld.send(
+          sendRank, recvRank, BYTES(messageData.data()), MPI_INT, messageData.size());
+        remoteWorld.send(
+          sendRank, recvRank, BYTES(messageData.data()), MPI_INT, messageData.size());
+
+        usleep(1000 * 500);
+        remoteWorld.destroy();
+    });
+
+    // Receive one message asynchronously 
+    std::vector<int> asyncMessage(messageData.size(), 0);
+    int recvId =
+      localWorld.irecv(sendRank, recvRank, BYTES(asyncMessage.data()), MPI_INT, asyncMessage.size());
+
+    // Receive one message synchronously
+    std::vector<int> syncMessage(messageData.size(), 0);
+    localWorld.recv(sendRank, recvRank, BYTES(syncMessage.data()), MPI_INT, syncMessage.size(), MPI_STATUS_IGNORE);
+
+    // Wait for the async message
+    localWorld.awaitAsyncRequest(recvId);
+
+    // Checks
+    REQUIRE(syncMessage == messageData);
+    REQUIRE(asyncMessage == messageData);
+
+    // Destroy world
+    senderThread.join();
+    localWorld.destroy();
+}
 }
