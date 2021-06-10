@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
 

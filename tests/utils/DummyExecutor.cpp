@@ -3,6 +3,7 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 

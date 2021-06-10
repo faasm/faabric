@@ -4,6 +4,7 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
 
