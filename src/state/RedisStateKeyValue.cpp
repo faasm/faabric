@@ -1,5 +1,4 @@
 #include <faabric/state/RedisStateKeyValue.h>
-
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/state.h>
@@ -68,7 +67,7 @@ void RedisStateKeyValue::pullFromRemote()
     PROF_START(statePull)
 
     // Read from the remote
-    logger->debug("Pulling remote value for {}", joinedKey);
+    SPDLOG_DEBUG("Pulling remote value for {}", joinedKey);
     auto memoryBytes = static_cast<uint8_t*>(sharedMemory);
     redis::Redis::getState().get(joinedKey, memoryBytes, valueSize);
 
@@ -79,10 +78,10 @@ void RedisStateKeyValue::pullChunkFromRemote(long offset, size_t length)
 {
     PROF_START(stateChunkPull)
 
-    logger->debug("Pulling remote chunk ({}-{}) for {}",
-                  offset,
-                  offset + length,
-                  joinedKey);
+    SPDLOG_DEBUG("Pulling remote chunk ({}-{}) for {}",
+                 offset,
+                 offset + length,
+                 joinedKey);
 
     // Note - redis ranges are inclusive, so we need to knock one off
     size_t rangeStart = offset;
@@ -100,7 +99,7 @@ void RedisStateKeyValue::pushToRemote()
 {
     PROF_START(pushFull)
 
-    logger->debug("Pushing whole value for {}", joinedKey);
+    SPDLOG_DEBUG("Pushing whole value for {}", joinedKey);
 
     redis::Redis::getState().set(
       joinedKey, static_cast<uint8_t*>(sharedMemory), valueSize);
@@ -121,7 +120,7 @@ void RedisStateKeyValue::pushPartialToRemote(
     }
 
     // Flush the pipeline
-    logger->debug("Pipelined {} updates on {}", chunks.size(), joinedKey);
+    SPDLOG_DEBUG("Pipelined {} updates on {}", chunks.size(), joinedKey);
     redis.flushPipeline(chunks.size());
 
     PROF_END(pushPartial)

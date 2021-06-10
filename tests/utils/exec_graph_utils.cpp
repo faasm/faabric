@@ -2,6 +2,8 @@
 
 #include "faabric_utils.h"
 
+#include <faabric/util/logging.h>
+
 namespace tests {
 void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
                                 const scheduler::ExecGraphNode& nodeB)

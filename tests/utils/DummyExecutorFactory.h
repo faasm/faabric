@@ -7,7 +7,6 @@ namespace faabric::scheduler {
 class DummyExecutorFactory : public ExecutorFactory
 {
   protected:
-    std::shared_ptr<Executor> createExecutor(
-      const faabric::Message& msg) override;
+    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override;
 };
 }

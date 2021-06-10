@@ -20,7 +20,7 @@ void registerDistTestExecutorCallback(const char* user,
 class DistTestExecutor final : public faabric::scheduler::Executor
 {
   public:
-    DistTestExecutor(const faabric::Message& msg);
+    DistTestExecutor(faabric::Message& msg);
 
     ~DistTestExecutor();
 
@@ -35,13 +35,13 @@ class DistTestExecutor final : public faabric::scheduler::Executor
     size_t snapshotSize = 0;
 
   protected:
-    void restore(const faabric::Message& msg) override;
+    void restore(faabric::Message& msg) override;
 };
 
 class DistTestExecutorFactory : public faabric::scheduler::ExecutorFactory
 {
   protected:
     std::shared_ptr<faabric::scheduler::Executor> createExecutor(
-      const faabric::Message& msg) override;
+      faabric::Message& msg) override;
 };
 }

@@ -77,7 +77,6 @@ void clearMockSnapshotRequests()
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
-  , logger(faabric::util::getLogger())
 {
     this->open(faabric::transport::getGlobalMessageContext());
 }
@@ -91,7 +90,7 @@ void SnapshotClient::sendHeader(faabric::scheduler::SnapshotCalls call)
 void SnapshotClient::pushSnapshot(const std::string& key,
                                   const faabric::util::SnapshotData& data)
 {
-    logger->debug("Pushing snapshot {} to {}", key, host);
+    SPDLOG_DEBUG("Pushing snapshot {} to {}", key, host);
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
@@ -125,10 +124,10 @@ void SnapshotClient::pushSnapshotDiffs(
         faabric::util::UniqueLock lock(mockMutex);
         snapshotDiffPushes.emplace_back(host, diffs);
     } else {
-        logger->debug("Pushing {} diffs for snapshot {} to {}",
-                      diffs.size(),
-                      snapshotKey,
-                      host);
+        SPDLOG_DEBUG("Pushing {} diffs for snapshot {} to {}",
+                     diffs.size(),
+                     snapshotKey,
+                     host);
 
         const faabric::util::SystemConfig& conf =
           faabric::util::getSystemConfig();
@@ -166,7 +165,7 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
         snapshotDeletes.emplace_back(host, key);
 
     } else {
-        logger->debug("Deleting snapshot {} from {}", key, host);
+        SPDLOG_DEBUG("Deleting snapshot {} from {}", key, host);
 
         // TODO - avoid copying data here
         flatbuffers::FlatBufferBuilder mb;
@@ -199,7 +198,7 @@ void SnapshotClient::pushThreadResult(
         flatbuffers::Offset<ThreadResultRequest> requestOffset;
 
         if (!diffs.empty()) {
-            logger->debug(
+            SPDLOG_DEBUG(
               "Sending thread result for {} to {} (plus {} snapshot diffs)",
               messageId,
               host,
@@ -220,7 +219,7 @@ void SnapshotClient::pushThreadResult(
             requestOffset = CreateThreadResultRequest(
               mb, messageId, returnValue, keyOffset, diffsOffset);
         } else {
-            logger->debug(
+            SPDLOG_DEBUG(
               "Sending thread result for {} to {} (with no snapshot diffs)",
               messageId,
               host);

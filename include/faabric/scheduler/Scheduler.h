@@ -7,7 +7,6 @@
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
@@ -28,7 +27,7 @@ class Executor
   public:
     std::string id;
 
-    explicit Executor(const faabric::Message& msg);
+    explicit Executor(faabric::Message& msg);
 
     virtual ~Executor();
 
@@ -39,7 +38,7 @@ class Executor
 
     virtual void flush();
 
-    virtual void reset(const faabric::Message& msg);
+    virtual void reset(faabric::Message& msg);
 
     virtual int32_t executeTask(
       int threadPoolIdx,
@@ -55,7 +54,7 @@ class Executor
     virtual faabric::util::SnapshotData snapshot();
 
   protected:
-    virtual void restore(const faabric::Message& msg);
+    virtual void restore(faabric::Message& msg);
 
     virtual void postFinish();
 
@@ -180,8 +179,6 @@ class Scheduler
 
     faabric::util::SystemConfig& conf;
 
-    const std::shared_ptr<spdlog::logger> logger;
-
     std::vector<std::shared_ptr<Executor>> deadExecutors;
 
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
@@ -215,7 +212,7 @@ class Scheduler
     std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
                                                   bool noCache = false);
 
-    std::shared_ptr<Executor> claimExecutor(const faabric::Message& msg);
+    std::shared_ptr<Executor> claimExecutor(faabric::Message& msg);
 
     faabric::HostResources getHostResources(const std::string& host);
 

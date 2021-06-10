@@ -31,7 +31,6 @@ Scheduler& getScheduler()
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
-  , logger(faabric::util::getLogger())
 {
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
@@ -159,7 +158,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 {
     faabric::util::FullLock lock(mx);
 
-    logger->trace("Shutting down executor {}", exec->id);
+    SPDLOG_TRACE("Shutting down executor {}", exec->id);
 
     std::string funcStr = faabric::util::funcToString(msg, false);
 
@@ -183,7 +182,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
     thisExecutors.erase(thisExecutors.begin() + execIdx);
 
     if (thisExecutors.empty()) {
-        logger->trace("No remaining executors for {}", funcStr);
+        SPDLOG_TRACE("No remaining executors for {}", funcStr);
 
         // Unregister if this was the last executor for that function
         bool isMaster = thisHost == msg.masterhost();
@@ -208,12 +207,12 @@ std::vector<std::string> Scheduler::callFunctions(
 
     // Note, we assume all the messages are for the same function and have the
     // same master host
-    const faabric::Message& firstMsg = req->messages().at(0);
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     std::string masterHost = firstMsg.masterhost();
     if (masterHost.empty()) {
         std::string funcStrWithId = faabric::util::funcToString(firstMsg, true);
-        logger->error("Request {} has no master host", funcStrWithId);
+        SPDLOG_ERROR("Request {} has no master host", funcStrWithId);
         throw std::runtime_error("Message with no master host");
     }
 
@@ -224,7 +223,7 @@ std::vector<std::string> Scheduler::callFunctions(
     // master host. This will only happen if a nested batch execution happens.
     std::vector<int> localMessageIdxs;
     if (!forceLocal && masterHost != thisHost) {
-        logger->debug(
+        SPDLOG_DEBUG(
           "Forwarding {} {} back to master {}", nMessages, funcStr, masterHost);
 
         getFunctionCallClient(masterHost).executeFunctions(req);
@@ -257,7 +256,7 @@ std::vector<std::string> Scheduler::callFunctions(
           req->type() == req->THREADS || req->type() == req->PROCESSES;
 
         if (snapshotNeeded && snapshotKey.empty()) {
-            logger->error("No snapshot provided for {}", funcStr);
+            SPDLOG_ERROR("No snapshot provided for {}", funcStr);
             throw std::runtime_error(
               "Empty snapshot for distributed threads/ processes");
         }
@@ -270,10 +269,10 @@ std::vector<std::string> Scheduler::callFunctions(
             // Do the snapshot diff pushing
             if (!snapshotDiffs.empty()) {
                 for (const auto& h : thisRegisteredHosts) {
-                    logger->debug("Pushing {} snapshot diffs for {} to {}",
-                                  snapshotDiffs.size(),
-                                  funcStr,
-                                  h);
+                    SPDLOG_DEBUG("Pushing {} snapshot diffs for {} to {}",
+                                 snapshotDiffs.size(),
+                                 funcStr,
+                                 h);
                     SnapshotClient& c = getSnapshotClient(h);
                     c.pushSnapshotDiffs(snapshotKey, snapshotDiffs);
                 }
@@ -282,8 +281,8 @@ std::vector<std::string> Scheduler::callFunctions(
             // Now reset the dirty page tracking, as we want the next batch of
             // diffs to contain everything from now on (including the updates
             // sent back from all the threads)
-            logger->debug("Resetting dirty tracking after pushing diffs {}",
-                          funcStr);
+            SPDLOG_DEBUG("Resetting dirty tracking after pushing diffs {}",
+                         funcStr);
             faabric::util::resetDirtyTracking();
         }
 
@@ -302,7 +301,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
         // Add those that can be executed locally
         if (nLocally > 0) {
-            logger->debug(
+            SPDLOG_DEBUG(
               "Executing {}/{} {} locally", nLocally, nMessages, funcStr);
             for (int i = 0; i < nLocally; i++) {
                 localMessageIdxs.emplace_back(i);
@@ -342,7 +341,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
-                    logger->debug("Registering {} for {}", h, funcStr);
+                    SPDLOG_DEBUG("Registering {} for {}", h, funcStr);
                     registeredHosts[funcStr].insert(h);
                 }
 
@@ -356,11 +355,10 @@ std::vector<std::string> Scheduler::callFunctions(
         // At this point there's no more capacity in the system, so we
         // just need to execute locally
         if (offset < nMessages) {
-            int overloadCount = nMessages - offset;
-            logger->debug("Overloading {}/{} {} locally",
-                          overloadCount,
-                          nMessages,
-                          funcStr);
+            SPDLOG_DEBUG("Overloading {}/{} {} locally",
+                         nMessages - offset,
+                         nMessages,
+                         funcStr);
 
             for (; offset < nMessages; offset++) {
                 localMessageIdxs.emplace_back(offset);
@@ -400,9 +398,9 @@ std::vector<std::string> Scheduler::callFunctions(
                 // Use existing executor if exists
                 e = thisExecutors.back();
             } else {
-                logger->error("Found {} executors for threaded function {}",
-                              thisExecutors.size(),
-                              funcStr);
+                SPDLOG_ERROR("Found {} executors for threaded function {}",
+                             thisExecutors.size(),
+                             funcStr);
                 throw std::runtime_error(
                   "Expected only one executor for threaded function");
             }
@@ -499,7 +497,7 @@ int Scheduler::scheduleFunctionsOnHost(
 
     // Drop out if none available
     if (available <= 0) {
-        logger->debug("Not scheduling {} on {}, no resources", funcStr, host);
+        SPDLOG_DEBUG("Not scheduling {} on {}, no resources", funcStr, host);
         return 0;
     }
 
@@ -516,7 +514,7 @@ int Scheduler::scheduleFunctionsOnHost(
         records.at(i) = host;
     }
 
-    logger->debug(
+    SPDLOG_DEBUG(
       "Sending {}/{} {} to {}", nOnThisHost, nMessages, funcStr, host);
 
     // Handle snapshots
@@ -580,7 +578,7 @@ FunctionCallClient& Scheduler::getFunctionCallClient(
         faabric::util::FullLock lock(functionCallClientsMx);
 
         if (functionCallClients.find(key) == functionCallClients.end()) {
-            logger->debug(
+            SPDLOG_DEBUG(
               "Adding new function call client for {} ({})", otherHost, key);
             functionCallClients.emplace(key, otherHost);
         }
@@ -599,7 +597,7 @@ SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
         faabric::util::FullLock lock(snapshotClientsMx);
 
         if (snapshotClients.find(key) == snapshotClients.end()) {
-            logger->debug(
+            SPDLOG_DEBUG(
               "Adding new snapshot client for {} ({})", otherHost, key);
             snapshotClients.emplace(key, otherHost);
         }
@@ -617,12 +615,11 @@ Scheduler::getRecordedMessagesShared()
     return recordedMessagesShared;
 }
 
-std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
+std::shared_ptr<Executor> Scheduler::claimExecutor(faabric::Message& msg)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 
     std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
-    int nExecutors = thisExecutors.size();
 
     std::shared_ptr<faabric::scheduler::ExecutorFactory> factory =
       getExecutorFactory();
@@ -631,7 +628,7 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
     for (auto& e : thisExecutors) {
         if (e->tryClaim()) {
             claimed = e;
-            logger->debug(
+            SPDLOG_DEBUG(
               "Reusing warm executor {} for {}", claimed->id, funcStr);
             break;
         }
@@ -639,7 +636,8 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
 
     // We have no warm executors available, so scale up
     if (claimed == nullptr) {
-        logger->debug(
+        int nExecutors = thisExecutors.size();
+        SPDLOG_DEBUG(
           "Scaling {} from {} -> {}", funcStr, nExecutors, nExecutors + 1);
 
         thisExecutors.emplace_back(factory->createExecutor(msg));
@@ -676,8 +674,8 @@ void Scheduler::broadcastFlush()
 
 void Scheduler::flushLocally()
 {
-    logger->info("Flushing host {}",
-                 faabric::util::getSystemConfig().endpointHost);
+    SPDLOG_INFO("Flushing host {}",
+                faabric::util::getSystemConfig().endpointHost);
 
     // Call flush on all executors
     for (auto& p : executors) {
@@ -759,14 +757,14 @@ void Scheduler::setThreadResult(
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
-    logger->debug("Setting result for thread {} to {}", msgId, returnValue);
+    SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
     threadResults[msgId].set_value(returnValue);
 }
 
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
     if (threadResults.count(messageId) == 0) {
-        logger->error("Thread {} not registered on this host", messageId);
+        SPDLOG_ERROR("Thread {} not registered on this host", messageId);
         throw std::runtime_error("Awaiting unregistered thread");
     }
 

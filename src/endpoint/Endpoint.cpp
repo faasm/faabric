@@ -1,6 +1,6 @@
 #include <faabric/endpoint/Endpoint.h>
-
 #include <faabric/util/logging.h>
+
 #include <pistache/endpoint.h>
 #include <pistache/listener.h>
 #include <signal.h>
@@ -13,9 +13,7 @@ Endpoint::Endpoint(int portIn, int threadCountIn)
 
 void Endpoint::start()
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
-
-    logger->info("Starting HTTP endpoint");
+    SPDLOG_INFO("Starting HTTP endpoint");
 
     // Set up signal handler
     sigset_t signals;
@@ -43,13 +41,13 @@ void Endpoint::start()
     httpEndpoint.serveThreaded();
 
     // Wait for a signal
-    logger->info("Awaiting signal");
+    SPDLOG_INFO("Awaiting signal");
     int signal = 0;
     int status = sigwait(&signals, &signal);
     if (status == 0) {
-        logger->info("Received signal: {}", signal);
+        SPDLOG_INFO("Received signal: {}", signal);
     } else {
-        logger->info("Sigwait return value: {}", signal);
+        SPDLOG_INFO("Sigwait return value: {}", signal);
     }
 
     httpEndpoint.shutdown();

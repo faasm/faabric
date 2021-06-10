@@ -3,10 +3,11 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
 
-DummyExecutor::DummyExecutor(const faabric::Message& msg)
+DummyExecutor::DummyExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 
@@ -17,9 +18,9 @@ int32_t DummyExecutor::executeTask(
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    auto logger = faabric::util::getLogger();
+
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-    logger->debug("DummyExecutor executing task {}", msg.id());
+    SPDLOG_DEBUG("DummyExecutor executing task {}", msg.id());
 
     msg.set_outputdata(fmt::format("DummyExecutor executed {}", msg.id()));
 

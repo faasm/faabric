@@ -1,5 +1,6 @@
 #include <faabric/state/StateClient.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
 namespace faabric::state {
@@ -64,7 +65,7 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
         try {
             (void)awaitResponse();
         } catch (...) {
-            faabric::util::getLogger()->error("Error in awaitReponse");
+            SPDLOG_ERROR("Error in awaitReponse");
             throw;
         }
     }

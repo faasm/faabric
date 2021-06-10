@@ -1,7 +1,6 @@
-#include <faabric/state/StateServer.h>
-
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
+#include <faabric/state/StateServer.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
@@ -61,7 +60,7 @@ void StateServer::recvSize(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Prepare the response
-    faabric::util::getLogger()->trace("Size {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Size {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     faabric::StateSizeResponse response;
     response.set_user(kv->user);
@@ -74,11 +73,11 @@ void StateServer::recvPull(faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::StateChunkRequest, body.data(), body.size())
 
-    faabric::util::getLogger()->trace("Pull {}/{} ({}->{})",
-                                      msg.user(),
-                                      msg.key(),
-                                      msg.offset(),
-                                      msg.offset() + msg.chunksize());
+    SPDLOG_TRACE("Pull {}/{} ({}->{})",
+                 msg.user(),
+                 msg.key(),
+                 msg.offset(),
+                 msg.offset() + msg.chunksize());
 
     // Write the response
     faabric::StatePart response;
@@ -99,11 +98,11 @@ void StateServer::recvPush(faabric::transport::Message& body)
     PARSE_MSG(faabric::StatePart, body.data(), body.size())
 
     // Update the KV store
-    faabric::util::getLogger()->trace("Push {}/{} ({}->{})",
-                                      msg.user(),
-                                      msg.key(),
-                                      msg.offset(),
-                                      msg.offset() + msg.data().size());
+    SPDLOG_TRACE("Push {}/{} ({}->{})",
+                 msg.user(),
+                 msg.key(),
+                 msg.offset(),
+                 msg.offset() + msg.data().size());
     KV_FROM_REQUEST(msg)
     kv->setChunk(
       msg.offset(), BYTES_CONST(msg.data().c_str()), msg.data().size());
@@ -132,8 +131,7 @@ void StateServer::recvPullAppended(faabric::transport::Message& body)
 
     // Prepare response
     faabric::StateAppendedResponse response;
-    faabric::util::getLogger()->trace(
-      "Pull appended {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Pull appended {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     response.set_user(msg.user());
     response.set_key(msg.key());
@@ -151,7 +149,7 @@ void StateServer::recvDelete(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Delete value
-    faabric::util::getLogger()->trace("Delete {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Delete {}/{}", msg.user(), msg.key());
     state.deleteKV(msg.user(), msg.key());
 
     faabric::StateResponse emptyResponse;
@@ -163,8 +161,7 @@ void StateServer::recvClearAppended(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Perform operation
-    faabric::util::getLogger()->trace(
-      "Clear appended {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Clear appended {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     kv->clearAppended();
 
@@ -177,7 +174,7 @@ void StateServer::recvLock(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Perform operation
-    faabric::util::getLogger()->trace("Lock {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Lock {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     kv->lockWrite();
 
@@ -190,7 +187,7 @@ void StateServer::recvUnlock(faabric::transport::Message& body)
     PARSE_MSG(faabric::StateRequest, body.data(), body.size())
 
     // Perform operation
-    faabric::util::getLogger()->trace("Unlock {}/{}", msg.user(), msg.key());
+    SPDLOG_TRACE("Unlock {}/{}", msg.user(), msg.key());
     KV_FROM_REQUEST(msg)
     kv->unlockWrite();
 

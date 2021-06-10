@@ -7,15 +7,13 @@
 #include <sys/mman.h>
 
 namespace faabric::snapshot {
-SnapshotRegistry::SnapshotRegistry()
-  : logger(faabric::util::getLogger())
-{}
+SnapshotRegistry::SnapshotRegistry() {}
 
 faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
   const std::string& key)
 {
     if (snapshotMap.count(key) == 0) {
-        logger->error("Snapshot for {} does not exist", key);
+        SPDLOG_ERROR("Snapshot for {} does not exist", key);
         throw std::runtime_error("Snapshot doesn't exist");
     }
 
@@ -27,14 +25,14 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
     faabric::util::SnapshotData d = getSnapshot(key);
 
     if (!faabric::util::isPageAligned((void*)target)) {
-        logger->error(
+        SPDLOG_ERROR(
           "Mapping snapshot {} to non page-aligned address {}", key, target);
         throw std::runtime_error(
           "Mapping snapshot to non page-aligned address");
     }
 
     if (d.fd == 0) {
-        logger->error("Attempting to map non-restorable snapshot");
+        SPDLOG_ERROR("Attempting to map non-restorable snapshot");
         throw std::runtime_error("Mapping non-restorable snapshot");
     }
 
@@ -42,7 +40,7 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
       mmap(target, d.size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
 
     if (mmapRes == MAP_FAILED) {
-        logger->error(
+        SPDLOG_ERROR(
           "mmapping snapshot failed: {} ({})", errno, ::strerror(errno));
         throw std::runtime_error("mmapping snapshot failed");
     }
@@ -114,21 +112,21 @@ int SnapshotRegistry::writeSnapshotToFd(const std::string& key)
     // Make the fd big enough
     int ferror = ::ftruncate(fd, snapData.size);
     if (ferror) {
-        logger->error("ferror call failed with error {}", ferror);
+        SPDLOG_ERROR("ferror call failed with error {}", ferror);
         throw std::runtime_error("Failed writing memory to fd (ftruncate)");
     }
 
     // Write the data
     ssize_t werror = ::write(fd, snapData.data, snapData.size);
     if (werror == -1) {
-        logger->error("Write call failed with error {}", werror);
+        SPDLOG_ERROR("Write call failed with error {}", werror);
         throw std::runtime_error("Failed writing memory to fd (write)");
     }
 
     // Record the fd
     getSnapshot(key).fd = fd;
 
-    logger->debug("Wrote snapshot {} to fd {}", key, fd);
+    SPDLOG_DEBUG("Wrote snapshot {} to fd {}", key, fd);
     return fd;
 }
 }

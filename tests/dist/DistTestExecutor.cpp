@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
 
@@ -17,16 +18,15 @@ void registerDistTestExecutorCallback(const char* user,
     std::string key = std::string(user) + "_" + std::string(funcName);
     executorFunctions[key] = func;
 
-    const auto& logger = faabric::util::getLogger();
-    logger->debug("Registered executor callback for {}", key);
+    SPDLOG_DEBUG("Registered executor callback for {}", key);
 }
 
 ExecutorFunction getDistTestExecutorCallback(const faabric::Message& msg)
 {
     std::string key = msg.user() + "_" + msg.function();
     if (executorFunctions.find(key) == executorFunctions.end()) {
-        const auto& logger = faabric::util::getLogger();
-        logger->error("No registered executor callback for {}", key);
+
+        SPDLOG_ERROR("No registered executor callback for {}", key);
         throw std::runtime_error(
           "Could not find executor callback for function");
     }
@@ -34,7 +34,7 @@ ExecutorFunction getDistTestExecutorCallback(const faabric::Message& msg)
     return executorFunctions[key];
 }
 
-DistTestExecutor::DistTestExecutor(const faabric::Message& msg)
+DistTestExecutor::DistTestExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 
@@ -61,7 +61,7 @@ faabric::util::SnapshotData DistTestExecutor::snapshot()
     return snap;
 }
 
-void DistTestExecutor::restore(const faabric::Message& msg)
+void DistTestExecutor::restore(faabric::Message& msg)
 {
     // Initialise the dummy memory and map to snapshot
     faabric::snapshot::SnapshotRegistry& reg =
@@ -77,7 +77,7 @@ void DistTestExecutor::restore(const faabric::Message& msg)
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(
-  const faabric::Message& msg)
+  faabric::Message& msg)
 {
     return std::make_shared<DistTestExecutor>(msg);
 }

@@ -12,6 +12,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
@@ -28,7 +29,7 @@ std::atomic<int> restoreCount = 0;
 class TestExecutor final : public Executor
 {
   public:
-    TestExecutor(const faabric::Message& msg)
+    TestExecutor(faabric::Message& msg)
       : Executor(msg)
     {}
 
@@ -44,7 +45,7 @@ class TestExecutor final : public Executor
         }
     }
 
-    void restore(const faabric::Message& msg)
+    void restore(faabric::Message& msg)
     {
         restoreCount += 1;
 
@@ -73,7 +74,7 @@ class TestExecutor final : public Executor
                         int msgIdx,
                         std::shared_ptr<faabric::BatchExecuteRequest> reqOrig)
     {
-        auto logger = faabric::util::getLogger();
+
         faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
 
         std::string funcStr = faabric::util::funcToString(msg, true);
@@ -133,8 +134,8 @@ class TestExecutor final : public Executor
             delete[] snap.data;
             reg.deleteSnapshot(snapKey);
 
-            logger->trace("TestExecutor got {} thread results",
-                          chainedReq->messages_size());
+            SPDLOG_TRACE("TestExecutor got {} thread results",
+                         chainedReq->messages_size());
             return 0;
         }
 
@@ -184,7 +185,7 @@ class TestExecutor final : public Executor
         if (msg.function() == "snap-check") {
             // Modify a page of the dummy memory
             uint8_t pageIdx = threadPoolIdx;
-            logger->debug("TextExecutor Modifying page {} of memory", pageIdx);
+            SPDLOG_DEBUG("TextExecutor Modifying page {} of memory", pageIdx);
             uint8_t* offsetPtr =
               dummyMemory + (pageIdx * faabric::util::HOST_PAGE_SIZE);
 
@@ -218,8 +219,7 @@ class TestExecutor final : public Executor
 class TestExecutorFactory : public ExecutorFactory
 {
   protected:
-    std::shared_ptr<Executor> createExecutor(
-      const faabric::Message& msg) override
+    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override
     {
         return std::make_shared<TestExecutor>(msg);
     }

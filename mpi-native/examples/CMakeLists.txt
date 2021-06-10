@@ -25,8 +25,8 @@ function(add_example example_name)
         hiredis
         pthread
     )
-    
-    set(ALL_EXAMPLES ${ALL_EXAMPLES} ${example_name} PARENT_SCOPE)   
+
+    set(ALL_EXAMPLES ${ALL_EXAMPLES} ${example_name} PARENT_SCOPE)
 endfunction()
 
 add_example(mpi_allgather)
@@ -42,7 +42,6 @@ add_example(mpi_isendrecv)
 add_example(mpi_onesided)
 add_example(mpi_order)
 add_example(mpi_probe)
-add_example(mpi_put)
 add_example(mpi_reduce)
 add_example(mpi_scan)
 add_example(mpi_scatter)

@@ -1,13 +1,12 @@
-#include <faabric/state/InMemoryStateRegistry.h>
-
-#include <vector>
-
 #include <faabric/redis/Redis.h>
+#include <faabric/state/InMemoryStateRegistry.h>
 #include <faabric/state/StateKeyValue.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/state.h>
+
+#include <vector>
 
 #define MASTER_KEY_PREFIX "master_"
 
@@ -31,7 +30,6 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
                                                const std::string& thisIP,
                                                bool claim)
 {
-    const std::shared_ptr<spdlog::logger>& logger = faabric::util::getLogger();
 
     std::string lookupKey = faabric::util::keyForUser(user, key);
 
@@ -53,7 +51,7 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
         return masterMap[lookupKey];
     }
 
-    logger->trace("Checking master for state {}", lookupKey);
+    SPDLOG_TRACE("Checking master for state {}", lookupKey);
 
     // Query Redis
     const std::string masterKey = getMasterKey(user, key);
@@ -62,7 +60,7 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
 
     if (masterIPBytes.empty() && !claim) {
         // No master found and not claiming
-        logger->trace("No master found for {}", lookupKey);
+        SPDLOG_TRACE("No master found for {}", lookupKey);
         throw StateKeyValueException("Found no master for state " + masterKey);
     }
 
@@ -70,11 +68,11 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
     if (masterIPBytes.empty()) {
         uint32_t masterLockId = StateKeyValue::waitOnRedisRemoteLock(masterKey);
         if (masterLockId == 0) {
-            logger->error("Unable to acquire remote lock for {}", masterKey);
+            SPDLOG_ERROR("Unable to acquire remote lock for {}", masterKey);
             throw std::runtime_error("Unable to get remote lock");
         }
 
-        logger->debug(
+        SPDLOG_DEBUG(
           "Claiming master for {} (this host {})", lookupKey, thisIP);
 
         // Check there's still no master, if so, claim
@@ -89,10 +87,10 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
 
     // Cache the result locally
     std::string masterIP = faabric::util::bytesToString(masterIPBytes);
-    logger->debug("Caching master for {} as {} (this host {})",
-                  lookupKey,
-                  masterIP,
-                  thisIP);
+    SPDLOG_DEBUG("Caching master for {} as {} (this host {})",
+                 lookupKey,
+                 masterIP,
+                 thisIP);
 
     masterMap[lookupKey] = masterIP;
 
@@ -109,11 +107,10 @@ std::string InMemoryStateRegistry::getMasterIPForOtherMaster(
 
     // Sanity check that the master is *not* this machine
     if (masterIP == thisIP) {
-        faabric::util::getLogger()->error(
-          "Attempting to pull state size on master ({}/{} on {})",
-          userIn,
-          keyIn,
-          thisIP);
+        SPDLOG_ERROR("Attempting to pull state size on master ({}/{} on {})",
+                     userIn,
+                     keyIn,
+                     thisIP);
         throw std::runtime_error("Attempting to pull state size on master");
     }
 
