@@ -4,7 +4,7 @@
 namespace faabric::scheduler {
 
 std::shared_ptr<Executor> DummyExecutorFactory::createExecutor(
-  const faabric::Message& msg)
+  faabric::Message& msg)
 {
     return std::make_shared<DummyExecutor>(msg);
 }

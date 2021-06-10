@@ -15,7 +15,7 @@
 namespace faabric::scheduler {
 
 // TODO - avoid the copy of the message here?
-Executor::Executor(const faabric::Message& msg)
+Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
   , threadPoolSize(faabric::util::getUsableCores())
   , threadPoolThreads(threadPoolSize)
@@ -98,7 +98,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Restore if necessary. If we're executing threads on the master host we
     // assume we don't need to restore, but for everything else we do. If we've
     // already restored from this snapshot, we don't do so again.
-    const faabric::Message& firstMsg = req->messages().at(0);
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string snapshotKey = firstMsg.snapshotkey();
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
@@ -318,7 +318,7 @@ void Executor::postFinish() {}
 
 void Executor::flush() {}
 
-void Executor::reset(const faabric::Message& msg) {}
+void Executor::reset(faabric::Message& msg) {}
 
 faabric::util::SnapshotData Executor::snapshot()
 {
@@ -328,7 +328,7 @@ faabric::util::SnapshotData Executor::snapshot()
     return d;
 }
 
-void Executor::restore(const faabric::Message& msg)
+void Executor::restore(faabric::Message& msg)
 {
     faabric::util::getLogger()->warn(
       "Executor has not implemented restore method");

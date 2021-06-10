@@ -208,7 +208,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
     // Note, we assume all the messages are for the same function and have the
     // same master host
-    const faabric::Message& firstMsg = req->messages().at(0);
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     std::string masterHost = firstMsg.masterhost();
     if (masterHost.empty()) {
@@ -617,7 +617,7 @@ Scheduler::getRecordedMessagesShared()
     return recordedMessagesShared;
 }
 
-std::shared_ptr<Executor> Scheduler::claimExecutor(const faabric::Message& msg)
+std::shared_ptr<Executor> Scheduler::claimExecutor(faabric::Message& msg)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 

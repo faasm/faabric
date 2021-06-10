@@ -8,7 +8,7 @@ using namespace faabric::scheduler;
 class ExampleExecutor : public Executor
 {
   public:
-    ExampleExecutor(const faabric::Message& msg)
+    ExampleExecutor(faabric::Message& msg)
       : Executor(msg)
     {}
 
@@ -31,8 +31,7 @@ class ExampleExecutor : public Executor
 class ExampleExecutorFactory : public ExecutorFactory
 {
   protected:
-    std::shared_ptr<Executor> createExecutor(
-      const faabric::Message& msg) override
+    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override
     {
         return std::make_shared<ExampleExecutor>(msg);
     }

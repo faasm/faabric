@@ -34,7 +34,7 @@ ExecutorFunction getDistTestExecutorCallback(const faabric::Message& msg)
     return executorFunctions[key];
 }
 
-DistTestExecutor::DistTestExecutor(const faabric::Message& msg)
+DistTestExecutor::DistTestExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 
@@ -61,7 +61,7 @@ faabric::util::SnapshotData DistTestExecutor::snapshot()
     return snap;
 }
 
-void DistTestExecutor::restore(const faabric::Message& msg)
+void DistTestExecutor::restore(faabric::Message& msg)
 {
     // Initialise the dummy memory and map to snapshot
     faabric::snapshot::SnapshotRegistry& reg =
@@ -77,7 +77,7 @@ void DistTestExecutor::restore(const faabric::Message& msg)
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(
-  const faabric::Message& msg)
+  faabric::Message& msg)
 {
     return std::make_shared<DistTestExecutor>(msg);
 }

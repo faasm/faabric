@@ -11,7 +11,7 @@ namespace faabric::mpi_native {
 class MpiExecutor final : public Executor
 {
   public:
-    explicit MpiExecutor(const faabric::Message& msg);
+    explicit MpiExecutor(faabric::Message& msg);
 
     int32_t executeTask(
       int threadPoolIdx,
@@ -22,8 +22,7 @@ class MpiExecutor final : public Executor
 class MpiExecutorFactory : public ExecutorFactory
 {
   protected:
-    std::shared_ptr<Executor> createExecutor(
-      const faabric::Message& msg) override
+    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override
     {
         return std::make_unique<MpiExecutor>(msg);
     }
