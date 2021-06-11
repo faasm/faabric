@@ -387,23 +387,37 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         remoteWorld.initialiseFromMsg(msg);
 
         // Send message twice
-        remoteWorld.send(
-          sendRank, recvRank, BYTES(messageData.data()), MPI_INT, messageData.size());
-        remoteWorld.send(
-          sendRank, recvRank, BYTES(messageData.data()), MPI_INT, messageData.size());
+        remoteWorld.send(sendRank,
+                         recvRank,
+                         BYTES(messageData.data()),
+                         MPI_INT,
+                         messageData.size());
+        remoteWorld.send(sendRank,
+                         recvRank,
+                         BYTES(messageData.data()),
+                         MPI_INT,
+                         messageData.size());
 
         usleep(1000 * 500);
         remoteWorld.destroy();
     });
 
-    // Receive one message asynchronously 
+    // Receive one message asynchronously
     std::vector<int> asyncMessage(messageData.size(), 0);
-    int recvId =
-      localWorld.irecv(sendRank, recvRank, BYTES(asyncMessage.data()), MPI_INT, asyncMessage.size());
+    int recvId = localWorld.irecv(sendRank,
+                                  recvRank,
+                                  BYTES(asyncMessage.data()),
+                                  MPI_INT,
+                                  asyncMessage.size());
 
     // Receive one message synchronously
     std::vector<int> syncMessage(messageData.size(), 0);
-    localWorld.recv(sendRank, recvRank, BYTES(syncMessage.data()), MPI_INT, syncMessage.size(), MPI_STATUS_IGNORE);
+    localWorld.recv(sendRank,
+                    recvRank,
+                    BYTES(syncMessage.data()),
+                    MPI_INT,
+                    syncMessage.size(),
+                    MPI_STATUS_IGNORE);
 
     // Wait for the async message
     localWorld.awaitAsyncRequest(recvId);

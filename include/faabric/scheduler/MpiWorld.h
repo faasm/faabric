@@ -3,19 +3,44 @@
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
-#include <faabric/scheduler/MpiThreadPool.h>
 #include <faabric/transport/MpiMessageEndpoint.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
 #include <atomic>
-#include <thread>
+#include <list>
 
 namespace faabric::scheduler {
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
+
+/* The untracked message buffer (UMB) keeps track of the asyncrhonous
+ * messages that we must have received (i.e. through an irecv call) but we
+ * still have not waited on (acknowledged). Messages are acknowledged either
+ * through a call to recv or a call to await. A call to recv will
+ * acknowledge (i.e. synchronously read from transport buffers) as many
+ * unacknowleged messages there are, plus one.
+ */
+struct UnackedMessageBuffer
+{
+    struct Arguments
+    {
+        int sendRank;
+        int recvRank;
+        uint8_t* buffer;
+        faabric_datatype_t* dataType;
+        int count;
+        faabric::MPIMessage::MPIMessageType messageType;
+    };
+
+    // We keep track of: the request id, its arguments, and the message it
+    // acknowledges (may be null if unacknowleged). All three lists should
+    // always be the same size.
+    std::list<int> ids;
+    std::list<Arguments> args;
+    std::list<std::shared_ptr<faabric::MPIMessage>> msgs;
+};
 
 class MpiWorld
 {
@@ -40,8 +65,6 @@ class MpiWorld
     int getSize();
 
     void destroy();
-
-    void shutdownThreadPool();
 
     void getCartesianRank(int rank,
                           int maxDims,
@@ -196,9 +219,6 @@ class MpiWorld
     std::string user;
     std::string function;
 
-    std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
-    int getMpiThreadPoolSize();
-
     std::vector<int> cartProcsPerDim;
 
     /* MPI internal messaging layer */
@@ -221,6 +241,24 @@ class MpiWorld
                                                               int recvRank);
     void closeMpiMessageEndpoints();
 
+    // Support for asyncrhonous communications
+    std::shared_ptr<faabric::scheduler::UnackedMessageBuffer>
+    getUnackedMessageBuffer(int sendRank, int recvRank);
+    std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
+                                                             int recvRank,
+                                                             int batchSize = 0);
+
+    /* Helper methods */
+
     void checkRanksRange(int sendRank, int recvRank);
+
+    // Abstraction of the bulk of the recv work, shared among various functions
+    void doRecv(std::shared_ptr<faabric::MPIMessage> m,
+                uint8_t* buffer,
+                faabric_datatype_t* dataType,
+                int count,
+                MPI_Status* status,
+                faabric::MPIMessage::MPIMessageType messageType =
+                  faabric::MPIMessage::NORMAL);
 };
 }
