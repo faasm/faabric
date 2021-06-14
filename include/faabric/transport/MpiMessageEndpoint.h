@@ -23,6 +23,10 @@ class MpiMessageEndpoint
   public:
     MpiMessageEndpoint(const std::string& hostIn, int portIn);
 
+    MpiMessageEndpoint(const std::string& hostIn,
+                       int portIn,
+                       const std::string& overrideRecvHost);
+
     void sendMpiMessage(const std::shared_ptr<faabric::MPIMessage>& msg);
 
     std::shared_ptr<faabric::MPIMessage> recvMpiMessage();

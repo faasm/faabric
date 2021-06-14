@@ -212,6 +212,7 @@ class MpiWorld
     void initLocalQueues();
 
     // Rank-to-rank sockets for remote messaging
+    void initRemoteMpiEndpoint(int sendRank, int recvRank);
     int getMpiPort(int sendRank, int recvRank);
     void sendRemoteMpiMessage(int sendRank,
                               int recvRank,
@@ -219,5 +220,7 @@ class MpiWorld
     std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
                                                               int recvRank);
     void closeMpiMessageEndpoints();
+
+    void checkRanksRange(int sendRank, int recvRank);
 };
 }

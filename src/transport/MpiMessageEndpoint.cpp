@@ -31,16 +31,24 @@ void sendMpiHostRankMsg(const std::string& hostIn,
 MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn, int portIn)
   : sendMessageEndpoint(hostIn, portIn)
   , recvMessageEndpoint(portIn)
-{}
+{
+    sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+}
+
+MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn,
+                                       int portIn,
+                                       const std::string& overrideRecvHost)
+  : sendMessageEndpoint(hostIn, portIn)
+  , recvMessageEndpoint(portIn, overrideRecvHost)
+{
+    sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+}
 
 void MpiMessageEndpoint::sendMpiMessage(
   const std::shared_ptr<faabric::MPIMessage>& msg)
 {
-    // TODO - is this lazy init very expensive?
-    if (sendMessageEndpoint.socket == nullptr) {
-        sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
-    }
-
     size_t msgSize = msg->ByteSizeLong();
     {
         uint8_t sMsg[msgSize];
@@ -53,10 +61,6 @@ void MpiMessageEndpoint::sendMpiMessage(
 
 std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
 {
-    if (recvMessageEndpoint.socket == nullptr) {
-        recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
-    }
-
     Message m = recvMessageEndpoint.recv();
     PARSE_MSG(faabric::MPIMessage, m.data(), m.size());
 

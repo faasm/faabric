@@ -19,42 +19,65 @@ MpiWorld::MpiWorld()
   , cartProcsPerDim(2)
 {}
 
-void MpiWorld::sendRemoteMpiMessage(
-  int sendRank,
-  int recvRank,
-  const std::shared_ptr<faabric::MPIMessage>& msg)
+void MpiWorld::initRemoteMpiEndpoint(int sendRank, int recvRank)
 {
-    // Assert the ranks are sane
-    assert(0 <= sendRank && sendRank < size);
-    assert(0 <= recvRank && recvRank < size);
-
-    // Initialise the endpoint vector if not initialised
-    if (mpiMessageEndpoints.size() == 0) {
+    // Resize the message endpoint vector and initialise to null. Note that we
+    // allocate size x size slots to cover all possible (sendRank, recvRank)
+    // pairs
+    if (mpiMessageEndpoints.empty()) {
         for (int i = 0; i < size * size; i++) {
             mpiMessageEndpoints.emplace_back(nullptr);
         }
     }
 
+    // Get host for recv rank
+    std::string otherHost;
+    std::string recvHost = getHostForRank(recvRank);
+    std::string sendHost = getHostForRank(sendRank);
+    if (recvHost == sendHost) {
+        SPDLOG_ERROR(
+          "Send and recv ranks in the same host: SEND {}, RECV{} in {}",
+          sendRank,
+          recvRank,
+          sendHost);
+        throw std::runtime_error("Send and recv ranks in the same host");
+    } else if (recvHost == thisHost) {
+        otherHost = sendHost;
+    } else if (sendHost == thisHost) {
+        otherHost = recvHost;
+    } else {
+        SPDLOG_ERROR("Send and recv ranks correspond to remote hosts: SEND {} "
+                     "in {}, RECV {} in {}",
+                     sendRank,
+                     sendHost,
+                     recvRank,
+                     recvHost);
+        throw std::runtime_error("Send and recv ranks in remote hosts");
+    }
+
     // Get the index for the rank-host pair
     int index = getIndexForRanks(sendRank, recvRank);
-    assert(index >= 0 && index < size * size);
 
-    // Lazily initialise send endpoints
-    if (mpiMessageEndpoints[index] == nullptr) {
-        // Get host for recv rank
-        std::string host = getHostForRank(recvRank);
-        assert(!host.empty());
-        assert(host != thisHost);
+    // Get port for send-recv pair
+    int port = getMpiPort(sendRank, recvRank);
 
-        // Get port for send-recv pair
-        int port = getMpiPort(sendRank, recvRank);
-        // TODO - finer-grained checking when multi-tenant port scheme
-        assert(port > 0);
+    // Create MPI message endpoint
+    mpiMessageEndpoints.emplace(
+      mpiMessageEndpoints.begin() + index,
+      std::make_unique<faabric::transport::MpiMessageEndpoint>(
+        otherHost, port, thisHost));
+}
 
-        // Create MPI message endpoint
-        mpiMessageEndpoints.emplace(
-          mpiMessageEndpoints.begin() + index,
-          std::make_unique<faabric::transport::MpiMessageEndpoint>(host, port));
+void MpiWorld::sendRemoteMpiMessage(
+  int sendRank,
+  int recvRank,
+  const std::shared_ptr<faabric::MPIMessage>& msg)
+{
+    // Get the index for the rank-host pair
+    int index = getIndexForRanks(sendRank, recvRank);
+
+    if (mpiMessageEndpoints.empty() || mpiMessageEndpoints[index] == nullptr) {
+        initRemoteMpiEndpoint(sendRank, recvRank);
     }
 
     mpiMessageEndpoints[index]->sendMpiMessage(msg);
@@ -64,36 +87,11 @@ std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
   int sendRank,
   int recvRank)
 {
-    // Assert the ranks are sane
-    assert(0 <= sendRank && sendRank < size);
-    assert(0 <= recvRank && recvRank < size);
-
-    // Initialise the endpoint vector if not initialised
-    if (mpiMessageEndpoints.size() == 0) {
-        for (int i = 0; i < size * size; i++) {
-            mpiMessageEndpoints.emplace_back(nullptr);
-        }
-    }
-
     // Get the index for the rank-host pair
     int index = getIndexForRanks(sendRank, recvRank);
-    assert(index >= 0 && index < size * size);
 
-    // Lazily initialise send endpoints
-    if (mpiMessageEndpoints[index] == nullptr) {
-        // Get host for recv rank
-        std::string host = getHostForRank(sendRank);
-        assert(!host.empty());
-        assert(host != thisHost);
-
-        // Get port for send-recv pair
-        int port = getMpiPort(sendRank, recvRank);
-        // TODO - finer-grained checking when multi-tenant port scheme
-        assert(port > 0);
-
-        mpiMessageEndpoints.emplace(
-          mpiMessageEndpoints.begin() + index,
-          std::make_unique<faabric::transport::MpiMessageEndpoint>(host, port));
+    if (mpiMessageEndpoints.empty() || mpiMessageEndpoints[index] == nullptr) {
+        initRemoteMpiEndpoint(sendRank, recvRank);
     }
 
     return mpiMessageEndpoints[index]->recvMpiMessage();
@@ -253,11 +251,6 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
 std::string MpiWorld::getHostForRank(int rank)
 {
     assert(rankHosts.size() == size);
-
-    if (rank >= size) {
-        throw std::runtime_error(
-          fmt::format("Rank bigger than world size ({} > {})", rank, size));
-    }
 
     std::string host = rankHosts[rank];
     if (host.empty()) {
@@ -476,6 +469,14 @@ void MpiWorld::send(int sendRank,
                     int count,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
+    // Sanity-check input parameters
+    checkRanksRange(sendRank, recvRank);
+    if (getHostForRank(sendRank) != thisHost) {
+        SPDLOG_ERROR("Trying to send message from a non-local rank: {}",
+                     sendRank);
+        throw std::runtime_error("Sending message from non-local rank");
+    }
+
     // Work out whether the message is sent locally or to another host
     const std::string otherHost = getHostForRank(recvRank);
     bool isLocal = otherHost == thisHost;
@@ -516,8 +517,15 @@ void MpiWorld::recv(int sendRank,
                     MPI_Status* status,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
+    // Sanity-check input parameters
+    checkRanksRange(sendRank, recvRank);
+    if (getHostForRank(recvRank) != thisHost) {
+        SPDLOG_ERROR("Trying to recv message into a non-local rank: {}",
+                     recvRank);
+        throw std::runtime_error("Receiving message into non-local rank");
+    }
+
     // Work out whether the message is sent locally or from another host
-    assert(thisHost == getHostForRank(recvRank));
     const std::string otherHost = getHostForRank(sendRank);
     bool isLocal = otherHost == thisHost;
 
@@ -1174,7 +1182,9 @@ void MpiWorld::initLocalQueues()
 
 int MpiWorld::getIndexForRanks(int sendRank, int recvRank)
 {
-    return sendRank * size + recvRank;
+    int index = sendRank * size + recvRank;
+    assert(index >= 0 && index < size * size);
+    return index;
 }
 
 long MpiWorld::getLocalQueueSize(int sendRank, int recvRank)
@@ -1213,5 +1223,19 @@ int MpiWorld::getSize()
 void MpiWorld::overrideHost(const std::string& newHost)
 {
     thisHost = newHost;
+}
+
+void MpiWorld::checkRanksRange(int sendRank, int recvRank)
+{
+    if (sendRank < 0 || sendRank >= size) {
+        SPDLOG_ERROR(
+          "Send rank outside range: {} not in [0, {})", sendRank, size);
+        throw std::runtime_error("Send rank outside range");
+    }
+    if (recvRank < 0 || recvRank >= size) {
+        SPDLOG_ERROR(
+          "Recv rank outside range: {} not in [0, {})", recvRank, size);
+        throw std::runtime_error("Recv rank outside range");
+    }
 }
 }
