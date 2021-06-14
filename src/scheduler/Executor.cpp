@@ -311,8 +311,6 @@ int32_t Executor::executeTask(int threadPoolIdx,
 
 void Executor::postFinish() {}
 
-void Executor::flush() {}
-
 void Executor::reset(faabric::Message& msg) {}
 
 faabric::util::SnapshotData Executor::snapshot()

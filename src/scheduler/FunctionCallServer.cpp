@@ -66,9 +66,6 @@ void FunctionCallServer::recvFlush(faabric::transport::Message& body)
 
     // Clear the scheduler
     scheduler.flushLocally();
-
-    // Reset the scheduler
-    scheduler.reset();
 }
 
 void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message& body)
@@ -85,7 +82,7 @@ void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
     PARSE_MSG(faabric::UnregisterRequest, body.data(), body.size())
 
     std::string funcStr = faabric::util::funcToString(msg.function(), false);
-    SPDLOG_INFO("Unregistering host {} for {}", msg.host(), funcStr);
+    SPDLOG_DEBUG("Unregistering host {} for {}", msg.host(), funcStr);
 
     // Remove the host from the warm set
     scheduler.removeRegisteredHost(msg.host(), msg.function());
