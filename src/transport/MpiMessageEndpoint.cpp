@@ -27,4 +27,53 @@ void sendMpiHostRankMsg(const std::string& hostIn,
         endpoint.close();
     }
 }
+
+MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn, int portIn)
+  : sendMessageEndpoint(hostIn, portIn)
+  , recvMessageEndpoint(portIn)
+{
+    sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+}
+
+MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn,
+                                       int portIn,
+                                       const std::string& overrideRecvHost)
+  : sendMessageEndpoint(hostIn, portIn)
+  , recvMessageEndpoint(portIn, overrideRecvHost)
+{
+    sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+}
+
+void MpiMessageEndpoint::sendMpiMessage(
+  const std::shared_ptr<faabric::MPIMessage>& msg)
+{
+    size_t msgSize = msg->ByteSizeLong();
+    {
+        uint8_t sMsg[msgSize];
+        if (!msg->SerializeToArray(sMsg, msgSize)) {
+            throw std::runtime_error("Error serialising message");
+        }
+        sendMessageEndpoint.send(sMsg, msgSize, false);
+    }
+}
+
+std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
+{
+    Message m = recvMessageEndpoint.recv();
+    PARSE_MSG(faabric::MPIMessage, m.data(), m.size());
+
+    return std::make_shared<faabric::MPIMessage>(msg);
+}
+
+void MpiMessageEndpoint::close()
+{
+    if (sendMessageEndpoint.socket != nullptr) {
+        sendMessageEndpoint.close();
+    }
+    if (recvMessageEndpoint.socket != nullptr) {
+        recvMessageEndpoint.close();
+    }
+}
 }

@@ -279,10 +279,15 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
   : MessageEndpoint(ANY_HOST, portIn)
 {}
 
+RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
+                                         const std::string& overrideHost)
+  : MessageEndpoint(overrideHost, portIn)
+{}
+
 void RecvMessageEndpoint::open(MessageContext& context)
 {
     SPDLOG_TRACE(
-      fmt::format("Opening socket: {} (RECV {}:{})", id, ANY_HOST, port));
+      fmt::format("Opening socket: {} (RECV {}:{})", id, host, port));
 
     MessageEndpoint::open(context, SocketType::PULL, true);
 }
@@ -290,7 +295,7 @@ void RecvMessageEndpoint::open(MessageContext& context)
 void RecvMessageEndpoint::close()
 {
     SPDLOG_TRACE(
-      fmt::format("Closing socket: {} (RECV {}:{})", id, ANY_HOST, port));
+      fmt::format("Closing socket: {} (RECV {}:{})", id, host, port));
 
     MessageEndpoint::close(true);
 }

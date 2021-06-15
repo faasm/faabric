@@ -19,8 +19,6 @@ static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
   batchMessages;
 
-static std::vector<std::pair<std::string, faabric::MPIMessage>> mpiMessages;
-
 static std::vector<std::pair<std::string, faabric::ResponseRequest>>
   resourceRequests;
 
@@ -48,11 +46,6 @@ getBatchRequests()
     return batchMessages;
 }
 
-std::vector<std::pair<std::string, faabric::MPIMessage>> getMPIMessages()
-{
-    return mpiMessages;
-}
-
 std::vector<std::pair<std::string, faabric::ResponseRequest>>
 getResourceRequests()
 {
@@ -74,7 +67,6 @@ void clearMockRequests()
 {
     functionCalls.clear();
     batchMessages.clear();
-    mpiMessages.clear();
     resourceRequests.clear();
     unregisterRequests.clear();
 
@@ -110,17 +102,6 @@ void FunctionCallClient::sendFlush()
         call.set_returnhost(faabric::util::getSystemConfig().endpointHost);
 
         SEND_MESSAGE(faabric::scheduler::FunctionCalls::Flush, call);
-    }
-}
-
-void FunctionCallClient::sendMPIMessage(
-  const std::shared_ptr<faabric::MPIMessage> msg)
-{
-    if (faabric::util::isMockMode()) {
-        faabric::util::UniqueLock lock(mockMutex);
-        mpiMessages.emplace_back(host, *msg);
-    } else {
-        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::MpiMessage, msg);
     }
 }
 

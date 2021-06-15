@@ -19,8 +19,6 @@ std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
 getBatchRequests();
 
-std::vector<std::pair<std::string, faabric::MPIMessage>> getMPIMessages();
-
 std::vector<std::pair<std::string, faabric::ResponseRequest>>
 getResourceRequests();
 
@@ -43,8 +41,6 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
     /* Function call client external API */
 
     void sendFlush();
-
-    void sendMPIMessage(const std::shared_ptr<faabric::MPIMessage> msg);
 
     faabric::HostResources getResources();
 
