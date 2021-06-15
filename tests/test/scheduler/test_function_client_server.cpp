@@ -19,7 +19,7 @@
 
 #define TEST_TIMEOUT_MS 500
 
-using namespace scheduler;
+using namespace faabric::scheduler;
 
 namespace tests {
 class ClientServerFixture
@@ -30,6 +30,7 @@ class ClientServerFixture
   protected:
     FunctionCallServer server;
     FunctionCallClient cli;
+    std::shared_ptr<DummyExecutorFactory> executorFactory;
 
   public:
     ClientServerFixture()
@@ -39,9 +40,8 @@ class ClientServerFixture
         usleep(1000 * TEST_TIMEOUT_MS);
 
         // Set up executor
-        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        faabric::scheduler::setExecutorFactory(fac);
+        executorFactory = std::make_shared<DummyExecutorFactory>();
+        setExecutorFactory(executorFactory);
     }
 
     ~ClientServerFixture()
@@ -126,6 +126,9 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "Test sending flush message",
                  "[scheduler]")
 {
+    // Check no flushes to begin with
+    executorFactory->reset();
+
     // Set up some state
     faabric::state::State& state = faabric::state::getGlobalState();
     state.getKV("demo", "blah", 10);
@@ -156,6 +159,10 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);
+
+    // Check the flush hook has been called
+    int flushCount = executorFactory->getFlushCount();
+    REQUIRE(flushCount == 1);
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
