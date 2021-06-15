@@ -10,6 +10,8 @@ class ExecutorFactory
     virtual ~ExecutorFactory(){};
 
     virtual std::shared_ptr<Executor> createExecutor(faabric::Message& msg) = 0;
+
+    virtual void flushHost();
 };
 
 void setExecutorFactory(std::shared_ptr<ExecutorFactory> fac);
