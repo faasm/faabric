@@ -21,16 +21,25 @@ class MpiMessageBuffer
      * buffer. Note that the message field will point to null if unacknowleged
      * or to a valid message otherwise.
      */
-    struct Arguments
+    class PendingAsyncMpiMessage
     {
-        int requestId;
-        std::shared_ptr<faabric::MPIMessage> msg;
-        int sendRank;
-        int recvRank;
-        uint8_t* buffer;
-        faabric_datatype_t* dataType;
-        int count;
-        faabric::MPIMessage::MPIMessageType messageType;
+      public:
+        int requestId = -1;
+        std::shared_ptr<faabric::MPIMessage> msg = nullptr;
+        int sendRank = -1;
+        int recvRank = -1;
+        uint8_t* buffer = nullptr;
+        faabric_datatype_t* dataType = nullptr;
+        int count = -1;
+        faabric::MPIMessage::MPIMessageType messageType =
+          faabric::MPIMessage::NORMAL;
+
+        bool isAcknowledged() { return msg != nullptr; }
+
+        void acknowledge(std::shared_ptr<faabric::MPIMessage> msgIn)
+        {
+            msg = msgIn;
+        }
     };
 
     /* Interface to query the buffer size */
@@ -41,31 +50,33 @@ class MpiMessageBuffer
 
     /* Interface to add and delete messages to the buffer */
 
-    void addMessage(Arguments arg);
+    void addMessage(PendingAsyncMpiMessage msg);
 
-    void deleteMessage(const std::list<Arguments>::iterator& argIt);
+    void deleteMessage(
+      const std::list<PendingAsyncMpiMessage>::iterator& msgIt);
 
     /* Interface to get a pointer to a message in the MMB */
 
     // Pointer to a message given its request id
-    std::list<Arguments>::iterator getRequestArguments(int requestId);
+    std::list<PendingAsyncMpiMessage>::iterator getRequestPendingMsg(
+      int requestId);
 
     // Pointer to the first null-pointing (unacknowleged) message
-    std::list<Arguments>::iterator getFirstNullMsg();
+    std::list<PendingAsyncMpiMessage>::iterator getFirstNullMsg();
 
     /* Interface to ask for the number of unacknowleged messages */
 
     // Unacknowledged messages until an iterator (used in await)
     int getTotalUnackedMessagesUntil(
-      const std::list<Arguments>::iterator& argIt);
+      const std::list<PendingAsyncMpiMessage>::iterator& msgIt);
 
     // Unacknowledged messages in the whole buffer (used in recv)
     int getTotalUnackedMessages();
 
   private:
-    std::list<Arguments> args;
+    std::list<PendingAsyncMpiMessage> pendingMsgs;
 
-    std::list<Arguments>::iterator getFirstNullMsgUntil(
-      const std::list<Arguments>::iterator& argIt);
+    std::list<PendingAsyncMpiMessage>::iterator getFirstNullMsgUntil(
+      const std::list<PendingAsyncMpiMessage>::iterator& msgIt);
 };
 }

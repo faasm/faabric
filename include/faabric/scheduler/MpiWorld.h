@@ -215,8 +215,8 @@ class MpiWorld
     void closeMpiMessageEndpoints();
 
     // Support for asyncrhonous communications
-    std::shared_ptr<faabric::scheduler::MpiMessageBuffer>
-    getUnackedMessageBuffer(int sendRank, int recvRank);
+    std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,
+                                                              int recvRank);
     std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
                                                              int recvRank,
                                                              int batchSize = 0);

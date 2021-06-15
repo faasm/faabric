@@ -6,8 +6,9 @@
 
 using namespace faabric::scheduler;
 
-MpiMessageBuffer::Arguments genRandomArguments(bool nullMsg = true,
-                                               int overrideRequestId = -1)
+MpiMessageBuffer::PendingAsyncMpiMessage genRandomArguments(
+  bool nullMsg = true,
+  int overrideRequestId = -1)
 {
     int requestId;
     if (overrideRequestId != -1) {
@@ -16,16 +17,14 @@ MpiMessageBuffer::Arguments genRandomArguments(bool nullMsg = true,
         requestId = static_cast<int>(faabric::util::generateGid());
     }
 
-    MpiMessageBuffer::Arguments args = {
-        requestId, nullptr, 0, 1,
-        nullptr,   MPI_INT, 0, faabric::MPIMessage::NORMAL
-    };
+    MpiMessageBuffer::PendingAsyncMpiMessage pendingMsg;
+    pendingMsg.requestId = requestId;
 
     if (!nullMsg) {
-        args.msg = std::make_shared<faabric::MPIMessage>();
+        pendingMsg.msg = std::make_shared<faabric::MPIMessage>();
     }
 
-    return args;
+    return pendingMsg;
 }
 
 namespace tests {
@@ -59,7 +58,7 @@ TEST_CASE("Test getting an iterator from a request id", "[mpi]")
     int requestId = 1337;
     mmb.addMessage(genRandomArguments(true, requestId));
 
-    auto it = mmb.getRequestArguments(requestId);
+    auto it = mmb.getRequestPendingMsg(requestId);
     REQUIRE(it->requestId == requestId);
 }
 
@@ -111,7 +110,7 @@ TEST_CASE("Test getting total unacked messages in message buffer range",
     mmb.addMessage(genRandomArguments(true, requestId));
 
     // Get an iterator to our second null message
-    auto it = mmb.getRequestArguments(requestId);
+    auto it = mmb.getRequestPendingMsg(requestId);
 
     // Check that we have only one unacked message until the iterator
     REQUIRE(mmb.getTotalUnackedMessagesUntil(it) == 1);

@@ -2,68 +2,72 @@
 #include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
-typedef std::list<MpiMessageBuffer::Arguments>::iterator ArgListIterator;
+typedef std::list<MpiMessageBuffer::PendingAsyncMpiMessage>::iterator
+  MpiMessageIterator;
 bool MpiMessageBuffer::isEmpty()
 {
-    return args.empty();
+    return pendingMsgs.empty();
 }
 
 int MpiMessageBuffer::size()
 {
-    return args.size();
+    return pendingMsgs.size();
 }
 
-void MpiMessageBuffer::addMessage(Arguments arg)
+void MpiMessageBuffer::addMessage(PendingAsyncMpiMessage msg)
 {
-    args.push_back(arg);
+    pendingMsgs.push_back(msg);
 }
 
-void MpiMessageBuffer::deleteMessage(const ArgListIterator& argIt)
+void MpiMessageBuffer::deleteMessage(const MpiMessageIterator& msgIt)
 {
-    args.erase(argIt);
+    pendingMsgs.erase(msgIt);
 }
 
-ArgListIterator MpiMessageBuffer::getRequestArguments(int requestId)
+MpiMessageIterator MpiMessageBuffer::getRequestPendingMsg(int requestId)
 {
     // The request id must be in the MMB, as an irecv must happen before an
     // await
-    ArgListIterator argIt =
-      std::find_if(args.begin(), args.end(), [requestId](Arguments args) {
-          return args.requestId == requestId;
-      });
+    MpiMessageIterator msgIt =
+      std::find_if(pendingMsgs.begin(),
+                   pendingMsgs.end(),
+                   [requestId](PendingAsyncMpiMessage pendingMsg) {
+                       return pendingMsg.requestId == requestId;
+                   });
 
     // If it's not there, error out
-    if (argIt == args.end()) {
+    if (msgIt == pendingMsgs.end()) {
         SPDLOG_ERROR("Asynchronous request id not in buffer: {}", requestId);
         throw std::runtime_error("Async request not in buffer");
     }
 
-    return argIt;
+    return msgIt;
 }
 
-ArgListIterator MpiMessageBuffer::getFirstNullMsgUntil(
-  const ArgListIterator& argItEnd)
+MpiMessageIterator MpiMessageBuffer::getFirstNullMsgUntil(
+  const MpiMessageIterator& msgItEnd)
 {
-    return std::find_if(args.begin(), argItEnd, [](Arguments args) {
-        return args.msg == nullptr;
-    });
+    return std::find_if(
+      pendingMsgs.begin(), msgItEnd, [](PendingAsyncMpiMessage pendingMsg) {
+          return pendingMsg.msg == nullptr;
+      });
 }
 
-ArgListIterator MpiMessageBuffer::getFirstNullMsg()
+MpiMessageIterator MpiMessageBuffer::getFirstNullMsg()
 {
-    return getFirstNullMsgUntil(args.end());
+    return getFirstNullMsgUntil(pendingMsgs.end());
 }
 
 int MpiMessageBuffer::getTotalUnackedMessagesUntil(
-  const ArgListIterator& argItEnd)
+  const MpiMessageIterator& msgItEnd)
 {
-    ArgListIterator firstNull = getFirstNullMsgUntil(argItEnd);
-    return std::distance(firstNull, argItEnd);
+    MpiMessageIterator firstNull = getFirstNullMsgUntil(msgItEnd);
+    return std::distance(firstNull, msgItEnd);
 }
 
 int MpiMessageBuffer::getTotalUnackedMessages()
 {
-    ArgListIterator firstNull = getFirstNullMsg();
-    return std::distance(firstNull, args.end());
+    MpiMessageIterator firstNull = getFirstNullMsg();
+    return std::distance(firstNull, pendingMsgs.end());
 }
 }
