@@ -444,11 +444,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 
         // Send different messages
         for (int i = 0; i < 3; i++) {
-            remoteWorld.send(sendRank,
-                             recvRank,
-                             BYTES(&i),
-                             MPI_INT,
-                             1);
+            remoteWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
 
         remoteWorld.destroy();
@@ -456,25 +452,15 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 
     // Receive two messages asynchronously
     int recv1, recv2, recv3;
-    int recvId1 = localWorld.irecv(sendRank,
-                                   recvRank,
-                                   BYTES(&recv1),
-                                   MPI_INT,
-                                   1);
+    int recvId1 =
+      localWorld.irecv(sendRank, recvRank, BYTES(&recv1), MPI_INT, 1);
 
-    int recvId2 = localWorld.irecv(sendRank,
-                                   recvRank,
-                                   BYTES(&recv2),
-                                   MPI_INT,
-                                   1);
+    int recvId2 =
+      localWorld.irecv(sendRank, recvRank, BYTES(&recv2), MPI_INT, 1);
 
     // Receive one message synchronously
-    localWorld.recv(sendRank,
-                    recvRank,
-                    BYTES(&recv3),
-                    MPI_INT,
-                    1,
-                    MPI_STATUS_IGNORE);
+    localWorld.recv(
+      sendRank, recvRank, BYTES(&recv3), MPI_INT, 1, MPI_STATUS_IGNORE);
 
     SECTION("Wait out of order")
     {
@@ -505,14 +491,14 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     // Allocate two ranks in total, one rank per host
     this->setWorldsSizes(3, 1, 2);
     int worldSize = 3;
-    std::vector<int> localRanks = {0};
+    std::vector<int> localRanks = { 0 };
 
     // Init world
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
 
     std::thread senderThread([this, worldSize] {
-        std::vector<int> remoteRanks = {1, 2};
+        std::vector<int> remoteRanks = { 1, 2 };
         remoteWorld.initialiseFromMsg(msg);
 
         // Send different messages
