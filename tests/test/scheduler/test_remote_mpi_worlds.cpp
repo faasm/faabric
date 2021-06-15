@@ -67,9 +67,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
 
-    std::thread senderThread([this, rankA, rankB] {
-        std::vector<int> messageData = { 0, 1, 2 };
-
+    std::thread senderThread([this, rankA, rankB, &messageData] {
         remoteWorld.initialiseFromMsg(msg);
 
         // Send a message that should get sent to this host
@@ -78,21 +76,18 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
         remoteWorld.destroy();
     });
 
-    SECTION("Check recv")
-    {
-        // Receive the message for the given rank
-        MPI_Status status{};
-        auto buffer = new int[messageData.size()];
-        localWorld.recv(
-          rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
+    // Receive the message for the given rank
+    MPI_Status status{};
+    auto buffer = new int[messageData.size()];
+    localWorld.recv(
+      rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
-        std::vector<int> actual(buffer, buffer + messageData.size());
-        REQUIRE(actual == messageData);
+    std::vector<int> actual(buffer, buffer + messageData.size());
+    REQUIRE(actual == messageData);
 
-        REQUIRE(status.MPI_SOURCE == rankB);
-        REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
-        REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
-    }
+    REQUIRE(status.MPI_SOURCE == rankB);
+    REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
+    REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
 
     // Destroy worlds
     senderThread.join();
@@ -377,9 +372,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
 
-    std::thread senderThread([this, sendRank, recvRank] {
-        std::vector<int> messageData = { 0, 1, 2 };
-
+    std::thread senderThread([this, sendRank, recvRank, &messageData] {
         remoteWorld.initialiseFromMsg(msg);
 
         // Send message twice

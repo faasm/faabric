@@ -5,9 +5,8 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
 
-/* Each MPI rank runs in a separate thread, however they interact with faabric
- * as a library. Thus, we use thread_local storage to guarantee that each rank
- * sees its own version of these data structures.
+/* Each MPI rank runs in a separate thread, thus we use TLS to maintain the
+ * per-rank data structures.
  */
 static thread_local std::vector<
   std::unique_ptr<faabric::transport::MpiMessageEndpoint>>
@@ -112,9 +111,7 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     // thread local nature, we expect it to be quite sparse (i.e. filled with
     // nullptr).
     if (unackedMessageBuffers.size() == 0) {
-        for (int i = 0; i < size * size; i++) {
-            unackedMessageBuffers.emplace_back(nullptr);
-        }
+        unackedMessageBuffers.resize(size * size, nullptr);
     }
 
     // Get the index for the rank-host pair
@@ -505,15 +502,6 @@ void MpiWorld::recv(int sendRank,
 {
     // Sanity-check input parameters
     checkRanksRange(sendRank, recvRank);
-    if (getHostForRank(recvRank) != thisHost) {
-        SPDLOG_ERROR("Trying to recv message into a non-local rank: {}",
-                     recvRank);
-        throw std::runtime_error("Receiving message into non-local rank");
-    }
-
-    // Work out whether the message is sent locally or from another host
-    const std::string otherHost = getHostForRank(sendRank);
-    bool isLocal = otherHost == thisHost;
 
     // Recv message from underlying transport
     std::shared_ptr<faabric::MPIMessage> m =
@@ -804,8 +792,8 @@ void MpiWorld::awaitAsyncRequest(int requestId)
 
     // Get the corresponding send and recv ranks
     auto it = reqIdToRanks.find(requestId);
-    // If the request id is not in the map, the application has issued an
-    // await() without a previous `isend`, `irecv`, or the actual request id
+    // If the request id is not in the map, the application either has issued an
+    // await without a previous isend/irecv, or the actual request id
     // has been corrupted. In any case, we error out.
     if (it == reqIdToRanks.end()) {
         SPDLOG_ERROR("Asynchronous request id not recognized: {}", requestId);

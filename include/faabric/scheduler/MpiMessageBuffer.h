@@ -10,11 +10,17 @@ namespace faabric::scheduler {
  * still have not waited on (acknowledged). Messages are acknowledged either
  * through a call to recv or a call to await. A call to recv will
  * acknowledge (i.e. synchronously read from transport buffers) as many
- * unacknowleged messages there are, plus one.
+ * unacknowleged messages there are. A call to await with a request
+ * id as a parameter will acknowledge as many unacknowleged messages there are
+ * until said request id.
  */
 class MpiMessageBuffer
 {
   public:
+    /* This structure holds the metadata for each Mpi message we keep in the
+     * buffer. Note that the message field will point to null if unacknowleged
+     * or to a valid message otherwise.
+     */
     struct Arguments
     {
         int requestId;
@@ -27,29 +33,39 @@ class MpiMessageBuffer
         faabric::MPIMessage::MPIMessageType messageType;
     };
 
-    void addMessage(Arguments arg);
-
-    void deleteMessage(const std::list<Arguments>::iterator& argIt);
+    /* Interface to query the buffer size */
 
     bool isEmpty();
 
     int size();
 
+    /* Interface to add and delete messages to the buffer */
+
+    void addMessage(Arguments arg);
+
+    void deleteMessage(const std::list<Arguments>::iterator& argIt);
+
+    /* Interface to get a pointer to a message in the MMB */
+
+    // Pointer to a message given its request id
     std::list<Arguments>::iterator getRequestArguments(int requestId);
 
-    std::list<Arguments>::iterator getFirstNullMsgUntil(
-      const std::list<Arguments>::iterator& argIt);
-
+    // Pointer to the first null-pointing (unacknowleged) message
     std::list<Arguments>::iterator getFirstNullMsg();
 
+    /* Interface to ask for the number of unacknowleged messages */
+
+    // Unacknowledged messages until an iterator (used in await)
     int getTotalUnackedMessagesUntil(
       const std::list<Arguments>::iterator& argIt);
 
+    // Unacknowledged messages in the whole buffer (used in recv)
     int getTotalUnackedMessages();
 
   private:
-    // We keep track of the request id and its arguments. Note that the message
-    // is part of the arguments and may be null if unacknowleged.
     std::list<Arguments> args;
+
+    std::list<Arguments>::iterator getFirstNullMsgUntil(
+      const std::list<Arguments>::iterator& argIt);
 };
 }
