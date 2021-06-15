@@ -48,6 +48,7 @@ class ClientServerFixture
     {
         cli.close();
         server.stop();
+        executorFactory->reset();
     }
 };
 
@@ -127,7 +128,7 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler]")
 {
     // Check no flushes to begin with
-    executorFactory->reset();
+    REQUIRE(executorFactory->getFlushCount() == 0);
 
     // Set up some state
     faabric::state::State& state = faabric::state::getGlobalState();
