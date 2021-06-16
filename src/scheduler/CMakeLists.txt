@@ -10,7 +10,7 @@ set(LIB_FILES
         SnapshotServer.cpp
         SnapshotClient.cpp
         MpiContext.cpp
-        MpiThreadPool.cpp
+        MpiMessageBuffer.cpp
         MpiWorldRegistry.cpp
         MpiWorld.cpp
         ${HEADERS}

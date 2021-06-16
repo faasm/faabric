@@ -1202,4 +1202,61 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test all-to-all", "[mpi]")
 
     world.destroy();
 }
+
+TEST_CASE_METHOD(MpiTestFixture,
+                 "Test can't destroy world with outstanding requests",
+                 "[mpi]")
+{
+    int rankA = 0;
+    int rankB = 1;
+    int data = 9;
+    int actual = -1;
+
+    SECTION("Outstanding irecv")
+    {
+        world.send(rankA, rankB, BYTES(&data), MPI_INT, 1);
+        int recvId = world.irecv(rankA, rankB, BYTES(&actual), MPI_INT, 1);
+
+        REQUIRE_THROWS(world.destroy());
+
+        world.awaitAsyncRequest(recvId);
+        REQUIRE(actual == data);
+    }
+
+    SECTION("Outstanding acknowledged irecv")
+    {
+        int data2 = 14;
+        int actual2 = -1;
+
+        world.send(rankA, rankB, BYTES(&data), MPI_INT, 1);
+        world.send(rankA, rankB, BYTES(&data2), MPI_INT, 1);
+        int recvId = world.irecv(rankA, rankB, BYTES(&actual), MPI_INT, 1);
+        int recvId2 = world.irecv(rankA, rankB, BYTES(&actual2), MPI_INT, 1);
+
+        REQUIRE_THROWS(world.destroy());
+
+        // Await for the second request, which will acknowledge the first one
+        // but not remove it from the pending message buffer
+        world.awaitAsyncRequest(recvId2);
+
+        REQUIRE_THROWS(world.destroy());
+
+        // Await for the first one
+        world.awaitAsyncRequest(recvId);
+
+        REQUIRE(actual == data);
+        REQUIRE(actual2 == data2);
+    }
+
+    SECTION("Outstanding isend")
+    {
+        int sendId = world.isend(rankA, rankB, BYTES(&data), MPI_INT, 1);
+        world.recv(rankA, rankB, BYTES(&actual), MPI_INT, 1, MPI_STATUS_IGNORE);
+
+        REQUIRE_THROWS(world.destroy());
+
+        world.awaitAsyncRequest(sendId);
+        REQUIRE(actual == data);
+    }
+}
 }

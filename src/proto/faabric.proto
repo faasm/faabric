@@ -88,6 +88,7 @@ message MPIMessage {
 // fields.
 message MpiHostsToRanksMessage {
     repeated string hosts = 1;
+    repeated int32 basePorts = 2;
 }
 
 message Message {

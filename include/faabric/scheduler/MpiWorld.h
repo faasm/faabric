@@ -3,15 +3,13 @@
 #include <faabric/mpi/mpi.h>
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
-#include <faabric/scheduler/MpiThreadPool.h>
+#include <faabric/scheduler/MpiMessageBuffer.h>
 #include <faabric/transport/MpiMessageEndpoint.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
 #include <atomic>
-#include <thread>
 
 namespace faabric::scheduler {
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
@@ -29,7 +27,7 @@ class MpiWorld
 
     std::string getHostForRank(int rank);
 
-    void setAllRankHosts(const faabric::MpiHostsToRanksMessage& msg);
+    void setAllRankHostsPorts(const faabric::MpiHostsToRanksMessage& msg);
 
     std::string getUser();
 
@@ -40,8 +38,6 @@ class MpiWorld
     int getSize();
 
     void destroy();
-
-    void shutdownThreadPool();
 
     void getCartesianRank(int rank,
                           int maxDims,
@@ -196,9 +192,6 @@ class MpiWorld
     std::string user;
     std::string function;
 
-    std::shared_ptr<faabric::scheduler::MpiAsyncThreadPool> threadPool;
-    int getMpiThreadPoolSize();
-
     std::vector<int> cartProcsPerDim;
 
     /* MPI internal messaging layer */
@@ -212,8 +205,11 @@ class MpiWorld
     void initLocalQueues();
 
     // Rank-to-rank sockets for remote messaging
-    void initRemoteMpiEndpoint(int sendRank, int recvRank);
-    int getMpiPort(int sendRank, int recvRank);
+    std::vector<int> basePorts;
+    std::vector<int> initLocalBasePorts(
+      const std::vector<std::string>& executedAt);
+    void initRemoteMpiEndpoint(int localRank, int remoteRank);
+    std::pair<int, int> getPortForRanks(int localRank, int remoteRank);
     void sendRemoteMpiMessage(int sendRank,
                               int recvRank,
                               const std::shared_ptr<faabric::MPIMessage>& msg);
@@ -221,6 +217,24 @@ class MpiWorld
                                                               int recvRank);
     void closeMpiMessageEndpoints();
 
+    // Support for asyncrhonous communications
+    std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,
+                                                              int recvRank);
+    std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
+                                                             int recvRank,
+                                                             int batchSize = 0);
+
+    /* Helper methods */
+
     void checkRanksRange(int sendRank, int recvRank);
+
+    // Abstraction of the bulk of the recv work, shared among various functions
+    void doRecv(std::shared_ptr<faabric::MPIMessage> m,
+                uint8_t* buffer,
+                faabric_datatype_t* dataType,
+                int count,
+                MPI_Status* status,
+                faabric::MPIMessage::MPIMessageType messageType =
+                  faabric::MPIMessage::NORMAL);
 };
 }

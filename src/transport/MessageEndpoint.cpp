@@ -279,11 +279,6 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
   : MessageEndpoint(ANY_HOST, portIn)
 {}
 
-RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
-                                         const std::string& overrideHost)
-  : MessageEndpoint(overrideHost, portIn)
-{}
-
 void RecvMessageEndpoint::open(MessageContext& context)
 {
     SPDLOG_TRACE(

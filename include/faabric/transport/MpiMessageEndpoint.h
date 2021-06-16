@@ -14,8 +14,8 @@ faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
 void sendMpiHostRankMsg(const std::string& hostIn,
                         const faabric::MpiHostsToRanksMessage msg);
 
-/* This class abstracts the notion of a communication channel between two MPI
- * ranks. There will always be one rank local to this host, and one remote.
+/* This class abstracts the notion of a communication channel between two remote
+ * MPI ranks. There will always be one rank local to this host, and one remote.
  * Note that the port is unique per (user, function, sendRank, recvRank) tuple.
  */
 class MpiMessageEndpoint
@@ -23,9 +23,7 @@ class MpiMessageEndpoint
   public:
     MpiMessageEndpoint(const std::string& hostIn, int portIn);
 
-    MpiMessageEndpoint(const std::string& hostIn,
-                       int portIn,
-                       const std::string& overrideRecvHost);
+    MpiMessageEndpoint(const std::string& hostIn, int sendPort, int recvPort);
 
     void sendMpiMessage(const std::shared_ptr<faabric::MPIMessage>& msg);
 
