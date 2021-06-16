@@ -31,8 +31,8 @@ TEST_CASE_METHOD(MessageContextFixture,
                  "[transport]")
 {
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    MpiMessageEndpoint sendEndpoint(LOCALHOST, 9999, thisHost);
-    MpiMessageEndpoint recvEndpoint(thisHost, 9999, LOCALHOST);
+    MpiMessageEndpoint sendEndpoint(LOCALHOST, 9999, 9998);
+    MpiMessageEndpoint recvEndpoint(thisHost, 9998, 9999);
 
     std::shared_ptr<faabric::MPIMessage> expected =
       std::make_shared<faabric::MPIMessage>();

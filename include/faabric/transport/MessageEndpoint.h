@@ -83,8 +83,6 @@ class RecvMessageEndpoint : public MessageEndpoint
   public:
     RecvMessageEndpoint(int portIn);
 
-    RecvMessageEndpoint(int portIn, const std::string& overrideHost);
-
     void open(MessageContext& context);
 
     void close();

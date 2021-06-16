@@ -37,10 +37,10 @@ MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn, int portIn)
 }
 
 MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn,
-                                       int portIn,
-                                       const std::string& overrideRecvHost)
-  : sendMessageEndpoint(hostIn, portIn)
-  , recvMessageEndpoint(portIn, overrideRecvHost)
+                                       int sendPort,
+                                       int recvPort)
+  : sendMessageEndpoint(hostIn, sendPort)
+  , recvMessageEndpoint(recvPort)
 {
     sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
     recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());

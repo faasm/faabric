@@ -68,7 +68,7 @@ jobs:
         run: inv dev.cc faabric_tests
       # --- Tests ---
       - name: "Run tests"
-        run: LOG_LEVEL=trace ./bin/faabric_tests
+        run: ./bin/faabric_tests
         working-directory: /build/faabric/static
 
   dist-tests:
