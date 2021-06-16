@@ -677,11 +677,15 @@ void Scheduler::flushLocally()
     SPDLOG_INFO("Flushing host {}",
                 faabric::util::getSystemConfig().endpointHost);
 
+    // Call flush on all executors
+    for (auto& p : executors) {
+        for (auto& e : p.second) {
+            e->flush();
+        }
+    }
+
     // Reset this scheduler
     reset();
-
-    // Flush the host
-    getExecutorFactory()->flushHost();
 }
 
 void Scheduler::setFunctionResult(faabric::Message& msg)

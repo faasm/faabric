@@ -36,6 +36,8 @@ class Executor
 
     void finish();
 
+    virtual void flush();
+
     virtual void reset(faabric::Message& msg);
 
     virtual int32_t executeTask(
