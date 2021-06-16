@@ -73,6 +73,9 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
         // Send a message that should get sent to this host
         remoteWorld.send(
           rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
+
+        usleep(1000 * 500);
+
         remoteWorld.destroy();
     });
 
@@ -84,6 +87,65 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 
     std::vector<int> actual(buffer, buffer + messageData.size());
     REQUIRE(actual == messageData);
+
+    REQUIRE(status.MPI_SOURCE == rankB);
+    REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
+    REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
+
+    // Destroy worlds
+    senderThread.join();
+    localWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test send and recv across hosts",
+                 "[mpi]")
+{
+    // Register two ranks (one on each host)
+    this->setWorldsSizes(2, 1, 1);
+    int rankA = 0;
+    int rankB = 1;
+    std::vector<int> messageData = { 0, 1, 2 };
+    std::vector<int> messageData2 = { 3, 4, 5 };
+
+    // Init worlds
+    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(false);
+
+    std::thread senderThread([this, rankA, rankB, &messageData, &messageData2] {
+        remoteWorld.initialiseFromMsg(msg);
+
+        // Send a message that should get sent to this host
+        remoteWorld.send(
+          rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
+
+        // Now recv
+        auto buffer = new int[messageData2.size()];
+        remoteWorld.recv(rankA,
+                         rankB,
+                         BYTES(buffer),
+                         MPI_INT,
+                         messageData2.size(),
+                         MPI_STATUS_IGNORE);
+        std::vector<int> actual(buffer, buffer + messageData2.size());
+        REQUIRE(actual == messageData2);
+
+        usleep(1000 * 500);
+
+        remoteWorld.destroy();
+    });
+
+    // Receive the message for the given rank
+    MPI_Status status{};
+    auto buffer = new int[messageData.size()];
+    localWorld.recv(
+      rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
+    std::vector<int> actual(buffer, buffer + messageData.size());
+    REQUIRE(actual == messageData);
+
+    // Now send a message
+    localWorld.send(
+      rankA, rankB, BYTES(messageData2.data()), MPI_INT, messageData2.size());
 
     REQUIRE(status.MPI_SOURCE == rankB);
     REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
@@ -114,6 +176,9 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         for (int i = 0; i < numMessages; i++) {
             remoteWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
         }
+
+        usleep(1000 * 500);
+
         remoteWorld.destroy();
     });
 
@@ -164,6 +229,8 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
               remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
             assert(actual == messageData);
         }
+
+        usleep(1000 * 500);
 
         remoteWorld.destroy();
     });
@@ -236,6 +303,8 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                             MPI_INT,
                             nPerRank);
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
+
+        usleep(1000 * 500);
 
         remoteWorld.destroy();
     });
@@ -324,6 +393,8 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                                nPerRank);
         }
 
+        usleep(1000 * 500);
+
         remoteWorld.destroy();
     });
 
@@ -387,6 +458,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                          MPI_INT,
                          messageData.size());
 
+        usleep(1000 * 500);
+
         remoteWorld.destroy();
     });
 
@@ -439,6 +512,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         for (int i = 0; i < 3; i++) {
             remoteWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
+
+        usleep(1000 * 500);
 
         remoteWorld.destroy();
     });
@@ -511,6 +586,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                                  rank,
                                  MPI_STATUS_IGNORE);
         }
+
+        usleep(1000 * 500);
 
         remoteWorld.destroy();
     });
