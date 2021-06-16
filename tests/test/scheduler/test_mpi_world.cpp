@@ -43,6 +43,19 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
     world.destroy();
 }
 
+TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating world of size 1", "[mpi]")
+{
+    // Create the world
+    MpiWorld world;
+    int worldSize = 1;
+
+    REQUIRE_NOTHROW(world.create(msg, worldId, worldSize));
+
+    REQUIRE(world.getSize() == worldSize);
+
+    world.destroy();
+}
+
 TEST_CASE_METHOD(MpiTestFixture, "Test world loading from msg", "[mpi]")
 {
     // Create another copy from state
