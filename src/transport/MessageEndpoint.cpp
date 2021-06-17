@@ -179,7 +179,7 @@ Message MessageEndpoint::recv(int size)
             SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
             return Message();
         } else {
-            SPDLOG_ERROR("Error receiving message: {}", e.what());
+            SPDLOG_ERROR("Error receiving message: {} ({})", e.num(), e.what());
             throw;
         }
     }
