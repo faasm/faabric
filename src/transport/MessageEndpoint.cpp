@@ -55,6 +55,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
                              e.what());
                 throw;
             }
+
             break;
         default:
             throw std::runtime_error("Unrecognized socket type");
@@ -78,6 +79,10 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
             throw;
         }
     }
+
+    // Set socket options
+    this->socket->setsockopt(ZMQ_RCVTIMEO, recvTimeoutMs);
+    this->socket->setsockopt(ZMQ_SNDTIMEO, sendTimeoutMs);
 }
 
 void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
@@ -251,6 +256,31 @@ std::string MessageEndpoint::getHost()
 int MessageEndpoint::getPort()
 {
     return port;
+}
+
+void MessageEndpoint::validateTimeout(int value)
+{
+    if (value <= 0) {
+        SPDLOG_ERROR("Setting invalid timeout of {}", value);
+        throw std::runtime_error("Setting invalid timeout");
+    }
+
+    if (socket != nullptr) {
+        SPDLOG_ERROR("Setting timeout of {} after socket created", value);
+        throw std::runtime_error("Setting timeout after socket created");
+    }
+}
+
+void MessageEndpoint::setRecvTimeoutMs(int value)
+{
+    validateTimeout(value);
+    recvTimeoutMs = value;
+}
+
+void MessageEndpoint::setSendTimeoutMs(int value)
+{
+    validateTimeout(value);
+    sendTimeoutMs = value;
 }
 
 /* Send and Recv Message Endpoints */
