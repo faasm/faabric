@@ -131,4 +131,17 @@ TEST_CASE("Test queue on non-copy-constructible object", "[util]")
     REQUIRE(fa.get() == 1);
     REQUIRE(fb.get() == 2);
 }
+
+TEST_CASE("Test queue timeout must be positive", "[util]")
+{
+    int timeoutValueMs;
+
+    SECTION("Zero timeout") { timeoutValueMs = 0; }
+
+    SECTION("Negative timeout") { timeoutValueMs = -1; }
+
+    faabric::util::Queue<int> q;
+    q.enqueue(10);
+    REQUIRE_THROWS(q.dequeue(timeoutValueMs));
+}
 }

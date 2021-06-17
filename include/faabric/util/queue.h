@@ -2,8 +2,11 @@
 
 #include <faabric/util/exception.h>
 #include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
 
 #include <queue>
+
+#define DEFAULT_QUEUE_TIMEOUT_MS 500
 
 namespace faabric::util {
 class QueueTimeoutException : public faabric::util::FaabricException
@@ -40,21 +43,22 @@ class Queue
         }
     }
 
-    T dequeue(long timeoutMs = 0)
+    T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
         UniqueLock lock(mx);
 
-        while (mq.empty()) {
-            if (timeoutMs > 0) {
-                std::cv_status returnVal = enqueueNotifier.wait_for(
-                  lock, std::chrono::milliseconds(timeoutMs));
+        if (timeoutMs <= 0) {
+            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
+            throw std::runtime_error("Invalid queue timeout");
+        }
 
-                // Work out if this has returned due to timeout expiring
-                if (returnVal == std::cv_status::timeout) {
-                    throw QueueTimeoutException("Timeout waiting for dequeue");
-                }
-            } else {
-                enqueueNotifier.wait(lock);
+        while (mq.empty()) {
+            std::cv_status returnVal = enqueueNotifier.wait_for(
+              lock, std::chrono::milliseconds(timeoutMs));
+
+            // Work out if this has returned due to timeout expiring
+            if (returnVal == std::cv_status::timeout) {
+                throw QueueTimeoutException("Timeout waiting for dequeue");
             }
         }
 
