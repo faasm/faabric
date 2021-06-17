@@ -102,6 +102,9 @@ void FunctionCallClient::sendFlush()
         call.set_returnhost(faabric::util::getSystemConfig().endpointHost);
 
         SEND_MESSAGE(faabric::scheduler::FunctionCalls::Flush, call);
+
+        // Await the response
+        awaitResponse(FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
     }
 }
 

@@ -54,6 +54,9 @@ void FunctionCallServer::recvFlush(faabric::transport::Message& body)
 
     // Clear the scheduler
     scheduler.flushLocally();
+
+    faabric::EmptyResponse response;
+    SEND_SERVER_RESPONSE(response, msg.returnhost(), FUNCTION_CALL_PORT)
 }
 
 void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message& body)
