@@ -136,8 +136,11 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldsize(size);
     }
 
-    // Send the init messages (note that message i corresponds to rank i+1)
-    std::vector<std::string> executedAt = sch.callFunctions(req);
+    std::vector<std::string> executedAt;
+    if (size > 1) {
+        // Send the init messages (note that message i corresponds to rank i+1)
+        executedAt = sch.callFunctions(req);
+    }
     assert(executedAt.size() == size - 1);
 
     // Prepend this host for rank 0
