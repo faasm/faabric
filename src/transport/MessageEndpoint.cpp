@@ -137,6 +137,12 @@ Message MessageEndpoint::recv(int size)
 
         try {
             auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
+
+            if (!res.has_value()) {
+                SPDLOG_ERROR("Timed out receiving message of size {}", size);
+                throw MessageTimeoutException("Timed out receiving message");
+            }
+
             if (res.has_value() && (res->size != res->untruncated_size)) {
                 SPDLOG_ERROR("Received more bytes than buffer can hold. "
                              "Received: {}, capacity {}",
@@ -149,10 +155,11 @@ Message MessageEndpoint::recv(int size)
                 // Return empty message to signify termination
                 SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
                 return Message();
-            } else {
-                SPDLOG_ERROR("Error receiving message: {}", e.what());
-                throw;
             }
+
+            // Print default message and rethrow
+            SPDLOG_ERROR("Error receiving message: {} ({})", e.num(), e.what());
+            throw;
         }
 
         return msg;
@@ -163,8 +170,8 @@ Message MessageEndpoint::recv(int size)
     try {
         auto res = this->socket->recv(msg);
         if (!res.has_value()) {
-            SPDLOG_ERROR("Error receiving message: EAGAIN");
-            throw std::runtime_error("Error receiving message");
+            SPDLOG_ERROR("Timed out receiving message with no size");
+            throw MessageTimeoutException("Timed out receiving message");
         }
     } catch (zmq::error_t& e) {
         if (e.num() == ZMQ_ETERM) {

@@ -42,6 +42,29 @@ class DummyServer final : public MessageEndpointServer
     }
 };
 
+class SlowServer final : public MessageEndpointServer
+{
+  public:
+    int delayMs = 1000;
+
+    SlowServer()
+      : MessageEndpointServer(testPort)
+    {}
+
+    void sendResponse(uint8_t* serialisedMsg,
+                      int size,
+                      const std::string& returnHost,
+                      int returnPort)
+    {
+        usleep(delayMs * 1000);
+    }
+
+  private:
+    void doRecv(faabric::transport::Message& header,
+                faabric::transport::Message& body) override
+    {}
+};
+
 namespace tests {
 TEST_CASE("Test start/stop server", "[transport]")
 {
@@ -162,5 +185,57 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     REQUIRE(server.messageCount == numMessages * numClients);
 
     server.stop();
+}
+
+TEST_CASE("Test client timeout on requests to valid server", "[transport]")
+{
+    // Start the server in the background
+    std::thread t([] {
+        SlowServer server;
+        server.start();
+
+        int threadSleep = server.delayMs + 500;
+        usleep(threadSleep * 1000);
+
+        server.stop();
+    });
+
+    // Wait for the server to start up
+    usleep(500 * 1000);
+
+    // Set up the client
+    auto& context = getGlobalMessageContext();
+    MessageEndpointClient cli(thisHost, testPort);
+
+    int clientTimeout;
+    bool expectFailure;
+    SECTION("Long timeout no failure")
+    {
+        clientTimeout = 20000;
+        expectFailure = false;
+    }
+
+    SECTION("Short timeout failure")
+    {
+        clientTimeout = 100;
+        expectFailure = true;
+    }
+
+    cli.setRecvTimeoutMs(clientTimeout);
+    cli.open(context);
+
+    // Check for failure accordingly
+    if (expectFailure) {
+        REQUIRE_THROWS_AS(cli.awaitResponse(testPort + REPLY_PORT_OFFSET),
+                          MessageTimeoutException);
+    } else {
+        REQUIRE_NOTHROW(cli.awaitResponse(testPort + REPLY_PORT_OFFSET));
+    }
+
+    cli.close();
+
+    if (t.joinable()) {
+        t.join();
+    }
 }
 }

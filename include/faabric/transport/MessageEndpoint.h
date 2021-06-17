@@ -4,6 +4,7 @@
 
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageContext.h>
+#include <faabric/util/exception.h>
 
 #include <thread>
 #include <zmq.hpp>
@@ -74,7 +75,6 @@ class MessageEndpoint
     std::thread::id tid;
     int id;
 
-  private:
     int recvTimeoutMs = DEFAULT_RECV_TIMEOUT_MS;
     int sendTimeoutMs = DEFAULT_SEND_TIMEOUT_MS;
 
@@ -101,5 +101,13 @@ class RecvMessageEndpoint : public MessageEndpoint
     void open(MessageContext& context);
 
     void close();
+};
+
+class MessageTimeoutException : public faabric::util::FaabricException
+{
+  public:
+    explicit MessageTimeoutException(std::string message)
+      : FaabricException(std::move(message))
+    {}
 };
 }
