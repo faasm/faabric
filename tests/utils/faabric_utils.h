@@ -12,6 +12,30 @@ using namespace faabric;
 
 #define SHORT_TEST_TIMEOUT_MS 1000
 
+#define FAABRIC_CATCH_LOGGER                                                   \
+    struct LogListener : Catch::TestEventListenerBase                          \
+    {                                                                          \
+        using TestEventListenerBase::TestEventListenerBase;                    \
+        void testCaseStarting(Catch::TestCaseInfo const& testInfo) override    \
+        {                                                                      \
+            this->Catch::TestEventListenerBase::testCaseStarting(testInfo);    \
+            SPDLOG_INFO("=============================================");      \
+            SPDLOG_INFO("TEST: {}", testInfo.name);                            \
+            SPDLOG_INFO("=============================================");      \
+        }                                                                      \
+                                                                               \
+        void sectionStarting(Catch::SectionInfo const& sectionInfo) override   \
+        {                                                                      \
+            this->Catch::TestEventListenerBase::sectionStarting(sectionInfo);  \
+            if (sectionInfo.name != currentTestCaseInfo->name) {               \
+                SPDLOG_INFO("---------------------------------------------");  \
+                SPDLOG_INFO("SECTION: {}", sectionInfo.name);                  \
+                SPDLOG_INFO("---------------------------------------------");  \
+            }                                                                  \
+        }                                                                      \
+    };                                                                         \
+    CATCH_REGISTER_LISTENER(LogListener)
+
 namespace tests {
 void cleanFaabric();
 
