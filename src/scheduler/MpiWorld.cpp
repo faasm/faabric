@@ -212,20 +212,6 @@ void MpiWorld::destroy()
           iSendRequests.size());
         throw std::runtime_error("Destroying world with outstanding requests");
     }
-
-    // Destroy once per host the shared resources
-    if (!isDestroyed.test_and_set()) {
-        // Wait (forever) until all ranks are done consuming their queues to
-        // clear them.
-        // Note - this means that an application with outstanding messages, i.e.
-        // send without recv, will block forever.
-        for (auto& q : localQueues) {
-            if (q != nullptr) {
-                q->waitToDrain(-1);
-            }
-        }
-        localQueues.clear();
-    }
 }
 
 void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
