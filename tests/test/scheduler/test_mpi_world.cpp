@@ -45,13 +45,18 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
 
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating world of size 1", "[mpi]")
 {
-    // Create the world
+    // Create a world of size 1
     MpiWorld world;
     int worldSize = 1;
-
     REQUIRE_NOTHROW(world.create(msg, worldId, worldSize));
 
     REQUIRE(world.getSize() == worldSize);
+    REQUIRE(world.getId() == worldId);
+    REQUIRE(world.getUser() == user);
+    REQUIRE(world.getFunction() == func);
+
+    // Check no messages are sent
+    REQUIRE(sch.getRecordedMessagesAll().empty());
 
     world.destroy();
 }
