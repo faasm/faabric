@@ -17,7 +17,7 @@
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
 
-#define TEST_TIMEOUT_MS 500
+#define TEST_WAIT_MS 1000
 
 using namespace faabric::scheduler;
 
@@ -37,7 +37,7 @@ class ClientServerFixture
       : cli(LOCALHOST)
     {
         server.start();
-        usleep(1000 * TEST_TIMEOUT_MS);
+        usleep(TEST_WAIT_MS * 1000);
 
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
@@ -81,7 +81,7 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     // Send flush message
     cli.sendFlush();
-    usleep(1000 * TEST_TIMEOUT_MS);
+    usleep(TEST_WAIT_MS * 1000);
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
@@ -138,7 +138,7 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     // Make the request
     cli.executeFunctions(req);
-    usleep(1000 * TEST_TIMEOUT_MS);
+    usleep(TEST_WAIT_MS * 1000);
 
     // Check no other hosts have been registered
     faabric::Message m = req->messages().at(0);
@@ -227,7 +227,7 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
     cli.unregister(reqB);
-    usleep(1000 * TEST_TIMEOUT_MS);
+    usleep(TEST_WAIT_MS * 1000);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     sch.setThisHostResources(originalResources);
