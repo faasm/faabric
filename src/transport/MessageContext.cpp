@@ -17,6 +17,7 @@ MessageContext::MessageContext(int overrideIoThreads)
 
 MessageContext::~MessageContext()
 {
+    SPDLOG_TRACE("Closing global ZeroMQ message context");
     this->ctx.close();
 }
 

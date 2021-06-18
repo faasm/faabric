@@ -19,10 +19,6 @@
                          e.what());                                            \
             throw;                                                             \
         }                                                                      \
-    } catch (...) {                                                            \
-        SPDLOG_ERROR(                                                          \
-          "Caught non-ZeroMQ error for {} on address {}", label, address);     \
-        throw;                                                                 \
     }
 
 namespace faabric::transport {

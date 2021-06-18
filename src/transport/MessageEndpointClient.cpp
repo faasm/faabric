@@ -1,4 +1,5 @@
 #include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::transport {
 MessageEndpointClient::MessageEndpointClient(const std::string& host, int port)
@@ -17,7 +18,9 @@ Message MessageEndpointClient::awaitResponse(int port)
     endpoint.setSendTimeoutMs(sendTimeoutMs);
 
     endpoint.open(faabric::transport::getGlobalMessageContext());
+
     Message receivedMessage = endpoint.recv();
+
     endpoint.close();
 
     return receivedMessage;
