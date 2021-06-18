@@ -4,6 +4,7 @@
 
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageContext.h>
+#include <faabric/util/exception.h>
 
 #include <thread>
 #include <zmq.hpp>
@@ -12,6 +13,11 @@
 #define ZMQ_ETERM ETERM
 
 #define ANY_HOST "0.0.0.0"
+
+// These timeouts should be long enough to permit sending and receiving large
+// messages, but short enough not to hang around when something has gone wrong.
+#define DEFAULT_RECV_TIMEOUT_MS 20000
+#define DEFAULT_SEND_TIMEOUT_MS 20000
 
 namespace faabric::transport {
 enum class SocketType
@@ -59,11 +65,20 @@ class MessageEndpoint
 
     int getPort();
 
+    void setRecvTimeoutMs(int value);
+
+    void setSendTimeoutMs(int value);
+
   protected:
     const std::string host;
     const int port;
     std::thread::id tid;
     int id;
+
+    int recvTimeoutMs = DEFAULT_RECV_TIMEOUT_MS;
+    int sendTimeoutMs = DEFAULT_SEND_TIMEOUT_MS;
+
+    void validateTimeout(int value);
 };
 
 /* Send and Recv Message Endpoints */
@@ -86,5 +101,13 @@ class RecvMessageEndpoint : public MessageEndpoint
     void open(MessageContext& context);
 
     void close();
+};
+
+class MessageTimeoutException : public faabric::util::FaabricException
+{
+  public:
+    explicit MessageTimeoutException(std::string message)
+      : FaabricException(std::move(message))
+    {}
 };
 }

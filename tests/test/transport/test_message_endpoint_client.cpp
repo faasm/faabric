@@ -202,4 +202,43 @@ TEST_CASE_METHOD(MessageContextFixture,
     // Close the destination endpoint
     dst.close();
 }
+
+TEST_CASE_METHOD(MessageContextFixture,
+                 "Test can't set invalid send/recv timeouts",
+                 "[transport]")
+{
+    MessageEndpoint cli(thisHost, testPort);
+
+    SECTION("Sanity check valid timeout")
+    {
+        REQUIRE_NOTHROW(cli.setRecvTimeoutMs(100));
+        REQUIRE_NOTHROW(cli.setSendTimeoutMs(100));
+    }
+
+    SECTION("Recv zero timeout") { REQUIRE_THROWS(cli.setRecvTimeoutMs(0)); }
+
+    SECTION("Send zero timeout") { REQUIRE_THROWS(cli.setSendTimeoutMs(0)); }
+
+    SECTION("Recv negative timeout")
+    {
+        REQUIRE_THROWS(cli.setRecvTimeoutMs(-1));
+    }
+
+    SECTION("Send negative timeout")
+    {
+        REQUIRE_THROWS(cli.setSendTimeoutMs(-1));
+    }
+
+    SECTION("Recv, socket already initialised")
+    {
+        cli.open(context, SocketType::PULL, false);
+        REQUIRE_THROWS(cli.setRecvTimeoutMs(100));
+    }
+
+    SECTION("Send, socket already initialised")
+    {
+        cli.open(context, SocketType::PULL, false);
+        REQUIRE_THROWS(cli.setSendTimeoutMs(100));
+    }
+}
 }
