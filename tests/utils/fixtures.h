@@ -128,7 +128,7 @@ class MessageContextFixture : public SchedulerTestFixture
       : context(faabric::transport::getGlobalMessageContext())
     {}
 
-    ~MessageContextFixture() { }
+    ~MessageContextFixture() {}
 };
 
 class MpiBaseTestFixture : public SchedulerTestFixture

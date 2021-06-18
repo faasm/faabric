@@ -57,12 +57,20 @@ class SlowServer final : public MessageEndpointServer
                       int returnPort)
     {
         usleep(delayMs * 1000);
+
+        SPDLOG_DEBUG("Slow message server test sending response");
+        MessageEndpointServer::sendResponse(
+          serialisedMsg, size, returnHost, returnPort);
     }
 
   private:
     void doRecv(faabric::transport::Message& header,
                 faabric::transport::Message& body) override
-    {}
+    {
+        SPDLOG_DEBUG("Slow message server test recv");
+        std::vector<uint8_t> data = { 0, 1, 2, 3 };
+        sendResponse(data.data(), data.size(), thisHost, testPort);
+    }
 };
 
 namespace tests {
@@ -205,10 +213,6 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     // Wait for the server to start up
     usleep(500 * 1000);
 
-    // Set up the client
-    auto& context = getGlobalMessageContext();
-    MessageEndpointClient cli(thisHost, testPort);
-
     int clientTimeout;
     bool expectFailure;
 
@@ -224,8 +228,15 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         expectFailure = true;
     }
 
+    // Set up the client
+    auto& context = getGlobalMessageContext();
+    MessageEndpointClient cli(thisHost, testPort);
     cli.setRecvTimeoutMs(clientTimeout);
     cli.open(context);
+
+    std::vector<uint8_t> data = { 1, 1, 1 };
+    cli.send(data.data(), data.size(), true);
+    cli.send(data.data(), data.size());
 
     // Check for failure accordingly
     if (expectFailure) {
