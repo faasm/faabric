@@ -226,7 +226,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      threadPoolIdx,
                      executingTaskCount);
 
-        // Get snapshot diffs _before_ we reset the module
+        // Get snapshot diffs _before_ we reset the executor
         bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
         std::vector<faabric::util::SnapshotDiff> diffs;
         if (isLastTask && isThreads) {
