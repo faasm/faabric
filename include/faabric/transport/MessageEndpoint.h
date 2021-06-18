@@ -80,6 +80,10 @@ class MessageEndpoint
     int sendTimeoutMs = DEFAULT_SEND_TIMEOUT_MS;
 
     void validateTimeout(int value);
+
+    Message recvBuffer(int size);
+
+    Message recvNoBuffer();
 };
 
 /* Send and Recv Message Endpoints */

@@ -4,7 +4,24 @@
 
 #include <unistd.h>
 
+#define ZMQ_CATCH(op, label)                                                   \
+    try {                                                                      \
+        op;                                                                    \
+    } catch (zmq::error_t & e) {                                               \
+        SPDLOG_ERROR("Caught ZeroMQ error for {} on address {}: {} ({})",      \
+                     label,                                                    \
+                     address,                                                  \
+                     e.num(),                                                  \
+                     e.what());                                                \
+        throw;                                                                 \
+    } catch (...) {                                                            \
+        SPDLOG_ERROR(                                                          \
+          "Caught non-ZeroMQ error for {} on address {}", label, address);     \
+        throw;                                                                 \
+    }
+
 namespace faabric::transport {
+
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
@@ -34,48 +51,34 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // bind and connect does not matter.
     switch (sockType) {
         case faabric::transport::SocketType::PUSH:
-            try {
-                this->socket = std::make_unique<zmq::socket_t>(
-                  context.get(), zmq::socket_type::push);
-            } catch (zmq::error_t& e) {
-                SPDLOG_ERROR(
-                  "Error opening SEND socket to {}: {}", address, e.what());
-                throw;
-            }
+            ZMQ_CATCH(
+              {
+                  this->socket = std::make_unique<zmq::socket_t>(
+                    context.get(), zmq::socket_type::push);
+              },
+              "push_socket")
             break;
         case faabric::transport::SocketType::PULL:
-            try {
-                this->socket = std::make_unique<zmq::socket_t>(
-                  context.get(), zmq::socket_type::pull);
-            } catch (zmq::error_t& e) {
-                SPDLOG_ERROR("Error opening RECV socket bound to {}: {}",
-                             address,
-                             e.what());
-                throw;
-            }
+            ZMQ_CATCH(
+              {
+                  this->socket = std::make_unique<zmq::socket_t>(
+                    context.get(), zmq::socket_type::pull);
+              },
+              "pull_socket")
 
             break;
         default:
             throw std::runtime_error("Unrecognized socket type");
     }
+
+    // Check opening the socket has worked
     assert(this->socket != nullptr);
 
     // Bind or connect the socket
     if (bind) {
-        try {
-            this->socket->bind(address);
-        } catch (zmq::error_t& e) {
-            SPDLOG_ERROR("Error binding socket to {}: {}", address, e.what());
-            throw;
-        }
+        ZMQ_CATCH({ this->socket->bind(address); }, "bind")
     } else {
-        try {
-            this->socket->connect(address);
-        } catch (zmq::error_t& e) {
-            SPDLOG_ERROR(
-              "Error connecting socket to {}: {}", address, e.what());
-            throw;
-        }
+        ZMQ_CATCH({ this->socket->connect(address); }, "connect")
     }
 
     // Set socket options
@@ -88,37 +91,22 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     assert(tid == std::this_thread::get_id());
     assert(this->socket != nullptr);
 
-    if (more) {
-        try {
-            auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
-                                          zmq::send_flags::sndmore);
-            if (res != msgSize) {
-                SPDLOG_ERROR("Sent different bytes than expected (sent "
-                             "{}, expected {})",
-                             res.value_or(0),
-                             msgSize);
-                throw std::runtime_error("Error sending message");
-            }
-        } catch (zmq::error_t& e) {
-            SPDLOG_ERROR("Error sending message: {}", e.what());
-            throw;
-        }
-    } else {
-        try {
-            auto res = this->socket->send(zmq::buffer(serialisedMsg, msgSize),
-                                          zmq::send_flags::none);
-            if (res != msgSize) {
-                SPDLOG_ERROR("Sent different bytes than expected (sent "
-                             "{}, expected {})",
-                             res.value_or(0),
-                             msgSize);
-                throw std::runtime_error("Error sending message");
-            }
-        } catch (zmq::error_t& e) {
-            SPDLOG_ERROR("Error sending message: {}", e.what());
-            throw;
-        }
-    }
+    zmq::send_flags sendFlags =
+      more ? zmq::send_flags::sndmore : zmq::send_flags::none;
+
+    ZMQ_CATCH(
+      {
+          auto res =
+            this->socket->send(zmq::buffer(serialisedMsg, msgSize), sendFlags);
+          if (res != msgSize) {
+              SPDLOG_ERROR("Sent different bytes than expected (sent "
+                           "{}, expected {})",
+                           res.value_or(0),
+                           msgSize);
+              throw std::runtime_error("Error sending message");
+          }
+      },
+      "send")
 }
 
 // By passing the expected recv buffer size, we instrument zeromq to receive on
@@ -129,42 +117,53 @@ Message MessageEndpoint::recv(int size)
     assert(this->socket != nullptr);
     assert(size >= 0);
 
-    // Pre-allocate buffer to avoid copying data
-    if (size > 0) {
-        Message msg(size);
-
-        try {
-            auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
-
-            if (!res.has_value()) {
-                SPDLOG_ERROR("Timed out receiving message of size {}", size);
-                throw MessageTimeoutException("Timed out receiving message");
-            }
-
-            if (res.has_value() && (res->size != res->untruncated_size)) {
-                SPDLOG_ERROR("Received more bytes than buffer can hold. "
-                             "Received: {}, capacity {}",
-                             res->untruncated_size,
-                             res->size);
-                throw std::runtime_error("Error receiving message");
-            }
-        } catch (zmq::error_t& e) {
-            if (e.num() == ZMQ_ETERM) {
-                // Return empty message to signify termination
-                SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
-                return Message();
-            }
-
-            // Print default message and rethrow
-            SPDLOG_ERROR("Error receiving message: {} ({})", e.num(), e.what());
-            throw;
-        }
-
-        return msg;
+    if (size == 0) {
+        return recvNoBuffer();
     }
 
+    return recvBuffer(size);
+}
+
+Message MessageEndpoint::recvBuffer(int size)
+{
+    // Pre-allocate buffer to avoid copying data
+    Message msg(size);
+
+    ZMQ_CATCH(
+      try {
+          auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
+
+          if (!res.has_value()) {
+              SPDLOG_ERROR("Timed out receiving message of size {}", size);
+              throw MessageTimeoutException("Timed out receiving message");
+          }
+
+          if (res.has_value() && (res->size != res->untruncated_size)) {
+              SPDLOG_ERROR("Received more bytes than buffer can hold. "
+                           "Received: {}, capacity {}",
+                           res->untruncated_size,
+                           res->size);
+              throw std::runtime_error("Error receiving message");
+          }
+      } catch (zmq::error_t& e) {
+          if (e.num() == ZMQ_ETERM) {
+              // Return empty message to signify termination
+              SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
+              return Message();
+          }
+
+          throw;
+      },
+      "recv_buffer")
+
+    return msg;
+}
+
+Message MessageEndpoint::recvNoBuffer()
+{
     // Allocate a message to receive data
     zmq::message_t msg;
+    ZMQ_CATCH(
     try {
         auto res = this->socket->recv(msg);
         if (!res.has_value()) {
@@ -176,11 +175,9 @@ Message MessageEndpoint::recv(int size)
             // Return empty message to signify termination
             SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
             return Message();
-        } else {
-            SPDLOG_ERROR("Error receiving message: {} ({})", e.num(), e.what());
-            throw;
         }
-    }
+        throw;
+    }, "recv_no_buffer")
 
     // Copy the received message to a buffer whose scope we control
     return Message(msg);
@@ -202,48 +199,25 @@ void MessageEndpoint::close(bool bind)
         // system is slow at closing sockets, and the application relies a lot
         // on synchronous message-passing.
         if (bind) {
-            try {
-                this->socket->unbind(address);
-            } catch (zmq::error_t& e) {
-                if (e.num() != ZMQ_ETERM) {
-                    SPDLOG_ERROR("Error unbinding socket: {}", e.what());
-                    throw;
-                }
-            }
-
             // NOTE - unbinding a socket has a considerable overhead compared to
             // disconnecting it.
-            // TODO - could we reuse the monitor?
-            try {
-                zmq::monitor_t mon;
-                const std::string monAddr =
-                  "inproc://monitor_" + std::to_string(id);
-                mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
+            ZMQ_CATCH(this->socket->unbind(address), "unbind")
 
-                this->socket->close();
-                mon.check_event(-1);
-            } catch (zmq::error_t& e) {
-                if (e.num() != ZMQ_ETERM) {
-                    SPDLOG_ERROR("Error closing bind socket: {}", e.what());
-                    throw;
-                }
-            }
+            // TODO - could we reuse the monitor?
+            zmq::monitor_t mon;
+            const std::string monAddr =
+              "inproc://monitor_" + std::to_string(id);
+            mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
+
+            ZMQ_CATCH(this->socket->close(), "close")
+
+            // Wait for this to complete
+            mon.check_event(recvTimeoutMs);
 
         } else {
-            try {
-                this->socket->disconnect(address);
-            } catch (zmq::error_t& e) {
-                if (e.num() != ZMQ_ETERM) {
-                    SPDLOG_ERROR("Error disconnecting socket: {}", e.what());
-                    throw;
-                }
-            }
-            try {
-                this->socket->close();
-            } catch (zmq::error_t& e) {
-                SPDLOG_ERROR("Error closing connect socket: {}", e.what());
-                throw;
-            }
+            ZMQ_CATCH(this->socket->disconnect(address), "disconnect")
+
+            ZMQ_CATCH(this->socket->close(), "disconnect")
         }
 
         // Finally, null the socket
