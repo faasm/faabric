@@ -17,12 +17,6 @@ MessageContext::MessageContext(int overrideIoThreads)
 
 MessageContext::~MessageContext()
 {
-    this->close();
-}
-
-void MessageContext::close()
-{
-    isClosed = true;
     this->ctx.close();
 }
 
@@ -42,11 +36,6 @@ faabric::transport::MessageContext& getGlobalMessageContext()
 
     {
         faabric::util::SharedLock lock(messageContextMx);
-
-        if (instance->isClosed) {
-            throw std::runtime_error(
-              "Global ZeroMQ message context already closed");
-        }
 
         return *instance;
     }

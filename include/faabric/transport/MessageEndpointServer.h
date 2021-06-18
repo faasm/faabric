@@ -42,7 +42,7 @@ class MessageEndpointServer
     virtual void stop();
 
   protected:
-    int recv(faabric::transport::RecvMessageEndpoint& endpoint);
+    bool recv();
 
     /* Template function to handle message reception
      *
@@ -66,6 +66,8 @@ class MessageEndpointServer
 
   private:
     const int port;
+
+    std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
 
     std::thread servingThread;
 };

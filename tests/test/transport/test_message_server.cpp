@@ -38,7 +38,7 @@ class DummyServer final : public MessageEndpointServer
                 faabric::transport::Message& body) override
     {
         // Dummy server, do nothing but increment the message count
-        this->messageCount++;
+        messageCount++;
     }
 };
 
@@ -83,16 +83,19 @@ TEST_CASE("Test send one message to server", "[transport]")
     server.start();
 
     // Open the source endpoint client, don't bind
-    auto& context = getGlobalMessageContext();
     MessageEndpointClient src(thisHost, testPort);
+
+    auto& context = getGlobalMessageContext();
     src.open(context);
 
     // Send message: server expects header + body
     std::string header = "header";
     uint8_t headerMsg[header.size()];
     memcpy(headerMsg, header.c_str(), header.size());
+
     // Mark we are sending the header
-    REQUIRE_NOTHROW(src.send(headerMsg, header.size(), true));
+    src.send(headerMsg, header.size(), true);
+
     // Send the body
     std::string body = "body";
     uint8_t bodyMsg[body.size()];
@@ -132,8 +135,7 @@ TEST_CASE("Test send one-off response to client", "[transport]")
 
     uint8_t msg[expectedMsg.size()];
     memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-    REQUIRE_NOTHROW(
-      server.sendResponse(msg, expectedMsg.size(), thisHost, testPort));
+    server.sendResponse(msg, expectedMsg.size(), thisHost, testPort);
 
     if (clientThread.joinable()) {
         clientThread.join();
@@ -209,6 +211,7 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 
     int clientTimeout;
     bool expectFailure;
+
     SECTION("Long timeout no failure")
     {
         clientTimeout = 20000;

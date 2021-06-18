@@ -1,4 +1,5 @@
 #include <faabric/transport/MessageEndpointServer.h>
+#include <faabric/util/logging.h>
 
 #include <csignal>
 #include <cstdlib>
@@ -17,20 +18,25 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
     // Start serving thread in background
     servingThread = std::thread([this, &context] {
-        RecvMessageEndpoint serverEndpoint(this->port);
+        endpoint = std::make_unique<RecvMessageEndpoint>(this->port);
 
         // Open message endpoint, and bind
-        serverEndpoint.open(context);
-        assert(serverEndpoint.socket != nullptr);
+        endpoint->open(context);
 
-        // Loop until context is terminated
+        // Loop until we receive a shutdown message
         while (true) {
-            int rc = this->recv(serverEndpoint);
-            if (rc == ENDPOINT_SERVER_SHUTDOWN) {
-                serverEndpoint.close();
-                break;
+            try {
+                bool messageReceived = this->recv();
+                if (!messageReceived) {
+                    SPDLOG_TRACE("Server received shutdown message");
+                    break;
+                }
+            } catch (MessageTimeoutException& ex) {
+                continue;
             }
         }
+
+        endpoint->close();
     });
 }
 
@@ -41,22 +47,33 @@ void MessageEndpointServer::stop()
 
 void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
 {
+    // Send a shutdown message via a temporary endpoint
+    SPDLOG_TRACE("Sending shutdown message locally to {}:{}",
+                 endpoint->getHost(),
+                 endpoint->getPort());
+    SendMessageEndpoint e(endpoint->getHost(), endpoint->getPort());
+    e.open(getGlobalMessageContext());
+    e.send(nullptr, 0);
+
     // Join the serving thread
     if (servingThread.joinable()) {
         servingThread.join();
     }
+
+    e.close();
 }
 
-int MessageEndpointServer::recv(RecvMessageEndpoint& endpoint)
+bool MessageEndpointServer::recv()
 {
-    assert(endpoint.socket != nullptr);
+    // Check endpoint has been initialised
+    assert(endpoint->socket != nullptr);
 
     // Receive header and body
-    Message header = endpoint.recv();
+    Message header = endpoint->recv();
 
     // Detect shutdown condition
-    if (header.udata() == nullptr) {
-        return ENDPOINT_SERVER_SHUTDOWN;
+    if (header.size() == 0) {
+        return false;
     }
 
     // Check the header was sent with ZMQ_SNDMORE flag
@@ -65,7 +82,7 @@ int MessageEndpointServer::recv(RecvMessageEndpoint& endpoint)
     }
 
     // Check that there are no more messages to receive
-    Message body = endpoint.recv();
+    Message body = endpoint->recv();
     if (body.more()) {
         throw std::runtime_error("Body sent with SNDMORE flag");
     }
@@ -74,7 +91,7 @@ int MessageEndpointServer::recv(RecvMessageEndpoint& endpoint)
     // Server-specific message handling
     doRecv(header, body);
 
-    return 0;
+    return true;
 }
 
 // We create a new endpoint every time. Re-using them would be a possible
