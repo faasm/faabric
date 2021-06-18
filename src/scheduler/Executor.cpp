@@ -249,18 +249,17 @@ void Executor::threadPoolThread(int threadPoolIdx)
             sch.setFunctionResult(msg);
         }
 
-        // If this batch is finished, reset and release the claim on this
-        // executor.
-        // Note that we have to release the claim _after_ resetting otherwise
+        // If this batch is finished, reset the executor and release its claim.
+        // Note that we have to release the claim _after_ resetting, otherwise
         // the executor won't be ready for reuse.
         if (oldTaskCount == 1) {
             reset(msg);
             releaseClaim();
         }
 
-        // Vacate the slot for this task in the scheduler. This must be done
-        // after releasing the claim and resetting the module to avoid a race
-        // condition in the scheduler that allows the host to overcommit.
+        // Vacate the slot occupied by this task. This must be done after
+        // releasing the claim on this executor, otherwise the scheduler may try
+        // to schedule another function and be unable to reuse this executor.
         sch.vacateSlot();
     }
 
