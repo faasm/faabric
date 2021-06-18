@@ -232,7 +232,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         if (isLastTask && isThreads) {
             // Get diffs
             faabric::util::SnapshotData d = snapshot();
-            std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
+            diffs = d.getDirtyPages();
 
             // Reset dirty page tracking now that we've got the diffs
             faabric::util::resetDirtyTracking();
