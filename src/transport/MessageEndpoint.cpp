@@ -147,8 +147,7 @@ Message MessageEndpoint::recvBuffer(int size)
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
-              // Return empty message to signify termination
-              SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
+              SPDLOG_TRACE("Endpoint received ETERM");
               return Message();
           }
 
@@ -164,20 +163,20 @@ Message MessageEndpoint::recvNoBuffer()
     // Allocate a message to receive data
     zmq::message_t msg;
     ZMQ_CATCH(
-    try {
-        auto res = this->socket->recv(msg);
-        if (!res.has_value()) {
-            SPDLOG_ERROR("Timed out receiving message with no size");
-            throw MessageTimeoutException("Timed out receiving message");
-        }
-    } catch (zmq::error_t& e) {
-        if (e.num() == ZMQ_ETERM) {
-            // Return empty message to signify termination
-            SPDLOG_TRACE("Shutting endpoint down after receiving ETERM");
-            return Message();
-        }
-        throw;
-    }, "recv_no_buffer")
+      try {
+          auto res = this->socket->recv(msg);
+          if (!res.has_value()) {
+              SPDLOG_ERROR("Timed out receiving message with no size");
+              throw MessageTimeoutException("Timed out receiving message");
+          }
+      } catch (zmq::error_t& e) {
+          if (e.num() == ZMQ_ETERM) {
+              SPDLOG_TRACE("Endpoint received ETERM");
+              return Message();
+          }
+          throw;
+      },
+      "recv_no_buffer")
 
     // Copy the received message to a buffer whose scope we control
     return Message(msg);
