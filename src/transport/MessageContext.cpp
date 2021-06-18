@@ -1,9 +1,14 @@
 #include <faabric/transport/MessageContext.h>
+#include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::transport {
+
+static std::unique_ptr<MessageContext> instance = nullptr;
+static std::shared_mutex messageContextMx;
+
 MessageContext::MessageContext()
   : ctx(1)
-  , isContextShutDown(false)
 {}
 
 MessageContext::MessageContext(int overrideIoThreads)
@@ -17,8 +22,8 @@ MessageContext::~MessageContext()
 
 void MessageContext::close()
 {
+    isClosed = true;
     this->ctx.close();
-    this->isContextShutDown = true;
 }
 
 zmq::context_t& MessageContext::get()
@@ -28,15 +33,22 @@ zmq::context_t& MessageContext::get()
 
 faabric::transport::MessageContext& getGlobalMessageContext()
 {
-    static auto msgContext =
-      std::make_unique<faabric::transport::MessageContext>();
-    // The message context needs to be opened and closed every server instance.
-    // Sometimes (e.g. tests) the scheduler is re-used, but the message context
-    // needs to be reset. In this situations we override the shut-down message
-    // context.
-    if (msgContext->isContextShutDown) {
-        msgContext = std::make_unique<faabric::transport::MessageContext>();
+    if (instance == nullptr) {
+        faabric::util::FullLock lock(messageContextMx);
+        if (instance == nullptr) {
+            instance = std::make_unique<MessageContext>();
+        }
     }
-    return *msgContext;
+
+    {
+        faabric::util::SharedLock lock(messageContextMx);
+
+        if (instance->isClosed) {
+            throw std::runtime_error(
+              "Global ZeroMQ message context already closed");
+        }
+
+        return *instance;
+    }
 }
 }

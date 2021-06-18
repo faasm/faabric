@@ -16,7 +16,7 @@ void MessageEndpointServer::start()
 void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 {
     // Start serving thread in background
-    this->servingThread = std::thread([this, &context] {
+    servingThread = std::thread([this, &context] {
         RecvMessageEndpoint serverEndpoint(this->port);
 
         // Open message endpoint, and bind
@@ -41,13 +41,9 @@ void MessageEndpointServer::stop()
 
 void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
 {
-    // Note - different servers will concurrently close the server context, but
-    // this structure is thread-safe, and the close operation idempotent.
-    context.close();
-
-    // Finally join the serving thread
-    if (this->servingThread.joinable()) {
-        this->servingThread.join();
+    // Join the serving thread
+    if (servingThread.joinable()) {
+        servingThread.join();
     }
 }
 
@@ -57,17 +53,19 @@ int MessageEndpointServer::recv(RecvMessageEndpoint& endpoint)
 
     // Receive header and body
     Message header = endpoint.recv();
+
     // Detect shutdown condition
     if (header.udata() == nullptr) {
         return ENDPOINT_SERVER_SHUTDOWN;
     }
+
     // Check the header was sent with ZMQ_SNDMORE flag
     if (!header.more()) {
         throw std::runtime_error("Header sent without SNDMORE flag");
     }
 
-    Message body = endpoint.recv();
     // Check that there are no more messages to receive
+    Message body = endpoint.recv();
     if (body.more()) {
         throw std::runtime_error("Body sent with SNDMORE flag");
     }

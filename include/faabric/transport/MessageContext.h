@@ -33,8 +33,8 @@ class MessageContext
      */
     void close();
 
-    bool isContextShutDown;
+    bool isClosed = false;
 };
 
-faabric::transport::MessageContext& getGlobalMessageContext();
+MessageContext& getGlobalMessageContext();
 }

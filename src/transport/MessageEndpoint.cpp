@@ -4,16 +4,21 @@
 
 #include <unistd.h>
 
-#define ZMQ_CATCH(op, label)                                                   \
+#define CATCH_ZMQ_ERR(op, label)                                               \
     try {                                                                      \
         op;                                                                    \
     } catch (zmq::error_t & e) {                                               \
-        SPDLOG_ERROR("Caught ZeroMQ error for {} on address {}: {} ({})",      \
-                     label,                                                    \
-                     address,                                                  \
-                     e.num(),                                                  \
-                     e.what());                                                \
-        throw;                                                                 \
+        if (e.num() == ZMQ_ETERM) {                                            \
+            SPDLOG_TRACE(                                                      \
+              "Got ZeroMQ ETERM for {} on address {}", label, address);        \
+        } else {                                                               \
+            SPDLOG_ERROR("Caught ZeroMQ error for {} on address {}: {} ({})",  \
+                         label,                                                \
+                         address,                                              \
+                         e.num(),                                              \
+                         e.what());                                            \
+            throw;                                                             \
+        }                                                                      \
     } catch (...) {                                                            \
         SPDLOG_ERROR(                                                          \
           "Caught non-ZeroMQ error for {} on address {}", label, address);     \
@@ -51,7 +56,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // bind and connect does not matter.
     switch (sockType) {
         case faabric::transport::SocketType::PUSH:
-            ZMQ_CATCH(
+            CATCH_ZMQ_ERR(
               {
                   this->socket = std::make_unique<zmq::socket_t>(
                     context.get(), zmq::socket_type::push);
@@ -59,7 +64,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
               "push_socket")
             break;
         case faabric::transport::SocketType::PULL:
-            ZMQ_CATCH(
+            CATCH_ZMQ_ERR(
               {
                   this->socket = std::make_unique<zmq::socket_t>(
                     context.get(), zmq::socket_type::pull);
@@ -76,9 +81,9 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
 
     // Bind or connect the socket
     if (bind) {
-        ZMQ_CATCH({ this->socket->bind(address); }, "bind")
+        CATCH_ZMQ_ERR(this->socket->bind(address), "bind")
     } else {
-        ZMQ_CATCH({ this->socket->connect(address); }, "connect")
+        CATCH_ZMQ_ERR(this->socket->connect(address), "connect")
     }
 
     // Set socket options
@@ -94,7 +99,7 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     zmq::send_flags sendFlags =
       more ? zmq::send_flags::sndmore : zmq::send_flags::none;
 
-    ZMQ_CATCH(
+    CATCH_ZMQ_ERR(
       {
           auto res =
             this->socket->send(zmq::buffer(serialisedMsg, msgSize), sendFlags);
@@ -129,7 +134,7 @@ Message MessageEndpoint::recvBuffer(int size)
     // Pre-allocate buffer to avoid copying data
     Message msg(size);
 
-    ZMQ_CATCH(
+    CATCH_ZMQ_ERR(
       try {
           auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
 
@@ -162,7 +167,7 @@ Message MessageEndpoint::recvNoBuffer()
 {
     // Allocate a message to receive data
     zmq::message_t msg;
-    ZMQ_CATCH(
+    CATCH_ZMQ_ERR(
       try {
           auto res = this->socket->recv(msg);
           if (!res.has_value()) {
@@ -185,7 +190,6 @@ Message MessageEndpoint::recvNoBuffer()
 void MessageEndpoint::close(bool bind)
 {
     if (this->socket != nullptr) {
-
         if (tid != std::this_thread::get_id()) {
             SPDLOG_WARN("Closing socket from a different thread");
         }
@@ -194,13 +198,13 @@ void MessageEndpoint::close(bool bind)
         // block until we _actually_ have unbinded, i.e. 0MQ has closed the
         // socket (which happens asynchronously). For connect()-ed sockets we
         // don't care.
-        // Not blobking on un-bind can cause race-conditions when the underlying
+        // Not blocking on un-bind can cause race-conditions when the underlying
         // system is slow at closing sockets, and the application relies a lot
         // on synchronous message-passing.
         if (bind) {
             // NOTE - unbinding a socket has a considerable overhead compared to
             // disconnecting it.
-            ZMQ_CATCH(this->socket->unbind(address), "unbind")
+            CATCH_ZMQ_ERR(this->socket->unbind(address), "unbind")
 
             // TODO - could we reuse the monitor?
             zmq::monitor_t mon;
@@ -208,15 +212,15 @@ void MessageEndpoint::close(bool bind)
               "inproc://monitor_" + std::to_string(id);
             mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
 
-            ZMQ_CATCH(this->socket->close(), "close")
+            CATCH_ZMQ_ERR(this->socket->close(), "close_unbind")
 
             // Wait for this to complete
             mon.check_event(recvTimeoutMs);
 
         } else {
-            ZMQ_CATCH(this->socket->disconnect(address), "disconnect")
+            CATCH_ZMQ_ERR(this->socket->disconnect(address), "disconnect")
 
-            ZMQ_CATCH(this->socket->close(), "disconnect")
+            CATCH_ZMQ_ERR(this->socket->close(), "close_disconnect")
         }
 
         // Finally, null the socket
