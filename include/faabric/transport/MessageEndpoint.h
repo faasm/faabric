@@ -72,6 +72,7 @@ class MessageEndpoint
   protected:
     const std::string host;
     const int port;
+    const std::string address;
     std::thread::id tid;
     int id;
 

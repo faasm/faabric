@@ -8,6 +8,7 @@ namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(const std::string& hostIn, int portIn)
   : host(hostIn)
   , port(portIn)
+  , address("tcp://" + host + ":" + std::to_string(port))
   , tid(std::this_thread::get_id())
   , id(faabric::util::generateGid())
 {}
@@ -27,9 +28,6 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // Check we are opening from the same thread. We assert not to incur in
     // costly checks when running a Release build.
     assert(tid == std::this_thread::get_id());
-
-    std::string address =
-      "tcp://" + this->host + ":" + std::to_string(this->port);
 
     // Note - only one socket may bind, but several can connect. This
     // allows for easy N - 1 or 1 - N PUSH/PULL patterns. Order between
@@ -196,9 +194,6 @@ void MessageEndpoint::close(bool bind)
             SPDLOG_WARN("Closing socket from a different thread");
         }
 
-        std::string address =
-          "tcp://" + this->host + ":" + std::to_string(this->port);
-
         // We duplicate the call to close() because when unbinding, we want to
         // block until we _actually_ have unbinded, i.e. 0MQ has closed the
         // socket (which happens asynchronously). For connect()-ed sockets we
@@ -215,24 +210,25 @@ void MessageEndpoint::close(bool bind)
                     throw;
                 }
             }
+
             // NOTE - unbinding a socket has a considerable overhead compared to
             // disconnecting it.
             // TODO - could we reuse the monitor?
             try {
-                {
-                    zmq::monitor_t mon;
-                    const std::string monAddr =
-                      "inproc://monitor_" + std::to_string(id);
-                    mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
-                    this->socket->close();
-                    mon.check_event(-1);
-                }
+                zmq::monitor_t mon;
+                const std::string monAddr =
+                  "inproc://monitor_" + std::to_string(id);
+                mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
+
+                this->socket->close();
+                mon.check_event(-1);
             } catch (zmq::error_t& e) {
                 if (e.num() != ZMQ_ETERM) {
                     SPDLOG_ERROR("Error closing bind socket: {}", e.what());
                     throw;
                 }
             }
+
         } else {
             try {
                 this->socket->disconnect(address);
