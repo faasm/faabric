@@ -7,7 +7,6 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
-#include <faabric/transport/MessageContext.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
@@ -120,13 +119,8 @@ class ConfTestFixture
 
 class MessageContextFixture : public SchedulerTestFixture
 {
-  protected:
-    faabric::transport::MessageContext& context;
-
   public:
-    MessageContextFixture()
-      : context(faabric::transport::getGlobalMessageContext())
-    {}
+    MessageContextFixture() {}
 
     ~MessageContextFixture() {}
 };

@@ -1,3 +1,4 @@
+#include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
@@ -39,9 +40,7 @@ MessageEndpoint::~MessageEndpoint()
     }
 }
 
-void MessageEndpoint::open(faabric::transport::MessageContext& context,
-                           faabric::transport::SocketType sockType,
-                           bool bind)
+void MessageEndpoint::open(faabric::transport::SocketType sockType, bool bind)
 {
     // Check we are opening from the same thread. We assert not to incur in
     // costly checks when running a Release build.
@@ -50,12 +49,13 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     // Note - only one socket may bind, but several can connect. This
     // allows for easy N - 1 or 1 - N PUSH/PULL patterns. Order between
     // bind and connect does not matter.
+    std::shared_ptr<MessageContext> context = getGlobalMessageContext();
     switch (sockType) {
         case faabric::transport::SocketType::PUSH:
             CATCH_ZMQ_ERR(
               {
                   this->socket = std::make_unique<zmq::socket_t>(
-                    context.get(), zmq::socket_type::push);
+                    context->getZMQContext(), zmq::socket_type::push);
               },
               "push_socket")
             break;
@@ -63,7 +63,7 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
             CATCH_ZMQ_ERR(
               {
                   this->socket = std::make_unique<zmq::socket_t>(
-                    context.get(), zmq::socket_type::pull);
+                    context->getZMQContext(), zmq::socket_type::pull);
               },
               "pull_socket")
 
@@ -265,12 +265,12 @@ SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
   : MessageEndpoint(hostIn, portIn)
 {}
 
-void SendMessageEndpoint::open(MessageContext& context)
+void SendMessageEndpoint::open()
 {
     SPDLOG_TRACE(
       fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
 
-    MessageEndpoint::open(context, SocketType::PUSH, false);
+    MessageEndpoint::open(SocketType::PUSH, false);
 }
 
 void SendMessageEndpoint::close()
@@ -285,12 +285,12 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
   : MessageEndpoint(ANY_HOST, portIn)
 {}
 
-void RecvMessageEndpoint::open(MessageContext& context)
+void RecvMessageEndpoint::open()
 {
     SPDLOG_TRACE(
       fmt::format("Opening socket: {} (RECV {}:{})", id, host, port));
 
-    MessageEndpoint::open(context, SocketType::PULL, true);
+    MessageEndpoint::open(SocketType::PULL, true);
 }
 
 void RecvMessageEndpoint::close()

@@ -18,7 +18,7 @@ void FunctionCallServer::stop()
     faabric::scheduler::getScheduler().closeFunctionCallClients();
 
     // Call the parent stop
-    MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
+    MessageEndpointServer::stop();
 }
 
 void FunctionCallServer::doRecv(faabric::transport::Message& header,

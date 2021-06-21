@@ -1,5 +1,6 @@
 #pragma once
 
+#include <shared_mutex>
 #include <zmq.hpp>
 
 namespace faabric::transport {
@@ -22,10 +23,16 @@ class MessageContext
 
     ~MessageContext();
 
+    zmq::context_t& getZMQContext();
+
+    static std::shared_ptr<MessageContext> getInstance();
+
+  private:
     zmq::context_t ctx;
 
-    zmq::context_t& get();
+    static std::shared_ptr<MessageContext> instance;
+    static std::shared_mutex mx;
 };
 
-MessageContext& getGlobalMessageContext();
+std::shared_ptr<MessageContext> getGlobalMessageContext();
 }

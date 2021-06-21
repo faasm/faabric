@@ -4,8 +4,8 @@
 
 namespace faabric::transport {
 
-static std::unique_ptr<MessageContext> instance = nullptr;
-static std::shared_mutex messageContextMx;
+std::shared_ptr<MessageContext> MessageContext::instance = nullptr;
+std::shared_mutex MessageContext::mx;
 
 MessageContext::MessageContext()
   : ctx(1)
@@ -21,24 +21,29 @@ MessageContext::~MessageContext()
     this->ctx.close();
 }
 
-zmq::context_t& MessageContext::get()
+zmq::context_t& MessageContext::getZMQContext()
 {
     return this->ctx;
 }
 
-faabric::transport::MessageContext& getGlobalMessageContext()
+std::shared_ptr<MessageContext> MessageContext::getInstance()
 {
     if (instance == nullptr) {
-        faabric::util::FullLock lock(messageContextMx);
+        faabric::util::FullLock lock(mx);
         if (instance == nullptr) {
             instance = std::make_unique<MessageContext>();
         }
     }
 
     {
-        faabric::util::SharedLock lock(messageContextMx);
+        faabric::util::SharedLock lock(mx);
 
-        return *instance;
+        return instance;
     }
+}
+
+std::shared_ptr<MessageContext> getGlobalMessageContext()
+{
+    return MessageContext::getInstance();
 }
 }

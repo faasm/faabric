@@ -3,7 +3,6 @@
 #include <google/protobuf/message.h>
 
 #include <faabric/transport/Message.h>
-#include <faabric/transport/MessageContext.h>
 #include <faabric/util/exception.h>
 
 #include <thread>
@@ -47,9 +46,7 @@ class MessageEndpoint
 
     ~MessageEndpoint();
 
-    void open(faabric::transport::MessageContext& context,
-              faabric::transport::SocketType sockTypeIn,
-              bool bind);
+    void open(SocketType sockTypeIn, bool bind);
 
     void close(bool bind);
 
@@ -93,7 +90,7 @@ class SendMessageEndpoint : public MessageEndpoint
   public:
     SendMessageEndpoint(const std::string& hostIn, int portIn);
 
-    void open(MessageContext& context);
+    void open();
 
     void close();
 };
@@ -103,7 +100,7 @@ class RecvMessageEndpoint : public MessageEndpoint
   public:
     RecvMessageEndpoint(int portIn);
 
-    void open(MessageContext& context);
+    void open();
 
     void close();
 };

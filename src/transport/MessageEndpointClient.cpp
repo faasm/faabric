@@ -10,18 +10,21 @@ MessageEndpointClient::MessageEndpointClient(const std::string& host, int port)
 Message MessageEndpointClient::awaitResponse(int port)
 {
     // Wait for the response, open a temporary endpoint for it
-    // Note - we use a different host/port not to clash with existing server
     RecvMessageEndpoint endpoint(port);
 
     // Inherit timeouts on temporary endpoint
     endpoint.setRecvTimeoutMs(recvTimeoutMs);
     endpoint.setSendTimeoutMs(sendTimeoutMs);
 
-    endpoint.open(faabric::transport::getGlobalMessageContext());
+    endpoint.open();
 
-    Message receivedMessage = endpoint.recv();
-
-    endpoint.close();
+    Message receivedMessage;
+    try {
+        receivedMessage = endpoint.recv();
+    } catch (MessageTimeoutException& ex) {
+        endpoint.close();
+        throw;
+    }
 
     return receivedMessage;
 }

@@ -93,8 +93,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     // Open the source endpoint client, don't bind
     MessageEndpointClient src(thisHost, testPort);
 
-    auto& context = getGlobalMessageContext();
-    src.open(context);
+    src.open();
 
     // Send message: server expects header + body
     std::string header = "header";
@@ -129,9 +128,8 @@ TEST_CASE("Test send one-off response to client", "[transport]")
 
     std::thread clientThread([expectedMsg] {
         // Open the source endpoint client, don't bind
-        auto& context = getGlobalMessageContext();
         MessageEndpointClient cli(thisHost, testPort);
-        cli.open(context);
+        cli.open();
 
         Message msg = cli.awaitResponse(testPort + REPLY_PORT_OFFSET);
         assert(msg.size() == expectedMsg.size());
@@ -164,9 +162,8 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     for (int i = 0; i < numClients; i++) {
         clientThreads.emplace_back(std::thread([numMessages] {
             // Prepare client
-            auto& context = getGlobalMessageContext();
             MessageEndpointClient cli(thisHost, testPort);
-            cli.open(context);
+            cli.open();
 
             std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {
@@ -229,10 +226,9 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     }
 
     // Set up the client
-    auto& context = getGlobalMessageContext();
     MessageEndpointClient cli(thisHost, testPort);
     cli.setRecvTimeoutMs(clientTimeout);
-    cli.open(context);
+    cli.open();
 
     std::vector<uint8_t> data = { 1, 1, 1 };
     cli.send(data.data(), data.size(), true);

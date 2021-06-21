@@ -4,7 +4,7 @@ namespace faabric::transport {
 faabric::MpiHostsToRanksMessage recvMpiHostRankMsg()
 {
     faabric::transport::RecvMessageEndpoint endpoint(MPI_PORT);
-    endpoint.open(faabric::transport::getGlobalMessageContext());
+    endpoint.open();
     faabric::transport::Message m = endpoint.recv();
     PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
     endpoint.close();
@@ -22,7 +22,7 @@ void sendMpiHostRankMsg(const std::string& hostIn,
             throw std::runtime_error("Error serialising message");
         }
         faabric::transport::SendMessageEndpoint endpoint(hostIn, MPI_PORT);
-        endpoint.open(faabric::transport::getGlobalMessageContext());
+        endpoint.open();
         endpoint.send(sMsg, msgSize, false);
         endpoint.close();
     }
@@ -32,8 +32,8 @@ MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn, int portIn)
   : sendMessageEndpoint(hostIn, portIn)
   , recvMessageEndpoint(portIn)
 {
-    sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
-    recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    sendMessageEndpoint.open();
+    recvMessageEndpoint.open();
 }
 
 MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn,
@@ -42,8 +42,8 @@ MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn,
   : sendMessageEndpoint(hostIn, sendPort)
   , recvMessageEndpoint(recvPort)
 {
-    sendMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
-    recvMessageEndpoint.open(faabric::transport::getGlobalMessageContext());
+    sendMessageEndpoint.open();
+    recvMessageEndpoint.open();
 }
 
 void MpiMessageEndpoint::sendMpiMessage(

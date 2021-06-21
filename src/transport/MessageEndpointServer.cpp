@@ -11,17 +11,12 @@ MessageEndpointServer::MessageEndpointServer(int portIn)
 
 void MessageEndpointServer::start()
 {
-    start(faabric::transport::getGlobalMessageContext());
-}
-
-void MessageEndpointServer::start(faabric::transport::MessageContext& context)
-{
     // Start serving thread in background
-    servingThread = std::thread([this, &context] {
+    servingThread = std::thread([this] {
         endpoint = std::make_unique<RecvMessageEndpoint>(this->port);
 
         // Open message endpoint, and bind
-        endpoint->open(context);
+        endpoint->open();
 
         // Loop until we receive a shutdown message
         while (true) {
@@ -42,17 +37,12 @@ void MessageEndpointServer::start(faabric::transport::MessageContext& context)
 
 void MessageEndpointServer::stop()
 {
-    stop(faabric::transport::getGlobalMessageContext());
-}
-
-void MessageEndpointServer::stop(faabric::transport::MessageContext& context)
-{
     // Send a shutdown message via a temporary endpoint
     SPDLOG_TRACE("Sending shutdown message locally to {}:{}",
                  endpoint->getHost(),
                  endpoint->getPort());
     SendMessageEndpoint e(endpoint->getHost(), endpoint->getPort());
-    e.open(getGlobalMessageContext());
+    e.open();
     e.send(nullptr, 0);
 
     // Join the serving thread
@@ -103,7 +93,7 @@ void MessageEndpointServer::sendResponse(uint8_t* serialisedMsg,
 {
     // Open the endpoint socket, server connects (not bind) to remote address
     SendMessageEndpoint endpoint(returnHost, returnPort + REPLY_PORT_OFFSET);
-    endpoint.open(faabric::transport::getGlobalMessageContext());
+    endpoint.open();
     endpoint.send(serialisedMsg, size);
     endpoint.close();
 }

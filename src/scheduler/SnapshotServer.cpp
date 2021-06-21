@@ -18,7 +18,7 @@ void SnapshotServer::stop()
     faabric::scheduler::getScheduler().closeSnapshotClients();
 
     // Call the parent stop
-    MessageEndpointServer::stop(faabric::transport::getGlobalMessageContext());
+    MessageEndpointServer::stop();
 }
 
 void SnapshotServer::doRecv(faabric::transport::Message& header,

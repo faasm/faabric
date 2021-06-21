@@ -2,7 +2,6 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallApi.h>
-#include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/util/config.h>
 

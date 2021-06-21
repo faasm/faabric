@@ -19,11 +19,11 @@ TEST_CASE_METHOD(MessageContextFixture,
 {
     // Open an endpoint client, don't bind
     MessageEndpoint cli(thisHost, testPort);
-    REQUIRE_NOTHROW(cli.open(context, SocketType::PULL, false));
+    REQUIRE_NOTHROW(cli.open(SocketType::PULL, false));
 
     // Open another endpoint client, bind
     MessageEndpoint secondCli(thisHost, testPort);
-    REQUIRE_NOTHROW(secondCli.open(context, SocketType::PUSH, true));
+    REQUIRE_NOTHROW(secondCli.open(SocketType::PUSH, true));
 
     // Close all endpoint clients
     REQUIRE_NOTHROW(cli.close(false));
@@ -36,11 +36,11 @@ TEST_CASE_METHOD(MessageContextFixture,
 {
     // Open the source endpoint client, don't bind
     SendMessageEndpoint src(thisHost, testPort);
-    src.open(context);
+    src.open();
 
     // Open the destination endpoint client, bind
     RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    dst.open();
 
     // Send message
     std::string expectedMsg = "Hello world!";
@@ -68,7 +68,7 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
     std::thread senderThread([this, expectedMsg, expectedResponse] {
         // Open the source endpoint client, don't bind
         MessageEndpointClient src(thisHost, testPort);
-        src.open(context);
+        src.open();
 
         // Send message and wait for response
         uint8_t msg[expectedMsg.size()];
@@ -86,7 +86,7 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
 
     // Receive message
     RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    dst.open();
     faabric::transport::Message recvMsg = dst.recv();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
@@ -94,7 +94,7 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
 
     // Send response, open a new endpoint for it
     SendMessageEndpoint dstResponse(thisHost, testReplyPort);
-    dstResponse.open(context);
+    dstResponse.open();
     uint8_t msg[expectedResponse.size()];
     memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
     dstResponse.send(msg, expectedResponse.size());
@@ -119,7 +119,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     std::thread senderThread([this, numMessages, baseMsg] {
         // Open the source endpoint client, don't bind
         SendMessageEndpoint src(thisHost, testPort);
-        src.open(context);
+        src.open();
         for (int i = 0; i < numMessages; i++) {
             std::string expectedMsg = baseMsg + std::to_string(i);
             uint8_t msg[expectedMsg.size()];
@@ -132,7 +132,7 @@ TEST_CASE_METHOD(MessageContextFixture,
 
     // Receive messages
     RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    dst.open();
     for (int i = 0; i < numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
@@ -168,7 +168,7 @@ TEST_CASE_METHOD(MessageContextFixture,
           std::thread([this, numMessages, expectedMsg] {
               // Open the source endpoint client, don't bind
               SendMessageEndpoint src(thisHost, testPort);
-              src.open(context);
+              src.open();
               for (int i = 0; i < numMessages; i++) {
                   uint8_t msg[expectedMsg.size()];
                   memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
@@ -181,7 +181,7 @@ TEST_CASE_METHOD(MessageContextFixture,
 
     // Receive messages
     RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    dst.open();
     for (int i = 0; i < numSenders * numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
@@ -231,13 +231,13 @@ TEST_CASE_METHOD(MessageContextFixture,
 
     SECTION("Recv, socket already initialised")
     {
-        cli.open(context, SocketType::PULL, false);
+        cli.open(SocketType::PULL, false);
         REQUIRE_THROWS(cli.setRecvTimeoutMs(100));
     }
 
     SECTION("Send, socket already initialised")
     {
-        cli.open(context, SocketType::PULL, false);
+        cli.open(SocketType::PULL, false);
         REQUIRE_THROWS(cli.setSendTimeoutMs(100));
     }
 }

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <faabric/transport/Message.h>
-#include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/MessageEndpointClient.h>
 
@@ -22,21 +21,6 @@ class MessageEndpointServer
   public:
     MessageEndpointServer(int portIn);
 
-    /* Start and stop the server
-     *
-     * Generic methods to start and stop a message endpoint server. They take
-     * a, thread-safe, 0MQ context as an argument. The stop method will block
-     * until _all_ sockets within the context have been closed. Sockets blocking
-     * on a `recv` will be interrupted with ETERM upon context closure.
-     */
-    void start(faabric::transport::MessageContext& context);
-
-    void stop(faabric::transport::MessageContext& context);
-
-    /* Common start and stop entrypoint
-     *
-     * Call the generic methods with the default global message context.
-     */
     void start();
 
     virtual void stop();
