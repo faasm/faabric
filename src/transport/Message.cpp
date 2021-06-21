@@ -2,47 +2,35 @@
 
 namespace faabric::transport {
 Message::Message(const zmq::message_t& msgIn)
-  : _size(msgIn.size())
+  : bytes(msgIn.size())
   , _more(msgIn.more())
   , _persist(false)
 {
-    msg = reinterpret_cast<uint8_t*>(malloc(_size * sizeof(uint8_t)));
-    memcpy(msg, msgIn.data(), _size);
+    memcpy(bytes.data(), msgIn.data(), msgIn.size());
 }
 
 Message::Message(int sizeIn)
-  : _size(sizeIn)
+  : bytes(sizeIn)
   , _more(false)
   , _persist(false)
-{
-    msg = reinterpret_cast<uint8_t*>(malloc(_size * sizeof(uint8_t)));
-}
-
-// Empty message signals shutdown
-Message::Message()
-  : msg(nullptr)
 {}
 
-Message::~Message()
-{
-    if (!_persist) {
-        free(reinterpret_cast<void*>(msg));
-    }
-}
+// Empty message signals shutdown
+Message::Message() {}
 
 char* Message::data()
 {
-    return reinterpret_cast<char*>(msg);
+    return reinterpret_cast<char*>(bytes.data());
 }
 
 uint8_t* Message::udata()
 {
-    return msg;
+    return bytes.data();
 }
 
 int Message::size()
 {
-    return _size;
+    return bytes.size();
 }
 
 bool Message::more()
