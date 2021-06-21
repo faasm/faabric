@@ -70,6 +70,27 @@ class SlowExecutorFixture
     };
 };
 
+class DummyExecutorFixture
+  : public RedisTestFixture
+  , public SchedulerTestFixture
+  , public ConfTestFixture
+{
+  public:
+    DummyExecutorFixture()
+    {
+        std::shared_ptr<ExecutorFactory> fac =
+          std::make_shared<DummyExecutorFactory>();
+        setExecutorFactory(fac);
+    };
+
+    ~DummyExecutorFixture()
+    {
+        std::shared_ptr<DummyExecutorFactory> fac =
+          std::make_shared<DummyExecutorFactory>();
+        setExecutorFactory(fac);
+    };
+};
+
 TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
 {
     faabric::util::setMockMode(true);
@@ -782,5 +803,31 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     std::vector<faabric::util::SnapshotDiff> actualDiffs =
       std::get<3>(actualTuple);
     REQUIRE(actualDiffs.size() == diffs.size());
+}
+
+TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
+{
+    faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
+    faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
+    faabric::Message msgC = faabric::util::messageFactory("foo", "bar");
+    faabric::Message msgD = faabric::util::messageFactory("foo", "bar");
+
+    // Execute a couple of functions
+    sch.callFunction(msgA);
+    sch.callFunction(msgB);
+    sch.getFunctionResult(msgA.id(), SHORT_TEST_TIMEOUT_MS);
+    sch.getFunctionResult(msgB.id(), SHORT_TEST_TIMEOUT_MS);
+
+    // Check executor count
+    REQUIRE(sch.getFunctionExecutorCount(msgA) == 2);
+
+    // Submit a couple more functions
+    sch.callFunction(msgC);
+    sch.callFunction(msgD);
+    sch.getFunctionResult(msgC.id(), SHORT_TEST_TIMEOUT_MS);
+    sch.getFunctionResult(msgD.id(), SHORT_TEST_TIMEOUT_MS);
+
+    // Check executor count is still the same
+    REQUIRE(sch.getFunctionExecutorCount(msgA) == 2);
 }
 }
