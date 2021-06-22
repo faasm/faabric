@@ -5,7 +5,7 @@ Message::Message(const zmq::message_t& msgIn)
   : bytes(msgIn.size())
   , _more(msgIn.more())
 {
-    memcpy(bytes.data(), msgIn.data(), msgIn.size());
+    std::memcpy(bytes.data(), msgIn.data(), msgIn.size());
 }
 
 Message::Message(int sizeIn)

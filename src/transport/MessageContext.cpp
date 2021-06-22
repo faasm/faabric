@@ -8,6 +8,7 @@ class ContextWrapper
 {
   public:
     std::shared_ptr<zmq::context_t> ctx;
+
     ContextWrapper()
     {
         ctx = std::make_shared<zmq::context_t>(ZMQ_CONTEXT_IO_THREADS);
@@ -16,7 +17,12 @@ class ContextWrapper
     ~ContextWrapper()
     {
         SPDLOG_TRACE("Destroying ZeroMQ context");
+
+        // Force outstanding ops to return ETERM
         ctx->shutdown();
+
+        // Close the context
+        ctx->close();
     }
 };
 

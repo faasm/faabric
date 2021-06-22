@@ -4,6 +4,7 @@
 
 #include "faabric_utils.h"
 
+#include <faabric/transport/MessageContext.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/testing.h>
 
@@ -17,6 +18,9 @@ int main(int argc, char* argv[])
     int result = Catch::Session().run(argc, argv);
 
     fflush(stdout);
+
+    faabric::transport::getGlobalMessageContext()->shutdown();
+    faabric::transport::getGlobalMessageContext()->close();
 
     return result;
 }
