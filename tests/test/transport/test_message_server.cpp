@@ -196,20 +196,6 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
 
 TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 {
-    // Start the server in the background
-    std::thread t([] {
-        SlowServer server;
-        server.start();
-
-        int threadSleep = server.delayMs + 500;
-        usleep(threadSleep * 1000);
-
-        server.stop();
-    });
-
-    // Wait for the server to start up
-    usleep(500 * 1000);
-
     int clientTimeout;
     bool expectFailure;
 
@@ -224,6 +210,20 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         clientTimeout = 100;
         expectFailure = true;
     }
+
+    // Start the server in the background
+    std::thread t([] {
+        SlowServer server;
+        server.start();
+
+        int threadSleep = server.delayMs + 500;
+        usleep(threadSleep * 1000);
+
+        server.stop();
+    });
+
+    // Wait for the server to start up
+    usleep(500 * 1000);
 
     // Set up the client
     MessageEndpointClient cli(thisHost, testPort);

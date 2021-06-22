@@ -26,6 +26,8 @@ Message MessageEndpointClient::awaitResponse(int port)
         throw;
     }
 
+    endpoint.close();
+
     return receivedMessage;
 }
 }

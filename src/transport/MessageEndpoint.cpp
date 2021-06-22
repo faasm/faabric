@@ -49,13 +49,13 @@ void MessageEndpoint::open(faabric::transport::SocketType sockType, bool bind)
     // Note - only one socket may bind, but several can connect. This
     // allows for easy N - 1 or 1 - N PUSH/PULL patterns. Order between
     // bind and connect does not matter.
-    std::shared_ptr<MessageContext> context = getGlobalMessageContext();
+    std::shared_ptr<zmq::context_t> context = getGlobalMessageContext();
     switch (sockType) {
         case faabric::transport::SocketType::PUSH:
             CATCH_ZMQ_ERR(
               {
                   this->socket = std::make_unique<zmq::socket_t>(
-                    context->getZMQContext(), zmq::socket_type::push);
+                    *context, zmq::socket_type::push);
               },
               "push_socket")
             break;
@@ -63,7 +63,7 @@ void MessageEndpoint::open(faabric::transport::SocketType sockType, bool bind)
             CATCH_ZMQ_ERR(
               {
                   this->socket = std::make_unique<zmq::socket_t>(
-                    context->getZMQContext(), zmq::socket_type::pull);
+                    *context, zmq::socket_type::pull);
               },
               "pull_socket")
 

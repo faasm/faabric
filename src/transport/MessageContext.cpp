@@ -4,34 +4,15 @@
 
 namespace faabric::transport {
 
-std::shared_ptr<MessageContext> MessageContext::instance = nullptr;
-std::shared_mutex MessageContext::mx;
+static std::shared_ptr<zmq::context_t> instance = nullptr;
+static std::shared_mutex mx;
 
-MessageContext::MessageContext()
-  : ctx(1)
-{}
-
-MessageContext::MessageContext(int overrideIoThreads)
-  : ctx(overrideIoThreads)
-{}
-
-MessageContext::~MessageContext()
-{
-    SPDLOG_TRACE("Closing global ZeroMQ message context");
-    this->ctx.close();
-}
-
-zmq::context_t& MessageContext::getZMQContext()
-{
-    return this->ctx;
-}
-
-std::shared_ptr<MessageContext> MessageContext::getInstance()
+std::shared_ptr<zmq::context_t> getGlobalMessageContext()
 {
     if (instance == nullptr) {
         faabric::util::FullLock lock(mx);
         if (instance == nullptr) {
-            instance = std::make_unique<MessageContext>();
+            instance = std::make_shared<zmq::context_t>(ZMQ_CONTEXT_IO_THREADS);
         }
     }
 
@@ -40,10 +21,5 @@ std::shared_ptr<MessageContext> MessageContext::getInstance()
 
         return instance;
     }
-}
-
-std::shared_ptr<MessageContext> getGlobalMessageContext()
-{
-    return MessageContext::getInstance();
 }
 }
