@@ -18,6 +18,9 @@
 #define DEFAULT_RECV_TIMEOUT_MS 20000
 #define DEFAULT_SEND_TIMEOUT_MS 20000
 
+// The monitor is checking an asynchronous event has completed, so can be short
+#define MONITOR_TIMEOUT_MS 2000
+
 namespace faabric::transport {
 enum class SocketType
 {

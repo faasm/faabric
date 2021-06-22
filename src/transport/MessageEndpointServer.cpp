@@ -13,10 +13,10 @@ void MessageEndpointServer::start()
 {
     // Start serving thread in background
     servingThread = std::thread([this] {
-        endpoint = std::make_unique<RecvMessageEndpoint>(this->port);
+        recvEndpoint = std::make_unique<RecvMessageEndpoint>(this->port);
 
         // Open message endpoint, and bind
-        endpoint->open();
+        recvEndpoint->open();
 
         // Loop until we receive a shutdown message
         while (true) {
@@ -27,22 +27,23 @@ void MessageEndpointServer::start()
                     break;
                 }
             } catch (MessageTimeoutException& ex) {
+                SPDLOG_TRACE("Server timed out with no messages, continuing");
                 continue;
             }
         }
 
-        endpoint->close();
+        recvEndpoint->close();
     });
 }
 
 void MessageEndpointServer::stop()
 {
     SPDLOG_TRACE("Sending shutdown message locally to {}:{}",
-                 endpoint->getHost(),
-                 endpoint->getPort());
+                 recvEndpoint->getHost(),
+                 recvEndpoint->getPort());
 
     // Send a shutdown message via a temporary endpoint
-    SendMessageEndpoint e(endpoint->getHost(), endpoint->getPort());
+    SendMessageEndpoint e(recvEndpoint->getHost(), recvEndpoint->getPort());
     e.open();
     e.send(nullptr, 0);
 
@@ -57,10 +58,10 @@ void MessageEndpointServer::stop()
 bool MessageEndpointServer::recv()
 {
     // Check endpoint has been initialised
-    assert(endpoint->socket != nullptr);
+    assert(recvEndpoint->socket != nullptr);
 
     // Receive header and body
-    Message header = endpoint->recv();
+    Message header = recvEndpoint->recv();
 
     // Detect shutdown condition
     if (header.size() == 0) {
@@ -73,7 +74,7 @@ bool MessageEndpointServer::recv()
     }
 
     // Check that there are no more messages to receive
-    Message body = endpoint->recv();
+    Message body = recvEndpoint->recv();
     if (body.more()) {
         throw std::runtime_error("Body sent with SNDMORE flag");
     }
@@ -93,9 +94,10 @@ void MessageEndpointServer::sendResponse(uint8_t* serialisedMsg,
                                          int returnPort)
 {
     // Open the endpoint socket, server connects (not bind) to remote address
-    SendMessageEndpoint endpoint(returnHost, returnPort + REPLY_PORT_OFFSET);
-    endpoint.open();
-    endpoint.send(serialisedMsg, size);
-    endpoint.close();
+    SendMessageEndpoint sendEndpoint(returnHost,
+                                     returnPort + REPLY_PORT_OFFSET);
+    sendEndpoint.open();
+    sendEndpoint.send(serialisedMsg, size);
+    sendEndpoint.close();
 }
 }

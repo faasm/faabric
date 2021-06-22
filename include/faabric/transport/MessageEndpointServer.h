@@ -51,7 +51,7 @@ class MessageEndpointServer
   private:
     const int port;
 
-    std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
+    std::unique_ptr<RecvMessageEndpoint> recvEndpoint = nullptr;
 
     std::thread servingThread;
 };

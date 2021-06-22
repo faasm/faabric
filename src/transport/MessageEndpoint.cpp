@@ -45,9 +45,13 @@ MessageEndpoint::~MessageEndpoint()
 
 void MessageEndpoint::open()
 {
-    // Check we are opening from the same thread. We assert not to incur in
-    // costly checks when running a Release build.
+    // Check we are opening from the same thread.
     assert(tid == std::this_thread::get_id());
+
+    if (socket != nullptr) {
+        SPDLOG_ERROR("Double opening socket {}", id);
+        throw std::runtime_error("Double opening a socket");
+    }
 
     // Note - only one socket may bind, but several can connect. This
     // allows for easy N - 1 or 1 - N PUSH/PULL patterns. Order between
@@ -91,7 +95,14 @@ void MessageEndpoint::open()
 void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
 {
     assert(tid == std::this_thread::get_id());
-    assert(this->socket != nullptr);
+
+    if (this->socket == nullptr) {
+        throw std::runtime_error("Sending on an unopened socket");
+    }
+
+    if (socketType == SocketType::PULL) {
+        throw std::runtime_error("Sending on a recv socket");
+    }
 
     zmq::send_flags sendFlags =
       more ? zmq::send_flags::sndmore : zmq::send_flags::none;
@@ -116,8 +127,15 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
 Message MessageEndpoint::recv(int size)
 {
     assert(tid == std::this_thread::get_id());
-    assert(this->socket != nullptr);
     assert(size >= 0);
+
+    if (this->socket == nullptr) {
+        throw std::runtime_error("Receiving on an unopened socket");
+    }
+
+    if (socketType == SocketType::PUSH) {
+        throw std::runtime_error("Receiving on a send socket");
+    }
 
     if (size == 0) {
         return recvNoBuffer();
@@ -186,50 +204,54 @@ Message MessageEndpoint::recvNoBuffer()
 
 void MessageEndpoint::close()
 {
-    if (this->socket != nullptr) {
-        if (tid != std::this_thread::get_id()) {
-            SPDLOG_WARN("Closing socket from a different thread");
-        }
-
-        // We duplicate the call to close() because when unbinding, we want to
-        // block until we _actually_ have unbound, i.e. 0MQ has closed the
-        // socket (which happens asynchronously). For connect()-ed sockets we
-        // don't care.
-        // Not blocking on un-bind can cause race-conditions when the underlying
-        // system is slow at closing sockets, and the application relies a lot
-        // on synchronous message-passing.
-        switch (socketType) {
-            case SocketType::PUSH: {
-                CATCH_ZMQ_ERR(this->socket->disconnect(address), "disconnect")
-
-                CATCH_ZMQ_ERR(this->socket->close(), "close_disconnect")
-                break;
-            }
-            case SocketType::PULL: {
-                // NOTE - unbinding a socket has a considerable overhead
-                // compared to disconnecting it.
-                CATCH_ZMQ_ERR(this->socket->unbind(address), "unbind")
-
-                // TODO - could we reuse the monitor?
-                zmq::monitor_t mon;
-                const std::string monAddr =
-                  "inproc://monitor_" + std::to_string(id);
-                mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
-
-                CATCH_ZMQ_ERR(this->socket->close(), "close_unbind")
-
-                // Wait for this to complete
-                mon.check_event(recvTimeoutMs);
-                break;
-            }
-            default: {
-                throw std::runtime_error("Closing unrecognised type of socket");
-            }
-        }
-
-        // Finally, null the socket
-        this->socket = nullptr;
+    if (this->socket == nullptr) {
+        SPDLOG_ERROR("Closing unopened socket {}", id);
+        throw std::runtime_error("Closing unopened socket");
     }
+
+    if (tid != std::this_thread::get_id()) {
+        SPDLOG_WARN("Closing socket from a different thread");
+    }
+
+    switch (socketType) {
+        case SocketType::PUSH: {
+            CATCH_ZMQ_ERR(this->socket->disconnect(address), "disconnect")
+            CATCH_ZMQ_ERR(this->socket->close(), "close")
+            break;
+        }
+        case SocketType::PULL: {
+            // We duplicate the call to close() because when unbinding, we want
+            // to block until we _actually_ have unbound, i.e. 0MQ has closed
+            // the socket (which happens asynchronously).
+            //
+            // Not blocking on un-bind can cause race-conditions when the
+            // underlying system is slow at closing sockets, and the application
+            // relies a lot on synchronous message-passing.
+            //
+            // NOTE that unbinding a socket has a considerable
+            // overhead compared to disconnecting it.
+            CATCH_ZMQ_ERR(this->socket->unbind(address), "unbind")
+
+            // TODO - could we reuse the monitor across sockets?
+            zmq::monitor_t mon;
+            const std::string monAddr =
+              "inproc://monitor_" + std::to_string(id);
+            mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
+
+            CATCH_ZMQ_ERR(this->socket->close(), "close")
+
+            // Wait for this to complete (should be fast)
+            mon.check_event(MONITOR_TIMEOUT_MS);
+
+            break;
+        }
+        default: {
+            throw std::runtime_error("Closing unrecognised type of socket");
+        }
+    }
+
+    // Finally, null the socket
+    this->socket = nullptr;
 }
 
 std::string MessageEndpoint::getHost()
