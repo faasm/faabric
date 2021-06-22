@@ -4,7 +4,6 @@ namespace faabric::transport {
 Message::Message(const zmq::message_t& msgIn)
   : bytes(msgIn.size())
   , _more(msgIn.more())
-  , _persist(false)
 {
     memcpy(bytes.data(), msgIn.data(), msgIn.size());
 }
@@ -12,7 +11,6 @@ Message::Message(const zmq::message_t& msgIn)
 Message::Message(int sizeIn)
   : bytes(sizeIn)
   , _more(false)
-  , _persist(false)
 {}
 
 // Empty message signals shutdown
@@ -41,10 +39,5 @@ int Message::size()
 bool Message::more()
 {
     return _more;
-}
-
-void Message::persist()
-{
-    _persist = true;
 }
 }

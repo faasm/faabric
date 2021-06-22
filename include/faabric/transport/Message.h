@@ -28,12 +28,9 @@ class Message
 
     bool more();
 
-    void persist();
-
   private:
     std::vector<uint8_t> bytes;
 
     bool _more;
-    bool _persist;
 };
 }

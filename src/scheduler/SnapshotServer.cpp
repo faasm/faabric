@@ -7,6 +7,8 @@
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
+#include <sys/mman.h>
+
 namespace faabric::scheduler {
 SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(SNAPSHOT_PORT)
@@ -60,12 +62,16 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
     // Set up the snapshot
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
-    data.data = r->mutable_contents()->Data();
-    reg.takeSnapshot(r->key()->str(), data, true);
 
-    // Note that now the snapshot data is owned by Faabric and will be deleted
-    // later, so we don't want the message to delete it
-    msg.persist();
+    // TODO - avoid this copy by changing server superclass to allow subclasses
+    // to provide a buffer to receive data.
+    // TODO - work out snapshot ownership here, how do we know when to delete
+    // this data?
+    data.data = (uint8_t*)mmap(
+      nullptr, data.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    std::memcpy(data.data, r->mutable_contents()->Data(), data.size);
+
+    reg.takeSnapshot(r->key()->str(), data, true);
 
     // Send response
     faabric::EmptyResponse response;
