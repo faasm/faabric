@@ -18,16 +18,16 @@ TEST_CASE_METHOD(MessageContextFixture,
                  "[transport]")
 {
     // Open an endpoint client, don't bind
-    MessageEndpoint cli(thisHost, testPort);
-    REQUIRE_NOTHROW(cli.open(SocketType::PULL, false));
+    MessageEndpoint cli(SocketType::PULL, thisHost, testPort);
+    REQUIRE_NOTHROW(cli.open());
 
     // Open another endpoint client, bind
-    MessageEndpoint secondCli(thisHost, testPort);
-    REQUIRE_NOTHROW(secondCli.open(SocketType::PUSH, true));
+    MessageEndpoint secondCli(SocketType::PUSH, thisHost, testPort);
+    REQUIRE_NOTHROW(secondCli.open());
 
     // Close all endpoint clients
-    REQUIRE_NOTHROW(cli.close(false));
-    REQUIRE_NOTHROW(secondCli.close(true));
+    REQUIRE_NOTHROW(cli.close());
+    REQUIRE_NOTHROW(secondCli.close());
 }
 
 TEST_CASE_METHOD(MessageContextFixture,
@@ -65,7 +65,7 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
     std::string expectedMsg = "Hello ";
     std::string expectedResponse = "world!";
 
-    std::thread senderThread([this, expectedMsg, expectedResponse] {
+    std::thread senderThread([expectedMsg, expectedResponse] {
         // Open the source endpoint client, don't bind
         MessageEndpointClient src(thisHost, testPort);
         src.open();
@@ -116,7 +116,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     int numMessages = 10000;
     std::string baseMsg = "Hello ";
 
-    std::thread senderThread([this, numMessages, baseMsg] {
+    std::thread senderThread([numMessages, baseMsg] {
         // Open the source endpoint client, don't bind
         SendMessageEndpoint src(thisHost, testPort);
         src.open();
@@ -164,19 +164,18 @@ TEST_CASE_METHOD(MessageContextFixture,
     std::vector<std::thread> senderThreads;
 
     for (int j = 0; j < numSenders; j++) {
-        senderThreads.emplace_back(
-          std::thread([this, numMessages, expectedMsg] {
-              // Open the source endpoint client, don't bind
-              SendMessageEndpoint src(thisHost, testPort);
-              src.open();
-              for (int i = 0; i < numMessages; i++) {
-                  uint8_t msg[expectedMsg.size()];
-                  memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-                  src.send(msg, expectedMsg.size());
-              }
+        senderThreads.emplace_back(std::thread([numMessages, expectedMsg] {
+            // Open the source endpoint client, don't bind
+            SendMessageEndpoint src(thisHost, testPort);
+            src.open();
+            for (int i = 0; i < numMessages; i++) {
+                uint8_t msg[expectedMsg.size()];
+                memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
+                src.send(msg, expectedMsg.size());
+            }
 
-              src.close();
-          }));
+            src.close();
+        }));
     }
 
     // Receive messages
@@ -207,7 +206,7 @@ TEST_CASE_METHOD(MessageContextFixture,
                  "Test can't set invalid send/recv timeouts",
                  "[transport]")
 {
-    MessageEndpoint cli(thisHost, testPort);
+    MessageEndpoint cli(SocketType::PULL, thisHost, testPort);
 
     SECTION("Sanity check valid timeout")
     {
@@ -231,13 +230,13 @@ TEST_CASE_METHOD(MessageContextFixture,
 
     SECTION("Recv, socket already initialised")
     {
-        cli.open(SocketType::PULL, false);
+        cli.open();
         REQUIRE_THROWS(cli.setRecvTimeoutMs(100));
     }
 
     SECTION("Send, socket already initialised")
     {
-        cli.open(SocketType::PULL, false);
+        cli.open();
         REQUIRE_THROWS(cli.setSendTimeoutMs(100));
     }
 }

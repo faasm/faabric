@@ -28,6 +28,11 @@ uint8_t* Message::udata()
     return bytes.data();
 }
 
+std::vector<uint8_t> Message::dataCopy()
+{
+    return bytes;
+}
+
 int Message::size()
 {
     return bytes.size();

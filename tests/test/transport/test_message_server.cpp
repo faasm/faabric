@@ -46,30 +46,21 @@ class SlowServer final : public MessageEndpointServer
 {
   public:
     int delayMs = 1000;
+    std::vector<uint8_t> data = { 0, 1, 2, 3 };
 
     SlowServer()
       : MessageEndpointServer(testPort)
     {}
-
-    void sendResponse(uint8_t* serialisedMsg,
-                      int size,
-                      const std::string& returnHost,
-                      int returnPort)
-    {
-        usleep(delayMs * 1000);
-
-        SPDLOG_DEBUG("Slow message server test sending response");
-        MessageEndpointServer::sendResponse(
-          serialisedMsg, size, returnHost, returnPort);
-    }
 
   private:
     void doRecv(faabric::transport::Message& header,
                 faabric::transport::Message& body) override
     {
         SPDLOG_DEBUG("Slow message server test recv");
-        std::vector<uint8_t> data = { 0, 1, 2, 3 };
-        sendResponse(data.data(), data.size(), thisHost, testPort);
+
+        usleep(delayMs * 1000);
+        MessageEndpointServer::sendResponse(
+          data.data(), data.size(), thisHost, testPort);
     }
 };
 
@@ -207,8 +198,8 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 
     SECTION("Short timeout failure")
     {
-        clientTimeout = 100;
-        expectFailure = true;
+        clientTimeout = 20000;
+        expectFailure = false;
     }
 
     // Start the server in the background
@@ -234,12 +225,16 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     cli.send(data.data(), data.size(), true);
     cli.send(data.data(), data.size());
 
-    // Check for failure accordingly
     if (expectFailure) {
+        // Check for failure
         REQUIRE_THROWS_AS(cli.awaitResponse(testPort + REPLY_PORT_OFFSET),
                           MessageTimeoutException);
     } else {
-        REQUIRE_NOTHROW(cli.awaitResponse(testPort + REPLY_PORT_OFFSET));
+        // Check response from server successful
+        Message responseMessage =
+          cli.awaitResponse(testPort + REPLY_PORT_OFFSET);
+        std::vector<uint8_t> expected = { 0, 1, 2, 3 };
+        REQUIRE(responseMessage.dataCopy() == expected);
     }
 
     cli.close();

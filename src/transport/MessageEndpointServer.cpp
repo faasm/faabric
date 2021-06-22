@@ -37,10 +37,11 @@ void MessageEndpointServer::start()
 
 void MessageEndpointServer::stop()
 {
-    // Send a shutdown message via a temporary endpoint
     SPDLOG_TRACE("Sending shutdown message locally to {}:{}",
                  endpoint->getHost(),
                  endpoint->getPort());
+
+    // Send a shutdown message via a temporary endpoint
     SendMessageEndpoint e(endpoint->getHost(), endpoint->getPort());
     e.open();
     e.send(nullptr, 0);

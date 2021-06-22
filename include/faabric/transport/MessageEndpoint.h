@@ -35,7 +35,9 @@ enum class SocketType
 class MessageEndpoint
 {
   public:
-    MessageEndpoint(const std::string& hostIn, int portIn);
+    MessageEndpoint(SocketType socketTypeIn,
+                    const std::string& hostIn,
+                    int portIn);
 
     // Message endpoints shouldn't be assigned as ZeroMQ sockets are not thread
     // safe
@@ -46,9 +48,9 @@ class MessageEndpoint
 
     ~MessageEndpoint();
 
-    void open(SocketType sockTypeIn, bool bind);
+    void open();
 
-    void close(bool bind);
+    void close();
 
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
@@ -67,6 +69,7 @@ class MessageEndpoint
     void setSendTimeoutMs(int value);
 
   protected:
+    const SocketType socketType;
     const std::string host;
     const int port;
     const std::string address;

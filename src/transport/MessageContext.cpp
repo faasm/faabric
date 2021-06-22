@@ -18,7 +18,6 @@ std::shared_ptr<zmq::context_t> getGlobalMessageContext()
 
     {
         faabric::util::SharedLock lock(mx);
-
         return instance;
     }
 }

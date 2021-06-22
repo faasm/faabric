@@ -22,6 +22,8 @@ class Message
 
     uint8_t* udata();
 
+    std::vector<uint8_t> dataCopy();
+
     int size();
 
     bool more();
