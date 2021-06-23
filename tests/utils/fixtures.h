@@ -117,14 +117,6 @@ class ConfTestFixture
     faabric::util::SystemConfig& conf;
 };
 
-class MessageContextFixture : public SchedulerTestFixture
-{
-  public:
-    MessageContextFixture() {}
-
-    ~MessageContextFixture() {}
-};
-
 class MpiBaseTestFixture : public SchedulerTestFixture
 {
   public:

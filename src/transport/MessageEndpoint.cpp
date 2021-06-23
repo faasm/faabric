@@ -1,4 +1,4 @@
-#include <faabric/transport/MessageContext.h>
+#include <faabric/transport/context.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>

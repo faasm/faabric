@@ -14,7 +14,7 @@ const int testReplyPort = 9996;
 
 namespace tests {
 
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv one message",
                  "[transport]")
 {
@@ -37,7 +37,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     REQUIRE(actualMsg == expectedMsg);
 }
 
-TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
+TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
 {
     // Prepare common message/response
     std::string expectedMsg = "Hello ";
@@ -78,7 +78,7 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
     }
 }
 
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv many messages",
                  "[transport]")
 {
@@ -116,7 +116,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     }
 }
 
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv many messages from many clients",
                  "[transport]")
 {

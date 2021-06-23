@@ -1,6 +1,7 @@
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
+#include <faabric/transport/context.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 

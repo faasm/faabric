@@ -6,7 +6,7 @@
 using namespace faabric::transport;
 
 namespace tests {
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send and recv the hosts to rank message",
                  "[transport]")
 {
@@ -26,7 +26,7 @@ TEST_CASE_METHOD(MessageContextFixture,
     }
 }
 
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send and recv an MPI message",
                  "[transport]")
 {
