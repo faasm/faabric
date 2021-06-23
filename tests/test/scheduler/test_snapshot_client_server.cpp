@@ -64,7 +64,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     usleep(1000 * 500);
 
-    // Check snapshots created in regsitry
+    // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
     const faabric::util::SnapshotData& actualA = reg.getSnapshot(snapKeyA);
     const faabric::util::SnapshotData& actualB = reg.getSnapshot(snapKeyB);

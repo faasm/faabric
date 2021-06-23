@@ -21,7 +21,7 @@
 // How long undelivered messages will hang around when the socket is closed,
 // which also determines how long the context will hang for when closing if
 // things haven't yet completed (usually only when there's an error).
-#define LINGER_MS 1000
+#define LINGER_MS 100
 
 namespace faabric::transport {
 

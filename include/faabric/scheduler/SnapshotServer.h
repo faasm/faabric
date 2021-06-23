@@ -10,9 +10,6 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
 {
   public:
     SnapshotServer();
-
-    void stop() override;
-
   protected:
     void doRecv(faabric::transport::Message& header,
                 faabric::transport::Message& body) override;

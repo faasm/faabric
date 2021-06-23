@@ -15,15 +15,6 @@ SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(SNAPSHOT_PORT)
 {}
 
-void SnapshotServer::stop()
-{
-    // Close the dangling clients
-    faabric::scheduler::getScheduler().closeSnapshotClients();
-
-    // Call the parent stop
-    MessageEndpointServer::stop();
-}
-
 void SnapshotServer::doRecv(faabric::transport::Message& header,
                             faabric::transport::Message& body)
 {

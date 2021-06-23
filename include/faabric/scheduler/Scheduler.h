@@ -168,10 +168,6 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
-    void closeFunctionCallClients();
-
-    void closeSnapshotClients();
-
   private:
     std::string thisHost;
 

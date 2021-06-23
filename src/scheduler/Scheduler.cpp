@@ -61,16 +61,6 @@ void Scheduler::addHostToGlobalSet()
     redis.sadd(AVAILABLE_HOST_SET, thisHost);
 }
 
-void Scheduler::closeFunctionCallClients()
-{
-    functionCallClients.clear();
-}
-
-void Scheduler::closeSnapshotClients()
-{
-    snapshotClients.clear();
-}
-
 void Scheduler::reset()
 {
     // Shut down all Executors
@@ -104,8 +94,8 @@ void Scheduler::reset()
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
 
-    closeFunctionCallClients();
-    closeSnapshotClients();
+    functionCallClients.clear();
+    snapshotClients.clear();
 }
 
 void Scheduler::shutdown()

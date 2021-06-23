@@ -42,7 +42,7 @@ MessageEndpoint::MessageEndpoint(zmq::socket_type socketTypeIn,
                     zmq::socket_t(*getGlobalMessageContext(), socketType),
                   "socket_create")
 
-    // Set socket timeouts
+    // Check and set socket timeout
     if (timeoutMs <= 0) {
         SPDLOG_ERROR("Setting invalid timeout of {}", timeoutMs);
         throw std::runtime_error("Setting invalid timeout");

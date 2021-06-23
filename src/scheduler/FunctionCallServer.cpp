@@ -13,15 +13,6 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::stop()
-{
-    // Close the dangling scheduler endpoints
-    faabric::scheduler::getScheduler().closeFunctionCallClients();
-
-    // Call the parent stop
-    MessageEndpointServer::stop();
-}
-
 void FunctionCallServer::doRecv(faabric::transport::Message& header,
                                 faabric::transport::Message& body)
 {

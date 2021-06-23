@@ -12,8 +12,6 @@ class FunctionCallServer final
   public:
     FunctionCallServer();
 
-    void stop() override;
-
   private:
     Scheduler& scheduler;
 
