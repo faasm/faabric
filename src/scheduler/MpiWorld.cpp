@@ -1155,6 +1155,7 @@ void MpiWorld::barrier(int thisRank)
 {
     if (thisRank == 0) {
         // This is the root, hence just does the waiting
+        SPDLOG_TRACE("MPI - barrier init {}", thisRank);
 
         // Await messages from all others
         for (int r = 1; r < size; r++) {
