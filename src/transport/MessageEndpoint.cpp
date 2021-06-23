@@ -1,4 +1,5 @@
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/transport/common.h>
 #include <faabric/transport/context.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
@@ -202,5 +203,18 @@ Message RecvMessageEndpoint::recvNoBuffer()
 
     // Copy the received message to a buffer whose scope we control
     return Message(msg);
+}
+
+// We create a new endpoint every time. Re-using them would be a possible
+// optimisation if needed.
+void RecvMessageEndpoint::sendResponse(uint8_t* data,
+                                       int size,
+                                       const std::string& returnHost,
+                                       int returnPort)
+{
+    // Open the endpoint socket, server connects (not bind) to remote address
+    SendMessageEndpoint sendEndpoint(returnHost,
+                                     returnPort + REPLY_PORT_OFFSET);
+    sendEndpoint.send(data, size);
 }
 }

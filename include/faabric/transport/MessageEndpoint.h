@@ -20,7 +20,7 @@
 
 namespace faabric::transport {
 
- /* Wrapper arround zmq::socket_t
+/* Wrapper arround zmq::socket_t
  *
  * Thread-unsafe socket-like object. MUST be open-ed and close-ed from the
  * _same_ thread. For a proto://host:pair triple, one socket may bind, and all
@@ -32,7 +32,8 @@ class MessageEndpoint
   public:
     MessageEndpoint(zmq::socket_type socketTypeIn,
                     const std::string& hostIn,
-                    int portIn, int timeoutMsIn);
+                    int portIn,
+                    int timeoutMsIn);
 
     // Delete assignment and copy-constructor as we need to be very careful with
     // socping and same-thread instantiation
@@ -78,6 +79,17 @@ class RecvMessageEndpoint : public MessageEndpoint
     RecvMessageEndpoint(int portIn, int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
     Message recv(int size = 0);
+
+    /* Send response to the client
+     *
+     * Send a one-off response to a client identified by host:port pair.
+     * Together with a blocking recv at the client side, this
+     * method can be used to achieve synchronous client-server communication.
+     */
+    void sendResponse(uint8_t* data,
+                      int size,
+                      const std::string& returnHost,
+                      int returnPort);
 
   private:
     Message recvBuffer(int size);

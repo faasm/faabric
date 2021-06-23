@@ -25,6 +25,8 @@ class MessageEndpointServer
     virtual void stop();
 
   protected:
+    std::unique_ptr<RecvMessageEndpoint> recvEndpoint = nullptr;
+
     bool recv();
 
     /* Template function to handle message reception
@@ -36,21 +38,8 @@ class MessageEndpointServer
     virtual void doRecv(faabric::transport::Message& header,
                         faabric::transport::Message& body) = 0;
 
-    /* Send response to the client
-     *
-     * Send a one-off response to a client identified by host:port pair.
-     * Together with a blocking recv at the client side, this
-     * method can be used to achieve synchronous client-server communication.
-     */
-    void sendResponse(uint8_t* serialisedMsg,
-                      int size,
-                      const std::string& returnHost,
-                      int returnPort);
-
   private:
     const int port;
-
-    std::unique_ptr<RecvMessageEndpoint> recvEndpoint = nullptr;
 
     std::thread servingThread;
 };

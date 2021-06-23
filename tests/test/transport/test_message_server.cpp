@@ -22,18 +22,6 @@ class DummyServer final : public MessageEndpointServer
     // Variable to keep track of the received messages
     int messageCount;
 
-    // This method is protected in the base class, as it's always called from
-    // the doRecv implementation. To ease testing, we make it public with this
-    // workaround.
-    void sendResponse(uint8_t* serialisedMsg,
-                      int size,
-                      const std::string& returnHost,
-                      int returnPort)
-    {
-        MessageEndpointServer::sendResponse(
-          serialisedMsg, size, returnHost, returnPort);
-    }
-
   private:
     void doRecv(faabric::transport::Message& header,
                 faabric::transport::Message& body) override
@@ -60,7 +48,7 @@ class SlowServer final : public MessageEndpointServer
         SPDLOG_DEBUG("Slow message server test recv");
 
         usleep(delayMs * 1000);
-        MessageEndpointServer::sendResponse(
+        recvEndpoint->sendResponse(
           data.data(), data.size(), thisHost, testPort);
     }
 };
@@ -108,8 +96,7 @@ TEST_CASE("Test send one message to server", "[transport]")
 
 TEST_CASE("Test send one-off response to client", "[transport]")
 {
-    DummyServer server;
-    server.start();
+    RecvMessageEndpoint recvEndpoint(testPort);
 
     std::string expectedMsg = "Response from server";
 
@@ -125,13 +112,11 @@ TEST_CASE("Test send one-off response to client", "[transport]")
 
     uint8_t msg[expectedMsg.size()];
     memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-    server.sendResponse(msg, expectedMsg.size(), thisHost, testPort);
+    recvEndpoint.sendResponse(msg, expectedMsg.size(), thisHost, testPort);
 
     if (clientThread.joinable()) {
         clientThread.join();
     }
-
-    server.stop();
 }
 
 TEST_CASE("Test multiple clients talking to one server", "[transport]")

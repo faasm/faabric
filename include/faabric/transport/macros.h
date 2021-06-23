@@ -29,7 +29,7 @@
         if (!msg.SerializeToArray(sMsg, msgSize)) {                            \
             throw std::runtime_error("Error serialising message");             \
         }                                                                      \
-        sendResponse(sMsg, msgSize, host, port);                               \
+        recvEndpoint->sendResponse(sMsg, msgSize, host, port);                 \
     }
 
 #define PARSE_MSG(T, data, size)                                               \
