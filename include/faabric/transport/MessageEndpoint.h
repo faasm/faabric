@@ -18,6 +18,11 @@
 #define DEFAULT_RECV_TIMEOUT_MS 20000
 #define DEFAULT_SEND_TIMEOUT_MS 20000
 
+// How long undelivered messages will hang around when the socket is closed,
+// which also determines how long the context will hang for when closing if
+// things haven't yet completed (usually only when there's an error).
+#define LINGER_MS 1000
+
 namespace faabric::transport {
 
 /* Wrapper arround zmq::socket_t

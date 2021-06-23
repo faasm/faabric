@@ -1,3 +1,4 @@
+#include "zmq.hpp"
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/context.h>
@@ -42,9 +43,12 @@ MessageEndpoint::MessageEndpoint(zmq::socket_type socketTypeIn,
                     zmq::socket_t(*getGlobalMessageContext(), socketType),
                   "socket_create")
 
-    // Set socket options
+    // Set socket timeouts
     socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
     socket.set(zmq::sockopt::sndtimeo, timeoutMs);
+
+    // Note - setting linger here is essential to avoid infinite hangs
+    socket.set(zmq::sockopt::linger, LINGER_MS);
 
     // Note - only one socket may bind, but several can connect. This
     // allows for easy N - 1 or 1 - N PUSH/PULL patterns. Order between
@@ -212,7 +216,8 @@ void RecvMessageEndpoint::sendResponse(uint8_t* data,
                                        const std::string& returnHost)
 {
     // Open the endpoint socket, server connects (not bind) to remote address
-    SendMessageEndpoint sendEndpoint(returnHost, port + REPLY_PORT_OFFSET);
+    SendMessageEndpoint sendEndpoint(
+      returnHost, port + REPLY_PORT_OFFSET, timeoutMs);
     sendEndpoint.send(data, size);
 }
 }

@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/util/macros.h>
 
 using namespace faabric::transport;
 
@@ -47,9 +48,10 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
         SendMessageEndpoint src(thisHost, testPort);
 
         // Send message and wait for response
-        uint8_t msg[expectedMsg.size()];
-        memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-        src.send(msg, expectedMsg.size());
+        std::vector<uint8_t> bytes(BYTES_CONST(expectedMsg.c_str()),
+                                   BYTES_CONST(expectedMsg.c_str()) +
+                                     expectedMsg.size());
+        src.send(bytes.data(), bytes.size());
 
         // Block waiting for a response
         faabric::transport::Message recvMsg = src.awaitResponse();
@@ -65,11 +67,10 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
 
-    // Send response, open a new endpoint for it
-    SendMessageEndpoint dstResponse(thisHost, testPort);
+    // Send response
     uint8_t msg[expectedResponse.size()];
     memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
-    dstResponse.send(msg, expectedResponse.size());
+    dst.sendResponse(msg, expectedResponse.size(), thisHost);
 
     // Wait for sender thread
     if (senderThread.joinable()) {
