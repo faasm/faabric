@@ -226,20 +226,41 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      threadPoolIdx,
                      executingTaskCount);
 
+        // Get snapshot diffs _before_ we reset the executor
         bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+        std::vector<faabric::util::SnapshotDiff> diffs;
         if (isLastTask && isThreads) {
             // Get diffs
             faabric::util::SnapshotData d = snapshot();
-            std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
+            diffs = d.getDirtyPages();
 
+            // Reset dirty page tracking now that we've got the diffs
+            faabric::util::resetDirtyTracking();
+        }
+
+        // If this batch is finished, reset the executor and release its claim.
+        // Note that we have to release the claim _after_ resetting, otherwise
+        // the executor won't be ready for reuse.
+        if (isLastTask) {
+            reset(msg);
+            releaseClaim();
+        }
+
+        // Vacate the slot occupied by this task. This must be done after
+        // releasing the claim on this executor, otherwise the scheduler may try
+        // to schedule another function and be unable to reuse this executor.
+        sch.vacateSlot();
+
+        // Finally set the result of the task, this will allow anything waiting
+        // on its result to continue execution, therefore must be done once the
+        // executor has been reset, otherwise the executor may not be reused for
+        // a repeat invocation.
+        if (isLastTask && isThreads) {
+            // Send diffs along with thread result
             SPDLOG_DEBUG("Task {} finished, returning {} snapshot diffs",
                          msg.id(),
                          diffs.size());
 
-            // Reset dirty page tracking now that we've got the diffs
-            faabric::util::resetDirtyTracking();
-
-            // Send diffs along with thread result
             sch.setThreadResult(msg, returnValue, diffs);
         } else if (isThreads) {
             // Set non-final thread result
@@ -247,13 +268,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
         } else {
             // Set normal function result
             sch.setFunctionResult(msg);
-        }
-
-        // Reset and release claim. Note that we have to release the claim
-        // _after_ resetting, once the executor is ready to be reused
-        if (oldTaskCount == 1) {
-            reset(msg);
-            releaseClaim();
         }
     }
 

@@ -14,16 +14,11 @@ class DistTestsFixture
   , public ConfTestFixture
   , public SnapshotTestFixture
 {
-  protected:
-    std::set<std::string> otherHosts;
-
   public:
     DistTestsFixture()
     {
         // Get other hosts
         std::string thisHost = conf.endpointHost;
-        otherHosts = sch.getAvailableHosts();
-        otherHosts.erase(thisHost);
 
         // Set up executor
         std::shared_ptr<tests::DistTestExecutorFactory> fac =

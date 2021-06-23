@@ -8,6 +8,8 @@
 #include <faabric/util/random.h>
 #include <faabric_utils.h>
 
+#include <thread>
+
 using namespace faabric::scheduler;
 
 namespace tests {
@@ -168,6 +170,41 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test cartesian communicator", "[mpi]")
         }
     }
 
+    world.destroy();
+}
+
+TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
+{
+    // Create the world
+    int worldSize = 2;
+    MpiWorld world;
+    world.create(msg, worldId, worldSize);
+
+    int rankA1 = 0;
+    int rankA2 = 1;
+    std::vector<int> sendData = { 0, 1, 2 };
+    std::vector<int> recvData = { -1, -1, -1 };
+
+    std::thread senderThread([&world, rankA1, rankA2, &sendData, &recvData] {
+        world.send(
+          rankA1, rankA2, BYTES(sendData.data()), MPI_INT, sendData.size());
+
+        world.barrier(rankA1);
+        assert(sendData == recvData);
+    });
+
+    world.recv(rankA1,
+               rankA2,
+               BYTES(recvData.data()),
+               MPI_INT,
+               recvData.size(),
+               MPI_STATUS_IGNORE);
+
+    REQUIRE(recvData == sendData);
+
+    world.barrier(rankA2);
+
+    senderThread.join();
     world.destroy();
 }
 
