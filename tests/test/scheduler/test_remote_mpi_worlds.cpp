@@ -156,6 +156,49 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     localWorld.destroy();
 }
 
+TEST_CASE_METHOD(RemoteMpiTestFixture, "Test barrier across hosts", "[mpi]")
+{
+    // Register two ranks (one on each host)
+    this->setWorldsSizes(2, 1, 1);
+    int rankA = 0;
+    int rankB = 1;
+    std::vector<int> sendData = { 0, 1, 2 };
+    std::vector<int> recvData = { -1, -1, -1 };
+
+    // Init worlds
+    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(false);
+
+    std::thread senderThread([this, rankA, rankB, &sendData, &recvData] {
+        remoteWorld.initialiseFromMsg(msg);
+
+        remoteWorld.send(
+          rankB, rankA, BYTES(sendData.data()), MPI_INT, sendData.size());
+
+        // Barrier on this rank
+        remoteWorld.barrier(rankB);
+        assert(sendData == recvData);
+
+        remoteWorld.destroy();
+    });
+
+    // Receive the message for the given rank
+    localWorld.recv(rankB,
+                    rankA,
+                    BYTES(recvData.data()),
+                    MPI_INT,
+                    recvData.size(),
+                    MPI_STATUS_IGNORE);
+    REQUIRE(recvData == sendData);
+
+    // Call barrier to synchronise remote host
+    localWorld.barrier(rankA);
+
+    // Destroy worlds
+    senderThread.join();
+    localWorld.destroy();
+}
+
 TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "Test sending many messages across host",
                  "[mpi]")

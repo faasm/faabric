@@ -185,8 +185,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
     std::vector<int> sendData = { 0, 1, 2 };
     std::vector<int> recvData = { -1, -1, -1 };
 
-    std::thread sendThread([&world, rankA1, rankA2, &sendData, &recvData] {
-        assert(sendData != recvData);
+    std::thread senderThread([&world, rankA1, rankA2, &sendData, &recvData] {
         world.send(
           rankA1, rankA2, BYTES(sendData.data()), MPI_INT, sendData.size());
 
@@ -194,14 +193,18 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
         assert(sendData == recvData);
     });
 
-    world.recv(
-      rankA1, rankA2, BYTES(recvData.data()), MPI_INT, recvData.size(), MPI_STATUS_IGNORE);
+    world.recv(rankA1,
+               rankA2,
+               BYTES(recvData.data()),
+               MPI_INT,
+               recvData.size(),
+               MPI_STATUS_IGNORE);
 
     REQUIRE(recvData == sendData);
 
     world.barrier(rankA2);
 
-    sendThread.join();
+    senderThread.join();
     world.destroy();
 }
 
