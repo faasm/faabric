@@ -63,17 +63,11 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::closeFunctionCallClients()
 {
-    for (auto& iter : functionCallClients) {
-        iter.second.close();
-    }
     functionCallClients.clear();
 }
 
 void Scheduler::closeSnapshotClients()
 {
-    for (auto& iter : snapshotClients) {
-        iter.second.close();
-    }
     snapshotClients.clear();
 }
 

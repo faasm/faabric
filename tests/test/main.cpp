@@ -19,8 +19,5 @@ int main(int argc, char* argv[])
 
     fflush(stdout);
 
-    faabric::transport::getGlobalMessageContext()->shutdown();
-    faabric::transport::getGlobalMessageContext()->close();
-
     return result;
 }

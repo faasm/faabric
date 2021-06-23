@@ -34,7 +34,6 @@ class SnapshotClientServerFixture
 
     ~SnapshotClientServerFixture()
     {
-        cli.close();
         server.stop();
     }
 };

@@ -12,7 +12,9 @@ namespace faabric::transport {
 class MessageEndpointClient : public faabric::transport::SendMessageEndpoint
 {
   public:
-    MessageEndpointClient(const std::string& host, int port);
+    MessageEndpointClient(const std::string& host,
+                          int port,
+                          int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
     /* Wait for a message
      *

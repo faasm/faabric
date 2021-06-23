@@ -78,7 +78,6 @@ void clearMockSnapshotRequests()
 SnapshotClient::SnapshotClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
 {
-    this->open();
 }
 
 void SnapshotClient::sendHeader(faabric::scheduler::SnapshotCalls call)

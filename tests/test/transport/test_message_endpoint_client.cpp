@@ -13,22 +13,6 @@ const int testPort = 9999;
 const int testReplyPort = 9996;
 
 namespace tests {
-TEST_CASE_METHOD(MessageContextFixture,
-                 "Test open/close one client",
-                 "[transport]")
-{
-    // Open an endpoint client, don't bind
-    MessageEndpoint cli(SocketType::PULL, thisHost, testPort);
-    REQUIRE_NOTHROW(cli.open());
-
-    // Open another endpoint client, bind
-    MessageEndpoint secondCli(SocketType::PUSH, thisHost, testPort);
-    REQUIRE_NOTHROW(secondCli.open());
-
-    // Close all endpoint clients
-    REQUIRE_NOTHROW(cli.close());
-    REQUIRE_NOTHROW(secondCli.close());
-}
 
 TEST_CASE_METHOD(MessageContextFixture,
                  "Test send/recv one message",
@@ -36,11 +20,9 @@ TEST_CASE_METHOD(MessageContextFixture,
 {
     // Open the source endpoint client, don't bind
     SendMessageEndpoint src(thisHost, testPort);
-    src.open();
 
     // Open the destination endpoint client, bind
     RecvMessageEndpoint dst(testPort);
-    dst.open();
 
     // Send message
     std::string expectedMsg = "Hello world!";
@@ -53,10 +35,6 @@ TEST_CASE_METHOD(MessageContextFixture,
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
-
-    // Close endpoints
-    src.close();
-    dst.close();
 }
 
 TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
@@ -68,7 +46,6 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
     std::thread senderThread([expectedMsg, expectedResponse] {
         // Open the source endpoint client, don't bind
         MessageEndpointClient src(thisHost, testPort);
-        src.open();
 
         // Send message and wait for response
         uint8_t msg[expectedMsg.size()];
@@ -80,13 +57,10 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
         assert(recvMsg.size() == expectedResponse.size());
         std::string actualResponse(recvMsg.data(), recvMsg.size());
         assert(actualResponse == expectedResponse);
-
-        src.close();
     });
 
     // Receive message
     RecvMessageEndpoint dst(testPort);
-    dst.open();
     faabric::transport::Message recvMsg = dst.recv();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
@@ -94,7 +68,6 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
 
     // Send response, open a new endpoint for it
     SendMessageEndpoint dstResponse(thisHost, testReplyPort);
-    dstResponse.open();
     uint8_t msg[expectedResponse.size()];
     memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
     dstResponse.send(msg, expectedResponse.size());
@@ -103,10 +76,6 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
     if (senderThread.joinable()) {
         senderThread.join();
     }
-
-    // Close receiving endpoints
-    dst.close();
-    dstResponse.close();
 }
 
 TEST_CASE_METHOD(MessageContextFixture,
@@ -119,20 +88,16 @@ TEST_CASE_METHOD(MessageContextFixture,
     std::thread senderThread([numMessages, baseMsg] {
         // Open the source endpoint client, don't bind
         SendMessageEndpoint src(thisHost, testPort);
-        src.open();
         for (int i = 0; i < numMessages; i++) {
             std::string expectedMsg = baseMsg + std::to_string(i);
             uint8_t msg[expectedMsg.size()];
             memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
             src.send(msg, expectedMsg.size());
         }
-
-        src.close();
     });
 
     // Receive messages
     RecvMessageEndpoint dst(testPort);
-    dst.open();
     for (int i = 0; i < numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
@@ -149,9 +114,6 @@ TEST_CASE_METHOD(MessageContextFixture,
     if (senderThread.joinable()) {
         senderThread.join();
     }
-
-    // Close the destination endpoint
-    dst.close();
 }
 
 TEST_CASE_METHOD(MessageContextFixture,
@@ -167,20 +129,16 @@ TEST_CASE_METHOD(MessageContextFixture,
         senderThreads.emplace_back(std::thread([numMessages, expectedMsg] {
             // Open the source endpoint client, don't bind
             SendMessageEndpoint src(thisHost, testPort);
-            src.open();
             for (int i = 0; i < numMessages; i++) {
                 uint8_t msg[expectedMsg.size()];
                 memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
                 src.send(msg, expectedMsg.size());
             }
-
-            src.close();
         }));
     }
 
     // Receive messages
     RecvMessageEndpoint dst(testPort);
-    dst.open();
     for (int i = 0; i < numSenders * numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
@@ -196,48 +154,6 @@ TEST_CASE_METHOD(MessageContextFixture,
         if (t.joinable()) {
             t.join();
         }
-    }
-
-    // Close the destination endpoint
-    dst.close();
-}
-
-TEST_CASE_METHOD(MessageContextFixture,
-                 "Test can't set invalid send/recv timeouts",
-                 "[transport]")
-{
-    MessageEndpoint cli(SocketType::PULL, thisHost, testPort);
-
-    SECTION("Sanity check valid timeout")
-    {
-        REQUIRE_NOTHROW(cli.setRecvTimeoutMs(100));
-        REQUIRE_NOTHROW(cli.setSendTimeoutMs(100));
-    }
-
-    SECTION("Recv zero timeout") { REQUIRE_THROWS(cli.setRecvTimeoutMs(0)); }
-
-    SECTION("Send zero timeout") { REQUIRE_THROWS(cli.setSendTimeoutMs(0)); }
-
-    SECTION("Recv negative timeout")
-    {
-        REQUIRE_THROWS(cli.setRecvTimeoutMs(-1));
-    }
-
-    SECTION("Send negative timeout")
-    {
-        REQUIRE_THROWS(cli.setSendTimeoutMs(-1));
-    }
-
-    SECTION("Recv, socket already initialised")
-    {
-        cli.open();
-        REQUIRE_THROWS(cli.setRecvTimeoutMs(100));
-    }
-
-    SECTION("Send, socket already initialised")
-    {
-        cli.open();
-        REQUIRE_THROWS(cli.setSendTimeoutMs(100));
     }
 }
 }

@@ -84,8 +84,6 @@ TEST_CASE("Test send one message to server", "[transport]")
     // Open the source endpoint client, don't bind
     MessageEndpointClient src(thisHost, testPort);
 
-    src.open();
-
     // Send message: server expects header + body
     std::string header = "header";
     uint8_t headerMsg[header.size()];
@@ -103,9 +101,6 @@ TEST_CASE("Test send one message to server", "[transport]")
     usleep(1000 * 300);
     REQUIRE(server.messageCount == 1);
 
-    // Close the client
-    src.close();
-
     // Close the server
     server.stop();
 }
@@ -120,14 +115,11 @@ TEST_CASE("Test send one-off response to client", "[transport]")
     std::thread clientThread([expectedMsg] {
         // Open the source endpoint client, don't bind
         MessageEndpointClient cli(thisHost, testPort);
-        cli.open();
 
         Message msg = cli.awaitResponse(testPort + REPLY_PORT_OFFSET);
         assert(msg.size() == expectedMsg.size());
         std::string actualMsg(msg.data(), msg.size());
         assert(actualMsg == expectedMsg);
-
-        cli.close();
     });
 
     uint8_t msg[expectedMsg.size()];
@@ -154,7 +146,6 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
         clientThreads.emplace_back(std::thread([numMessages] {
             // Prepare client
             MessageEndpointClient cli(thisHost, testPort);
-            cli.open();
 
             std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {
@@ -169,8 +160,6 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
             }
 
             usleep(1000 * 300);
-
-            cli.close();
         }));
     }
 
@@ -198,7 +187,7 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 
     SECTION("Short timeout failure")
     {
-        clientTimeout = 100;
+        clientTimeout = 1;
         expectFailure = true;
     }
 
@@ -217,9 +206,7 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     usleep(500 * 1000);
 
     // Set up the client
-    MessageEndpointClient cli(thisHost, testPort);
-    cli.setRecvTimeoutMs(clientTimeout);
-    cli.open();
+    MessageEndpointClient cli(thisHost, testPort, clientTimeout);
 
     std::vector<uint8_t> data = { 1, 1, 1 };
     cli.send(data.data(), data.size(), true);
@@ -236,8 +223,6 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         std::vector<uint8_t> expected = { 0, 1, 2, 3 };
         REQUIRE(responseMessage.dataCopy() == expected);
     }
-
-    cli.close();
 
     if (t.joinable()) {
         t.join();

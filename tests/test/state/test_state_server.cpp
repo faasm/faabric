@@ -134,9 +134,6 @@ TEST_CASE("Test request/ response", "[state]")
         REQUIRE(actualAppended == expected);
     }
 
-    // Close the state client
-    client.close();
-
     s.stop();
 
     resetStateMode();

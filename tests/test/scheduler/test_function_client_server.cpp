@@ -46,7 +46,6 @@ class ClientServerFixture
 
     ~ClientServerFixture()
     {
-        cli.close();
         server.stop();
         executorFactory->reset();
     }

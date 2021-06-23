@@ -4,10 +4,8 @@ namespace faabric::transport {
 faabric::MpiHostsToRanksMessage recvMpiHostRankMsg()
 {
     faabric::transport::RecvMessageEndpoint endpoint(MPI_PORT);
-    endpoint.open();
     faabric::transport::Message m = endpoint.recv();
     PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
-    endpoint.close();
 
     return msg;
 }
@@ -22,29 +20,21 @@ void sendMpiHostRankMsg(const std::string& hostIn,
             throw std::runtime_error("Error serialising message");
         }
         faabric::transport::SendMessageEndpoint endpoint(hostIn, MPI_PORT);
-        endpoint.open();
         endpoint.send(sMsg, msgSize, false);
-        endpoint.close();
     }
 }
 
 MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn, int portIn)
   : sendMessageEndpoint(hostIn, portIn)
   , recvMessageEndpoint(portIn)
-{
-    sendMessageEndpoint.open();
-    recvMessageEndpoint.open();
-}
+{}
 
 MpiMessageEndpoint::MpiMessageEndpoint(const std::string& hostIn,
                                        int sendPort,
                                        int recvPort)
   : sendMessageEndpoint(hostIn, sendPort)
   , recvMessageEndpoint(recvPort)
-{
-    sendMessageEndpoint.open();
-    recvMessageEndpoint.open();
-}
+{}
 
 void MpiMessageEndpoint::sendMpiMessage(
   const std::shared_ptr<faabric::MPIMessage>& msg)
@@ -67,13 +57,5 @@ std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
     return std::make_shared<faabric::MPIMessage>(msg);
 }
 
-void MpiMessageEndpoint::close()
-{
-    if (sendMessageEndpoint.socket != nullptr) {
-        sendMessageEndpoint.close();
-    }
-    if (recvMessageEndpoint.socket != nullptr) {
-        recvMessageEndpoint.close();
-    }
-}
+void MpiMessageEndpoint::close() {}
 }

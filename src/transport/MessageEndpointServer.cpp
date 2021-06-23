@@ -15,9 +15,6 @@ void MessageEndpointServer::start()
     servingThread = std::thread([this] {
         recvEndpoint = std::make_unique<RecvMessageEndpoint>(this->port);
 
-        // Open message endpoint, and bind
-        recvEndpoint->open();
-
         // Loop until we receive a shutdown message
         while (true) {
             try {
@@ -31,35 +28,27 @@ void MessageEndpointServer::start()
                 continue;
             }
         }
-
-        recvEndpoint->close();
     });
 }
 
 void MessageEndpointServer::stop()
 {
+    // Send a shutdown message via a temporary endpoint
+    SendMessageEndpoint e(recvEndpoint->getHost(), recvEndpoint->getPort());
+
     SPDLOG_TRACE("Sending shutdown message locally to {}:{}",
                  recvEndpoint->getHost(),
                  recvEndpoint->getPort());
-
-    // Send a shutdown message via a temporary endpoint
-    SendMessageEndpoint e(recvEndpoint->getHost(), recvEndpoint->getPort());
-    e.open();
     e.send(nullptr, 0);
 
     // Join the serving thread
     if (servingThread.joinable()) {
         servingThread.join();
     }
-
-    e.close();
 }
 
 bool MessageEndpointServer::recv()
 {
-    // Check endpoint has been initialised
-    assert(recvEndpoint->socket != nullptr);
-
     // Receive header and body
     Message header = recvEndpoint->recv();
 
@@ -96,8 +85,6 @@ void MessageEndpointServer::sendResponse(uint8_t* serialisedMsg,
     // Open the endpoint socket, server connects (not bind) to remote address
     SendMessageEndpoint sendEndpoint(returnHost,
                                      returnPort + REPLY_PORT_OFFSET);
-    sendEndpoint.open();
     sendEndpoint.send(serialisedMsg, size);
-    sendEndpoint.close();
 }
 }

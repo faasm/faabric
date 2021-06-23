@@ -25,7 +25,6 @@ size_t InMemoryStateKeyValue::getStateSizeFromRemote(const std::string& userIn,
 
     StateClient stateClient(userIn, keyIn, masterIP);
     size_t stateSize = stateClient.stateSize();
-    stateClient.close();
     return stateSize;
 }
 
@@ -43,7 +42,6 @@ void InMemoryStateKeyValue::deleteFromRemote(const std::string& userIn,
 
     StateClient stateClient(userIn, keyIn, masterIP);
     stateClient.deleteState();
-    stateClient.close();
 }
 
 void InMemoryStateKeyValue::clearAll(bool global)
@@ -90,7 +88,6 @@ void InMemoryStateKeyValue::lockGlobal()
     } else {
         StateClient cli(user, key, masterIP);
         cli.lock();
-        cli.close();
     }
 }
 
@@ -101,7 +98,6 @@ void InMemoryStateKeyValue::unlockGlobal()
     } else {
         StateClient cli(user, key, masterIP);
         cli.unlock();
-        cli.close();
     }
 }
 
@@ -114,7 +110,6 @@ void InMemoryStateKeyValue::pullFromRemote()
     std::vector<StateChunk> chunks = getAllChunks();
     StateClient cli(user, key, masterIP);
     cli.pullChunks(chunks, BYTES(sharedMemory));
-    cli.close();
 }
 
 void InMemoryStateKeyValue::pullChunkFromRemote(long offset, size_t length)
@@ -127,7 +122,6 @@ void InMemoryStateKeyValue::pullChunkFromRemote(long offset, size_t length)
     std::vector<StateChunk> chunks = { StateChunk(offset, length, chunkStart) };
     StateClient cli(user, key, masterIP);
     cli.pullChunks(chunks, BYTES(sharedMemory));
-    cli.close();
 }
 
 void InMemoryStateKeyValue::pushToRemote()
@@ -139,7 +133,6 @@ void InMemoryStateKeyValue::pushToRemote()
     std::vector<StateChunk> allChunks = getAllChunks();
     StateClient cli(user, key, masterIP);
     cli.pushChunks(allChunks);
-    cli.close();
 }
 
 void InMemoryStateKeyValue::pushPartialToRemote(
@@ -150,7 +143,6 @@ void InMemoryStateKeyValue::pushPartialToRemote(
     } else {
         StateClient cli(user, key, masterIP);
         cli.pushChunks(chunks);
-        cli.close();
     }
 }
 
@@ -166,7 +158,6 @@ void InMemoryStateKeyValue::appendToRemote(const uint8_t* data, size_t length)
     } else {
         StateClient cli(user, key, masterIP);
         cli.append(data, length);
-        cli.close();
     }
 }
 
@@ -186,7 +177,6 @@ void InMemoryStateKeyValue::pullAppendedFromRemote(uint8_t* data,
     } else {
         StateClient cli(user, key, masterIP);
         cli.pullAppended(data, length, nValues);
-        cli.close();
     }
 }
 
@@ -198,7 +188,6 @@ void InMemoryStateKeyValue::clearAppendedFromRemote()
     } else {
         StateClient cli(user, key, masterIP);
         cli.clearAppended();
-        cli.close();
     }
 }
 

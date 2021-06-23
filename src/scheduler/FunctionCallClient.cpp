@@ -82,7 +82,6 @@ void clearMockRequests()
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
 {
-    this->open();
 }
 
 void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)

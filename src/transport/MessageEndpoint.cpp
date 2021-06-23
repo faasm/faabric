@@ -24,84 +24,80 @@
 
 namespace faabric::transport {
 
-MessageEndpoint::MessageEndpoint(SocketType socketTypeIn,
+MessageEndpoint::MessageEndpoint(zmq::socket_type socketTypeIn,
                                  const std::string& hostIn,
-                                 int portIn)
+                                 int portIn,
+                                 int timeoutMs)
   : socketType(socketTypeIn)
   , host(hostIn)
   , port(portIn)
   , address("tcp://" + host + ":" + std::to_string(port))
   , tid(std::this_thread::get_id())
   , id(faabric::util::generateGid())
-{}
-
-MessageEndpoint::~MessageEndpoint()
 {
-    if (this->socket != nullptr) {
-        SPDLOG_WARN("Destroying an open message endpoint!");
-        this->close();
-    }
-}
+    // Create the socket
+    CATCH_ZMQ_ERR(socket =
+                    zmq::socket_t(*getGlobalMessageContext(), socketType),
+                  "socket_create")
 
-void MessageEndpoint::open()
-{
-    // Check we are opening from the same thread.
-    assert(tid == std::this_thread::get_id());
-
-    if (socket != nullptr) {
-        SPDLOG_ERROR("Double opening socket {}", id);
-        throw std::runtime_error("Double opening a socket");
-    }
+    // Set socket options
+    socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
+    socket.set(zmq::sockopt::sndtimeo, timeoutMs);
 
     // Note - only one socket may bind, but several can connect. This
     // allows for easy N - 1 or 1 - N PUSH/PULL patterns. Order between
     // bind and connect does not matter.
-    std::shared_ptr<zmq::context_t> context = getGlobalMessageContext();
     switch (socketType) {
-        case faabric::transport::SocketType::PUSH: {
-            CATCH_ZMQ_ERR(
-              {
-                  this->socket = std::make_unique<zmq::socket_t>(
-                    *context, zmq::socket_type::push);
-              },
-              "push_socket")
-
-            CATCH_ZMQ_ERR(this->socket->connect(address), "connect")
-
+        case zmq::socket_type::push: {
+            SPDLOG_TRACE("Opening push socket {}:{} (timeout {}ms)",
+                         host,
+                         port,
+                         timeoutMs);
+            CATCH_ZMQ_ERR(socket.connect(address), "connect")
             break;
         }
-        case faabric::transport::SocketType::PULL: {
-            CATCH_ZMQ_ERR(
-              {
-                  this->socket = std::make_unique<zmq::socket_t>(
-                    *context, zmq::socket_type::pull);
-              },
-              "pull_socket")
-
-            CATCH_ZMQ_ERR(this->socket->bind(address), "bind")
-
+        case zmq::socket_type::pull: {
+            SPDLOG_TRACE("Opening pull socket {}:{} (timeout {}ms)",
+                         host,
+                         port,
+                         timeoutMs);
+            CATCH_ZMQ_ERR(socket.bind(address), "bind")
             break;
         }
         default: {
             throw std::runtime_error("Opening unrecognized socket type");
         }
     }
-
-    // Set socket options
-    this->socket->setsockopt(ZMQ_RCVTIMEO, recvTimeoutMs);
-    this->socket->setsockopt(ZMQ_SNDTIMEO, sendTimeoutMs);
 }
 
-void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
+std::string MessageEndpoint::getHost()
+{
+    return host;
+}
+
+int MessageEndpoint::getPort()
+{
+    return port;
+}
+
+// ----------------------------------------------
+// SEND ENDPOINT
+// ----------------------------------------------
+
+SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn,
+                                         int portIn,
+                                         int timeoutMs)
+  : MessageEndpoint(zmq::socket_type::push, hostIn, portIn, timeoutMs)
+{}
+
+void SendMessageEndpoint::send(uint8_t* serialisedMsg,
+                               size_t msgSize,
+                               bool more)
 {
     assert(tid == std::this_thread::get_id());
 
     if (this->socket == nullptr) {
         throw std::runtime_error("Sending on an unopened socket");
-    }
-
-    if (socketType == SocketType::PULL) {
-        throw std::runtime_error("Sending on a recv socket");
     }
 
     zmq::send_flags sendFlags =
@@ -110,7 +106,7 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
     CATCH_ZMQ_ERR(
       {
           auto res =
-            this->socket->send(zmq::buffer(serialisedMsg, msgSize), sendFlags);
+            socket.send(zmq::buffer(serialisedMsg, msgSize), sendFlags);
           if (res != msgSize) {
               SPDLOG_ERROR("Sent different bytes than expected (sent "
                            "{}, expected {})",
@@ -122,19 +118,24 @@ void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
       "send")
 }
 
-// By passing the expected recv buffer size, we instrument zeromq to receive on
-// our provisioned buffer
-Message MessageEndpoint::recv(int size)
+// ----------------------------------------------
+// RECV ENDPOINT
+// ----------------------------------------------
+
+RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
+  : MessageEndpoint(zmq::socket_type::pull,
+                    ANY_HOST,
+                    portIn,
+                    DEFAULT_RECV_TIMEOUT_MS)
+{}
+
+Message RecvMessageEndpoint::recv(int size)
 {
     assert(tid == std::this_thread::get_id());
     assert(size >= 0);
 
     if (this->socket == nullptr) {
         throw std::runtime_error("Receiving on an unopened socket");
-    }
-
-    if (socketType == SocketType::PUSH) {
-        throw std::runtime_error("Receiving on a send socket");
     }
 
     if (size == 0) {
@@ -144,14 +145,14 @@ Message MessageEndpoint::recv(int size)
     return recvBuffer(size);
 }
 
-Message MessageEndpoint::recvBuffer(int size)
+Message RecvMessageEndpoint::recvBuffer(int size)
 {
     // Pre-allocate buffer to avoid copying data
     Message msg(size);
 
     CATCH_ZMQ_ERR(
       try {
-          auto res = this->socket->recv(zmq::buffer(msg.udata(), msg.size()));
+          auto res = socket.recv(zmq::buffer(msg.udata(), msg.size()));
 
           if (!res.has_value()) {
               SPDLOG_ERROR("Timed out receiving message of size {}", size);
@@ -178,13 +179,13 @@ Message MessageEndpoint::recvBuffer(int size)
     return msg;
 }
 
-Message MessageEndpoint::recvNoBuffer()
+Message RecvMessageEndpoint::recvNoBuffer()
 {
     // Allocate a message to receive data
     zmq::message_t msg;
     CATCH_ZMQ_ERR(
       try {
-          auto res = this->socket->recv(msg);
+          auto res = socket.recv(msg);
           if (!res.has_value()) {
               SPDLOG_ERROR("Timed out receiving message with no size");
               throw MessageTimeoutException("Timed out receiving message");
@@ -200,134 +201,5 @@ Message MessageEndpoint::recvNoBuffer()
 
     // Copy the received message to a buffer whose scope we control
     return Message(msg);
-}
-
-void MessageEndpoint::close()
-{
-    if (this->socket == nullptr) {
-        SPDLOG_ERROR("Closing unopened socket {}", id);
-        throw std::runtime_error("Closing unopened socket");
-    }
-
-    if (tid != std::this_thread::get_id()) {
-        SPDLOG_WARN("Closing socket from a different thread");
-    }
-
-    switch (socketType) {
-        case SocketType::PUSH: {
-            CATCH_ZMQ_ERR(this->socket->disconnect(address), "disconnect")
-            CATCH_ZMQ_ERR(this->socket->close(), "close")
-            break;
-        }
-        case SocketType::PULL: {
-            // We duplicate the call to close() because when unbinding, we want
-            // to block until we _actually_ have unbound, i.e. 0MQ has closed
-            // the socket (which happens asynchronously).
-            //
-            // Not blocking on un-bind can cause race-conditions when the
-            // underlying system is slow at closing sockets, and the application
-            // relies a lot on synchronous message-passing.
-            //
-            // NOTE that unbinding a socket has a considerable
-            // overhead compared to disconnecting it.
-            CATCH_ZMQ_ERR(this->socket->unbind(address), "unbind")
-
-            // TODO - could we reuse the monitor across sockets?
-            zmq::monitor_t mon;
-            const std::string monAddr =
-              "inproc://monitor_" + std::to_string(id);
-            mon.init(*(this->socket), monAddr, ZMQ_EVENT_CLOSED);
-
-            CATCH_ZMQ_ERR(this->socket->close(), "close")
-
-            // Wait for this to complete (should be fast)
-            mon.check_event(MONITOR_TIMEOUT_MS);
-
-            break;
-        }
-        default: {
-            throw std::runtime_error("Closing unrecognised type of socket");
-        }
-    }
-
-    // Finally, null the socket
-    this->socket = nullptr;
-}
-
-std::string MessageEndpoint::getHost()
-{
-    return host;
-}
-
-int MessageEndpoint::getPort()
-{
-    return port;
-}
-
-void MessageEndpoint::validateTimeout(int value)
-{
-    if (value <= 0) {
-        SPDLOG_ERROR("Setting invalid timeout of {}", value);
-        throw std::runtime_error("Setting invalid timeout");
-    }
-
-    if (socket != nullptr) {
-        SPDLOG_ERROR("Setting timeout of {} after socket created", value);
-        throw std::runtime_error("Setting timeout after socket created");
-    }
-}
-
-void MessageEndpoint::setRecvTimeoutMs(int value)
-{
-    validateTimeout(value);
-    recvTimeoutMs = value;
-}
-
-void MessageEndpoint::setSendTimeoutMs(int value)
-{
-    validateTimeout(value);
-    sendTimeoutMs = value;
-}
-
-/* Send and Recv Message Endpoints */
-
-SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn, int portIn)
-  : MessageEndpoint(SocketType::PUSH, hostIn, portIn)
-{}
-
-void SendMessageEndpoint::open()
-{
-    SPDLOG_TRACE(
-      fmt::format("Opening socket: {} (SEND {}:{})", id, host, port));
-
-    MessageEndpoint::open();
-}
-
-void SendMessageEndpoint::close()
-{
-    SPDLOG_TRACE(
-      fmt::format("Closing socket: {} (SEND {}:{})", id, host, port));
-
-    MessageEndpoint::close();
-}
-
-RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
-  : MessageEndpoint(SocketType::PULL, ANY_HOST, portIn)
-{}
-
-void RecvMessageEndpoint::open()
-{
-    SPDLOG_TRACE(
-      fmt::format("Opening socket: {} (RECV {}:{})", id, host, port));
-
-    MessageEndpoint::open();
-}
-
-void RecvMessageEndpoint::close()
-{
-    SPDLOG_TRACE(
-      fmt::format("Closing socket: {} (RECV {}:{})", id, host, port));
-
-    MessageEndpoint::close();
 }
 }
