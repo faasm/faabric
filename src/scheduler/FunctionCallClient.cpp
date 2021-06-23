@@ -103,7 +103,7 @@ void FunctionCallClient::sendFlush()
         SEND_MESSAGE(faabric::scheduler::FunctionCalls::Flush, call);
 
         // Await the response
-        awaitResponse(FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+        awaitResponse();
     }
 }
 
@@ -128,7 +128,7 @@ faabric::HostResources FunctionCallClient::getResources()
 
         // Receive message
         faabric::transport::Message msg =
-          awaitResponse(FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+          awaitResponse();
         // Deserialise message string
         if (!response.ParseFromArray(msg.data(), msg.size())) {
             throw std::runtime_error("Error deserialising message");

@@ -70,7 +70,7 @@ class SendMessageEndpoint : public MessageEndpoint
 
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
-    Message awaitResponse(int port);
+    Message awaitResponse();
 };
 
 class RecvMessageEndpoint : public MessageEndpoint
@@ -86,10 +86,7 @@ class RecvMessageEndpoint : public MessageEndpoint
      * Together with a blocking recv at the client side, this
      * method can be used to achieve synchronous client-server communication.
      */
-    void sendResponse(uint8_t* data,
-                      int size,
-                      const std::string& returnHost,
-                      int returnPort);
+    void sendResponse(uint8_t* data, int size, const std::string& returnHost);
 
   private:
     Message recvBuffer(int size);

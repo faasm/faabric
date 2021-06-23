@@ -117,10 +117,10 @@ void SendMessageEndpoint::send(uint8_t* serialisedMsg,
 }
 
 // Block until we receive a response from the server
-Message SendMessageEndpoint::awaitResponse(int port)
+Message SendMessageEndpoint::awaitResponse()
 {
     // Wait for the response, open a temporary endpoint for it
-    RecvMessageEndpoint endpoint(port, timeoutMs);
+    RecvMessageEndpoint endpoint(port + REPLY_PORT_OFFSET, timeoutMs);
 
     Message receivedMessage = endpoint.recv();
 
@@ -209,12 +209,10 @@ Message RecvMessageEndpoint::recvNoBuffer()
 // optimisation if needed.
 void RecvMessageEndpoint::sendResponse(uint8_t* data,
                                        int size,
-                                       const std::string& returnHost,
-                                       int returnPort)
+                                       const std::string& returnHost)
 {
     // Open the endpoint socket, server connects (not bind) to remote address
-    SendMessageEndpoint sendEndpoint(returnHost,
-                                     returnPort + REPLY_PORT_OFFSET);
+    SendMessageEndpoint sendEndpoint(returnHost, port + REPLY_PORT_OFFSET);
     sendEndpoint.send(data, size);
 }
 }

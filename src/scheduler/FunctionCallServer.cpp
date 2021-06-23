@@ -57,7 +57,7 @@ void FunctionCallServer::recvFlush(faabric::transport::Message& body)
     scheduler.flushLocally();
 
     faabric::EmptyResponse response;
-    SEND_SERVER_RESPONSE(response, msg.returnhost(), FUNCTION_CALL_PORT)
+    SEND_SERVER_RESPONSE(response, msg.returnhost())
 }
 
 void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message& body)
@@ -86,6 +86,6 @@ void FunctionCallServer::recvGetResources(faabric::transport::Message& body)
 
     // Send the response body
     faabric::HostResources response = scheduler.getThisHostResources();
-    SEND_SERVER_RESPONSE(response, msg.returnhost(), FUNCTION_CALL_PORT)
+    SEND_SERVER_RESPONSE(response, msg.returnhost())
 }
 }

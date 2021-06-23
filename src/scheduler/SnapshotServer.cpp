@@ -76,7 +76,7 @@ void SnapshotServer::recvPushSnapshot(faabric::transport::Message& msg)
 
     // Send response
     faabric::EmptyResponse response;
-    SEND_SERVER_RESPONSE(response, r->return_host()->str(), SNAPSHOT_PORT)
+    SEND_SERVER_RESPONSE(response, r->return_host()->str())
 }
 
 void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
@@ -107,7 +107,7 @@ void SnapshotServer::recvPushSnapshotDiffs(faabric::transport::Message& msg)
 
     // Send response
     faabric::EmptyResponse response;
-    SEND_SERVER_RESPONSE(response, r->return_host()->str(), SNAPSHOT_PORT)
+    SEND_SERVER_RESPONSE(response, r->return_host()->str())
 }
 
 void SnapshotServer::applyDiffsToSnapshot(

@@ -48,8 +48,7 @@ class SlowServer final : public MessageEndpointServer
         SPDLOG_DEBUG("Slow message server test recv");
 
         usleep(delayMs * 1000);
-        recvEndpoint->sendResponse(
-          data.data(), data.size(), thisHost, testPort);
+        recvEndpoint->sendResponse(data.data(), data.size(), thisHost);
     }
 };
 
@@ -104,7 +103,7 @@ TEST_CASE("Test send one-off response to client", "[transport]")
         // Open the source endpoint client, don't bind
         SendMessageEndpoint cli(thisHost, testPort);
 
-        Message msg = cli.awaitResponse(testPort + REPLY_PORT_OFFSET);
+        Message msg = cli.awaitResponse();
         assert(msg.size() == expectedMsg.size());
         std::string actualMsg(msg.data(), msg.size());
         assert(actualMsg == expectedMsg);
@@ -112,7 +111,7 @@ TEST_CASE("Test send one-off response to client", "[transport]")
 
     uint8_t msg[expectedMsg.size()];
     memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-    recvEndpoint.sendResponse(msg, expectedMsg.size(), thisHost, testPort);
+    recvEndpoint.sendResponse(msg, expectedMsg.size(), thisHost);
 
     if (clientThread.joinable()) {
         clientThread.join();
@@ -201,12 +200,10 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 
     if (expectFailure) {
         // Check for failure
-        REQUIRE_THROWS_AS(cli.awaitResponse(testPort + REPLY_PORT_OFFSET),
-                          MessageTimeoutException);
+        REQUIRE_THROWS_AS(cli.awaitResponse(), MessageTimeoutException);
     } else {
         // Check response from server successful
-        Message responseMessage =
-          cli.awaitResponse(testPort + REPLY_PORT_OFFSET);
+        Message responseMessage = cli.awaitResponse();
         std::vector<uint8_t> expected = { 0, 1, 2, 3 };
         REQUIRE(responseMessage.dataCopy() == expected);
     }

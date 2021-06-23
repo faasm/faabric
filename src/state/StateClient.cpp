@@ -24,7 +24,7 @@ void StateClient::sendHeader(faabric::state::StateCalls call)
 faabric::transport::Message StateClient::awaitResponse()
 {
     // Call the superclass implementation
-    return SendMessageEndpoint::awaitResponse(STATE_PORT + REPLY_PORT_OFFSET);
+    return SendMessageEndpoint::awaitResponse();
 }
 
 void StateClient::sendStateRequest(faabric::state::StateCalls header,

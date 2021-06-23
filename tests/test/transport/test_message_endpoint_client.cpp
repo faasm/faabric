@@ -9,8 +9,7 @@
 using namespace faabric::transport;
 
 const std::string thisHost = "127.0.0.1";
-const int testPort = 9999;
-const int testReplyPort = 9996;
+const int testPort = 9800;
 
 namespace tests {
 
@@ -53,7 +52,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
         src.send(msg, expectedMsg.size());
 
         // Block waiting for a response
-        faabric::transport::Message recvMsg = src.awaitResponse(testReplyPort);
+        faabric::transport::Message recvMsg = src.awaitResponse();
         assert(recvMsg.size() == expectedResponse.size());
         std::string actualResponse(recvMsg.data(), recvMsg.size());
         assert(actualResponse == expectedResponse);
@@ -67,7 +66,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
     REQUIRE(actualMsg == expectedMsg);
 
     // Send response, open a new endpoint for it
-    SendMessageEndpoint dstResponse(thisHost, testReplyPort);
+    SendMessageEndpoint dstResponse(thisHost, testPort);
     uint8_t msg[expectedResponse.size()];
     memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
     dstResponse.send(msg, expectedResponse.size());

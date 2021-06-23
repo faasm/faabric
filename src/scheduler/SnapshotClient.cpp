@@ -111,7 +111,7 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::PushSnapshot)
 
         // Await a response as this call must be synchronous
-        awaitResponse(SNAPSHOT_PORT + REPLY_PORT_OFFSET);
+        awaitResponse();
     }
 }
 
@@ -153,7 +153,7 @@ void SnapshotClient::pushSnapshotDiffs(
         SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::PushSnapshotDiffs)
 
         // Await a response as this call must be synchronous
-        awaitResponse(SNAPSHOT_PORT + REPLY_PORT_OFFSET);
+        awaitResponse();
     }
 }
 

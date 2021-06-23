@@ -67,7 +67,7 @@ void StateServer::recvSize(faabric::transport::Message& body)
     response.set_user(kv->user);
     response.set_key(kv->key);
     response.set_statesize(kv->size());
-    SEND_SERVER_RESPONSE(response, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(response, msg.returnhost())
 }
 
 void StateServer::recvPull(faabric::transport::Message& body)
@@ -91,7 +91,7 @@ void StateServer::recvPull(faabric::transport::Message& body)
     response.set_offset(chunkOffset);
     // TODO: avoid copying here
     response.set_data(chunk, chunkLen);
-    SEND_SERVER_RESPONSE(response, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(response, msg.returnhost())
 }
 
 void StateServer::recvPush(faabric::transport::Message& body)
@@ -109,7 +109,7 @@ void StateServer::recvPush(faabric::transport::Message& body)
       msg.offset(), BYTES_CONST(msg.data().c_str()), msg.data().size());
 
     faabric::StateResponse emptyResponse;
-    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost())
 }
 
 void StateServer::recvAppend(faabric::transport::Message& body)
@@ -123,7 +123,7 @@ void StateServer::recvAppend(faabric::transport::Message& body)
     kv->append(reqData, dataLen);
 
     faabric::StateResponse emptyResponse;
-    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost())
 }
 
 void StateServer::recvPullAppended(faabric::transport::Message& body)
@@ -142,7 +142,7 @@ void StateServer::recvPullAppended(faabric::transport::Message& body)
         appendedValue->set_data(reinterpret_cast<char*>(value.data.get()),
                                 value.length);
     }
-    SEND_SERVER_RESPONSE(response, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(response, msg.returnhost())
 }
 
 void StateServer::recvDelete(faabric::transport::Message& body)
@@ -154,7 +154,7 @@ void StateServer::recvDelete(faabric::transport::Message& body)
     state.deleteKV(msg.user(), msg.key());
 
     faabric::StateResponse emptyResponse;
-    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost())
 }
 
 void StateServer::recvClearAppended(faabric::transport::Message& body)
@@ -167,7 +167,7 @@ void StateServer::recvClearAppended(faabric::transport::Message& body)
     kv->clearAppended();
 
     faabric::StateResponse emptyResponse;
-    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost())
 }
 
 void StateServer::recvLock(faabric::transport::Message& body)
@@ -180,7 +180,7 @@ void StateServer::recvLock(faabric::transport::Message& body)
     kv->lockWrite();
 
     faabric::StateResponse emptyResponse;
-    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost())
 }
 
 void StateServer::recvUnlock(faabric::transport::Message& body)
@@ -193,6 +193,6 @@ void StateServer::recvUnlock(faabric::transport::Message& body)
     kv->unlockWrite();
 
     faabric::StateResponse emptyResponse;
-    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost(), STATE_PORT)
+    SEND_SERVER_RESPONSE(emptyResponse, msg.returnhost())
 }
 }
