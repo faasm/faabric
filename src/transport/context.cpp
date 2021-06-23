@@ -36,7 +36,8 @@ std::shared_ptr<zmq::context_t> getGlobalMessageContext()
 void closeGlobalMessageContext()
 {
     if (instance == nullptr) {
-        SPDLOG_WARN("ZeroMQ context already closed (or not initialised). Skipping");
+        SPDLOG_WARN(
+          "ZeroMQ context already closed (or not initialised). Skipping");
         return;
     }
 
