@@ -25,7 +25,8 @@ void initGlobalMessageContext()
 std::shared_ptr<zmq::context_t> getGlobalMessageContext()
 {
     if (instance == nullptr) {
-        throw std::runtime_error("Trying to access uninitialised ZeroMQ context");
+        throw std::runtime_error(
+          "Trying to access uninitialised ZeroMQ context");
     }
 
     return instance;

@@ -189,8 +189,8 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     // TODO - reinstate this
     SECTION("Short timeout failure")
     {
-        clientTimeout = 20000;
-        expectFailure = false;
+        clientTimeout = 10;
+        expectFailure = true;
     }
 
     // Start the server in the background

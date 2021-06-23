@@ -1,5 +1,5 @@
-#include <faabric/transport/context.h>
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/transport/context.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 
@@ -97,10 +97,6 @@ void SendMessageEndpoint::send(uint8_t* serialisedMsg,
 {
     assert(tid == std::this_thread::get_id());
 
-    if (this->socket == nullptr) {
-        throw std::runtime_error("Sending on an unopened socket");
-    }
-
     zmq::send_flags sendFlags =
       more ? zmq::send_flags::sndmore : zmq::send_flags::none;
 
@@ -123,7 +119,7 @@ void SendMessageEndpoint::send(uint8_t* serialisedMsg,
 Message SendMessageEndpoint::awaitResponse(int port)
 {
     // Wait for the response, open a temporary endpoint for it
-    RecvMessageEndpoint endpoint(port);
+    RecvMessageEndpoint endpoint(port, timeoutMs);
 
     Message receivedMessage = endpoint.recv();
 
@@ -134,21 +130,14 @@ Message SendMessageEndpoint::awaitResponse(int port)
 // RECV ENDPOINT
 // ----------------------------------------------
 
-RecvMessageEndpoint::RecvMessageEndpoint(int portIn)
-  : MessageEndpoint(zmq::socket_type::pull,
-                    ANY_HOST,
-                    portIn,
-                    DEFAULT_RECV_TIMEOUT_MS)
+RecvMessageEndpoint::RecvMessageEndpoint(int portIn, int timeoutMs)
+  : MessageEndpoint(zmq::socket_type::pull, ANY_HOST, portIn, timeoutMs)
 {}
 
 Message RecvMessageEndpoint::recv(int size)
 {
     assert(tid == std::this_thread::get_id());
     assert(size >= 0);
-
-    if (this->socket == nullptr) {
-        throw std::runtime_error("Receiving on an unopened socket");
-    }
 
     if (size == 0) {
         return recvNoBuffer();

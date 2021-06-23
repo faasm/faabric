@@ -75,7 +75,7 @@ class SendMessageEndpoint : public MessageEndpoint
 class RecvMessageEndpoint : public MessageEndpoint
 {
   public:
-    RecvMessageEndpoint(int portIn);
+    RecvMessageEndpoint(int portIn, int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
     Message recv(int size = 0);
 
