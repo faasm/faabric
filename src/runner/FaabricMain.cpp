@@ -21,6 +21,8 @@ FaabricMain::FaabricMain(
 
 void FaabricMain::startBackground()
 {
+    faabric::transport::initGlobalMessageContext();
+
     // Start basics
     startRunner();
 
@@ -91,6 +93,8 @@ void FaabricMain::shutdown()
 
     SPDLOG_INFO("Waiting for the snapshot server to finish");
     snapshotServer.stop();
+
+    faabric::transport::closeGlobalMessageContext();
 
     SPDLOG_INFO("Faabric pool successfully shut down");
 }

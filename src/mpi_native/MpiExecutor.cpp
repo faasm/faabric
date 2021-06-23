@@ -1,4 +1,5 @@
 #include <faabric/mpi-native/MpiExecutor.h>
+#include <faabric/transport/context.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::mpi_native {
@@ -26,6 +27,8 @@ int32_t MpiExecutor::executeTask(
 
 int mpiNativeMain(int argc, char** argv)
 {
+    faabric::transport::initGlobalMessageContext();
+
     auto& scheduler = faabric::scheduler::getScheduler();
     auto& conf = faabric::util::getSystemConfig();
 
@@ -53,6 +56,8 @@ int mpiNativeMain(int argc, char** argv)
         msg.set_mpiworldsize(__worldSize);
         scheduler.callFunction(msg);
     }
+
+    faabric::transport::closeGlobalMessageContext();
 
     return 0;
 }

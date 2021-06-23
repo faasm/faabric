@@ -15,7 +15,8 @@ static std::shared_ptr<zmq::context_t> instance = nullptr;
 void initGlobalMessageContext()
 {
     if (instance != nullptr) {
-        throw std::runtime_error("Trying to initialise ZeroMQ context twice");
+        SPDLOG_WARN("ZeroMQ context already initialised. Skipping");
+        return;
     }
 
     SPDLOG_TRACE("Initialising global ZeroMQ context");
@@ -35,7 +36,8 @@ std::shared_ptr<zmq::context_t> getGlobalMessageContext()
 void closeGlobalMessageContext()
 {
     if (instance == nullptr) {
-        throw std::runtime_error("Cannot close uninitialised ZeroMQ context");
+        SPDLOG_WARN("ZeroMQ context already closed (or not initialised). Skipping");
+        return;
     }
 
     SPDLOG_TRACE("Destroying global ZeroMQ context");
