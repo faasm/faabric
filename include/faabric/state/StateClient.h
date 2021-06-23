@@ -17,8 +17,6 @@ class StateClient : public faabric::transport::SendMessageEndpoint
     const std::string key;
     const std::string host;
 
-    InMemoryStateRegistry& reg;
-
     /* External state client API */
 
     void pushChunks(const std::vector<StateChunk>& chunks);

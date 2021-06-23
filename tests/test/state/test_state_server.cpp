@@ -2,7 +2,6 @@
 
 #include "faabric_utils.h"
 
-#include <faabric/state/DummyStateServer.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
 #include <faabric/state/StateClient.h>
@@ -14,61 +13,66 @@
 using namespace faabric::state;
 
 namespace tests {
-static const char* userA = "foo";
-static const char* keyA = "bar";
-static const char* keyB = "baz";
-static std::vector<uint8_t> dataA = { 0, 1, 2, 3, 4, 5, 6, 7 };
-static std::vector<uint8_t> dataB = { 7, 6, 5, 4, 3, 2, 1, 0 };
 
-static std::string originalStateMode;
-
-static void setUpStateMode()
+class SimpleStateServerTestFixture
+  : public StateTestFixture
+  , public ConfTestFixture
 {
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    originalStateMode = conf.stateMode;
-    cleanFaabric();
-}
+  public:
+    SimpleStateServerTestFixture()
+      : server(faabric::state::getGlobalState())
+      , dataA({ 0, 1, 2, 3, 4, 5, 6, 7 })
+      , dataB({ 7, 6, 5, 4, 3, 2, 1, 0 })
+    {
+        conf.stateMode = "inmemory";
 
-static void resetStateMode()
+        server.start();
+        usleep(1000 * 100);
+    }
+
+    ~SimpleStateServerTestFixture() { server.stop(); }
+
+    std::shared_ptr<InMemoryStateKeyValue> getKv(const std::string& user,
+                                                 const std::string& key,
+                                                 size_t stateSize)
+    {
+        std::shared_ptr<StateKeyValue> localKv =
+          state.getKV(user, key, stateSize);
+
+        std::shared_ptr<InMemoryStateKeyValue> inMemLocalKv =
+          std::static_pointer_cast<InMemoryStateKeyValue>(localKv);
+
+        return inMemLocalKv;
+    }
+
+  protected:
+    StateServer server;
+
+    const char* userA = "foo";
+    const char* keyA = "bar";
+    const char* keyB = "baz";
+
+    std::vector<uint8_t> dataA;
+    std::vector<uint8_t> dataB;
+};
+
+TEST_CASE_METHOD(SimpleStateServerTestFixture,
+                 "Test state request/ response",
+                 "[state]")
 {
-    faabric::util::getSystemConfig().stateMode = originalStateMode;
-}
-
-std::shared_ptr<InMemoryStateKeyValue> getKv(const std::string& user,
-                                             const std::string& key,
-                                             size_t stateSize)
-{
-    State& state = getGlobalState();
-
-    std::shared_ptr<StateKeyValue> localKv = state.getKV(user, key, stateSize);
-    std::shared_ptr<InMemoryStateKeyValue> inMemLocalKv =
-      std::static_pointer_cast<InMemoryStateKeyValue>(localKv);
-
-    return inMemLocalKv;
-}
-
-TEST_CASE("Test request/ response", "[state]")
-{
-    setUpStateMode();
-
-    // Create server
-    StateServer s(getGlobalState());
-    s.start();
-    usleep(1000 * 100);
-
     std::vector<uint8_t> actual(dataA.size(), 0);
 
     // Prepare a key-value with data
     auto kvA = getKv(userA, keyA, dataA.size());
     kvA->set(dataA.data());
 
-    // Prepare a key-value with no data
+    // Prepare a key-value with no data (but a size)
     auto kvB = getKv(userA, keyB, dataA.size());
 
     // Prepare a key-value with same key but different data (for pushing)
-    std::string thisIP = faabric::util::getSystemConfig().endpointHost;
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
     auto kvADuplicate =
-      InMemoryStateKeyValue(userA, keyA, dataB.size(), thisIP);
+      InMemoryStateKeyValue(userA, keyA, dataB.size(), thisHost);
     kvADuplicate.set(dataB.data());
 
     StateClient client(userA, keyA, DEFAULT_STATE_HOST);
@@ -133,16 +137,12 @@ TEST_CASE("Test request/ response", "[state]")
 
         REQUIRE(actualAppended == expected);
     }
-
-    s.stop();
-
-    resetStateMode();
 }
 
-TEST_CASE("Test local-only push/ pull", "[state]")
+TEST_CASE_METHOD(SimpleStateServerTestFixture,
+                 "Test local-only push/ pull",
+                 "[state]")
 {
-    setUpStateMode();
-
     // Create a key-value locally
     auto localKv = getKv(userA, keyA, dataA.size());
 
@@ -156,14 +156,12 @@ TEST_CASE("Test local-only push/ pull", "[state]")
     // Check that we get the expected size
     State& state = getGlobalState();
     REQUIRE(state.getStateSize(userA, keyA) == dataA.size());
-
-    resetStateMode();
 }
 
-TEST_CASE("Test local-only append", "[state]")
+TEST_CASE_METHOD(SimpleStateServerTestFixture,
+                 "Test local-only append",
+                 "[state]")
 {
-    setUpStateMode();
-
     // Append a few chunks
     std::vector<uint8_t> chunkA = { 1, 1 };
     std::vector<uint8_t> chunkB = { 2, 2, 2 };
@@ -184,59 +182,12 @@ TEST_CASE("Test local-only append", "[state]")
     kv->getAppended(actual.data(), actual.size(), 3);
 
     REQUIRE(actual == expected);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test state server as remote master", "[state]")
+TEST_CASE_METHOD(SimpleStateServerTestFixture,
+                 "Test state server with local master",
+                 "[state]")
 {
-    setUpStateMode();
-
-    State& globalState = getGlobalState();
-    REQUIRE(globalState.getKVCount() == 0);
-
-    DummyStateServer server;
-    server.dummyData = dataA;
-    server.dummyUser = userA;
-    server.dummyKey = keyA;
-    server.start();
-
-    // Get the state size before accessing the value locally
-    size_t actualSize = globalState.getStateSize(userA, keyA);
-    REQUIRE(actualSize == dataA.size());
-
-    // Access locally and check not master
-    auto localKv = getKv(userA, keyA, dataA.size());
-    REQUIRE(!localKv->isMaster());
-
-    // Set the state locally and check
-    State& state = getGlobalState();
-    const std::shared_ptr<StateKeyValue>& kv =
-      state.getKV(userA, keyA, dataA.size());
-    kv->set(dataB.data());
-
-    std::vector<uint8_t> actualLocal(dataA.size(), 0);
-    kv->get(actualLocal.data());
-    REQUIRE(actualLocal == dataB);
-
-    // Check it's not changed remotely
-    std::vector<uint8_t> actualRemote = server.getRemoteKvValue();
-    REQUIRE(actualRemote == dataA);
-
-    // Push and check remote is updated
-    kv->pushFull();
-    actualRemote = server.getRemoteKvValue();
-    REQUIRE(actualRemote == dataB);
-
-    server.stop();
-
-    resetStateMode();
-}
-
-TEST_CASE("Test state server with local master", "[state]")
-{
-    setUpStateMode();
-
     // Set and push
     auto localKv = getKv(userA, keyA, dataA.size());
     localKv->set(dataA.data());
@@ -247,7 +198,6 @@ TEST_CASE("Test state server with local master", "[state]")
     localKv->set(dataB.data());
 
     // Pull
-    State& state = getGlobalState();
     const std::shared_ptr<StateKeyValue>& kv =
       state.getKV(userA, keyA, dataA.size());
     kv->pull();
@@ -255,7 +205,5 @@ TEST_CASE("Test state server with local master", "[state]")
     // Check it's still the same locally set value
     std::vector<uint8_t> actual(kv->get(), kv->get() + dataA.size());
     REQUIRE(actual == dataB);
-
-    resetStateMode();
 }
 }

@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include <faabric/util/bytes.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/state.h>
 
@@ -64,7 +65,15 @@ InMemoryStateKeyValue::InMemoryStateKeyValue(const std::string& userIn,
   , status(masterIP == thisIP ? InMemoryStateKeyStatus::MASTER
                               : InMemoryStateKeyStatus::NOT_MASTER)
   , stateRegistry(getInMemoryStateRegistry())
-{}
+{
+    SPDLOG_TRACE("Creating in-memory state key-value for {}/{} size {} (this "
+                 "host {}, master {})",
+                 userIn,
+                 keyIn,
+                 sizeIn,
+                 thisIP,
+                 masterIP);
+}
 
 InMemoryStateKeyValue::InMemoryStateKeyValue(const std::string& userIn,
                                              const std::string& keyIn,

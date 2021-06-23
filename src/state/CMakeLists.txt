@@ -1,7 +1,6 @@
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/state/*.h")
 
 set(LIB_FILES
-        DummyStateServer.cpp
         InMemoryStateKeyValue.cpp
         InMemoryStateRegistry.cpp
         State.cpp

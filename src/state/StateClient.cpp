@@ -12,7 +12,6 @@ StateClient::StateClient(const std::string& userIn,
   , user(userIn)
   , key(keyIn)
   , host(hostIn)
-  , reg(state::getInMemoryStateRegistry())
 {}
 
 void StateClient::sendHeader(faabric::state::StateCalls call)

@@ -3,11 +3,12 @@
 #include "faabric_utils.h"
 
 #include <faabric/redis/Redis.h>
-#include <faabric/state/DummyStateServer.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
+#include <faabric/state/StateServer.h>
 #include <faabric/util/config.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/network.h>
 
 #include <faabric/util/state.h>
 #include <sys/mman.h>
@@ -15,21 +16,143 @@
 using namespace faabric::state;
 
 namespace tests {
+
 static int staticCount = 0;
 
-static void setUpDummyServer(DummyStateServer& server,
-                             const std::vector<uint8_t>& values)
+class StateServerTestFixture
+  : public StateTestFixture
+  , ConfTestFixture
 {
-    cleanFaabric();
+  public:
+    // Set up a local server with a *different* state instance to the main
+    // thread. This way we can fake the master/ non-master setup
+    StateServerTestFixture()
+      : remoteState(LOCALHOST)
+      , stateServer(remoteState)
+    {
+        staticCount++;
+        const std::string stateKey = "state_key_" + std::to_string(staticCount);
 
-    staticCount++;
-    const std::string stateKey = "state_key_" + std::to_string(staticCount);
+        conf.stateMode = "inmemory";
 
-    // Set state remotely
-    server.dummyUser = "demo";
-    server.dummyKey = stateKey;
-    server.dummyData = values;
-}
+        dummyUser = "demo";
+        dummyKey = stateKey;
+
+        // Start the state server
+        SPDLOG_DEBUG("Running state server");
+        stateServer.start();
+
+        // Give it time to start
+        usleep(1000 * 1000);
+    }
+
+    ~StateServerTestFixture() { stateServer.stop(); }
+
+    void setDummyData(std::vector<uint8_t> data)
+    {
+        dummyData = data;
+
+        // Master the dummy data in the "remote" state
+        if (!dummyData.empty()) {
+            std::string originalHost = conf.endpointHost;
+            conf.endpointHost = LOCALHOST;
+
+            const std::shared_ptr<state::StateKeyValue>& kv =
+              remoteState.getKV(dummyUser, dummyKey, dummyData.size());
+
+            std::shared_ptr<InMemoryStateKeyValue> inMemKv =
+              std::static_pointer_cast<InMemoryStateKeyValue>(kv);
+
+            // Check this kv "thinks" it's master
+            if (!inMemKv->isMaster()) {
+                SPDLOG_ERROR("Dummy state server not master for data");
+                throw std::runtime_error("Dummy state server failed");
+            }
+
+            // Set the data
+            kv->set(dummyData.data());
+            SPDLOG_DEBUG(
+              "Finished setting master for test {}/{}", kv->user, kv->key);
+
+            conf.endpointHost = originalHost;
+        }
+    }
+
+    std::shared_ptr<state::StateKeyValue> getRemoteKv()
+    {
+        if (dummyData.empty()) {
+            return remoteState.getKV(dummyUser, dummyKey);
+        }
+        return remoteState.getKV(dummyUser, dummyKey, dummyData.size());
+    }
+
+    std::shared_ptr<state::StateKeyValue> getLocalKv()
+    {
+        if (dummyData.empty()) {
+            return state::getGlobalState().getKV(dummyUser, dummyKey);
+        }
+
+        return state::getGlobalState().getKV(
+          dummyUser, dummyKey, dummyData.size());
+    }
+
+    std::vector<uint8_t> getRemoteKvValue()
+    {
+        std::vector<uint8_t> actual(dummyData.size(), 0);
+        getRemoteKv()->get(actual.data());
+        return actual;
+    }
+
+    std::vector<uint8_t> getLocalKvValue()
+    {
+        std::vector<uint8_t> actual(dummyData.size(), 0);
+        getLocalKv()->get(actual.data());
+        return actual;
+    }
+
+    void checkPulling(bool doPull)
+    {
+        std::vector<uint8_t> values = { 0, 1, 2, 3 };
+        std::vector<uint8_t> actual(values.size(), 0);
+        setDummyData(values);
+
+        // Get, with optional pull
+        int nMessages = 1;
+        if (doPull) {
+            nMessages = 2;
+        }
+
+        // Initial pull
+        const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
+        localKv->pull();
+
+        // Update directly on the remote KV
+        std::shared_ptr<state::StateKeyValue> remoteKv = getRemoteKv();
+        std::vector<uint8_t> newValues = { 5, 5, 5, 5 };
+        remoteKv->set(newValues.data());
+
+        if (doPull) {
+            // Check locak changed with another pull
+            localKv->pull();
+            localKv->get(actual.data());
+            REQUIRE(actual == newValues);
+        } else {
+            // Check local unchanged without another pull
+            localKv->get(actual.data());
+            REQUIRE(actual == values);
+        }
+    }
+
+  protected:
+    std::string dummyUser;
+    std::string dummyKey;
+
+    state::State remoteState;
+    state::StateServer stateServer;
+
+  private:
+    std::vector<uint8_t> dummyData;
+};
 
 static std::shared_ptr<StateKeyValue> setupKV(size_t size)
 {
@@ -46,30 +169,29 @@ static std::shared_ptr<StateKeyValue> setupKV(size_t size)
     return kv;
 }
 
-TEST_CASE("Test in-memory state sizes", "[state]")
+TEST_CASE_METHOD(StateTestFixture, "Test in-memory state sizes", "[state]")
 {
-    cleanFaabric();
-    State& s = getGlobalState();
     std::string user = "alpha";
     std::string key = "beta";
 
     // Empty should be none
-    size_t initialSize = s.getStateSize(user, key);
+    size_t initialSize = state.getStateSize(user, key);
     REQUIRE(initialSize == 0);
 
     // Set a value
     std::vector<uint8_t> bytes = { 0, 1, 2, 3, 4 };
-    auto kv = s.getKV(user, key, bytes.size());
+    auto kv = state.getKV(user, key, bytes.size());
     kv->set(bytes.data());
     kv->pushFull();
 
     // Get size
-    REQUIRE(s.getStateSize(user, key) == bytes.size());
+    REQUIRE(state.getStateSize(user, key) == bytes.size());
 }
 
-TEST_CASE("Test simple in memory state get/set", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test simple in memory state get/set",
+                 "[state]")
 {
-    cleanFaabric();
     auto kv = setupKV(5);
 
     std::vector<uint8_t> actual(5);
@@ -91,22 +213,20 @@ TEST_CASE("Test simple in memory state get/set", "[state]")
     REQUIRE(actual == values);
 }
 
-TEST_CASE("Test in memory get/ set chunk", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test in memory get/ set chunk",
+                 "[state]")
 {
-    DummyStateServer server;
     std::vector<uint8_t> values = { 0, 0, 1, 1, 2, 2, 3, 3, 4, 4 };
-    setUpDummyServer(server, values);
-
-    // Start the server
-    server.start();
+    setDummyData(values);
 
     // Get locally
-    std::vector<uint8_t> actual = server.getLocalKvValue();
+    std::vector<uint8_t> actual = getLocalKvValue();
     REQUIRE(actual == values);
 
     // Update a subsection
     std::vector<uint8_t> update = { 8, 8, 8 };
-    std::shared_ptr<state::StateKeyValue> localKv = server.getLocalKv();
+    std::shared_ptr<state::StateKeyValue> localKv = getLocalKv();
     localKv->setChunk(3, update.data(), 3);
 
     std::vector<uint8_t> expected = { 0, 0, 1, 8, 8, 8, 3, 3, 4, 4 };
@@ -114,7 +234,7 @@ TEST_CASE("Test in memory get/ set chunk", "[state]")
     REQUIRE(actual == expected);
 
     // Check remote is unchanged
-    REQUIRE(server.getRemoteKvValue() == values);
+    REQUIRE(getRemoteKvValue() == values);
 
     // Try getting a chunk locally
     std::vector<uint8_t> actualChunk(3);
@@ -123,21 +243,18 @@ TEST_CASE("Test in memory get/ set chunk", "[state]")
 
     // Run push and check remote is updated
     localKv->pushPartial();
-    REQUIRE(server.getRemoteKvValue() == expected);
-
-    // Wait for server to finish
-    server.stop();
+    REQUIRE(getRemoteKvValue() == expected);
 }
 
-TEST_CASE("Test in memory marking chunks dirty", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test in memory marking chunks dirty",
+                 "[state]")
 {
     std::vector<uint8_t> values = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-    server.start();
+    setDummyData(values);
 
     // Get pointer to local and update in memory only
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     uint8_t* ptr = localKv->get();
     ptr[0] = 8;
     ptr[5] = 7;
@@ -150,27 +267,23 @@ TEST_CASE("Test in memory marking chunks dirty", "[state]")
     values.at(0) = 8;
 
     // Check remote
-    REQUIRE(server.getRemoteKvValue() == values);
+    REQUIRE(getRemoteKvValue() == values);
 
     // Check local value has been set with the latest remote value
     std::vector<uint8_t> actualMemory(ptr, ptr + values.size());
     REQUIRE(actualMemory == values);
-
-    server.stop();
 }
 
-TEST_CASE("Test overlaps with multiple chunks dirty", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test overlaps with multiple chunks dirty",
+                 "[state]")
 {
     std::vector<uint8_t> values = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Get, push, pull
-    server.start();
+    setDummyData(values);
 
     // Get pointer to local data
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     uint8_t* statePtr = localKv->get();
 
     // Update a couple of areas
@@ -193,8 +306,7 @@ TEST_CASE("Test overlaps with multiple chunks dirty", "[state]")
 
     // Update one non-overlapping value remotely
     std::vector<uint8_t> directA = { 2, 2 };
-    const std::shared_ptr<state::StateKeyValue>& remoteKv =
-      server.getRemoteKv();
+    const std::shared_ptr<state::StateKeyValue>& remoteKv = getRemoteKv();
     remoteKv->setChunk(6, directA.data(), 2);
 
     // Update one overlapping value remotely
@@ -207,8 +319,8 @@ TEST_CASE("Test overlaps with multiple chunks dirty", "[state]")
     std::vector<uint8_t> expectedRemote = { 6, 6, 6, 6, 6, 0, 2, 2, 0, 0,
                                             0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
-    REQUIRE(server.getLocalKvValue() == expectedLocal);
-    REQUIRE(server.getRemoteKvValue() == expectedRemote);
+    REQUIRE(getLocalKvValue() == expectedLocal);
+    REQUIRE(getRemoteKvValue() == expectedRemote);
 
     // Push changes
     localKv->pushPartial();
@@ -217,23 +329,19 @@ TEST_CASE("Test overlaps with multiple chunks dirty", "[state]")
     std::vector<uint8_t> expected = { 6, 1, 2, 3, 6, 0, 2, 2, 0, 0,
                                       4, 5, 0, 0, 7, 7, 7, 7, 0, 0 };
 
-    REQUIRE(server.getLocalKvValue() == expected);
-    REQUIRE(server.getRemoteKvValue() == expected);
-
-    server.stop();
+    REQUIRE(getLocalKvValue() == expected);
+    REQUIRE(getRemoteKvValue() == expected);
 }
 
-TEST_CASE("Test in memory partial update of doubles in state", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test in memory partial update of doubles in state",
+                 "[state]")
 {
     long nDoubles = 20;
     long nBytes = nDoubles * sizeof(double);
 
     std::vector<uint8_t> values(nBytes, 0);
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Get, push, pull
-    server.start();
+    setDummyData(values);
 
     // Set up both with zeroes initially
     std::vector<double> expected(nDoubles);
@@ -242,7 +350,7 @@ TEST_CASE("Test in memory partial update of doubles in state", "[state]")
     memset(actualBytes.data(), 0, nBytes);
 
     // Update a value locally and flag dirty
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     auto actualPtr = reinterpret_cast<double*>(localKv->get());
     auto expectedPtr = expected.data();
     actualPtr[0] = 123.456;
@@ -274,18 +382,17 @@ TEST_CASE("Test in memory partial update of doubles in state", "[state]")
     REQUIRE(expected == actualPostPush);
 
     // Check remote
-    std::vector<uint8_t> remoteValue = server.getRemoteKvValue();
+    std::vector<uint8_t> remoteValue = getRemoteKvValue();
     std::vector<double> actualPostPushRemote(postPushDoublePtr,
                                              postPushDoublePtr + nDoubles);
     REQUIRE(expected == actualPostPushRemote);
-
-    server.stop();
 }
 
-TEST_CASE("Test set chunk cannot be over the size of the allocated memory",
-          "[state]")
+TEST_CASE_METHOD(
+  StateServerTestFixture,
+  "Test set chunk cannot be over the size of the allocated memory",
+  "[state]")
 {
-    cleanFaabric();
     auto kv = setupKV(2);
 
     // Set a chunk offset
@@ -295,29 +402,27 @@ TEST_CASE("Test set chunk cannot be over the size of the allocated memory",
     REQUIRE_THROWS(kv->setChunk(offset, update.data(), 3));
 }
 
-TEST_CASE("Test partially setting just first/ last element", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test partially setting just first/ last element",
+                 "[state]")
 {
     std::vector<uint8_t> values = { 0, 1, 2, 3, 4 };
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Only 3 push-partial messages as kv not fully allocated
-    server.start();
+    setDummyData(values);
 
     // Update just the last element
     std::vector<uint8_t> update = { 8 };
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     localKv->setChunk(4, update.data(), 1);
 
     localKv->pushPartial();
     std::vector<uint8_t> expected = { 0, 1, 2, 3, 8 };
-    REQUIRE(server.getRemoteKvValue() == expected);
+    REQUIRE(getRemoteKvValue() == expected);
 
     // Update the first
     localKv->setChunk(0, update.data(), 1);
     localKv->pushPartial();
     expected = { 8, 1, 2, 3, 8 };
-    REQUIRE(server.getRemoteKvValue() == expected);
+    REQUIRE(getRemoteKvValue() == expected);
 
     // Update two
     update = { 6 };
@@ -326,27 +431,22 @@ TEST_CASE("Test partially setting just first/ last element", "[state]")
 
     localKv->pushPartial();
     expected = { 6, 1, 2, 3, 6 };
-    REQUIRE(server.getRemoteKvValue() == expected);
-
-    server.stop();
+    REQUIRE(getRemoteKvValue() == expected);
 }
 
-TEST_CASE("Test push partial with mask", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test push partial with mask",
+                 "[state]")
 {
     size_t stateSize = 4 * sizeof(double);
     std::vector<uint8_t> values(stateSize, 0);
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Get, full push, push partial
-    server.start();
+    setDummyData(values);
 
     // Create another local KV of same size
-    State& state = getGlobalState();
     auto maskKv = state.getKV("demo", "dummy_mask", stateSize);
 
     // Set up value locally
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     uint8_t* dataBytePtr = localKv->get();
     auto dataDoublePtr = reinterpret_cast<double*>(dataBytePtr);
     std::vector<double> initial = { 1.2345, 12.345, 987.6543, 10987654.3 };
@@ -358,7 +458,7 @@ TEST_CASE("Test push partial with mask", "[state]")
     localKv->pushFull();
 
     // Check pushed remotely
-    std::vector<uint8_t> actualBytes = server.getRemoteKvValue();
+    std::vector<uint8_t> actualBytes = getRemoteKvValue();
     auto actualDoublePtr = reinterpret_cast<double*>(actualBytes.data());
     std::vector<double> actualDoubles(actualDoublePtr, actualDoublePtr + 4);
 
@@ -387,100 +487,58 @@ TEST_CASE("Test push partial with mask", "[state]")
     };
 
     // Check remotely
-    std::vector<uint8_t> actualValue2 = server.getRemoteKvValue();
+    std::vector<uint8_t> actualValue2 = getRemoteKvValue();
     auto actualDoublesPtr = reinterpret_cast<double*>(actualValue2.data());
     std::vector<double> actualDoubles2(actualDoublesPtr, actualDoublesPtr + 4);
     REQUIRE(actualDoubles2 == expected);
-
-    server.stop();
 }
 
-void checkPulling(bool doPull)
-{
-    std::vector<uint8_t> values = { 0, 1, 2, 3 };
-    std::vector<uint8_t> actual(values.size(), 0);
-
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Get, with optional pull
-    int nMessages = 1;
-    if (doPull) {
-        nMessages = 2;
-    }
-
-    server.start();
-
-    // Initial pull
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
-    localKv->pull();
-
-    // Update directly on the remote KV
-    std::shared_ptr<state::StateKeyValue> remoteKv = server.getRemoteKv();
-    std::vector<uint8_t> newValues = { 5, 5, 5, 5 };
-    remoteKv->set(newValues.data());
-
-    if (doPull) {
-        // Check locak changed with another pull
-        localKv->pull();
-        localKv->get(actual.data());
-        REQUIRE(actual == newValues);
-    } else {
-        // Check local unchanged without another pull
-        localKv->get(actual.data());
-        REQUIRE(actual == values);
-    }
-
-    server.stop();
-}
-
-TEST_CASE("Test updates pulled from remote", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test updates pulled from remote",
+                 "[state]")
 {
     checkPulling(true);
 }
 
-TEST_CASE("Test updates not pulled from remote without call to pull", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test updates not pulled from remote without call to pull",
+                 "[state]")
 {
     checkPulling(false);
 }
 
-TEST_CASE("Test pushing only happens when dirty", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test pushing only happens when dirty",
+                 "[state]")
 {
     std::vector<uint8_t> values = { 0, 1, 2, 3 };
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    server.start();
+    setDummyData(values);
 
     // Pull locally
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     localKv->pull();
 
     // Change remote directly
-    std::shared_ptr<state::StateKeyValue> remoteKv = server.getRemoteKv();
+    std::shared_ptr<state::StateKeyValue> remoteKv = getRemoteKv();
     std::vector<uint8_t> newValues = { 3, 4, 5, 6 };
     remoteKv->set(newValues.data());
 
     // Push and make sure remote has not changed without local being dirty
     localKv->pushFull();
-    REQUIRE(server.getRemoteKvValue() == newValues);
+    REQUIRE(getRemoteKvValue() == newValues);
 
     // Now change locally and check push happens
     std::vector<uint8_t> newValues2 = { 7, 7, 7, 7 };
     localKv->set(newValues2.data());
     localKv->pushFull();
-    REQUIRE(server.getRemoteKvValue() == newValues2);
-
-    server.stop();
+    REQUIRE(getRemoteKvValue() == newValues2);
 }
 
-TEST_CASE("Test mapping shared memory", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test mapping shared memory",
+                 "[state]")
 {
-    cleanFaabric();
-
-    // Set up the KV
-    State& s = getGlobalState();
-    auto kv = s.getKV("demo", "mapping_test", 5);
+    auto kv = state.getKV("demo", "mapping_test", 5);
     std::vector<uint8_t> value = { 0, 1, 2, 3, 4 };
     kv->set(value.data());
 
@@ -529,19 +587,16 @@ TEST_CASE("Test mapping shared memory", "[state]")
     }
 }
 
-TEST_CASE("Test mapping shared memory does not pull", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test mapping shared memory does not pull",
+                 "[state]")
 {
     std::vector<uint8_t> values = { 0, 1, 2, 3, 4 };
     std::vector<uint8_t> zeroes(values.size(), 0);
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // One implicit pull
-    server.start();
+    setDummyData(values);
 
     // Write value to remote
-    const std::shared_ptr<state::StateKeyValue>& remoteKv =
-      server.getRemoteKv();
+    const std::shared_ptr<state::StateKeyValue>& remoteKv = getRemoteKv();
     remoteKv->set(values.data());
 
     // Map the KV locally
@@ -551,7 +606,7 @@ TEST_CASE("Test mapping shared memory does not pull", "[state]")
                               MAP_PRIVATE | MAP_ANONYMOUS,
                               -1,
                               0);
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     localKv->mapSharedMemory(mappedRegion, 0, 1);
 
     // Check it's zeroed
@@ -564,18 +619,17 @@ TEST_CASE("Test mapping shared memory does not pull", "[state]")
     std::vector<uint8_t> actualValueAfterGet(byteRegion,
                                              byteRegion + values.size());
     REQUIRE(actualValueAfterGet == values);
-
-    server.stop();
 }
 
-TEST_CASE("Test mapping small shared memory offsets", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test mapping small shared memory offsets",
+                 "[state]")
 {
-    cleanFaabric();
-
     // Set up the KV
     std::vector<uint8_t> values = { 0, 1, 2, 3, 4, 5, 6 };
-    State& s = getGlobalState();
-    auto kv = s.getKV("demo", "mapping_small_test", values.size());
+    setDummyData(values);
+
+    auto kv = state.getKV("demo", "mapping_small_test", values.size());
     kv->set(values.data());
 
     // Map a single page of host memory
@@ -622,7 +676,9 @@ TEST_CASE("Test mapping small shared memory offsets", "[state]")
     REQUIRE(chunkB[1] == 1);
 }
 
-TEST_CASE("Test mapping bigger uninitialized shared memory offsets", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test mapping bigger uninitialized shared memory offsets",
+                 "[state]")
 {
     // Define some mapping larger than a page
     size_t mappingSize = 3 * faabric::util::HOST_PAGE_SIZE;
@@ -630,13 +686,7 @@ TEST_CASE("Test mapping bigger uninitialized shared memory offsets", "[state]")
     // Set up a larger total value full of ones
     size_t totalSize = (10 * faabric::util::HOST_PAGE_SIZE) + 15;
     std::vector<uint8_t> values(totalSize, 1);
-
-    // Set up remote server
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Expecting two implicit pulls
-    server.start();
+    setDummyData(values);
 
     // Map a couple of chunks in host memory (as would be done by the wasm
     // module)
@@ -646,7 +696,7 @@ TEST_CASE("Test mapping bigger uninitialized shared memory offsets", "[state]")
       nullptr, mappingSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     // Do the mapping
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     localKv->mapSharedMemory(mappedRegionA, 6, 3);
     localKv->mapSharedMemory(mappedRegionB, 2, 3);
 
@@ -668,36 +718,28 @@ TEST_CASE("Test mapping bigger uninitialized shared memory offsets", "[state]")
     REQUIRE(chunkB[0] == 1);
     REQUIRE(chunkA[5] == 5);
     REQUIRE(chunkB[9] == 9);
-
-    server.stop();
 }
 
-TEST_CASE("Test deletion", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture, "Test deletion", "[state]")
 {
     std::vector<uint8_t> values = { 0, 1, 2, 3, 4 };
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // One pull, one deletion
-    server.start();
+    setDummyData(values);
 
     // Check data remotely and locally
-    REQUIRE(server.getLocalKvValue() == values);
-    REQUIRE(server.getRemoteKvValue() == values);
+    REQUIRE(getLocalKvValue() == values);
+    REQUIRE(getRemoteKvValue() == values);
 
     // Delete from state
-    getGlobalState().deleteKV(server.dummyUser, server.dummyKey);
+    getGlobalState().deleteKV(dummyUser, dummyKey);
 
     // Check it's gone
-    REQUIRE(server.remoteState.getKVCount() == 0);
-
-    server.stop();
+    REQUIRE(remoteState.getKVCount() == 0);
 }
 
-TEST_CASE("Test appended state with KV", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test appended state with KV",
+                 "[state]")
 {
-    cleanFaabric();
-
     // Set up the KV
     State& s = getGlobalState();
     std::shared_ptr<StateKeyValue> kv;
@@ -750,25 +792,19 @@ TEST_CASE("Test appended state with KV", "[state]")
     REQUIRE(actualAfterClear == expectedAfterClear);
 }
 
-TEST_CASE("Test remote appended state", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test remote appended state",
+                 "[state]")
 {
-    DummyStateServer server;
-    std::vector<uint8_t> empty;
-    setUpDummyServer(server, empty);
-
-    // One appends, two retrievals, one clear
-    server.start();
-
     std::vector<uint8_t> valuesA = { 0, 1, 2, 3, 4 };
     std::vector<uint8_t> valuesB = { 3, 3, 5, 5 };
 
     // Append some data remotely
-    const std::shared_ptr<state::StateKeyValue>& remoteKv =
-      server.getRemoteKv();
+    const std::shared_ptr<state::StateKeyValue>& remoteKv = getRemoteKv();
     remoteKv->append(valuesA.data(), valuesA.size());
 
     // Append locally
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     auto localInMemKv =
       std::static_pointer_cast<InMemoryStateKeyValue>(localKv);
     REQUIRE(!localInMemKv->isMaster());
@@ -797,28 +833,24 @@ TEST_CASE("Test remote appended state", "[state]")
     localKv->getAppended(
       actualLocalAfterClear.data(), actualLocalAfterClear.size(), 1);
     REQUIRE(actualLocalAfterClear == valuesB);
-
-    server.stop();
 }
 
-TEST_CASE("Test pushing pulling large state", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test pushing pulling large state",
+                 "[state]")
 {
     size_t valueSize = (3 * STATE_STREAMING_CHUNK_SIZE) + 123;
     std::vector<uint8_t> valuesA(valueSize, 1);
     std::vector<uint8_t> valuesB(valueSize, 2);
 
-    DummyStateServer server;
-    setUpDummyServer(server, valuesA);
-
-    // One pull, one push
-    server.start();
+    setDummyData(valuesA);
 
     // Pull locally
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     localKv->pull();
 
     // Check equality
-    const std::vector<uint8_t>& actualLocal = server.getLocalKvValue();
+    const std::vector<uint8_t>& actualLocal = getLocalKvValue();
     REQUIRE(actualLocal == valuesA);
 
     // Push
@@ -826,28 +858,24 @@ TEST_CASE("Test pushing pulling large state", "[state]")
     localKv->pushFull();
 
     // Check equality of remote
-    const std::vector<uint8_t>& actualRemote = server.getRemoteKvValue();
+    const std::vector<uint8_t>& actualRemote = getRemoteKvValue();
     REQUIRE(actualRemote == valuesB);
-
-    server.stop();
 }
 
-TEST_CASE("Test pushing pulling chunks over multiple requests", "[state]")
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test pushing pulling chunks over multiple requests",
+                 "[state]")
 {
     // Set up a chunk of state
     size_t chunkSize = 1024;
     size_t valueSize = 10 * chunkSize + 123;
     std::vector<uint8_t> values(valueSize, 1);
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Two chunk pulls, one push partial
-    server.start();
+    setDummyData(values);
 
     // Set a chunk in the remote value
     size_t offsetA = 3 * chunkSize + 5;
     std::vector<uint8_t> segA = { 4, 4 };
-    std::shared_ptr<state::StateKeyValue> remoteKv = server.getRemoteKv();
+    std::shared_ptr<state::StateKeyValue> remoteKv = getRemoteKv();
     remoteKv->setChunk(offsetA, segA.data(), segA.size());
 
     // Set a chunk at the end of the remote value
@@ -856,7 +884,7 @@ TEST_CASE("Test pushing pulling chunks over multiple requests", "[state]")
     remoteKv->setChunk(offsetB, segB.data(), segB.size());
 
     // Get only these chunks locally
-    std::shared_ptr<state::StateKeyValue> localKv = server.getLocalKv();
+    std::shared_ptr<state::StateKeyValue> localKv = getLocalKv();
     std::vector<uint8_t> actualSegA(segA.size(), 0);
     localKv->getChunk(offsetA, actualSegA.data(), segA.size());
     REQUIRE(actualSegA == segA);
@@ -879,7 +907,7 @@ TEST_CASE("Test pushing pulling chunks over multiple requests", "[state]")
     localKv->pushPartial();
 
     // Check the chunks in the remote value
-    std::vector<uint8_t> actualAfterPush = server.getRemoteKvValue();
+    std::vector<uint8_t> actualAfterPush = getRemoteKvValue();
     std::vector<uint8_t> actualSegC(actualAfterPush.begin() + offsetC,
                                     actualAfterPush.begin() + offsetC +
                                       segC.size());
@@ -889,21 +917,17 @@ TEST_CASE("Test pushing pulling chunks over multiple requests", "[state]")
 
     REQUIRE(actualSegC == segC);
     REQUIRE(actualSegD == segD);
-
-    server.stop();
 }
 
-TEST_CASE("Test pulling disjoint chunks of the same value which share pages",
-          "[state]")
+TEST_CASE_METHOD(
+  StateServerTestFixture,
+  "Test pulling disjoint chunks of the same value which share pages",
+  "[state]")
 {
     // Set up state
     size_t valueSize = 20 * faabric::util::HOST_PAGE_SIZE + 123;
     std::vector<uint8_t> values(valueSize, 1);
-    DummyStateServer server;
-    setUpDummyServer(server, values);
-
-    // Expect two chunk pulls
-    server.start();
+    setDummyData(values);
 
     // Set up two chunks both from the same page of memory but not overlapping
     long offsetA = 2 * faabric::util::HOST_PAGE_SIZE + 10;
@@ -916,7 +940,7 @@ TEST_CASE("Test pulling disjoint chunks of the same value which share pages",
     std::vector<uint8_t> actualB(lenA, 0);
     std::vector<uint8_t> expectedB(lenA, 1);
 
-    const std::shared_ptr<state::StateKeyValue>& localKv = server.getLocalKv();
+    const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     localKv->getChunk(offsetA, actualA.data(), lenA);
     localKv->getChunk(offsetB, actualB.data(), lenB);
 
@@ -927,7 +951,49 @@ TEST_CASE("Test pulling disjoint chunks of the same value which share pages",
     // Check both chunks are as expected
     REQUIRE(actualA == expectedA);
     REQUIRE(actualB == expectedB);
+}
 
-    server.stop();
+TEST_CASE_METHOD(StateServerTestFixture,
+                 "Test state server as remote master",
+                 "[state]")
+{
+    REQUIRE(state.getKVCount() == 0);
+
+    const char* userA = "foo";
+    const char* keyA = "bar";
+    std::vector<uint8_t> dataA = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    std::vector<uint8_t> dataB = { 7, 6, 5, 4, 3, 2, 1, 0 };
+
+    dummyUser = userA;
+    dummyKey = keyA;
+    setDummyData(dataA);
+
+    // Get the state size before accessing the value locally
+    size_t actualSize = state.getStateSize(userA, keyA);
+    REQUIRE(actualSize == dataA.size());
+
+    // Access locally and check not master
+    auto localKv = getLocalKv();
+    auto localStateKv =
+      std::static_pointer_cast<InMemoryStateKeyValue>(localKv);
+    REQUIRE(!localStateKv->isMaster());
+
+    // Set the state locally and check
+    const std::shared_ptr<StateKeyValue>& kv =
+      state.getKV(userA, keyA, dataA.size());
+    kv->set(dataB.data());
+
+    std::vector<uint8_t> actualLocal(dataA.size(), 0);
+    kv->get(actualLocal.data());
+    REQUIRE(actualLocal == dataB);
+
+    // Check it's not changed remotely
+    std::vector<uint8_t> actualRemote = getRemoteKvValue();
+    REQUIRE(actualRemote == dataA);
+
+    // Push and check remote is updated
+    kv->pushFull();
+    actualRemote = getRemoteKvValue();
+    REQUIRE(actualRemote == dataB);
 }
 }

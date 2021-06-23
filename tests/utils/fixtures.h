@@ -6,6 +6,7 @@
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
