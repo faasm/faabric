@@ -6,7 +6,7 @@
 
 #include <queue>
 
-#define DEFAULT_QUEUE_TIMEOUT_MS 500
+#define DEFAULT_QUEUE_TIMEOUT_MS 5000
 
 namespace faabric::util {
 class QueueTimeoutException : public faabric::util::FaabricException
