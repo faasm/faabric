@@ -1,5 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
@@ -80,9 +81,8 @@ void clearMockRequests()
 // Message Client
 // -----------------------------------
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
-{
-}
+  : faabric::transport::SendMessageEndpoint(hostIn, FUNCTION_CALL_PORT)
+{}
 
 void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
 {

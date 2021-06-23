@@ -2,7 +2,6 @@
 
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
-#include <faabric/transport/MessageEndpointClient.h>
 
 #include <thread>
 

@@ -3,6 +3,7 @@
 #include <thread>
 
 #include <faabric/transport/MessageEndpointServer.h>
+#include <faabric/transport/common.h>
 #include <faabric/util/logging.h>
 
 using namespace faabric::transport;
@@ -82,7 +83,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     server.start();
 
     // Open the source endpoint client, don't bind
-    MessageEndpointClient src(thisHost, testPort);
+    SendMessageEndpoint src(thisHost, testPort);
 
     // Send message: server expects header + body
     std::string header = "header";
@@ -114,7 +115,7 @@ TEST_CASE("Test send one-off response to client", "[transport]")
 
     std::thread clientThread([expectedMsg] {
         // Open the source endpoint client, don't bind
-        MessageEndpointClient cli(thisHost, testPort);
+        SendMessageEndpoint cli(thisHost, testPort);
 
         Message msg = cli.awaitResponse(testPort + REPLY_PORT_OFFSET);
         assert(msg.size() == expectedMsg.size());
@@ -145,7 +146,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     for (int i = 0; i < numClients; i++) {
         clientThreads.emplace_back(std::thread([numMessages] {
             // Prepare client
-            MessageEndpointClient cli(thisHost, testPort);
+            SendMessageEndpoint cli(thisHost, testPort);
 
             std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {
@@ -206,7 +207,7 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     usleep(500 * 1000);
 
     // Set up the client
-    MessageEndpointClient cli(thisHost, testPort, clientTimeout);
+    SendMessageEndpoint cli(thisHost, testPort, clientTimeout);
 
     std::vector<uint8_t> data = { 1, 1, 1 };
     cli.send(data.data(), data.size(), true);

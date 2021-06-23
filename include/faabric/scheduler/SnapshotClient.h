@@ -2,7 +2,7 @@
 
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/scheduler/SnapshotApi.h>
-#include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/util/snapshot.h>
 
 namespace faabric::scheduler {
@@ -32,7 +32,7 @@ void clearMockSnapshotRequests();
 // gRPC client
 // -----------------------------------
 
-class SnapshotClient final : public faabric::transport::MessageEndpointClient
+class SnapshotClient final : public faabric::transport::SendMessageEndpoint
 {
   public:
     explicit SnapshotClient(const std::string& hostIn);

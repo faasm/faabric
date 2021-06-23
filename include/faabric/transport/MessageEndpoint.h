@@ -32,7 +32,7 @@ class MessageEndpoint
   public:
     MessageEndpoint(zmq::socket_type socketTypeIn,
                     const std::string& hostIn,
-                    int portIn, int timeoutMs);
+                    int portIn, int timeoutMsIn);
 
     // Delete assignment and copy-constructor as we need to be very careful with
     // socping and same-thread instantiation
@@ -49,8 +49,9 @@ class MessageEndpoint
     const std::string host;
     const int port;
     const std::string address;
-    std::thread::id tid;
-    int id;
+    const int timeoutMs;
+    const std::thread::id tid;
+    const int id;
 
     zmq::socket_t socket;
 
@@ -67,6 +68,8 @@ class SendMessageEndpoint : public MessageEndpoint
                         int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
+
+    Message awaitResponse(int port);
 };
 
 class RecvMessageEndpoint : public MessageEndpoint

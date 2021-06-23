@@ -3,7 +3,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::scheduler {

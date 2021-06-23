@@ -1,4 +1,5 @@
 #include <faabric/state/StateClient.h>
+#include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -7,13 +8,12 @@ namespace faabric::state {
 StateClient::StateClient(const std::string& userIn,
                          const std::string& keyIn,
                          const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, STATE_PORT)
+  : faabric::transport::SendMessageEndpoint(hostIn, STATE_PORT)
   , user(userIn)
   , key(keyIn)
   , host(hostIn)
   , reg(state::getInMemoryStateRegistry())
-{
-}
+{}
 
 void StateClient::sendHeader(faabric::state::StateCalls call)
 {
@@ -24,7 +24,7 @@ void StateClient::sendHeader(faabric::state::StateCalls call)
 faabric::transport::Message StateClient::awaitResponse()
 {
     // Call the superclass implementation
-    return MessageEndpointClient::awaitResponse(STATE_PORT + REPLY_PORT_OFFSET);
+    return SendMessageEndpoint::awaitResponse(STATE_PORT + REPLY_PORT_OFFSET);
 }
 
 void StateClient::sendStateRequest(faabric::state::StateCalls header,

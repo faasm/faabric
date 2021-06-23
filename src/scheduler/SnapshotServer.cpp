@@ -3,6 +3,7 @@
 #include <faabric/scheduler/SnapshotServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>

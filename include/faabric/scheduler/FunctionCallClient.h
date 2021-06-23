@@ -2,7 +2,7 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallApi.h>
-#include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/util/config.h>
 
 namespace faabric::scheduler {
@@ -32,7 +32,7 @@ void clearMockRequests();
 // -----------------------------------
 // Message client
 // -----------------------------------
-class FunctionCallClient : public faabric::transport::MessageEndpointClient
+class FunctionCallClient : public faabric::transport::SendMessageEndpoint
 {
   public:
     explicit FunctionCallClient(const std::string& hostIn);

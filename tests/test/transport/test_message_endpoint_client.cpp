@@ -4,7 +4,7 @@
 #include <thread>
 #include <unistd.h>
 
-#include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/transport/MessageEndpoint.h>
 
 using namespace faabric::transport;
 
@@ -44,8 +44,8 @@ TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
     std::string expectedResponse = "world!";
 
     std::thread senderThread([expectedMsg, expectedResponse] {
-        // Open the source endpoint client, don't bind
-        MessageEndpointClient src(thisHost, testPort);
+        // Open the source endpoint client
+        SendMessageEndpoint src(thisHost, testPort);
 
         // Send message and wait for response
         uint8_t msg[expectedMsg.size()];

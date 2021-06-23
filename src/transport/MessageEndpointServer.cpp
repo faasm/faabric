@@ -1,4 +1,5 @@
 #include <faabric/transport/MessageEndpointServer.h>
+#include <faabric/transport/common.h>
 #include <faabric/util/logging.h>
 
 #include <csignal>

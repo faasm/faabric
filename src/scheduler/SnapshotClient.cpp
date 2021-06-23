@@ -1,4 +1,5 @@
 #include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/transport/common.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
@@ -76,9 +77,8 @@ void clearMockSnapshotRequests()
     send(buffer, size);
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
-{
-}
+  : faabric::transport::SendMessageEndpoint(hostIn, SNAPSHOT_PORT)
+{}
 
 void SnapshotClient::sendHeader(faabric::scheduler::SnapshotCalls call)
 {

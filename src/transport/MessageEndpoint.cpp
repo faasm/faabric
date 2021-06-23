@@ -27,11 +27,12 @@ namespace faabric::transport {
 MessageEndpoint::MessageEndpoint(zmq::socket_type socketTypeIn,
                                  const std::string& hostIn,
                                  int portIn,
-                                 int timeoutMs)
+                                 int timeoutMsIn)
   : socketType(socketTypeIn)
   , host(hostIn)
   , port(portIn)
   , address("tcp://" + host + ":" + std::to_string(port))
+  , timeoutMs(timeoutMsIn)
   , tid(std::this_thread::get_id())
   , id(faabric::util::generateGid())
 {
@@ -116,6 +117,17 @@ void SendMessageEndpoint::send(uint8_t* serialisedMsg,
           }
       },
       "send")
+}
+
+// Block until we receive a response from the server
+Message SendMessageEndpoint::awaitResponse(int port)
+{
+    // Wait for the response, open a temporary endpoint for it
+    RecvMessageEndpoint endpoint(port);
+
+    Message receivedMessage = endpoint.recv();
+
+    return receivedMessage;
 }
 
 // ----------------------------------------------
