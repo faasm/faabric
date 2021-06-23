@@ -81,8 +81,8 @@ void MessageEndpoint::open(faabric::transport::MessageContext& context,
     }
 
     // Set socket options
-    this->socket->setsockopt(ZMQ_RCVTIMEO, recvTimeoutMs);
-    this->socket->setsockopt(ZMQ_SNDTIMEO, sendTimeoutMs);
+    this->socket->set(zmq::sockopt::rcvtimeo, recvTimeoutMs);
+    this->socket->set(zmq::sockopt::sndtimeo, recvTimeoutMs);
 }
 
 void MessageEndpoint::send(uint8_t* serialisedMsg, size_t msgSize, bool more)
