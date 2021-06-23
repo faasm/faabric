@@ -60,8 +60,6 @@ class MessageEndpoint
     const int id;
 
     zmq::socket_t socket;
-
-    void validateTimeout(int value);
 };
 
 /* Send and Recv Message Endpoints */

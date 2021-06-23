@@ -1,4 +1,3 @@
-#include "zmq.hpp"
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/context.h>
@@ -44,6 +43,11 @@ MessageEndpoint::MessageEndpoint(zmq::socket_type socketTypeIn,
                   "socket_create")
 
     // Set socket timeouts
+    if (timeoutMs <= 0) {
+        SPDLOG_ERROR("Setting invalid timeout of {}", timeoutMs);
+        throw std::runtime_error("Setting invalid timeout");
+    }
+
     socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
     socket.set(zmq::sockopt::sndtimeo, timeoutMs);
 

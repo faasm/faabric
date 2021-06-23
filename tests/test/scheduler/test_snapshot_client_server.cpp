@@ -32,10 +32,7 @@ class SnapshotClientServerFixture
         usleep(1000 * SHORT_TEST_TIMEOUT_MS);
     }
 
-    ~SnapshotClientServerFixture()
-    {
-        server.stop();
-    }
+    ~SnapshotClientServerFixture() { server.stop(); }
 };
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,

@@ -127,8 +127,7 @@ faabric::HostResources FunctionCallClient::getResources()
         SEND_MESSAGE(faabric::scheduler::FunctionCalls::GetResources, request);
 
         // Receive message
-        faabric::transport::Message msg =
-          awaitResponse();
+        faabric::transport::Message msg = awaitResponse();
         // Deserialise message string
         if (!response.ParseFromArray(msg.data(), msg.size())) {
             throw std::runtime_error("Error deserialising message");

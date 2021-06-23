@@ -156,4 +156,36 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         }
     }
 }
+
+TEST_CASE_METHOD(SchedulerTestFixture,
+                 "Test can't set invalid send/recv timeouts",
+                 "[transport]")
+{
+
+    SECTION("Sanity check valid timeout")
+    {
+        SendMessageEndpoint s(thisHost, testPort, 100);
+        RecvMessageEndpoint r(testPort, 100);
+    }
+
+    SECTION("Recv zero timeout")
+    {
+        REQUIRE_THROWS(RecvMessageEndpoint(testPort, 0));
+    }
+
+    SECTION("Send zero timeout")
+    {
+        REQUIRE_THROWS(SendMessageEndpoint(thisHost, testPort, 0));
+    }
+
+    SECTION("Recv negative timeout")
+    {
+        REQUIRE_THROWS(RecvMessageEndpoint(testPort, -1));
+    }
+
+    SECTION("Send negative timeout")
+    {
+        REQUIRE_THROWS(SendMessageEndpoint(thisHost, testPort, -1));
+    }
+}
 }
