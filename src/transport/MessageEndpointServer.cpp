@@ -23,8 +23,8 @@ void MessageEndpointServer::start()
             Message header = endpoint.recv();
 
             // Detect shutdown condition
-            if (header.size() == 0) {
-                SPDLOG_TRACE("Server received shutdown message");
+            if (header.size() == sizeof(uint8_t) && !header.more()) {
+                SPDLOG_TRACE("Async server socket received shutdown message");
                 break;
             }
 
@@ -54,8 +54,8 @@ void MessageEndpointServer::start()
             Message header = endpoint.recv();
 
             // Detect shutdown condition
-            if (header.size() == 0) {
-                SPDLOG_TRACE("Server received shutdown message");
+            if (header.size() == sizeof(uint8_t) && !header.more()) {
+                SPDLOG_TRACE("Sync server socket received shutdown message");
                 break;
             }
 
@@ -72,7 +72,8 @@ void MessageEndpointServer::start()
             assert(body.udata() != nullptr);
 
             // Server-specific message handling
-            std::unique_ptr<google::protobuf::Message> resp = doSyncRecv(header, body);
+            std::unique_ptr<google::protobuf::Message> resp =
+              doSyncRecv(header, body);
             size_t respSize = resp->ByteSizeLong();
 
             uint8_t buffer[respSize];
@@ -91,13 +92,13 @@ void MessageEndpointServer::stop()
       "Sending sync shutdown message locally to {}:{}", LOCALHOST, syncPort);
 
     SyncSendMessageEndpoint syncSender(LOCALHOST, syncPort);
-    syncSender.sendAwaitResponse(nullptr, 0);
+    syncSender.sendShutdown();
 
     SPDLOG_TRACE(
       "Sending async shutdown message locally to {}:{}", LOCALHOST, asyncPort);
 
-    AsyncSendMessageEndpoint asyncSender(LOCALHOST, syncPort);
-    asyncSender.send(nullptr, 0);
+    AsyncSendMessageEndpoint asyncSender(LOCALHOST, asyncPort);
+    asyncSender.sendShutdown();
 
     // Join the threads
     if (asyncThread.joinable()) {

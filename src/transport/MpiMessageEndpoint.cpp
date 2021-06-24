@@ -19,6 +19,7 @@ void sendMpiHostRankMsg(const std::string& hostIn,
         if (!msg.SerializeToArray(sMsg, msgSize)) {
             throw std::runtime_error("Error serialising message");
         }
+
         faabric::transport::AsyncSendMessageEndpoint endpoint(hostIn, MPI_PORT);
         endpoint.send(sMsg, msgSize, false);
     }

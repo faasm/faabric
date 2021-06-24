@@ -1,5 +1,3 @@
-#pragma once
-
 #include <faabric/transport/MessageEndpointClient.h>
 
 namespace faabric::transport {
@@ -9,7 +7,7 @@ MessageEndpointClient::MessageEndpointClient(std::string hostIn, int portIn)
   , asyncPort(portIn)
   , syncPort(portIn + 1)
   , asyncEndpoint(host, asyncPort)
-  , syncEndpoint(host, asyncPort)
+  , syncEndpoint(host, syncPort)
 {}
 
 void MessageEndpointClient::asyncSend(int header,

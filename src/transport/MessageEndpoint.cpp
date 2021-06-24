@@ -91,6 +91,8 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
             throw std::runtime_error("Opening unrecognized socket type");
         }
     }
+
+    return socket;
 }
 
 void MessageEndpoint::doSend(zmq::socket_t& socket,
@@ -100,7 +102,7 @@ void MessageEndpoint::doSend(zmq::socket_t& socket,
 {
     assert(tid == std::this_thread::get_id());
     zmq::send_flags sendFlags =
-      more ? zmq::send_flags::sndmore : zmq::send_flags::dontwait;
+      more ? zmq::send_flags::sndmore : zmq::send_flags::none;
 
     CATCH_ZMQ_ERR(
       {
@@ -208,6 +210,19 @@ AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
     pushSocket = setUpSocket(zmq::socket_type::push, portIn);
 }
 
+void AsyncSendMessageEndpoint::sendHeader(int header)
+{
+    uint8_t headerBytes = static_cast<uint8_t>(header);
+    doSend(pushSocket, &headerBytes, sizeof(headerBytes), true);
+}
+
+void AsyncSendMessageEndpoint::sendShutdown()
+{
+    int header = -1;
+    uint8_t headerBytes = static_cast<uint8_t>(header);
+    doSend(pushSocket, &headerBytes, sizeof(headerBytes), false);
+}
+
 void AsyncSendMessageEndpoint::send(uint8_t* serialisedMsg,
                                     size_t msgSize,
                                     bool more)
@@ -231,6 +246,13 @@ void SyncSendMessageEndpoint::sendHeader(int header)
 {
     uint8_t headerBytes = static_cast<uint8_t>(header);
     doSend(reqSocket, &headerBytes, sizeof(headerBytes), true);
+}
+
+void SyncSendMessageEndpoint::sendShutdown()
+{
+    int header = -1;
+    uint8_t headerBytes = static_cast<uint8_t>(header);
+    doSend(reqSocket, &headerBytes, sizeof(headerBytes), false);
 }
 
 Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* serialisedMsg,

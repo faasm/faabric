@@ -72,6 +72,10 @@ class AsyncSendMessageEndpoint : public MessageEndpoint
                              int portIn,
                              int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
+    void sendHeader(int header);
+
+    void sendShutdown();
+
     void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
 
   private:
@@ -86,6 +90,8 @@ class SyncSendMessageEndpoint : public MessageEndpoint
                             int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
     void sendHeader(int header);
+
+    void sendShutdown();
 
     Message sendAwaitResponse(const uint8_t* serialisedMsg,
                               size_t msgSize,
