@@ -4,9 +4,10 @@
 #include <faabric/state/InMemoryStateRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/transport/MessageEndpointClient.h>
 
 namespace faabric::state {
-class StateClient : public faabric::transport::SendMessageEndpoint
+class StateClient : public faabric::transport::MessageEndpointClient
 {
   public:
     explicit StateClient(const std::string& userIn,
@@ -15,9 +16,6 @@ class StateClient : public faabric::transport::SendMessageEndpoint
 
     const std::string user;
     const std::string key;
-    const std::string host;
-
-    /* External state client API */
 
     void pushChunks(const std::vector<StateChunk>& chunks);
 
@@ -39,16 +37,8 @@ class StateClient : public faabric::transport::SendMessageEndpoint
     void unlock();
 
   private:
-    void sendHeader(faabric::state::StateCalls call);
-
-    // Block, but ignore return value
-    faabric::transport::Message awaitResponse();
-
-    void sendStateRequest(faabric::state::StateCalls header, bool expectReply);
-
     void sendStateRequest(faabric::state::StateCalls header,
-                          const uint8_t* data = nullptr,
-                          int length = 0,
-                          bool expectReply = false);
+                          const uint8_t* data,
+                          int length);
 };
 }

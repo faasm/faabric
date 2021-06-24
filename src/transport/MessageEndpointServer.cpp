@@ -72,16 +72,15 @@ void MessageEndpointServer::start()
             assert(body.udata() != nullptr);
 
             // Server-specific message handling
-            std::unique_ptr<google::protobuf::Message> resp =
-              doSyncRecv(header, body);
-            size_t msgSize = resp->ByteSizeLong();
-            {
-                uint8_t sMsg[msgSize];
-                if (!resp->SerializeToArray(sMsg, msgSize)) {
-                    throw std::runtime_error("Error serialising message");
-                }
-                endpoint.sendResponse(sMsg, msgSize);
+            std::unique_ptr<google::protobuf::Message> resp = doSyncRecv(header, body);
+            size_t respSize = resp->ByteSizeLong();
+
+            uint8_t buffer[respSize];
+            if (!resp->SerializeToArray(buffer, respSize)) {
+                throw std::runtime_error("Error serialising message");
             }
+
+            endpoint.sendResponse(buffer, respSize);
         }
     });
 }
@@ -109,4 +108,5 @@ void MessageEndpointServer::stop()
         syncThread.join();
     }
 }
+
 }

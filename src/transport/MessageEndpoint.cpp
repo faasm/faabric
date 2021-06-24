@@ -94,7 +94,7 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
 }
 
 void MessageEndpoint::doSend(zmq::socket_t& socket,
-                             uint8_t* data,
+                             const uint8_t* data,
                              size_t dataSize,
                              bool more)
 {
@@ -233,7 +233,7 @@ void SyncSendMessageEndpoint::sendHeader(int header)
     doSend(reqSocket, &headerBytes, sizeof(headerBytes), true);
 }
 
-Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t* serialisedMsg,
+Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* serialisedMsg,
                                                    size_t msgSize,
                                                    bool more)
 {

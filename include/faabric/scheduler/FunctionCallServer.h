@@ -18,19 +18,18 @@ class FunctionCallServer final
     void doAsyncRecv(faabric::transport::Message& header,
                      faabric::transport::Message& body) override;
 
-    faabric::Message doSyncRecv(faabric::transport::Message& header,
-                                faabric::transport::Message& body) override;
+    std::unique_ptr<google::protobuf::Message> doSyncRecv(
+      faabric::transport::Message& header,
+      faabric::transport::Message& body) override;
 
-    /* Function call server API */
+    std::unique_ptr<google::protobuf::Message> recvFlush(
+      faabric::transport::Message& body);
 
-    void recvFlush(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvGetResources(
+      faabric::transport::Message& body);
 
     void recvExecuteFunctions(faabric::transport::Message& body);
 
-    void recvGetResources(faabric::transport::Message& body);
-
     void recvUnregister(faabric::transport::Message& body);
-
-    void recvSetThreadResult(faabric::transport::Message& body);
 };
 }

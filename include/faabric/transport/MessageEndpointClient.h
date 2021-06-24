@@ -1,5 +1,6 @@
 #pragma once
 
+#include <faabric/flat/faabric_generated.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
@@ -13,11 +14,18 @@ class MessageEndpointClient
   protected:
     const std::string host;
 
-    void asyncSend(int header, std::unique_ptr<google::protobuf::Message> msg);
+    void asyncSend(int header, google::protobuf::Message* msg);
+
+    void asyncSend(int header, uint8_t* buffer, size_t bufferSize);
 
     void syncSend(int header,
-                  std::unique_ptr<google::protobuf::Message> msg,
-                  std::unique_ptr<google::protobuf::Message> response);
+                  google::protobuf::Message* msg,
+                  google::protobuf::Message* response);
+
+    void syncSend(int header,
+                  const uint8_t* buffer,
+                  size_t bufferSize,
+                  google::protobuf::Message* response);
 
   private:
     const int asyncPort;

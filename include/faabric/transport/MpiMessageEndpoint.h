@@ -32,7 +32,7 @@ class MpiMessageEndpoint
     void close();
 
   private:
-    SendMessageEndpoint sendMessageEndpoint;
-    RecvMessageEndpoint recvMessageEndpoint;
+    AsyncSendMessageEndpoint sendMessageEndpoint;
+    AsyncRecvMessageEndpoint recvMessageEndpoint;
 };
 }

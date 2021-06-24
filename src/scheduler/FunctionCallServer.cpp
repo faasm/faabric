@@ -13,31 +13,50 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doRecv(faabric::transport::Message& header,
-                                faabric::transport::Message& body)
+void FunctionCallServer::doAsyncRecv(faabric::transport::Message& header,
+                                     faabric::transport::Message& body)
 {
     assert(header.size() == sizeof(uint8_t));
     uint8_t call = static_cast<uint8_t>(*header.data());
     switch (call) {
-        case faabric::scheduler::FunctionCalls::Flush:
-            this->recvFlush(body);
+        case faabric::scheduler::FunctionCalls::ExecuteFunctions: {
+            recvExecuteFunctions(body);
             break;
-        case faabric::scheduler::FunctionCalls::ExecuteFunctions:
-            this->recvExecuteFunctions(body);
+        }
+        case faabric::scheduler::FunctionCalls::Unregister: {
+            recvUnregister(body);
             break;
-        case faabric::scheduler::FunctionCalls::Unregister:
-            this->recvUnregister(body);
-            break;
-        case faabric::scheduler::FunctionCalls::GetResources:
-            this->recvGetResources(body);
-            break;
-        default:
+        }
+        default: {
             throw std::runtime_error(
-              fmt::format("Unrecognized call header: {}", call));
+              fmt::format("Unrecognized async call header: {}", call));
+        }
     }
 }
 
-void FunctionCallServer::recvFlush(faabric::transport::Message& body)
+std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
+  faabric::transport::Message& header,
+  faabric::transport::Message& body)
+{
+    assert(header.size() == sizeof(uint8_t));
+
+    uint8_t call = static_cast<uint8_t>(*header.data());
+    switch (call) {
+        case faabric::scheduler::FunctionCalls::Flush: {
+            return recvFlush(body);
+        }
+        case faabric::scheduler::FunctionCalls::GetResources: {
+            return recvGetResources(body);
+        }
+        default: {
+            throw std::runtime_error(
+              fmt::format("Unrecognized sync call header: {}", call));
+        }
+    }
+}
+
+std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
+  faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::ResponseRequest, body.data(), body.size());
 
@@ -47,8 +66,7 @@ void FunctionCallServer::recvFlush(faabric::transport::Message& body)
     // Clear the scheduler
     scheduler.flushLocally();
 
-    faabric::EmptyResponse response;
-    SEND_SERVER_RESPONSE(response, msg.returnhost())
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
 void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message& body)
@@ -71,12 +89,13 @@ void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
     scheduler.removeRegisteredHost(msg.host(), msg.function());
 }
 
-void FunctionCallServer::recvGetResources(faabric::transport::Message& body)
+std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
+  faabric::transport::Message& body)
 {
     PARSE_MSG(faabric::ResponseRequest, body.data(), body.size())
 
-    // Send the response body
-    faabric::HostResources response = scheduler.getThisHostResources();
-    SEND_SERVER_RESPONSE(response, msg.returnhost())
+    auto response = std::make_unique<faabric::HostResources>(
+      scheduler.getThisHostResources());
+    return response;
 }
 }

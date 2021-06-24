@@ -37,7 +37,7 @@ class MessageEndpointServer
       faabric::transport::Message& header,
       faabric::transport::Message& body) = 0;
 
-    void sendSyncResponse();
+    void sendSyncResponse(google::protobuf::Message* resp);
 
   private:
     const int asyncPort;

@@ -22,15 +22,6 @@
         send(sMsg, msgSize);                                                   \
     }
 
-#define SEND_SERVER_RESPONSE(msg, host)                                        \
-    size_t msgSize = msg.ByteSizeLong();                                       \
-    {                                                                          \
-        uint8_t sMsg[msgSize];                                                 \
-        if (!msg.SerializeToArray(sMsg, msgSize)) {                            \
-            throw std::runtime_error("Error serialising message");             \
-        }                                                                      \
-        recvEndpoint->sendResponse(sMsg, msgSize, host);                       \
-    }
 
 #define PARSE_MSG(T, data, size)                                               \
     T msg;                                                                     \

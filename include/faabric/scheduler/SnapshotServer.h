@@ -19,15 +19,13 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
       faabric::transport::Message& header,
       faabric::transport::Message& body) override;
 
-    /* Snapshot server API */
-
     std::unique_ptr<google::protobuf::Message> recvPushSnapshot(
       faabric::transport::Message& msg);
 
-    void recvDeleteSnapshot(faabric::transport::Message& msg);
-
     std::unique_ptr<google::protobuf::Message> recvPushSnapshotDiffs(
       faabric::transport::Message& msg);
+
+    void recvDeleteSnapshot(faabric::transport::Message& msg);
 
     void recvThreadResult(faabric::transport::Message& msg);
 

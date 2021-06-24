@@ -1,7 +1,5 @@
 #pragma once
 
-#include <google/protobuf/message.h>
-
 #include <faabric/transport/Message.h>
 #include <faabric/util/exception.h>
 
@@ -56,7 +54,7 @@ class MessageEndpoint
     zmq::socket_t setUpSocket(zmq::socket_type socketType, int socketPort);
 
     void doSend(zmq::socket_t& socket,
-                uint8_t* data,
+                const uint8_t* data,
                 size_t dataSize,
                 bool more);
 
@@ -89,7 +87,7 @@ class SyncSendMessageEndpoint : public MessageEndpoint
 
     void sendHeader(int header);
 
-    Message sendAwaitResponse(uint8_t* serialisedMsg,
+    Message sendAwaitResponse(const uint8_t* serialisedMsg,
                               size_t msgSize,
                               bool more = false);
 

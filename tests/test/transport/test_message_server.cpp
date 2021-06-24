@@ -23,11 +23,19 @@ class DummyServer final : public MessageEndpointServer
     int messageCount;
 
   private:
-    void doRecv(faabric::transport::Message& header,
-                faabric::transport::Message& body) override
+    void doAsyncRecv(faabric::transport::Message& header,
+                     faabric::transport::Message& body) override
     {
-        // Dummy server, do nothing but increment the message count
         messageCount++;
+    }
+
+    std::unique_ptr<google::protobuf::Message> doSyncRecv(
+      faabric::transport::Message& header,
+      faabric::transport::Message& body) override
+    {
+        messageCount++;
+
+        return std::make_unique<faabric::EmptyResponse>();
     }
 };
 
@@ -42,13 +50,20 @@ class SlowServer final : public MessageEndpointServer
     {}
 
   private:
-    void doRecv(faabric::transport::Message& header,
-                faabric::transport::Message& body) override
+    void doAsyncRecv(faabric::transport::Message& header,
+                     faabric::transport::Message& body) override
+    {
+        throw std::runtime_error("SlowServer not expecting async recv");
+    }
+
+    void doSyncRecv(faabric::transport::Message& header,
+                    faabric::transport::Message& body)
     {
         SPDLOG_DEBUG("Slow message server test recv");
 
         usleep(delayMs * 1000);
-        recvEndpoint->sendResponse(data.data(), data.size(), thisHost);
+        sendSyncResponse recvEndpoint->sendResponse(
+          data.data(), data.size(), thisHost);
     }
 };
 
