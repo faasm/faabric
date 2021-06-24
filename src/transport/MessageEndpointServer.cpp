@@ -1,32 +1,86 @@
 #include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/transport/common.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/network.h>
 
 #include <csignal>
 #include <cstdlib>
 
 namespace faabric::transport {
 MessageEndpointServer::MessageEndpointServer(int portIn)
-  : port(portIn)
+  : asyncPort(portIn)
+  , syncPort(portIn + 1)
 {}
 
 void MessageEndpointServer::start()
 {
-    // Start serving thread in background
-    servingThread = std::thread([this] {
-        recvEndpoint = std::make_unique<RecvMessageEndpoint>(this->port);
+    asyncThread = std::thread([this] {
+        AsyncRecvMessageEndpoint endpoint(asyncPort);
 
         // Loop until we receive a shutdown message
         while (true) {
-            try {
-                bool messageReceived = this->recv();
-                if (!messageReceived) {
-                    SPDLOG_TRACE("Server received shutdown message");
-                    break;
+            // Receive header and body
+            Message header = endpoint.recv();
+
+            // Detect shutdown condition
+            if (header.size() == 0) {
+                SPDLOG_TRACE("Server received shutdown message");
+                break;
+            }
+
+            // Check the header was sent with ZMQ_SNDMORE flag
+            if (!header.more()) {
+                throw std::runtime_error("Header sent without SNDMORE flag");
+            }
+
+            // Check that there are no more messages to receive
+            Message body = endpoint.recv();
+            if (body.more()) {
+                throw std::runtime_error("Body sent with SNDMORE flag");
+            }
+            assert(body.udata() != nullptr);
+
+            // Server-specific message handling
+            doAsyncRecv(header, body);
+        }
+    });
+
+    syncThread = std::thread([this] {
+        SyncRecvMessageEndpoint endpoint(syncPort);
+
+        // Loop until we receive a shutdown message
+        while (true) {
+            // Receive header and body
+            Message header = endpoint.recv();
+
+            // Detect shutdown condition
+            if (header.size() == 0) {
+                SPDLOG_TRACE("Server received shutdown message");
+                break;
+            }
+
+            // Check the header was sent with ZMQ_SNDMORE flag
+            if (!header.more()) {
+                throw std::runtime_error("Header sent without SNDMORE flag");
+            }
+
+            // Check that there are no more messages to receive
+            Message body = endpoint.recv();
+            if (body.more()) {
+                throw std::runtime_error("Body sent with SNDMORE flag");
+            }
+            assert(body.udata() != nullptr);
+
+            // Server-specific message handling
+            std::unique_ptr<google::protobuf::Message> resp =
+              doSyncRecv(header, body);
+            size_t msgSize = resp->ByteSizeLong();
+            {
+                uint8_t sMsg[msgSize];
+                if (!resp->SerializeToArray(sMsg, msgSize)) {
+                    throw std::runtime_error("Error serialising message");
                 }
-            } catch (MessageTimeoutException& ex) {
-                SPDLOG_TRACE("Server timed out with no messages, continuing");
-                continue;
+                endpoint.sendResponse(sMsg, msgSize);
             }
         }
     });
@@ -34,45 +88,25 @@ void MessageEndpointServer::start()
 
 void MessageEndpointServer::stop()
 {
-    // Send a shutdown message via a temporary endpoint
-    SendMessageEndpoint e(recvEndpoint->getHost(), recvEndpoint->getPort());
+    SPDLOG_TRACE(
+      "Sending sync shutdown message locally to {}:{}", LOCALHOST, syncPort);
 
-    SPDLOG_TRACE("Sending shutdown message locally to {}:{}",
-                 recvEndpoint->getHost(),
-                 recvEndpoint->getPort());
-    e.send(nullptr, 0);
+    SyncSendMessageEndpoint syncSender(LOCALHOST, syncPort);
+    syncSender.sendAwaitResponse(nullptr, 0);
 
-    // Join the serving thread
-    if (servingThread.joinable()) {
-        servingThread.join();
-    }
-}
+    SPDLOG_TRACE(
+      "Sending async shutdown message locally to {}:{}", LOCALHOST, asyncPort);
 
-bool MessageEndpointServer::recv()
-{
-    // Receive header and body
-    Message header = recvEndpoint->recv();
+    AsyncSendMessageEndpoint asyncSender(LOCALHOST, syncPort);
+    asyncSender.send(nullptr, 0);
 
-    // Detect shutdown condition
-    if (header.size() == 0) {
-        return false;
+    // Join the threads
+    if (asyncThread.joinable()) {
+        asyncThread.join();
     }
 
-    // Check the header was sent with ZMQ_SNDMORE flag
-    if (!header.more()) {
-        throw std::runtime_error("Header sent without SNDMORE flag");
+    if (syncThread.joinable()) {
+        syncThread.join();
     }
-
-    // Check that there are no more messages to receive
-    Message body = recvEndpoint->recv();
-    if (body.more()) {
-        throw std::runtime_error("Body sent with SNDMORE flag");
-    }
-    assert(body.udata() != nullptr);
-
-    // Server-specific message handling
-    doRecv(header, body);
-
-    return true;
 }
 }

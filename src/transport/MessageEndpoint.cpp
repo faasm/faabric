@@ -25,39 +25,46 @@
 
 namespace faabric::transport {
 
-MessageEndpoint::MessageEndpoint(zmq::socket_type socketTypeIn,
-                                 const std::string& hostIn,
+MessageEndpoint::MessageEndpoint(const std::string& hostIn,
                                  int portIn,
                                  int timeoutMsIn)
-  : socketType(socketTypeIn)
-  , host(hostIn)
+  : host(hostIn)
   , port(portIn)
   , address("tcp://" + host + ":" + std::to_string(port))
   , timeoutMs(timeoutMsIn)
   , tid(std::this_thread::get_id())
   , id(faabric::util::generateGid())
 {
-    // Create the socket
-    CATCH_ZMQ_ERR(socket =
-                    zmq::socket_t(*getGlobalMessageContext(), socketType),
-                  "socket_create")
 
     // Check and set socket timeout
     if (timeoutMs <= 0) {
         SPDLOG_ERROR("Setting invalid timeout of {}", timeoutMs);
         throw std::runtime_error("Setting invalid timeout");
     }
+}
 
+zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
+                                           int socketPort)
+{
+    zmq::socket_t socket;
+
+    // Create the socket
+    CATCH_ZMQ_ERR(socket =
+                    zmq::socket_t(*getGlobalMessageContext(), socketType),
+                  "socket_create")
     socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
     socket.set(zmq::sockopt::sndtimeo, timeoutMs);
 
     // Note - setting linger here is essential to avoid infinite hangs
     socket.set(zmq::sockopt::linger, LINGER_MS);
 
-    // Note - only one socket may bind, but several can connect. This
-    // allows for easy N - 1 or 1 - N PUSH/PULL patterns. Order between
-    // bind and connect does not matter.
     switch (socketType) {
+        case zmq::socket_type::req: {
+            SPDLOG_TRACE(
+              "Opening req socket {}:{} (timeout {}ms)", host, port, timeoutMs);
+            CATCH_ZMQ_ERR(socket.connect(address), "connect")
+            break;
+        }
         case zmq::socket_type::push: {
             SPDLOG_TRACE("Opening push socket {}:{} (timeout {}ms)",
                          host,
@@ -74,88 +81,54 @@ MessageEndpoint::MessageEndpoint(zmq::socket_type socketTypeIn,
             CATCH_ZMQ_ERR(socket.bind(address), "bind")
             break;
         }
+        case zmq::socket_type::rep: {
+            SPDLOG_TRACE(
+              "Opening rep socket {}:{} (timeout {}ms)", host, port, timeoutMs);
+            CATCH_ZMQ_ERR(socket.bind(address), "bind")
+            break;
+        }
         default: {
             throw std::runtime_error("Opening unrecognized socket type");
         }
     }
 }
 
-std::string MessageEndpoint::getHost()
-{
-    return host;
-}
-
-int MessageEndpoint::getPort()
-{
-    return port;
-}
-
-// ----------------------------------------------
-// SEND ENDPOINT
-// ----------------------------------------------
-
-SendMessageEndpoint::SendMessageEndpoint(const std::string& hostIn,
-                                         int portIn,
-                                         int timeoutMs)
-  : MessageEndpoint(zmq::socket_type::push, hostIn, portIn, timeoutMs)
-{}
-
-void SendMessageEndpoint::send(uint8_t* serialisedMsg,
-                               size_t msgSize,
-                               bool more)
+void MessageEndpoint::doSend(zmq::socket_t& socket,
+                             uint8_t* data,
+                             size_t dataSize,
+                             bool more)
 {
     assert(tid == std::this_thread::get_id());
-
     zmq::send_flags sendFlags =
-      more ? zmq::send_flags::sndmore : zmq::send_flags::none;
+      more ? zmq::send_flags::sndmore : zmq::send_flags::dontwait;
 
     CATCH_ZMQ_ERR(
       {
-          auto res =
-            socket.send(zmq::buffer(serialisedMsg, msgSize), sendFlags);
-          if (res != msgSize) {
+          auto res = socket.send(zmq::buffer(data, dataSize), sendFlags);
+          if (res != dataSize) {
               SPDLOG_ERROR("Sent different bytes than expected (sent "
                            "{}, expected {})",
                            res.value_or(0),
-                           msgSize);
+                           dataSize);
               throw std::runtime_error("Error sending message");
           }
       },
       "send")
 }
 
-// Block until we receive a response from the server
-Message SendMessageEndpoint::awaitResponse()
-{
-    // Wait for the response, open a temporary endpoint for it
-    RecvMessageEndpoint endpoint(port + REPLY_PORT_OFFSET, timeoutMs);
-
-    Message receivedMessage = endpoint.recv();
-
-    return receivedMessage;
-}
-
-// ----------------------------------------------
-// RECV ENDPOINT
-// ----------------------------------------------
-
-RecvMessageEndpoint::RecvMessageEndpoint(int portIn, int timeoutMs)
-  : MessageEndpoint(zmq::socket_type::pull, ANY_HOST, portIn, timeoutMs)
-{}
-
-Message RecvMessageEndpoint::recv(int size)
+Message MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
 {
     assert(tid == std::this_thread::get_id());
     assert(size >= 0);
 
     if (size == 0) {
-        return recvNoBuffer();
+        return recvNoBuffer(socket);
     }
 
-    return recvBuffer(size);
+    return recvBuffer(socket, size);
 }
 
-Message RecvMessageEndpoint::recvBuffer(int size)
+Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
 {
     // Pre-allocate buffer to avoid copying data
     Message msg(size);
@@ -189,7 +162,7 @@ Message RecvMessageEndpoint::recvBuffer(int size)
     return msg;
 }
 
-Message RecvMessageEndpoint::recvNoBuffer()
+Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
 {
     // Allocate a message to receive data
     zmq::message_t msg;
@@ -213,15 +186,114 @@ Message RecvMessageEndpoint::recvNoBuffer()
     return Message(msg);
 }
 
+std::string MessageEndpoint::getHost()
+{
+    return host;
+}
+
+int MessageEndpoint::getPort()
+{
+    return port;
+}
+
+// ----------------------------------------------
+// ASYNC SEND ENDPOINT
+// ----------------------------------------------
+
+AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
+                                                   int portIn,
+                                                   int timeoutMs)
+  : MessageEndpoint(hostIn, portIn, timeoutMs)
+{
+    pushSocket = setUpSocket(zmq::socket_type::push, portIn);
+}
+
+void AsyncSendMessageEndpoint::send(uint8_t* serialisedMsg,
+                                    size_t msgSize,
+                                    bool more)
+{
+    doSend(pushSocket, serialisedMsg, msgSize, more);
+}
+
+// ----------------------------------------------
+// SYNC SEND ENDPOINT
+// ----------------------------------------------
+
+SyncSendMessageEndpoint::SyncSendMessageEndpoint(const std::string& hostIn,
+                                                 int portIn,
+                                                 int timeoutMs)
+  : MessageEndpoint(hostIn, portIn, timeoutMs)
+{
+    reqSocket = setUpSocket(zmq::socket_type::req, portIn + 1);
+}
+
+void SyncSendMessageEndpoint::sendHeader(int header)
+{
+    uint8_t headerBytes = static_cast<uint8_t>(header);
+    doSend(reqSocket, &headerBytes, sizeof(headerBytes), true);
+}
+
+Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t* serialisedMsg,
+                                                   size_t msgSize,
+                                                   bool more)
+{
+    doSend(reqSocket, serialisedMsg, msgSize, more);
+
+    // Do the receive
+    zmq::message_t msg;
+    CATCH_ZMQ_ERR(
+      try {
+          auto res = reqSocket.recv(msg);
+          if (!res.has_value()) {
+              SPDLOG_ERROR("Timed out receiving message with no size");
+              throw MessageTimeoutException("Timed out receiving message");
+          }
+      } catch (zmq::error_t& e) {
+          if (e.num() == ZMQ_ETERM) {
+              SPDLOG_TRACE("Endpoint received ETERM");
+              return Message();
+          }
+          throw;
+      },
+      "send_recv")
+
+    return Message(msg);
+}
+
+// ----------------------------------------------
+// ASYNC RECV ENDPOINT
+// ----------------------------------------------
+
+AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
+  : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
+{
+    pullSocket = setUpSocket(zmq::socket_type::pull, portIn);
+}
+
+Message AsyncRecvMessageEndpoint::recv(int size)
+{
+    return doRecv(pullSocket, size);
+}
+
+// ----------------------------------------------
+// SYNC RECV ENDPOINT
+// ----------------------------------------------
+//
+SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
+  : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
+{
+    repSocket = setUpSocket(zmq::socket_type::rep, portIn + 1);
+}
+
+Message SyncRecvMessageEndpoint::recv(int size)
+{
+    return doRecv(repSocket, size);
+}
+
 // We create a new endpoint every time. Re-using them would be a possible
 // optimisation if needed.
-void RecvMessageEndpoint::sendResponse(uint8_t* data,
-                                       int size,
-                                       const std::string& returnHost)
+void SyncRecvMessageEndpoint::sendResponse(uint8_t* data, int size)
 {
-    // Open the endpoint socket, server connects (not bind) to remote address
-    SendMessageEndpoint sendEndpoint(
-      returnHost, port + REPLY_PORT_OFFSET, timeoutMs);
-    sendEndpoint.send(data, size);
+    doSend(repSocket, data, size, false);
 }
 }

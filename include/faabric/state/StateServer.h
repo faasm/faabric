@@ -13,8 +13,11 @@ class StateServer final : public faabric::transport::MessageEndpointServer
   private:
     State& state;
 
-    void doRecv(faabric::transport::Message& header,
-                faabric::transport::Message& body) override;
+    void doAsyncRecv(faabric::transport::Message& header,
+                     faabric::transport::Message& body) override;
+
+    faabric::Message doSyncRecv(faabric::transport::Message& header,
+                                faabric::transport::Message& body) override;
 
     /* State server API */
 

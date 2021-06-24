@@ -81,29 +81,19 @@ void clearMockRequests()
 // Message Client
 // -----------------------------------
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : faabric::transport::SendMessageEndpoint(hostIn, FUNCTION_CALL_PORT)
+  : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
 {}
-
-void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
-{
-    uint8_t header = static_cast<uint8_t>(call);
-    send(&header, sizeof(header), true);
-}
 
 void FunctionCallClient::sendFlush()
 {
-    faabric::ResponseRequest call;
     if (faabric::util::isMockMode()) {
+        faabric::ResponseRequest call;
         faabric::util::UniqueLock lock(mockMutex);
         flushCalls.emplace_back(host, call);
     } else {
-        // Prepare the message body
-        call.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-
-        SEND_MESSAGE(faabric::scheduler::FunctionCalls::Flush, call);
-
-        // Await the response
-        awaitResponse();
+        auto call = std::make_unique<faabric::ResponseRequest>();
+        auto resp = std::make_unique<faabric::EmptyResponse>();
+        syncSend(faabric::scheduler::FunctionCalls::Flush, call, resp);
     }
 }
 

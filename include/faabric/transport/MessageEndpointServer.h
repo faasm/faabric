@@ -1,11 +1,10 @@
 #pragma once
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
 
 #include <thread>
-
-#define ENDPOINT_SERVER_SHUTDOWN -1
 
 namespace faabric::transport {
 /* Server handling a long-running 0MQ socket
@@ -25,22 +24,28 @@ class MessageEndpointServer
     virtual void stop();
 
   protected:
-    std::unique_ptr<RecvMessageEndpoint> recvEndpoint = nullptr;
-
-    bool recv();
-
     /* Template function to handle message reception
      *
      * A message endpoint server in faabric expects each communication to be
      * a multi-part 0MQ message. One message containing the header, and another
      * one with the body. Note that 0MQ _guarantees_ in-order delivery.
      */
-    virtual void doRecv(faabric::transport::Message& header,
-                        faabric::transport::Message& body) = 0;
+    virtual void doAsyncRecv(faabric::transport::Message& header,
+                             faabric::transport::Message& body) = 0;
+
+    virtual std::unique_ptr<google::protobuf::Message> doSyncRecv(
+      faabric::transport::Message& header,
+      faabric::transport::Message& body) = 0;
+
+    void sendSyncResponse();
 
   private:
-    const int port;
+    const int asyncPort;
 
-    std::thread servingThread;
+    const int syncPort;
+
+    std::thread asyncThread;
+
+    std::thread syncThread;
 };
 }

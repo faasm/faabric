@@ -15,8 +15,11 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    void doRecv(faabric::transport::Message& header,
-                faabric::transport::Message& body) override;
+    void doAsyncRecv(faabric::transport::Message& header,
+                     faabric::transport::Message& body) override;
+
+    faabric::Message doSyncRecv(faabric::transport::Message& header,
+                                faabric::transport::Message& body) override;
 
     /* Function call server API */
 
