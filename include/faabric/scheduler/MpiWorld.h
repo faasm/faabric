@@ -187,15 +187,6 @@ class MpiWorld
     int basePort = -1;
     faabric::util::TimePoint creationTime;
 
-    std::unique_ptr<faabric::transport::AsyncRecvMessageEndpoint>
-      ranksRecvEndpoint;
-
-    std::unordered_map<
-      std::string,
-      std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
-      ranksSendEndpoints;
-
-    std::shared_mutex worldMutex;
     std::atomic_flag isDestroyed = false;
 
     std::string user;

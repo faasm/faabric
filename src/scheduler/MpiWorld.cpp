@@ -17,6 +17,15 @@ static thread_local std::vector<
   std::shared_ptr<faabric::scheduler::MpiMessageBuffer>>
   unackedMessageBuffers;
 
+static thread_local std::unique_ptr<
+  faabric::transport::AsyncRecvMessageEndpoint>
+  ranksRecvEndpoint;
+
+static thread_local std::unordered_map<
+  std::string,
+  std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
+  ranksSendEndpoints;
+
 static thread_local std::set<int> iSendRequests;
 
 static thread_local std::map<int, std::pair<int, int>> reqIdToRanks;
@@ -42,16 +51,10 @@ faabric::MpiHostsToRanksMessage MpiWorld::recvMpiHostRankMsg()
     }
 
     if (ranksRecvEndpoint == nullptr) {
-        faabric::util::FullLock lock(worldMutex);
-        if (ranksRecvEndpoint == nullptr) {
-            ranksRecvEndpoint =
-              std::make_unique<faabric::transport::AsyncRecvMessageEndpoint>(
-                basePort);
-        }
+        ranksRecvEndpoint =
+          std::make_unique<faabric::transport::AsyncRecvMessageEndpoint>(
+            basePort);
     }
-
-    // Shared lock to ensure it's initialised before use
-    faabric::util::SharedLock lock(worldMutex);
 
     SPDLOG_TRACE("Receiving MPI host ranks on {}", basePort);
     faabric::transport::Message m = ranksRecvEndpoint->recv();
@@ -69,17 +72,11 @@ void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
     }
 
     if (ranksSendEndpoints.find(hostIn) == ranksSendEndpoints.end()) {
-        faabric::util::FullLock lock(worldMutex);
-        if (ranksSendEndpoints.find(hostIn) == ranksSendEndpoints.end()) {
-            ranksSendEndpoints.emplace(
-              hostIn,
-              std::make_unique<faabric::transport::AsyncSendMessageEndpoint>(
-                hostIn, basePort));
-        }
+        ranksSendEndpoints.emplace(
+          hostIn,
+          std::make_unique<faabric::transport::AsyncSendMessageEndpoint>(
+            hostIn, basePort));
     }
-
-    // Shared lock to ensure endpoint is initialised before use
-    faabric::util::SharedLock lock(worldMutex);
 
     SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, basePort);
     SERIALISE_MSG(msg)
