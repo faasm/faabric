@@ -9,15 +9,6 @@
 namespace faabric::transport {
 
 /*
- * These two abstract methods are used to broadcast the host-rank mapping at
- * initialisation time.
- */
-faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
-
-void sendMpiHostRankMsg(const std::string& hostIn,
-                        const faabric::MpiHostsToRanksMessage msg);
-
-/*
  * This class abstracts the notion of a communication channel between two remote
  * MPI ranks. There will always be one rank local to this host, and one remote.
  * Note that the ports are unique per (user, function, sendRank, recvRank)

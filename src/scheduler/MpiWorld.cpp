@@ -4,6 +4,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/testing.h>
 
 /* Each MPI rank runs in a separate thread, thus we use TLS to maintain the
  * per-rank data structures.
@@ -11,20 +12,56 @@
 static thread_local std::vector<
   std::unique_ptr<faabric::transport::MpiMessageEndpoint>>
   mpiMessageEndpoints;
+
 static thread_local std::vector<
   std::shared_ptr<faabric::scheduler::MpiMessageBuffer>>
   unackedMessageBuffers;
+
 static thread_local std::set<int> iSendRequests;
+
 static thread_local std::map<int, std::pair<int, int>> reqIdToRanks;
 
+static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
+
 namespace faabric::scheduler {
+
 MpiWorld::MpiWorld()
-  : id(-1)
-  , size(-1)
-  , thisHost(faabric::util::getSystemConfig().endpointHost)
+  : thisHost(faabric::util::getSystemConfig().endpointHost)
   , creationTime(faabric::util::startTimer())
+  , ranksRecvEndpoint(MPI_BASE_PORT)
   , cartProcsPerDim(2)
 {}
+
+faabric::MpiHostsToRanksMessage MpiWorld::recvMpiHostRankMsg()
+{
+    if (faabric::util::isMockMode()) {
+        assert(!rankMessages.empty());
+        faabric::MpiHostsToRanksMessage msg = rankMessages.back();
+        rankMessages.pop_back();
+        return msg;
+    }
+
+    SPDLOG_TRACE("Receiving MPI host ranks on {}", MPI_BASE_PORT);
+    faabric::transport::Message m = ranksRecvEndpoint.recv();
+    PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
+
+    return msg;
+}
+
+void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
+                                  const faabric::MpiHostsToRanksMessage msg)
+{
+    if (faabric::util::isMockMode()) {
+        rankMessages.push_back(msg);
+        return;
+    }
+
+    SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, MPI_BASE_PORT);
+    faabric::transport::AsyncSendMessageEndpoint endpoint(hostIn,
+                                                          MPI_BASE_PORT);
+    SERIALISE_MSG(msg)
+    endpoint.send(buffer, msgSize, false);
+}
 
 void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)
 {
@@ -174,7 +211,7 @@ void MpiWorld::broadcastHostsToRanks()
 
     // Do the broadcast
     for (const auto& h : targetHosts) {
-        faabric::transport::sendMpiHostRankMsg(h, hostRankMsg);
+        sendMpiHostRankMsg(h, hostRankMsg);
     }
 }
 
@@ -221,8 +258,7 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg)
     size = msg.mpiworldsize();
 
     // Block until we receive
-    faabric::MpiHostsToRanksMessage hostRankMsg =
-      faabric::transport::recvMpiHostRankMsg();
+    faabric::MpiHostsToRanksMessage hostRankMsg = recvMpiHostRankMsg();
 
     // Prepare the host-rank map with a vector containing _all_ ranks
     // Note - this method should be called by only one rank. This is

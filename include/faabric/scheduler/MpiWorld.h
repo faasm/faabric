@@ -180,10 +180,12 @@ class MpiWorld
     double getWTime();
 
   private:
-    int id;
-    int size;
+    int id = -1;
+    int size = -1;
     std::string thisHost;
     faabric::util::TimePoint creationTime;
+
+    faabric::transport::AsyncRecvMessageEndpoint ranksRecvEndpoint;
 
     std::shared_mutex worldMutex;
     std::atomic_flag isDestroyed = false;
@@ -207,13 +209,23 @@ class MpiWorld
     std::vector<int> basePorts;
     std::vector<int> initLocalBasePorts(
       const std::vector<std::string>& executedAt);
+
     void initRemoteMpiEndpoint(int localRank, int remoteRank);
+
     std::pair<int, int> getPortForRanks(int localRank, int remoteRank);
+
     void sendRemoteMpiMessage(int sendRank,
                               int recvRank,
                               const std::shared_ptr<faabric::MPIMessage>& msg);
+
     std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
                                                               int recvRank);
+
+    faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
+
+    void sendMpiHostRankMsg(const std::string& hostIn,
+                        const faabric::MpiHostsToRanksMessage msg);
+
     void closeMpiMessageEndpoints();
 
     // Support for asyncrhonous communications
