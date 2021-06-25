@@ -174,8 +174,6 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
       : thisHost(faabric::util::getSystemConfig().endpointHost)
       , otherHost(LOCALHOST)
     {
-        // Mock everything by default
-        faabric::util::setMockMode(true);
         remoteWorld.overrideHost(otherHost);
     }
 

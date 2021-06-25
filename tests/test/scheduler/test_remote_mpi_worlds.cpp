@@ -76,36 +76,35 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     faabric::util::setMockMode(false);
     localWorld.broadcastHostsToRanks();
 
-    std::thread senderThread([this, rankA, rankB, &messageData] {
+    // Start the "remote" world in the background
+    std::thread remoteWorldThread([this, rankA, rankB, &messageData] {
         remoteWorld.initialiseFromMsg(msg);
 
-        // Send a message that should get sent to this host
-        remoteWorld.send(
-          rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
+        // Receive the message for the given rank
+        MPI_Status status{};
+        auto buffer = new int[messageData.size()];
+        remoteWorld.recv(
+          rankA, rankB, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
-        usleep(1000 * 1000);
+        std::vector<int> actual(buffer, buffer + messageData.size());
+        assert(actual == messageData);
+
+        assert(status.MPI_SOURCE == rankA);
+        assert(status.MPI_ERROR == MPI_SUCCESS);
+        assert(status.bytesSize == messageData.size() * sizeof(int));
+
+        remoteWorld.destroy();
     });
 
-    // Receive the message for the given rank
-    MPI_Status status{};
-    auto buffer = new int[messageData.size()];
-    localWorld.recv(
-      rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
+    // Send a message that should get sent to the "remote" world
+    localWorld.send(
+      rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-    std::vector<int> actual(buffer, buffer + messageData.size());
-    REQUIRE(actual == messageData);
-
-    REQUIRE(status.MPI_SOURCE == rankB);
-    REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
-    REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
-
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    if (remoteWorldThread.joinable()) {
+        remoteWorldThread.join();
     }
 
     localWorld.destroy();
-    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,

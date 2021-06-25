@@ -187,7 +187,6 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
                 cli.asyncSend(0, body, clientMsg.size());
             }
 
-            usleep(1000 * 300);
         }));
     }
 
@@ -196,6 +195,8 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
             t.join();
         }
     }
+
+    usleep(2000 * 1000);
 
     REQUIRE(server.messageCount == numMessages * numClients);
 

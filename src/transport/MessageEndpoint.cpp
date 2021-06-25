@@ -61,25 +61,25 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
     switch (socketType) {
         case zmq::socket_type::req: {
             SPDLOG_TRACE(
-              "REQ socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: req {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::push: {
             SPDLOG_TRACE(
-              "PUSH socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: push {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::pull: {
             SPDLOG_TRACE(
-              "PULL socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: pull {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.bind(address), "bind")
             break;
         }
         case zmq::socket_type::rep: {
             SPDLOG_TRACE(
-              "REP socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: rep {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.bind(address), "bind")
             break;
         }
