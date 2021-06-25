@@ -30,8 +30,13 @@ class RemoteCollectiveTestFixture : public RemoteMpiTestFixture
 
   protected:
     int thisWorldSize;
-    int remoteRankA, remoteRankB, remoteRankC;
-    int localRankA, localRankB;
+    int remoteRankA;
+    int remoteRankB;
+    int remoteRankC;
+
+    int localRankA;
+    int localRankB;
+
     std::vector<int> remoteWorldRanks;
     std::vector<int> localWorldRanks;
 };
@@ -69,7 +74,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
-
     localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, rankA, rankB, &messageData] {
@@ -79,9 +83,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
         remoteWorld.send(
           rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-        usleep(500 * 1000);
-
-        remoteWorld.destroy();
+        usleep(1000 * 1000);
     });
 
     // Receive the message for the given rank
@@ -98,8 +100,12 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
 
     // Destroy worlds
-    senderThread.join();
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
+
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -138,8 +144,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         REQUIRE(actual == messageData2);
 
         usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     // Receive the message for the given rank
@@ -159,7 +163,11 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
 
     // Destroy worlds
-    senderThread.join();
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
+
+    remoteWorld.destroy();
     localWorld.destroy();
 }
 
@@ -187,8 +195,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test barrier across hosts", "[mpi]")
         // Barrier on this rank
         remoteWorld.barrier(rankB);
         assert(sendData == recvData);
-
-        remoteWorld.destroy();
     });
 
     // Receive the message for the given rank
@@ -204,8 +210,11 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test barrier across hosts", "[mpi]")
     localWorld.barrier(rankA);
 
     // Destroy worlds
-    senderThread.join();
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -232,8 +241,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         }
 
         usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     int recv;
@@ -248,8 +255,11 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     }
 
     // Destroy worlds
-    senderThread.join();
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
@@ -264,7 +274,6 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
-
     localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, &messageData] {
@@ -285,10 +294,6 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
               remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
             assert(actual == messageData);
         }
-
-        usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     // Check the local host
@@ -299,8 +304,12 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         REQUIRE(actual == messageData);
     }
 
-    senderThread.join();
+    // Destroy worlds
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
@@ -363,8 +372,6 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
 
         usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     // Check for local ranks
@@ -399,8 +406,12 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                        nPerRank);
     REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
 
-    senderThread.join();
+    // Destroy worlds
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
@@ -453,8 +464,6 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         }
 
         usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     for (int rank : localWorldRanks) {
@@ -484,8 +493,12 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     // Check data
     REQUIRE(actual == expected);
 
-    senderThread.join();
+    // Destroy worlds
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -519,8 +532,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                          messageData.size());
 
         usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     // Receive one message asynchronously
@@ -547,9 +558,12 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(syncMessage == messageData);
     REQUIRE(asyncMessage == messageData);
 
-    // Destroy world
-    senderThread.join();
+    // Destroy worlds
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -575,8 +589,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         }
 
         usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     // Receive two messages asynchronously
@@ -608,9 +620,12 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(recv2 == 1);
     REQUIRE(recv3 == 2);
 
-    // Destroy world
-    senderThread.join();
+    // Destroy worlds
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -650,8 +665,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         }
 
         usleep(500 * 1000);
-
-        remoteWorld.destroy();
     });
 
     for (auto& rank : localRanks) {
@@ -679,5 +692,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     }
 
     localWorld.destroy();
+    remoteWorld.destroy();
 }
 }

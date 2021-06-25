@@ -118,7 +118,9 @@ class ConfTestFixture
     faabric::util::SystemConfig& conf;
 };
 
-class MpiBaseTestFixture : public SchedulerTestFixture
+class MpiBaseTestFixture
+  : public SchedulerTestFixture
+  , public ConfTestFixture
 {
   public:
     MpiBaseTestFixture()
@@ -172,11 +174,14 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
       : thisHost(faabric::util::getSystemConfig().endpointHost)
       , otherHost(LOCALHOST)
     {
+        // Mock everything by default
+        faabric::util::setMockMode(true);
         remoteWorld.overrideHost(otherHost);
     }
 
     ~RemoteMpiTestFixture()
     {
+        faabric::util::setMockMode(false);
         faabric::scheduler::getMpiWorldRegistry().clear();
     }
 

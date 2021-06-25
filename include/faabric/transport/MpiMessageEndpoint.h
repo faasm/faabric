@@ -2,7 +2,6 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/MessageEndpoint.h>
-#include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 

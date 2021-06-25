@@ -61,29 +61,25 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
     switch (socketType) {
         case zmq::socket_type::req: {
             SPDLOG_TRACE(
-              "Opening req socket {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "REQ socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::push: {
-            SPDLOG_TRACE("Opening push socket {}:{} (timeout {}ms)",
-                         host,
-                         port,
-                         timeoutMs);
+            SPDLOG_TRACE(
+              "PUSH socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::pull: {
-            SPDLOG_TRACE("Opening pull socket {}:{} (timeout {}ms)",
-                         host,
-                         port,
-                         timeoutMs);
+            SPDLOG_TRACE(
+              "PULL socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.bind(address), "bind")
             break;
         }
         case zmq::socket_type::rep: {
             SPDLOG_TRACE(
-              "Opening rep socket {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "REP socket open {}:{} (timeout {}ms)", host, port, timeoutMs);
             CATCH_ZMQ_ERR(socket.bind(address), "bind")
             break;
         }
@@ -227,6 +223,7 @@ void AsyncSendMessageEndpoint::send(uint8_t* serialisedMsg,
                                     size_t msgSize,
                                     bool more)
 {
+    SPDLOG_TRACE("PUSH {}:{} ({} bytes, more {})", host, port, msgSize, more);
     doSend(pushSocket, serialisedMsg, msgSize, more);
 }
 
@@ -259,6 +256,8 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* serialisedMsg,
                                                    size_t msgSize,
                                                    bool more)
 {
+    SPDLOG_TRACE("REQ {}:{} ({} bytes, more {})", host, port, msgSize, more);
+
     doSend(reqSocket, serialisedMsg, msgSize, more);
 
     // Do the receive
@@ -294,6 +293,7 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
 
 Message AsyncRecvMessageEndpoint::recv(int size)
 {
+    SPDLOG_TRACE("PULL {} ({} bytes)", port, size);
     return doRecv(pullSocket, size);
 }
 
@@ -309,6 +309,7 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
 
 Message SyncRecvMessageEndpoint::recv(int size)
 {
+    SPDLOG_TRACE("RECV {} (REP) ({} bytes)", port, size);
     return doRecv(repSocket, size);
 }
 
@@ -316,6 +317,7 @@ Message SyncRecvMessageEndpoint::recv(int size)
 // optimisation if needed.
 void SyncRecvMessageEndpoint::sendResponse(uint8_t* data, int size)
 {
+    SPDLOG_TRACE("REP {} ({} bytes)", port, size);
     doSend(repSocket, data, size, false);
 }
 }
