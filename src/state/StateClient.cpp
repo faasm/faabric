@@ -28,7 +28,7 @@ void StateClient::sendStateRequest(faabric::state::StateCalls header,
     }
 
     faabric::EmptyResponse resp;
-    syncSend(header, data, length, &resp);
+    syncSend(header, &request, &resp);
 }
 
 void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
@@ -56,9 +56,11 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
         request.set_offset(chunk.offset);
         request.set_chunksize(chunk.length);
 
-        // Send and copy response into place
+        // Send request
         faabric::StatePart response;
         syncSend(faabric::state::StateCalls::Pull, &request, &response);
+
+        // Copy response data
         std::copy(response.data().begin(),
                   response.data().end(),
                   bufferStart + response.offset());
@@ -109,7 +111,7 @@ size_t StateClient::stateSize()
     request.set_key(key);
 
     faabric::StateSizeResponse response;
-    syncSend(faabric::state::StateCalls::Size, nullptr, 0, &response);
+    syncSend(faabric::state::StateCalls::Size, &request, &response);
 
     return response.statesize();
 }

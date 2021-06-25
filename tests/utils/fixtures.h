@@ -157,9 +157,7 @@ class MpiBaseTestFixture : public SchedulerTestFixture
 class MpiTestFixture : public MpiBaseTestFixture
 {
   public:
-    MpiTestFixture() {
-        world.create(msg, worldId, worldSize);
-    }
+    MpiTestFixture() { world.create(msg, worldId, worldSize); }
 
     ~MpiTestFixture() { world.destroy(); }
 
@@ -175,6 +173,11 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
       , otherHost(LOCALHOST)
     {
         remoteWorld.overrideHost(otherHost);
+    }
+
+    ~RemoteMpiTestFixture()
+    {
+        faabric::scheduler::getMpiWorldRegistry().clear();
     }
 
     void setWorldsSizes(int worldSize, int ranksWorldOne, int ranksWorldTwo)

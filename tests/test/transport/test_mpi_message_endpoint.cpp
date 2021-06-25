@@ -6,24 +6,6 @@
 using namespace faabric::transport;
 
 namespace tests {
-TEST_CASE_METHOD(SchedulerTestFixture,
-                 "Test send and recv the hosts to rank message",
-                 "[transport]")
-{
-    std::vector<std::string> expected = { "foo", "bar" };
-
-    // Send the message
-    faabric::MpiHostsToRanksMessage sendMsg;
-    *sendMsg.mutable_hosts() = { expected.begin(), expected.end() };
-    sendMpiHostRankMsg(LOCALHOST, sendMsg);
-
-    // Receive and check
-    faabric::MpiHostsToRanksMessage actual = recvMpiHostRankMsg();
-    assert(actual.hosts().size() == expected.size());
-    for (int i = 0; i < actual.hosts().size(); i++) {
-        assert(actual.hosts().Get(i) == expected[i]);
-    }
-}
 
 TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send and recv an MPI message",

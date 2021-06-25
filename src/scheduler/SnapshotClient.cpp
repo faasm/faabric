@@ -70,7 +70,9 @@ void clearMockSnapshotRequests()
 // -----------------------------------
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_ASYNC_PORT, SNAPSHOT_SYNC_PORT)
+  : faabric::transport::MessageEndpointClient(hostIn,
+                                              SNAPSHOT_ASYNC_PORT,
+                                              SNAPSHOT_SYNC_PORT)
 {}
 
 void SnapshotClient::pushSnapshot(const std::string& key,
@@ -87,8 +89,8 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto dataOffset = mb.CreateVector<uint8_t>(data.data, data.size);
-        auto requestOffset = CreateSnapshotPushRequest(
-          mb, keyOffset, dataOffset);
+        auto requestOffset =
+          CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
 
         // Send it
         mb.Finish(requestOffset);
@@ -129,8 +131,8 @@ void SnapshotClient::pushSnapshotDiffs(
         // TODO - avoid copying data here
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
-        auto requestOffset = CreateSnapshotDiffPushRequest(
-          mb, keyOffset, diffsOffset);
+        auto requestOffset =
+          CreateSnapshotDiffPushRequest(mb, keyOffset, diffsOffset);
 
         mb.Finish(requestOffset);
         uint8_t* buffer = mb.GetBufferPointer();
@@ -222,7 +224,7 @@ void SnapshotClient::pushThreadResult(
         uint8_t* buffer = mb.GetBufferPointer();
         int size = mb.GetSize();
         asyncSend(
-          faabric::scheduler::SnapshotCalls::PushSnapshotDiffs, buffer, size);
+          faabric::scheduler::SnapshotCalls::ThreadResult, buffer, size);
     }
 }
 }

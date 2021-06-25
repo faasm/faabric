@@ -43,8 +43,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
 
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    faabric::util::setMockMode(false);
 
+    faabric::util::setMockMode(false);
     localWorld.broadcastHostsToRanks();
 
     remoteWorld.initialiseFromMsg(msg);
@@ -79,7 +79,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
         remoteWorld.send(
           rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -137,7 +137,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         std::vector<int> actual(buffer, buffer + messageData2.size());
         REQUIRE(actual == messageData2);
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -231,7 +231,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             remoteWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
         }
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -286,7 +286,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
             assert(actual == messageData);
         }
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -362,7 +362,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                             nPerRank);
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -452,7 +452,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                                nPerRank);
         }
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -518,7 +518,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                          MPI_INT,
                          messageData.size());
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -574,7 +574,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             remoteWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -649,7 +649,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                                  MPI_STATUS_IGNORE);
         }
 
-        usleep(1000 * 500);
+        usleep(500 * 1000);
 
         remoteWorld.destroy();
     });
@@ -674,7 +674,10 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     }
 
     // Destroy world
-    senderThread.join();
+    if (senderThread.joinable()) {
+        senderThread.join();
+    }
+
     localWorld.destroy();
 }
 }

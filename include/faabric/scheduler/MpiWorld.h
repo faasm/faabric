@@ -10,6 +10,7 @@
 #include <faabric/util/timing.h>
 
 #include <atomic>
+#include <unordered_map>
 
 namespace faabric::scheduler {
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
@@ -18,7 +19,7 @@ typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
 class MpiWorld
 {
   public:
-    MpiWorld();
+    MpiWorld(int basePort = DEFAULT_MPI_BASE_PORT);
 
     void create(const faabric::Message& call, int newId, int newSize);
 
@@ -183,9 +184,16 @@ class MpiWorld
     int id = -1;
     int size = -1;
     std::string thisHost;
+    int basePort = -1;
     faabric::util::TimePoint creationTime;
 
-    faabric::transport::AsyncRecvMessageEndpoint ranksRecvEndpoint;
+    std::unique_ptr<faabric::transport::AsyncRecvMessageEndpoint>
+      ranksRecvEndpoint;
+
+    std::unordered_map<
+      std::string,
+      std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
+      ranksSendEndpoints;
 
     std::shared_mutex worldMutex;
     std::atomic_flag isDestroyed = false;
@@ -224,13 +232,14 @@ class MpiWorld
     faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
 
     void sendMpiHostRankMsg(const std::string& hostIn,
-                        const faabric::MpiHostsToRanksMessage msg);
+                            const faabric::MpiHostsToRanksMessage msg);
 
     void closeMpiMessageEndpoints();
 
     // Support for asyncrhonous communications
     std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,
                                                               int recvRank);
+
     std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
                                                              int recvRank,
                                                              int batchSize = 0);

@@ -25,10 +25,10 @@ static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
 
 namespace faabric::scheduler {
 
-MpiWorld::MpiWorld()
+MpiWorld::MpiWorld(int basePortIn)
   : thisHost(faabric::util::getSystemConfig().endpointHost)
+  , basePort(basePortIn)
   , creationTime(faabric::util::startTimer())
-  , ranksRecvEndpoint(MPI_BASE_PORT)
   , cartProcsPerDim(2)
 {}
 
@@ -41,8 +41,20 @@ faabric::MpiHostsToRanksMessage MpiWorld::recvMpiHostRankMsg()
         return msg;
     }
 
-    SPDLOG_TRACE("Receiving MPI host ranks on {}", MPI_BASE_PORT);
-    faabric::transport::Message m = ranksRecvEndpoint.recv();
+    if (ranksRecvEndpoint == nullptr) {
+        faabric::util::FullLock lock(worldMutex);
+        if (ranksRecvEndpoint == nullptr) {
+            ranksRecvEndpoint =
+              std::make_unique<faabric::transport::AsyncRecvMessageEndpoint>(
+                basePort);
+        }
+    }
+
+    // Shared lock to ensure it's initialised before use
+    faabric::util::SharedLock lock(worldMutex);
+
+    SPDLOG_TRACE("Receiving MPI host ranks on {}", basePort);
+    faabric::transport::Message m = ranksRecvEndpoint->recv();
     PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
 
     return msg;
@@ -56,11 +68,22 @@ void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
         return;
     }
 
-    SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, MPI_BASE_PORT);
-    faabric::transport::AsyncSendMessageEndpoint endpoint(hostIn,
-                                                          MPI_BASE_PORT);
+    if (ranksSendEndpoints.find(hostIn) == ranksSendEndpoints.end()) {
+        faabric::util::FullLock lock(worldMutex);
+        if (ranksSendEndpoints.find(hostIn) == ranksSendEndpoints.end()) {
+            ranksSendEndpoints.emplace(
+              hostIn,
+              std::make_unique<faabric::transport::AsyncSendMessageEndpoint>(
+                hostIn, basePort));
+        }
+    }
+
+    // Shared lock to ensure endpoint is initialised before use
+    faabric::util::SharedLock lock(worldMutex);
+
+    SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, basePort);
     SERIALISE_MSG(msg)
-    endpoint.send(buffer, msgSize, false);
+    ranksSendEndpoints[hostIn]->send(buffer, msgSize, false);
 }
 
 void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)
@@ -1250,10 +1273,10 @@ std::vector<int> MpiWorld::initLocalBasePorts(
     basePortForRank.reserve(size);
 
     std::string lastHost = thisHost;
-    int lastPort = MPI_BASE_PORT;
+    int lastPort = basePort;
     for (const auto& host : executedAt) {
         if (host == thisHost) {
-            basePortForRank.push_back(MPI_BASE_PORT);
+            basePortForRank.push_back(basePort);
         } else if (host == lastHost) {
             basePortForRank.push_back(lastPort);
         } else {
