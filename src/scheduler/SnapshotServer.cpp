@@ -12,7 +12,8 @@
 
 namespace faabric::scheduler {
 SnapshotServer::SnapshotServer()
-  : faabric::transport::MessageEndpointServer(SNAPSHOT_PORT)
+  : faabric::transport::MessageEndpointServer(SNAPSHOT_ASYNC_PORT,
+                                              SNAPSHOT_SYNC_PORT)
 {}
 
 void SnapshotServer::doAsyncRecv(faabric::transport::Message& header,

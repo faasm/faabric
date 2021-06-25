@@ -8,7 +8,9 @@ namespace faabric::state {
 StateClient::StateClient(const std::string& userIn,
                          const std::string& keyIn,
                          const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, STATE_PORT)
+  : faabric::transport::MessageEndpointClient(hostIn,
+                                              STATE_ASYNC_PORT,
+                                              STATE_SYNC_PORT)
   , user(userIn)
   , key(keyIn)
 {}
@@ -53,7 +55,6 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
         request.set_key(key);
         request.set_offset(chunk.offset);
         request.set_chunksize(chunk.length);
-        request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
 
         // Send and copy response into place
         faabric::StatePart response;
@@ -76,7 +77,6 @@ void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
     request.set_user(user);
     request.set_key(key);
     request.set_nvalues(nValues);
-    request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
 
     faabric::StateAppendedResponse response;
     syncSend(faabric::state::StateCalls::PullAppended, &request, &response);

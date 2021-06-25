@@ -70,7 +70,7 @@ void clearMockSnapshotRequests()
 // -----------------------------------
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
+  : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_ASYNC_PORT, SNAPSHOT_SYNC_PORT)
 {}
 
 void SnapshotClient::pushSnapshot(const std::string& key,
@@ -82,17 +82,13 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         faabric::util::UniqueLock lock(mockMutex);
         snapshotPushes.emplace_back(host, data);
     } else {
-        const faabric::util::SystemConfig& conf =
-          faabric::util::getSystemConfig();
-
         // Set up the main request
         // TODO - avoid copying data here
         flatbuffers::FlatBufferBuilder mb;
-        auto returnHostOffset = mb.CreateString(conf.endpointHost);
         auto keyOffset = mb.CreateString(key);
         auto dataOffset = mb.CreateVector<uint8_t>(data.data, data.size);
         auto requestOffset = CreateSnapshotPushRequest(
-          mb, returnHostOffset, keyOffset, dataOffset);
+          mb, keyOffset, dataOffset);
 
         // Send it
         mb.Finish(requestOffset);
@@ -119,9 +115,6 @@ void SnapshotClient::pushSnapshotDiffs(
                      snapshotKey,
                      host);
 
-        const faabric::util::SystemConfig& conf =
-          faabric::util::getSystemConfig();
-
         flatbuffers::FlatBufferBuilder mb;
 
         // Create objects for all the chunks
@@ -134,11 +127,10 @@ void SnapshotClient::pushSnapshotDiffs(
 
         // Set up the main request
         // TODO - avoid copying data here
-        auto returnHostOffset = mb.CreateString(conf.endpointHost);
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
         auto requestOffset = CreateSnapshotDiffPushRequest(
-          mb, returnHostOffset, keyOffset, diffsOffset);
+          mb, keyOffset, diffsOffset);
 
         mb.Finish(requestOffset);
         uint8_t* buffer = mb.GetBufferPointer();

@@ -12,13 +12,14 @@
 using namespace faabric::transport;
 
 const std::string thisHost = "127.0.0.1";
-const int testPort = 9999;
+const int testPortAsync = 9998;
+const int testPortSync = 9999;
 
 class DummyServer final : public MessageEndpointServer
 {
   public:
     DummyServer()
-      : MessageEndpointServer(testPort)
+      : MessageEndpointServer(testPortAsync, testPortSync)
       , messageCount(0)
     {}
 
@@ -46,7 +47,7 @@ class EchoServer final : public MessageEndpointServer
 {
   public:
     EchoServer()
-      : MessageEndpointServer(testPort)
+      : MessageEndpointServer(testPortAsync, testPortSync)
     {}
 
   protected:
@@ -75,7 +76,7 @@ class SlowServer final : public MessageEndpointServer
     int delayMs = 1000;
 
     SlowServer()
-      : MessageEndpointServer(testPort)
+      : MessageEndpointServer(testPortAsync, testPortSync)
     {}
 
   protected:
@@ -116,7 +117,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     server.start();
 
     // Open the source endpoint client, don't bind
-    AsyncSendMessageEndpoint src(thisHost, testPort);
+    AsyncSendMessageEndpoint src(thisHost, testPortAsync, testPortSync);
 
     // Send message: server expects header + body
     std::string header = "header";
@@ -151,7 +152,7 @@ TEST_CASE("Test send response to client", "[transport]")
     std::string expectedMsg = "Response from server";
 
     // Open the source endpoint client, don't bind
-    MessageEndpointClient cli(thisHost, testPort);
+    MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
 
     // Send and await the response
     faabric::StatePart response;
@@ -176,7 +177,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     for (int i = 0; i < numClients; i++) {
         clientThreads.emplace_back(std::thread([numMessages] {
             // Prepare client
-            MessageEndpointClient cli(thisHost, testPort);
+            MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
 
             std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {
@@ -233,7 +234,8 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     usleep(500 * 1000);
 
     // Set up the client
-    MessageEndpointClient cli(thisHost, testPort, clientTimeout);
+    MessageEndpointClient cli(
+      thisHost, testPortAsync, testPortSync, clientTimeout);
     std::vector<uint8_t> data = { 1, 1, 1 };
     faabric::StatePart response;
 

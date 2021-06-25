@@ -13,13 +13,13 @@ namespace faabric::scheduler {
 // -----------------------------------
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls();
 
-std::vector<std::pair<std::string, faabric::ResponseRequest>> getFlushCalls();
+std::vector<std::pair<std::string, faabric::EmptyRequest>> getFlushCalls();
 
 std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
 getBatchRequests();
 
-std::vector<std::pair<std::string, faabric::ResponseRequest>>
+std::vector<std::pair<std::string, faabric::EmptyRequest>>
 getResourceRequests();
 
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>

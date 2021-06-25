@@ -17,7 +17,7 @@ namespace faabric::transport {
 class MessageEndpointServer
 {
   public:
-    MessageEndpointServer(int portIn);
+    MessageEndpointServer(int asyncPortIn, int syncPortIn);
 
     void start();
 

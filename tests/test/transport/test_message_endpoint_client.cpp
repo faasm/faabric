@@ -18,10 +18,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv one message",
                  "[transport]")
 {
-    // Open the source endpoint client, don't bind
     AsyncSendMessageEndpoint src(thisHost, testPort);
-
-    // Open the destination endpoint client, bind
     AsyncRecvMessageEndpoint dst(testPort);
 
     // Send message
@@ -35,6 +32,36 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
+}
+
+TEST_CASE_METHOD(SchedulerTestFixture,
+                 "Test send before recv is ready",
+                 "[transport]")
+{
+    std::string expectedMsg = "Hello world!";
+
+    AsyncSendMessageEndpoint src(thisHost, testPort);
+
+    // Run the recv in the background
+    std::thread recvThread([expectedMsg] {
+        usleep(1000 * 1000);
+        AsyncRecvMessageEndpoint dst(testPort);
+
+        // Receive message
+        faabric::transport::Message recvMsg = dst.recv();
+        assert(recvMsg.size() == expectedMsg.size());
+        std::string actualMsg(recvMsg.data(), recvMsg.size());
+        assert(actualMsg == expectedMsg);
+    });
+
+    // Send message (should wait for receiver to become ready)
+    uint8_t msg[expectedMsg.size()];
+    memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
+    src.send(msg, expectedMsg.size());
+
+    if(recvThread.joinable()) {
+        recvThread.join();
+    }
 }
 
 TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")

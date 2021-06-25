@@ -173,17 +173,6 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
 
 void MpiWorld::destroy()
 {
-    // Destroy once per thread the rank-specific data structures
-    // Remote message endpoints
-    if (!mpiMessageEndpoints.empty()) {
-        for (auto& e : mpiMessageEndpoints) {
-            if (e != nullptr) {
-                e->close();
-            }
-        }
-        mpiMessageEndpoints.clear();
-    }
-
     // Unacked message buffers
     if (!unackedMessageBuffers.empty()) {
         for (auto& umb : unackedMessageBuffers) {
@@ -289,8 +278,8 @@ std::pair<int, int> MpiWorld::getPortForRanks(int localRank, int remoteRank)
 void MpiWorld::setAllRankHostsPorts(const faabric::MpiHostsToRanksMessage& msg)
 {
     // Assert we are only setting the values once
-    assert(rankHosts.size() == 0);
-    assert(basePorts.size() == 0);
+    assert(rankHosts.empty());
+    assert(basePorts.empty());
 
     assert(msg.hosts().size() == size);
     assert(msg.baseports().size() == size);
@@ -1224,10 +1213,10 @@ std::vector<int> MpiWorld::initLocalBasePorts(
     basePortForRank.reserve(size);
 
     std::string lastHost = thisHost;
-    int lastPort = MPI_PORT;
+    int lastPort = MPI_BASE_PORT;
     for (const auto& host : executedAt) {
         if (host == thisHost) {
-            basePortForRank.push_back(MPI_PORT);
+            basePortForRank.push_back(MPI_BASE_PORT);
         } else if (host == lastHost) {
             basePortForRank.push_back(lastPort);
         } else {

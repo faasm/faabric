@@ -7,9 +7,9 @@
 #include <cstdlib>
 
 namespace faabric::transport {
-MessageEndpointServer::MessageEndpointServer(int portIn)
-  : asyncPort(portIn)
-  , syncPort(portIn + 1)
+MessageEndpointServer::MessageEndpointServer(int asyncPortIn, int syncPortIn)
+  : asyncPort(asyncPortIn)
+  , syncPort(syncPortIn)
 {}
 
 void MessageEndpointServer::start()
@@ -69,7 +69,6 @@ void MessageEndpointServer::start()
             if (body.more()) {
                 throw std::runtime_error("Body sent with SNDMORE flag");
             }
-            assert(body.udata() != nullptr);
 
             // Server-specific message handling
             std::unique_ptr<google::protobuf::Message> resp =

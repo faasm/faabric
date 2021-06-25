@@ -9,7 +9,8 @@
 
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
-  : faabric::transport::MessageEndpointServer(FUNCTION_CALL_PORT)
+  : faabric::transport::MessageEndpointServer(FUNCTION_CALL_ASYNC_PORT,
+                                              FUNCTION_CALL_SYNC_PORT)
   , scheduler(getScheduler())
 {}
 
@@ -58,8 +59,6 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
   faabric::transport::Message& body)
 {
-    PARSE_MSG(faabric::ResponseRequest, body.data(), body.size());
-
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
 
@@ -92,8 +91,6 @@ void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
   faabric::transport::Message& body)
 {
-    PARSE_MSG(faabric::ResponseRequest, body.data(), body.size())
-
     auto response = std::make_unique<faabric::HostResources>(
       scheduler.getThisHostResources());
     return response;

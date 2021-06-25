@@ -10,7 +10,8 @@ class MessageEndpointClient
 {
   public:
     MessageEndpointClient(std::string hostIn,
-                          int portIn,
+                          int asyncPort,
+                          int syncPort,
                           int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
     void asyncSend(int header, google::protobuf::Message* msg);

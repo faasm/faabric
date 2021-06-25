@@ -14,13 +14,13 @@ std::mutex mockMutex;
 
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
-static std::vector<std::pair<std::string, faabric::ResponseRequest>> flushCalls;
+static std::vector<std::pair<std::string, faabric::EmptyRequest>> flushCalls;
 
 static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
   batchMessages;
 
-static std::vector<std::pair<std::string, faabric::ResponseRequest>>
+static std::vector<std::pair<std::string, faabric::EmptyRequest>>
   resourceRequests;
 
 static std::unordered_map<std::string,
@@ -35,7 +35,7 @@ std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
     return functionCalls;
 }
 
-std::vector<std::pair<std::string, faabric::ResponseRequest>> getFlushCalls()
+std::vector<std::pair<std::string, faabric::EmptyRequest>> getFlushCalls()
 {
     return flushCalls;
 }
@@ -47,7 +47,7 @@ getBatchRequests()
     return batchMessages;
 }
 
-std::vector<std::pair<std::string, faabric::ResponseRequest>>
+std::vector<std::pair<std::string, faabric::EmptyRequest>>
 getResourceRequests()
 {
     return resourceRequests;
@@ -81,12 +81,14 @@ void clearMockRequests()
 // Message Client
 // -----------------------------------
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
+  : faabric::transport::MessageEndpointClient(hostIn,
+                                              FUNCTION_CALL_ASYNC_PORT,
+                                              FUNCTION_CALL_SYNC_PORT)
 {}
 
 void FunctionCallClient::sendFlush()
 {
-    faabric::ResponseRequest req;
+    faabric::EmptyRequest req;
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
         flushCalls.emplace_back(host, req);
@@ -98,7 +100,7 @@ void FunctionCallClient::sendFlush()
 
 faabric::HostResources FunctionCallClient::getResources()
 {
-    faabric::ResponseRequest request;
+    faabric::EmptyRequest request;
     faabric::HostResources response;
 
     if (faabric::util::isMockMode()) {
