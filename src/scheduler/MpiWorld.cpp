@@ -146,29 +146,36 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     // Prepend this host for rank 0
     executedAt.insert(executedAt.begin(), thisHost);
 
-    // Register hosts to rank mappings on this host
-    faabric::MpiHostsToRanksMessage hostRankMsg;
-    *hostRankMsg.mutable_hosts() = { executedAt.begin(), executedAt.end() };
-
-    // Prepare the base port for each rank
-    std::vector<int> basePortForRank = initLocalBasePorts(executedAt);
-    *hostRankMsg.mutable_baseports() = { basePortForRank.begin(),
-                                         basePortForRank.end() };
-
-    // Register hosts to rank mappins on this host
-    setAllRankHostsPorts(hostRankMsg);
-
-    // Set up a list of hosts to broadcast to (excluding this host)
-    std::set<std::string> hosts(executedAt.begin(), executedAt.end());
-    hosts.erase(thisHost);
-
-    // Do the broadcast
-    for (const auto& h : hosts) {
-        faabric::transport::sendMpiHostRankMsg(h, hostRankMsg);
-    }
+    // Record rank-to-host mapping and base ports
+    rankHosts = executedAt;
+    basePorts = initLocalBasePorts(executedAt);
 
     // Initialise the memory queues for message reception
     initLocalQueues();
+}
+
+void MpiWorld::broadcastHostsToRanks()
+{
+    // Set up a list of hosts to broadcast to (excluding this host)
+    std::set<std::string> targetHosts(rankHosts.begin(), rankHosts.end());
+    targetHosts.erase(thisHost);
+
+    if (targetHosts.empty()) {
+        SPDLOG_DEBUG("Not broadcasting rank-to-host mapping, no other hosts");
+        return;
+    }
+
+    // Register hosts to rank mappings on this host
+    faabric::MpiHostsToRanksMessage hostRankMsg;
+    *hostRankMsg.mutable_hosts() = { rankHosts.begin(), rankHosts.end() };
+
+    // Prepare the base port for each rank
+    *hostRankMsg.mutable_baseports() = { basePorts.begin(), basePorts.end() };
+
+    // Do the broadcast
+    for (const auto& h : targetHosts) {
+        faabric::transport::sendMpiHostRankMsg(h, hostRankMsg);
+    }
 }
 
 void MpiWorld::destroy()
@@ -206,25 +213,34 @@ void MpiWorld::destroy()
     }
 }
 
-void MpiWorld::initialiseFromMsg(const faabric::Message& msg, bool forceLocal)
+void MpiWorld::initialiseFromMsg(const faabric::Message& msg)
 {
     id = msg.mpiworldid();
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
 
-    // Sometimes for testing purposes we may want to initialise a world in the
-    // _same_ host we have created one (note that this would never happen in
-    // reality). If so, we skip initialising resources already initialised
-    if (!forceLocal) {
-        // Block until we receive
-        faabric::MpiHostsToRanksMessage hostRankMsg =
-          faabric::transport::recvMpiHostRankMsg();
-        setAllRankHostsPorts(hostRankMsg);
+    // Block until we receive
+    faabric::MpiHostsToRanksMessage hostRankMsg =
+      faabric::transport::recvMpiHostRankMsg();
 
-        // Initialise the memory queues for message reception
-        initLocalQueues();
-    }
+    // Prepare the host-rank map with a vector containing _all_ ranks
+    // Note - this method should be called by only one rank. This is
+    // enforced in the world registry.
+
+    // Assert we are only setting the values once
+    assert(rankHosts.empty());
+    assert(basePorts.empty());
+
+    assert(hostRankMsg.hosts().size() == size);
+    assert(hostRankMsg.baseports().size() == size);
+
+    rankHosts = { hostRankMsg.hosts().begin(), hostRankMsg.hosts().end() };
+    basePorts = { hostRankMsg.baseports().begin(),
+                  hostRankMsg.baseports().end() };
+
+    // Initialise the memory queues for message reception
+    initLocalQueues();
 }
 
 std::string MpiWorld::getHostForRank(int rank)
@@ -270,21 +286,6 @@ std::pair<int, int> MpiWorld::getPortForRanks(int localRank, int remoteRank)
       localBasePort + getIndexForRanks(localRank, remoteRank);
 
     return sendRecvPortPair;
-}
-
-// Prepare the host-rank map with a vector containing _all_ ranks
-// Note - this method should be called by only one rank. This is enforced in
-// the world registry
-void MpiWorld::setAllRankHostsPorts(const faabric::MpiHostsToRanksMessage& msg)
-{
-    // Assert we are only setting the values once
-    assert(rankHosts.empty());
-    assert(basePorts.empty());
-
-    assert(msg.hosts().size() == size);
-    assert(msg.baseports().size() == size);
-    rankHosts = { msg.hosts().begin(), msg.hosts().end() };
-    basePorts = { msg.baseports().begin(), msg.baseports().end() };
 }
 
 void MpiWorld::getCartesianRank(int rank,

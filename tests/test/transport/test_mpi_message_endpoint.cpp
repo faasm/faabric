@@ -10,19 +10,18 @@ TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send and recv the hosts to rank message",
                  "[transport]")
 {
-    // Prepare message
     std::vector<std::string> expected = { "foo", "bar" };
+
+    // Send the message
     faabric::MpiHostsToRanksMessage sendMsg;
     *sendMsg.mutable_hosts() = { expected.begin(), expected.end() };
     sendMpiHostRankMsg(LOCALHOST, sendMsg);
 
-    // Send message
+    // Receive and check
     faabric::MpiHostsToRanksMessage actual = recvMpiHostRankMsg();
-
-    // Checks
-    REQUIRE(actual.hosts().size() == expected.size());
+    assert(actual.hosts().size() == expected.size());
     for (int i = 0; i < actual.hosts().size(); i++) {
-        REQUIRE(actual.hosts().Get(i) == expected[i]);
+        assert(actual.hosts().Get(i) == expected[i]);
     }
 }
 
@@ -43,8 +42,5 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     // Checks
     REQUIRE(expected->id() == actual->id());
-
-    REQUIRE_NOTHROW(sendEndpoint.close());
-    REQUIRE_NOTHROW(recvEndpoint.close());
 }
 }

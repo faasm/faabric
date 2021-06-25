@@ -59,8 +59,34 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
     src.send(msg, expectedMsg.size());
 
-    if(recvThread.joinable()) {
+    if (recvThread.joinable()) {
         recvThread.join();
+    }
+}
+
+TEST_CASE_METHOD(SchedulerTestFixture,
+                 "Test send out of scope before recv",
+                 "[transport]")
+{
+    std::string expectedMsg = "Hello world!";
+
+    // Send message and let socket go out of scope
+    {
+        AsyncSendMessageEndpoint src(thisHost, testPort);
+        uint8_t msg[expectedMsg.size()];
+        memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
+        src.send(msg, expectedMsg.size());
+    }
+
+    // Recieve message in its own scope too
+    {
+        usleep(100 * 1000);
+        AsyncRecvMessageEndpoint dst(testPort);
+
+        faabric::transport::Message recvMsg = dst.recv();
+        REQUIRE(recvMsg.size() == expectedMsg.size());
+        std::string actualMsg(recvMsg.data(), recvMsg.size());
+        REQUIRE(actualMsg == expectedMsg);
     }
 }
 

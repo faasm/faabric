@@ -7,6 +7,7 @@
 #include <faabric/transport/macros.h>
 
 namespace faabric::transport {
+
 /*
  * These two abstract methods are used to broadcast the host-rank mapping at
  * initialisation time.

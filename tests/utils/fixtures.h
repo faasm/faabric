@@ -157,7 +157,9 @@ class MpiBaseTestFixture : public SchedulerTestFixture
 class MpiTestFixture : public MpiBaseTestFixture
 {
   public:
-    MpiTestFixture() { world.create(msg, worldId, worldSize); }
+    MpiTestFixture() {
+        world.create(msg, worldId, worldSize);
+    }
 
     ~MpiTestFixture() { world.destroy(); }
 

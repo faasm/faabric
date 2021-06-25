@@ -43,8 +43,11 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
 
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    remoteWorld.initialiseFromMsg(msg);
     faabric::util::setMockMode(false);
+
+    localWorld.broadcastHostsToRanks();
+
+    remoteWorld.initialiseFromMsg(msg);
 
     // Now check both world instances report the same mappings
     REQUIRE(localWorld.getHostForRank(0) == thisHost);
@@ -66,6 +69,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+
+    localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, rankA, rankB, &messageData] {
         remoteWorld.initialiseFromMsg(msg);
@@ -111,6 +116,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+
+    localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, rankA, rankB, &messageData, &messageData2] {
         remoteWorld.initialiseFromMsg(msg);
@@ -169,6 +176,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test barrier across hosts", "[mpi]")
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
 
+    localWorld.broadcastHostsToRanks();
+
     std::thread senderThread([this, rankA, rankB, &sendData, &recvData] {
         remoteWorld.initialiseFromMsg(msg);
 
@@ -213,6 +222,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
 
+    localWorld.broadcastHostsToRanks();
+
     std::thread senderThread([this, rankA, rankB, numMessages] {
         remoteWorld.initialiseFromMsg(msg);
 
@@ -253,6 +264,8 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+
+    localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, &messageData] {
         remoteWorld.initialiseFromMsg(msg);
@@ -301,6 +314,8 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+
+    localWorld.broadcastHostsToRanks();
 
     // Build the data
     int nPerRank = 4;
@@ -399,6 +414,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     // Init worlds
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+    localWorld.broadcastHostsToRanks();
 
     // Build the data for each rank
     int nPerRank = 4;
@@ -485,6 +501,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     // Init world
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+    localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, sendRank, recvRank, &messageData] {
         remoteWorld.initialiseFromMsg(msg);
@@ -547,6 +564,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     // Init world
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+    localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, sendRank, recvRank] {
         remoteWorld.initialiseFromMsg(msg);
@@ -607,6 +625,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     // Init world
     MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+    localWorld.broadcastHostsToRanks();
 
     std::thread senderThread([this, worldSize] {
         std::vector<int> remoteRanks = { 1, 2 };

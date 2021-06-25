@@ -22,12 +22,11 @@ class MpiWorld
 
     void create(const faabric::Message& call, int newId, int newSize);
 
-    void initialiseFromMsg(const faabric::Message& msg,
-                           bool forceLocal = false);
+    void broadcastHostsToRanks();
+
+    void initialiseFromMsg(const faabric::Message& msg);
 
     std::string getHostForRank(int rank);
-
-    void setAllRankHostsPorts(const faabric::MpiHostsToRanksMessage& msg);
 
     std::string getUser();
 
