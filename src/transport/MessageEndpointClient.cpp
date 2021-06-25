@@ -2,12 +2,12 @@
 
 namespace faabric::transport {
 
-MessageEndpointClient::MessageEndpointClient(std::string hostIn, int portIn)
+MessageEndpointClient::MessageEndpointClient(std::string hostIn, int portIn, int timeoutMs)
   : host(hostIn)
   , asyncPort(portIn)
   , syncPort(portIn + 1)
-  , asyncEndpoint(host, asyncPort)
-  , syncEndpoint(host, syncPort)
+  , asyncEndpoint(host, asyncPort, timeoutMs)
+  , syncEndpoint(host, syncPort, timeoutMs)
 {}
 
 void MessageEndpointClient::asyncSend(int header,

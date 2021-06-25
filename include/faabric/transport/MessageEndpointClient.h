@@ -9,10 +9,9 @@ namespace faabric::transport {
 class MessageEndpointClient
 {
   public:
-    MessageEndpointClient(std::string hostIn, int portIn);
-
-  protected:
-    const std::string host;
+    MessageEndpointClient(std::string hostIn,
+                          int portIn,
+                          int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
     void asyncSend(int header, google::protobuf::Message* msg);
 
@@ -26,6 +25,9 @@ class MessageEndpointClient
                   const uint8_t* buffer,
                   size_t bufferSize,
                   google::protobuf::Message* response);
+
+  protected:
+    const std::string host;
 
   private:
     const int asyncPort;

@@ -1,8 +1,9 @@
-#include "faabric/proto/faabric.pb.h"
 #include <catch.hpp>
 
 #include <thread>
 
+#include <faabric/proto/faabric.pb.h>
+#include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/transport/common.h>
 #include <faabric/util/logging.h>
@@ -150,15 +151,11 @@ TEST_CASE("Test send response to client", "[transport]")
     std::string expectedMsg = "Response from server";
 
     // Open the source endpoint client, don't bind
-    SyncSendMessageEndpoint cli(thisHost, testPort + 1);
+    MessageEndpointClient cli(thisHost, testPort);
 
     // Send and await the response
-    cli.sendHeader(1);
-    Message responseMsg =
-      cli.sendAwaitResponse(BYTES(expectedMsg.data()), expectedMsg.size());
-
     faabric::StatePart response;
-    response.ParseFromArray(responseMsg.data(), responseMsg.size());
+    cli.syncSend(0, BYTES(expectedMsg.data()), expectedMsg.size(), &response);
 
     assert(response.data() == expectedMsg);
 
@@ -179,17 +176,14 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     for (int i = 0; i < numClients; i++) {
         clientThreads.emplace_back(std::thread([numMessages] {
             // Prepare client
-            AsyncSendMessageEndpoint cli(thisHost, testPort);
+            MessageEndpointClient cli(thisHost, testPort);
 
             std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {
-                // Send header
-                cli.sendHeader(1);
-
                 // Send body
                 uint8_t body[clientMsg.size()];
                 memcpy(body, clientMsg.c_str(), clientMsg.size());
-                cli.send(body, clientMsg.size());
+                cli.asyncSend(0, body, clientMsg.size());
             }
 
             usleep(1000 * 300);
@@ -239,19 +233,16 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     usleep(500 * 1000);
 
     // Set up the client
-    SyncSendMessageEndpoint cli(thisHost, testPort + 1, clientTimeout);
-
+    MessageEndpointClient cli(thisHost, testPort, clientTimeout);
     std::vector<uint8_t> data = { 1, 1, 1 };
-    cli.sendHeader(1);
+    faabric::StatePart response;
 
     if (expectFailure) {
         // Check for failure
-        REQUIRE_THROWS_AS(cli.sendAwaitResponse(data.data(), data.size()),
+        REQUIRE_THROWS_AS(cli.syncSend(0, data.data(), data.size(), &response),
                           MessageTimeoutException);
     } else {
-        Message responseMsg = cli.sendAwaitResponse(data.data(), data.size());
-        faabric::StatePart response;
-        response.ParseFromArray(responseMsg.data(), responseMsg.size());
+        cli.syncSend(0, data.data(), data.size(), &response);
 
         std::vector<uint8_t> expected = { 0, 1, 2, 3 };
         REQUIRE(response.data() == "From the slow server");
