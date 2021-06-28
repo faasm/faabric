@@ -7,13 +7,13 @@
     }
 
 #define SERIALISE_MSG(msg)                                                     \
-    size_t msgSize = msg.ByteSizeLong();                                      \
+    size_t msgSize = msg.ByteSizeLong();                                       \
     uint8_t buffer[msgSize];                                                   \
-    if (!msg.SerializeToArray(buffer, msgSize)) {                             \
+    if (!msg.SerializeToArray(buffer, msgSize)) {                              \
         throw std::runtime_error("Error serialising message");                 \
     }
 
-#define SERIALISE_MSG_PTR(msg)                                                     \
+#define SERIALISE_MSG_PTR(msg)                                                 \
     size_t msgSize = msg->ByteSizeLong();                                      \
     uint8_t buffer[msgSize];                                                   \
     if (!msg->SerializeToArray(buffer, msgSize)) {                             \

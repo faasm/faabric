@@ -18,72 +18,100 @@ class RemoteCollectiveTestFixture : public RemoteMpiTestFixture
 {
   public:
     RemoteCollectiveTestFixture()
-      : thisWorldSize(6)
-      , remoteRankA(1)
-      , remoteRankB(2)
-      , remoteRankC(3)
-      , localRankA(4)
-      , localRankB(5)
-      , remoteWorldRanks({ remoteRankB, remoteRankC, remoteRankA })
-      , localWorldRanks({ localRankB, localRankA, 0 })
-    {}
+    {
+        thisWorldRanks = { thisHostRankB, thisHostRankA, 0 };
+        otherWorldRanks = { otherHostRankB, otherHostRankC, otherHostRankA };
+
+        // Here we rely on the scheduler running out of resources and
+        // overloading this world with ranks 4 and 5
+        setWorldSizes(thisWorldSize, 1, 3);
+    }
+
+    MpiWorld& setUpThisWorld()
+    {
+        MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+        faabric::util::setMockMode(false);
+        thisWorld.broadcastHostsToRanks();
+
+        // Check it's set up as we expect
+        for (auto r : otherWorldRanks) {
+            REQUIRE(thisWorld.getHostForRank(r) == otherHost);
+        }
+
+        for (auto r : thisWorldRanks) {
+            REQUIRE(thisWorld.getHostForRank(r) == thisHost);
+        }
+
+        return thisWorld;
+    }
 
   protected:
-    int thisWorldSize;
-    int remoteRankA;
-    int remoteRankB;
-    int remoteRankC;
+    int thisWorldSize = 6;
 
-    int localRankA;
-    int localRankB;
+    int otherHostRankA = 1;
+    int otherHostRankB = 2;
+    int otherHostRankC = 3;
 
-    std::vector<int> remoteWorldRanks;
-    std::vector<int> localWorldRanks;
+    int thisHostRankA = 4;
+    int thisHostRankB = 5;
+
+    std::vector<int> otherWorldRanks;
+    std::vector<int> thisWorldRanks;
 };
 
 TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
 {
     // Allocate two ranks in total, one rank per host
-    this->setWorldsSizes(2, 1, 1);
+    setWorldSizes(2, 1, 1);
 
-    // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
-    localWorld.broadcastHostsToRanks();
+    thisWorld.broadcastHostsToRanks();
 
-    remoteWorld.initialiseFromMsg(msg);
+    // Background thread to receive the allocation
+    std::thread otherWorldThread([this] {
+        otherWorld.initialiseFromMsg(msg);
 
-    // Now check both world instances report the same mappings
-    REQUIRE(localWorld.getHostForRank(0) == thisHost);
-    REQUIRE(localWorld.getHostForRank(1) == otherHost);
+        REQUIRE(otherWorld.getHostForRank(0) == thisHost);
+        REQUIRE(otherWorld.getHostForRank(1) == otherHost);
 
-    // Destroy worlds
-    localWorld.destroy();
-    remoteWorld.destroy();
+        otherWorld.destroy();
+    });
+
+    usleep(500 * 1000);
+
+    REQUIRE(thisWorld.getHostForRank(0) == thisHost);
+    REQUIRE(thisWorld.getHostForRank(1) == otherHost);
+
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
+    }
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 {
     // Register two ranks (one on each host)
-    this->setWorldsSizes(2, 1, 1);
+    setWorldSizes(2, 1, 1);
     int rankA = 0;
     int rankB = 1;
     std::vector<int> messageData = { 0, 1, 2 };
 
     // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
-    localWorld.broadcastHostsToRanks();
+    thisWorld.broadcastHostsToRanks();
 
     // Start the "remote" world in the background
-    std::thread remoteWorldThread([this, rankA, rankB, &messageData] {
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, rankA, rankB, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
 
         // Receive the message for the given rank
         MPI_Status status{};
         auto buffer = new int[messageData.size()];
-        remoteWorld.recv(
+        otherWorld.recv(
           rankA, rankB, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
         std::vector<int> actual(buffer, buffer + messageData.size());
@@ -93,18 +121,18 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
         assert(status.MPI_ERROR == MPI_SUCCESS);
         assert(status.bytesSize == messageData.size() * sizeof(int));
 
-        remoteWorld.destroy();
+        otherWorld.destroy();
     });
 
     // Send a message that should get sent to the "remote" world
-    localWorld.send(
+    thisWorld.send(
       rankA, rankB, BYTES(messageData.data()), MPI_INT, messageData.size());
 
-    if (remoteWorldThread.joinable()) {
-        remoteWorldThread.join();
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
 
-    localWorld.destroy();
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -112,108 +140,113 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Register two ranks (one on each host)
-    this->setWorldsSizes(2, 1, 1);
+    setWorldSizes(2, 1, 1);
     int rankA = 0;
     int rankB = 1;
     std::vector<int> messageData = { 0, 1, 2 };
     std::vector<int> messageData2 = { 3, 4, 5 };
 
     // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+    thisWorld.broadcastHostsToRanks();
 
-    localWorld.broadcastHostsToRanks();
+    std::thread otherWorldThread(
+      [this, rankA, rankB, &messageData, &messageData2] {
+          otherWorld.initialiseFromMsg(msg);
 
-    std::thread senderThread([this, rankA, rankB, &messageData, &messageData2] {
-        remoteWorld.initialiseFromMsg(msg);
+          // Send a message that should get sent to this host
+          otherWorld.send(rankB,
+                          rankA,
+                          BYTES(messageData.data()),
+                          MPI_INT,
+                          messageData.size());
 
-        // Send a message that should get sent to this host
-        remoteWorld.send(
-          rankB, rankA, BYTES(messageData.data()), MPI_INT, messageData.size());
+          // Now recv
+          auto buffer = new int[messageData2.size()];
+          otherWorld.recv(rankA,
+                          rankB,
+                          BYTES(buffer),
+                          MPI_INT,
+                          messageData2.size(),
+                          MPI_STATUS_IGNORE);
+          std::vector<int> actual(buffer, buffer + messageData2.size());
+          REQUIRE(actual == messageData2);
 
-        // Now recv
-        auto buffer = new int[messageData2.size()];
-        remoteWorld.recv(rankA,
-                         rankB,
-                         BYTES(buffer),
-                         MPI_INT,
-                         messageData2.size(),
-                         MPI_STATUS_IGNORE);
-        std::vector<int> actual(buffer, buffer + messageData2.size());
-        REQUIRE(actual == messageData2);
+          usleep(1000 * 1000);
 
-        usleep(500 * 1000);
-    });
+          otherWorld.destroy();
+      });
 
     // Receive the message for the given rank
     MPI_Status status{};
     auto buffer = new int[messageData.size()];
-    localWorld.recv(
+    thisWorld.recv(
       rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
     std::vector<int> actual(buffer, buffer + messageData.size());
     REQUIRE(actual == messageData);
 
     // Now send a message
-    localWorld.send(
+    thisWorld.send(
       rankA, rankB, BYTES(messageData2.data()), MPI_INT, messageData2.size());
 
     REQUIRE(status.MPI_SOURCE == rankB);
     REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
     REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
 
-    remoteWorld.destroy();
-    localWorld.destroy();
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture, "Test barrier across hosts", "[mpi]")
 {
     // Register two ranks (one on each host)
-    this->setWorldsSizes(2, 1, 1);
+    setWorldSizes(2, 1, 1);
     int rankA = 0;
     int rankB = 1;
     std::vector<int> sendData = { 0, 1, 2 };
     std::vector<int> recvData = { -1, -1, -1 };
 
     // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
 
-    localWorld.broadcastHostsToRanks();
+    thisWorld.broadcastHostsToRanks();
 
-    std::thread senderThread([this, rankA, rankB, &sendData, &recvData] {
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, rankA, rankB, &sendData, &recvData] {
+        otherWorld.initialiseFromMsg(msg);
 
-        remoteWorld.send(
+        otherWorld.send(
           rankB, rankA, BYTES(sendData.data()), MPI_INT, sendData.size());
 
         // Barrier on this rank
-        remoteWorld.barrier(rankB);
+        otherWorld.barrier(rankB);
         assert(sendData == recvData);
+        otherWorld.destroy();
     });
 
     // Receive the message for the given rank
-    localWorld.recv(rankB,
-                    rankA,
-                    BYTES(recvData.data()),
-                    MPI_INT,
-                    recvData.size(),
-                    MPI_STATUS_IGNORE);
+    thisWorld.recv(rankB,
+                   rankA,
+                   BYTES(recvData.data()),
+                   MPI_INT,
+                   recvData.size(),
+                   MPI_STATUS_IGNORE);
     REQUIRE(recvData == sendData);
 
     // Call barrier to synchronise remote host
-    localWorld.barrier(rankA);
+    thisWorld.barrier(rankA);
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
-    localWorld.destroy();
-    remoteWorld.destroy();
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -221,30 +254,31 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Register two ranks (one on each host)
-    this->setWorldsSizes(2, 1, 1);
+    setWorldSizes(2, 1, 1);
     int rankA = 0;
     int rankB = 1;
     int numMessages = 1000;
 
     // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
 
-    localWorld.broadcastHostsToRanks();
+    thisWorld.broadcastHostsToRanks();
 
-    std::thread senderThread([this, rankA, rankB, numMessages] {
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, rankA, rankB, numMessages] {
+        otherWorld.initialiseFromMsg(msg);
 
         for (int i = 0; i < numMessages; i++) {
-            remoteWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
+            otherWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
         }
 
         usleep(500 * 1000);
+        otherWorld.destroy();
     });
 
     int recv;
     for (int i = 0; i < numMessages; i++) {
-        localWorld.recv(
+        thisWorld.recv(
           rankB, rankA, BYTES(&recv), MPI_INT, 1, MPI_STATUS_IGNORE);
 
         // Check in-order delivery
@@ -253,77 +287,70 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
         }
     }
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
-    localWorld.destroy();
-    remoteWorld.destroy();
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                  "Test broadcast across hosts",
                  "[mpi]")
 {
-    // Here we rely on the scheduler running out of resources, and overloading
-    // the localWorld with ranks 4 and 5
-    this->setWorldsSizes(thisWorldSize, 1, 3);
+    MpiWorld& thisWorld = setUpThisWorld();
+
     std::vector<int> messageData = { 0, 1, 2 };
 
-    // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    faabric::util::setMockMode(false);
-    localWorld.broadcastHostsToRanks();
-
-    std::thread senderThread([this, &messageData] {
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
 
         // Broadcast a message
-        remoteWorld.broadcast(
-          remoteRankB, BYTES(messageData.data()), MPI_INT, messageData.size());
+        otherWorld.broadcast(otherHostRankB,
+                             BYTES(messageData.data()),
+                             MPI_INT,
+                             messageData.size());
 
-        // Check the host that the root is on
-        for (int rank : remoteWorldRanks) {
-            if (rank == remoteRankB) {
+        // Check the broadcast is received on this host by the other ranks
+        for (int rank : otherWorldRanks) {
+            if (rank == otherHostRankB) {
                 continue;
             }
 
             std::vector<int> actual(3, -1);
-            remoteWorld.recv(
-              remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            otherWorld.recv(
+              otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
             assert(actual == messageData);
         }
+
+        // Give the other host time to receive the broadcast
+        usleep(1000 * 1000);
+
+        otherWorld.destroy();
     });
 
-    // Check the local host
-    for (int rank : localWorldRanks) {
+    // Check the ranks on this host receive the broadcast
+    for (int rank : thisWorldRanks) {
         std::vector<int> actual(3, -1);
-        localWorld.recv(
-          remoteRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+        thisWorld.recv(
+          otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
         REQUIRE(actual == messageData);
     }
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
-    localWorld.destroy();
-    remoteWorld.destroy();
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                  "Test scatter across hosts",
                  "[mpi]")
 {
-    // Here we rely on the scheduler running out of resources, and overloading
-    // the localWorld with ranks 4 and 5
-    this->setWorldsSizes(thisWorldSize, 1, 3);
-
-    // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    faabric::util::setMockMode(false);
-
-    localWorld.broadcastHostsToRanks();
+    MpiWorld& thisWorld = setUpThisWorld();
 
     // Build the data
     int nPerRank = 4;
@@ -333,98 +360,94 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         messageData[i] = i;
     }
 
-    std::thread senderThread([this, nPerRank, &messageData] {
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, nPerRank, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
+
         // Do the scatter
         std::vector<int> actual(nPerRank, -1);
-        remoteWorld.scatter(remoteRankB,
-                            remoteRankB,
-                            BYTES(messageData.data()),
-                            MPI_INT,
-                            nPerRank,
-                            BYTES(actual.data()),
-                            MPI_INT,
-                            nPerRank);
+        otherWorld.scatter(otherHostRankB,
+                           otherHostRankB,
+                           BYTES(messageData.data()),
+                           MPI_INT,
+                           nPerRank,
+                           BYTES(actual.data()),
+                           MPI_INT,
+                           nPerRank);
 
         // Check for root
         assert(actual == std::vector<int>({ 8, 9, 10, 11 }));
 
         // Check for other remote ranks
-        remoteWorld.scatter(remoteRankB,
-                            remoteRankA,
-                            nullptr,
-                            MPI_INT,
-                            nPerRank,
-                            BYTES(actual.data()),
-                            MPI_INT,
-                            nPerRank);
+        otherWorld.scatter(otherHostRankB,
+                           otherHostRankA,
+                           nullptr,
+                           MPI_INT,
+                           nPerRank,
+                           BYTES(actual.data()),
+                           MPI_INT,
+                           nPerRank);
         assert(actual == std::vector<int>({ 4, 5, 6, 7 }));
 
-        remoteWorld.scatter(remoteRankB,
-                            remoteRankC,
-                            nullptr,
-                            MPI_INT,
-                            nPerRank,
-                            BYTES(actual.data()),
-                            MPI_INT,
-                            nPerRank);
+        otherWorld.scatter(otherHostRankB,
+                           otherHostRankC,
+                           nullptr,
+                           MPI_INT,
+                           nPerRank,
+                           BYTES(actual.data()),
+                           MPI_INT,
+                           nPerRank);
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
 
         usleep(500 * 1000);
+
+        otherWorld.destroy();
     });
 
     // Check for local ranks
     std::vector<int> actual(nPerRank, -1);
-    localWorld.scatter(remoteRankB,
-                       0,
-                       nullptr,
-                       MPI_INT,
-                       nPerRank,
-                       BYTES(actual.data()),
-                       MPI_INT,
-                       nPerRank);
+    thisWorld.scatter(otherHostRankB,
+                      0,
+                      nullptr,
+                      MPI_INT,
+                      nPerRank,
+                      BYTES(actual.data()),
+                      MPI_INT,
+                      nPerRank);
     REQUIRE(actual == std::vector<int>({ 0, 1, 2, 3 }));
 
-    localWorld.scatter(remoteRankB,
-                       localRankB,
-                       nullptr,
-                       MPI_INT,
-                       nPerRank,
-                       BYTES(actual.data()),
-                       MPI_INT,
-                       nPerRank);
+    thisWorld.scatter(otherHostRankB,
+                      thisHostRankB,
+                      nullptr,
+                      MPI_INT,
+                      nPerRank,
+                      BYTES(actual.data()),
+                      MPI_INT,
+                      nPerRank);
     REQUIRE(actual == std::vector<int>({ 20, 21, 22, 23 }));
 
-    localWorld.scatter(remoteRankB,
-                       localRankA,
-                       nullptr,
-                       MPI_INT,
-                       nPerRank,
-                       BYTES(actual.data()),
-                       MPI_INT,
-                       nPerRank);
+    thisWorld.scatter(otherHostRankB,
+                      thisHostRankA,
+                      nullptr,
+                      MPI_INT,
+                      nPerRank,
+                      BYTES(actual.data()),
+                      MPI_INT,
+                      nPerRank);
     REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
-    localWorld.destroy();
-    remoteWorld.destroy();
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                  "Test gather across hosts",
                  "[mpi]")
 {
-    // Here we rely on the scheduler running out of resources, and overloading
-    // the localWorld with ranks 4 and 5
-    this->setWorldsSizes(thisWorldSize, 1, 3);
-
-    // Init worlds
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    faabric::util::setMockMode(false);
-    localWorld.broadcastHostsToRanks();
+    MpiWorld& thisWorld = setUpThisWorld();
 
     // Build the data for each rank
     int nPerRank = 4;
@@ -447,57 +470,59 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::vector<int> actual(thisWorldSize * nPerRank, -1);
 
     // Call gather for each rank other than the root (out of order)
-    int root = localRankA;
-    std::thread senderThread([this, root, &rankData, nPerRank] {
-        remoteWorld.initialiseFromMsg(msg);
+    int root = thisHostRankA;
+    std::thread otherWorldThread([this, root, &rankData, nPerRank] {
+        otherWorld.initialiseFromMsg(msg);
 
-        for (int rank : remoteWorldRanks) {
-            remoteWorld.gather(rank,
-                               root,
-                               BYTES(rankData[rank].data()),
-                               MPI_INT,
-                               nPerRank,
-                               nullptr,
-                               MPI_INT,
-                               nPerRank);
+        for (int rank : otherWorldRanks) {
+            otherWorld.gather(rank,
+                              root,
+                              BYTES(rankData[rank].data()),
+                              MPI_INT,
+                              nPerRank,
+                              nullptr,
+                              MPI_INT,
+                              nPerRank);
         }
 
         usleep(500 * 1000);
+
+        otherWorld.destroy();
     });
 
-    for (int rank : localWorldRanks) {
+    for (int rank : thisWorldRanks) {
         if (rank == root) {
             continue;
         }
-        localWorld.gather(rank,
-                          root,
-                          BYTES(rankData[rank].data()),
-                          MPI_INT,
-                          nPerRank,
-                          nullptr,
-                          MPI_INT,
-                          nPerRank);
+        thisWorld.gather(rank,
+                         root,
+                         BYTES(rankData[rank].data()),
+                         MPI_INT,
+                         nPerRank,
+                         nullptr,
+                         MPI_INT,
+                         nPerRank);
     }
 
     // Call gather for root
-    localWorld.gather(root,
-                      root,
-                      BYTES(rankData[root].data()),
-                      MPI_INT,
-                      nPerRank,
-                      BYTES(actual.data()),
-                      MPI_INT,
-                      nPerRank);
+    thisWorld.gather(root,
+                     root,
+                     BYTES(rankData[root].data()),
+                     MPI_INT,
+                     nPerRank,
+                     BYTES(actual.data()),
+                     MPI_INT,
+                     nPerRank);
 
     // Check data
     REQUIRE(actual == expected);
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
-    localWorld.destroy();
-    remoteWorld.destroy();
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -505,64 +530,66 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Allocate two ranks in total, one rank per host
-    this->setWorldsSizes(2, 1, 1);
+    setWorldSizes(2, 1, 1);
     int sendRank = 1;
     int recvRank = 0;
     std::vector<int> messageData = { 0, 1, 2 };
 
     // Init world
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
-    localWorld.broadcastHostsToRanks();
+    thisWorld.broadcastHostsToRanks();
 
-    std::thread senderThread([this, sendRank, recvRank, &messageData] {
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, sendRank, recvRank, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
 
         // Send message twice
-        remoteWorld.send(sendRank,
-                         recvRank,
-                         BYTES(messageData.data()),
-                         MPI_INT,
-                         messageData.size());
-        remoteWorld.send(sendRank,
-                         recvRank,
-                         BYTES(messageData.data()),
-                         MPI_INT,
-                         messageData.size());
+        otherWorld.send(sendRank,
+                        recvRank,
+                        BYTES(messageData.data()),
+                        MPI_INT,
+                        messageData.size());
+        otherWorld.send(sendRank,
+                        recvRank,
+                        BYTES(messageData.data()),
+                        MPI_INT,
+                        messageData.size());
 
         usleep(500 * 1000);
+
+        otherWorld.destroy();
     });
 
     // Receive one message asynchronously
     std::vector<int> asyncMessage(messageData.size(), 0);
-    int recvId = localWorld.irecv(sendRank,
-                                  recvRank,
-                                  BYTES(asyncMessage.data()),
-                                  MPI_INT,
-                                  asyncMessage.size());
+    int recvId = thisWorld.irecv(sendRank,
+                                 recvRank,
+                                 BYTES(asyncMessage.data()),
+                                 MPI_INT,
+                                 asyncMessage.size());
 
     // Receive one message synchronously
     std::vector<int> syncMessage(messageData.size(), 0);
-    localWorld.recv(sendRank,
-                    recvRank,
-                    BYTES(syncMessage.data()),
-                    MPI_INT,
-                    syncMessage.size(),
-                    MPI_STATUS_IGNORE);
+    thisWorld.recv(sendRank,
+                   recvRank,
+                   BYTES(syncMessage.data()),
+                   MPI_INT,
+                   syncMessage.size(),
+                   MPI_STATUS_IGNORE);
 
     // Wait for the async message
-    localWorld.awaitAsyncRequest(recvId);
+    thisWorld.awaitAsyncRequest(recvId);
 
     // Checks
     REQUIRE(syncMessage == messageData);
     REQUIRE(asyncMessage == messageData);
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
-    localWorld.destroy();
-    remoteWorld.destroy();
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -570,48 +597,50 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Allocate two ranks in total, one rank per host
-    this->setWorldsSizes(2, 1, 1);
+    setWorldSizes(2, 1, 1);
     int sendRank = 1;
     int recvRank = 0;
 
     // Init world
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
-    localWorld.broadcastHostsToRanks();
+    thisWorld.broadcastHostsToRanks();
 
-    std::thread senderThread([this, sendRank, recvRank] {
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, sendRank, recvRank] {
+        otherWorld.initialiseFromMsg(msg);
 
         // Send different messages
         for (int i = 0; i < 3; i++) {
-            remoteWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
+            otherWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
 
         usleep(500 * 1000);
+
+        otherWorld.destroy();
     });
 
     // Receive two messages asynchronously
     int recv1, recv2, recv3;
     int recvId1 =
-      localWorld.irecv(sendRank, recvRank, BYTES(&recv1), MPI_INT, 1);
+      thisWorld.irecv(sendRank, recvRank, BYTES(&recv1), MPI_INT, 1);
 
     int recvId2 =
-      localWorld.irecv(sendRank, recvRank, BYTES(&recv2), MPI_INT, 1);
+      thisWorld.irecv(sendRank, recvRank, BYTES(&recv2), MPI_INT, 1);
 
     // Receive one message synchronously
-    localWorld.recv(
+    thisWorld.recv(
       sendRank, recvRank, BYTES(&recv3), MPI_INT, 1, MPI_STATUS_IGNORE);
 
     SECTION("Wait out of order")
     {
-        localWorld.awaitAsyncRequest(recvId2);
-        localWorld.awaitAsyncRequest(recvId1);
+        thisWorld.awaitAsyncRequest(recvId2);
+        thisWorld.awaitAsyncRequest(recvId1);
     }
 
     SECTION("Wait in order")
     {
-        localWorld.awaitAsyncRequest(recvId1);
-        localWorld.awaitAsyncRequest(recvId2);
+        thisWorld.awaitAsyncRequest(recvId1);
+        thisWorld.awaitAsyncRequest(recvId2);
     }
 
     // Checks
@@ -619,12 +648,12 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(recv2 == 1);
     REQUIRE(recv3 == 2);
 
-    // Destroy worlds
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
-    localWorld.destroy();
-    remoteWorld.destroy();
+
+    thisWorld.destroy();
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
@@ -632,65 +661,65 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Allocate two ranks in total, one rank per host
-    this->setWorldsSizes(3, 1, 2);
+    setWorldSizes(3, 1, 2);
     int worldSize = 3;
-    std::vector<int> localRanks = { 0 };
+    std::vector<int> thisHostRanks = { 0 };
 
     // Init world
-    MpiWorld& localWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
-    localWorld.broadcastHostsToRanks();
+    thisWorld.broadcastHostsToRanks();
 
-    std::thread senderThread([this, worldSize] {
-        std::vector<int> remoteRanks = { 1, 2 };
-        remoteWorld.initialiseFromMsg(msg);
+    std::thread otherWorldThread([this, worldSize] {
+        std::vector<int> otherHostRanks = { 1, 2 };
+        otherWorld.initialiseFromMsg(msg);
 
         // Send different messages
-        for (auto& rank : remoteRanks) {
+        for (auto& rank : otherHostRanks) {
             int left = rank > 0 ? rank - 1 : worldSize - 1;
             int right = (rank + 1) % worldSize;
             int recvData = -1;
 
-            remoteWorld.sendRecv(BYTES(&rank),
-                                 1,
-                                 MPI_INT,
-                                 right,
-                                 BYTES(&recvData),
-                                 1,
-                                 MPI_INT,
-                                 left,
-                                 rank,
-                                 MPI_STATUS_IGNORE);
+            otherWorld.sendRecv(BYTES(&rank),
+                                1,
+                                MPI_INT,
+                                right,
+                                BYTES(&recvData),
+                                1,
+                                MPI_INT,
+                                left,
+                                rank,
+                                MPI_STATUS_IGNORE);
         }
 
         usleep(500 * 1000);
+        otherWorld.destroy();
     });
 
-    for (auto& rank : localRanks) {
+    for (auto& rank : thisHostRanks) {
         int left = rank > 0 ? rank - 1 : worldSize - 1;
         int right = (rank + 1) % worldSize;
         int recvData = -1;
 
-        localWorld.sendRecv(BYTES(&rank),
-                            1,
-                            MPI_INT,
-                            right,
-                            BYTES(&recvData),
-                            1,
-                            MPI_INT,
-                            left,
-                            rank,
-                            MPI_STATUS_IGNORE);
+        thisWorld.sendRecv(BYTES(&rank),
+                           1,
+                           MPI_INT,
+                           right,
+                           BYTES(&recvData),
+                           1,
+                           MPI_INT,
+                           left,
+                           rank,
+                           MPI_STATUS_IGNORE);
 
         REQUIRE(recvData == left);
     }
 
-    // Destroy world
-    if (senderThread.joinable()) {
-        senderThread.join();
+    // Clean up
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
     }
 
-    localWorld.destroy();
-    remoteWorld.destroy();
+    thisWorld.destroy();
 }
 }

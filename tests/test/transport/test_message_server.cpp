@@ -186,7 +186,6 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
                 memcpy(body, clientMsg.c_str(), clientMsg.size());
                 cli.asyncSend(0, body, clientMsg.size());
             }
-
         }));
     }
 

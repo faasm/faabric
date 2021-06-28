@@ -47,8 +47,7 @@ getBatchRequests()
     return batchMessages;
 }
 
-std::vector<std::pair<std::string, faabric::EmptyRequest>>
-getResourceRequests()
+std::vector<std::pair<std::string, faabric::EmptyRequest>> getResourceRequests()
 {
     return resourceRequests;
 }
