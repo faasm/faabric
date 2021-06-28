@@ -9,8 +9,8 @@
 
 using namespace faabric::transport;
 
-const std::string thisHost = "127.0.0.1";
-const int testPort = 9800;
+static const std::string thisHost = "127.0.0.1";
+static const int testPort = 9800;
 
 namespace tests {
 
@@ -114,7 +114,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     std::string baseMsg = "Hello ";
 
     std::thread senderThread([numMessages, baseMsg] {
-        // Open the source endpoint client, don't bind
+        // Open the source endpoint client
         AsyncSendMessageEndpoint src(thisHost, testPort);
         for (int i = 0; i < numMessages; i++) {
             std::string msgData = baseMsg + std::to_string(i);
@@ -155,7 +155,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     for (int j = 0; j < numSenders; j++) {
         senderThreads.emplace_back(std::thread([numMessages, expectedMsg] {
-            // Open the source endpoint client, don't bind
+            // Open the source endpoint client
             AsyncSendMessageEndpoint src(thisHost, testPort);
             for (int i = 0; i < numMessages; i++) {
                 uint8_t msg[expectedMsg.size()];

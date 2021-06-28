@@ -11,9 +11,9 @@
 
 using namespace faabric::transport;
 
-const std::string thisHost = "127.0.0.1";
-const int testPortAsync = 9998;
-const int testPortSync = 9999;
+static const std::string thisHost = "127.0.0.1";
+static const int testPortAsync = 9998;
+static const int testPortSync = 9999;
 
 class DummyServer final : public MessageEndpointServer
 {
@@ -33,7 +33,7 @@ class DummyServer final : public MessageEndpointServer
         try {
             MessageEndpointServer::start();
         } catch (zmq::error_t& ex) {
-            SPDLOG_DEBUG("Retrying dummy server start after delay");
+            SPDLOG_WARN("Error connecting dummy server, retrying after delay");
 
             SLEEP_MS(1000);
             MessageEndpointServer::start();
@@ -114,58 +114,37 @@ class SlowServer final : public MessageEndpointServer
 };
 
 namespace tests {
-TEST_CASE("Test start/stop server", "[transport]")
+
+    TEST_CASE("Test send one message to server", "[transport]")
 {
     DummyServer server;
     server.start();
 
-    SLEEP_MS(100);
+    REQUIRE(server.messageCount == 0);
 
-    server.stop();
-}
+    MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
 
-TEST_CASE("Test send one message to server", "[transport]")
-{
-    // Start server
-    DummyServer server;
-    server.start();
-
-    // Open the source endpoint client, don't bind
-    AsyncSendMessageEndpoint src(thisHost, testPortAsync, testPortSync);
-
-    // Send message: server expects header + body
-    std::string header = "header";
-    uint8_t headerMsg[header.size()];
-    memcpy(headerMsg, header.c_str(), header.size());
-
-    // Mark we are sending the header
-    src.send(headerMsg, header.size(), true);
-
-    // Send the body
+    // Send a message
     std::string body = "body";
     uint8_t bodyMsg[body.size()];
     memcpy(bodyMsg, body.c_str(), body.size());
-    src.send(bodyMsg, body.size(), false);
+    cli.asyncSend(0, bodyMsg, body.size());
 
-    SLEEP_MS(300);
+    SLEEP_MS(500);
+
     REQUIRE(server.messageCount == 1);
 
-    // Close the server
     server.stop();
 }
 
 TEST_CASE("Test send response to client", "[transport]")
 {
-    std::thread serverThread([] {
-        EchoServer server;
-        server.start();
-        SLEEP_MS(1000);
-        server.stop();
-    });
+    EchoServer server;
+    server.start();
 
     std::string expectedMsg = "Response from server";
 
-    // Open the source endpoint client, don't bind
+    // Open the source endpoint client
     MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
 
     // Send and await the response
@@ -174,9 +153,7 @@ TEST_CASE("Test send response to client", "[transport]")
 
     assert(response.data() == expectedMsg);
 
-    if (serverThread.joinable()) {
-        serverThread.join();
-    }
+    server.stop();
 }
 
 TEST_CASE("Test multiple clients talking to one server", "[transport]")
@@ -233,19 +210,9 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         expectFailure = true;
     }
 
-    // Start the server in the background
-    std::thread t([] {
-        SlowServer server;
-        server.start();
-
-        int threadSleep = server.delayMs + 500;
-        SLEEP_MS(threadSleep);
-
-        server.stop();
-    });
-
-    // Wait for the server to start up
-    SLEEP_MS(500);
+    // Start the server
+    SlowServer server;
+    server.start();
 
     // Set up the client
     MessageEndpointClient cli(
@@ -264,8 +231,6 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         REQUIRE(response.data() == "From the slow server");
     }
 
-    if (t.joinable()) {
-        t.join();
-    }
+    server.stop();
 }
 }
