@@ -545,7 +545,7 @@ TEST_CASE("Test enqueue after blocking dequeue")
     });
 
     // Wait a bit (assume the waiting thread will get to block by now)
-    SLEEP_MS(1000);
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
     redisQueue.enqueue("foobar", "baz");
 
     // If this hangs, the redis client isn't dequeueing after an enqueue is

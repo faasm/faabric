@@ -1,5 +1,7 @@
 #include <catch.hpp>
 
+#include "faabric_utils.h"
+
 #include <thread>
 
 #include <faabric/proto/faabric.pb.h>
@@ -35,7 +37,7 @@ class DummyServer final : public MessageEndpointServer
         } catch (zmq::error_t& ex) {
             SPDLOG_WARN("Error connecting dummy server, retrying after delay");
 
-            SLEEP_MS(1000);
+            SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
             MessageEndpointServer::start();
         }
     }
@@ -115,7 +117,7 @@ class SlowServer final : public MessageEndpointServer
 
 namespace tests {
 
-    TEST_CASE("Test send one message to server", "[transport]")
+TEST_CASE("Test send one message to server", "[transport]")
 {
     DummyServer server;
     server.start();
@@ -130,7 +132,7 @@ namespace tests {
     memcpy(bodyMsg, body.c_str(), body.size());
     cli.asyncSend(0, bodyMsg, body.size());
 
-    SLEEP_MS(500);
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
     REQUIRE(server.messageCount == 1);
 
@@ -186,7 +188,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
         }
     }
 
-    SLEEP_MS(2000);
+    SLEEP_MS(2 * SHORT_TEST_TIMEOUT_MS);
 
     REQUIRE(server.messageCount == numMessages * numClients);
 

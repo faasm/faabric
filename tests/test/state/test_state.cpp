@@ -44,7 +44,7 @@ class StateServerTestFixture
         stateServer.start();
 
         // Give it time to start
-        SLEEP_MS(1000);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
     }
 
     ~StateServerTestFixture() { stateServer.stop(); }

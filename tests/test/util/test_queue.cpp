@@ -1,5 +1,7 @@
 #include <catch.hpp>
 
+#include "faabric_utils.h"
+
 #include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/queue.h>
@@ -118,7 +120,7 @@ TEST_CASE("Test queue on non-copy-constructible object", "[util]")
 
     std::thread ta([&q] { q.dequeue().set_value(1); });
     std::thread tb([&q] {
-        SLEEP_MS(500);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
         q.dequeue().set_value(2);
     });
 

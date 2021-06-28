@@ -78,7 +78,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
         otherWorld.destroy();
     });
 
-    SLEEP_MS(500);
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
     REQUIRE(thisWorld.getHostForRank(0) == thisHost);
     REQUIRE(thisWorld.getHostForRank(1) == otherHost);
@@ -173,7 +173,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           std::vector<int> actual(buffer, buffer + messageData2.size());
           REQUIRE(actual == messageData2);
 
-          SLEEP_MS(1000);
+          SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
           otherWorld.destroy();
       });
@@ -272,7 +272,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
         }
 
-        SLEEP_MS(500);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
         otherWorld.destroy();
     });
 
@@ -325,7 +325,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         }
 
         // Give the other host time to receive the broadcast
-        SLEEP_MS(1000);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
         otherWorld.destroy();
     });
@@ -363,7 +363,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::thread otherWorldThread([this, nPerRank, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
-        // Do the scatter
+        // Do the scatter (when send rank == recv rank)
         std::vector<int> actual(nPerRank, -1);
         otherWorld.scatter(otherHostRankB,
                            otherHostRankB,
@@ -377,7 +377,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         // Check for root
         assert(actual == std::vector<int>({ 8, 9, 10, 11 }));
 
-        // Check for other remote ranks
+        // Check the other ranks on this host have received the data
         otherWorld.scatter(otherHostRankB,
                            otherHostRankA,
                            nullptr,
@@ -398,12 +398,12 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            nPerRank);
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
 
-        SLEEP_MS(500);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
         otherWorld.destroy();
     });
 
-    // Check for local ranks
+    // Check for ranks on this host
     std::vector<int> actual(nPerRank, -1);
     thisWorld.scatter(otherHostRankB,
                       0,
@@ -485,7 +485,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                               nPerRank);
         }
 
-        SLEEP_MS(500);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
         otherWorld.destroy();
     });
@@ -555,7 +555,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                         MPI_INT,
                         messageData.size());
 
-        SLEEP_MS(500);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
         otherWorld.destroy();
     });
@@ -614,7 +614,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
 
-        SLEEP_MS(500);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
         otherWorld.destroy();
     });
@@ -692,7 +692,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                                 MPI_STATUS_IGNORE);
         }
 
-        SLEEP_MS(500);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
         otherWorld.destroy();
     });
 

@@ -63,7 +63,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     cli.pushSnapshot(snapKeyA, snapA);
     cli.pushSnapshot(snapKeyB, snapB);
 
-    SLEEP_MS(500);
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);

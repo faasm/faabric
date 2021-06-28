@@ -44,7 +44,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     // Run the recv in the background
     std::thread recvThread([expectedMsg] {
-        SLEEP_MS(1000);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
         AsyncRecvMessageEndpoint dst(testPort);
 
         // Receive message
