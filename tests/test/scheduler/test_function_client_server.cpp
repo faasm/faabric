@@ -35,12 +35,11 @@ class ClientServerFixture
     ClientServerFixture()
       : cli(LOCALHOST)
     {
-        server.start();
-        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
-
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
+
+        server.start();
     }
 
     ~ClientServerFixture()
@@ -77,9 +76,8 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(msgs.at(1).function() == "bar");
     sch.clearRecordedMessages();
 
-    // Send flush message
+    // Send flush message (which is synchronous)
     cli.sendFlush();
-    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
@@ -136,7 +134,11 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     // Make the request
     cli.executeFunctions(req);
-    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
+
+    for (const auto& m : req->messages()) {
+        // This timeout can be long as it shouldn't fail
+        sch.getFunctionResult(m.id(), 5 * SHORT_TEST_TIMEOUT_MS);
+    }
 
     // Check no other hosts have been registered
     faabric::Message m = req->messages().at(0);
@@ -217,6 +219,7 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqA.set_host("foobar");
     *reqA.mutable_function() = msg;
 
+    // Check that nothing's happened
     cli.unregister(reqA);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
@@ -225,8 +228,8 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
     cli.unregister(reqB);
-    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
-    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
+
+    REQUIRE_RETRY({}, sch.getFunctionRegisteredHostCount(msg) == 0);
 
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();

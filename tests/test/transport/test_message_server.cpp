@@ -118,9 +118,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     memcpy(bodyMsg, body.c_str(), body.size());
     cli.asyncSend(0, bodyMsg, body.size());
 
-    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
-
-    REQUIRE(server.messageCount == 1);
+    REQUIRE_RETRY({}, server.messageCount == 1);
 
     server.stop();
 }
@@ -146,6 +144,7 @@ TEST_CASE("Test send response to client", "[transport]")
 
 TEST_CASE("Test multiple clients talking to one server", "[transport]")
 {
+    // Start the server in the background
     DummyServer server;
     server.start();
 
@@ -153,8 +152,11 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     int numClients = 10;
     int numMessages = 1000;
 
+    // Set up a barrier to wait on all the clients having finished
+    faabric::util::Barrier barrier(numClients + 1);
+
     for (int i = 0; i < numClients; i++) {
-        clientThreads.emplace_back(std::thread([numMessages] {
+        clientThreads.emplace_back(std::thread([&barrier, numMessages] {
             // Prepare client
             MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
 
@@ -165,8 +167,12 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
                 memcpy(body, clientMsg.c_str(), clientMsg.size());
                 cli.asyncSend(0, body, clientMsg.size());
             }
+
+            barrier.wait();
         }));
     }
+
+    barrier.wait();
 
     for (auto& t : clientThreads) {
         if (t.joinable()) {
@@ -174,9 +180,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
         }
     }
 
-    SLEEP_MS(2 * SHORT_TEST_TIMEOUT_MS);
-
-    REQUIRE(server.messageCount == numMessages * numClients);
+    REQUIRE_RETRY({}, server.messageCount == numMessages * numClients);
 
     server.stop();
 }

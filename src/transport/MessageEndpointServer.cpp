@@ -1,5 +1,6 @@
 #include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/transport/common.h>
+#include <faabric/util/barrier.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/network.h>
 
@@ -14,8 +15,13 @@ MessageEndpointServer::MessageEndpointServer(int asyncPortIn, int syncPortIn)
 
 void MessageEndpointServer::start()
 {
-    asyncThread = std::thread([this] {
+    // Callers will only pass this barrier once the server sockets have been
+    // opened (hence we don't need to add arbitrary sleeps all over the place).
+    faabric::util::Barrier startBarrier(3);
+
+    asyncThread = std::thread([this, &startBarrier] {
         AsyncRecvMessageEndpoint endpoint(asyncPort);
+        startBarrier.wait();
 
         // Loop until we receive a shutdown message
         while (true) {
@@ -45,8 +51,9 @@ void MessageEndpointServer::start()
         }
     });
 
-    syncThread = std::thread([this] {
+    syncThread = std::thread([this, &startBarrier] {
         SyncRecvMessageEndpoint endpoint(syncPort);
+        startBarrier.wait();
 
         // Loop until we receive a shutdown message
         while (true) {
@@ -83,6 +90,8 @@ void MessageEndpointServer::start()
             endpoint.sendResponse(buffer, respSize);
         }
     });
+
+    startBarrier.wait();
 }
 
 void MessageEndpointServer::stop()

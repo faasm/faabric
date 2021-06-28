@@ -28,7 +28,6 @@ class SimpleStateServerTestFixture
         conf.stateMode = "inmemory";
 
         server.start();
-        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
     }
 
     ~SimpleStateServerTestFixture() { server.stop(); }

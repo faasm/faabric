@@ -30,7 +30,6 @@ class SnapshotClientServerFixture
       : cli(LOCALHOST)
     {
         server.start();
-        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
     }
 
     ~SnapshotClientServerFixture() { server.stop(); }
@@ -62,8 +61,6 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Send the message
     cli.pushSnapshot(snapKeyA, snapA);
     cli.pushSnapshot(snapKeyB, snapB);
-
-    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);

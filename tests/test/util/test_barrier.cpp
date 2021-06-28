@@ -24,8 +24,7 @@ TEST_CASE("Test barrier operation", "[util]")
     auto t2 = std::thread([&b] { b.wait(); });
 
     // Sleep for a bit while the threads spawn
-    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
-    REQUIRE(b.getSlotCount() == 1);
+    REQUIRE_RETRY({}, b.getSlotCount() == 1);
 
     // Join with master to go through barrier
     b.wait();

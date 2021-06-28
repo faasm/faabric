@@ -41,22 +41,26 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     AsyncSendMessageEndpoint src(thisHost, testPort);
 
-    // Run the recv in the background
-    std::thread recvThread([expectedMsg] {
-        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
-        AsyncRecvMessageEndpoint dst(testPort);
+    faabric::util::Barrier barrier(2);
+
+    std::thread recvThread([&barrier, expectedMsg] {
+        // Make sure this only runs once the send has been done
+        barrier.wait();
 
         // Receive message
+        AsyncRecvMessageEndpoint dst(testPort);
         faabric::transport::Message recvMsg = dst.recv();
+
         assert(recvMsg.size() == expectedMsg.size());
         std::string actualMsg(recvMsg.data(), recvMsg.size());
         assert(actualMsg == expectedMsg);
     });
 
-    // Send message (should wait for receiver to become ready)
     uint8_t msg[expectedMsg.size()];
     memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
+
     src.send(msg, expectedMsg.size());
+    barrier.wait();
 
     if (recvThread.joinable()) {
         recvThread.join();

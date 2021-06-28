@@ -42,9 +42,6 @@ class StateServerTestFixture
         // Start the state server
         SPDLOG_DEBUG("Running state server");
         stateServer.start();
-
-        // Give it time to start
-        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
     }
 
     ~StateServerTestFixture() { stateServer.stop(); }
