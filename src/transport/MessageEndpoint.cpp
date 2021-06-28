@@ -313,8 +313,6 @@ Message SyncRecvMessageEndpoint::recv(int size)
     return doRecv(repSocket, size);
 }
 
-// We create a new endpoint every time. Re-using them would be a possible
-// optimisation if needed.
 void SyncRecvMessageEndpoint::sendResponse(uint8_t* data, int size)
 {
     SPDLOG_TRACE("REP {} ({} bytes)", port, size);

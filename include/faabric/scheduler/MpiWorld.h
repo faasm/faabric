@@ -19,7 +19,7 @@ typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
 class MpiWorld
 {
   public:
-    MpiWorld(int basePort = DEFAULT_MPI_BASE_PORT);
+    MpiWorld();
 
     void create(const faabric::Message& call, int newId, int newSize);
 
@@ -184,7 +184,7 @@ class MpiWorld
     int id = -1;
     int size = -1;
     std::string thisHost;
-    int basePort = -1;
+    int basePort = DEFAULT_MPI_BASE_PORT;
     faabric::util::TimePoint creationTime;
 
     std::atomic_flag isDestroyed = false;

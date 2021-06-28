@@ -19,7 +19,7 @@ class MessageEndpointServer
   public:
     MessageEndpointServer(int asyncPortIn, int syncPortIn);
 
-    void start();
+    virtual void start();
 
     virtual void stop();
 

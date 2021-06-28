@@ -6,9 +6,8 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/testing.h>
 
-/* Each MPI rank runs in a separate thread, thus we use TLS to maintain the
- * per-rank data structures.
- */
+// Each MPI rank runs in a separate thread, thus we use TLS to maintain the
+// per-rank data structures
 static thread_local std::vector<
   std::unique_ptr<faabric::transport::MpiMessageEndpoint>>
   mpiMessageEndpoints;
@@ -17,6 +16,13 @@ static thread_local std::vector<
   std::shared_ptr<faabric::scheduler::MpiMessageBuffer>>
   unackedMessageBuffers;
 
+static thread_local std::set<int> iSendRequests;
+
+static thread_local std::map<int, std::pair<int, int>> reqIdToRanks;
+
+// These long-lived sockets are used by each world to communicate rank-to-host
+// mappings. They are thread-local to ensure separation between concurrent
+// worlds executing on the same host
 static thread_local std::unique_ptr<
   faabric::transport::AsyncRecvMessageEndpoint>
   ranksRecvEndpoint;
@@ -26,17 +32,13 @@ static thread_local std::unordered_map<
   std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
   ranksSendEndpoints;
 
-static thread_local std::set<int> iSendRequests;
-
-static thread_local std::map<int, std::pair<int, int>> reqIdToRanks;
-
+// This is used for mocking in tests
 static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
 
 namespace faabric::scheduler {
 
-MpiWorld::MpiWorld(int basePortIn)
+MpiWorld::MpiWorld()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
-  , basePort(basePortIn)
   , creationTime(faabric::util::startTimer())
   , cartProcsPerDim(2)
 {}

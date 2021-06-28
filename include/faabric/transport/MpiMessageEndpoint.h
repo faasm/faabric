@@ -7,15 +7,14 @@
 
 namespace faabric::transport {
 
-/*
- * This class abstracts the notion of a communication channel between two remote
- * MPI ranks. There will always be one rank local to this host, and one remote.
- * Note that the ports are unique per (user, function, sendRank, recvRank)
- * tuple.
- *
- * This is different to our normal messaging clients as it wraps two _async_
- * sockets.
- */
+// This class abstracts the notion of a communication channel between two remote
+// MPI ranks. There will always be one rank local to this host, and one remote.
+// Note that the ports are unique per (user, function, sendRank, recvRank)
+// tuple.
+//
+// This is different to our normal messaging clients as it wraps two
+// _async_ sockets.
+
 class MpiMessageEndpoint
 {
   public:

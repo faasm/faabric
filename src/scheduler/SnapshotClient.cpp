@@ -69,6 +69,21 @@ void clearMockSnapshotRequests()
 // Snapshot client
 // -----------------------------------
 
+#define SEND_FB_MSG(T, mb)                                                     \
+    {                                                                          \
+        uint8_t* buffer = mb.GetBufferPointer();                               \
+        int size = mb.GetSize();                                               \
+        faabric::EmptyResponse response;                                       \
+        syncSend(T, buffer, size, &response);                                  \
+    }
+
+#define SEND_FB_MSG_ASYNC(T, mb)                                               \
+    {                                                                          \
+        uint8_t* buffer = mb.GetBufferPointer();                               \
+        int size = mb.GetSize();                                               \
+        asyncSend(T, buffer, size);                                            \
+    }
+
 SnapshotClient::SnapshotClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn,
                                               SNAPSHOT_ASYNC_PORT,
@@ -91,16 +106,10 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         auto dataOffset = mb.CreateVector<uint8_t>(data.data, data.size);
         auto requestOffset =
           CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
+        mb.Finish(requestOffset);
 
         // Send it
-        mb.Finish(requestOffset);
-        uint8_t* buffer = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        faabric::EmptyResponse response;
-        syncSend(faabric::scheduler::SnapshotCalls::PushSnapshot,
-                 buffer,
-                 size,
-                 &response);
+        SEND_FB_MSG(SnapshotCalls::PushSnapshot, mb)
     }
 }
 
@@ -133,15 +142,9 @@ void SnapshotClient::pushSnapshotDiffs(
         auto diffsOffset = mb.CreateVector(diffsFbVector);
         auto requestOffset =
           CreateSnapshotDiffPushRequest(mb, keyOffset, diffsOffset);
-
         mb.Finish(requestOffset);
-        uint8_t* buffer = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        faabric::EmptyResponse response;
-        syncSend(faabric::scheduler::SnapshotCalls::PushSnapshotDiffs,
-                 buffer,
-                 size,
-                 &response);
+
+        SEND_FB_MSG(SnapshotCalls::PushSnapshotDiffs, mb);
     }
 }
 
@@ -158,12 +161,9 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto requestOffset = CreateSnapshotDeleteRequest(mb, keyOffset);
-
         mb.Finish(requestOffset);
-        uint8_t* buffer = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        asyncSend(
-          faabric::scheduler::SnapshotCalls::PushSnapshotDiffs, buffer, size);
+
+        SEND_FB_MSG_ASYNC(SnapshotCalls::DeleteSnapshot, mb);
     }
 }
 
@@ -221,10 +221,7 @@ void SnapshotClient::pushThreadResult(
         }
 
         mb.Finish(requestOffset);
-        uint8_t* buffer = mb.GetBufferPointer();
-        int size = mb.GetSize();
-        asyncSend(
-          faabric::scheduler::SnapshotCalls::ThreadResult, buffer, size);
+        SEND_FB_MSG_ASYNC(SnapshotCalls::ThreadResult, mb)
     }
 }
 }

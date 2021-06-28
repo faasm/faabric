@@ -4,12 +4,8 @@
 
 namespace faabric::transport {
 
-/*
- * The zmq::context_t object is thread safe, and the constructor parameter
- * indicates the number of hardware IO threads to be used. As a rule of thumb,
- * use one IO thread per Gbps of data.
- */
-
+// The ZeroMQ context object is thread safe, so we're ok to have a single global
+// instance.
 static std::shared_ptr<zmq::context_t> instance = nullptr;
 
 void initGlobalMessageContext()
