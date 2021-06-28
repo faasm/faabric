@@ -237,6 +237,17 @@ void MpiWorld::broadcastHostsToRanks()
 
 void MpiWorld::destroy()
 {
+    SPDLOG_TRACE("Destroying MPI world {}", id);
+
+    // Note that all ranks will call this function.
+
+    // We must force the destructors for all message endpoints to run here
+    // rather than at the end of their global thread-local lifespan. If we
+    // don't, the ZMQ shutdown can hang.
+    mpiMessageEndpoints.clear();
+    ranksRecvEndpoint = nullptr;
+    ranksSendEndpoints.clear();
+
     // Unacked message buffers
     if (!unackedMessageBuffers.empty()) {
         for (auto& umb : unackedMessageBuffers) {
