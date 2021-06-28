@@ -8,7 +8,6 @@
 #include <faabric/util/macros.h>
 
 using namespace faabric::transport;
-
 static const std::string thisHost = "127.0.0.1";
 static const int testPort = 9800;
 

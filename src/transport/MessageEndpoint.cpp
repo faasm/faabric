@@ -3,22 +3,44 @@
 #include <faabric/transport/context.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 
 #include <unistd.h>
+
+#define RETRY_SLEEP_MS 1000
 
 #define CATCH_ZMQ_ERR(op, label)                                               \
     try {                                                                      \
         op;                                                                    \
     } catch (zmq::error_t & e) {                                               \
-        if (e.num() == ZMQ_ETERM) {                                            \
-            SPDLOG_TRACE(                                                      \
-              "Got ZeroMQ ETERM for {} on address {}", label, address);        \
-        } else {                                                               \
-            SPDLOG_ERROR("Caught ZeroMQ error for {} on address {}: {} ({})",  \
-                         label,                                                \
-                         address,                                              \
-                         e.num(),                                              \
-                         e.what());                                            \
+        SPDLOG_ERROR("Caught ZeroMQ error for {} on address {}: {} ({})",      \
+                     label,                                                    \
+                     address,                                                  \
+                     e.num(),                                                  \
+                     e.what());                                                \
+        throw;                                                                 \
+    }
+
+#define CATCH_ZMQ_ERR_RETRY(op, label)                                         \
+    try {                                                                      \
+        op;                                                                    \
+    } catch (zmq::error_t & e) {                                               \
+        SPDLOG_WARN("Caught ZeroMQ error for {} on address {}: {} ({})",       \
+                    label,                                                     \
+                    address,                                                   \
+                    e.num(),                                                   \
+                    e.what());                                                 \
+        SPDLOG_WARN("Retrying {} on address {}", label, address);              \
+        SLEEP_MS(RETRY_SLEEP_MS);                                              \
+        try {                                                                  \
+            op;                                                                \
+        } catch (zmq::error_t & e2) {                                          \
+            SPDLOG_ERROR(                                                      \
+              "Caught ZeroMQ error on retry for {} on address {}: {} ({})",    \
+              label,                                                           \
+              address,                                                         \
+              e2.num(),                                                        \
+              e2.what());                                                      \
             throw;                                                             \
         }                                                                      \
     }
@@ -35,7 +57,6 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn,
   , tid(std::this_thread::get_id())
   , id(faabric::util::generateGid())
 {
-
     // Check and set socket timeout
     if (timeoutMs <= 0) {
         SPDLOG_ERROR("Setting invalid timeout of {}", timeoutMs);
@@ -62,25 +83,25 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
         case zmq::socket_type::req: {
             SPDLOG_TRACE(
               "New socket: req {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR(socket.connect(address), "connect")
+            CATCH_ZMQ_ERR_RETRY(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::push: {
             SPDLOG_TRACE(
               "New socket: push {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR(socket.connect(address), "connect")
+            CATCH_ZMQ_ERR_RETRY(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::pull: {
             SPDLOG_TRACE(
               "New socket: pull {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR(socket.bind(address), "bind")
+            CATCH_ZMQ_ERR_RETRY(socket.bind(address), "bind")
             break;
         }
         case zmq::socket_type::rep: {
             SPDLOG_TRACE(
               "New socket: rep {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR(socket.bind(address), "bind")
+            CATCH_ZMQ_ERR_RETRY(socket.bind(address), "bind")
             break;
         }
         default: {
@@ -149,7 +170,7 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
-              SPDLOG_TRACE("Endpoint received ETERM");
+              SPDLOG_WARN("Endpoint {}:{} received ETERM on recv", host, port);
               return Message();
           }
 
@@ -173,7 +194,7 @@ Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
-              SPDLOG_TRACE("Endpoint received ETERM");
+              SPDLOG_WARN("Endpoint {}:{} received ETERM on recv", host, port);
               return Message();
           }
           throw;
@@ -261,24 +282,8 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* serialisedMsg,
     doSend(reqSocket, serialisedMsg, msgSize, more);
 
     // Do the receive
-    zmq::message_t msg;
-    CATCH_ZMQ_ERR(
-      try {
-          auto res = reqSocket.recv(msg);
-          if (!res.has_value()) {
-              SPDLOG_ERROR("Timed out receiving message with no size");
-              throw MessageTimeoutException("Timed out receiving message");
-          }
-      } catch (zmq::error_t& e) {
-          if (e.num() == ZMQ_ETERM) {
-              SPDLOG_TRACE("Endpoint received ETERM");
-              return Message();
-          }
-          throw;
-      },
-      "send_recv")
-
-    return Message(msg);
+    SPDLOG_TRACE("RECV (REQ) {}", port);
+    return recvNoBuffer(reqSocket);
 }
 
 // ----------------------------------------------
@@ -300,7 +305,7 @@ Message AsyncRecvMessageEndpoint::recv(int size)
 // ----------------------------------------------
 // SYNC RECV ENDPOINT
 // ----------------------------------------------
-//
+
 SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
 {
@@ -309,7 +314,7 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
 
 Message SyncRecvMessageEndpoint::recv(int size)
 {
-    SPDLOG_TRACE("RECV {} (REP) ({} bytes)", port, size);
+    SPDLOG_TRACE("RECV (REP) {} ({} bytes)", port, size);
     return doRecv(repSocket, size);
 }
 

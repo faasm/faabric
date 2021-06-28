@@ -28,20 +28,6 @@ class DummyServer final : public MessageEndpointServer
     // Variable to keep track of the received messages
     int messageCount;
 
-    void start() override
-    {
-        // In a CI environment tests can be slow to tear down fully, so we want
-        // to sleep and retry if the initial connection fails.
-        try {
-            MessageEndpointServer::start();
-        } catch (zmq::error_t& ex) {
-            SPDLOG_WARN("Error connecting dummy server, retrying after delay");
-
-            SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
-            MessageEndpointServer::start();
-        }
-    }
-
   private:
     void doAsyncRecv(faabric::transport::Message& header,
                      faabric::transport::Message& body) override
