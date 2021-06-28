@@ -1,6 +1,7 @@
 #include <catch.hpp>
 
 #include <faabric/util/bytes.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/queue.h>
 
 #include <future>
@@ -86,7 +87,7 @@ TEST_CASE("Test wait for draining queue with elements", "[util]")
     // Background thread to consume elements
     std::thread t([&q, &dequeued, nElems] {
         for (int i = 0; i < nElems; i++) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            SLEEP_MS(100);
 
             int j = q.dequeue();
             dequeued.emplace_back(j);
@@ -117,7 +118,7 @@ TEST_CASE("Test queue on non-copy-constructible object", "[util]")
 
     std::thread ta([&q] { q.dequeue().set_value(1); });
     std::thread tb([&q] {
-        usleep(500 * 1000);
+        SLEEP_MS(500);
         q.dequeue().set_value(2);
     });
 

@@ -559,7 +559,7 @@ uint32_t StateKeyValue::waitOnRedisRemoteLock(const std::string& redisKey)
             break;
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        SLEEP_MS(1);
 
         remoteLockId = redis.acquireLock(redisKey, REMOTE_LOCK_TIMEOUT_SECS);
         retryCount++;

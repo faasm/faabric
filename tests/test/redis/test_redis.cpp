@@ -4,6 +4,7 @@
 
 #include <faabric/redis/Redis.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/macros.h>
 
 #include <algorithm>
 
@@ -544,7 +545,7 @@ TEST_CASE("Test enqueue after blocking dequeue")
     });
 
     // Wait a bit (assume the waiting thread will get to block by now)
-    sleep(1);
+    SLEEP_MS(1000);
     redisQueue.enqueue("foobar", "baz");
 
     // If this hangs, the redis client isn't dequeueing after an enqueue is

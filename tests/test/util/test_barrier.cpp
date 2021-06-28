@@ -1,6 +1,9 @@
 #include <catch.hpp>
+
 #include <faabric/util/barrier.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/macros.h>
+
 #include <thread>
 #include <unistd.h>
 
@@ -19,7 +22,7 @@ TEST_CASE("Test barrier operation", "[util]")
     auto t2 = std::thread([&b] { b.wait(); });
 
     // Sleep for a bit while the threads spawn
-    usleep(500 * 1000);
+    SLEEP_MS(500);
     REQUIRE(b.getSlotCount() == 1);
 
     // Join with master to go through barrier

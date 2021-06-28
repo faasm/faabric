@@ -10,6 +10,7 @@
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 
 using namespace faabric::scheduler;
 
@@ -30,7 +31,7 @@ int main(int argc, char* argv[])
     m.startBackground();
 
     // Wait for things to start
-    usleep(3000 * 1000);
+    SLEEP_MS(3000);
 
     // Run the tests
     int result = Catch::Session().run(argc, argv);

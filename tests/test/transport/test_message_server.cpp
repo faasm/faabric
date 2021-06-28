@@ -92,7 +92,7 @@ class SlowServer final : public MessageEndpointServer
     {
         SPDLOG_DEBUG("Slow message server test recv");
 
-        usleep(delayMs * 1000);
+        SLEEP_MS(delayMs);
         auto response = std::make_unique<faabric::StatePart>();
         response->set_data("From the slow server");
         return response;
@@ -105,7 +105,7 @@ TEST_CASE("Test start/stop server", "[transport]")
     DummyServer server;
     server.start();
 
-    usleep(100 * 1000);
+    SLEEP_MS(100);
 
     server.stop();
 }
@@ -133,7 +133,7 @@ TEST_CASE("Test send one message to server", "[transport]")
     memcpy(bodyMsg, body.c_str(), body.size());
     src.send(bodyMsg, body.size(), false);
 
-    usleep(1000 * 300);
+    SLEEP_MS(300);
     REQUIRE(server.messageCount == 1);
 
     // Close the server
@@ -145,7 +145,7 @@ TEST_CASE("Test send response to client", "[transport]")
     std::thread serverThread([] {
         EchoServer server;
         server.start();
-        usleep(1000 * 1000);
+        SLEEP_MS(1000);
         server.stop();
     });
 
@@ -195,7 +195,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
         }
     }
 
-    usleep(2000 * 1000);
+    SLEEP_MS(2000);
 
     REQUIRE(server.messageCount == numMessages * numClients);
 
@@ -225,13 +225,13 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         server.start();
 
         int threadSleep = server.delayMs + 500;
-        usleep(threadSleep * 1000);
+        SLEEP_MS(threadSleep);
 
         server.stop();
     });
 
     // Wait for the server to start up
-    usleep(500 * 1000);
+    SLEEP_MS(500);
 
     // Set up the client
     MessageEndpointClient cli(

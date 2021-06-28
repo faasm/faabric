@@ -7,10 +7,11 @@
 #include <faabric/state/State.h>
 #include <faabric/state/StateServer.h>
 #include <faabric/util/config.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
-
 #include <faabric/util/state.h>
+
 #include <sys/mman.h>
 
 using namespace faabric::state;
@@ -43,7 +44,7 @@ class StateServerTestFixture
         stateServer.start();
 
         // Give it time to start
-        usleep(1000 * 1000);
+        SLEEP_MS(1000);
     }
 
     ~StateServerTestFixture() { stateServer.stop(); }

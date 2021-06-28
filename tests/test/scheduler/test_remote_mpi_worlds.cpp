@@ -78,7 +78,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
         otherWorld.destroy();
     });
 
-    usleep(500 * 1000);
+    SLEEP_MS(500);
 
     REQUIRE(thisWorld.getHostForRank(0) == thisHost);
     REQUIRE(thisWorld.getHostForRank(1) == otherHost);
@@ -173,7 +173,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           std::vector<int> actual(buffer, buffer + messageData2.size());
           REQUIRE(actual == messageData2);
 
-          usleep(1000 * 1000);
+          SLEEP_MS(1000);
 
           otherWorld.destroy();
       });
@@ -272,7 +272,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
         }
 
-        usleep(500 * 1000);
+        SLEEP_MS(500);
         otherWorld.destroy();
     });
 
@@ -325,7 +325,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         }
 
         // Give the other host time to receive the broadcast
-        usleep(1000 * 1000);
+        SLEEP_MS(1000);
 
         otherWorld.destroy();
     });
@@ -398,7 +398,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            nPerRank);
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
 
-        usleep(500 * 1000);
+        SLEEP_MS(500);
 
         otherWorld.destroy();
     });
@@ -485,7 +485,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                               nPerRank);
         }
 
-        usleep(500 * 1000);
+        SLEEP_MS(500);
 
         otherWorld.destroy();
     });
@@ -555,7 +555,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                         MPI_INT,
                         messageData.size());
 
-        usleep(500 * 1000);
+        SLEEP_MS(500);
 
         otherWorld.destroy();
     });
@@ -614,7 +614,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
 
-        usleep(500 * 1000);
+        SLEEP_MS(500);
 
         otherWorld.destroy();
     });
@@ -692,7 +692,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                                 MPI_STATUS_IGNORE);
         }
 
-        usleep(500 * 1000);
+        SLEEP_MS(500);
         otherWorld.destroy();
     });
 

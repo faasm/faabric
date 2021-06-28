@@ -7,6 +7,7 @@
 #include <faabric/state/StateClient.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
+#include <faabric/util/macros.h>
 
 #include <wait.h>
 
@@ -27,7 +28,7 @@ class SimpleStateServerTestFixture
         conf.stateMode = "inmemory";
 
         server.start();
-        usleep(1000 * 100);
+        SLEEP_MS(100);
     }
 
     ~SimpleStateServerTestFixture() { server.stop(); }

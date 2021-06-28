@@ -454,7 +454,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     });
 
     // Give it time to have made the request
-    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
     // Check restore hasn't been called yet
     REQUIRE(restoreCount == 0);
@@ -521,7 +521,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // We have to manually add a wait here as the thread results won't actually
     // get logged on this host
-    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
     auto actual = faabric::scheduler::getThreadResults();
     REQUIRE(actual.size() == nThreads);
 
@@ -681,7 +681,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == 1);
 
-    usleep((conf.boundTimeout + 500) * 1000);
+    SLEEP_MS(conf.boundTimeout + 500);
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
 }
@@ -712,7 +712,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     executeWithTestExecutor(req, true);
 
     // Wait for executor to have finished - sometimes takes a while
-    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
     // Check thread results returned
     REQUIRE(faabric::scheduler::getThreadResults().size() == nThreads);
