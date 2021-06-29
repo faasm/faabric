@@ -74,9 +74,7 @@ class AsyncSendMessageEndpoint : public MessageEndpoint
 
     void sendHeader(int header);
 
-    void sendShutdown();
-
-    void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
+    void send(const uint8_t* data, size_t dataSize, bool more = false);
 
   private:
     zmq::socket_t pushSocket;
@@ -91,10 +89,10 @@ class SyncSendMessageEndpoint : public MessageEndpoint
 
     void sendHeader(int header);
 
-    void sendShutdown();
+    void sendRaw(const uint8_t* data, size_t dataSize);
 
-    Message sendAwaitResponse(const uint8_t* serialisedMsg,
-                              size_t msgSize,
+    Message sendAwaitResponse(const uint8_t* data,
+                              size_t dataSize,
                               bool more = false);
 
   private:

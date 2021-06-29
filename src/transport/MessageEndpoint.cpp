@@ -233,19 +233,12 @@ void AsyncSendMessageEndpoint::sendHeader(int header)
     doSend(pushSocket, &headerBytes, sizeof(headerBytes), true);
 }
 
-void AsyncSendMessageEndpoint::sendShutdown()
-{
-    int header = -1;
-    uint8_t headerBytes = static_cast<uint8_t>(header);
-    doSend(pushSocket, &headerBytes, sizeof(headerBytes), false);
-}
-
-void AsyncSendMessageEndpoint::send(uint8_t* serialisedMsg,
-                                    size_t msgSize,
+void AsyncSendMessageEndpoint::send(const uint8_t* data,
+                                    size_t dataSize,
                                     bool more)
 {
-    SPDLOG_TRACE("PUSH {}:{} ({} bytes, more {})", host, port, msgSize, more);
-    doSend(pushSocket, serialisedMsg, msgSize, more);
+    SPDLOG_TRACE("PUSH {}:{} ({} bytes, more {})", host, port, dataSize, more);
+    doSend(pushSocket, data, dataSize, more);
 }
 
 // ----------------------------------------------
@@ -266,20 +259,19 @@ void SyncSendMessageEndpoint::sendHeader(int header)
     doSend(reqSocket, &headerBytes, sizeof(headerBytes), true);
 }
 
-void SyncSendMessageEndpoint::sendShutdown()
+void SyncSendMessageEndpoint::sendRaw(const uint8_t* data, size_t dataSize)
 {
-    int header = -1;
-    uint8_t headerBytes = static_cast<uint8_t>(header);
-    doSend(reqSocket, &headerBytes, sizeof(headerBytes), false);
+    SPDLOG_TRACE("REQ {}:{} ({} bytes)", host, port, dataSize);
+    doSend(reqSocket, data, dataSize, false);
 }
 
-Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* serialisedMsg,
-                                                   size_t msgSize,
+Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
+                                                   size_t dataSize,
                                                    bool more)
 {
-    SPDLOG_TRACE("REQ {}:{} ({} bytes, more {})", host, port, msgSize, more);
+    SPDLOG_TRACE("REQ {}:{} ({} bytes, more {})", host, port, dataSize, more);
 
-    doSend(reqSocket, serialisedMsg, msgSize, more);
+    doSend(reqSocket, data, dataSize, more);
 
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", port);

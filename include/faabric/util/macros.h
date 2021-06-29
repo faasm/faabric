@@ -8,4 +8,3 @@
 #define SLEEP_MS(ms) usleep((ms)*1000)
 
 #define UNUSED(x) (void)(x)
-

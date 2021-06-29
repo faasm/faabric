@@ -72,12 +72,12 @@ class EchoServer final : public MessageEndpointServer
     }
 };
 
-class SlowServer final : public MessageEndpointServer
+class SleepServer final : public MessageEndpointServer
 {
   public:
     int delayMs = 1000;
 
-    SlowServer()
+    SleepServer()
       : MessageEndpointServer(testPortAsync, testPortSync)
     {}
 
@@ -85,18 +85,19 @@ class SlowServer final : public MessageEndpointServer
     void doAsyncRecv(faabric::transport::Message& header,
                      faabric::transport::Message& body) override
     {
-        throw std::runtime_error("SlowServer not expecting async recv");
+        throw std::runtime_error("Sleep server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
       faabric::transport::Message& header,
       faabric::transport::Message& body) override
     {
-        SPDLOG_DEBUG("Slow message server test recv");
+        int* sleepTimeMs = (int*)body.udata();
+        SPDLOG_DEBUG("Sleep server sleeping for {}ms", *sleepTimeMs);
+        SLEEP_MS(*sleepTimeMs);
 
-        SLEEP_MS(delayMs);
         auto response = std::make_unique<faabric::StatePart>();
-        response->set_data("From the slow server");
+        response->set_data("Response after sleep");
         return response;
     }
 };
@@ -188,39 +189,42 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
 TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 {
     int clientTimeout;
+    int serverSleep;
     bool expectFailure;
 
     SECTION("Long timeout no failure")
     {
         clientTimeout = 20000;
+        serverSleep = 100;
         expectFailure = false;
     }
 
     SECTION("Short timeout failure")
     {
         clientTimeout = 10;
+        serverSleep = 2000;
         expectFailure = true;
     }
 
     // Start the server
-    SlowServer server;
+    SleepServer server;
     server.start();
 
     // Set up the client
     MessageEndpointClient cli(
       thisHost, testPortAsync, testPortSync, clientTimeout);
-    std::vector<uint8_t> data = { 1, 1, 1 };
+
+    uint8_t* sleepBytes = BYTES(&serverSleep);
     faabric::StatePart response;
 
     if (expectFailure) {
         // Check for failure
-        REQUIRE_THROWS_AS(cli.syncSend(0, data.data(), data.size(), &response),
+        REQUIRE_THROWS_AS(cli.syncSend(0, sleepBytes, sizeof(int), &response),
                           MessageTimeoutException);
     } else {
-        cli.syncSend(0, data.data(), data.size(), &response);
-
+        cli.syncSend(0, sleepBytes, sizeof(int), &response);
         std::vector<uint8_t> expected = { 0, 1, 2, 3 };
-        REQUIRE(response.data() == "From the slow server");
+        REQUIRE(response.data() == "Response after sleep");
     }
 
     server.stop();

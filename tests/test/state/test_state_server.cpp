@@ -162,7 +162,6 @@ TEST_CASE_METHOD(SimpleStateServerTestFixture,
                  "Test local-only append",
                  "[state]")
 {
-    // Append a few chunks
     std::vector<uint8_t> chunkA = { 1, 1 };
     std::vector<uint8_t> chunkB = { 2, 2, 2 };
     std::vector<uint8_t> chunkC = { 3, 3 };

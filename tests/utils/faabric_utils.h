@@ -17,13 +17,17 @@ using namespace faabric;
 
 #define REQUIRE_RETRY(updater, check)                                          \
     {                                                                          \
-        { updater; };                                                           \
+        {                                                                      \
+            updater;                                                           \
+        };                                                                     \
         bool res = (check);                                                    \
         int count = 0;                                                         \
         while (!res && count < REQUIRE_RETRY_MAX) {                            \
             count++;                                                           \
-            SLEEP_MS(REQUIRE_RETRY_SLEEP_MS);                                                    \
-            { updater; };                                                       \
+            SLEEP_MS(REQUIRE_RETRY_SLEEP_MS);                                  \
+            {                                                                  \
+                updater;                                                       \
+            };                                                                 \
             res = (check);                                                     \
         }                                                                      \
         if (!res) {                                                            \

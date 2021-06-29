@@ -41,11 +41,12 @@ class MessageEndpointServer
 
   private:
     const int asyncPort;
-
     const int syncPort;
 
     std::thread asyncThread;
-
     std::thread syncThread;
+
+    AsyncSendMessageEndpoint asyncShutdownSender;
+    SyncSendMessageEndpoint syncShutdownSender;
 };
 }

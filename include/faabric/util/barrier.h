@@ -10,7 +10,7 @@ namespace faabric::util {
 class Barrier
 {
   public:
-    explicit Barrier(int count, int timeoutMsIn=DEFAULT_BARRIER_TIMEOUT_MS);
+    explicit Barrier(int count, int timeoutMsIn = DEFAULT_BARRIER_TIMEOUT_MS);
 
     void wait();
 

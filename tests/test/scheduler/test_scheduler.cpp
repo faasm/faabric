@@ -33,7 +33,7 @@ class SlowExecutor final : public Executor
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override
     {
-        SPDLOG_DEBUG("SlowExecutor executing task{}",
+        SPDLOG_DEBUG("Slow executor executing task{}",
                      req->mutable_messages()->at(msgIdx).id());
 
         SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
