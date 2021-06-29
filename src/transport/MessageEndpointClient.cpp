@@ -27,7 +27,7 @@ void MessageEndpointClient::asyncSend(int header,
 }
 
 void MessageEndpointClient::asyncSend(int header,
-                                      uint8_t* buffer,
+                                      const uint8_t* buffer,
                                       size_t bufferSize)
 {
     asyncEndpoint.sendHeader(header);

@@ -16,7 +16,7 @@ class MessageEndpointClient
 
     void asyncSend(int header, google::protobuf::Message* msg);
 
-    void asyncSend(int header, uint8_t* buffer, size_t bufferSize);
+    void asyncSend(int header, const uint8_t* buffer, size_t bufferSize);
 
     void syncSend(int header,
                   google::protobuf::Message* msg,

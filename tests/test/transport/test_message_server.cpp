@@ -112,8 +112,7 @@ TEST_CASE("Test send one message to server", "[transport]")
 
     // Send a message
     std::string body = "body";
-    uint8_t bodyMsg[body.size()];
-    memcpy(bodyMsg, body.c_str(), body.size());
+    const uint8_t* bodyMsg = BYTES_CONST(body.c_str());
 
     server.setAsyncLatch();
     cli.asyncSend(0, bodyMsg, body.size());
@@ -163,8 +162,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
                   fmt::format("Message {} from client {}", j, i);
 
                 // Send and get response
-                uint8_t body[clientMsg.size()];
-                memcpy(body, clientMsg.c_str(), clientMsg.size());
+                const uint8_t* body = BYTES_CONST(clientMsg.c_str());
                 faabric::StatePart response;
                 cli.syncSend(0, body, clientMsg.size(), &response);
 
@@ -220,7 +218,6 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
                           MessageTimeoutException);
     } else {
         cli.syncSend(0, sleepBytes, sizeof(int), &response);
-        std::vector<uint8_t> expected = { 0, 1, 2, 3 };
         REQUIRE(response.data() == "Response after sleep");
     }
 

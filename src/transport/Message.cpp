@@ -1,11 +1,15 @@
+#include <cstddef>
 #include <faabric/transport/Message.h>
+#include <faabric/util/macros.h>
 
 namespace faabric::transport {
 Message::Message(const zmq::message_t& msgIn)
-  : bytes(msgIn.size())
-  , _more(msgIn.more())
+  : _more(msgIn.more())
 {
-    std::memcpy(bytes.data(), msgIn.data(), msgIn.size());
+    if (msgIn.data() != nullptr) {
+        bytes = std::vector(BYTES_CONST(msgIn.data()),
+                            BYTES_CONST(msgIn.data()) + msgIn.size());
+    }
 }
 
 Message::Message(int sizeIn)

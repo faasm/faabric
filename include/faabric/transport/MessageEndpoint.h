@@ -119,7 +119,7 @@ class SyncRecvMessageEndpoint : public MessageEndpoint
 
     Message recv(int size = 0);
 
-    void sendResponse(uint8_t* data, int size);
+    void sendResponse(const uint8_t* data, int size);
 
   private:
     zmq::socket_t repSocket;

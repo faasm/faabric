@@ -310,7 +310,7 @@ Message SyncRecvMessageEndpoint::recv(int size)
     return doRecv(repSocket, size);
 }
 
-void SyncRecvMessageEndpoint::sendResponse(uint8_t* data, int size)
+void SyncRecvMessageEndpoint::sendResponse(const uint8_t* data, int size)
 {
     SPDLOG_TRACE("REP {} ({} bytes)", port, size);
     doSend(repSocket, data, size, false);

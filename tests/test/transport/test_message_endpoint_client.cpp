@@ -22,8 +22,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     // Send message
     std::string expectedMsg = "Hello world!";
-    uint8_t msg[expectedMsg.size()];
-    memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
+    const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
     src.send(msg, expectedMsg.size());
 
     // Receive message
@@ -56,9 +55,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         assert(actualMsg == expectedMsg);
     });
 
-    uint8_t msg[expectedMsg.size()];
-    memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-
+    const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
     src.send(msg, expectedMsg.size());
     latch.wait();
 
@@ -99,8 +96,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
     REQUIRE(actualMsg == expectedMsg);
 
     // Send response
-    uint8_t msg[expectedResponse.size()];
-    memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
+    const uint8_t* msg = BYTES_CONST(expectedResponse.c_str());
     dst.sendResponse(msg, expectedResponse.size());
 
     // Wait for sender thread
@@ -121,8 +117,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
         for (int i = 0; i < numMessages; i++) {
             std::string msgData = baseMsg + std::to_string(i);
-            uint8_t msg[msgData.size()];
-            memcpy(msg, msgData.c_str(), msgData.size());
+            const uint8_t* msg = BYTES_CONST(msgData.c_str());
             src.send(msg, msgData.size());
         }
     });
@@ -155,14 +150,13 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     int numSenders = 10;
     std::string expectedMsg = "Hello from client";
     std::vector<std::thread> senderThreads;
+    const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
 
     for (int j = 0; j < numSenders; j++) {
-        senderThreads.emplace_back(std::thread([numMessages, expectedMsg] {
+        senderThreads.emplace_back(std::thread([msg, numMessages, expectedMsg] {
             // Open the source endpoint client
             AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
             for (int i = 0; i < numMessages; i++) {
-                uint8_t msg[expectedMsg.size()];
-                memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
                 src.send(msg, expectedMsg.size());
             }
         }));
