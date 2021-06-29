@@ -3,7 +3,6 @@
 #include <faabric/mpi/mpi.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/util/barrier.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
 #include <faabric_utils.h>
@@ -171,7 +170,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           std::vector<int> actual(buffer, buffer + messageData2.size());
           REQUIRE(actual == messageData2);
 
-          testBarrier.wait();
+          testLatch.wait();
 
           otherWorld.destroy();
       });
@@ -192,7 +191,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
     REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
 
-    testBarrier.wait();
+    testLatch.wait();
 
     // Clean up
     if (otherWorldThread.joinable()) {
@@ -272,7 +271,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
         }
 
-        testBarrier.wait();
+        testLatch.wait();
         otherWorld.destroy();
     });
 
@@ -288,7 +287,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     }
 
     // Clean up
-    testBarrier.wait();
+    testLatch.wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -326,7 +325,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         }
 
         // Give the other host time to receive the broadcast
-        testBarrier.wait();
+        testLatch.wait();
         otherWorld.destroy();
     });
 
@@ -339,7 +338,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     }
 
     // Clean up
-    testBarrier.wait();
+    testLatch.wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -399,7 +398,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            nPerRank);
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
 
-        testBarrier.wait();
+        testLatch.wait();
         otherWorld.destroy();
     });
 
@@ -436,7 +435,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
 
     // Clean up
-    testBarrier.wait();
+    testLatch.wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -486,7 +485,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                               nPerRank);
         }
 
-        testBarrier.wait();
+        testLatch.wait();
         otherWorld.destroy();
     });
 
@@ -518,7 +517,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     REQUIRE(actual == expected);
 
     // Clean up
-    testBarrier.wait();
+    testLatch.wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -556,7 +555,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                         MPI_INT,
                         messageData.size());
 
-        testBarrier.wait();
+        testLatch.wait();
         otherWorld.destroy();
     });
 
@@ -585,7 +584,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(asyncMessage == messageData);
 
     // Clean up
-    testBarrier.wait();
+    testLatch.wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -615,7 +614,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
 
-        testBarrier.wait();
+        testLatch.wait();
         otherWorld.destroy();
     });
 
@@ -649,7 +648,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(recv3 == 2);
 
     // Clean up
-    testBarrier.wait();
+    testLatch.wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -693,7 +692,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                                 MPI_STATUS_IGNORE);
         }
 
-        testBarrier.wait();
+        testLatch.wait();
         otherWorld.destroy();
     });
 
@@ -717,7 +716,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     }
 
     // Clean up
-    testBarrier.wait();
+    testLatch.wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }

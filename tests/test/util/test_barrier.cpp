@@ -2,8 +2,8 @@
 
 #include "faabric_utils.h"
 
-#include <faabric/util/barrier.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/latch.h>
 #include <faabric/util/macros.h>
 
 #include <thread>
@@ -12,22 +12,14 @@
 using namespace faabric::util;
 
 namespace tests {
-TEST_CASE("Test barrier operation", "[util]")
+TEST_CASE("Test latch operation", "[util]")
 {
-    Barrier b(3);
+    Latch l(3);
 
-    REQUIRE(b.getSlotCount() == 3);
-    REQUIRE(b.getUseCount() == 0);
+    auto t1 = std::thread([&l] { l.wait(); });
+    auto t2 = std::thread([&l] { l.wait(); });
 
-    auto t1 = std::thread([&b] { b.wait(); });
-
-    auto t2 = std::thread([&b] { b.wait(); });
-
-    // Sleep for a bit while the threads spawn
-    REQUIRE_RETRY({}, b.getSlotCount() == 1);
-
-    // Join with master to go through barrier
-    b.wait();
+    l.wait();
 
     if (t1.joinable()) {
         t1.join();
@@ -37,15 +29,13 @@ TEST_CASE("Test barrier operation", "[util]")
         t2.join();
     }
 
-    REQUIRE(b.getSlotCount() == 3);
-    REQUIRE(b.getUseCount() == 1);
+    REQUIRE_THROWS(l.wait());
 }
 
-TEST_CASE("Test barrier timeout", "[util]")
+TEST_CASE("Test latch timeout", "[util]")
 {
     int timeoutMs = 500;
-    Barrier b(2, timeoutMs);
-
-    REQUIRE_THROWS(b.wait());
+    Latch l(2, timeoutMs);
+    REQUIRE_THROWS(l.wait());
 }
 }

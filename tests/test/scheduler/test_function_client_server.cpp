@@ -220,16 +220,21 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     *reqA.mutable_function() = msg;
 
     // Check that nothing's happened
+    server.setAsyncLatch();
     cli.unregister(reqA);
+    server.awaitAsyncLatch();
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Make the request to unregister the actual host
     faabric::UnregisterRequest reqB;
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
-    cli.unregister(reqB);
 
-    REQUIRE_RETRY({}, sch.getFunctionRegisteredHostCount(msg) == 0);
+    server.setAsyncLatch();
+    cli.unregister(reqB);
+    server.awaitAsyncLatch();
+
+    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();

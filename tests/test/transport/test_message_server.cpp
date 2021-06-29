@@ -13,20 +13,17 @@
 
 using namespace faabric::transport;
 
-static const std::string thisHost = "127.0.0.1";
-static const int testPortAsync = 9998;
-static const int testPortSync = 9999;
+#define TEST_PORT_ASYNC 9998
+#define TEST_PORT_SYNC 9999
 
 class DummyServer final : public MessageEndpointServer
 {
   public:
     DummyServer()
-      : MessageEndpointServer(testPortAsync, testPortSync)
-      , messageCount(0)
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC)
     {}
 
-    // Variable to keep track of the received messages
-    int messageCount;
+    std::atomic<int> messageCount = 0;
 
   private:
     void doAsyncRecv(faabric::transport::Message& header,
@@ -49,14 +46,14 @@ class EchoServer final : public MessageEndpointServer
 {
   public:
     EchoServer()
-      : MessageEndpointServer(testPortAsync, testPortSync)
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC)
     {}
 
   protected:
     void doAsyncRecv(faabric::transport::Message& header,
                      faabric::transport::Message& body) override
     {
-        throw std::runtime_error("EchoServer not expecting async recv");
+        throw std::runtime_error("Echo server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
@@ -78,7 +75,7 @@ class SleepServer final : public MessageEndpointServer
     int delayMs = 1000;
 
     SleepServer()
-      : MessageEndpointServer(testPortAsync, testPortSync)
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC)
     {}
 
   protected:
@@ -111,15 +108,18 @@ TEST_CASE("Test send one message to server", "[transport]")
 
     REQUIRE(server.messageCount == 0);
 
-    MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
+    MessageEndpointClient cli(LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
 
     // Send a message
     std::string body = "body";
     uint8_t bodyMsg[body.size()];
     memcpy(bodyMsg, body.c_str(), body.size());
-    cli.asyncSend(0, bodyMsg, body.size());
 
-    REQUIRE_RETRY({}, server.messageCount == 1);
+    server.setAsyncLatch();
+    cli.asyncSend(0, bodyMsg, body.size());
+    server.awaitAsyncLatch();
+
+    REQUIRE(server.messageCount == 1);
 
     server.stop();
 }
@@ -132,7 +132,7 @@ TEST_CASE("Test send response to client", "[transport]")
     std::string expectedMsg = "Response from server";
 
     // Open the source endpoint client
-    MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
+    MessageEndpointClient cli(LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
 
     // Send and await the response
     faabric::StatePart response;
@@ -145,43 +145,40 @@ TEST_CASE("Test send response to client", "[transport]")
 
 TEST_CASE("Test multiple clients talking to one server", "[transport]")
 {
-    // Start the server in the background
-    DummyServer server;
+    EchoServer server;
     server.start();
 
     std::vector<std::thread> clientThreads;
     int numClients = 10;
     int numMessages = 1000;
 
-    // Set up a barrier to wait on all the clients having finished
-    faabric::util::Barrier barrier(numClients + 1);
-
     for (int i = 0; i < numClients; i++) {
-        clientThreads.emplace_back(std::thread([&barrier, numMessages] {
+        clientThreads.emplace_back(std::thread([i, numMessages] {
             // Prepare client
-            MessageEndpointClient cli(thisHost, testPortAsync, testPortSync);
+            MessageEndpointClient cli(
+              LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
 
-            std::string clientMsg = "Message from threaded client";
             for (int j = 0; j < numMessages; j++) {
-                // Send body
+                std::string clientMsg =
+                  fmt::format("Message {} from client {}", j, i);
+
+                // Send and get response
                 uint8_t body[clientMsg.size()];
                 memcpy(body, clientMsg.c_str(), clientMsg.size());
-                cli.asyncSend(0, body, clientMsg.size());
-            }
+                faabric::StatePart response;
+                cli.syncSend(0, body, clientMsg.size(), &response);
 
-            barrier.wait();
+                std::string actual = response.data();
+                assert(actual == clientMsg);
+            }
         }));
     }
-
-    barrier.wait();
 
     for (auto& t : clientThreads) {
         if (t.joinable()) {
             t.join();
         }
     }
-
-    REQUIRE_RETRY({}, server.messageCount == numMessages * numClients);
 
     server.stop();
 }
@@ -212,7 +209,7 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 
     // Set up the client
     MessageEndpointClient cli(
-      thisHost, testPortAsync, testPortSync, clientTimeout);
+      LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC, clientTimeout);
 
     uint8_t* sleepBytes = BYTES(&serverSleep);
     faabric::StatePart response;

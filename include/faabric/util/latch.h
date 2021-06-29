@@ -7,21 +7,16 @@ namespace faabric::util {
 
 #define DEFAULT_BARRIER_TIMEOUT_MS 10000
 
-class Barrier
+class Latch
 {
   public:
-    explicit Barrier(int count, int timeoutMsIn = DEFAULT_BARRIER_TIMEOUT_MS);
+    explicit Latch(int countIn, int timeoutMsIn = DEFAULT_BARRIER_TIMEOUT_MS);
 
     void wait();
-
-    int getSlotCount();
-
-    int getUseCount();
-
   private:
-    int threadCount;
-    int slotCount;
-    int uses;
+    int count;
+    int waiters = 0;
+
     int timeoutMs;
 
     std::mutex mx;

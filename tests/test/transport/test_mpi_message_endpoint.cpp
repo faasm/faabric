@@ -22,7 +22,6 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     sendEndpoint.sendMpiMessage(expected);
     std::shared_ptr<faabric::MPIMessage> actual = recvEndpoint.recvMpiMessage();
 
-    // Checks
     REQUIRE(expected->id() == actual->id());
 }
 }

@@ -8,7 +8,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
-#include <faabric/util/barrier.h>
+#include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
@@ -176,7 +176,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
   public:
     RemoteMpiTestFixture()
       : thisHost(faabric::util::getSystemConfig().endpointHost)
-      , testBarrier(2)
+      , testLatch(2)
     {
         otherWorld.overrideHost(otherHost);
 
@@ -217,7 +217,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     std::string thisHost;
     std::string otherHost = LOCALHOST;
 
-    faabric::util::Barrier testBarrier;
+    faabric::util::Latch testLatch;
 
     faabric::scheduler::MpiWorld otherWorld;
 };
