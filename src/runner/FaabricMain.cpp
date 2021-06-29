@@ -1,7 +1,6 @@
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
-#include <faabric/transport/context.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
@@ -21,8 +20,6 @@ FaabricMain::FaabricMain(
 
 void FaabricMain::startBackground()
 {
-    faabric::transport::initGlobalMessageContext();
-
     // Start basics
     startRunner();
 
@@ -93,8 +90,6 @@ void FaabricMain::shutdown()
 
     SPDLOG_INFO("Waiting for the snapshot server to finish");
     snapshotServer.stop();
-
-    faabric::transport::closeGlobalMessageContext();
 
     SPDLOG_INFO("Faabric pool successfully shut down");
 }

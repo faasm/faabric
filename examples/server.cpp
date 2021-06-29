@@ -1,6 +1,7 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/transport/context.h>
 #include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
@@ -38,6 +39,7 @@ class ExampleExecutorFactory : public ExecutorFactory
 int main()
 {
     faabric::util::initLogging();
+    faabric::transport::initGlobalMessageContext();
 
     // Start the worker pool
     SPDLOG_INFO("Starting executor pool in the background");
@@ -53,6 +55,7 @@ int main()
 
     SPDLOG_INFO("Shutting down endpoint");
     m.shutdown();
+    faabric::transport::closeGlobalMessageContext();
 
     return EXIT_SUCCESS;
 }

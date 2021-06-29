@@ -9,6 +9,7 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/transport/context.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
@@ -19,6 +20,7 @@ FAABRIC_CATCH_LOGGER
 int main(int argc, char* argv[])
 {
     faabric::util::initLogging();
+    faabric::transport::initGlobalMessageContext();
 
     // Set up the distributed tests
     tests::initDistTests();
@@ -40,6 +42,8 @@ int main(int argc, char* argv[])
     // Shut down
     SPDLOG_INFO("Shutting down");
     m.shutdown();
+
+    faabric::transport::closeGlobalMessageContext();
 
     return result;
 }
