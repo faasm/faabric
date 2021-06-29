@@ -25,5 +25,5 @@ set(LIB_FILES
 
 faabric_lib(transport "${LIB_FILES}")
 
-target_link_libraries(transport proto zeromq_imported)
+target_link_libraries(transport util proto zeromq_imported)
 
