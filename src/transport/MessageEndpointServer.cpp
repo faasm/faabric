@@ -15,8 +15,9 @@ MessageEndpointServer::MessageEndpointServer(int asyncPortIn, int syncPortIn)
 
 void MessageEndpointServer::start()
 {
-    // Callers will only pass this barrier once the server sockets have been
-    // opened (hence we don't need to add arbitrary sleeps all over the place).
+    // This barrier means that callers can guarantee that when this function
+    // completes, both sockets will have been opened (and hence the server is
+    // ready to use).
     faabric::util::Barrier startBarrier(3);
 
     asyncThread = std::thread([this, &startBarrier] {

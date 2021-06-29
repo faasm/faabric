@@ -40,4 +40,12 @@ TEST_CASE("Test barrier operation", "[util]")
     REQUIRE(b.getSlotCount() == 3);
     REQUIRE(b.getUseCount() == 1);
 }
+
+TEST_CASE("Test barrier timeout", "[util]")
+{
+    int timeoutMs = 500;
+    Barrier b(2, timeoutMs);
+
+    REQUIRE_THROWS(b.wait());
+}
 }

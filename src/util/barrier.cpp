@@ -2,10 +2,11 @@
 #include <faabric/util/locks.h>
 
 namespace faabric::util {
-Barrier::Barrier(int count)
+Barrier::Barrier(int count, int timeoutMsIn)
   : threadCount(count)
   , slotCount(count)
   , uses(0)
+  , timeoutMs(timeoutMsIn)
 {}
 
 void Barrier::wait()
@@ -24,7 +25,13 @@ void Barrier::wait()
             slotCount = threadCount;
             cv.notify_all();
         } else {
-            cv.wait(lock, [&] { return usesCopy < uses; });
+            auto timePoint = std::chrono::system_clock::now() +
+                             std::chrono::milliseconds(timeoutMs);
+            bool waitRes =
+              cv.wait_until(lock, timePoint, [&] { return usesCopy < uses; });
+            if (!waitRes) {
+                throw std::runtime_error("Barrier timed out");
+            }
         }
     }
 }
