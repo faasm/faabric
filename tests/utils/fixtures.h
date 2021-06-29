@@ -176,7 +176,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
   public:
     RemoteMpiTestFixture()
       : thisHost(faabric::util::getSystemConfig().endpointHost)
-      , testLatch(2)
+      , testLatch(faabric::util::Latch::create(2))
     {
         otherWorld.overrideHost(otherHost);
 
@@ -217,7 +217,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     std::string thisHost;
     std::string otherHost = LOCALHOST;
 
-    faabric::util::Latch testLatch;
+    std::shared_ptr<faabric::util::Latch> testLatch;
 
     faabric::scheduler::MpiWorld otherWorld;
 };

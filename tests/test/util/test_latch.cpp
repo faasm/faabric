@@ -14,12 +14,12 @@ using namespace faabric::util;
 namespace tests {
 TEST_CASE("Test latch operation", "[util]")
 {
-    Latch l(3);
+    auto l = Latch::create(3);
 
-    auto t1 = std::thread([&l] { l.wait(); });
-    auto t2 = std::thread([&l] { l.wait(); });
+    auto t1 = std::thread([l] { l->wait(); });
+    auto t2 = std::thread([l] { l->wait(); });
 
-    l.wait();
+    l->wait();
 
     if (t1.joinable()) {
         t1.join();
@@ -29,13 +29,13 @@ TEST_CASE("Test latch operation", "[util]")
         t2.join();
     }
 
-    REQUIRE_THROWS(l.wait());
+    REQUIRE_THROWS(l->wait());
 }
 
 TEST_CASE("Test latch timeout", "[util]")
 {
     int timeoutMs = 500;
-    Latch l(2, timeoutMs);
-    REQUIRE_THROWS(l.wait());
+    auto l = Latch::create(2, timeoutMs);
+    REQUIRE_THROWS(l->wait());
 }
 }

@@ -43,11 +43,11 @@ void MessageEndpointServer::start()
     // This latch means that callers can guarantee that when this function
     // completes, both sockets will have been opened (and hence the server is
     // ready to use).
-    faabric::util::Latch startLatch(3);
+    auto startLatch = faabric::util::Latch::create(3);
 
-    asyncThread = std::thread([this, &startLatch] {
+    asyncThread = std::thread([this, startLatch] {
         AsyncRecvMessageEndpoint endpoint(asyncPort);
-        startLatch.wait();
+        startLatch->wait();
 
         while (true) {
             // Receive header and body
@@ -62,17 +62,16 @@ void MessageEndpointServer::start()
 
             // Wait on the async latch if necessary
             if (asyncLatch != nullptr) {
-                SPDLOG_TRACE(
-                  "Server thread waiting on async latch for port {}",
-                  asyncPort);
+                SPDLOG_TRACE("Server thread waiting on async latch for port {}",
+                             asyncPort);
                 asyncLatch->wait();
             }
         }
     });
 
-    syncThread = std::thread([this, &startLatch] {
+    syncThread = std::thread([this, startLatch] {
         SyncRecvMessageEndpoint endpoint(syncPort);
-        startLatch.wait();
+        startLatch->wait();
 
         while (true) {
             // Receive header and body
@@ -96,7 +95,7 @@ void MessageEndpointServer::start()
         }
     });
 
-    startLatch.wait();
+    startLatch->wait();
 }
 
 void MessageEndpointServer::stop()
@@ -121,7 +120,7 @@ void MessageEndpointServer::stop()
 
 void MessageEndpointServer::setAsyncLatch()
 {
-    asyncLatch = std::make_unique<faabric::util::Latch>(2);
+    asyncLatch = faabric::util::Latch::create(2);
 }
 
 void MessageEndpointServer::awaitAsyncLatch()

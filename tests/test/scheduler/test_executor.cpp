@@ -439,7 +439,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
     // Background thread to execute main function and await results
-    faabric::util::Latch latch(2);
+    auto latch = faabric::util::Latch::create(2);
     std::thread t([&latch] {
         int nThreads = 8;
         std::shared_ptr<BatchExecuteRequest> req =
@@ -450,7 +450,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         auto& sch = faabric::scheduler::getScheduler();
         sch.callFunctions(req, false);
 
-        latch.wait();
+        latch->wait();
         faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
         assert(res.returnvalue() == 0);
     });
@@ -493,7 +493,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Rejoin the other thread
-    latch.wait();
+    latch->wait();
     if (t.joinable()) {
         t.join();
     }

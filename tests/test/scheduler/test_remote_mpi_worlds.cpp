@@ -170,7 +170,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           std::vector<int> actual(buffer, buffer + messageData2.size());
           REQUIRE(actual == messageData2);
 
-          testLatch.wait();
+          testLatch->wait();
 
           otherWorld.destroy();
       });
@@ -191,7 +191,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(status.MPI_ERROR == MPI_SUCCESS);
     REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
 
-    testLatch.wait();
+    testLatch->wait();
 
     // Clean up
     if (otherWorldThread.joinable()) {
@@ -271,7 +271,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(rankB, rankA, BYTES(&i), MPI_INT, 1);
         }
 
-        testLatch.wait();
+        testLatch->wait();
         otherWorld.destroy();
     });
 
@@ -287,7 +287,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     }
 
     // Clean up
-    testLatch.wait();
+    testLatch->wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -325,7 +325,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         }
 
         // Give the other host time to receive the broadcast
-        testLatch.wait();
+        testLatch->wait();
         otherWorld.destroy();
     });
 
@@ -338,7 +338,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     }
 
     // Clean up
-    testLatch.wait();
+    testLatch->wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -398,7 +398,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            nPerRank);
         assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
 
-        testLatch.wait();
+        testLatch->wait();
         otherWorld.destroy();
     });
 
@@ -435,7 +435,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
 
     // Clean up
-    testLatch.wait();
+    testLatch->wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -485,7 +485,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                               nPerRank);
         }
 
-        testLatch.wait();
+        testLatch->wait();
         otherWorld.destroy();
     });
 
@@ -517,7 +517,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     REQUIRE(actual == expected);
 
     // Clean up
-    testLatch.wait();
+    testLatch->wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -555,7 +555,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                         MPI_INT,
                         messageData.size());
 
-        testLatch.wait();
+        testLatch->wait();
         otherWorld.destroy();
     });
 
@@ -584,7 +584,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(asyncMessage == messageData);
 
     // Clean up
-    testLatch.wait();
+    testLatch->wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -614,7 +614,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
             otherWorld.send(sendRank, recvRank, BYTES(&i), MPI_INT, 1);
         }
 
-        testLatch.wait();
+        testLatch->wait();
         otherWorld.destroy();
     });
 
@@ -648,7 +648,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(recv3 == 2);
 
     // Clean up
-    testLatch.wait();
+    testLatch->wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }
@@ -692,7 +692,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                                 MPI_STATUS_IGNORE);
         }
 
-        testLatch.wait();
+        testLatch->wait();
         otherWorld.destroy();
     });
 
@@ -716,7 +716,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     }
 
     // Clean up
-    testLatch.wait();
+    testLatch->wait();
     if (otherWorldThread.joinable()) {
         otherWorldThread.join();
     }

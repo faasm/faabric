@@ -40,11 +40,11 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
 
-    faabric::util::Latch latch(2);
+    auto latch = faabric::util::Latch::create(2);
 
     std::thread recvThread([&latch, expectedMsg] {
         // Make sure this only runs once the send has been done
-        latch.wait();
+        latch->wait();
 
         // Receive message
         AsyncRecvMessageEndpoint dst(TEST_PORT);
@@ -57,7 +57,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
     src.send(msg, expectedMsg.size());
-    latch.wait();
+    latch->wait();
 
     if (recvThread.joinable()) {
         recvThread.join();

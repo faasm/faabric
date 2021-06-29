@@ -1,7 +1,14 @@
 #include <faabric/util/latch.h>
 #include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::util {
+
+std::shared_ptr<Latch> Latch::create(int count, int timeoutMs)
+{
+    return std::make_shared<Latch>(count, timeoutMs);
+}
+
 Latch::Latch(int countIn, int timeoutMsIn)
   : count(countIn)
   , timeoutMs(timeoutMsIn)
@@ -24,7 +31,7 @@ void Latch::wait()
                          std::chrono::milliseconds(timeoutMs);
 
         if (!cv.wait_until(lock, timePoint, [&] { return waiters >= count; })) {
-            throw std::runtime_error("latch timed out");
+            throw std::runtime_error("Latch timed out");
         }
     }
 }

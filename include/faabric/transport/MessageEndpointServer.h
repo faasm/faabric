@@ -44,6 +44,6 @@ class MessageEndpointServer
     AsyncSendMessageEndpoint asyncShutdownSender;
     SyncSendMessageEndpoint syncShutdownSender;
 
-    std::unique_ptr<faabric::util::Latch> asyncLatch;
+    std::shared_ptr<faabric::util::Latch> asyncLatch;
 };
 }

@@ -71,7 +71,7 @@ void clearMockSnapshotRequests()
 
 #define SEND_FB_MSG(T, mb)                                                     \
     {                                                                          \
-        const uint8_t* buffer = mb.GetBufferPointer();                               \
+        const uint8_t* buffer = mb.GetBufferPointer();                         \
         int size = mb.GetSize();                                               \
         faabric::EmptyResponse response;                                       \
         syncSend(T, buffer, size, &response);                                  \
@@ -79,7 +79,7 @@ void clearMockSnapshotRequests()
 
 #define SEND_FB_MSG_ASYNC(T, mb)                                               \
     {                                                                          \
-        const uint8_t* buffer = mb.GetBufferPointer();                               \
+        const uint8_t* buffer = mb.GetBufferPointer();                         \
         int size = mb.GetSize();                                               \
         asyncSend(T, buffer, size);                                            \
     }
