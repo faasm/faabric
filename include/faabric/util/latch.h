@@ -5,7 +5,7 @@
 
 namespace faabric::util {
 
-#define DEFAULT_BARRIER_TIMEOUT_MS 10000
+#define DEFAULT_LATCH_TIMEOUT_MS 10000
 
 class Latch
 {
@@ -15,7 +15,7 @@ class Latch
     // to its destruction.
     static std::shared_ptr<Latch> create(
       int count,
-      int timeoutMs = DEFAULT_BARRIER_TIMEOUT_MS);
+      int timeoutMs = DEFAULT_LATCH_TIMEOUT_MS);
 
     void wait();
 

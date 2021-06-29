@@ -455,7 +455,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         assert(res.returnvalue() == 0);
     });
 
-    // Wait until the function has executed and submitted another request
+    // Wait until the function has executed and submit another request
     auto reqs = faabric::scheduler::getBatchRequests();
     REQUIRE_RETRY(reqs = faabric::scheduler::getBatchRequests(),
                   reqs.size() == 1);

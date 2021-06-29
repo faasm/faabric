@@ -23,11 +23,9 @@
 
 namespace faabric::transport {
 
-/*
- * Note, that sockets must be open-ed and close-ed from the _same_ thread. For a
- * proto://host:pair triple, one socket may bind, and all the rest must connect.
- * Order does not matter.
- */
+// Note: sockets must be open-ed and close-ed from the _same_ thread. In a given
+// communication group, one socket may bind, and all the rest must connect.
+// Order does not matter.
 class MessageEndpoint
 {
   public:
