@@ -11,26 +11,6 @@ namespace faabric::transport {
 
 static const std::vector<uint8_t> shutdownHeader = { 0, 0, 1, 1 };
 
-#define SHUTDOWN_CHECK(header, label)                                          \
-    {                                                                          \
-        if (header.size() == shutdownHeader.size()) {                          \
-            if (header.dataCopy() == shutdownHeader) {                         \
-                SPDLOG_TRACE("Server {} endpoint received shutdown message",   \
-                             label);                                           \
-                break;                                                         \
-            }                                                                  \
-        }                                                                      \
-    }
-
-#define RECEIVE_BODY(header, endpoint)                                         \
-    if (!header.more()) {                                                      \
-        throw std::runtime_error("Header sent without SNDMORE flag");          \
-    }                                                                          \
-    Message body = endpoint.recv();                                            \
-    if (body.more()) {                                                         \
-        throw std::runtime_error("Body sent with SNDMORE flag");               \
-    }
-
 MessageEndpointServerThread::MessageEndpointServerThread(
   MessageEndpointServer* serverIn,
   bool asyncIn)
@@ -66,7 +46,7 @@ void MessageEndpointServerThread::start(
                 if (header.size() == shutdownHeader.size()) {
                     if (header.dataCopy() == shutdownHeader) {
                         SPDLOG_TRACE(
-                          "Server {} endpoint received shutdown message");
+                          "Server on {} received shutdown message", port);
                         break;
                     }
                 }

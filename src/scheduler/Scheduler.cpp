@@ -63,6 +63,8 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::reset()
 {
+    SPDLOG_DEBUG("Resetting scheduler");
+
     // Shut down all Executors
     for (auto& p : executors) {
         for (auto& e : p.second) {
