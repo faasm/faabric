@@ -31,9 +31,115 @@ static const std::vector<uint8_t> shutdownHeader = { 0, 0, 1, 1 };
         throw std::runtime_error("Body sent with SNDMORE flag");               \
     }
 
+MessageEndpointServerThread::MessageEndpointServerThread(
+  MessageEndpointServer* serverIn,
+  bool asyncIn)
+  : server(serverIn)
+  , async(asyncIn)
+{}
+
+void MessageEndpointServerThread::start(
+  std::shared_ptr<faabric::util::Latch> latch)
+{
+    backgroundThread = std::thread([this, latch] {
+        std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
+        int port = -1;
+
+        if (async) {
+            port = server->asyncPort;
+            endpoint = std::make_unique<AsyncRecvMessageEndpoint>(port);
+        } else {
+            port = server->syncPort;
+            endpoint = std::make_unique<SyncRecvMessageEndpoint>(port);
+        }
+
+        latch->wait();
+
+        while (true) {
+            bool headerReceived = false;
+            bool bodyReceived = false;
+            try {
+                // Receive header and body
+                Message header = endpoint->recv();
+                headerReceived = true;
+
+                if (header.size() == shutdownHeader.size()) {
+                    if (header.dataCopy() == shutdownHeader) {
+                        SPDLOG_TRACE(
+                          "Server {} endpoint received shutdown message");
+                        break;
+                    }
+                }
+
+                if (!header.more()) {
+                    throw std::runtime_error(
+                      "Header sent without SNDMORE flag");
+                }
+
+                Message body = endpoint->recv();
+                if (body.more()) {
+                    throw std::runtime_error("Body sent with SNDMORE flag");
+                }
+                bodyReceived = true;
+
+                if (async) {
+                    // Server-specific async handling
+                    server->doAsyncRecv(header, body);
+                } else {
+                    // Server-specific sync handling
+                    std::unique_ptr<google::protobuf::Message> resp =
+                      server->doSyncRecv(header, body);
+                    size_t respSize = resp->ByteSizeLong();
+
+                    uint8_t buffer[respSize];
+                    if (!resp->SerializeToArray(buffer, respSize)) {
+                        throw std::runtime_error("Error serialising message");
+                    }
+
+                    // Return the response
+                    static_cast<SyncRecvMessageEndpoint*>(endpoint.get())
+                      ->sendResponse(buffer, respSize);
+                }
+            } catch (MessageTimeoutException& ex) {
+                // If we don't get a header in the timeout, we're ok to just
+                // loop round and try again
+                if (!headerReceived) {
+                    SPDLOG_TRACE("Server on port {}, looping after no message",
+                                 port);
+                    continue;
+                }
+
+                if (headerReceived && !bodyReceived) {
+                    SPDLOG_ERROR(
+                      "Server on port {}, got header, timed out on body", port);
+                    throw;
+                }
+            }
+
+            // Wait on the async latch if necessary
+            if (server->asyncLatch != nullptr) {
+                SPDLOG_TRACE("Server thread waiting on async latch");
+                server->asyncLatch->wait();
+            }
+
+            headerReceived = false;
+            bodyReceived = false;
+        }
+    });
+}
+
+void MessageEndpointServerThread::join()
+{
+    if (backgroundThread.joinable()) {
+        backgroundThread.join();
+    }
+}
+
 MessageEndpointServer::MessageEndpointServer(int asyncPortIn, int syncPortIn)
   : asyncPort(asyncPortIn)
   , syncPort(syncPortIn)
+  , asyncThread(this, true)
+  , syncThread(this, false)
   , asyncShutdownSender(LOCALHOST, asyncPort)
   , syncShutdownSender(LOCALHOST, syncPort)
 {}
@@ -45,55 +151,8 @@ void MessageEndpointServer::start()
     // ready to use).
     auto startLatch = faabric::util::Latch::create(3);
 
-    asyncThread = std::thread([this, startLatch] {
-        AsyncRecvMessageEndpoint endpoint(asyncPort);
-        startLatch->wait();
-
-        while (true) {
-            // Receive header and body
-            Message header = endpoint.recv();
-
-            SHUTDOWN_CHECK(header, "async")
-
-            RECEIVE_BODY(header, endpoint)
-
-            // Server-specific message handling
-            doAsyncRecv(header, body);
-
-            // Wait on the async latch if necessary
-            if (asyncLatch != nullptr) {
-                SPDLOG_TRACE("Server thread waiting on async latch for port {}",
-                             asyncPort);
-                asyncLatch->wait();
-            }
-        }
-    });
-
-    syncThread = std::thread([this, startLatch] {
-        SyncRecvMessageEndpoint endpoint(syncPort);
-        startLatch->wait();
-
-        while (true) {
-            // Receive header and body
-            Message header = endpoint.recv();
-
-            SHUTDOWN_CHECK(header, "sync")
-
-            RECEIVE_BODY(header, endpoint)
-
-            // Server-specific message handling
-            std::unique_ptr<google::protobuf::Message> resp =
-              doSyncRecv(header, body);
-            size_t respSize = resp->ByteSizeLong();
-
-            uint8_t buffer[respSize];
-            if (!resp->SerializeToArray(buffer, respSize)) {
-                throw std::runtime_error("Error serialising message");
-            }
-
-            endpoint.sendResponse(buffer, respSize);
-        }
-    });
+    asyncThread.start(startLatch);
+    syncThread.start(startLatch);
 
     startLatch->wait();
 }
@@ -109,13 +168,8 @@ void MessageEndpointServer::stop()
     syncShutdownSender.sendRaw(shutdownHeader.data(), shutdownHeader.size());
 
     // Join the threads
-    if (asyncThread.joinable()) {
-        asyncThread.join();
-    }
-
-    if (syncThread.joinable()) {
-        syncThread.join();
-    }
+    asyncThread.join();
+    syncThread.join();
 }
 
 void MessageEndpointServer::setAsyncLatch()

@@ -63,7 +63,7 @@ class MessageEndpoint
     Message recvNoBuffer(zmq::socket_t& socket);
 };
 
-class AsyncSendMessageEndpoint : public MessageEndpoint
+class AsyncSendMessageEndpoint final : public MessageEndpoint
 {
   public:
     AsyncSendMessageEndpoint(const std::string& hostIn,
@@ -78,7 +78,7 @@ class AsyncSendMessageEndpoint : public MessageEndpoint
     zmq::socket_t pushSocket;
 };
 
-class SyncSendMessageEndpoint : public MessageEndpoint
+class SyncSendMessageEndpoint final : public MessageEndpoint
 {
   public:
     SyncSendMessageEndpoint(const std::string& hostIn,
@@ -97,33 +97,40 @@ class SyncSendMessageEndpoint : public MessageEndpoint
     zmq::socket_t reqSocket;
 };
 
-class AsyncRecvMessageEndpoint : public MessageEndpoint
+class RecvMessageEndpoint : public MessageEndpoint
+{
+  public:
+    RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
+
+    virtual ~RecvMessageEndpoint(){};
+
+    virtual Message recv(int size = 0);
+
+  protected:
+    zmq::socket_t socket;
+};
+
+class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
     AsyncRecvMessageEndpoint(int portIn,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    Message recv(int size = 0);
-
-  private:
-    zmq::socket_t pullSocket;
+    Message recv(int size = 0) override;
 };
 
-class SyncRecvMessageEndpoint : public MessageEndpoint
+class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
     SyncRecvMessageEndpoint(int portIn,
                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    Message recv(int size = 0);
+    Message recv(int size = 0) override;
 
     void sendResponse(const uint8_t* data, int size);
-
-  private:
-    zmq::socket_t repSocket;
 };
 
-class MessageTimeoutException : public faabric::util::FaabricException
+class MessageTimeoutException final : public faabric::util::FaabricException
 {
   public:
     explicit MessageTimeoutException(std::string message)

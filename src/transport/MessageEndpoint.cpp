@@ -157,7 +157,7 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
           auto res = socket.recv(zmq::buffer(msg.udata(), msg.size()));
 
           if (!res.has_value()) {
-              SPDLOG_ERROR("Timed out receiving message of size {}", size);
+              SPDLOG_TRACE("Timed out receiving message of size {}", size);
               throw MessageTimeoutException("Timed out receiving message");
           }
 
@@ -189,7 +189,7 @@ Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
       try {
           auto res = socket.recv(msg);
           if (!res.has_value()) {
-              SPDLOG_ERROR("Timed out receiving message with no size");
+              SPDLOG_TRACE("Timed out receiving message with no size");
               throw MessageTimeoutException("Timed out receiving message");
           }
       } catch (zmq::error_t& e) {
@@ -250,7 +250,7 @@ SyncSendMessageEndpoint::SyncSendMessageEndpoint(const std::string& hostIn,
                                                  int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    reqSocket = setUpSocket(zmq::socket_type::req, portIn + 1);
+    reqSocket = setUpSocket(zmq::socket_type::req, portIn);
 }
 
 void SyncSendMessageEndpoint::sendHeader(int header)
@@ -270,7 +270,6 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
                                                    bool more)
 {
     SPDLOG_TRACE("REQ {}:{} ({} bytes, more {})", host, port, dataSize, more);
-
     doSend(reqSocket, data, dataSize, more);
 
     // Do the receive
@@ -279,19 +278,32 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
 }
 
 // ----------------------------------------------
+// RECV ENDPOINT
+// ----------------------------------------------
+
+RecvMessageEndpoint::RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType)
+  : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
+{
+    socket = setUpSocket(socketType, portIn);
+}
+
+Message RecvMessageEndpoint::recv(int size) {
+    return doRecv(socket, size);
+}
+
+// ----------------------------------------------
 // ASYNC RECV ENDPOINT
 // ----------------------------------------------
 
 AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
-  : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
+  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
 {
-    pullSocket = setUpSocket(zmq::socket_type::pull, portIn);
 }
 
 Message AsyncRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("PULL {} ({} bytes)", port, size);
-    return doRecv(pullSocket, size);
+    return RecvMessageEndpoint::recv(size);
 }
 
 // ----------------------------------------------
@@ -299,20 +311,19 @@ Message AsyncRecvMessageEndpoint::recv(int size)
 // ----------------------------------------------
 
 SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
-  : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
+  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::rep)
 {
-    repSocket = setUpSocket(zmq::socket_type::rep, portIn + 1);
 }
 
 Message SyncRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("RECV (REP) {} ({} bytes)", port, size);
-    return doRecv(repSocket, size);
+    return RecvMessageEndpoint::recv(size);
 }
 
 void SyncRecvMessageEndpoint::sendResponse(const uint8_t* data, int size)
 {
     SPDLOG_TRACE("REP {} ({} bytes)", port, size);
-    doSend(repSocket, data, size, false);
+    doSend(socket, data, size, false);
 }
 }

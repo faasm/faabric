@@ -9,8 +9,26 @@
 
 namespace faabric::transport {
 
-// This server has two underlying sockets, one for synchronous communication and
-// one for asynchronous.
+// Each server has two underlying sockets, one for synchronous communication and
+// one for asynchronous. Each is run inside its own background thread.
+class MessageEndpointServer;
+
+class MessageEndpointServerThread
+{
+  public:
+    MessageEndpointServerThread(MessageEndpointServer* serverIn, bool asyncIn);
+
+    void start(std::shared_ptr<faabric::util::Latch> latch);
+
+    void join();
+
+  private:
+    MessageEndpointServer* server;
+    bool async = false;
+
+    std::thread backgroundThread;
+};
+
 class MessageEndpointServer
 {
   public:
@@ -35,11 +53,13 @@ class MessageEndpointServer
     void sendSyncResponse(google::protobuf::Message* resp);
 
   private:
+    friend class MessageEndpointServerThread;
+
     const int asyncPort;
     const int syncPort;
 
-    std::thread asyncThread;
-    std::thread syncThread;
+    MessageEndpointServerThread asyncThread;
+    MessageEndpointServerThread syncThread;
 
     AsyncSendMessageEndpoint asyncShutdownSender;
     SyncSendMessageEndpoint syncShutdownSender;
