@@ -21,6 +21,7 @@ int main()
     faabric::runner::FaabricMain m(fac);
     m.startBackground();
 
+    // Note, endpoint will block until killed
     SPDLOG_INFO("Starting HTTP endpoint on worker");
     faabric::endpoint::FaabricEndpoint endpoint;
     endpoint.start();

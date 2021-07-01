@@ -22,6 +22,18 @@ using namespace faabric::util;
 
 namespace faabric::scheduler {
 
+// 0MQ sockets are not thread-safe, and opening them and closing them from
+// different threads messes things up. However, we don't want to constatnly
+// create and recreate them to make calls in the scheduler, therefore we cache
+// them in TLS, and perform thread-specific tidy-up.
+static thread_local std::unordered_map<std::string,
+                                       faabric::scheduler::FunctionCallClient>
+  functionCallClients;
+
+static thread_local std::unordered_map<std::string,
+                                       faabric::scheduler::SnapshotClient>
+  snapshotClients;
+
 Scheduler& getScheduler()
 {
     static Scheduler sch;
@@ -61,9 +73,20 @@ void Scheduler::addHostToGlobalSet()
     redis.sadd(AVAILABLE_HOST_SET, thisHost);
 }
 
+void Scheduler::resetThreadLocalCache()
+{
+    auto tid = (pid_t)syscall(SYS_gettid);
+    SPDLOG_DEBUG("Resetting scheduler thread-local cache for thread {}", tid);
+
+    functionCallClients.clear();
+    snapshotClients.clear();
+}
+
 void Scheduler::reset()
 {
     SPDLOG_DEBUG("Resetting scheduler");
+
+    resetThreadLocalCache();
 
     // Shut down all Executors
     for (auto& p : executors) {
@@ -95,9 +118,6 @@ void Scheduler::reset()
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
-
-    functionCallClients.clear();
-    snapshotClients.clear();
 }
 
 void Scheduler::shutdown()
@@ -545,54 +565,25 @@ std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
     return recordedMessagesLocal;
 }
 
-std::string getClientKey(const std::string& otherHost)
-{
-    // Note, our keys here have to include the tid as the clients can only be
-    // used within the same thread.
-    std::thread::id tid = std::this_thread::get_id();
-    std::stringstream ss;
-    ss << otherHost << "_" << tid;
-    std::string key = ss.str();
-    return key;
-}
-
 FunctionCallClient& Scheduler::getFunctionCallClient(
   const std::string& otherHost)
 {
-    std::string key = getClientKey(otherHost);
-    if (functionCallClients.find(key) == functionCallClients.end()) {
-        faabric::util::FullLock lock(functionCallClientsMx);
-
-        if (functionCallClients.find(key) == functionCallClients.end()) {
-            SPDLOG_DEBUG(
-              "Adding new function call client for {} ({})", otherHost, key);
-            functionCallClients.emplace(key, otherHost);
-        }
+    if (functionCallClients.find(otherHost) == functionCallClients.end()) {
+        SPDLOG_DEBUG("Adding new function call client for {}", otherHost);
+        functionCallClients.emplace(otherHost, otherHost);
     }
 
-    {
-        faabric::util::SharedLock lock(functionCallClientsMx);
-        return functionCallClients.at(key);
-    }
+    return functionCallClients.at(otherHost);
 }
 
 SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
 {
-    std::string key = getClientKey(otherHost);
-    if (snapshotClients.find(key) == snapshotClients.end()) {
-        faabric::util::FullLock lock(snapshotClientsMx);
-
-        if (snapshotClients.find(key) == snapshotClients.end()) {
-            SPDLOG_DEBUG(
-              "Adding new snapshot client for {} ({})", otherHost, key);
-            snapshotClients.emplace(key, otherHost);
-        }
+    if (snapshotClients.find(otherHost) == snapshotClients.end()) {
+        SPDLOG_DEBUG("Adding new snapshot client for {}", otherHost);
+        snapshotClients.emplace(otherHost, otherHost);
     }
 
-    {
-        faabric::util::SharedLock lock(snapshotClientsMx);
-        return snapshotClients.at(key);
-    }
+    return snapshotClients.at(otherHost);
 }
 
 std::vector<std::pair<std::string, faabric::Message>>

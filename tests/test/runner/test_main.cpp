@@ -32,17 +32,23 @@ TEST_CASE_METHOD(MainRunnerTestFixture, "Test main runner", "[runner]")
 
     m.startBackground();
 
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("foo", "bar", 4);
+    SECTION("Do nothing") {}
 
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(req);
+    SECTION("Make calls")
+    {
+        std::shared_ptr<faabric::BatchExecuteRequest> req =
+          faabric::util::batchExecFactory("foo", "bar", 4);
 
-    for (const auto& m : req->messages()) {
-        std::string expected = fmt::format("DummyExecutor executed {}", m.id());
-        faabric::Message res =
-          sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
-        REQUIRE(res.outputdata() == expected);
+        auto& sch = faabric::scheduler::getScheduler();
+        sch.callFunctions(req);
+
+        for (const auto& m : req->messages()) {
+            std::string expected =
+              fmt::format("DummyExecutor executed {}", m.id());
+            faabric::Message res =
+              sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+            REQUIRE(res.outputdata() == expected);
+        }
     }
 
     m.shutdown();

@@ -13,7 +13,6 @@ FAABRIC_CATCH_LOGGER
 int main(int argc, char* argv[])
 {
     faabric::transport::initGlobalMessageContext();
-
     faabric::util::setTestMode(true);
     faabric::util::initLogging();
 

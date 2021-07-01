@@ -298,6 +298,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
             sch.notifyExecutorShutdown(this, boundMessage);
         }
     }
+
+    // We have to clean up TLS here as this should be the last use of the
+    // scheduler from this thread
+    sch.resetThreadLocalCache();
 }
 
 bool Executor::tryClaim()

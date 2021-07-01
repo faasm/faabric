@@ -1,47 +1,44 @@
 #define CATCH_CONFIG_RUNNER
 
-#include "DistTestExecutor.h"
-#include "faabric_utils.h"
 #include <catch.hpp>
 
+#include "DistTestExecutor.h"
+#include "faabric_utils.h"
 #include "init.h"
 
-#include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/transport/context.h>
 #include <faabric/util/logging.h>
-#include <faabric/util/macros.h>
-
-using namespace faabric::scheduler;
 
 FAABRIC_CATCH_LOGGER
 
 int main(int argc, char* argv[])
 {
-    faabric::util::initLogging();
     faabric::transport::initGlobalMessageContext();
-
-    // Set up the distributed tests
+    faabric::util::initLogging();
     tests::initDistTests();
 
-    // Start everything up
-    SPDLOG_INFO("Starting distributed test server on master");
-    std::shared_ptr<ExecutorFactory> fac =
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
       std::make_shared<tests::DistTestExecutorFactory>();
-    faabric::runner::FaabricMain m(fac);
-    m.startBackground();
 
-    // Wait for things to start
-    SLEEP_MS(3000);
+    // WARNING: all 0MQ sockets have to have gone *out of scope* before we shut
+    // down the context, therefore this segment must be in a nested scope (or
+    // another function).
+    int result;
+    {
+        SPDLOG_INFO("Starting distributed test server on master");
+        faabric::runner::FaabricMain m(fac);
+        m.startBackground();
 
-    // Run the tests
-    int result = Catch::Session().run(argc, argv);
-    fflush(stdout);
+        // Run the tests
+        result = Catch::Session().run(argc, argv);
+        fflush(stdout);
 
-    // Shut down
-    SPDLOG_INFO("Shutting down");
-    m.shutdown();
+        // Shut down
+        SPDLOG_INFO("Shutting down");
+        m.shutdown();
+    }
 
     faabric::transport::closeGlobalMessageContext();
 

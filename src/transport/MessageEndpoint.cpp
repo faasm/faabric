@@ -281,13 +281,16 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
 // RECV ENDPOINT
 // ----------------------------------------------
 
-RecvMessageEndpoint::RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType)
+RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
+                                         int timeoutMs,
+                                         zmq::socket_type socketType)
   : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
 {
     socket = setUpSocket(socketType, portIn);
 }
 
-Message RecvMessageEndpoint::recv(int size) {
+Message RecvMessageEndpoint::recv(int size)
+{
     return doRecv(socket, size);
 }
 
@@ -297,8 +300,7 @@ Message RecvMessageEndpoint::recv(int size) {
 
 AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
-{
-}
+{}
 
 Message AsyncRecvMessageEndpoint::recv(int size)
 {
@@ -312,8 +314,7 @@ Message AsyncRecvMessageEndpoint::recv(int size)
 
 SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::rep)
-{
-}
+{}
 
 Message SyncRecvMessageEndpoint::recv(int size)
 {

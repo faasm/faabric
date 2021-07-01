@@ -91,6 +91,8 @@ class Scheduler
 
     void reset();
 
+    void resetThreadLocalCache();
+
     void shutdown();
 
     void broadcastSnapshotDelete(const faabric::Message& msg,
@@ -182,15 +184,9 @@ class Scheduler
 
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
 
-    std::shared_mutex functionCallClientsMx;
-    std::unordered_map<std::string, faabric::scheduler::FunctionCallClient>
-      functionCallClients;
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
-    std::shared_mutex snapshotClientsMx;
-    std::unordered_map<std::string, faabric::scheduler::SnapshotClient>
-      snapshotClients;
     faabric::scheduler::SnapshotClient& getSnapshotClient(
       const std::string& otherHost);
 

@@ -45,8 +45,8 @@ void MessageEndpointServerThread::start(
 
                 if (header.size() == shutdownHeader.size()) {
                     if (header.dataCopy() == shutdownHeader) {
-                        SPDLOG_TRACE(
-                          "Server on {} received shutdown message", port);
+                        SPDLOG_TRACE("Server on {} received shutdown message",
+                                     port);
                         break;
                     }
                 }
