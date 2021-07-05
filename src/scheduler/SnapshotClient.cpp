@@ -1,5 +1,6 @@
 #include <faabric/scheduler/SnapshotClient.h>
 #include <faabric/transport/common.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
@@ -68,21 +69,6 @@ void clearMockSnapshotRequests()
 // -----------------------------------
 // Snapshot client
 // -----------------------------------
-
-#define SEND_FB_MSG(T, mb)                                                     \
-    {                                                                          \
-        const uint8_t* buffer = mb.GetBufferPointer();                         \
-        int size = mb.GetSize();                                               \
-        faabric::EmptyResponse response;                                       \
-        syncSend(T, buffer, size, &response);                                  \
-    }
-
-#define SEND_FB_MSG_ASYNC(T, mb)                                               \
-    {                                                                          \
-        const uint8_t* buffer = mb.GetBufferPointer();                         \
-        int size = mb.GetSize();                                               \
-        asyncSend(T, buffer, size);                                            \
-    }
 
 SnapshotClient::SnapshotClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn,
