@@ -17,9 +17,9 @@ class Latch
       int count,
       int timeoutMs = DEFAULT_LATCH_TIMEOUT_MS);
 
-    void wait();
-
     explicit Latch(int countIn, int timeoutMsIn);
+
+    void wait();
 
   private:
     int count;
