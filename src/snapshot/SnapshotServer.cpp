@@ -1,7 +1,7 @@
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/SnapshotServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/State.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
@@ -10,7 +10,7 @@
 
 #include <sys/mman.h>
 
-namespace faabric::scheduler {
+namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(SNAPSHOT_ASYNC_PORT,
                                               SNAPSHOT_SYNC_PORT)
@@ -21,11 +21,11 @@ void SnapshotServer::doAsyncRecv(int header,
                                  size_t bufferSize)
 {
     switch (header) {
-        case faabric::scheduler::SnapshotCalls::DeleteSnapshot: {
+        case faabric::snapshot::SnapshotCalls::DeleteSnapshot: {
             this->recvDeleteSnapshot(buffer, bufferSize);
             break;
         }
-        case faabric::scheduler::SnapshotCalls::ThreadResult: {
+        case faabric::snapshot::SnapshotCalls::ThreadResult: {
             this->recvThreadResult(buffer, bufferSize);
             break;
         }
@@ -40,10 +40,10 @@ std::unique_ptr<google::protobuf::Message>
 SnapshotServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
 {
     switch (header) {
-        case faabric::scheduler::SnapshotCalls::PushSnapshot: {
+        case faabric::snapshot::SnapshotCalls::PushSnapshot: {
             return recvPushSnapshot(buffer, bufferSize);
         }
-        case faabric::scheduler::SnapshotCalls::PushSnapshotDiffs: {
+        case faabric::snapshot::SnapshotCalls::PushSnapshotDiffs: {
             return recvPushSnapshotDiffs(buffer, bufferSize);
         }
         default: {

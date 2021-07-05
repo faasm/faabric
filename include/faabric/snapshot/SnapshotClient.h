@@ -1,12 +1,12 @@
 #pragma once
 
 #include <faabric/flat/faabric_generated.h>
-#include <faabric/scheduler/SnapshotApi.h>
+#include <faabric/snapshot/SnapshotApi.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/util/snapshot.h>
 
-namespace faabric::scheduler {
+namespace faabric::snapshot {
 
 // -----------------------------------
 // Mocking
@@ -57,6 +57,6 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
   private:
-    void sendHeader(faabric::scheduler::SnapshotCalls call);
+    void sendHeader(faabric::snapshot::SnapshotCalls call);
 };
 }

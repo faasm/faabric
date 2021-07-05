@@ -4,7 +4,7 @@
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
-#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/queue.h>
@@ -187,7 +187,7 @@ class Scheduler
     faabric::scheduler::FunctionCallClient& getFunctionCallClient(
       const std::string& otherHost);
 
-    faabric::scheduler::SnapshotClient& getSnapshotClient(
+    faabric::snapshot::SnapshotClient& getSnapshotClient(
       const std::string& otherHost);
 
     faabric::HostResources thisHostResources;

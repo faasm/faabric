@@ -3,7 +3,7 @@
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/scheduler/SnapshotServer.h>
+#include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/StateServer.h>
 #include <faabric/util/config.h>
 
@@ -28,6 +28,6 @@ class FaabricMain
   private:
     faabric::state::StateServer stateServer;
     faabric::scheduler::FunctionCallServer functionServer;
-    faabric::scheduler::SnapshotServer snapshotServer;
+    faabric::snapshot::SnapshotServer snapshotServer;
 };
 }
