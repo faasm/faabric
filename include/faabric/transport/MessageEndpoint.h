@@ -1,9 +1,6 @@
 #pragma once
 
-#include <google/protobuf/message.h>
-
 #include <faabric/transport/Message.h>
-#include <faabric/transport/MessageContext.h>
 #include <faabric/util/exception.h>
 
 #include <thread>
@@ -19,91 +16,121 @@
 #define DEFAULT_RECV_TIMEOUT_MS 20000
 #define DEFAULT_SEND_TIMEOUT_MS 20000
 
-namespace faabric::transport {
-enum class SocketType
-{
-    PUSH,
-    PULL
-};
+// How long undelivered messages will hang around when the socket is closed,
+// which also determines how long the context will hang for when closing if
+// things haven't yet completed (usually only when there's an error).
+#define LINGER_MS 100
 
-/* Wrapper arround zmq::socket_t
- *
- * Thread-unsafe socket-like object. MUST be open-ed and close-ed from the
- * _same_ thread. For a proto://host:pair triple, one socket may bind, and all
- * the rest must connect. Order does not matter. Sockets either send (PUSH)
- * or recv (PULL) data.
- */
+namespace faabric::transport {
+
+// Note: sockets must be open-ed and close-ed from the _same_ thread. In a given
+// communication group, one socket may bind, and all the rest must connect.
+// Order does not matter.
 class MessageEndpoint
 {
   public:
-    MessageEndpoint(const std::string& hostIn, int portIn);
+    MessageEndpoint(const std::string& hostIn, int portIn, int timeoutMsIn);
 
-    // Message endpoints shouldn't be assigned as ZeroMQ sockets are not thread
-    // safe
+    // Delete assignment and copy-constructor as we need to be very careful with
+    // socping and same-thread instantiation
     MessageEndpoint& operator=(const MessageEndpoint&) = delete;
 
-    // Neither copied
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
-
-    ~MessageEndpoint();
-
-    void open(faabric::transport::MessageContext& context,
-              faabric::transport::SocketType sockTypeIn,
-              bool bind);
-
-    void close(bool bind);
-
-    void send(uint8_t* serialisedMsg, size_t msgSize, bool more = false);
-
-    // If known, pass a size parameter to pre-allocate a recv buffer
-    Message recv(int size = 0);
-
-    // The MessageEndpointServer needs direct access to the socket
-    std::unique_ptr<zmq::socket_t> socket;
 
     std::string getHost();
 
     int getPort();
 
-    void setRecvTimeoutMs(int value);
-
-    void setSendTimeoutMs(int value);
-
   protected:
     const std::string host;
     const int port;
-    std::thread::id tid;
-    int id;
+    const std::string address;
+    const int timeoutMs;
+    const std::thread::id tid;
+    const int id;
 
-    int recvTimeoutMs = DEFAULT_RECV_TIMEOUT_MS;
-    int sendTimeoutMs = DEFAULT_SEND_TIMEOUT_MS;
+    zmq::socket_t setUpSocket(zmq::socket_type socketType, int socketPort);
 
-    void validateTimeout(int value);
+    void doSend(zmq::socket_t& socket,
+                const uint8_t* data,
+                size_t dataSize,
+                bool more);
+
+    Message doRecv(zmq::socket_t& socket, int size = 0);
+
+    Message recvBuffer(zmq::socket_t& socket, int size);
+
+    Message recvNoBuffer(zmq::socket_t& socket);
 };
 
-/* Send and Recv Message Endpoints */
-
-class SendMessageEndpoint : public MessageEndpoint
+class AsyncSendMessageEndpoint final : public MessageEndpoint
 {
   public:
-    SendMessageEndpoint(const std::string& hostIn, int portIn);
+    AsyncSendMessageEndpoint(const std::string& hostIn,
+                             int portIn,
+                             int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
-    void open(MessageContext& context);
+    void sendHeader(int header);
 
-    void close();
+    void send(const uint8_t* data, size_t dataSize, bool more = false);
+
+  private:
+    zmq::socket_t pushSocket;
+};
+
+class SyncSendMessageEndpoint final : public MessageEndpoint
+{
+  public:
+    SyncSendMessageEndpoint(const std::string& hostIn,
+                            int portIn,
+                            int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
+
+    void sendHeader(int header);
+
+    void sendRaw(const uint8_t* data, size_t dataSize);
+
+    Message sendAwaitResponse(const uint8_t* data,
+                              size_t dataSize,
+                              bool more = false);
+
+  private:
+    zmq::socket_t reqSocket;
 };
 
 class RecvMessageEndpoint : public MessageEndpoint
 {
   public:
-    RecvMessageEndpoint(int portIn);
+    RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
 
-    void open(MessageContext& context);
+    virtual ~RecvMessageEndpoint(){};
 
-    void close();
+    virtual Message recv(int size = 0);
+
+  protected:
+    zmq::socket_t socket;
 };
 
-class MessageTimeoutException : public faabric::util::FaabricException
+class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    AsyncRecvMessageEndpoint(int portIn,
+                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    Message recv(int size = 0) override;
+};
+
+class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    SyncRecvMessageEndpoint(int portIn,
+                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    Message recv(int size = 0) override;
+
+    void sendResponse(const uint8_t* data, int size);
+};
+
+class MessageTimeoutException final : public faabric::util::FaabricException
 {
   public:
     explicit MessageTimeoutException(std::string message)

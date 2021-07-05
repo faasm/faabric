@@ -3,7 +3,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/transport/MessageEndpointClient.h>
 #include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::scheduler {
@@ -13,24 +12,25 @@ class FunctionCallServer final
   public:
     FunctionCallServer();
 
-    void stop() override;
-
   private:
     Scheduler& scheduler;
 
-    void doRecv(faabric::transport::Message& header,
-                faabric::transport::Message& body) override;
+    void doAsyncRecv(int header,
+                     const uint8_t* buffer,
+                     size_t bufferSize) override;
 
-    /* Function call server API */
+    std::unique_ptr<google::protobuf::Message>
+    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override;
 
-    void recvFlush(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvFlush(const uint8_t* buffer,
+                                                         size_t bufferSize);
 
-    void recvExecuteFunctions(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvGetResources(
+      const uint8_t* buffer,
+      size_t bufferSize);
 
-    void recvGetResources(faabric::transport::Message& body);
+    void recvExecuteFunctions(const uint8_t* buffer, size_t bufferSize);
 
-    void recvUnregister(faabric::transport::Message& body);
-
-    void recvSetThreadResult(faabric::transport::Message& body);
+    void recvUnregister(const uint8_t* buffer, size_t bufferSize);
 };
 }

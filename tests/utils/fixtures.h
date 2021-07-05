@@ -6,8 +6,9 @@
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
-#include <faabric/transport/MessageContext.h>
+#include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
@@ -118,20 +119,9 @@ class ConfTestFixture
     faabric::util::SystemConfig& conf;
 };
 
-class MessageContextFixture : public SchedulerTestFixture
-{
-  protected:
-    faabric::transport::MessageContext& context;
-
-  public:
-    MessageContextFixture()
-      : context(faabric::transport::getGlobalMessageContext())
-    {}
-
-    ~MessageContextFixture() { context.close(); }
-};
-
-class MpiBaseTestFixture : public SchedulerTestFixture
+class MpiBaseTestFixture
+  : public SchedulerTestFixture
+  , public ConfTestFixture
 {
   public:
     MpiBaseTestFixture()
@@ -178,45 +168,57 @@ class MpiTestFixture : public MpiBaseTestFixture
     faabric::scheduler::MpiWorld world;
 };
 
+// Note that this test has two worlds, which each "think" that the other is
+// remote. This is done by allowing one to have the IP of this host, the other
+// to have the localhost IP, i.e. 127.0.0.1.
 class RemoteMpiTestFixture : public MpiBaseTestFixture
 {
   public:
     RemoteMpiTestFixture()
       : thisHost(faabric::util::getSystemConfig().endpointHost)
-      , otherHost(LOCALHOST)
+      , testLatch(faabric::util::Latch::create(2))
     {
-        remoteWorld.overrideHost(otherHost);
+        otherWorld.overrideHost(otherHost);
+
+        faabric::util::setMockMode(true);
     }
 
-    void setWorldsSizes(int worldSize, int ranksWorldOne, int ranksWorldTwo)
+    ~RemoteMpiTestFixture()
+    {
+        faabric::util::setMockMode(false);
+
+        faabric::scheduler::getMpiWorldRegistry().clear();
+    }
+
+    void setWorldSizes(int worldSize, int ranksThisWorld, int ranksOtherWorld)
     {
         // Update message
         msg.set_mpiworldsize(worldSize);
 
-        // Set local ranks
-        faabric::HostResources localResources;
-        localResources.set_slots(ranksWorldOne);
-        // Account for the master rank that is already running in this world
-        localResources.set_usedslots(1);
-        // Set remote ranks
-        faabric::HostResources otherResources;
-        otherResources.set_slots(ranksWorldTwo);
-        // Note that the remaining ranks will be allocated to the world
-        // with the master host
+        // Set up the first world, holding the master rank (which already takes
+        // one slot).
+        // Note that any excess ranks will also be allocated to this world when
+        // the scheduler is overloaded.
+        faabric::HostResources thisResources;
+        thisResources.set_slots(ranksThisWorld);
+        thisResources.set_usedslots(1);
+        sch.setThisHostResources(thisResources);
 
-        std::string otherHost = LOCALHOST;
+        // Set up the other world and add it to the global set of hosts
+        faabric::HostResources otherResources;
+        otherResources.set_slots(ranksOtherWorld);
         sch.addHostToGlobalSet(otherHost);
 
-        // Mock everything to make sure the other host has resources as well
-        faabric::util::setMockMode(true);
-        sch.setThisHostResources(localResources);
+        // Queue the resource response for this other host
         faabric::scheduler::queueResourceResponse(otherHost, otherResources);
     }
 
   protected:
     std::string thisHost;
-    std::string otherHost;
+    std::string otherHost = LOCALHOST;
 
-    faabric::scheduler::MpiWorld remoteWorld;
+    std::shared_ptr<faabric::util::Latch> testLatch;
+
+    faabric::scheduler::MpiWorld otherWorld;
 };
 }

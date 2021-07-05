@@ -10,6 +10,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
 
@@ -29,14 +30,9 @@ class SnapshotClientServerFixture
       : cli(LOCALHOST)
     {
         server.start();
-        usleep(1000 * SHORT_TEST_TIMEOUT_MS);
     }
 
-    ~SnapshotClientServerFixture()
-    {
-        cli.close();
-        server.stop();
-    }
+    ~SnapshotClientServerFixture() { server.stop(); }
 };
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
@@ -66,9 +62,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     cli.pushSnapshot(snapKeyA, snapA);
     cli.pushSnapshot(snapKeyB, snapB);
 
-    usleep(1000 * 500);
-
-    // Check snapshots created in regsitry
+    // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
     const faabric::util::SnapshotData& actualA = reg.getSnapshot(snapKeyA);
     const faabric::util::SnapshotData& actualB = reg.getSnapshot(snapKeyB);

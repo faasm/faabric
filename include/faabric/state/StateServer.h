@@ -13,27 +13,42 @@ class StateServer final : public faabric::transport::MessageEndpointServer
   private:
     State& state;
 
-    void doRecv(faabric::transport::Message& header,
-                faabric::transport::Message& body) override;
+    void doAsyncRecv(int header,
+                     const uint8_t* buffer,
+                     size_t bufferSize) override;
 
-    /* State server API */
+    std::unique_ptr<google::protobuf::Message>
+    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override;
 
-    void recvSize(faabric::transport::Message& body);
+    // Sync methods
 
-    void recvPull(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvSize(const uint8_t* buffer,
+                                                        size_t bufferSize);
 
-    void recvPush(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvPull(const uint8_t* buffer,
+                                                        size_t bufferSize);
 
-    void recvAppend(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvPush(const uint8_t* buffer,
+                                                        size_t bufferSize);
 
-    void recvPullAppended(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvAppend(const uint8_t* buffer,
+                                                          size_t bufferSize);
 
-    void recvClearAppended(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvPullAppended(
+      const uint8_t* buffer,
+      size_t bufferSize);
 
-    void recvDelete(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvClearAppended(
+      const uint8_t* buffer,
+      size_t bufferSize);
 
-    void recvLock(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvDelete(const uint8_t* buffer,
+                                                          size_t bufferSize);
 
-    void recvUnlock(faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvLock(const uint8_t* buffer,
+                                                        size_t bufferSize);
+
+    std::unique_ptr<google::protobuf::Message> recvUnlock(const uint8_t* buffer,
+                                                          size_t bufferSize);
 };
 }

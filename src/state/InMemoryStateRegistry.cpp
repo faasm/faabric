@@ -30,7 +30,6 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
                                                const std::string& thisIP,
                                                bool claim)
 {
-
     std::string lookupKey = faabric::util::keyForUser(user, key);
 
     // See if we already have the master

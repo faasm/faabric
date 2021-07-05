@@ -13,26 +13,45 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-TEST_CASE("Test main runner", "[runner]")
+class MainRunnerTestFixture : public SchedulerTestFixture
 {
-    cleanFaabric();
+  public:
+    MainRunnerTestFixture()
+    {
+        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        faabric::scheduler::setExecutorFactory(fac);
+    }
+};
+
+TEST_CASE_METHOD(MainRunnerTestFixture, "Test main runner", "[runner]")
+{
     std::shared_ptr<ExecutorFactory> fac =
       faabric::scheduler::getExecutorFactory();
     faabric::runner::FaabricMain m(fac);
 
-    m.startRunner();
+    m.startBackground();
 
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("foo", "bar", 4);
+    SECTION("Do nothing") {}
 
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(req);
+    SECTION("Make calls")
+    {
+        std::shared_ptr<faabric::BatchExecuteRequest> req =
+          faabric::util::batchExecFactory("foo", "bar", 4);
 
-    for (const auto& m : req->messages()) {
-        std::string expected = fmt::format("DummyExecutor executed {}", m.id());
-        faabric::Message res =
-          sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
-        REQUIRE(res.outputdata() == expected);
+        auto& sch = faabric::scheduler::getScheduler();
+        sch.callFunctions(req);
+
+        for (const auto& m : req->messages()) {
+            std::string expected =
+              fmt::format("DummyExecutor executed {}", m.id());
+            faabric::Message res =
+              sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+            REQUIRE(res.outputdata() == expected);
+        }
     }
+
+    m.shutdown();
 }
+
 }

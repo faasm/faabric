@@ -1,25 +1,65 @@
 #include <faabric/transport/MessageEndpointClient.h>
 
 namespace faabric::transport {
-MessageEndpointClient::MessageEndpointClient(const std::string& host, int port)
-  : SendMessageEndpoint(host, port)
+
+MessageEndpointClient::MessageEndpointClient(std::string hostIn,
+                                             int asyncPortIn,
+                                             int syncPortIn,
+                                             int timeoutMs)
+  : host(hostIn)
+  , asyncPort(asyncPortIn)
+  , syncPort(syncPortIn)
+  , asyncEndpoint(host, asyncPort, timeoutMs)
+  , syncEndpoint(host, syncPort, timeoutMs)
 {}
 
-// Block until we receive a response from the server
-Message MessageEndpointClient::awaitResponse(int port)
+void MessageEndpointClient::asyncSend(int header,
+                                      google::protobuf::Message* msg)
 {
-    // Wait for the response, open a temporary endpoint for it
-    // Note - we use a different host/port not to clash with existing server
-    RecvMessageEndpoint endpoint(port);
+    size_t msgSize = msg->ByteSizeLong();
+    uint8_t buffer[msgSize];
 
-    // Inherit timeouts on temporary endpoint
-    endpoint.setRecvTimeoutMs(recvTimeoutMs);
-    endpoint.setSendTimeoutMs(sendTimeoutMs);
+    if (!msg->SerializeToArray(buffer, msgSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
 
-    endpoint.open(faabric::transport::getGlobalMessageContext());
-    Message receivedMessage = endpoint.recv();
-    endpoint.close();
+    asyncSend(header, buffer, msgSize);
+}
 
-    return receivedMessage;
+void MessageEndpointClient::asyncSend(int header,
+                                      const uint8_t* buffer,
+                                      size_t bufferSize)
+{
+    asyncEndpoint.sendHeader(header);
+
+    asyncEndpoint.send(buffer, bufferSize);
+}
+
+void MessageEndpointClient::syncSend(int header,
+                                     google::protobuf::Message* msg,
+                                     google::protobuf::Message* response)
+{
+    size_t msgSize = msg->ByteSizeLong();
+    uint8_t buffer[msgSize];
+    if (!msg->SerializeToArray(buffer, msgSize)) {
+        throw std::runtime_error("Error serialising message");
+    }
+
+    syncSend(header, buffer, msgSize, response);
+}
+
+void MessageEndpointClient::syncSend(int header,
+                                     const uint8_t* buffer,
+                                     const size_t bufferSize,
+                                     google::protobuf::Message* response)
+{
+    syncEndpoint.sendHeader(header);
+
+    Message responseMsg = syncEndpoint.sendAwaitResponse(buffer, bufferSize);
+
+    // Deserialise response
+    if (!response->ParseFromArray(responseMsg.data(), responseMsg.size())) {
+        throw std::runtime_error("Error deserialising message");
+    }
 }
 }

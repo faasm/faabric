@@ -1,4 +1,6 @@
 #include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/transport/common.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
@@ -68,24 +70,11 @@ void clearMockSnapshotRequests()
 // Snapshot client
 // -----------------------------------
 
-#define SEND_FB_REQUEST(T)                                                     \
-    sendHeader(T);                                                             \
-    mb.Finish(requestOffset);                                                  \
-    uint8_t* buffer = mb.GetBufferPointer();                                   \
-    int size = mb.GetSize();                                                   \
-    send(buffer, size);
-
 SnapshotClient::SnapshotClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, SNAPSHOT_PORT)
-{
-    this->open(faabric::transport::getGlobalMessageContext());
-}
-
-void SnapshotClient::sendHeader(faabric::scheduler::SnapshotCalls call)
-{
-    uint8_t header = static_cast<uint8_t>(call);
-    send(&header, sizeof(header), true);
-}
+  : faabric::transport::MessageEndpointClient(hostIn,
+                                              SNAPSHOT_ASYNC_PORT,
+                                              SNAPSHOT_SYNC_PORT)
+{}
 
 void SnapshotClient::pushSnapshot(const std::string& key,
                                   const faabric::util::SnapshotData& data)
@@ -96,23 +85,17 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         faabric::util::UniqueLock lock(mockMutex);
         snapshotPushes.emplace_back(host, data);
     } else {
-        const faabric::util::SystemConfig& conf =
-          faabric::util::getSystemConfig();
-
         // Set up the main request
         // TODO - avoid copying data here
         flatbuffers::FlatBufferBuilder mb;
-        auto returnHostOffset = mb.CreateString(conf.endpointHost);
         auto keyOffset = mb.CreateString(key);
         auto dataOffset = mb.CreateVector<uint8_t>(data.data, data.size);
-        auto requestOffset = CreateSnapshotPushRequest(
-          mb, returnHostOffset, keyOffset, dataOffset);
+        auto requestOffset =
+          CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
+        mb.Finish(requestOffset);
 
         // Send it
-        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::PushSnapshot)
-
-        // Await a response as this call must be synchronous
-        awaitResponse(SNAPSHOT_PORT + REPLY_PORT_OFFSET);
+        SEND_FB_MSG(SnapshotCalls::PushSnapshot, mb)
     }
 }
 
@@ -129,9 +112,6 @@ void SnapshotClient::pushSnapshotDiffs(
                      snapshotKey,
                      host);
 
-        const faabric::util::SystemConfig& conf =
-          faabric::util::getSystemConfig();
-
         flatbuffers::FlatBufferBuilder mb;
 
         // Create objects for all the chunks
@@ -144,17 +124,13 @@ void SnapshotClient::pushSnapshotDiffs(
 
         // Set up the main request
         // TODO - avoid copying data here
-        auto returnHostOffset = mb.CreateString(conf.endpointHost);
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
-        auto requestOffset = CreateSnapshotDiffPushRequest(
-          mb, returnHostOffset, keyOffset, diffsOffset);
+        auto requestOffset =
+          CreateSnapshotDiffPushRequest(mb, keyOffset, diffsOffset);
+        mb.Finish(requestOffset);
 
-        // Send it
-        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::PushSnapshotDiffs)
-
-        // Await a response as this call must be synchronous
-        awaitResponse(SNAPSHOT_PORT + REPLY_PORT_OFFSET);
+        SEND_FB_MSG(SnapshotCalls::PushSnapshotDiffs, mb);
     }
 }
 
@@ -171,8 +147,9 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto requestOffset = CreateSnapshotDeleteRequest(mb, keyOffset);
+        mb.Finish(requestOffset);
 
-        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::DeleteSnapshot)
+        SEND_FB_MSG_ASYNC(SnapshotCalls::DeleteSnapshot, mb);
     }
 }
 
@@ -229,7 +206,8 @@ void SnapshotClient::pushThreadResult(
               CreateThreadResultRequest(mb, messageId, returnValue);
         }
 
-        SEND_FB_REQUEST(faabric::scheduler::SnapshotCalls::ThreadResult)
+        mb.Finish(requestOffset);
+        SEND_FB_MSG_ASYNC(SnapshotCalls::ThreadResult, mb)
     }
 }
 }

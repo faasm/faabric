@@ -4,135 +4,126 @@
 #include <thread>
 #include <unistd.h>
 
-#include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/transport/MessageEndpoint.h>
+#include <faabric/util/macros.h>
 
 using namespace faabric::transport;
 
-const std::string thisHost = "127.0.0.1";
-const int testPort = 9999;
-const int testReplyPort = 9996;
+#define TEST_PORT 9800
 
 namespace tests {
-TEST_CASE_METHOD(MessageContextFixture,
-                 "Test open/close one client",
-                 "[transport]")
-{
-    // Open an endpoint client, don't bind
-    MessageEndpoint cli(thisHost, testPort);
-    REQUIRE_NOTHROW(cli.open(context, SocketType::PULL, false));
 
-    // Open another endpoint client, bind
-    MessageEndpoint secondCli(thisHost, testPort);
-    REQUIRE_NOTHROW(secondCli.open(context, SocketType::PUSH, true));
-
-    // Close all endpoint clients
-    REQUIRE_NOTHROW(cli.close(false));
-    REQUIRE_NOTHROW(secondCli.close(true));
-}
-
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv one message",
                  "[transport]")
 {
-    // Open the source endpoint client, don't bind
-    SendMessageEndpoint src(thisHost, testPort);
-    src.open(context);
-
-    // Open the destination endpoint client, bind
-    RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
+    AsyncRecvMessageEndpoint dst(TEST_PORT);
 
     // Send message
     std::string expectedMsg = "Hello world!";
-    uint8_t msg[expectedMsg.size()];
-    memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-    REQUIRE_NOTHROW(src.send(msg, expectedMsg.size()));
+    const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
+    src.send(msg, expectedMsg.size());
 
     // Receive message
     faabric::transport::Message recvMsg = dst.recv();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
-
-    // Close endpoints
-    src.close();
-    dst.close();
 }
 
-TEST_CASE_METHOD(MessageContextFixture, "Test await response", "[transport]")
+TEST_CASE_METHOD(SchedulerTestFixture,
+                 "Test send before recv is ready",
+                 "[transport]")
+{
+    std::string expectedMsg = "Hello world!";
+
+    AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
+
+    auto latch = faabric::util::Latch::create(2);
+
+    std::thread recvThread([&latch, expectedMsg] {
+        // Make sure this only runs once the send has been done
+        latch->wait();
+
+        // Receive message
+        AsyncRecvMessageEndpoint dst(TEST_PORT);
+        faabric::transport::Message recvMsg = dst.recv();
+
+        assert(recvMsg.size() == expectedMsg.size());
+        std::string actualMsg(recvMsg.data(), recvMsg.size());
+        assert(actualMsg == expectedMsg);
+    });
+
+    const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
+    src.send(msg, expectedMsg.size());
+    latch->wait();
+
+    if (recvThread.joinable()) {
+        recvThread.join();
+    }
+}
+
+TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
 {
     // Prepare common message/response
     std::string expectedMsg = "Hello ";
     std::string expectedResponse = "world!";
 
-    std::thread senderThread([this, expectedMsg, expectedResponse] {
-        // Open the source endpoint client, don't bind
-        MessageEndpointClient src(thisHost, testPort);
-        src.open(context);
+    std::thread senderThread([expectedMsg, expectedResponse] {
+        // Open the source endpoint client
+        SyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
 
         // Send message and wait for response
-        uint8_t msg[expectedMsg.size()];
-        memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-        src.send(msg, expectedMsg.size());
+        std::vector<uint8_t> bytes(BYTES_CONST(expectedMsg.c_str()),
+                                   BYTES_CONST(expectedMsg.c_str()) +
+                                     expectedMsg.size());
+
+        faabric::transport::Message recvMsg =
+          src.sendAwaitResponse(bytes.data(), bytes.size());
 
         // Block waiting for a response
-        faabric::transport::Message recvMsg = src.awaitResponse(testReplyPort);
         assert(recvMsg.size() == expectedResponse.size());
         std::string actualResponse(recvMsg.data(), recvMsg.size());
         assert(actualResponse == expectedResponse);
-
-        src.close();
     });
 
     // Receive message
-    RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    SyncRecvMessageEndpoint dst(TEST_PORT);
     faabric::transport::Message recvMsg = dst.recv();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
 
-    // Send response, open a new endpoint for it
-    SendMessageEndpoint dstResponse(thisHost, testReplyPort);
-    dstResponse.open(context);
-    uint8_t msg[expectedResponse.size()];
-    memcpy(msg, expectedResponse.c_str(), expectedResponse.size());
-    dstResponse.send(msg, expectedResponse.size());
+    // Send response
+    const uint8_t* msg = BYTES_CONST(expectedResponse.c_str());
+    dst.sendResponse(msg, expectedResponse.size());
 
     // Wait for sender thread
     if (senderThread.joinable()) {
         senderThread.join();
     }
-
-    // Close receiving endpoints
-    dst.close();
-    dstResponse.close();
 }
 
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv many messages",
                  "[transport]")
 {
     int numMessages = 10000;
     std::string baseMsg = "Hello ";
 
-    std::thread senderThread([this, numMessages, baseMsg] {
-        // Open the source endpoint client, don't bind
-        SendMessageEndpoint src(thisHost, testPort);
-        src.open(context);
+    std::thread senderThread([numMessages, baseMsg] {
+        // Open the source endpoint client
+        AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
         for (int i = 0; i < numMessages; i++) {
-            std::string expectedMsg = baseMsg + std::to_string(i);
-            uint8_t msg[expectedMsg.size()];
-            memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-            src.send(msg, expectedMsg.size());
+            std::string msgData = baseMsg + std::to_string(i);
+            const uint8_t* msg = BYTES_CONST(msgData.c_str());
+            src.send(msg, msgData.size());
         }
-
-        src.close();
     });
 
     // Receive messages
-    RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    AsyncRecvMessageEndpoint dst(TEST_PORT);
     for (int i = 0; i < numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
@@ -149,12 +140,9 @@ TEST_CASE_METHOD(MessageContextFixture,
     if (senderThread.joinable()) {
         senderThread.join();
     }
-
-    // Close the destination endpoint
-    dst.close();
 }
 
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv many messages from many clients",
                  "[transport]")
 {
@@ -162,26 +150,20 @@ TEST_CASE_METHOD(MessageContextFixture,
     int numSenders = 10;
     std::string expectedMsg = "Hello from client";
     std::vector<std::thread> senderThreads;
+    const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
 
     for (int j = 0; j < numSenders; j++) {
-        senderThreads.emplace_back(
-          std::thread([this, numMessages, expectedMsg] {
-              // Open the source endpoint client, don't bind
-              SendMessageEndpoint src(thisHost, testPort);
-              src.open(context);
-              for (int i = 0; i < numMessages; i++) {
-                  uint8_t msg[expectedMsg.size()];
-                  memcpy(msg, expectedMsg.c_str(), expectedMsg.size());
-                  src.send(msg, expectedMsg.size());
-              }
-
-              src.close();
-          }));
+        senderThreads.emplace_back(std::thread([msg, numMessages, expectedMsg] {
+            // Open the source endpoint client
+            AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
+            for (int i = 0; i < numMessages; i++) {
+                src.send(msg, expectedMsg.size());
+            }
+        }));
     }
 
     // Receive messages
-    RecvMessageEndpoint dst(testPort);
-    dst.open(context);
+    AsyncRecvMessageEndpoint dst(TEST_PORT);
     for (int i = 0; i < numSenders * numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
@@ -198,47 +180,44 @@ TEST_CASE_METHOD(MessageContextFixture,
             t.join();
         }
     }
-
-    // Close the destination endpoint
-    dst.close();
 }
 
-TEST_CASE_METHOD(MessageContextFixture,
+TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test can't set invalid send/recv timeouts",
                  "[transport]")
 {
-    MessageEndpoint cli(thisHost, testPort);
 
     SECTION("Sanity check valid timeout")
     {
-        REQUIRE_NOTHROW(cli.setRecvTimeoutMs(100));
-        REQUIRE_NOTHROW(cli.setSendTimeoutMs(100));
+        AsyncSendMessageEndpoint s(LOCALHOST, TEST_PORT, 100);
+        AsyncRecvMessageEndpoint r(TEST_PORT, 100);
+
+        SyncSendMessageEndpoint sB(LOCALHOST, TEST_PORT + 10, 100);
+        SyncRecvMessageEndpoint rB(TEST_PORT + 10, 100);
     }
 
-    SECTION("Recv zero timeout") { REQUIRE_THROWS(cli.setRecvTimeoutMs(0)); }
+    SECTION("Recv zero timeout")
+    {
+        REQUIRE_THROWS(AsyncRecvMessageEndpoint(TEST_PORT, 0));
+        REQUIRE_THROWS(SyncRecvMessageEndpoint(TEST_PORT + 10, 0));
+    }
 
-    SECTION("Send zero timeout") { REQUIRE_THROWS(cli.setSendTimeoutMs(0)); }
+    SECTION("Send zero timeout")
+    {
+        REQUIRE_THROWS(AsyncSendMessageEndpoint(LOCALHOST, TEST_PORT, 0));
+        REQUIRE_THROWS(SyncSendMessageEndpoint(LOCALHOST, TEST_PORT + 10, 0));
+    }
 
     SECTION("Recv negative timeout")
     {
-        REQUIRE_THROWS(cli.setRecvTimeoutMs(-1));
+        REQUIRE_THROWS(AsyncRecvMessageEndpoint(TEST_PORT, -1));
+        REQUIRE_THROWS(SyncRecvMessageEndpoint(TEST_PORT + 10, -1));
     }
 
     SECTION("Send negative timeout")
     {
-        REQUIRE_THROWS(cli.setSendTimeoutMs(-1));
-    }
-
-    SECTION("Recv, socket already initialised")
-    {
-        cli.open(context, SocketType::PULL, false);
-        REQUIRE_THROWS(cli.setRecvTimeoutMs(100));
-    }
-
-    SECTION("Send, socket already initialised")
-    {
-        cli.open(context, SocketType::PULL, false);
-        REQUIRE_THROWS(cli.setSendTimeoutMs(100));
+        REQUIRE_THROWS(AsyncSendMessageEndpoint(LOCALHOST, TEST_PORT, -1));
+        REQUIRE_THROWS(SyncSendMessageEndpoint(LOCALHOST, TEST_PORT + 10, -1));
     }
 }
 }

@@ -1,5 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
@@ -13,13 +14,13 @@ std::mutex mockMutex;
 
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
-static std::vector<std::pair<std::string, faabric::ResponseRequest>> flushCalls;
+static std::vector<std::pair<std::string, faabric::EmptyRequest>> flushCalls;
 
 static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
   batchMessages;
 
-static std::vector<std::pair<std::string, faabric::ResponseRequest>>
+static std::vector<std::pair<std::string, faabric::EmptyRequest>>
   resourceRequests;
 
 static std::unordered_map<std::string,
@@ -34,7 +35,7 @@ std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
     return functionCalls;
 }
 
-std::vector<std::pair<std::string, faabric::ResponseRequest>> getFlushCalls()
+std::vector<std::pair<std::string, faabric::EmptyRequest>> getFlushCalls()
 {
     return flushCalls;
 }
@@ -46,8 +47,7 @@ getBatchRequests()
     return batchMessages;
 }
 
-std::vector<std::pair<std::string, faabric::ResponseRequest>>
-getResourceRequests()
+std::vector<std::pair<std::string, faabric::EmptyRequest>> getResourceRequests()
 {
     return resourceRequests;
 }
@@ -80,38 +80,28 @@ void clearMockRequests()
 // Message Client
 // -----------------------------------
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
-  : faabric::transport::MessageEndpointClient(hostIn, FUNCTION_CALL_PORT)
-{
-    this->open(faabric::transport::getGlobalMessageContext());
-}
-
-void FunctionCallClient::sendHeader(faabric::scheduler::FunctionCalls call)
-{
-    uint8_t header = static_cast<uint8_t>(call);
-    send(&header, sizeof(header), true);
-}
+  : faabric::transport::MessageEndpointClient(hostIn,
+                                              FUNCTION_CALL_ASYNC_PORT,
+                                              FUNCTION_CALL_SYNC_PORT)
+{}
 
 void FunctionCallClient::sendFlush()
 {
-    faabric::ResponseRequest call;
+    faabric::EmptyRequest req;
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
-        flushCalls.emplace_back(host, call);
+        flushCalls.emplace_back(host, req);
     } else {
-        // Prepare the message body
-        call.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-
-        SEND_MESSAGE(faabric::scheduler::FunctionCalls::Flush, call);
-
-        // Await the response
-        awaitResponse(FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
+        faabric::EmptyResponse resp;
+        syncSend(faabric::scheduler::FunctionCalls::Flush, &req, &resp);
     }
 }
 
 faabric::HostResources FunctionCallClient::getResources()
 {
-    faabric::ResponseRequest request;
+    faabric::EmptyRequest request;
     faabric::HostResources response;
+
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
 
@@ -123,17 +113,8 @@ faabric::HostResources FunctionCallClient::getResources()
             response = queuedResourceResponses[host].dequeue();
         }
     } else {
-        request.set_returnhost(faabric::util::getSystemConfig().endpointHost);
-
-        SEND_MESSAGE(faabric::scheduler::FunctionCalls::GetResources, request);
-
-        // Receive message
-        faabric::transport::Message msg =
-          awaitResponse(FUNCTION_CALL_PORT + REPLY_PORT_OFFSET);
-        // Deserialise message string
-        if (!response.ParseFromArray(msg.data(), msg.size())) {
-            throw std::runtime_error("Error deserialising message");
-        }
+        syncSend(
+          faabric::scheduler::FunctionCalls::GetResources, &request, &response);
     }
 
     return response;
@@ -146,18 +127,18 @@ void FunctionCallClient::executeFunctions(
         faabric::util::UniqueLock lock(mockMutex);
         batchMessages.emplace_back(host, req);
     } else {
-        SEND_MESSAGE_PTR(faabric::scheduler::FunctionCalls::ExecuteFunctions,
-                         req);
+        asyncSend(faabric::scheduler::FunctionCalls::ExecuteFunctions,
+                  req.get());
     }
 }
 
-void FunctionCallClient::unregister(const faabric::UnregisterRequest& req)
+void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
 {
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
         unregisterRequests.emplace_back(host, req);
     } else {
-        SEND_MESSAGE(faabric::scheduler::FunctionCalls::Unregister, req);
+        asyncSend(faabric::scheduler::FunctionCalls::Unregister, &req);
     }
 }
 }

@@ -439,7 +439,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
     // Background thread to execute main function and await results
-    std::thread t([] {
+    auto latch = faabric::util::Latch::create(2);
+    std::thread t([&latch] {
         int nThreads = 8;
         std::shared_ptr<BatchExecuteRequest> req =
           faabric::util::batchExecFactory("dummy", "thread-check", 1);
@@ -449,19 +450,20 @@ TEST_CASE_METHOD(TestExecutorFixture,
         auto& sch = faabric::scheduler::getScheduler();
         sch.callFunctions(req, false);
 
+        latch->wait();
         faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
         assert(res.returnvalue() == 0);
     });
 
-    // Give it time to have made the request
-    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
+    // Wait until the function has executed and submit another request
+    auto reqs = faabric::scheduler::getBatchRequests();
+    REQUIRE_RETRY(reqs = faabric::scheduler::getBatchRequests(),
+                  reqs.size() == 1);
 
     // Check restore hasn't been called yet
     REQUIRE(restoreCount == 0);
 
     // Get the request that's been submitted
-    auto reqs = faabric::scheduler::getBatchRequests();
-    REQUIRE(reqs.size() == 1);
     std::string actualHost = reqs.at(0).first;
     REQUIRE(actualHost == otherHost);
 
@@ -491,6 +493,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Rejoin the other thread
+    latch->wait();
     if (t.joinable()) {
         t.join();
     }
@@ -519,11 +522,11 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     executeWithTestExecutor(req, true);
 
-    // We have to manually add a wait here as the thread results won't actually
-    // get logged on this host
-    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
+    // Note that because the results don't actually get logged on this host, we
+    // can't wait on them as usual.
     auto actual = faabric::scheduler::getThreadResults();
-    REQUIRE(actual.size() == nThreads);
+    REQUIRE_RETRY(actual = faabric::scheduler::getThreadResults(),
+                  actual.size() == nThreads);
 
     std::vector<uint32_t> actualMessageIds;
     for (auto& p : actual) {
@@ -681,9 +684,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == 1);
 
-    usleep((conf.boundTimeout + 500) * 1000);
-
-    REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
+    REQUIRE_RETRY({}, sch.getFunctionExecutorCount(msg) == 0);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -711,11 +712,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     executeWithTestExecutor(req, true);
 
-    // Wait for executor to have finished - sometimes takes a while
-    usleep(SHORT_TEST_TIMEOUT_MS * 1000);
-
-    // Check thread results returned
-    REQUIRE(faabric::scheduler::getThreadResults().size() == nThreads);
+    // Results aren't set on this host as it's not the master, so we have to
+    // wait
+    REQUIRE_RETRY({},
+                  faabric::scheduler::getThreadResults().size() == nThreads);
 
     // Check results have been sent back to the master host
     auto actualResults = faabric::scheduler::getThreadResults();

@@ -79,9 +79,6 @@ void FaabricMain::shutdown()
 {
     SPDLOG_INFO("Removing from global working set");
 
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.shutdown();
-
     SPDLOG_INFO("Waiting for the state server to finish");
     stateServer.stop();
 
@@ -90,6 +87,9 @@ void FaabricMain::shutdown()
 
     SPDLOG_INFO("Waiting for the snapshot server to finish");
     snapshotServer.stop();
+
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.shutdown();
 
     SPDLOG_INFO("Faabric pool successfully shut down");
 }

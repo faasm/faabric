@@ -10,6 +10,7 @@
 #include <faabric/util/timing.h>
 
 #include <atomic>
+#include <unordered_map>
 
 namespace faabric::scheduler {
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
@@ -22,12 +23,11 @@ class MpiWorld
 
     void create(const faabric::Message& call, int newId, int newSize);
 
-    void initialiseFromMsg(const faabric::Message& msg,
-                           bool forceLocal = false);
+    void broadcastHostsToRanks();
+
+    void initialiseFromMsg(const faabric::Message& msg);
 
     std::string getHostForRank(int rank);
-
-    void setAllRankHostsPorts(const faabric::MpiHostsToRanksMessage& msg);
 
     std::string getUser();
 
@@ -181,12 +181,12 @@ class MpiWorld
     double getWTime();
 
   private:
-    int id;
-    int size;
+    int id = -1;
+    int size = -1;
     std::string thisHost;
+    int basePort = DEFAULT_MPI_BASE_PORT;
     faabric::util::TimePoint creationTime;
 
-    std::shared_mutex worldMutex;
     std::atomic_flag isDestroyed = false;
 
     std::string user;
@@ -208,18 +208,29 @@ class MpiWorld
     std::vector<int> basePorts;
     std::vector<int> initLocalBasePorts(
       const std::vector<std::string>& executedAt);
+
     void initRemoteMpiEndpoint(int localRank, int remoteRank);
+
     std::pair<int, int> getPortForRanks(int localRank, int remoteRank);
+
     void sendRemoteMpiMessage(int sendRank,
                               int recvRank,
                               const std::shared_ptr<faabric::MPIMessage>& msg);
+
     std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
                                                               int recvRank);
+
+    faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
+
+    void sendMpiHostRankMsg(const std::string& hostIn,
+                            const faabric::MpiHostsToRanksMessage msg);
+
     void closeMpiMessageEndpoints();
 
     // Support for asyncrhonous communications
     std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,
                                                               int recvRank);
+
     std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
                                                              int recvRank,
                                                              int batchSize = 0);

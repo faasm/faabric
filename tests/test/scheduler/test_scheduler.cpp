@@ -12,6 +12,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
@@ -32,10 +33,10 @@ class SlowExecutor final : public Executor
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override
     {
-        SPDLOG_DEBUG("SlowExecutor executing task{}",
+        SPDLOG_DEBUG("Slow executor executing task{}",
                      req->mutable_messages()->at(msgIdx).id());
 
-        usleep(SHORT_TEST_TIMEOUT_MS * 1000);
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
         return 0;
     }
 };

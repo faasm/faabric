@@ -11,21 +11,25 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
   public:
     SnapshotServer();
 
-    void stop() override;
-
   protected:
-    void doRecv(faabric::transport::Message& header,
-                faabric::transport::Message& body) override;
+    void doAsyncRecv(int header,
+                     const uint8_t* buffer,
+                     size_t bufferSize) override;
 
-    /* Snapshot server API */
+    std::unique_ptr<google::protobuf::Message>
+    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override;
 
-    void recvPushSnapshot(faabric::transport::Message& msg);
+    std::unique_ptr<google::protobuf::Message> recvPushSnapshot(
+      const uint8_t* buffer,
+      size_t bufferSize);
 
-    void recvDeleteSnapshot(faabric::transport::Message& msg);
+    std::unique_ptr<google::protobuf::Message> recvPushSnapshotDiffs(
+      const uint8_t* buffer,
+      size_t bufferSize);
 
-    void recvPushSnapshotDiffs(faabric::transport::Message& msg);
+    void recvDeleteSnapshot(const uint8_t* buffer, size_t bufferSize);
 
-    void recvThreadResult(faabric::transport::Message& msg);
+    void recvThreadResult(const uint8_t* buffer, size_t bufferSize);
 
   private:
     void applyDiffsToSnapshot(

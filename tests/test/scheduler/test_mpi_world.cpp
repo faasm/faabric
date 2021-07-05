@@ -63,22 +63,6 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating world of size 1", "[mpi]")
     world.destroy();
 }
 
-TEST_CASE_METHOD(MpiTestFixture, "Test world loading from msg", "[mpi]")
-{
-    // Create another copy from state
-    scheduler::MpiWorld worldB;
-    // Force creating the second world in the _same_ host
-    bool forceLocal = true;
-    worldB.initialiseFromMsg(msg, forceLocal);
-
-    REQUIRE(worldB.getSize() == worldSize);
-    REQUIRE(worldB.getId() == worldId);
-    REQUIRE(worldB.getUser() == user);
-    REQUIRE(worldB.getFunction() == func);
-
-    worldB.destroy();
-}
-
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test cartesian communicator", "[mpi]")
 {
     MpiWorld world;

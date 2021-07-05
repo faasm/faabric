@@ -18,22 +18,19 @@ class Message
 
     Message();
 
-    ~Message();
-
     char* data();
 
     uint8_t* udata();
+
+    std::vector<uint8_t> dataCopy();
 
     int size();
 
     bool more();
 
-    void persist();
-
   private:
-    uint8_t* msg;
-    int _size;
+    std::vector<uint8_t> bytes;
+
     bool _more;
-    bool _persist;
 };
 }

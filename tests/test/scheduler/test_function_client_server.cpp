@@ -13,11 +13,10 @@
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
 #include <faabric_utils.h>
-
-#define TEST_TIMEOUT_MS 500
 
 using namespace faabric::scheduler;
 
@@ -36,17 +35,15 @@ class ClientServerFixture
     ClientServerFixture()
       : cli(LOCALHOST)
     {
-        server.start();
-        usleep(1000 * TEST_TIMEOUT_MS);
-
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
+
+        server.start();
     }
 
     ~ClientServerFixture()
     {
-        cli.close();
         server.stop();
         executorFactory->reset();
     }
@@ -79,9 +76,8 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(msgs.at(1).function() == "bar");
     sch.clearRecordedMessages();
 
-    // Send flush message
+    // Send flush message (which is synchronous)
     cli.sendFlush();
-    usleep(1000 * TEST_TIMEOUT_MS);
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
@@ -138,7 +134,11 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     // Make the request
     cli.executeFunctions(req);
-    usleep(1000 * TEST_TIMEOUT_MS);
+
+    for (const auto& m : req->messages()) {
+        // This timeout can be long as it shouldn't fail
+        sch.getFunctionResult(m.id(), 5 * SHORT_TEST_TIMEOUT_MS);
+    }
 
     // Check no other hosts have been registered
     faabric::Message m = req->messages().at(0);
@@ -219,15 +219,21 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqA.set_host("foobar");
     *reqA.mutable_function() = msg;
 
+    // Check that nothing's happened
+    server.setAsyncLatch();
     cli.unregister(reqA);
+    server.awaitAsyncLatch();
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Make the request to unregister the actual host
     faabric::UnregisterRequest reqB;
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
+
+    server.setAsyncLatch();
     cli.unregister(reqB);
-    usleep(1000 * TEST_TIMEOUT_MS);
+    server.awaitAsyncLatch();
+
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     sch.setThisHostResources(originalResources);

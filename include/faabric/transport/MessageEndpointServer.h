@@ -1,72 +1,67 @@
 #pragma once
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/Message.h>
-#include <faabric/transport/MessageContext.h>
 #include <faabric/transport/MessageEndpoint.h>
-#include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/util/latch.h>
 
 #include <thread>
 
-#define ENDPOINT_SERVER_SHUTDOWN -1
-
 namespace faabric::transport {
-/* Server handling a long-running 0MQ socket
- *
- * This abstract class implements a server-like loop functionality and will
- * always run in the background. Note that message endpoints (i.e. 0MQ sockets)
- * are _not_ thread safe, must be open-ed and close-ed from the _same_ thread,
- * and thus should preferably live in the thread's local address space.
- */
+
+// Each server has two underlying sockets, one for synchronous communication and
+// one for asynchronous. Each is run inside its own background thread.
+class MessageEndpointServer;
+
+class MessageEndpointServerThread
+{
+  public:
+    MessageEndpointServerThread(MessageEndpointServer* serverIn, bool asyncIn);
+
+    void start(std::shared_ptr<faabric::util::Latch> latch);
+
+    void join();
+
+  private:
+    MessageEndpointServer* server;
+    bool async = false;
+
+    std::thread backgroundThread;
+};
+
 class MessageEndpointServer
 {
   public:
-    MessageEndpointServer(int portIn);
+    MessageEndpointServer(int asyncPortIn, int syncPortIn);
 
-    /* Start and stop the server
-     *
-     * Generic methods to start and stop a message endpoint server. They take
-     * a, thread-safe, 0MQ context as an argument. The stop method will block
-     * until _all_ sockets within the context have been closed. Sockets blocking
-     * on a `recv` will be interrupted with ETERM upon context closure.
-     */
-    void start(faabric::transport::MessageContext& context);
-
-    void stop(faabric::transport::MessageContext& context);
-
-    /* Common start and stop entrypoint
-     *
-     * Call the generic methods with the default global message context.
-     */
-    void start();
+    virtual void start();
 
     virtual void stop();
 
+    void setAsyncLatch();
+
+    void awaitAsyncLatch();
+
   protected:
-    int recv(faabric::transport::RecvMessageEndpoint& endpoint);
+    virtual void doAsyncRecv(int header,
+                             const uint8_t* buffer,
+                             size_t bufferSize) = 0;
 
-    /* Template function to handle message reception
-     *
-     * A message endpoint server in faabric expects each communication to be
-     * a multi-part 0MQ message. One message containing the header, and another
-     * one with the body. Note that 0MQ _guarantees_ in-order delivery.
-     */
-    virtual void doRecv(faabric::transport::Message& header,
-                        faabric::transport::Message& body) = 0;
-
-    /* Send response to the client
-     *
-     * Send a one-off response to a client identified by host:port pair.
-     * Together with a blocking recv at the client side, this
-     * method can be used to achieve synchronous client-server communication.
-     */
-    void sendResponse(uint8_t* serialisedMsg,
-                      int size,
-                      const std::string& returnHost,
-                      int returnPort);
+    virtual std::unique_ptr<google::protobuf::Message>
+    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) = 0;
 
   private:
-    const int port;
+    friend class MessageEndpointServerThread;
 
-    std::thread servingThread;
+    const int asyncPort;
+    const int syncPort;
+
+    MessageEndpointServerThread asyncThread;
+    MessageEndpointServerThread syncThread;
+
+    AsyncSendMessageEndpoint asyncShutdownSender;
+    SyncSendMessageEndpoint syncShutdownSender;
+
+    std::shared_ptr<faabric::util::Latch> asyncLatch;
 };
 }

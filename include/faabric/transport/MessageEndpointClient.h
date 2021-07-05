@@ -1,25 +1,42 @@
 #pragma once
 
+#include <faabric/flat/faabric_generated.h>
+#include <faabric/proto/faabric.pb.h>
+#include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
-#include <faabric/transport/common.h>
 
 namespace faabric::transport {
-/* Minimal message endpoint client
- *
- * Low-level and minimal message endpoint client to run in companion with
- * a background-running server.
- */
-class MessageEndpointClient : public faabric::transport::SendMessageEndpoint
+class MessageEndpointClient
 {
   public:
-    MessageEndpointClient(const std::string& host, int port);
+    MessageEndpointClient(std::string hostIn,
+                          int asyncPort,
+                          int syncPort,
+                          int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
-    /* Wait for a message
-     *
-     * This method blocks the calling thread until we receive a message from
-     * the specified host:port pair. When pointed at a server, this method
-     * allows for blocking communications.
-     */
-    Message awaitResponse(int port);
+    void asyncSend(int header, google::protobuf::Message* msg);
+
+    void asyncSend(int header, const uint8_t* buffer, size_t bufferSize);
+
+    void syncSend(int header,
+                  google::protobuf::Message* msg,
+                  google::protobuf::Message* response);
+
+    void syncSend(int header,
+                  const uint8_t* buffer,
+                  size_t bufferSize,
+                  google::protobuf::Message* response);
+
+  protected:
+    const std::string host;
+
+  private:
+    const int asyncPort;
+
+    const int syncPort;
+
+    faabric::transport::AsyncSendMessageEndpoint asyncEndpoint;
+
+    faabric::transport::SyncSendMessageEndpoint syncEndpoint;
 };
 }

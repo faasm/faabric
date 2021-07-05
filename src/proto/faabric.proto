@@ -10,6 +10,10 @@ message EmptyResponse {
     int32 empty = 1;
 }
 
+message EmptyRequest {
+    int32 empty = 1;
+}
+
 // ---------------------------------------------
 // FUNCTION SCHEDULING
 // ---------------------------------------------
@@ -33,10 +37,6 @@ message BatchExecuteRequest {
     // Arbitrary context for this batch
     int32 subType = 6;
     bytes contextData = 7;
-}
-
-message ResponseRequest {
-    string returnHost = 1;
 }
 
 message HostResources {
@@ -157,7 +157,6 @@ message StateRequest {
     string user = 1;
     string key = 2;
     bytes data = 3;
-    string returnHost = 4;
 }
 
 message StateChunkRequest {
@@ -165,7 +164,6 @@ message StateChunkRequest {
     string key = 2;
     uint64 offset = 3;
     uint64 chunkSize = 4;
-    string returnHost = 5;
 }
 
 message StateResponse {
@@ -179,7 +177,6 @@ message StatePart {
     string key = 2;
     uint64 offset = 3;
     bytes data = 4;
-    string returnHost = 5;
 }
 
 message StateSizeResponse {
@@ -192,7 +189,6 @@ message StateAppendedRequest {
     string user = 1;
     string key = 2;
     uint32 nValues = 3;
-    string returnHost = 4;
 }
 
 message StateAppendedResponse {
