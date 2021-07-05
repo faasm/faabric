@@ -21,7 +21,7 @@
         throw;                                                                 \
     }
 
-#define CATCH_ZMQ_ERR_RETRY(op, label)                                         \
+#define CATCH_ZMQ_ERR_RETRY_ONCE(op, label)                                         \
     try {                                                                      \
         op;                                                                    \
     } catch (zmq::error_t & e) {                                               \
@@ -83,25 +83,25 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
         case zmq::socket_type::req: {
             SPDLOG_TRACE(
               "New socket: req {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY(socket.connect(address), "connect")
+            CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::push: {
             SPDLOG_TRACE(
               "New socket: push {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY(socket.connect(address), "connect")
+            CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::pull: {
             SPDLOG_TRACE(
               "New socket: pull {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY(socket.bind(address), "bind")
+            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
             break;
         }
         case zmq::socket_type::rep: {
             SPDLOG_TRACE(
               "New socket: rep {}:{} (timeout {}ms)", host, port, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY(socket.bind(address), "bind")
+            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
             break;
         }
         default: {
