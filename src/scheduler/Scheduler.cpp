@@ -267,7 +267,7 @@ std::vector<std::string> Scheduler::callFunctions(
               "Empty snapshot for distributed threads/ processes");
         }
 
-        if (snapshotNeeded) {
+        if (snapshotNeeded && !registeredHosts.empty()) {
             snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
             snapshotDiffs = snapshotData.getDirtyPages();
