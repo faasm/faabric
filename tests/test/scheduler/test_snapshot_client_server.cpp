@@ -4,9 +4,9 @@
 
 #include <sys/mman.h>
 
-#include <faabric/scheduler/SnapshotClient.h>
-#include <faabric/scheduler/SnapshotServer.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
@@ -22,8 +22,8 @@ class SnapshotClientServerFixture
   , public SnapshotTestFixture
 {
   protected:
-    faabric::scheduler::SnapshotServer server;
-    faabric::scheduler::SnapshotClient cli;
+    faabric::snapshot::SnapshotServer server;
+    faabric::snapshot::SnapshotClient cli;
 
   public:
     SnapshotClientServerFixture()

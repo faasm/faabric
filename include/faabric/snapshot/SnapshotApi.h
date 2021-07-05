@@ -1,6 +1,6 @@
 #pragma once
 
-namespace faabric::scheduler {
+namespace faabric::snapshot {
 enum SnapshotCalls
 {
     NoSnapshotCall = 0,

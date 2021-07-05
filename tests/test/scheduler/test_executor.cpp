@@ -8,7 +8,7 @@
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -468,7 +468,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(actualHost == otherHost);
 
     // Check the snapshot has been pushed to the other host
-    auto snapPushes = faabric::scheduler::getSnapshotPushes();
+    auto snapPushes = faabric::snapshot::getSnapshotPushes();
     REQUIRE(snapPushes.size() == 1);
     REQUIRE(snapPushes.at(0).first == otherHost);
 
@@ -484,7 +484,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(restoreCount == 1);
 
     // Process the thread result requests
-    auto results = faabric::scheduler::getThreadResults();
+    auto results = faabric::snapshot::getThreadResults();
 
     for (auto& r : results) {
         REQUIRE(r.first == thisHost);
@@ -524,8 +524,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Note that because the results don't actually get logged on this host, we
     // can't wait on them as usual.
-    auto actual = faabric::scheduler::getThreadResults();
-    REQUIRE_RETRY(actual = faabric::scheduler::getThreadResults(),
+    auto actual = faabric::snapshot::getThreadResults();
+    REQUIRE_RETRY(actual = faabric::snapshot::getThreadResults(),
                   actual.size() == nThreads);
 
     std::vector<uint32_t> actualMessageIds;
@@ -714,11 +714,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Results aren't set on this host as it's not the master, so we have to
     // wait
-    REQUIRE_RETRY({},
-                  faabric::scheduler::getThreadResults().size() == nThreads);
+    REQUIRE_RETRY({}, faabric::snapshot::getThreadResults().size() == nThreads);
 
     // Check results have been sent back to the master host
-    auto actualResults = faabric::scheduler::getThreadResults();
+    auto actualResults = faabric::snapshot::getThreadResults();
     REQUIRE(actualResults.size() == nThreads);
 
     // Check only one has diffs attached
@@ -814,18 +813,18 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedRegistered);
 
     // Check snapshot has been pushed
-    auto pushes = faabric::scheduler::getSnapshotPushes();
+    auto pushes = faabric::snapshot::getSnapshotPushes();
     REQUIRE(pushes.at(0).first == otherHost);
     REQUIRE(pushes.at(0).second.size == snapshotSize);
 
-    REQUIRE(faabric::scheduler::getSnapshotDiffPushes().empty());
+    REQUIRE(faabric::snapshot::getSnapshotDiffPushes().empty());
 
     // Check that we're not registering any dirty pages on the snapshot
     faabric::util::SnapshotData& snap = reg.getSnapshot(snapshotKey);
     REQUIRE(snap.getDirtyPages().empty());
 
     // Now reset snapshot pushes of all kinds
-    faabric::scheduler::clearMockSnapshotRequests();
+    faabric::snapshot::clearMockSnapshotRequests();
 
     // Make an edit to the snapshot memory and get the expected diffs
     snap.data[0] = 9;
@@ -850,10 +849,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
     sch.awaitThreadResult(reqB->mutable_messages()->at(0).id());
 
     // Check the full snapshot hasn't been pushed
-    REQUIRE(faabric::scheduler::getSnapshotPushes().empty());
+    REQUIRE(faabric::snapshot::getSnapshotPushes().empty());
 
     // Check the diffs are pushed as expected
-    auto diffPushes = faabric::scheduler::getSnapshotDiffPushes();
+    auto diffPushes = faabric::snapshot::getSnapshotDiffPushes();
     REQUIRE(diffPushes.size() == 1);
     REQUIRE(diffPushes.at(0).first == otherHost);
     std::vector<faabric::util::SnapshotDiff> actualDiffs =

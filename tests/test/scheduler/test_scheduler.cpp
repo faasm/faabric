@@ -7,7 +7,7 @@
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
@@ -272,7 +272,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     REQUIRE(resRequestsOne.at(0).first == otherHost);
 
     // Check snapshots have been pushed
-    auto snapshotPushes = faabric::scheduler::getSnapshotPushes();
+    auto snapshotPushes = faabric::snapshot::getSnapshotPushes();
     if (expectedSnapshot.empty()) {
         REQUIRE(snapshotPushes.empty());
     } else {
@@ -749,7 +749,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     for (auto h : expectedHosts) {
         expectedDeleteRequests.push_back({ h, snapKey });
     };
-    auto actualDeleteRequests = faabric::scheduler::getSnapshotDeletes();
+    auto actualDeleteRequests = faabric::snapshot::getSnapshotDeletes();
 
     REQUIRE(actualDeleteRequests == expectedDeleteRequests);
 }
@@ -791,7 +791,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     }
 
     // Check the results have been pushed along with the thread result
-    auto actualResults = faabric::scheduler::getThreadResults();
+    auto actualResults = faabric::snapshot::getThreadResults();
 
     REQUIRE(actualResults.size() == 1);
     REQUIRE(actualResults.at(0).first == "otherHost");

@@ -7,7 +7,7 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/testing.h>
@@ -50,7 +50,7 @@ void cleanFaabric()
     faabric::util::setTestMode(true);
     faabric::util::setMockMode(false);
     faabric::scheduler::clearMockRequests();
-    faabric::scheduler::clearMockSnapshotRequests();
+    faabric::snapshot::clearMockSnapshotRequests();
 
     // Set up dummy executor factory
     std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =

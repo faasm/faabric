@@ -3,7 +3,7 @@
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/scheduler/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
@@ -19,6 +19,7 @@
 #define FLUSH_TIMEOUT_MS 10000
 
 using namespace faabric::util;
+using namespace faabric::snapshot;
 
 namespace faabric::scheduler {
 
@@ -31,7 +32,7 @@ static thread_local std::unordered_map<std::string,
   functionCallClients;
 
 static thread_local std::unordered_map<std::string,
-                                       faabric::scheduler::SnapshotClient>
+                                       faabric::snapshot::SnapshotClient>
   snapshotClients;
 
 Scheduler& getScheduler()

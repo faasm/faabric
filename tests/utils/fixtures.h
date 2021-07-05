@@ -68,7 +68,7 @@ class SchedulerTestFixture
         faabric::util::setTestMode(true);
 
         faabric::scheduler::clearMockRequests();
-        faabric::scheduler::clearMockSnapshotRequests();
+        faabric::snapshot::clearMockSnapshotRequests();
 
         sch.shutdown();
         sch.addHostToGlobalSet();
@@ -80,7 +80,7 @@ class SchedulerTestFixture
         faabric::util::setTestMode(true);
 
         faabric::scheduler::clearMockRequests();
-        faabric::scheduler::clearMockSnapshotRequests();
+        faabric::snapshot::clearMockSnapshotRequests();
 
         sch.shutdown();
         sch.addHostToGlobalSet();
