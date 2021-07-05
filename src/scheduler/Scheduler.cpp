@@ -699,27 +699,25 @@ void Scheduler::registerThread(uint32_t msgId)
 void Scheduler::setThreadResult(const faabric::Message& msg,
                                 int32_t returnValue)
 {
-    std::vector<faabric::util::SnapshotDiff> empty;
-    setThreadResult(msg, returnValue, empty);
-}
-
-void Scheduler::setThreadResult(
-  const faabric::Message& msg,
-  int32_t returnValue,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
-{
     bool isMaster = msg.masterhost() == conf.endpointHost;
 
     if (isMaster) {
         setThreadResultLocally(msg.id(), returnValue);
     } else {
         SnapshotClient& c = getSnapshotClient(msg.masterhost());
+        c.pushThreadResult(msg.id(), returnValue);
+    }
+}
 
-        if (diffs.empty()) {
-            c.pushThreadResult(msg.id(), returnValue);
-        } else {
-            c.pushThreadResult(msg.id(), returnValue, msg.snapshotkey(), diffs);
-        }
+void Scheduler::pushSnapshotDiffs(
+  const faabric::Message& msg,
+  const std::vector<faabric::util::SnapshotDiff>& diffs)
+{
+    bool isMaster = msg.masterhost() == conf.endpointHost;
+
+    if (!isMaster && !diffs.empty()) {
+        SnapshotClient& c = getSnapshotClient(msg.masterhost());
+        c.pushSnapshotDiffs(msg.snapshotkey(), diffs);
     }
 }
 

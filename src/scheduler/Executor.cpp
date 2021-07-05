@@ -233,6 +233,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Get diffs
             faabric::util::SnapshotData d = snapshot();
             diffs = d.getDirtyPages();
+            sch.pushSnapshotDiffs(msg, diffs);
 
             // Reset dirty page tracking now that we've got the diffs
             faabric::util::resetDirtyTracking();
@@ -255,14 +256,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // on its result to continue execution, therefore must be done once the
         // executor has been reset, otherwise the executor may not be reused for
         // a repeat invocation.
-        if (isLastTask && isThreads) {
-            // Send diffs along with thread result
-            SPDLOG_DEBUG("Task {} finished, returning {} snapshot diffs",
-                         msg.id(),
-                         diffs.size());
-
-            sch.setThreadResult(msg, returnValue, diffs);
-        } else if (isThreads) {
+        if (isThreads) {
             // Set non-final thread result
             sch.setThreadResult(msg, returnValue);
         } else {

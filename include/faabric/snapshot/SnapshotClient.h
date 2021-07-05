@@ -50,12 +50,6 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
 
     void pushThreadResult(uint32_t messageId, int returnValue);
 
-    void pushThreadResult(
-      uint32_t messageId,
-      int returnValue,
-      const std::string& snapshotKey,
-      const std::vector<faabric::util::SnapshotDiff>& diffs);
-
   private:
     void sendHeader(faabric::snapshot::SnapshotCalls call);
 };
