@@ -7,8 +7,6 @@ set(LIB_FILES
         FunctionCallClient.cpp
         FunctionCallServer.cpp
         Scheduler.cpp
-        SnapshotServer.cpp
-        SnapshotClient.cpp
         MpiContext.cpp
         MpiMessageBuffer.cpp
         MpiWorldRegistry.cpp
@@ -18,4 +16,4 @@ set(LIB_FILES
 
 faabric_lib(scheduler "${LIB_FILES}")
 
-target_link_libraries(scheduler flat proto snapshot state faabricmpi redis transport)
+target_link_libraries(scheduler snapshot state faabricmpi redis)
