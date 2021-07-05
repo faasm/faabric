@@ -21,7 +21,7 @@
         throw;                                                                 \
     }
 
-#define CATCH_ZMQ_ERR_RETRY_ONCE(op, label)                                         \
+#define CATCH_ZMQ_ERR_RETRY_ONCE(op, label)                                    \
     try {                                                                      \
         op;                                                                    \
     } catch (zmq::error_t & e) {                                               \

@@ -16,52 +16,49 @@ SnapshotServer::SnapshotServer()
                                               SNAPSHOT_SYNC_PORT)
 {}
 
-void SnapshotServer::doAsyncRecv(faabric::transport::Message& header,
-                                 faabric::transport::Message& body)
+void SnapshotServer::doAsyncRecv(int header,
+                                 const uint8_t* buffer,
+                                 size_t bufferSize)
 {
-    assert(header.size() == sizeof(uint8_t));
-    uint8_t call = static_cast<uint8_t>(*header.data());
-    switch (call) {
+    switch (header) {
         case faabric::scheduler::SnapshotCalls::DeleteSnapshot: {
-            this->recvDeleteSnapshot(body);
+            this->recvDeleteSnapshot(buffer, bufferSize);
             break;
         }
         case faabric::scheduler::SnapshotCalls::ThreadResult: {
-            this->recvThreadResult(body);
+            this->recvThreadResult(buffer, bufferSize);
             break;
         }
         default: {
             throw std::runtime_error(
-              fmt::format("Unrecognized async call header: {}", call));
+              fmt::format("Unrecognized async call header: {}", header));
         }
     }
 }
 
-std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
-  faabric::transport::Message& header,
-  faabric::transport::Message& body)
+std::unique_ptr<google::protobuf::Message>
+SnapshotServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
 {
-    assert(header.size() == sizeof(uint8_t));
-    uint8_t call = static_cast<uint8_t>(*header.data());
-    switch (call) {
+    switch (header) {
         case faabric::scheduler::SnapshotCalls::PushSnapshot: {
-            return recvPushSnapshot(body);
+            return recvPushSnapshot(buffer, bufferSize);
         }
         case faabric::scheduler::SnapshotCalls::PushSnapshotDiffs: {
-            return recvPushSnapshotDiffs(body);
+            return recvPushSnapshotDiffs(buffer, bufferSize);
         }
         default: {
             throw std::runtime_error(
-              fmt::format("Unrecognized sync call header: {}", call));
+              fmt::format("Unrecognized sync call header: {}", header));
         }
     }
 }
 
 std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
-  faabric::transport::Message& msg)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    SnapshotPushRequest* r =
-      flatbuffers::GetMutableRoot<SnapshotPushRequest>(msg.udata());
+    const SnapshotPushRequest* r =
+      flatbuffers::GetRoot<SnapshotPushRequest>(buffer);
 
     SPDLOG_DEBUG("Receiving shapshot {} (size {})",
                  r->key()->c_str(),
@@ -80,7 +77,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // this data?
     data.data = (uint8_t*)mmap(
       nullptr, data.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    std::memcpy(data.data, r->mutable_contents()->Data(), data.size);
+    std::memcpy(data.data, r->contents()->Data(), data.size);
 
     reg.takeSnapshot(r->key()->str(), data, true);
 
@@ -88,10 +85,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
+void SnapshotServer::recvThreadResult(const uint8_t* buffer, size_t bufferSize)
 {
     const ThreadResultRequest* r =
-      flatbuffers::GetMutableRoot<ThreadResultRequest>(msg.udata());
+      flatbuffers::GetRoot<ThreadResultRequest>(buffer);
 
     // Apply snapshot diffs *first* (these must be applied before other threads
     // can continue)
@@ -108,10 +105,10 @@ void SnapshotServer::recvThreadResult(faabric::transport::Message& msg)
 }
 
 std::unique_ptr<google::protobuf::Message>
-SnapshotServer::recvPushSnapshotDiffs(faabric::transport::Message& msg)
+SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 {
     const SnapshotDiffPushRequest* r =
-      flatbuffers::GetMutableRoot<SnapshotDiffPushRequest>(msg.udata());
+      flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
 
     applyDiffsToSnapshot(r->key()->str(), r->chunks());
 
@@ -139,10 +136,11 @@ void SnapshotServer::applyDiffsToSnapshot(
     }
 }
 
-void SnapshotServer::recvDeleteSnapshot(faabric::transport::Message& msg)
+void SnapshotServer::recvDeleteSnapshot(const uint8_t* buffer,
+                                        size_t bufferSize)
 {
     const SnapshotDeleteRequest* r =
-      flatbuffers::GetRoot<SnapshotDeleteRequest>(msg.udata());
+      flatbuffers::GetRoot<SnapshotDeleteRequest>(buffer);
     SPDLOG_INFO("Deleting shapshot {}", r->key()->c_str());
 
     faabric::snapshot::SnapshotRegistry& reg =

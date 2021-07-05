@@ -14,50 +14,48 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doAsyncRecv(faabric::transport::Message& header,
-                                     faabric::transport::Message& body)
+void FunctionCallServer::doAsyncRecv(int header,
+                                     const uint8_t* buffer,
+                                     size_t bufferSize)
 {
-    assert(header.size() == sizeof(uint8_t));
-    uint8_t call = static_cast<uint8_t>(*header.data());
-    switch (call) {
+    switch (header) {
         case faabric::scheduler::FunctionCalls::ExecuteFunctions: {
-            recvExecuteFunctions(body);
+            recvExecuteFunctions(buffer, bufferSize);
             break;
         }
         case faabric::scheduler::FunctionCalls::Unregister: {
-            recvUnregister(body);
+            recvUnregister(buffer, bufferSize);
             break;
         }
         default: {
             throw std::runtime_error(
-              fmt::format("Unrecognized async call header: {}", call));
+              fmt::format("Unrecognized async call header: {}", header));
         }
     }
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
-  faabric::transport::Message& header,
-  faabric::transport::Message& body)
+  int header,
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    assert(header.size() == sizeof(uint8_t));
-
-    uint8_t call = static_cast<uint8_t>(*header.data());
-    switch (call) {
+    switch (header) {
         case faabric::scheduler::FunctionCalls::Flush: {
-            return recvFlush(body);
+            return recvFlush(buffer, bufferSize);
         }
         case faabric::scheduler::FunctionCalls::GetResources: {
-            return recvGetResources(body);
+            return recvGetResources(buffer, bufferSize);
         }
         default: {
             throw std::runtime_error(
-              fmt::format("Unrecognized sync call header: {}", call));
+              fmt::format("Unrecognized sync call header: {}", header));
         }
     }
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
@@ -68,18 +66,20 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void FunctionCallServer::recvExecuteFunctions(faabric::transport::Message& body)
+void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,
+                                              size_t bufferSize)
 {
-    PARSE_MSG(faabric::BatchExecuteRequest, body.data(), body.size())
+    PARSE_MSG(faabric::BatchExecuteRequest, buffer, bufferSize)
 
     // This host has now been told to execute these functions no matter what
     scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(msg),
                             true);
 }
 
-void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
+void FunctionCallServer::recvUnregister(const uint8_t* buffer,
+                                        size_t bufferSize)
 {
-    PARSE_MSG(faabric::UnregisterRequest, body.data(), body.size())
+    PARSE_MSG(faabric::UnregisterRequest, buffer, bufferSize)
 
     std::string funcStr = faabric::util::funcToString(msg.function(), false);
     SPDLOG_DEBUG("Unregistering host {} for {}", msg.host(), funcStr);
@@ -89,7 +89,8 @@ void FunctionCallServer::recvUnregister(faabric::transport::Message& body)
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
     auto response = std::make_unique<faabric::HostResources>(
       scheduler.getThisHostResources());

@@ -17,58 +17,56 @@ StateServer::StateServer(State& stateIn)
   , state(stateIn)
 {}
 
-void StateServer::doAsyncRecv(faabric::transport::Message& header,
-                              faabric::transport::Message& body)
+void StateServer::doAsyncRecv(int header,
+                              const uint8_t* buffer,
+                              size_t bufferSize)
 {
     throw std::runtime_error("State server does not support async recv");
 }
 
-std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
-  faabric::transport::Message& header,
-  faabric::transport::Message& body)
+std::unique_ptr<google::protobuf::Message>
+StateServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
 {
-    assert(header.size() == sizeof(uint8_t));
-
-    uint8_t call = static_cast<uint8_t>(*header.data());
-    switch (call) {
+    switch (header) {
         case faabric::state::StateCalls::Pull: {
-            return recvPull(body);
+            return recvPull(buffer, bufferSize);
         }
         case faabric::state::StateCalls::Push: {
-            return recvPush(body);
+            return recvPush(buffer, bufferSize);
         }
         case faabric::state::StateCalls::Size: {
-            return recvSize(body);
+            return recvSize(buffer, bufferSize);
         }
         case faabric::state::StateCalls::Append: {
-            return recvAppend(body);
+            return recvAppend(buffer, bufferSize);
         }
         case faabric::state::StateCalls::ClearAppended: {
-            return recvClearAppended(body);
+            return recvClearAppended(buffer, bufferSize);
         }
         case faabric::state::StateCalls::PullAppended: {
-            return recvPullAppended(body);
+            return recvPullAppended(buffer, bufferSize);
         }
         case faabric::state::StateCalls::Lock: {
-            return recvLock(body);
+            return recvLock(buffer, bufferSize);
         }
         case faabric::state::StateCalls::Unlock: {
-            return recvUnlock(body);
+            return recvUnlock(buffer, bufferSize);
         }
         case faabric::state::StateCalls::Delete: {
-            return recvDelete(body);
+            return recvDelete(buffer, bufferSize);
         }
         default: {
             throw std::runtime_error(
-              fmt::format("Unrecognized state call header: {}", call));
+              fmt::format("Unrecognized state call header: {}", header));
         }
     }
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvSize(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Prepare the response
     SPDLOG_TRACE("Size {}/{}", msg.user(), msg.key());
@@ -82,9 +80,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvSize(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvPull(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateChunkRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateChunkRequest, buffer, bufferSize)
 
     SPDLOG_TRACE("Pull {}/{} ({}->{})",
                  msg.user(),
@@ -109,9 +108,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPull(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvPush(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StatePart, body.data(), body.size())
+    PARSE_MSG(faabric::StatePart, buffer, bufferSize)
 
     // Update the KV store
     SPDLOG_TRACE("Push {}/{} ({}->{})",
@@ -129,9 +129,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPush(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvAppend(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Update the KV
     KV_FROM_REQUEST(msg)
@@ -144,9 +145,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvAppend(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvPullAppended(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateAppendedRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateAppendedRequest, buffer, bufferSize)
 
     // Prepare response
     SPDLOG_TRACE("Pull appended {}/{}", msg.user(), msg.key());
@@ -166,9 +168,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPullAppended(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvDelete(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Delete value
     SPDLOG_TRACE("Delete {}/{}", msg.user(), msg.key());
@@ -179,9 +182,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvDelete(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvClearAppended(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Perform operation
     SPDLOG_TRACE("Clear appended {}/{}", msg.user(), msg.key());
@@ -193,9 +197,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvClearAppended(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvLock(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Perform operation
     SPDLOG_TRACE("Lock {}/{}", msg.user(), msg.key());
@@ -207,9 +212,10 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvLock(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvUnlock(
-  faabric::transport::Message& body)
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
-    PARSE_MSG(faabric::StateRequest, body.data(), body.size())
+    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Perform operation
     SPDLOG_TRACE("Unlock {}/{}", msg.user(), msg.key());

@@ -15,21 +15,22 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    void doAsyncRecv(faabric::transport::Message& header,
-                     faabric::transport::Message& body) override;
+    void doAsyncRecv(int header,
+                     const uint8_t* buffer,
+                     size_t bufferSize) override;
 
-    std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      faabric::transport::Message& header,
-      faabric::transport::Message& body) override;
+    std::unique_ptr<google::protobuf::Message>
+    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override;
 
-    std::unique_ptr<google::protobuf::Message> recvFlush(
-      faabric::transport::Message& body);
+    std::unique_ptr<google::protobuf::Message> recvFlush(const uint8_t* buffer,
+                                                         size_t bufferSize);
 
     std::unique_ptr<google::protobuf::Message> recvGetResources(
-      faabric::transport::Message& body);
+      const uint8_t* buffer,
+      size_t bufferSize);
 
-    void recvExecuteFunctions(faabric::transport::Message& body);
+    void recvExecuteFunctions(const uint8_t* buffer, size_t bufferSize);
 
-    void recvUnregister(faabric::transport::Message& body);
+    void recvUnregister(const uint8_t* buffer, size_t bufferSize);
 };
 }

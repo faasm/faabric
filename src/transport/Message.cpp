@@ -1,4 +1,3 @@
-#include <cstddef>
 #include <faabric/transport/Message.h>
 #include <faabric/util/macros.h>
 

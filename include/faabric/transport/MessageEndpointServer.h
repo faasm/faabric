@@ -43,14 +43,12 @@ class MessageEndpointServer
     void awaitAsyncLatch();
 
   protected:
-    virtual void doAsyncRecv(faabric::transport::Message& header,
-                             faabric::transport::Message& body) = 0;
+    virtual void doAsyncRecv(int header,
+                             const uint8_t* buffer,
+                             size_t bufferSize) = 0;
 
-    virtual std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      faabric::transport::Message& header,
-      faabric::transport::Message& body) = 0;
-
-    void sendSyncResponse(google::protobuf::Message* resp);
+    virtual std::unique_ptr<google::protobuf::Message>
+    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) = 0;
 
   private:
     friend class MessageEndpointServerThread;

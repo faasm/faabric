@@ -40,18 +40,18 @@ void MessageEndpointServerThread::start(
             bool bodyReceived = false;
             try {
                 // Receive header and body
-                Message header = endpoint->recv();
+                Message headerMessage = endpoint->recv();
                 headerReceived = true;
 
-                if (header.size() == shutdownHeader.size()) {
-                    if (header.dataCopy() == shutdownHeader) {
+                if (headerMessage.size() == shutdownHeader.size()) {
+                    if (headerMessage.dataCopy() == shutdownHeader) {
                         SPDLOG_TRACE("Server on {} received shutdown message",
                                      port);
                         break;
                     }
                 }
 
-                if (!header.more()) {
+                if (!headerMessage.more()) {
                     throw std::runtime_error(
                       "Header sent without SNDMORE flag");
                 }
@@ -62,13 +62,16 @@ void MessageEndpointServerThread::start(
                 }
                 bodyReceived = true;
 
+                assert(headerMessage.size() == sizeof(uint8_t));
+                uint8_t header = static_cast<uint8_t>(*headerMessage.data());
+
                 if (async) {
                     // Server-specific async handling
-                    server->doAsyncRecv(header, body);
+                    server->doAsyncRecv(header, body.udata(), body.size());
                 } else {
                     // Server-specific sync handling
                     std::unique_ptr<google::protobuf::Message> resp =
-                      server->doSyncRecv(header, body);
+                      server->doSyncRecv(header, body.udata(), body.size());
                     size_t respSize = resp->ByteSizeLong();
 
                     uint8_t buffer[respSize];
