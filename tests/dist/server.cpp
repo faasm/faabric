@@ -15,19 +15,24 @@ int main()
     faabric::transport::initGlobalMessageContext();
     tests::initDistTests();
 
-    SPDLOG_INFO("Starting distributed test server on worker");
-    std::shared_ptr<ExecutorFactory> fac =
-      std::make_shared<tests::DistTestExecutorFactory>();
-    faabric::runner::FaabricMain m(fac);
-    m.startBackground();
+    // WARNING: All 0MQ operations must be contained within their own scope so
+    // that all sockets are destructed before the context is closed.
+    {
+        SPDLOG_INFO("Starting distributed test server on worker");
+        std::shared_ptr<ExecutorFactory> fac =
+          std::make_shared<tests::DistTestExecutorFactory>();
+        faabric::runner::FaabricMain m(fac);
+        m.startBackground();
 
-    // Note, endpoint will block until killed
-    SPDLOG_INFO("Starting HTTP endpoint on worker");
-    faabric::endpoint::FaabricEndpoint endpoint;
-    endpoint.start();
+        // Note, endpoint will block until killed
+        SPDLOG_INFO("Starting HTTP endpoint on worker");
+        faabric::endpoint::FaabricEndpoint endpoint;
+        endpoint.start();
 
-    SPDLOG_INFO("Shutting down");
-    m.shutdown();
+        SPDLOG_INFO("Shutting down");
+        m.shutdown();
+    }
+
     faabric::transport::closeGlobalMessageContext();
 
     return EXIT_SUCCESS;
