@@ -224,7 +224,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         bool isLastTask = oldTaskCount == 1;
 
         SPDLOG_TRACE("Task {} finished by thread {}:{} ({} left)",
-                     msg.id(),
+                     faabric::util::funcToString(msg, true),
                      id,
                      threadPoolIdx,
                      oldTaskCount - 1);
