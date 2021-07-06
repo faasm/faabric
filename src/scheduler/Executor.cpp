@@ -161,7 +161,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
     auto& sch = faabric::scheduler::getScheduler();
-    auto& conf = faabric::util::getSystemConfig();
+    const auto& conf = faabric::util::getSystemConfig();
 
     bool selfShutdown = false;
 
@@ -226,13 +226,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      threadPoolIdx,
                      executingTaskCount);
 
-        // Get snapshot diffs _before_ we reset the executor
+        // Handle snapshot diffs _before_ we reset the executor
         bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-        std::vector<faabric::util::SnapshotDiff> diffs;
         if (isLastTask && isThreads) {
             // Get diffs
             faabric::util::SnapshotData d = snapshot();
-            diffs = d.getDirtyPages();
+
+            std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
             sch.pushSnapshotDiffs(msg, diffs);
 
             // Reset dirty page tracking now that we've got the diffs
