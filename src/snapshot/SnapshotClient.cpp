@@ -155,7 +155,7 @@ void SnapshotClient::pushThreadResult(uint32_t messageId, int returnValue)
         flatbuffers::Offset<ThreadResultRequest> requestOffset;
 
         SPDLOG_DEBUG(
-          "Sending thread result for {} to {} (with no snapshot diffs)",
+          "Sending thread result for {} to {}",
           messageId,
           host);
 
