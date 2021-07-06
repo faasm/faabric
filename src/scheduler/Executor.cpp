@@ -236,7 +236,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
             sch.pushSnapshotDiffs(msg, diffs);
 
-            // Reset dirty page tracking now that we've got the diffs
+            // Reset dirty page tracking now that we've pushed the diffs
             faabric::util::resetDirtyTracking();
             pendingSnapshotPush = false;
         }
