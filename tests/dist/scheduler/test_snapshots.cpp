@@ -98,7 +98,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::vector<std::string> executedHosts = sch.callFunctions(req);
     REQUIRE(expectedHosts == executedHosts);
 
-    int actualResult = sch.awaitThreadResult(m.id());
-    REQUIRE(actualResult == 333);
+    faabric::Message actualResult = sch.getFunctionResult(m.id(), 10000);
+    REQUIRE(actualResult.returnvalue() == 333);
 }
 }
