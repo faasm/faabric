@@ -117,8 +117,9 @@ class Scheduler
 
     void setThreadResult(const faabric::Message& msg, int32_t returnValue);
 
-    void pushSnapshotDiffs(const faabric::Message& msg,
-                         const std::vector<faabric::util::SnapshotDiff>& diffs);
+    void pushSnapshotDiffs(
+      const faabric::Message& msg,
+      const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
 

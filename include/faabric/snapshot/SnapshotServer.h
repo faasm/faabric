@@ -30,10 +30,5 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
     void recvDeleteSnapshot(const uint8_t* buffer, size_t bufferSize);
 
     void recvThreadResult(const uint8_t* buffer, size_t bufferSize);
-
-  private:
-    void applyDiffsToSnapshot(
-      const std::string& snapshotKey,
-      const flatbuffers::Vector<flatbuffers::Offset<SnapshotDiffChunk>>* diffs);
 };
 }

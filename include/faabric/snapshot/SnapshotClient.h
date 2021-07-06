@@ -20,11 +20,7 @@ getSnapshotDiffPushes();
 
 std::vector<std::pair<std::string, std::string>> getSnapshotDeletes();
 
-std::vector<std::pair<std::string,
-                      std::tuple<uint32_t,
-                                 int,
-                                 std::string,
-                                 std::vector<faabric::util::SnapshotDiff>>>>
+std::vector<std::pair<std::string, std::pair<uint32_t, int>>>
 getThreadResults();
 
 void clearMockSnapshotRequests();

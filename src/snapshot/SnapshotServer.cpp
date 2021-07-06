@@ -90,12 +90,6 @@ void SnapshotServer::recvThreadResult(const uint8_t* buffer, size_t bufferSize)
     const ThreadResultRequest* r =
       flatbuffers::GetRoot<ThreadResultRequest>(buffer);
 
-    // Apply snapshot diffs *first* (these must be applied before other threads
-    // can continue)
-    if (r->chunks() != nullptr && r->chunks()->size() > 0) {
-        applyDiffsToSnapshot(r->key()->str(), r->chunks());
-    }
-
     SPDLOG_DEBUG("Receiving thread result {} for message {}",
                  r->return_value(),
                  r->message_id());
@@ -110,30 +104,22 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     const SnapshotDiffPushRequest* r =
       flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
 
-    applyDiffsToSnapshot(r->key()->str(), r->chunks());
-
-    // Send response
-    return std::make_unique<faabric::EmptyResponse>();
-}
-
-void SnapshotServer::applyDiffsToSnapshot(
-  const std::string& snapshotKey,
-  const flatbuffers::Vector<flatbuffers::Offset<SnapshotDiffChunk>>* diffs)
-{
     SPDLOG_DEBUG(
-      "Applying {} diffs to snapshot {}", diffs->size(), snapshotKey);
+      "Applying {} diffs to snapshot {}", r->chunks()->size(), r->key()->str());
 
     // Get the snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
-    faabric::util::SnapshotData& snap = reg.getSnapshot(snapshotKey);
+    faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
     // Copy diffs to snapshot
-    for (const auto* r : *diffs) {
+    for (const auto* r : *r->chunks()) {
         const uint8_t* chunkPtr = r->data()->data();
         uint8_t* dest = snap.data + r->offset();
         std::memcpy(dest, chunkPtr, r->data()->size());
     }
+    // Send response
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
 void SnapshotServer::recvDeleteSnapshot(const uint8_t* buffer,

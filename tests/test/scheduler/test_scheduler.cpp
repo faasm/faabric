@@ -773,37 +773,14 @@ TEST_CASE_METHOD(SlowExecutorFixture,
         sch.setThreadResult(msg, returnValue);
     }
 
-    SECTION("With diffs")
-    {
-        snapshotKey = "blahblah";
-        msg.set_snapshotkey(snapshotKey);
-
-        std::vector<uint8_t> diffDataA(10, 1);
-        std::vector<uint8_t> diffDataB(20, 2);
-
-        diffs = {
-            { 0, diffDataA.data(), diffDataA.size() },
-            { 50, diffDataB.data(), diffDataB.size() },
-        };
-
-        // Set the thread result
-        sch.setThreadResult(msg, returnValue, diffs);
-    }
-
-    // Check the results have been pushed along with the thread result
     auto actualResults = faabric::snapshot::getThreadResults();
 
     REQUIRE(actualResults.size() == 1);
     REQUIRE(actualResults.at(0).first == "otherHost");
 
-    auto actualTuple = actualResults.at(0).second;
-    REQUIRE(std::get<0>(actualTuple) == msg.id());
-    REQUIRE(std::get<1>(actualTuple) == returnValue);
-    REQUIRE(std::get<2>(actualTuple) == snapshotKey);
-
-    std::vector<faabric::util::SnapshotDiff> actualDiffs =
-      std::get<3>(actualTuple);
-    REQUIRE(actualDiffs.size() == diffs.size());
+    auto actualPair = actualResults.at(0).second;
+    REQUIRE(actualPair.first == msg.id());
+    REQUIRE(actualPair.second == returnValue);
 }
 
 TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
