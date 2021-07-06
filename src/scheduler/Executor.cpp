@@ -124,6 +124,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Note this must be done after the restore has happened
     if (isThreads && isSnapshot) {
         faabric::util::resetDirtyTracking();
+        pendingSnapshotPush = true;
     }
 
     // Set executing task count
@@ -196,11 +197,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
         assert(req->messages_size() >= msgIdx + 1);
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
-        SPDLOG_TRACE("Thread {}:{} executing task {} ({})",
+        bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={})",
                      id,
                      threadPoolIdx,
                      msgIdx,
-                     msg.id());
+                     msg.id(),
+                     isThreads);
 
         int32_t returnValue;
         try {
@@ -224,19 +227,18 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      msg.id(),
                      id,
                      threadPoolIdx,
-                     executingTaskCount);
+                     oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-        if (isLastTask && isThreads) {
+        if (isLastTask && pendingSnapshotPush) {
             // Get diffs
             faabric::util::SnapshotData d = snapshot();
-
             std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
             sch.pushSnapshotDiffs(msg, diffs);
 
             // Reset dirty page tracking now that we've got the diffs
             faabric::util::resetDirtyTracking();
+            pendingSnapshotPush = false;
         }
 
         // If this batch is finished, reset the executor and release its claim.

@@ -97,6 +97,8 @@ void resetDirtyTracking()
         throw std::runtime_error("Failed to write to clear_refs");
     }
 
+    SPDLOG_TRACE("Reset dirty page tracking");
+
     fclose(fd);
 }
 

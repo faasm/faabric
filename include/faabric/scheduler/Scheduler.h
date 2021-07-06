@@ -65,6 +65,8 @@ class Executor
 
     std::atomic<bool> claimed = false;
 
+    std::atomic<bool> pendingSnapshotPush = false;
+
     std::atomic<int> executingTaskCount = 0;
 
     std::mutex threadsMutex;
