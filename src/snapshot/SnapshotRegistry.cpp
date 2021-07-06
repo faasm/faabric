@@ -50,10 +50,15 @@ void SnapshotRegistry::takeSnapshot(const std::string& key,
                                     faabric::util::SnapshotData data,
                                     bool locallyRestorable)
 {
-    if(data.size == 0) {
+    if (data.size == 0) {
         SPDLOG_ERROR("Cannot take snapshot {} of size zero", key);
         throw std::runtime_error("Taking snapshot size zero");
     }
+
+    SPDLOG_TRACE("Registering snapshot {} size {} (restorable={})",
+                 key,
+                 data.size,
+                 locallyRestorable);
 
     // Note - we only preserve the snapshot in the in-memory file, and do not
     // take ownership for the original data referenced in SnapshotData

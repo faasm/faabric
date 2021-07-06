@@ -257,40 +257,43 @@ std::vector<std::string> Scheduler::callFunctions(
         // This ensures everything is up to date, and we don't have to
         // maintain different records of which hosts hold which updates.
         faabric::util::SnapshotData snapshotData;
-        std::vector<faabric::util::SnapshotDiff> snapshotDiffs;
         std::string snapshotKey = firstMsg.snapshotkey();
         bool snapshotNeeded =
           req->type() == req->THREADS || req->type() == req->PROCESSES;
 
-        if (snapshotNeeded && snapshotKey.empty()) {
-            SPDLOG_ERROR("No snapshot provided for {}", funcStr);
-            throw std::runtime_error(
-              "Empty snapshot for distributed threads/ processes");
-        }
-
-        if (snapshotNeeded && !thisRegisteredHosts.empty()) {
-            snapshotData =
-              faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
-            snapshotDiffs = snapshotData.getDirtyPages();
-
-            // Do the snapshot diff pushing
-            if (!snapshotDiffs.empty()) {
-                for (const auto& h : thisRegisteredHosts) {
-                    SPDLOG_DEBUG("Pushing {} snapshot diffs for {} to {}",
-                                 snapshotDiffs.size(),
-                                 funcStr,
-                                 h);
-                    SnapshotClient& c = getSnapshotClient(h);
-                    c.pushSnapshotDiffs(snapshotKey, snapshotDiffs);
-                }
+        if (snapshotNeeded) {
+            if (snapshotKey.empty()) {
+                SPDLOG_ERROR("No snapshot provided for {}", funcStr);
+                throw std::runtime_error(
+                  "Empty snapshot for distributed threads/ processes");
             }
 
-            // Now reset the dirty page tracking, as we want the next batch of
-            // diffs to contain everything from now on (including the updates
-            // sent back from all the threads)
-            SPDLOG_DEBUG("Resetting dirty tracking after pushing diffs {}",
-                         funcStr);
-            faabric::util::resetDirtyTracking();
+            snapshotData =
+              faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+
+            if (!thisRegisteredHosts.empty()) {
+                std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
+                  snapshotData.getDirtyPages();
+
+                // Do the snapshot diff pushing
+                if (!snapshotDiffs.empty()) {
+                    for (const auto& h : thisRegisteredHosts) {
+                        SPDLOG_DEBUG("Pushing {} snapshot diffs for {} to {}",
+                                     snapshotDiffs.size(),
+                                     funcStr,
+                                     h);
+                        SnapshotClient& c = getSnapshotClient(h);
+                        c.pushSnapshotDiffs(snapshotKey, snapshotDiffs);
+                    }
+                }
+
+                // Now reset the dirty page tracking, as we want the next batch
+                // of diffs to contain everything from now on (including the
+                // updates sent back from all the threads)
+                SPDLOG_DEBUG("Resetting dirty tracking after pushing diffs {}",
+                             funcStr);
+                faabric::util::resetDirtyTracking();
+            }
         }
 
         // Work out how many we can handle locally

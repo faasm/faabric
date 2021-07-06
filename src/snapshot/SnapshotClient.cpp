@@ -69,7 +69,7 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
 void SnapshotClient::pushSnapshot(const std::string& key,
                                   const faabric::util::SnapshotData& data)
 {
-    if(data.size == 0) {
+    if (data.size == 0) {
         SPDLOG_ERROR("Cannot push snapshot {} with size zero to {}", key, host);
         throw std::runtime_error("Pushing snapshot with zero size");
     }
@@ -159,10 +159,7 @@ void SnapshotClient::pushThreadResult(uint32_t messageId, int returnValue)
         flatbuffers::FlatBufferBuilder mb;
         flatbuffers::Offset<ThreadResultRequest> requestOffset;
 
-        SPDLOG_DEBUG(
-          "Sending thread result for {} to {}",
-          messageId,
-          host);
+        SPDLOG_DEBUG("Sending thread result for {} to {}", messageId, host);
 
         // Create message without diffs
         requestOffset = CreateThreadResultRequest(mb, messageId, returnValue);
