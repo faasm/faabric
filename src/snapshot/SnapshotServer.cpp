@@ -60,6 +60,11 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     const SnapshotPushRequest* r =
       flatbuffers::GetRoot<SnapshotPushRequest>(buffer);
 
+    if (r->contents()->size() == 0) {
+        SPDLOG_ERROR("Received shapshot {} with zero size", r->key()->c_str());
+        throw std::runtime_error("Received snapshot with zero size");
+    }
+
     SPDLOG_DEBUG("Receiving shapshot {} (size {})",
                  r->key()->c_str(),
                  r->contents()->size());

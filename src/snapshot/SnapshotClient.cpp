@@ -69,7 +69,12 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
 void SnapshotClient::pushSnapshot(const std::string& key,
                                   const faabric::util::SnapshotData& data)
 {
-    SPDLOG_DEBUG("Pushing snapshot {} to {}", key, host);
+    if(data.size == 0) {
+        SPDLOG_ERROR("Cannot push snapshot {} with size zero to {}", key, host);
+        throw std::runtime_error("Pushing snapshot with zero size");
+    }
+
+    SPDLOG_DEBUG("Pushing snapshot {} to {} ({} bytes)", key, host, data.size);
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
