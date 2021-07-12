@@ -182,17 +182,25 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 {
     std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
+    int32_t expectedSubType;
+    std::string expectedContextData;
 
     SECTION("Threads")
     {
         execMode = faabric::BatchExecuteRequest::THREADS;
         expectedSnapshot = "threadSnap";
+
+        expectedSubType = 123;
+        expectedContextData = "thread context";
     }
 
     SECTION("Processes")
     {
         execMode = faabric::BatchExecuteRequest::PROCESSES;
         expectedSnapshot = "procSnap";
+
+        expectedSubType = 345;
+        expectedContextData = "proc context";
     }
 
     SECTION("Functions")
@@ -245,6 +253,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
       faabric::util::batchExecFactory("foo", "bar", nCallsOne);
     reqOne->set_type(execMode);
+    reqOne->set_subtype(expectedSubType);
+    reqOne->set_contextdata(expectedContextData);
 
     for (int i = 0; i < nCallsOne; i++) {
         // Set snapshot key
@@ -307,9 +317,13 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     // Check the message is dispatched to the other host
     auto batchRequestsOne = faabric::scheduler::getBatchRequests();
     REQUIRE(batchRequestsOne.size() == 1);
+
     auto batchRequestOne = batchRequestsOne.at(0);
     REQUIRE(batchRequestOne.first == otherHost);
     REQUIRE(batchRequestOne.second->messages_size() == nCallsOffloadedOne);
+    REQUIRE(batchRequestOne.second->type() == execMode);
+    REQUIRE(batchRequestOne.second->subtype() == expectedSubType);
+    REQUIRE(batchRequestOne.second->contextdata() == expectedContextData);
 
     // Clear mocks
     faabric::scheduler::clearMockRequests();

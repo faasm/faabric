@@ -72,6 +72,7 @@ void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,
     PARSE_MSG(faabric::BatchExecuteRequest, buffer, bufferSize)
 
     // This host has now been told to execute these functions no matter what
+    // TODO - avoid this copy
     scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(msg),
                             true);
 }

@@ -516,6 +516,8 @@ int Scheduler::scheduleFunctionsOnHost(
       faabric::util::batchExecFactory();
     hostRequest->set_snapshotkey(req->snapshotkey());
     hostRequest->set_type(req->type());
+    hostRequest->set_subtype(req->subtype());
+    hostRequest->set_contextdata(req->contextdata());
 
     // Add messages
     int nOnThisHost = std::min<int>(available, remainder);

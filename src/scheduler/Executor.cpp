@@ -106,8 +106,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     if (isSnapshot && !alreadyRestored) {
         if ((!isMaster && isThreads) || !isThreads) {
-            SPDLOG_DEBUG(
-              "Performing snapshot restore {} [{}]", funcStr, snapshotKey);
+            SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
             lastSnapshot = snapshotKey;
             restore(firstMsg);
         } else {
@@ -211,8 +210,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
         } catch (const std::exception& ex) {
             returnValue = 1;
 
-            msg.set_outputdata(fmt::format(
-              "Task {} threw exception. What: {}", msg.id(), ex.what()));
+            std::string errorMessage = fmt::format(
+              "Task {} threw exception. What: {}", msg.id(), ex.what());
+            SPDLOG_ERROR(errorMessage);
+            msg.set_outputdata(errorMessage);
         }
 
         // Set the return value
