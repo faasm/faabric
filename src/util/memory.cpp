@@ -12,13 +12,8 @@
 #define CLEAR_REFS "/proc/self/clear_refs"
 #define PAGEMAP "/proc/self/pagemap"
 
-// See docs: https://www.kernel.org/doc/html/v5.4/admin-guide/mm/pagemap.html
-// and source (grep PM_SOFT_DIRTY):
-// https://github.com/torvalds/linux/blob/master/fs/proc/task_mmu.c
 #define PAGEMAP_ENTRY_BYTES 8
 #define PAGEMAP_SOFT_DIRTY (1Ull << 55)
-#define PAGEMAP_EXCLUSIVE_MAP (1Ull << 56)
-#define PAGEMAP_FILE (1Ull << 61)
 
 namespace faabric::util {
 
@@ -102,8 +97,6 @@ void resetDirtyTracking()
         throw std::runtime_error("Failed to write to clear_refs");
     }
 
-    SPDLOG_TRACE("Reset dirty page tracking");
-
     fclose(fd);
 }
 
@@ -139,33 +132,21 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     return entries;
 }
 
-std::vector<bool> getPagemapFlags(const uint8_t* ptr,
-                                  int nPages,
-                                  uint64_t flag,
-                                  bool foundFlag)
+std::vector<bool> getDirtyPages(const uint8_t* ptr, int nPages)
 {
-    // Get the pagemap entries
     uintptr_t vptr = (uintptr_t)ptr;
+
+    // Get the pagemap entries
     std::vector<uint64_t> entries = readPagemapEntries(vptr, nPages);
 
     // Iterate through to get boolean flags
-    std::vector<bool> flags(nPages, !foundFlag);
+    std::vector<bool> flags(nPages, false);
     for (int i = 0; i < nPages; i++) {
-        if (entries.at(i) & flag) {
-            flags.at(i) = foundFlag;
+        if (entries.at(i) & PAGEMAP_SOFT_DIRTY) {
+            flags.at(i) = true;
         }
     }
 
     return flags;
-}
-
-std::vector<bool> getDirtyPagesForMappedMemory(const uint8_t* ptr, int nPages)
-{
-    return getPagemapFlags(ptr, nPages, PAGEMAP_FILE, false);
-}
-
-std::vector<bool> getDirtyPages(const uint8_t* ptr, int nPages)
-{
-    return getPagemapFlags(ptr, nPages, PAGEMAP_SOFT_DIRTY, true);
 }
 }

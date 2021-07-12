@@ -38,6 +38,4 @@ AlignedChunk getPageAlignedChunk(long offset, long length);
 void resetDirtyTracking();
 
 std::vector<bool> getDirtyPages(const uint8_t* ptr, int nPages);
-
-std::vector<bool> getDirtyPagesForMappedMemory(const uint8_t* ptr, int nPages);
 }
