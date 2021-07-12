@@ -159,6 +159,31 @@ std::vector<bool> getPagemapFlags(const uint8_t* ptr,
     return flags;
 }
 
+void printFlags(const uint8_t* ptr, int nPages)
+{
+    // Get the pagemap entries
+    uintptr_t vptr = (uintptr_t)ptr;
+    std::vector<uint64_t> entries = readPagemapEntries(vptr, nPages);
+
+    // Iterate through to get boolean flags
+    for (int i = 0; i < nPages; i++) {
+        printf("Page %i: ", i);
+        if (entries.at(i) & PAGEMAP_SOFT_DIRTY) {
+            printf(" SD ");
+        }
+
+        if (entries.at(i) & PAGEMAP_EXCLUSIVE_MAP) {
+            printf(" EM ");
+        }
+
+        if (entries.at(i) & PAGEMAP_FILE) {
+            printf(" F ");
+        }
+
+        printf("\n");
+    }
+}
+
 std::vector<bool> getDirtyPagesForMappedMemory(const uint8_t* ptr, int nPages)
 {
     return getPagemapFlags(ptr, nPages, PAGEMAP_FILE, false);

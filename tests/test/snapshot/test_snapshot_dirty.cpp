@@ -1,11 +1,11 @@
 #include <catch.hpp>
 
-#include "faabric/util/snapshot.h"
 #include "faabric_utils.h"
 
 #include <sys/mman.h>
 
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/memory.h>
 
 using namespace faabric::snapshot;
@@ -37,7 +37,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     int nPages = 100;
 
     faabric::util::SnapshotData snap;
-    snap.data = allocatePages(100);
+    snap.data = allocatePages(nPages);
     snap.size = nPages * faabric::util::HOST_PAGE_SIZE;
     reg.takeSnapshot(snapKey, snap, true);
 

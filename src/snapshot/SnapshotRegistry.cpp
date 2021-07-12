@@ -2,6 +2,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 
 #include <sys/mman.h>
@@ -20,7 +21,7 @@ faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
     return snapshotMap[key];
 }
 
-void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
+uint8_t* SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
     faabric::util::SnapshotData d = getSnapshot(key);
 
@@ -36,14 +37,25 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
         throw std::runtime_error("Mapping non-restorable snapshot");
     }
 
+    // Round size up to be page-aligned
+    int nPages = faabric::util::getRequiredHostPages(d.size);
+    size_t mmapSize = nPages * faabric::util::HOST_PAGE_SIZE;
+
     void* mmapRes =
-      mmap(target, d.size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
+      mmap(target, mmapSize, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
 
     if (mmapRes == MAP_FAILED) {
         SPDLOG_ERROR(
           "mmapping snapshot failed: {} ({})", errno, ::strerror(errno));
         throw std::runtime_error("mmapping snapshot failed");
     }
+
+    if (mmapRes != target) {
+        SPDLOG_ERROR("Failed to perform fixed mmapping to target");
+        throw std::runtime_error("Failed to perform fixed mmapping to target");
+    }
+
+    return BYTES(mmapRes);
 }
 
 void SnapshotRegistry::takeSnapshot(const std::string& key,
