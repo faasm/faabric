@@ -11,7 +11,7 @@ using namespace faabric::util;
 
 namespace tests {
 
-static uint8_t* allocatePages(int nPages)
+uint8_t* allocatePages(int nPages)
 {
     return (uint8_t*)mmap(nullptr,
                           nPages * HOST_PAGE_SIZE,
@@ -20,8 +20,7 @@ static uint8_t* allocatePages(int nPages)
                           -1,
                           0);
 }
-
-static void deallocatePages(uint8_t* base, int nPages)
+void deallocatePages(uint8_t* base, int nPages)
 {
     munmap(base, nPages * HOST_PAGE_SIZE);
 }
