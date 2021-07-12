@@ -30,14 +30,13 @@ TEST_CASE_METHOD(DistTestsFixture,
     uint8_t* snapMemory = (uint8_t*)mmap(
       nullptr, snapSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
+    // Set up snapshot
     faabric::util::SnapshotData snap;
     snap.data = snapMemory;
     snap.size = snapSize;
-
     reg.takeSnapshot(snapshotKey, snap);
 
-    // Invoke the function that ought to send back some snapshot diffs that
-    // should be applied
+    // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, 1);
     req->set_type(faabric::BatchExecuteRequest::THREADS);

@@ -15,6 +15,12 @@ int main()
     faabric::transport::initGlobalMessageContext();
     tests::initDistTests();
 
+    int slots = 4;
+    SPDLOG_INFO("Forcing distributed test server to have {} slots", slots);
+    faabric::HostResources res;
+    res.set_slots(slots);
+    faabric::scheduler::getScheduler().setThisHostResources(res);
+
     // WARNING: All 0MQ operations must be contained within their own scope so
     // that all sockets are destructed before the context is closed.
     {
