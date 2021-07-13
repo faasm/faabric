@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/mman.h>
+
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/MpiWorld.h>
@@ -98,10 +100,52 @@ class SnapshotTestFixture
     SnapshotTestFixture()
       : reg(faabric::snapshot::getSnapshotRegistry())
     {
+        faabric::util::resetDirtyTracking();
         reg.clear();
     }
 
-    ~SnapshotTestFixture() { reg.clear(); }
+    ~SnapshotTestFixture()
+    {
+        faabric::util::resetDirtyTracking();
+        reg.clear();
+    }
+
+    uint8_t* allocatePages(int nPages)
+    {
+        return (uint8_t*)mmap(nullptr,
+                              nPages * faabric::util::HOST_PAGE_SIZE,
+                              PROT_WRITE,
+                              MAP_SHARED | MAP_ANONYMOUS,
+                              -1,
+                              0);
+    }
+
+    void deallocatePages(uint8_t* base, int nPages)
+    {
+        munmap(base, nPages * faabric::util::HOST_PAGE_SIZE);
+    }
+
+    faabric::util::SnapshotData takeSnapshot(const std::string& snapKey,
+                                             int nPages,
+                                             bool locallyRestorable)
+    {
+        faabric::util::SnapshotData snap;
+        uint8_t* data = allocatePages(nPages);
+
+        snap.size = nPages * faabric::util::HOST_PAGE_SIZE;
+        snap.data = data;
+
+        reg.takeSnapshot(snapKey, snap, locallyRestorable);
+
+        return snap;
+    }
+
+    void removeSnapshot(const std::string& key, int nPages)
+    {
+        faabric::util::SnapshotData snap = reg.getSnapshot(key);
+        deallocatePages(snap.data, nPages);
+        reg.deleteSnapshot(key);
+    }
 
   protected:
     faabric::snapshot::SnapshotRegistry& reg;

@@ -118,7 +118,7 @@ int handleFakeDiffsThreadedFunction(
             m.set_snapshotkey(snapshotKey);
         }
 
-        // Dispatch the message, we expect them all to be executed other hosts
+        // Dispatch the message, expecting them all to execute on other hosts
         std::string thisHost = faabric::util::getSystemConfig().endpointHost;
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
         std::vector<std::string> executedHosts = sch.callFunctions(req);

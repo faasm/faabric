@@ -95,13 +95,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "[snapshot]")
 {
     // Set up a snapshot
-    faabric::util::SnapshotData snap;
-    snap.size = 5 * faabric::util::HOST_PAGE_SIZE;
-    snap.data = (uint8_t*)mmap(
-      nullptr, snap.size, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
     std::string snapKey = std::to_string(faabric::util::generateGid());
-    reg.takeSnapshot(snapKey, snap);
+    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, true);
 
     // Set up some diffs
     std::vector<uint8_t> diffDataA1 = { 0, 1, 2, 3 };
@@ -126,7 +121,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     checkDiffsApplied(snap.data, diffsA);
     checkDiffsApplied(snap.data, diffsB);
 
-    munmap(snap.data, snap.size);
+    deallocatePages(snap.data, 5);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
