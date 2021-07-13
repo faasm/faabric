@@ -14,10 +14,8 @@ namespace faabric::util {
 std::vector<uint8_t> messageToBytes(const faabric::Message& msg)
 {
     size_t byteSize = msg.ByteSizeLong();
-    uint8_t buffer[byteSize];
-    msg.SerializeToArray(buffer, (int)byteSize);
-
-    std::vector<uint8_t> inputData(buffer, buffer + byteSize);
+    std::vector<uint8_t> inputData(byteSize, 0);
+    msg.SerializeToArray(inputData.data(), (int)inputData.size());
 
     return inputData;
 }
