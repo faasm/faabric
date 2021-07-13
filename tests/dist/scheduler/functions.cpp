@@ -116,6 +116,13 @@ int handleFakeDiffsThreadedFunction(
             m.set_appindex(i);
             m.set_inputdata(std::string("thread_" + std::to_string(i)));
             m.set_snapshotkey(snapshotKey);
+
+            // Make a small modification to a page that will also be edited by
+            // the child thread to make sure it's not overwritten
+            std::vector<uint8_t> localChange(3, i);
+            uint32_t offset = 2 * i * faabric::util::HOST_PAGE_SIZE;
+            std::memcpy(
+              snapMemory + offset, localChange.data(), localChange.size());
         }
 
         // Dispatch the message, expecting them all to execute on other hosts
@@ -144,9 +151,22 @@ int handleFakeDiffsThreadedFunction(
         }
 
         // Check that the changes have been made to the snapshot memory
-        bool diffsApplied = true;
+        bool success = true;
         for (int i = 0; i < nThreads; i++) {
-            uint32_t offset = 2 * i * faabric::util::HOST_PAGE_SIZE;
+            // Check local modifications
+            std::vector<uint8_t> expectedLocal(3, i);
+            uint32_t localOffset = 2 * i * faabric::util::HOST_PAGE_SIZE;
+            std::vector<uint8_t> actualLocal(snapMemory + localOffset,
+                                             snapMemory + localOffset +
+                                               expectedLocal.size());
+
+            if (actualLocal != expectedLocal) {
+                SPDLOG_ERROR("Local modifications not present for {}", i);
+                success = false;
+            }
+
+            // Check remote modifications
+            uint32_t offset = 2 * i * faabric::util::HOST_PAGE_SIZE + 10;
             std::string expectedData("thread_" + std::to_string(i));
             auto* charPtr = reinterpret_cast<char*>(snapMemory + offset);
             std::string actual(charPtr);
@@ -154,17 +174,17 @@ int handleFakeDiffsThreadedFunction(
             if (actual != expectedData) {
                 SPDLOG_ERROR(
                   "Diff not as expected. {} != {}", actual, expectedData);
-                diffsApplied = false;
+                success = false;
             }
         }
 
-        if (!diffsApplied) {
+        if (!success) {
             return 222;
         }
 
     } else {
         int idx = msg.appindex();
-        uint32_t offset = 2 * idx * faabric::util::HOST_PAGE_SIZE;
+        uint32_t offset = 2 * idx * faabric::util::HOST_PAGE_SIZE + 10;
 
         // Modify the executor's memory
         std::vector<uint8_t> inputBytes =
