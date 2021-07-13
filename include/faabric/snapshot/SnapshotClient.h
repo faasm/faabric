@@ -20,11 +20,7 @@ getSnapshotDiffPushes();
 
 std::vector<std::pair<std::string, std::string>> getSnapshotDeletes();
 
-std::vector<std::pair<std::string,
-                      std::tuple<uint32_t,
-                                 int,
-                                 std::string,
-                                 std::vector<faabric::util::SnapshotDiff>>>>
+std::vector<std::pair<std::string, std::pair<uint32_t, int>>>
 getThreadResults();
 
 void clearMockSnapshotRequests();
@@ -49,12 +45,6 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
     void deleteSnapshot(const std::string& key);
 
     void pushThreadResult(uint32_t messageId, int returnValue);
-
-    void pushThreadResult(
-      uint32_t messageId,
-      int returnValue,
-      const std::string& snapshotKey,
-      const std::vector<faabric::util::SnapshotDiff>& diffs);
 
   private:
     void sendHeader(faabric::snapshot::SnapshotCalls call);

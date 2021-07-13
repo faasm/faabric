@@ -182,17 +182,25 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 {
     std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
+    int32_t expectedSubType;
+    std::string expectedContextData;
 
     SECTION("Threads")
     {
         execMode = faabric::BatchExecuteRequest::THREADS;
         expectedSnapshot = "threadSnap";
+
+        expectedSubType = 123;
+        expectedContextData = "thread context";
     }
 
     SECTION("Processes")
     {
         execMode = faabric::BatchExecuteRequest::PROCESSES;
         expectedSnapshot = "procSnap";
+
+        expectedSubType = 345;
+        expectedContextData = "proc context";
     }
 
     SECTION("Functions")
@@ -245,6 +253,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
       faabric::util::batchExecFactory("foo", "bar", nCallsOne);
     reqOne->set_type(execMode);
+    reqOne->set_subtype(expectedSubType);
+    reqOne->set_contextdata(expectedContextData);
 
     for (int i = 0; i < nCallsOne; i++) {
         // Set snapshot key
@@ -307,9 +317,13 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     // Check the message is dispatched to the other host
     auto batchRequestsOne = faabric::scheduler::getBatchRequests();
     REQUIRE(batchRequestsOne.size() == 1);
+
     auto batchRequestOne = batchRequestsOne.at(0);
     REQUIRE(batchRequestOne.first == otherHost);
     REQUIRE(batchRequestOne.second->messages_size() == nCallsOffloadedOne);
+    REQUIRE(batchRequestOne.second->type() == execMode);
+    REQUIRE(batchRequestOne.second->subtype() == expectedSubType);
+    REQUIRE(batchRequestOne.second->contextdata() == expectedContextData);
 
     // Clear mocks
     faabric::scheduler::clearMockRequests();
@@ -773,37 +787,14 @@ TEST_CASE_METHOD(SlowExecutorFixture,
         sch.setThreadResult(msg, returnValue);
     }
 
-    SECTION("With diffs")
-    {
-        snapshotKey = "blahblah";
-        msg.set_snapshotkey(snapshotKey);
-
-        std::vector<uint8_t> diffDataA(10, 1);
-        std::vector<uint8_t> diffDataB(20, 2);
-
-        diffs = {
-            { 0, diffDataA.data(), diffDataA.size() },
-            { 50, diffDataB.data(), diffDataB.size() },
-        };
-
-        // Set the thread result
-        sch.setThreadResult(msg, returnValue, diffs);
-    }
-
-    // Check the results have been pushed along with the thread result
     auto actualResults = faabric::snapshot::getThreadResults();
 
     REQUIRE(actualResults.size() == 1);
     REQUIRE(actualResults.at(0).first == "otherHost");
 
-    auto actualTuple = actualResults.at(0).second;
-    REQUIRE(std::get<0>(actualTuple) == msg.id());
-    REQUIRE(std::get<1>(actualTuple) == returnValue);
-    REQUIRE(std::get<2>(actualTuple) == snapshotKey);
-
-    std::vector<faabric::util::SnapshotDiff> actualDiffs =
-      std::get<3>(actualTuple);
-    REQUIRE(actualDiffs.size() == diffs.size());
+    auto actualPair = actualResults.at(0).second;
+    REQUIRE(actualPair.first == msg.id());
+    REQUIRE(actualPair.second == returnValue);
 }
 
 TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")

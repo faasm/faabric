@@ -20,6 +20,4 @@ table SnapshotDiffPushRequest {
 table ThreadResultRequest {
   message_id:int;
   return_value:int;
-  key:string;
-  chunks:[SnapshotDiffChunk];
 }

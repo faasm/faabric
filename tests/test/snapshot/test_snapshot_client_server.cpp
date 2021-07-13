@@ -37,7 +37,7 @@ class SnapshotClientServerFixture
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "Test pushing and deleting snapshots",
-                 "[scheduler]")
+                 "[snapshot]")
 {
     // Check nothing to start with
     REQUIRE(reg.getSnapshotCount() == 0);
@@ -91,17 +91,9 @@ void checkDiffsApplied(const uint8_t* snapBase,
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
-                 "Test set thread result",
-                 "[scheduler]")
+                 "Test push snapshot diffs",
+                 "[snapshot]")
 {
-    // Register threads on this host
-    int threadIdA = 123;
-    int threadIdB = 345;
-    int returnValueA = 88;
-    int returnValueB = 99;
-    sch.registerThread(threadIdA);
-    sch.registerThread(threadIdB);
-
     // Set up a snapshot
     faabric::util::SnapshotData snap;
     snap.size = 5 * faabric::util::HOST_PAGE_SIZE;
@@ -119,34 +111,38 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<faabric::util::SnapshotDiff> diffsA;
     std::vector<faabric::util::SnapshotDiff> diffsB;
 
-    SECTION("Without diffs")
-    {
-        cli.pushThreadResult(threadIdA, returnValueA);
-        cli.pushThreadResult(threadIdB, returnValueB);
-    }
+    faabric::util::SnapshotDiff diffA1(5, diffDataA1.data(), diffDataA1.size());
+    faabric::util::SnapshotDiff diffA2(
+      2 * faabric::util::HOST_PAGE_SIZE, diffDataA2.data(), diffDataA2.size());
+    diffsA = { diffA1, diffA2 };
+    cli.pushSnapshotDiffs(snapKey, diffsA);
 
-    SECTION("Empty diffs")
-    {
-        cli.pushThreadResult(threadIdA, returnValueA, snapKey, diffsA);
-        cli.pushThreadResult(threadIdB, returnValueB, snapKey, diffsB);
-    }
+    faabric::util::SnapshotDiff diffB(
+      3 * faabric::util::HOST_PAGE_SIZE, diffDataB.data(), diffDataB.size());
+    diffsB = { diffB };
+    cli.pushSnapshotDiffs(snapKey, diffsB);
 
-    SECTION("With diffs")
-    {
-        faabric::util::SnapshotDiff diffA1(
-          5, diffDataA1.data(), diffDataA1.size());
-        faabric::util::SnapshotDiff diffA2(2 * faabric::util::HOST_PAGE_SIZE,
-                                           diffDataA2.data(),
-                                           diffDataA2.size());
-        diffsA = { diffA1, diffA2 };
-        cli.pushThreadResult(threadIdA, returnValueA, snapKey, diffsA);
+    // Check changes have been applied
+    checkDiffsApplied(snap.data, diffsA);
+    checkDiffsApplied(snap.data, diffsB);
 
-        faabric::util::SnapshotDiff diffB(3 * faabric::util::HOST_PAGE_SIZE,
-                                          diffDataB.data(),
-                                          diffDataB.size());
-        diffsB = { diffB };
-        cli.pushThreadResult(threadIdB, returnValueB, snapKey, diffsB);
-    }
+    munmap(snap.data, snap.size);
+}
+
+TEST_CASE_METHOD(SnapshotClientServerFixture,
+                 "Test set thread result",
+                 "[snapshot]")
+{
+    // Register threads on this host
+    int threadIdA = 123;
+    int threadIdB = 345;
+    int returnValueA = 88;
+    int returnValueB = 99;
+    sch.registerThread(threadIdA);
+    sch.registerThread(threadIdB);
+
+    cli.pushThreadResult(threadIdA, returnValueA);
+    cli.pushThreadResult(threadIdB, returnValueB);
 
     // Set up two threads to await the results
     std::thread tA([threadIdA, returnValueA] {
@@ -168,11 +164,5 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     if (tB.joinable()) {
         tB.join();
     }
-
-    // Check changes have been applied
-    checkDiffsApplied(snap.data, diffsA);
-    checkDiffsApplied(snap.data, diffsB);
-
-    munmap(snap.data, snap.size);
 }
 }

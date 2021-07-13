@@ -106,8 +106,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     if (isSnapshot && !alreadyRestored) {
         if ((!isMaster && isThreads) || !isThreads) {
-            SPDLOG_DEBUG(
-              "Performing snapshot restore {} [{}]", funcStr, snapshotKey);
+            SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
             lastSnapshot = snapshotKey;
             restore(firstMsg);
         } else {
@@ -124,6 +123,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Note this must be done after the restore has happened
     if (isThreads && isSnapshot) {
         faabric::util::resetDirtyTracking();
+        pendingSnapshotPush = true;
     }
 
     // Set executing task count
@@ -161,7 +161,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
     auto& sch = faabric::scheduler::getScheduler();
-    auto& conf = faabric::util::getSystemConfig();
+    const auto& conf = faabric::util::getSystemConfig();
 
     bool selfShutdown = false;
 
@@ -196,11 +196,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
         assert(req->messages_size() >= msgIdx + 1);
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
-        SPDLOG_TRACE("Thread {}:{} executing task {} ({})",
+        bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={})",
                      id,
                      threadPoolIdx,
                      msgIdx,
-                     msg.id());
+                     msg.id(),
+                     isThreads);
 
         int32_t returnValue;
         try {
@@ -208,8 +210,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
         } catch (const std::exception& ex) {
             returnValue = 1;
 
-            msg.set_outputdata(fmt::format(
-              "Task {} threw exception. What: {}", msg.id(), ex.what()));
+            std::string errorMessage = fmt::format(
+              "Task {} threw exception. What: {}", msg.id(), ex.what());
+            SPDLOG_ERROR(errorMessage);
+            msg.set_outputdata(errorMessage);
         }
 
         // Set the return value
@@ -221,21 +225,21 @@ void Executor::threadPoolThread(int threadPoolIdx)
         bool isLastTask = oldTaskCount == 1;
 
         SPDLOG_TRACE("Task {} finished by thread {}:{} ({} left)",
-                     msg.id(),
+                     faabric::util::funcToString(msg, true),
                      id,
                      threadPoolIdx,
-                     executingTaskCount);
+                     oldTaskCount - 1);
 
-        // Get snapshot diffs _before_ we reset the executor
-        bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-        std::vector<faabric::util::SnapshotDiff> diffs;
-        if (isLastTask && isThreads) {
+        // Handle snapshot diffs _before_ we reset the executor
+        if (isLastTask && pendingSnapshotPush) {
             // Get diffs
             faabric::util::SnapshotData d = snapshot();
-            diffs = d.getDirtyPages();
+            std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
+            sch.pushSnapshotDiffs(msg, diffs);
 
-            // Reset dirty page tracking now that we've got the diffs
+            // Reset dirty page tracking now that we've pushed the diffs
             faabric::util::resetDirtyTracking();
+            pendingSnapshotPush = false;
         }
 
         // If this batch is finished, reset the executor and release its claim.
@@ -255,14 +259,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // on its result to continue execution, therefore must be done once the
         // executor has been reset, otherwise the executor may not be reused for
         // a repeat invocation.
-        if (isLastTask && isThreads) {
-            // Send diffs along with thread result
-            SPDLOG_DEBUG("Task {} finished, returning {} snapshot diffs",
-                         msg.id(),
-                         diffs.size());
-
-            sch.setThreadResult(msg, returnValue, diffs);
-        } else if (isThreads) {
+        if (isThreads) {
             // Set non-final thread result
             sch.setThreadResult(msg, returnValue);
         } else {

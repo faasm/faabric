@@ -22,23 +22,23 @@ TEST_CASE_METHOD(DistTestsFixture,
                  "Check snapshots sent back from worker are applied",
                  "[snapshots]")
 {
-    // Set up the snapshot
+    std::string user = "snapshots";
+    std::string function = "fake-diffs";
     std::string snapshotKey = "dist-snap-check";
 
     size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
     uint8_t* snapMemory = (uint8_t*)mmap(
       nullptr, snapSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
+    // Set up snapshot
     faabric::util::SnapshotData snap;
     snap.data = snapMemory;
     snap.size = snapSize;
-
     reg.takeSnapshot(snapshotKey, snap);
 
-    // Invoke the function that ought to send back some snapshot diffs that
-    // should be applied
+    // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("snapshots", "fake-diffs", 1);
+      faabric::util::batchExecFactory(user, function, 1);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
     // Set up some input data
@@ -72,5 +72,32 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     REQUIRE(actualA == expectedA);
     REQUIRE(actualB == expectedB);
+}
+
+TEST_CASE_METHOD(DistTestsFixture,
+                 "Check snapshots sent back from child threads",
+                 "[snapshots]")
+{
+    std::string user = "snapshots";
+    std::string function = "fake-diffs-threaded";
+    int nThreads = 3;
+
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory(user, function, 1);
+    faabric::Message& m = req->mutable_messages()->at(0);
+    m.set_inputdata(std::to_string(nThreads));
+
+    // Force the function itself to be executed on this host, but its child
+    // threads on another host
+    faabric::HostResources res;
+    res.set_slots(1);
+    sch.setThisHostResources(res);
+
+    std::vector<std::string> expectedHosts = { MASTER_IP };
+    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    REQUIRE(expectedHosts == executedHosts);
+
+    faabric::Message actualResult = sch.getFunctionResult(m.id(), 10000);
+    REQUIRE(actualResult.returnvalue() == 333);
 }
 }

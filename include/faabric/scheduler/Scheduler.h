@@ -65,6 +65,8 @@ class Executor
 
     std::atomic<bool> claimed = false;
 
+    std::atomic<bool> pendingSnapshotPush = false;
+
     std::atomic<int> executingTaskCount = 0;
 
     std::mutex threadsMutex;
@@ -117,9 +119,9 @@ class Scheduler
 
     void setThreadResult(const faabric::Message& msg, int32_t returnValue);
 
-    void setThreadResult(const faabric::Message& msg,
-                         int32_t returnValue,
-                         const std::vector<faabric::util::SnapshotDiff>& diffs);
+    void pushSnapshotDiffs(
+      const faabric::Message& msg,
+      const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
 
