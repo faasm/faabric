@@ -37,6 +37,9 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
       getDirtyPageNumbers(updated, nThisPages);
 
     // Get byte-wise diffs _within_ the dirty pages
+    // NOTE - this will cause diffs to be split across pages if they hit a page
+    // boundary, but we can be relatively confident that variables will be
+    // page-aligned so this shouldn't be a problem
     std::vector<SnapshotDiff> diffs;
     for (int i : dirtyPageNumbers) {
         int pageOffset = i * HOST_PAGE_SIZE;
@@ -63,6 +66,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
         // If we've reached the end with a diff in progress, we need to close it
         // off
         if (diffInProgress) {
+            offset++;
             diffs.emplace_back(
               diffStart, updated + diffStart, offset - diffStart);
         }

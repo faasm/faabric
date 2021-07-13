@@ -1,3 +1,4 @@
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/state/State.h>
@@ -232,9 +233,17 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Handle snapshot diffs _before_ we reset the executor
         if (isLastTask && pendingSnapshotPush) {
-            // Get diffs
-            faabric::util::SnapshotData d = snapshot();
-            std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
+            // Get diffs between original snapshot and after execution
+            faabric::util::SnapshotData snapshotPostExecution = snapshot();
+
+            faabric::util::SnapshotData snapshotPreExecution =
+              faabric::snapshot::getSnapshotRegistry().getSnapshot(
+                msg.snapshotkey());
+
+            std::vector<faabric::util::SnapshotDiff> diffs =
+              snapshotPreExecution.getChangeDiffs(snapshotPostExecution.data,
+                                                  snapshotPostExecution.size);
+
             sch.pushSnapshotDiffs(msg, diffs);
 
             // Reset dirty page tracking now that we've pushed the diffs
