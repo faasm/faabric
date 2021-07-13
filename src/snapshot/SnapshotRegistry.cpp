@@ -12,6 +12,11 @@ SnapshotRegistry::SnapshotRegistry() {}
 faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
   const std::string& key)
 {
+    if (key.empty()) {
+        SPDLOG_ERROR("Attempting to get snapshot with empty key");
+        throw std::runtime_error("Getting snapshot with empty key");
+    }
+
     if (snapshotMap.count(key) == 0) {
         SPDLOG_ERROR("Snapshot for {} does not exist", key);
         throw std::runtime_error("Snapshot doesn't exist");

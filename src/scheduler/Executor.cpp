@@ -1,6 +1,6 @@
-#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
@@ -15,6 +15,14 @@
 #define POOL_SHUTDOWN -1
 
 namespace faabric::scheduler {
+
+ExecutorTask::ExecutorTask(int messageIndexIn,
+                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
+                           std::shared_ptr<std::atomic<int>> batchCounterIn)
+  : messageIndex(messageIndexIn)
+  , req(reqIn)
+  , batchCounter(batchCounterIn)
+{}
 
 // TODO - avoid the copy of the message here?
 Executor::Executor(faabric::Message& msg)
@@ -47,7 +55,8 @@ void Executor::finish()
 
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
-        threadQueues.at(i).enqueue(std::make_pair(POOL_SHUTDOWN, nullptr));
+        threadQueues.at(i).enqueue(
+          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr));
 
         // Await the thread
         if (threadPoolThreads.at(i)->joinable()) {
@@ -67,7 +76,6 @@ void Executor::finish()
 
     // Reset variables
     boundMessage.Clear();
-    executingTaskCount = 0;
 
     lastSnapshot = "";
 
@@ -122,13 +130,14 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     // Reset dirty page tracking if we're executing threads.
     // Note this must be done after the restore has happened
-    if (isThreads && isSnapshot) {
+    if (isThreads && isSnapshot && !isMaster) {
         faabric::util::resetDirtyTracking();
         pendingSnapshotPush = true;
     }
 
-    // Set executing task count
-    executingTaskCount += msgIdxs.size();
+    // Set up shared counter for this batch of tasks
+    auto batchCounter =
+      std::make_shared<std::atomic<int>>(req->messages_size());
 
     // Iterate through and invoke tasks
     for (int msgIdx : msgIdxs) {
@@ -147,7 +156,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         // Enqueue the task
         SPDLOG_TRACE(
           "Assigning app index {} to thread {}", msg.appindex(), threadPoolIdx);
-        threadQueues[threadPoolIdx].enqueue(std::make_pair(msgIdx, req));
+        threadQueues[threadPoolIdx].enqueue(
+          ExecutorTask(msgIdx, req, batchCounter));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -168,10 +178,16 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
     for (;;) {
         SPDLOG_TRACE("Thread starting loop {}:{}", id, threadPoolIdx);
-        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>> task;
+
+        int msgIdx;
+        std::shared_ptr<faabric::BatchExecuteRequest> req;
+        std::shared_ptr<std::atomic<int>> batchCounter;
 
         try {
-            task = threadQueues[threadPoolIdx].dequeue(conf.boundTimeout);
+            ExecutorTask task = threadQueues[threadPoolIdx].dequeue(conf.boundTimeout);
+            msgIdx = task.messageIndex;
+            req = task.req;
+            batchCounter = task.batchCounter;
         } catch (faabric::util::QueueTimeoutException& ex) {
             // If the thread has had no messages, it needs to
             // remove itself
@@ -183,8 +199,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             break;
         }
 
-        int msgIdx = task.first;
-
         // If the thread is being killed, the executor itself
         // will handle the clean-up
         if (msgIdx == POOL_SHUTDOWN) {
@@ -193,7 +207,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             break;
         }
 
-        std::shared_ptr<faabric::BatchExecuteRequest> req = task.second;
         assert(req->messages_size() >= msgIdx + 1);
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
@@ -221,7 +234,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         msg.set_returnvalue(returnValue);
 
         // Decrement the task count
-        int oldTaskCount = executingTaskCount.fetch_sub(1);
+        int oldTaskCount = batchCounter->fetch_sub(1);
         assert(oldTaskCount >= 0);
         bool isLastTask = oldTaskCount == 1;
 

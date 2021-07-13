@@ -22,6 +22,18 @@ class Scheduler;
 
 Scheduler& getScheduler();
 
+class ExecutorTask
+{
+  public:
+    ExecutorTask(int messageIndexIn,
+                 std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
+                 std::shared_ptr<std::atomic<int>> batchCounterIn);
+
+    int messageIndex = 0;
+    std::shared_ptr<faabric::BatchExecuteRequest> req;
+    std::shared_ptr<std::atomic<int>> batchCounter;
+};
+
 class Executor
 {
   public:
@@ -67,15 +79,11 @@ class Executor
 
     std::atomic<bool> pendingSnapshotPush = false;
 
-    std::atomic<int> executingTaskCount = 0;
-
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<std::shared_ptr<std::thread>> deadThreads;
 
-    std::vector<faabric::util::Queue<
-      std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>>>>
-      threadQueues;
+    std::vector<faabric::util::Queue<ExecutorTask>> threadQueues;
 
     void threadPoolThread(int threadPoolIdx);
 };
