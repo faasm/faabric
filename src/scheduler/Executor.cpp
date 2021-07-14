@@ -18,10 +18,12 @@ namespace faabric::scheduler {
 
 ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                           std::shared_ptr<std::atomic<int>> batchCounterIn)
+                           std::shared_ptr<std::atomic<int>> batchCounterIn,
+                           bool needsSnapshotPushIn)
   : messageIndex(messageIndexIn)
   , req(reqIn)
   , batchCounter(batchCounterIn)
+  , needsSnapshotPush(needsSnapshotPushIn)
 {}
 
 // TODO - avoid the copy of the message here?
@@ -56,7 +58,7 @@ void Executor::finish()
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
         threadQueues.at(i).enqueue(
-          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr));
+          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false));
 
         // Await the thread
         if (threadPoolThreads.at(i)->joinable()) {
@@ -130,9 +132,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     // Reset dirty page tracking if we're executing threads.
     // Note this must be done after the restore has happened
+    bool needsSnapshotPush = false;
     if (isThreads && isSnapshot && !isMaster) {
         faabric::util::resetDirtyTracking();
-        pendingSnapshotPush = true;
+        needsSnapshotPush = true;
     }
 
     // Set up shared counter for this batch of tasks
@@ -157,7 +160,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         SPDLOG_TRACE(
           "Assigning app index {} to thread {}", msg.appindex(), threadPoolIdx);
         threadQueues[threadPoolIdx].enqueue(
-          ExecutorTask(msgIdx, req, batchCounter));
+          ExecutorTask(msgIdx, req, batchCounter, needsSnapshotPush));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -182,12 +185,15 @@ void Executor::threadPoolThread(int threadPoolIdx)
         int msgIdx;
         std::shared_ptr<faabric::BatchExecuteRequest> req;
         std::shared_ptr<std::atomic<int>> batchCounter;
+        bool needsSnapshotPush = false;
 
         try {
-            ExecutorTask task = threadQueues[threadPoolIdx].dequeue(conf.boundTimeout);
+            ExecutorTask task =
+              threadQueues[threadPoolIdx].dequeue(conf.boundTimeout);
             msgIdx = task.messageIndex;
             req = task.req;
             batchCounter = task.batchCounter;
+            needsSnapshotPush = task.needsSnapshotPush;
         } catch (faabric::util::QueueTimeoutException& ex) {
             // If the thread has had no messages, it needs to
             // remove itself
@@ -245,7 +251,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        if (isLastTask && pendingSnapshotPush) {
+        if (isLastTask && needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
             faabric::util::SnapshotData snapshotPostExecution = snapshot();
 
@@ -261,7 +267,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Reset dirty page tracking now that we've pushed the diffs
             faabric::util::resetDirtyTracking();
-            pendingSnapshotPush = false;
         }
 
         // If this batch is finished, reset the executor and release its claim.

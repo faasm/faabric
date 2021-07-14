@@ -27,11 +27,13 @@ class ExecutorTask
   public:
     ExecutorTask(int messageIndexIn,
                  std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                 std::shared_ptr<std::atomic<int>> batchCounterIn);
+                 std::shared_ptr<std::atomic<int>> batchCounterIn,
+                 bool needsSnapshotPushIn);
 
     int messageIndex = 0;
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
+    bool needsSnapshotPush = false;
 };
 
 class Executor
@@ -76,8 +78,6 @@ class Executor
     std::string lastSnapshot;
 
     std::atomic<bool> claimed = false;
-
-    std::atomic<bool> pendingSnapshotPush = false;
 
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
