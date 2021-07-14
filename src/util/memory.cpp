@@ -132,7 +132,7 @@ std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
     return entries;
 }
 
-std::vector<bool> getDirtyPages(const uint8_t* ptr, int nPages)
+std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages)
 {
     uintptr_t vptr = (uintptr_t)ptr;
 
@@ -140,13 +140,13 @@ std::vector<bool> getDirtyPages(const uint8_t* ptr, int nPages)
     std::vector<uint64_t> entries = readPagemapEntries(vptr, nPages);
 
     // Iterate through to get boolean flags
-    std::vector<bool> flags(nPages, false);
+    std::vector<int> pageNumbers;
     for (int i = 0; i < nPages; i++) {
         if (entries.at(i) & PAGEMAP_SOFT_DIRTY) {
-            flags.at(i) = true;
+            pageNumbers.emplace_back(i);
         }
     }
 
-    return flags;
+    return pageNumbers;
 }
 }

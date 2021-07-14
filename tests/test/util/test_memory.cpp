@@ -252,10 +252,9 @@ TEST_CASE("Test dirty page checking", "[util]")
 
     resetDirtyTracking();
 
-    std::vector<bool> allFalse(nPages, false);
-    std::vector<bool> actual =
-      faabric::util::getDirtyPages(sharedMemory, nPages);
-    REQUIRE(actual == allFalse);
+    std::vector<int> actual =
+      faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    REQUIRE(actual.empty());
 
     // Dirty two of the pages
     uint8_t* pageZero = sharedMemory;
@@ -265,23 +264,23 @@ TEST_CASE("Test dirty page checking", "[util]")
     pageOne[10] = 1;
     pageThree[123] = 4;
 
-    std::vector<bool> expected = { false, true, false, true, false, false };
-    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    std::vector<int> expected = { 1, 3 };
+    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
     REQUIRE(actual == expected);
 
     // And another
     uint8_t* pageFive = pageThree + (2 * faabric::util::HOST_PAGE_SIZE);
     pageFive[99] = 3;
 
-    expected = { false, true, false, true, false, true };
-    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    expected = { 1, 3, 5 };
+    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
     REQUIRE(actual == expected);
 
     // Reset
     resetDirtyTracking();
 
-    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
-    REQUIRE(actual == allFalse);
+    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    REQUIRE(actual.empty());
 
     // Check the data hasn't changed
     REQUIRE(pageOne[10] == 1);
@@ -293,14 +292,14 @@ TEST_CASE("Test dirty page checking", "[util]")
     pageThree[100] = 2;
     pageFour[22] = 5;
 
-    expected = { false, false, false, true, true, false };
-    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
+    expected = { 3, 4 };
+    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
     REQUIRE(actual == expected);
 
     // Final reset and check
     resetDirtyTracking();
-    actual = faabric::util::getDirtyPages(sharedMemory, nPages);
-    REQUIRE(actual == allFalse);
+    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    REQUIRE(actual.empty());
 
     munmap(sharedMemory, memSize);
 }

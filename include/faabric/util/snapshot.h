@@ -27,6 +27,10 @@ class SnapshotData
     int fd = 0;
 
     std::vector<SnapshotDiff> getDirtyPages();
-};
 
+    std::vector<SnapshotDiff> getChangeDiffs(const uint8_t* updated,
+            size_t updatedSize);
+
+    void applyDiff(size_t diffOffset, const uint8_t* diffData, size_t diffLen);
+};
 }

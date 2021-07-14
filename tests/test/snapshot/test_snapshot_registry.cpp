@@ -11,56 +11,26 @@ using namespace faabric::util;
 
 namespace tests {
 
-uint8_t* allocatePages(int nPages)
+TEST_CASE_METHOD(SnapshotTestFixture,
+                 "Test set and get snapshots",
+                 "[snapshot]")
 {
-    return (uint8_t*)mmap(nullptr,
-                          nPages * HOST_PAGE_SIZE,
-                          PROT_WRITE,
-                          MAP_SHARED | MAP_ANONYMOUS,
-                          -1,
-                          0);
-}
-void deallocatePages(uint8_t* base, int nPages)
-{
-    munmap(base, nPages * HOST_PAGE_SIZE);
-}
-
-TEST_CASE("Test set and get snapshots", "[snapshot]")
-{
-    cleanFaabric();
-
-    SnapshotRegistry& reg = getSnapshotRegistry();
-
     REQUIRE(reg.getSnapshotCount() == 0);
-
-    SnapshotData snapA;
-    SnapshotData snapB;
-    SnapshotData snapC;
-
-    // Snapshot have to be page-aligned
-    uint8_t* dataA = allocatePages(1);
-    uint8_t* dataB = allocatePages(2);
-    uint8_t* dataC = allocatePages(3);
-
-    // Add some random bits of data to the vectors
-    for (int i = 0; i < HOST_PAGE_SIZE - 10; i += 50) {
-        dataA[i] = i;
-        dataB[i + 1] = i;
-        dataC[i + 2] = i;
-    }
-
-    snapA.size = HOST_PAGE_SIZE;
-    snapA.data = dataA;
-
-    snapB.size = HOST_PAGE_SIZE;
-    snapB.data = dataB;
-
-    snapC.size = HOST_PAGE_SIZE;
-    snapC.data = dataC;
 
     std::string keyA = "snapA";
     std::string keyB = "snapB";
     std::string keyC = "snapC";
+
+    SnapshotData snapA = takeSnapshot(keyA, 1, true);
+    SnapshotData snapB = takeSnapshot(keyB, 2, false);
+    SnapshotData snapC = takeSnapshot(keyA, 3, true);
+
+    // Add some random bits of data to the vectors
+    for (int i = 0; i < HOST_PAGE_SIZE - 10; i += 50) {
+        snapA.data[i] = i;
+        snapB.data[i + 1] = i;
+        snapC.data[i + 2] = i;
+    }
 
     reg.takeSnapshot(keyA, snapA);
     reg.takeSnapshot(keyB, snapB, false);
@@ -98,21 +68,22 @@ TEST_CASE("Test set and get snapshots", "[snapshot]")
     REQUIRE_THROWS(reg.mapSnapshot(keyB, actualDataB));
 
     // Here we need to check the actual data after mapping
-    std::vector<uint8_t> vecDataA(dataA, dataA + HOST_PAGE_SIZE);
+    std::vector<uint8_t> vecDataA(snapA.data, snapA.data + HOST_PAGE_SIZE);
     std::vector<uint8_t> vecActualDataA(actualDataA,
                                         actualDataA + HOST_PAGE_SIZE);
-    std::vector<uint8_t> vecDataC(dataC, dataC + (3 * HOST_PAGE_SIZE));
+    std::vector<uint8_t> vecDataC(snapC.data,
+                                  snapC.data + (3 * HOST_PAGE_SIZE));
     std::vector<uint8_t> vecActualDataC(actualDataC,
                                         actualDataC + (3 * HOST_PAGE_SIZE));
 
     REQUIRE(vecActualDataA == vecDataA);
     REQUIRE(vecActualDataC == vecDataC);
 
-    deallocatePages(dataA, 1);
+    removeSnapshot(keyA, 1);
+    removeSnapshot(keyB, 2);
+    removeSnapshot(keyC, 3);
     deallocatePages(actualDataA, 1);
-    deallocatePages(dataB, 2);
     deallocatePages(actualDataB, 2);
-    deallocatePages(dataC, 3);
     deallocatePages(actualDataC, 3);
 }
 }

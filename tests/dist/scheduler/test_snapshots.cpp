@@ -75,7 +75,7 @@ TEST_CASE_METHOD(DistTestsFixture,
 }
 
 TEST_CASE_METHOD(DistTestsFixture,
-                 "Check snapshots sent back from child threads",
+                 "Check snapshot diffs sent back from child threads",
                  "[snapshots]")
 {
     std::string user = "snapshots";
