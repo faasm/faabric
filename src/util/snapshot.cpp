@@ -82,8 +82,8 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
 }
 
 void SnapshotData::applyDiff(size_t diffOffset,
-                              const uint8_t* diffData,
-                              size_t diffLen)
+                             const uint8_t* diffData,
+                             size_t diffLen)
 {
     uint8_t* dest = data + diffOffset;
     std::memcpy(dest, diffData, diffLen);
