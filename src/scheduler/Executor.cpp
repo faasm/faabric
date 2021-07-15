@@ -1,5 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
@@ -15,12 +16,22 @@
 
 namespace faabric::scheduler {
 
+ExecutorTask::ExecutorTask(int messageIndexIn,
+                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
+                           std::shared_ptr<std::atomic<int>> batchCounterIn,
+                           bool needsSnapshotPushIn)
+  : messageIndex(messageIndexIn)
+  , req(reqIn)
+  , batchCounter(batchCounterIn)
+  , needsSnapshotPush(needsSnapshotPushIn)
+{}
+
 // TODO - avoid the copy of the message here?
 Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
   , threadPoolSize(faabric::util::getUsableCores())
   , threadPoolThreads(threadPoolSize)
-  , threadQueues(threadPoolSize)
+  , threadTaskQueues(threadPoolSize)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
@@ -46,7 +57,8 @@ void Executor::finish()
 
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
-        threadQueues.at(i).enqueue(std::make_pair(POOL_SHUTDOWN, nullptr));
+        threadTaskQueues[i].enqueue(
+          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false));
 
         // Await the thread
         if (threadPoolThreads.at(i)->joinable()) {
@@ -66,14 +78,13 @@ void Executor::finish()
 
     // Reset variables
     boundMessage.Clear();
-    executingTaskCount = 0;
 
     lastSnapshot = "";
 
     claimed = false;
 
     threadPoolThreads.clear();
-    threadQueues.clear();
+    threadTaskQueues.clear();
 }
 
 void Executor::executeTasks(std::vector<int> msgIdxs,
@@ -121,13 +132,15 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     // Reset dirty page tracking if we're executing threads.
     // Note this must be done after the restore has happened
-    if (isThreads && isSnapshot) {
+    bool needsSnapshotPush = false;
+    if (isThreads && isSnapshot && !isMaster) {
         faabric::util::resetDirtyTracking();
-        pendingSnapshotPush = true;
+        needsSnapshotPush = true;
     }
 
-    // Set executing task count
-    executingTaskCount += msgIdxs.size();
+    // Set up shared counter for this batch of tasks
+    auto batchCounter =
+      std::make_shared<std::atomic<int>>(req->messages_size());
 
     // Iterate through and invoke tasks
     for (int msgIdx : msgIdxs) {
@@ -146,7 +159,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         // Enqueue the task
         SPDLOG_TRACE(
           "Assigning app index {} to thread {}", msg.appindex(), threadPoolIdx);
-        threadQueues[threadPoolIdx].enqueue(std::make_pair(msgIdx, req));
+        threadTaskQueues[threadPoolIdx].enqueue(
+          ExecutorTask(msgIdx, req, batchCounter, needsSnapshotPush));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -167,10 +181,19 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
     for (;;) {
         SPDLOG_TRACE("Thread starting loop {}:{}", id, threadPoolIdx);
-        std::pair<int, std::shared_ptr<faabric::BatchExecuteRequest>> task;
+
+        int msgIdx;
+        std::shared_ptr<faabric::BatchExecuteRequest> req;
+        std::shared_ptr<std::atomic<int>> batchCounter;
+        bool needsSnapshotPush = false;
 
         try {
-            task = threadQueues[threadPoolIdx].dequeue(conf.boundTimeout);
+            ExecutorTask task =
+              threadTaskQueues[threadPoolIdx].dequeue(conf.boundTimeout);
+            msgIdx = task.messageIndex;
+            req = task.req;
+            batchCounter = task.batchCounter;
+            needsSnapshotPush = task.needsSnapshotPush;
         } catch (faabric::util::QueueTimeoutException& ex) {
             // If the thread has had no messages, it needs to
             // remove itself
@@ -182,8 +205,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             break;
         }
 
-        int msgIdx = task.first;
-
         // If the thread is being killed, the executor itself
         // will handle the clean-up
         if (msgIdx == POOL_SHUTDOWN) {
@@ -192,7 +213,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             break;
         }
 
-        std::shared_ptr<faabric::BatchExecuteRequest> req = task.second;
         assert(req->messages_size() >= msgIdx + 1);
         faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
@@ -220,7 +240,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         msg.set_returnvalue(returnValue);
 
         // Decrement the task count
-        int oldTaskCount = executingTaskCount.fetch_sub(1);
+        int oldTaskCount = batchCounter->fetch_sub(1);
         assert(oldTaskCount >= 0);
         bool isLastTask = oldTaskCount == 1;
 
@@ -231,15 +251,22 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        if (isLastTask && pendingSnapshotPush) {
-            // Get diffs
-            faabric::util::SnapshotData d = snapshot();
-            std::vector<faabric::util::SnapshotDiff> diffs = d.getDirtyPages();
+        if (isLastTask && needsSnapshotPush) {
+            // Get diffs between original snapshot and after execution
+            faabric::util::SnapshotData snapshotPostExecution = snapshot();
+
+            faabric::util::SnapshotData snapshotPreExecution =
+              faabric::snapshot::getSnapshotRegistry().getSnapshot(
+                msg.snapshotkey());
+
+            std::vector<faabric::util::SnapshotDiff> diffs =
+              snapshotPreExecution.getChangeDiffs(snapshotPostExecution.data,
+                                                  snapshotPostExecution.size);
+
             sch.pushSnapshotDiffs(msg, diffs);
 
             // Reset dirty page tracking now that we've pushed the diffs
             faabric::util::resetDirtyTracking();
-            pendingSnapshotPush = false;
         }
 
         // If this batch is finished, reset the executor and release its claim.

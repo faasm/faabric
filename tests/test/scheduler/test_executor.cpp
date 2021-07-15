@@ -123,8 +123,8 @@ class TestExecutor final : public Executor
             sch.callFunctions(chainedReq);
 
             // Await the results
-            for (int i = 0; i < chainedReq->messages_size(); i++) {
-                uint32_t mid = chainedReq->messages().at(i).id();
+            for (const auto& msg : chainedReq->messages()) {
+                uint32_t mid = msg.id();
                 int threadRes = sch.awaitThreadResult(mid);
                 UNUSED(threadRes);
                 assert(threadRes == mid / 100);
@@ -264,14 +264,8 @@ class TestExecutorFixture
   private:
     void setUpDummySnapshot()
     {
-        snapshotData = (uint8_t*)mmap(
-          nullptr, snapshotSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
-        faabric::util::SnapshotData snap;
-        snap.data = snapshotData;
-        snap.size = snapshotSize;
-
-        reg.takeSnapshot(snapshotKey, snap, true);
+        takeSnapshot(snapshotKey, snapshotNPages, true);
+        faabric::util::resetDirtyTracking();
     }
 };
 

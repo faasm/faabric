@@ -119,10 +119,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Copy diffs to snapshot
     for (const auto* r : *r->chunks()) {
-        const uint8_t* chunkPtr = r->data()->data();
-        uint8_t* dest = snap.data + r->offset();
-        std::memcpy(dest, chunkPtr, r->data()->size());
+        snap.applyDiff(r->offset(), r->data()->data(), r->data()->size());
     }
+
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
 }
