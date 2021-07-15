@@ -25,15 +25,19 @@ Scheduler& getScheduler();
 class ExecutorTask
 {
   public:
+    ExecutorTask() = default;
+
     ExecutorTask(int messageIndexIn,
                  std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                  std::shared_ptr<std::atomic<int>> batchCounterIn,
-                 bool needsSnapshotPushIn);
+                 bool needsSnapshotPushIn,
+                 bool skipResetIn);
 
     int messageIndex = 0;
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
     bool needsSnapshotPush = false;
+    bool skipReset = false;
 };
 
 class Executor
