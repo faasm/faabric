@@ -8,6 +8,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/timing.h>
@@ -275,7 +276,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Note that we have to release the claim _after_ resetting, otherwise
         // the executor won't be ready for reuse.
         if (isLastInBatch) {
-            if (!task.skipReset) {
+            if (task.skipReset) {
+                SPDLOG_TRACE("Skipping reset for {}",
+                             faabric::util::funcToString(msg, true));
+            } else {
                 reset(msg);
             }
 

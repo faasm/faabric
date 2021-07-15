@@ -25,6 +25,7 @@ namespace tests {
 #define LONG_TEST_TIMEOUT_MS 10000
 
 std::atomic<int> restoreCount = 0;
+std::atomic<int> resetCount = 0;
 
 class TestExecutor final : public Executor
 {
@@ -38,15 +39,22 @@ class TestExecutor final : public Executor
     uint8_t* dummyMemory = nullptr;
     size_t dummyMemorySize = 0;
 
-    void postFinish()
+    void postFinish() override
     {
         if (dummyMemory != nullptr) {
             munmap(dummyMemory, dummyMemorySize);
         }
     }
 
-    void restore(faabric::Message& msg)
+    void reset(faabric::Message& msg) override
     {
+        SPDLOG_DEBUG("Resetting TestExecutor");
+        resetCount += 1;
+    }
+
+    void restore(faabric::Message& msg) override
+    {
+        SPDLOG_DEBUG("Restoring TestExecutor");
         restoreCount += 1;
 
         // Initialise the dummy memory and map to snapshot
@@ -62,7 +70,7 @@ class TestExecutor final : public Executor
         reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
     }
 
-    faabric::util::SnapshotData snapshot()
+    faabric::util::SnapshotData snapshot() override
     {
         faabric::util::SnapshotData snap;
         snap.data = dummyMemory;
@@ -70,9 +78,10 @@ class TestExecutor final : public Executor
         return snap;
     }
 
-    int32_t executeTask(int threadPoolIdx,
-                        int msgIdx,
-                        std::shared_ptr<faabric::BatchExecuteRequest> reqOrig)
+    int32_t executeTask(
+      int threadPoolIdx,
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override
     {
 
         faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
@@ -241,6 +250,7 @@ class TestExecutorFixture
         setUpDummySnapshot();
 
         restoreCount = 0;
+        resetCount = 0;
     }
 
     ~TestExecutorFixture() { munmap(snapshotData, snapshotSize); }
@@ -845,5 +855,56 @@ TEST_CASE_METHOD(TestExecutorFixture,
         REQUIRE(actualDiffs.at(i).offset == expectedDiffs.at(i).offset);
         REQUIRE(actualDiffs.at(i).size == expectedDiffs.at(i).size);
     }
+}
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test reset not called on master threads",
+                 "[executor]")
+{
+    faabric::util::setMockMode(true);
+
+    std::string hostOverride = conf.endpointHost;
+    int nMessages = 1;
+    faabric::BatchExecuteRequest::BatchExecuteType requestType =
+      faabric::BatchExecuteRequest::FUNCTIONS;
+
+    int expectedResets = 1;
+
+    SECTION("Non-master threads")
+    {
+        hostOverride = "foobar";
+        nMessages = 3;
+        requestType = faabric::BatchExecuteRequest::THREADS;
+    }
+
+    SECTION("Master threads")
+    {
+        requestType = faabric::BatchExecuteRequest::THREADS;
+        nMessages = 3;
+        expectedResets = 0;
+    }
+
+    SECTION("Non-master function") { hostOverride = "foobar"; }
+
+    SECTION("Master function") {}
+
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "blah", nMessages);
+    req->set_type(requestType);
+
+    std::vector<uint32_t> mids;
+    for (auto& m : *req->mutable_messages()) {
+        m.set_masterhost(hostOverride);
+        mids.push_back(m.id());
+    }
+
+    // Call functions and force to execute locally
+    sch.callFunctions(req, true);
+
+    // As we're faking a non-master execution results will be sent back to
+    // the fake master so we can't wait on them, thus have to sleep
+    SLEEP_MS(1000);
+
+    REQUIRE(resetCount == expectedResets);
 }
 }
