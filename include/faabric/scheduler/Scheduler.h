@@ -83,7 +83,7 @@ class Executor
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<std::shared_ptr<std::thread>> deadThreads;
 
-    std::vector<faabric::util::Queue<ExecutorTask>> threadQueues;
+    std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
     void threadPoolThread(int threadPoolIdx);
 };

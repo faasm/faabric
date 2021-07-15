@@ -31,7 +31,7 @@ Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
   , threadPoolSize(faabric::util::getUsableCores())
   , threadPoolThreads(threadPoolSize)
-  , threadQueues(threadPoolSize)
+  , threadTaskQueues(threadPoolSize)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
@@ -57,7 +57,7 @@ void Executor::finish()
 
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
-        threadQueues.at(i).enqueue(
+        threadTaskQueues[i].enqueue(
           ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false));
 
         // Await the thread
@@ -84,7 +84,7 @@ void Executor::finish()
     claimed = false;
 
     threadPoolThreads.clear();
-    threadQueues.clear();
+    threadTaskQueues.clear();
 }
 
 void Executor::executeTasks(std::vector<int> msgIdxs,
@@ -159,7 +159,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         // Enqueue the task
         SPDLOG_TRACE(
           "Assigning app index {} to thread {}", msg.appindex(), threadPoolIdx);
-        threadQueues[threadPoolIdx].enqueue(
+        threadTaskQueues[threadPoolIdx].enqueue(
           ExecutorTask(msgIdx, req, batchCounter, needsSnapshotPush));
 
         // Lazily create the thread
@@ -189,7 +189,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         try {
             ExecutorTask task =
-              threadQueues[threadPoolIdx].dequeue(conf.boundTimeout);
+              threadTaskQueues[threadPoolIdx].dequeue(conf.boundTimeout);
             msgIdx = task.messageIndex;
             req = task.req;
             batchCounter = task.batchCounter;

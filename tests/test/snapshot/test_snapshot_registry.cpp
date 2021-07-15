@@ -86,4 +86,11 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     deallocatePages(actualDataB, 2);
     deallocatePages(actualDataC, 3);
 }
+
+TEST_CASE_METHOD(SnapshotTestFixture,
+                 "Test can't get snapshot with empty key",
+                 "[snapshot]")
+{
+    REQUIRE_THROWS(reg.getSnapshot(""));
+}
 }
