@@ -6,7 +6,7 @@
 
 namespace faabric::util {
 
-#define DEFAULT_LATCH_TIMEOUT_MS 10000
+#define DEFAULT_BARRIER_TIMEOUT_MS 10000
 
 class Barrier
 {
@@ -17,11 +17,11 @@ class Barrier
     static std::shared_ptr<Barrier> create(
       int count,
       std::function<void()> completionFunctionIn,
-      int timeoutMs = DEFAULT_LATCH_TIMEOUT_MS);
+      int timeoutMs = DEFAULT_BARRIER_TIMEOUT_MS);
 
     static std::shared_ptr<Barrier> create(
       int count,
-      int timeoutMs = DEFAULT_LATCH_TIMEOUT_MS);
+      int timeoutMs = DEFAULT_BARRIER_TIMEOUT_MS);
 
     explicit Barrier(int countIn,
                      std::function<void()> completionFunctionIn,
