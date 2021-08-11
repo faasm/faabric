@@ -18,12 +18,16 @@
 using namespace Pistache;
 
 namespace tests {
-std::pair<int, std::string> getRequestToUrl(std::string url)
+
+std::pair<int, std::string> getRequestToUrl(std::string host,
+                                            int port,
+                                            std::string url)
 {
     Http::Client client;
     client.init();
 
-    auto rb = client.get(url);
+    std::string fullUrl = fmt::format("{}:{}/{}", host, port, url);
+    auto rb = client.get(fullUrl);
 
     // Set up the request and callbacks
     Async::Promise<Http::Response> resp =
@@ -52,4 +56,5 @@ std::pair<int, std::string> getRequestToUrl(std::string url)
     client.shutdown();
 
     return std::make_pair((int)respCode, out.str());
+}
 }

@@ -12,7 +12,7 @@ Endpoint::Endpoint(int portIn, int threadCountIn)
   , httpEndpoint(Pistache::Address(Pistache::Ipv4::any(), Pistache::Port(port)))
 {}
 
-void Endpoint::start()
+void Endpoint::start(bool awaitSignal)
 {
     SPDLOG_INFO("Starting HTTP endpoint");
 
@@ -38,17 +38,19 @@ void Endpoint::start()
     httpEndpoint.setHandler(this->getHandler());
     httpEndpoint.serveThreaded();
 
-    // Wait for a signal
-    SPDLOG_INFO("Awaiting signal");
-    int signal = 0;
-    int status = sigwait(&signals, &signal);
-    if (status == 0) {
-        SPDLOG_INFO("Received signal: {}", signal);
-    } else {
-        SPDLOG_INFO("Sigwait return value: {}", signal);
-    }
+    if (awaitSignal) {
+        // Wait for a signal
+        SPDLOG_INFO("Awaiting signal");
+        int signal = 0;
+        int status = sigwait(&signals, &signal);
+        if (status == 0) {
+            SPDLOG_INFO("Received signal: {}", signal);
+        } else {
+            SPDLOG_INFO("Sigwait return value: {}", signal);
+        }
 
-    httpEndpoint.shutdown();
+        httpEndpoint.shutdown();
+    }
 }
 
 void Endpoint::stop()
