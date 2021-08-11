@@ -9,6 +9,7 @@ namespace faabric::endpoint {
 Endpoint::Endpoint(int portIn, int threadCountIn)
   : port(portIn)
   , threadCount(threadCountIn)
+  , httpEndpoint(Pistache::Address(Pistache::Ipv4::any(), Pistache::Port(port)))
 {}
 
 void Endpoint::start()
@@ -25,15 +26,12 @@ void Endpoint::start()
         throw std::runtime_error("Install signal handler failed");
     }
 
-    Pistache::Address addr(Pistache::Ipv4::any(), Pistache::Port(this->port));
-
     // Configure endpoint
     auto opts = Pistache::Http::Endpoint::options()
                   .threads(threadCount)
                   .backlog(256)
                   .flags(Pistache::Tcp::Options::ReuseAddr);
 
-    Pistache::Http::Endpoint httpEndpoint(addr);
     httpEndpoint.init(opts);
 
     // Configure and start endpoint
@@ -50,6 +48,12 @@ void Endpoint::start()
         SPDLOG_INFO("Sigwait return value: {}", signal);
     }
 
+    httpEndpoint.shutdown();
+}
+
+void Endpoint::stop()
+{
+    SPDLOG_INFO("Shutting down endpoint on {}", port);
     httpEndpoint.shutdown();
 }
 }

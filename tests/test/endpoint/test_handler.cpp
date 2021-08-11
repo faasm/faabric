@@ -2,6 +2,9 @@
 
 #include "faabric_utils.h"
 
+#include <DummyExecutor.h>
+#include <DummyExecutorFactory.h>
+
 #include <faabric/endpoint/FaabricEndpointHandler.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/json.h>
@@ -9,10 +12,27 @@
 using namespace Pistache;
 
 namespace tests {
-TEST_CASE("Test valid calls to endpoint", "[endpoint]")
-{
-    cleanFaabric();
 
+class EndpointHandlerTestFixture : public SchedulerTestFixture
+{
+  public:
+    EndpointHandlerTestFixture()
+    {
+        executorFactory =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        setExecutorFactory(executorFactory);
+    }
+
+    ~EndpointHandlerTestFixture() { executorFactory->reset(); }
+
+  protected:
+    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+};
+
+TEST_CASE_METHOD(EndpointHandlerTestFixture,
+                 "Test valid calls to endpoint",
+                 "[endpoint]")
+{
     // Note - must be async to avoid needing a result
     faabric::Message call = faabric::util::messageFactory("foo", "bar");
     call.set_isasync(true);
@@ -34,11 +54,13 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
 
     // Handle the function
     endpoint::FaabricEndpointHandler handler;
-    const std::string responseStr = handler.handleFunction(requestStr);
+    std::pair<int, std::string> response = handler.handleFunction(requestStr);
+
+    REQUIRE(response.first == 0);
+    std::string responseStr = response.second;
 
     // Check actual call has right details including the ID returned to the
     // caller
-    scheduler::Scheduler& sch = scheduler::getScheduler();
     std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
     REQUIRE(msgs.size() == 1);
     faabric::Message actualCall = msgs.at(0);
@@ -51,9 +73,10 @@ TEST_CASE("Test valid calls to endpoint", "[endpoint]")
 TEST_CASE("Test empty invocation", "[endpoint]")
 {
     endpoint::FaabricEndpointHandler handler;
-    std::string actual = handler.handleFunction("");
+    std::pair<int, std::string> actual = handler.handleFunction("");
 
-    REQUIRE(actual == "Empty request");
+    REQUIRE(actual.first == 1);
+    REQUIRE(actual.second == "Empty request");
 }
 
 TEST_CASE("Test empty JSON invocation", "[endpoint]")
@@ -77,21 +100,22 @@ TEST_CASE("Test empty JSON invocation", "[endpoint]")
 
     endpoint::FaabricEndpointHandler handler;
     const std::string& requestStr = faabric::util::messageToJson(call);
-    std::string actual = handler.handleFunction(requestStr);
+    std::pair<int, std::string> actual = handler.handleFunction(requestStr);
 
-    REQUIRE(actual == expected);
+    REQUIRE(actual.first == 1);
+    REQUIRE(actual.second == expected);
 }
 
-TEST_CASE("Check getting function status from endpoint", "[endpoint]")
+TEST_CASE_METHOD(EndpointHandlerTestFixture,
+                 "Check getting function status from endpoint",
+                 "[endpoint]")
 {
-    cleanFaabric();
-
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-
     // Create a message
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
+    int expectedReturnCode = 0;
     std::string expectedOutput;
+
     SECTION("Running") { expectedOutput = "RUNNING"; }
 
     SECTION("Failure")
@@ -100,6 +124,8 @@ TEST_CASE("Check getting function status from endpoint", "[endpoint]")
         msg.set_outputdata(errorMsg);
         msg.set_returnvalue(1);
         sch.setFunctionResult(msg);
+
+        expectedReturnCode = 1;
 
         expectedOutput = "FAILED: " + errorMsg;
     }
@@ -118,8 +144,9 @@ TEST_CASE("Check getting function status from endpoint", "[endpoint]")
 
     endpoint::FaabricEndpointHandler handler;
     const std::string& requestStr = faabric::util::messageToJson(msg);
-    std::string actual = handler.handleFunction(requestStr);
+    std::pair<int, std::string> actual = handler.handleFunction(requestStr);
 
-    REQUIRE(actual == expectedOutput);
+    REQUIRE(actual.first == expectedReturnCode);
+    REQUIRE(actual.second == expectedOutput);
 }
 }

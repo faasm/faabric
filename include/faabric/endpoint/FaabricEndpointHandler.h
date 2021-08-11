@@ -15,9 +15,9 @@ class FaabricEndpointHandler : public Pistache::Http::Handler
     void onRequest(const Pistache::Http::Request& request,
                    Pistache::Http::ResponseWriter response) override;
 
-    std::string handleFunction(const std::string& requestStr);
+    std::pair<int, std::string> handleFunction(const std::string& requestStr);
 
   private:
-    std::string executeFunction(faabric::Message& msg);
+    std::pair<int, std::string> executeFunction(faabric::Message& msg);
 };
 }

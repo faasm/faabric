@@ -40,50 +40,67 @@ void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
 
     // Parse message from JSON in request
     const std::string requestStr = request.body();
-    std::string responseStr = handleFunction(requestStr);
+    std::pair<int, std::string> result = handleFunction(requestStr);
 
     PROF_END(endpointRoundTrip)
-    response.send(Pistache::Http::Code::Ok, responseStr);
+    Pistache::Http::Code responseCode = Pistache::Http::Code::Ok;
+    if (result.first > 0) {
+        responseCode = Pistache::Http::Code::Internal_Server_Error;
+    }
+    response.send(responseCode, result.second);
 }
 
-std::string FaabricEndpointHandler::handleFunction(
+std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
   const std::string& requestStr)
 {
-    std::string responseStr;
+    std::pair<int, std::string> response;
     if (requestStr.empty()) {
-        responseStr = "Empty request";
+        response = std::make_pair(1, "Empty request");
     } else {
         faabric::Message msg = faabric::util::jsonToMessage(requestStr);
         faabric::scheduler::Scheduler& sched =
           faabric::scheduler::getScheduler();
 
         if (msg.isstatusrequest()) {
-            responseStr = sched.getMessageStatus(msg.id());
+            const faabric::Message result =
+              sched.getFunctionResult(msg.id(), 0);
 
+            if (result.type() == faabric::Message_MessageType_EMPTY) {
+                response = std::make_pair(0, "RUNNING");
+            } else if (result.returnvalue() == 0) {
+                response = std::make_pair(0, "SUCCESS: " + result.outputdata());
+            } else {
+                response = std::make_pair(1, "FAILED: " + result.outputdata());
+            }
         } else if (msg.isexecgraphrequest()) {
             faabric::scheduler::ExecGraph execGraph =
               sched.getFunctionExecGraph(msg.id());
-            responseStr = faabric::scheduler::execGraphToJson(execGraph);
+            response =
+              std::make_pair(0, faabric::scheduler::execGraphToJson(execGraph));
 
         } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
             SPDLOG_DEBUG("Broadcasting flush request");
             sched.broadcastFlush();
+            response = std::make_pair(0, "Flush sent");
         } else {
-            responseStr = executeFunction(msg);
+            response = executeFunction(msg);
         }
     }
 
-    return responseStr;
+    return response;
 }
 
-std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
+std::pair<int, std::string> FaabricEndpointHandler::executeFunction(
+  faabric::Message& msg)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
     if (msg.user().empty()) {
-        return "Empty user";
-    } else if (msg.function().empty()) {
-        return "Empty function";
+        return std::make_pair(1, "Empty user");
+    }
+
+    if (msg.function().empty()) {
+        return std::make_pair(1, "Empty function");
     }
 
     // Set message ID and master host
@@ -101,23 +118,25 @@ std::string FaabricEndpointHandler::executeFunction(faabric::Message& msg)
 
     // Await result on global bus (may have been executed on a different worker)
     if (msg.isasync()) {
-        return faabric::util::buildAsyncResponse(msg);
-    } else {
-        SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
+        return std::make_pair(0, faabric::util::buildAsyncResponse(msg));
+    }
 
-        try {
-            const faabric::Message result =
-              sch.getFunctionResult(msg.id(), conf.globalMessageTimeout);
-            SPDLOG_DEBUG("Worker thread {} result {}", tid, funcStr);
+    SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
 
-            if (result.sgxresult().empty()) {
-                return result.outputdata() + "\n";
-            } else {
-                return faabric::util::getJsonOutput(result);
-            }
-        } catch (faabric::redis::RedisNoResponseException& ex) {
-            return "No response from function\n";
+    try {
+        const faabric::Message result =
+          sch.getFunctionResult(msg.id(), conf.globalMessageTimeout);
+        SPDLOG_DEBUG("Worker thread {} result {}", tid, funcStr);
+
+        if (result.sgxresult().empty()) {
+            return std::make_pair(result.returnvalue(),
+                                  result.outputdata() + "\n");
         }
+
+        return std::make_pair(result.returnvalue(),
+                              faabric::util::getJsonOutput(result));
+    } catch (faabric::redis::RedisNoResponseException& ex) {
+        return std::make_pair(1, "No response from function\n");
     }
 }
 }

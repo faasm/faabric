@@ -784,19 +784,6 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
     return msgResult;
 }
 
-std::string Scheduler::getMessageStatus(unsigned int messageId)
-{
-    const faabric::Message result = getFunctionResult(messageId, 0);
-
-    if (result.type() == faabric::Message_MessageType_EMPTY) {
-        return "RUNNING";
-    } else if (result.returnvalue() == 0) {
-        return "SUCCESS: " + result.outputdata();
-    } else {
-        return "FAILED: " + result.outputdata();
-    }
-}
-
 faabric::HostResources Scheduler::getThisHostResources()
 {
     return thisHostResources;
