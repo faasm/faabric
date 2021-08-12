@@ -71,7 +71,6 @@ void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
 void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
                             const scheduler::ExecGraph& graphB);
 
-std::pair<int, std::string> getRequestToUrl(std::string host,
-                                            int port,
-                                            std::string url);
+std::pair<int, std::string> submitGetRequestToUrl(std::string host,
+                                            int port);
 }

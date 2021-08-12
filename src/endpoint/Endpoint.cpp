@@ -14,16 +14,20 @@ Endpoint::Endpoint(int portIn, int threadCountIn)
 
 void Endpoint::start(bool awaitSignal)
 {
-    SPDLOG_INFO("Starting HTTP endpoint");
+    SPDLOG_INFO("Starting HTTP endpoint on {}", port);
 
     // Set up signal handler
     sigset_t signals;
-    if (sigemptyset(&signals) != 0 || sigaddset(&signals, SIGTERM) != 0 ||
-        sigaddset(&signals, SIGKILL) != 0 || sigaddset(&signals, SIGINT) != 0 ||
-        sigaddset(&signals, SIGHUP) != 0 || sigaddset(&signals, SIGQUIT) != 0 ||
-        pthread_sigmask(SIG_BLOCK, &signals, nullptr) != 0) {
+    if (awaitSignal) {
+        if (sigemptyset(&signals) != 0 || sigaddset(&signals, SIGTERM) != 0 ||
+            sigaddset(&signals, SIGKILL) != 0 ||
+            sigaddset(&signals, SIGINT) != 0 ||
+            sigaddset(&signals, SIGHUP) != 0 ||
+            sigaddset(&signals, SIGQUIT) != 0 ||
+            pthread_sigmask(SIG_BLOCK, &signals, nullptr) != 0) {
 
-        throw std::runtime_error("Install signal handler failed");
+            throw std::runtime_error("Install signal handler failed");
+        }
     }
 
     // Configure endpoint

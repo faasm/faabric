@@ -14,18 +14,16 @@ namespace tests {
 TEST_CASE_METHOD(SchedulerTestFixture, "Test request to endpoint", "[endpoint]")
 {
     int port = 8081;
-    std::string url = "localhost:8081";
     faabric::endpoint::FaabricEndpoint endpoint(port, 2);
 
     std::thread serverThread([&endpoint]() { endpoint.start(false); });
 
     SLEEP_MS(1000);
 
-    endpoint.stop();
+    std::pair<int, std::string> result = submitGetRequestToUrl(LOCALHOST, port);
+    REQUIRE(result.first == 500);
 
-    std::pair<int, std::string> result =
-      getRequestToUrl("localhost", port, "blah");
-    REQUIRE(result.first == 404);
+    endpoint.stop();
 
     if (serverThread.joinable()) {
         serverThread.join();

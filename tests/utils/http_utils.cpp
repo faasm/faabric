@@ -17,21 +17,25 @@
 
 using namespace Pistache;
 
+#define HTTP_REQ_TIMEOUT 5000
+
 namespace tests {
 
-std::pair<int, std::string> getRequestToUrl(std::string host,
-                                            int port,
-                                            std::string url)
+std::pair<int, std::string> submitGetRequestToUrl(std::string host,
+                                                  int port)
+
 {
     Http::Client client;
     client.init();
 
-    std::string fullUrl = fmt::format("{}:{}/{}", host, port, url);
-    auto rb = client.get(fullUrl);
+    std::string fullUrl = fmt::format("{}:{}", host, port);
+    SPDLOG_DEBUG("Making HTTP GET request to {}", fullUrl);
 
     // Set up the request and callbacks
     Async::Promise<Http::Response> resp =
-      rb.timeout(std::chrono::milliseconds(HTTP_FILE_TIMEOUT)).send();
+      client.get(fullUrl)
+        .timeout(std::chrono::milliseconds(HTTP_REQ_TIMEOUT))
+        .send();
 
     std::stringstream out;
     Http::Code respCode;
@@ -43,14 +47,11 @@ std::pair<int, std::string> getRequestToUrl(std::string host,
               out << body;
           }
       },
-      [&](std::exception_ptr exc) {
-          PrintException excPrinter;
-          excPrinter(exc);
-      });
+      Async::Throw);
 
     // Make calls synchronous
     Async::Barrier<Http::Response> barrier(resp);
-    std::chrono::milliseconds timeout(HTTP_FILE_TIMEOUT);
+    std::chrono::milliseconds timeout(HTTP_REQ_TIMEOUT);
     barrier.wait_for(timeout);
 
     client.shutdown();
