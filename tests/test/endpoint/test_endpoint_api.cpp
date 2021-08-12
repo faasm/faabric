@@ -16,7 +16,7 @@ namespace tests {
 
 // This is a bit gnarly, we get "Address already in use" errors if we try to use
 // the same port for each case, so we need to switch it every time.
-static int port = 8001;
+static int port = 8080;
 
 class EndpointApiTestExecutor final : public Executor
 {
