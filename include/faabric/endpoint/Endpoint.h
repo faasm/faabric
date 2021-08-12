@@ -13,7 +13,7 @@ class Endpoint
 
     Endpoint(int port, int threadCount);
 
-    void start(bool awaitSignal=true);
+    void start(bool awaitSignal = true);
 
     void stop();
 

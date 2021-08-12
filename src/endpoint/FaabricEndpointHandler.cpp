@@ -55,6 +55,7 @@ std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
 {
     std::pair<int, std::string> response;
     if (requestStr.empty()) {
+        SPDLOG_ERROR("Faabric handler received empty request");
         response = std::make_pair(1, "Empty request");
     } else {
         faabric::Message msg = faabric::util::jsonToMessage(requestStr);
@@ -62,6 +63,7 @@ std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
           faabric::scheduler::getScheduler();
 
         if (msg.isstatusrequest()) {
+            SPDLOG_DEBUG("Processing status request");
             const faabric::Message result =
               sched.getFunctionResult(msg.id(), 0);
 
@@ -73,6 +75,7 @@ std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
                 response = std::make_pair(1, "FAILED: " + result.outputdata());
             }
         } else if (msg.isexecgraphrequest()) {
+            SPDLOG_DEBUG("Processing execution graph request");
             faabric::scheduler::ExecGraph execGraph =
               sched.getFunctionExecGraph(msg.id());
             response =

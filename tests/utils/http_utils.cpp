@@ -21,8 +21,9 @@ using namespace Pistache;
 
 namespace tests {
 
-std::pair<int, std::string> submitGetRequestToUrl(std::string host,
-                                                  int port)
+std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
+                                                  int port,
+                                                  const std::string& body)
 
 {
     Http::Client client;
@@ -32,9 +33,12 @@ std::pair<int, std::string> submitGetRequestToUrl(std::string host,
     SPDLOG_DEBUG("Making HTTP GET request to {}", fullUrl);
 
     // Set up the request and callbacks
+    auto requestBuilder = client.get(fullUrl);
+    if (!body.empty()) {
+        requestBuilder.body(body);
+    }
     Async::Promise<Http::Response> resp =
-      client.get(fullUrl)
-        .timeout(std::chrono::milliseconds(HTTP_REQ_TIMEOUT))
+      requestBuilder.timeout(std::chrono::milliseconds(HTTP_REQ_TIMEOUT))
         .send();
 
     std::stringstream out;
@@ -42,10 +46,7 @@ std::pair<int, std::string> submitGetRequestToUrl(std::string host,
     resp.then(
       [&](Http::Response response) {
           respCode = response.code();
-          if (respCode == Http::Code::Ok) {
-              auto body = response.body();
-              out << body;
-          }
+          out << response.body();
       },
       Async::Throw);
 
