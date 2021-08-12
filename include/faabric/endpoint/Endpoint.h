@@ -13,12 +13,16 @@ class Endpoint
 
     Endpoint(int port, int threadCount);
 
-    void start();
+    void start(bool awaitSignal = true);
+
+    void stop();
 
     virtual std::shared_ptr<Pistache::Http::Handler> getHandler() = 0;
 
   private:
     int port = faabric::util::getSystemConfig().endpointPort;
     int threadCount = faabric::util::getSystemConfig().endpointNumThreads;
+
+    Pistache::Http::Endpoint httpEndpoint;
 };
 }

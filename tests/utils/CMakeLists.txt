@@ -6,6 +6,7 @@ set(LIB_FILES
     exec_graph_utils.cpp
     fixtures.h
     message_utils.cpp
+    http_utils.cpp
     system_utils.cpp
     faabric_utils.h
     )

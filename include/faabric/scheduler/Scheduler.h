@@ -123,8 +123,6 @@ class Scheduler
 
     void flushLocally();
 
-    std::string getMessageStatus(unsigned int messageId);
-
     void setFunctionResult(faabric::Message& msg);
 
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
