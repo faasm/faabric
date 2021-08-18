@@ -24,7 +24,6 @@ namespace tests {
 std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
                                                   int port,
                                                   const std::string& body)
-
 {
     Http::Client client;
     client.init();

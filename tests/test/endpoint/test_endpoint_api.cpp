@@ -45,6 +45,11 @@ class EndpointApiTestExecutor final : public Executor
             returnVal = 1;
             msg.set_outputdata(fmt::format(
               "Endpoint API returning {} for {}", returnVal, msg.id()));
+        } else if (msg.isasync()) {
+            returnVal = 0;
+            SLEEP_MS(3000);
+            msg.set_outputdata(
+              fmt::format("Finished async message {}", msg.id()));
         } else {
             throw std::runtime_error("Endpoint API error");
         }
@@ -131,6 +136,61 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
       submitGetRequestToUrl(LOCALHOST, port, body);
     REQUIRE(result.first == expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);
+
+    endpoint.stop();
+
+    if (serverThread.joinable()) {
+        serverThread.join();
+    }
+}
+
+TEST_CASE_METHOD(EndpointApiTestFixture,
+                 "Test status requests to endpoint",
+                 "[endpoint]")
+{
+    port++;
+    faabric::endpoint::FaabricEndpoint endpoint(port, 2);
+
+    std::thread serverThread([&endpoint]() { endpoint.start(false); });
+
+    // Wait for the server to start
+    SLEEP_MS(2000);
+
+    // Make the initial invocation
+    faabric::Message msg = faabric::util::messageFactory("foo", "blah");
+    msg.set_isasync(true);
+    std::string body = faabric::util::messageToJson(msg);
+
+    std::pair<int, std::string> result =
+      submitGetRequestToUrl(LOCALHOST, port, body);
+
+    REQUIRE(result.first == 200);
+    REQUIRE(result.second == std::to_string(msg.id()));
+
+    // Make a status request, should still be running
+    faabric::Message statusMsg;
+    statusMsg.set_user("foo");
+    statusMsg.set_function("blah");
+    statusMsg.set_id(msg.id());
+    statusMsg.set_isstatusrequest(true);
+
+    std::string statusBody = faabric::util::messageToJson(statusMsg);
+
+    std::pair<int, std::string> statusResult =
+      submitGetRequestToUrl(LOCALHOST, port, statusBody);
+
+    REQUIRE(statusResult.first == 200);
+    REQUIRE(statusResult.second == "RUNNING");
+
+    // Wait for the function to finish
+    SLEEP_MS(4000);
+
+    std::pair<int, std::string> statusResultAfter =
+      submitGetRequestToUrl(LOCALHOST, port, statusBody);
+
+    REQUIRE(statusResultAfter.first == 200);
+    REQUIRE(statusResultAfter.second ==
+            fmt::format("SUCCESS: Finished async message {}", msg.id()));
 
     endpoint.stop();
 
