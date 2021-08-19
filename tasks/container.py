@@ -50,7 +50,7 @@ def _do_push(name):
     run(cmd, shell=True, check=True)
 
 
-@task
+@task(default=True)
 def build(ctx, nocache=False, push=False):
     """
     Build current version of faabric container

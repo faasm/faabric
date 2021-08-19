@@ -1,5 +1,4 @@
 #include <faabric/util/bytes.h>
-#include <faabric/util/http.h>
 #include <faabric/util/logging.h>
 
 #include <pistache/async.h>
@@ -24,7 +23,6 @@ namespace tests {
 std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
                                                   int port,
                                                   const std::string& body)
-
 {
     Http::Client client;
     client.init();
