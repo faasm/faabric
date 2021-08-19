@@ -1,5 +1,4 @@
 #include <faabric/util/bytes.h>
-#include <faabric/util/http.h>
 #include <faabric/util/logging.h>
 
 #include <pistache/async.h>
