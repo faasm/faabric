@@ -324,8 +324,8 @@ std::vector<std::string> Scheduler::callFunctions(
         if (offset < nMessages) {
             // Schedule first to already registered hosts
             for (const auto& h : thisRegisteredHosts) {
-                int nOnThisHost =
-                  scheduleFunctionsOnHost(h, req, executed, offset, nullptr);
+                int nOnThisHost = scheduleFunctionsOnHost(
+                  h, req, executed, offset, &snapshotData);
 
                 offset += nOnThisHost;
                 if (offset >= nMessages) {
@@ -684,14 +684,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // Write the successful result to the result queue
     std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
-    redis.enqueueBytes(key, inputData);
-
-    // Set the result key to expire
-    redis.expire(key, RESULT_KEY_EXPIRY);
-
-    // Set long-lived result for function too
-    redis.set(msg.statuskey(), inputData);
-    redis.expire(key, STATUS_KEY_EXPIRY);
+    redis.publishSchedulerResult(key, msg.statuskey(), inputData);
 }
 
 void Scheduler::registerThread(uint32_t msgId)
