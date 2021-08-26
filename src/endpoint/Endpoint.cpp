@@ -1,20 +1,27 @@
 #include <faabric/endpoint/Endpoint.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
 
 #include <pistache/endpoint.h>
 #include <pistache/listener.h>
 #include <signal.h>
 
 namespace faabric::endpoint {
+Endpoint::Endpoint()
+  : Endpoint(faabric::util::getSystemConfig().endpointPort,
+             faabric::util::getSystemConfig().endpointNumThreads)
+{}
+
 Endpoint::Endpoint(int portIn, int threadCountIn)
   : port(portIn)
   , threadCount(threadCountIn)
-  , httpEndpoint(Pistache::Address(Pistache::Ipv4::any(), Pistache::Port(port)))
+  , httpEndpoint(
+      Pistache::Address(Pistache::Ipv4::any(), Pistache::Port(portIn)))
 {}
 
 void Endpoint::start(bool awaitSignal)
 {
-    SPDLOG_INFO("Starting HTTP endpoint on {}", port);
+    SPDLOG_INFO("Starting HTTP endpoint on {}, {} threads", port, threadCount);
 
     // Set up signal handler
     sigset_t signals;

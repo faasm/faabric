@@ -9,7 +9,7 @@ namespace faabric::endpoint {
 class Endpoint
 {
   public:
-    Endpoint() = default;
+    Endpoint();
 
     Endpoint(int port, int threadCount);
 
