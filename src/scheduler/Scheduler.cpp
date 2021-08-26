@@ -403,7 +403,7 @@ std::vector<std::string> Scheduler::callFunctions(
             std::shared_ptr<Executor> e = nullptr;
             if (thisExecutors.empty()) {
                 // Create executor if not exists
-                e = claimExecutor(firstMsg);
+                e = claimExecutor(firstMsg, lock);
             } else if (thisExecutors.size() == 1) {
                 // Use existing executor if exists
                 e = thisExecutors.back();
@@ -422,7 +422,7 @@ std::vector<std::string> Scheduler::callFunctions(
         } else {
             // Non-threads require one executor per task
             for (auto i : localMessageIdxs) {
-                std::shared_ptr<Executor> e = claimExecutor(firstMsg);
+                std::shared_ptr<Executor> e = claimExecutor(firstMsg, lock);
                 e->executeTasks({ i }, req);
             }
         }
@@ -598,7 +598,9 @@ Scheduler::getRecordedMessagesShared()
     return recordedMessagesShared;
 }
 
-std::shared_ptr<Executor> Scheduler::claimExecutor(faabric::Message& msg)
+std::shared_ptr<Executor> Scheduler::claimExecutor(
+  faabric::Message& msg,
+  faabric::util::FullLock& schedulerLock)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 
@@ -622,8 +624,12 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(faabric::Message& msg)
         int nExecutors = thisExecutors.size();
         SPDLOG_DEBUG(
           "Scaling {} from {} -> {}", funcStr, nExecutors, nExecutors + 1);
-
-        thisExecutors.emplace_back(factory->createExecutor(msg));
+        // Spinning up a new executor can be lengthy, allow other things to run
+        // in parallel
+        schedulerLock.unlock();
+        auto executor = factory->createExecutor(msg);
+        schedulerLock.lock();
+        thisExecutors.push_back(std::move(executor));
         claimed = thisExecutors.back();
 
         // Claim it

@@ -215,7 +215,9 @@ class Scheduler
     std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
                                                   bool noCache = false);
 
-    std::shared_ptr<Executor> claimExecutor(faabric::Message& msg);
+    std::shared_ptr<Executor> claimExecutor(
+      faabric::Message& msg,
+      faabric::util::FullLock& schedulerLock);
 
     faabric::HostResources getHostResources(const std::string& host);
 
