@@ -118,13 +118,14 @@ message Message {
 
     int64 timestamp = 14;
     string resultKey = 15;
-    string statusKey = 16;
+    bool executesLocally = 16;
+    string statusKey = 17;
 
-    string executedHost = 17;
-    int64 finishTimestamp = 18;
+    string executedHost = 18;
+    int64 finishTimestamp = 19;
 
-    bool isAsync = 19;
-    bool isPython = 20;
+    bool isAsync = 20;
+    bool isPython = 21;
     bool isStatusRequest = 22;
     bool isExecGraphRequest = 23;
 

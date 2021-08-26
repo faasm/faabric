@@ -422,7 +422,14 @@ std::vector<std::string> Scheduler::callFunctions(
         } else {
             // Non-threads require one executor per task
             for (auto i : localMessageIdxs) {
-                std::shared_ptr<Executor> e = claimExecutor(firstMsg, lock);
+                faabric::Message& localMsg = req->mutable_messages()->at(i);
+                if (localMsg.executeslocally()) {
+                    faabric::util::UniqueLock resultsLock(localResultsMutex);
+                    localResults.insert(
+                      { localMsg.id(),
+                        std::promise<std::unique_ptr<faabric::Message>>() });
+                }
+                std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
                 e->executeTasks({ i }, req);
             }
         }
@@ -522,7 +529,9 @@ int Scheduler::scheduleFunctionsOnHost(
     // Add messages
     int nOnThisHost = std::min<int>(available, remainder);
     for (int i = offset; i < (offset + nOnThisHost); i++) {
-        *hostRequest->add_messages() = req->messages().at(i);
+        auto* newMsg = hostRequest->add_messages();
+        *newMsg = req->messages().at(i);
+        newMsg->set_executeslocally(false);
         records.at(i) = host;
     }
 
@@ -683,6 +692,18 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
 
+    if (msg.executeslocally()) {
+        faabric::util::UniqueLock resultsLock(localResultsMutex);
+        auto it = localResults.find(msg.id());
+        if (it != localResults.end()) {
+            it->second.set_value(std::make_unique<faabric::Message>(msg));
+        }
+        // Sync messages can't have their results read twice, so skip redis
+        if (!msg.isasync()) {
+            return;
+        }
+    }
+
     std::string key = msg.resultkey();
     if (key.empty()) {
         throw std::runtime_error("Result key empty. Cannot publish result");
@@ -744,13 +765,40 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
                                               int timeoutMs)
 {
+    bool isBlocking = timeoutMs > 0;
+
     if (messageId == 0) {
         throw std::runtime_error("Must provide non-zero message ID");
     }
 
-    redis::Redis& redis = redis::Redis::getQueue();
+    do {
+        std::future<std::unique_ptr<faabric::Message>> fut;
+        {
+            faabric::util::UniqueLock resultsLock(localResultsMutex);
+            auto it = localResults.find(messageId);
+            if (it == localResults.end()) {
+                break; // fallback to redis
+            }
+            fut = it->second.get_future();
+        }
+        if (!isBlocking) {
+            auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+            if (status == std::future_status::timeout) {
+                faabric::Message msgResult;
+                msgResult.set_type(faabric::Message_MessageType_EMPTY);
+                return msgResult;
+            }
+        } else {
+            fut.wait();
+        }
+        {
+            faabric::util::UniqueLock resultsLock(localResultsMutex);
+            localResults.erase(messageId);
+        }
+        return *fut.get();
+    } while (0);
 
-    bool isBlocking = timeoutMs > 0;
+    redis::Redis& redis = redis::Redis::getQueue();
 
     std::string resultKey = faabric::util::resultKeyFromMessageId(messageId);
 
