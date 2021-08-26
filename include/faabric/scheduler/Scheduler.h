@@ -203,6 +203,7 @@ class Scheduler
       const std::string& otherHost);
 
     faabric::HostResources thisHostResources;
+    std::atomic<int32_t> thisHostUsedSlots;
     std::set<std::string> availableHostsCache;
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 

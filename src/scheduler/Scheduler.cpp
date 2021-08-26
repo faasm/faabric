@@ -156,8 +156,7 @@ void Scheduler::removeRegisteredHost(const std::string& host,
 
 void Scheduler::vacateSlot()
 {
-    faabric::util::FullLock lock(mx);
-    thisHostResources.set_usedslots(thisHostResources.usedslots() - 1);
+    thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
 }
 
 void Scheduler::notifyExecutorShutdown(Executor* exec,
@@ -302,7 +301,8 @@ std::vector<std::string> Scheduler::callFunctions(
             int slots = thisHostResources.slots();
 
             // Work out available cores, flooring at zero
-            int available = slots - thisHostResources.usedslots();
+            int available =
+              slots - this->thisHostUsedSlots.load(std::memory_order_acquire);
             available = std::max<int>(available, 0);
 
             // Claim as many as we can
@@ -391,8 +391,8 @@ std::vector<std::string> Scheduler::callFunctions(
     // executor, for anything else we want one Executor per function in flight
     if (!localMessageIdxs.empty()) {
         // Update slots
-        thisHostResources.set_usedslots(thisHostResources.usedslots() +
-                                        localMessageIdxs.size());
+        this->thisHostUsedSlots.fetch_add((int32_t)localMessageIdxs.size(),
+                                          std::memory_order_acquire);
 
         if (isThreads) {
             // Threads use the existing executor. We assume there's only one
@@ -779,12 +779,15 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
 
 faabric::HostResources Scheduler::getThisHostResources()
 {
+    thisHostResources.set_usedslots(
+      this->thisHostUsedSlots.load(std::memory_order_acquire));
     return thisHostResources;
 }
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
     thisHostResources = res;
+    this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
 }
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
