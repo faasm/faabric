@@ -135,7 +135,7 @@ void MessageEndpoint::doSend(zmq::socket_t& socket,
       "send")
 }
 
-Message MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
+std::optional<Message> MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
 {
     assert(tid == std::this_thread::get_id());
     assert(size >= 0);
@@ -147,7 +147,8 @@ Message MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
     return recvBuffer(socket, size);
 }
 
-Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
+std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
+                                                   int size)
 {
     // Pre-allocate buffer to avoid copying data
     Message msg(size);
@@ -158,7 +159,7 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
 
           if (!res.has_value()) {
               SPDLOG_TRACE("Timed out receiving message of size {}", size);
-              throw MessageTimeoutException("Timed out receiving message");
+              return std::nullopt;
           }
 
           if (res.has_value() && (res->size != res->untruncated_size)) {
@@ -181,7 +182,7 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
     return msg;
 }
 
-Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
+std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
 {
     // Allocate a message to receive data
     zmq::message_t msg;
@@ -190,7 +191,7 @@ Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
           auto res = socket.recv(msg);
           if (!res.has_value()) {
               SPDLOG_TRACE("Timed out receiving message with no size");
-              throw MessageTimeoutException("Timed out receiving message");
+              return std::nullopt;
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
@@ -274,7 +275,11 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
 
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", port);
-    return recvNoBuffer(reqSocket);
+    auto msgMaybe = recvNoBuffer(reqSocket);
+    if (!msgMaybe.has_value()) {
+        throw MessageTimeoutException("SendAwaitResponse timeout");
+    }
+    return msgMaybe.value();
 }
 
 // ----------------------------------------------
@@ -289,7 +294,7 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
     socket = setUpSocket(socketType, portIn);
 }
 
-Message RecvMessageEndpoint::recv(int size)
+std::optional<Message> RecvMessageEndpoint::recv(int size)
 {
     return doRecv(socket, size);
 }
@@ -302,7 +307,7 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
 {}
 
-Message AsyncRecvMessageEndpoint::recv(int size)
+std::optional<Message> AsyncRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("PULL {} ({} bytes)", port, size);
     return RecvMessageEndpoint::recv(size);
@@ -316,7 +321,7 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::rep)
 {}
 
-Message SyncRecvMessageEndpoint::recv(int size)
+std::optional<Message> SyncRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("RECV (REP) {} ({} bytes)", port, size);
     return RecvMessageEndpoint::recv(size);

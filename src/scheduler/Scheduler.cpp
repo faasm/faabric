@@ -156,8 +156,7 @@ void Scheduler::removeRegisteredHost(const std::string& host,
 
 void Scheduler::vacateSlot()
 {
-    faabric::util::FullLock lock(mx);
-    thisHostResources.set_usedslots(thisHostResources.usedslots() - 1);
+    thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
 }
 
 void Scheduler::notifyExecutorShutdown(Executor* exec,
@@ -302,7 +301,8 @@ std::vector<std::string> Scheduler::callFunctions(
             int slots = thisHostResources.slots();
 
             // Work out available cores, flooring at zero
-            int available = slots - thisHostResources.usedslots();
+            int available =
+              slots - this->thisHostUsedSlots.load(std::memory_order_acquire);
             available = std::max<int>(available, 0);
 
             // Claim as many as we can
@@ -324,8 +324,8 @@ std::vector<std::string> Scheduler::callFunctions(
         if (offset < nMessages) {
             // Schedule first to already registered hosts
             for (const auto& h : thisRegisteredHosts) {
-                int nOnThisHost =
-                  scheduleFunctionsOnHost(h, req, executed, offset, nullptr);
+                int nOnThisHost = scheduleFunctionsOnHost(
+                  h, req, executed, offset, &snapshotData);
 
                 offset += nOnThisHost;
                 if (offset >= nMessages) {
@@ -391,8 +391,8 @@ std::vector<std::string> Scheduler::callFunctions(
     // executor, for anything else we want one Executor per function in flight
     if (!localMessageIdxs.empty()) {
         // Update slots
-        thisHostResources.set_usedslots(thisHostResources.usedslots() +
-                                        localMessageIdxs.size());
+        this->thisHostUsedSlots.fetch_add((int32_t)localMessageIdxs.size(),
+                                          std::memory_order_acquire);
 
         if (isThreads) {
             // Threads use the existing executor. We assume there's only one
@@ -403,7 +403,7 @@ std::vector<std::string> Scheduler::callFunctions(
             std::shared_ptr<Executor> e = nullptr;
             if (thisExecutors.empty()) {
                 // Create executor if not exists
-                e = claimExecutor(firstMsg);
+                e = claimExecutor(firstMsg, lock);
             } else if (thisExecutors.size() == 1) {
                 // Use existing executor if exists
                 e = thisExecutors.back();
@@ -422,7 +422,14 @@ std::vector<std::string> Scheduler::callFunctions(
         } else {
             // Non-threads require one executor per task
             for (auto i : localMessageIdxs) {
-                std::shared_ptr<Executor> e = claimExecutor(firstMsg);
+                faabric::Message& localMsg = req->mutable_messages()->at(i);
+                if (localMsg.executeslocally()) {
+                    faabric::util::UniqueLock resultsLock(localResultsMutex);
+                    localResults.insert(
+                      { localMsg.id(),
+                        std::promise<std::unique_ptr<faabric::Message>>() });
+                }
+                std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
                 e->executeTasks({ i }, req);
             }
         }
@@ -522,7 +529,9 @@ int Scheduler::scheduleFunctionsOnHost(
     // Add messages
     int nOnThisHost = std::min<int>(available, remainder);
     for (int i = offset; i < (offset + nOnThisHost); i++) {
-        *hostRequest->add_messages() = req->messages().at(i);
+        auto* newMsg = hostRequest->add_messages();
+        *newMsg = req->messages().at(i);
+        newMsg->set_executeslocally(false);
         records.at(i) = host;
     }
 
@@ -598,7 +607,9 @@ Scheduler::getRecordedMessagesShared()
     return recordedMessagesShared;
 }
 
-std::shared_ptr<Executor> Scheduler::claimExecutor(faabric::Message& msg)
+std::shared_ptr<Executor> Scheduler::claimExecutor(
+  faabric::Message& msg,
+  faabric::util::FullLock& schedulerLock)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 
@@ -622,8 +633,12 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(faabric::Message& msg)
         int nExecutors = thisExecutors.size();
         SPDLOG_DEBUG(
           "Scaling {} from {} -> {}", funcStr, nExecutors, nExecutors + 1);
-
-        thisExecutors.emplace_back(factory->createExecutor(msg));
+        // Spinning up a new executor can be lengthy, allow other things to run
+        // in parallel
+        schedulerLock.unlock();
+        auto executor = factory->createExecutor(msg);
+        schedulerLock.lock();
+        thisExecutors.push_back(std::move(executor));
         claimed = thisExecutors.back();
 
         // Claim it
@@ -677,6 +692,18 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
 
+    if (msg.executeslocally()) {
+        faabric::util::UniqueLock resultsLock(localResultsMutex);
+        auto it = localResults.find(msg.id());
+        if (it != localResults.end()) {
+            it->second.set_value(std::make_unique<faabric::Message>(msg));
+        }
+        // Sync messages can't have their results read twice, so skip redis
+        if (!msg.isasync()) {
+            return;
+        }
+    }
+
     std::string key = msg.resultkey();
     if (key.empty()) {
         throw std::runtime_error("Result key empty. Cannot publish result");
@@ -684,14 +711,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // Write the successful result to the result queue
     std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
-    redis.enqueueBytes(key, inputData);
-
-    // Set the result key to expire
-    redis.expire(key, RESULT_KEY_EXPIRY);
-
-    // Set long-lived result for function too
-    redis.set(msg.statuskey(), inputData);
-    redis.expire(key, STATUS_KEY_EXPIRY);
+    redis.publishSchedulerResult(key, msg.statuskey(), inputData);
 }
 
 void Scheduler::registerThread(uint32_t msgId)
@@ -745,13 +765,40 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
                                               int timeoutMs)
 {
+    bool isBlocking = timeoutMs > 0;
+
     if (messageId == 0) {
         throw std::runtime_error("Must provide non-zero message ID");
     }
 
-    redis::Redis& redis = redis::Redis::getQueue();
+    do {
+        std::future<std::unique_ptr<faabric::Message>> fut;
+        {
+            faabric::util::UniqueLock resultsLock(localResultsMutex);
+            auto it = localResults.find(messageId);
+            if (it == localResults.end()) {
+                break; // fallback to redis
+            }
+            fut = it->second.get_future();
+        }
+        if (!isBlocking) {
+            auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+            if (status == std::future_status::timeout) {
+                faabric::Message msgResult;
+                msgResult.set_type(faabric::Message_MessageType_EMPTY);
+                return msgResult;
+            }
+        } else {
+            fut.wait();
+        }
+        {
+            faabric::util::UniqueLock resultsLock(localResultsMutex);
+            localResults.erase(messageId);
+        }
+        return *fut.get();
+    } while (0);
 
-    bool isBlocking = timeoutMs > 0;
+    redis::Redis& redis = redis::Redis::getQueue();
 
     std::string resultKey = faabric::util::resultKeyFromMessageId(messageId);
 
@@ -786,12 +833,15 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
 
 faabric::HostResources Scheduler::getThisHostResources()
 {
+    thisHostResources.set_usedslots(
+      this->thisHostUsedSlots.load(std::memory_order_acquire));
     return thisHostResources;
 }
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
     thisHostResources = res;
+    this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
 }
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)

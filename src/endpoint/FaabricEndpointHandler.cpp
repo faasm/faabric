@@ -110,6 +110,11 @@ std::pair<int, std::string> FaabricEndpointHandler::executeFunction(
     faabric::util::setMessageId(msg);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
     msg.set_masterhost(thisHost);
+    // This is set to false by the scheduler if the function ends up being sent
+    // elsewhere
+    if (!msg.isasync()) {
+        msg.set_executeslocally(true);
+    }
 
     auto tid = (pid_t)syscall(SYS_gettid);
     const std::string funcStr = faabric::util::funcToString(msg, true);

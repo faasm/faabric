@@ -21,7 +21,11 @@ void MpiMessageEndpoint::sendMpiMessage(
 
 std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
 {
-    Message m = recvSocket.recv();
+    std::optional<Message> mMaybe = recvSocket.recv();
+    if (!mMaybe.has_value()) {
+        throw MessageTimeoutException("Mpi message timeout");
+    }
+    Message& m = mMaybe.value();
     PARSE_MSG(faabric::MPIMessage, m.data(), m.size());
 
     return std::make_shared<faabric::MPIMessage>(msg);

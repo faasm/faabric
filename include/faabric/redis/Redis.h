@@ -7,6 +7,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_set>
 #include <vector>
@@ -24,6 +25,7 @@ class RedisInstance
     explicit RedisInstance(RedisRole role);
 
     std::string delifeqSha;
+    std::string schedPublishSha;
 
     std::string ip;
     std::string hostname;
@@ -35,15 +37,31 @@ class RedisInstance
     std::mutex scriptsLock;
 
     std::string loadScript(redisContext* context,
-                           const std::string& scriptBody);
+                           const std::string_view scriptBody);
 
     // Script to delete a key if it equals a given value
-    const std::string delifeqCmd =
-      "if redis.call(\"GET\", KEYS[1]) == ARGV[1] then \n"
-      "    return redis.call(\"DEL\", KEYS[1]) \n"
-      "else \n"
-      "    return 0 \n"
-      "end";
+    const std::string_view delifeqCmd = R"---(
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('DEL', KEYS[1])
+else
+    return 0
+end
+)---";
+
+    // Script to push and expire function execution results avoiding extra
+    // copies and round-trips
+    const std::string_view schedPublishCmd = R"---(
+local key = KEYS[1]
+local status_key = KEYS[2]
+local result = ARGV[1]
+local result_expiry = tonumber(ARGV[2])
+local status_expiry = tonumber(ARGV[3])
+redis.call('RPUSH', key, result)
+redis.call('EXPIRE', key, result_expiry)
+redis.call('SET', status_key, result)
+redis.call('EXPIRE', status_key, status_expiry)
+return 0
+)---";
 };
 
 class Redis
@@ -180,6 +198,11 @@ class Redis
                          uint8_t* buff,
                          long buffLen,
                          long nElems);
+
+    // Scheduler result publish
+    void publishSchedulerResult(const std::string& key,
+                                const std::string& status_key,
+                                const std::vector<uint8_t>& result);
 
   private:
     explicit Redis(const RedisInstance& instance);

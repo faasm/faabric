@@ -36,67 +36,59 @@ void MessageEndpointServerThread::start(
         latch->wait();
 
         while (true) {
-            bool headerReceived = false;
-            bool bodyReceived = false;
-            try {
-                // Receive header and body
-                Message headerMessage = endpoint->recv();
-                headerReceived = true;
+            // Receive header and body
+            std::optional<Message> headerMessageMaybe = endpoint->recv();
+            if (!headerMessageMaybe.has_value()) {
+                SPDLOG_TRACE("Server on port {}, looping after no message",
+                             port);
+                continue;
+            }
+            Message& headerMessage = headerMessageMaybe.value();
 
-                if (headerMessage.size() == shutdownHeader.size()) {
-                    if (headerMessage.dataCopy() == shutdownHeader) {
-                        SPDLOG_TRACE("Server on {} received shutdown message",
-                                     port);
-                        break;
-                    }
-                }
-
-                if (!headerMessage.more()) {
-                    throw std::runtime_error(
-                      "Header sent without SNDMORE flag");
-                }
-
-                Message body = endpoint->recv();
-                if (body.more()) {
-                    throw std::runtime_error("Body sent with SNDMORE flag");
-                }
-                bodyReceived = true;
-
-                assert(headerMessage.size() == sizeof(uint8_t));
-                uint8_t header = static_cast<uint8_t>(*headerMessage.data());
-
-                if (async) {
-                    // Server-specific async handling
-                    server->doAsyncRecv(header, body.udata(), body.size());
-                } else {
-                    // Server-specific sync handling
-                    std::unique_ptr<google::protobuf::Message> resp =
-                      server->doSyncRecv(header, body.udata(), body.size());
-                    size_t respSize = resp->ByteSizeLong();
-
-                    uint8_t buffer[respSize];
-                    if (!resp->SerializeToArray(buffer, respSize)) {
-                        throw std::runtime_error("Error serialising message");
-                    }
-
-                    // Return the response
-                    static_cast<SyncRecvMessageEndpoint*>(endpoint.get())
-                      ->sendResponse(buffer, respSize);
-                }
-            } catch (MessageTimeoutException& ex) {
-                // If we don't get a header in the timeout, we're ok to just
-                // loop round and try again
-                if (!headerReceived) {
-                    SPDLOG_TRACE("Server on port {}, looping after no message",
+            if (headerMessage.size() == shutdownHeader.size()) {
+                if (headerMessage.dataCopy() == shutdownHeader) {
+                    SPDLOG_TRACE("Server on {} received shutdown message",
                                  port);
-                    continue;
+                    break;
+                }
+            }
+
+            if (!headerMessage.more()) {
+                throw std::runtime_error("Header sent without SNDMORE flag");
+            }
+
+            std::optional<Message> bodyMaybe = endpoint->recv();
+            if (!bodyMaybe.has_value()) {
+                SPDLOG_ERROR("Server on port {}, got header, timed out on body",
+                             port);
+                throw MessageTimeoutException(
+                  "Server, got header, timed out on body");
+            }
+            Message& body = bodyMaybe.value();
+            if (body.more()) {
+                throw std::runtime_error("Body sent with SNDMORE flag");
+            }
+
+            assert(headerMessage.size() == sizeof(uint8_t));
+            uint8_t header = static_cast<uint8_t>(*headerMessage.data());
+
+            if (async) {
+                // Server-specific async handling
+                server->doAsyncRecv(header, body.udata(), body.size());
+            } else {
+                // Server-specific sync handling
+                std::unique_ptr<google::protobuf::Message> resp =
+                  server->doSyncRecv(header, body.udata(), body.size());
+                size_t respSize = resp->ByteSizeLong();
+
+                uint8_t buffer[respSize];
+                if (!resp->SerializeToArray(buffer, respSize)) {
+                    throw std::runtime_error("Error serialising message");
                 }
 
-                if (headerReceived && !bodyReceived) {
-                    SPDLOG_ERROR(
-                      "Server on port {}, got header, timed out on body", port);
-                    throw;
-                }
+                // Return the response
+                static_cast<SyncRecvMessageEndpoint*>(endpoint.get())
+                  ->sendResponse(buffer, respSize);
             }
 
             // Wait on the async latch if necessary
@@ -104,9 +96,6 @@ void MessageEndpointServerThread::start(
                 SPDLOG_TRACE("Server thread waiting on async latch");
                 server->asyncLatch->wait();
             }
-
-            headerReceived = false;
-            bodyReceived = false;
         }
     });
 }

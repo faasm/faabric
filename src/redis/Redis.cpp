@@ -1,11 +1,12 @@
 #include <faabric/redis/Redis.h>
 
+#include <faabric/util/bytes.h>
+#include <faabric/util/config.h>
+#include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/network.h>
 #include <faabric/util/random.h>
-
-#include <faabric/util/bytes.h>
-#include <faabric/util/gids.h>
+#include <faabric/util/timing.h>
 #include <thread>
 
 namespace faabric::redis {
@@ -27,15 +28,16 @@ RedisInstance::RedisInstance(RedisRole roleIn)
     port = std::stoi(portStr);
 
     // Load scripts
-    if (delifeqSha.empty()) {
+    if (delifeqSha.empty() || schedPublishSha.empty()) {
         std::unique_lock<std::mutex> lock(scriptsLock);
 
-        if (delifeqSha.empty()) {
+        if (delifeqSha.empty() || schedPublishSha.empty()) {
             printf("Loading scripts for Redis instance at %s\n",
                    hostname.c_str());
             redisContext* context = redisConnect(ip.c_str(), port);
 
             delifeqSha = this->loadScript(context, delifeqCmd);
+            schedPublishSha = this->loadScript(context, schedPublishCmd);
 
             redisFree(context);
         }
@@ -43,10 +45,10 @@ RedisInstance::RedisInstance(RedisRole roleIn)
 }
 
 std::string RedisInstance::loadScript(redisContext* context,
-                                      const std::string& scriptBody)
+                                      const std::string_view scriptBody)
 {
-    auto reply =
-      (redisReply*)redisCommand(context, "SCRIPT LOAD %s", scriptBody.c_str());
+    auto reply = (redisReply*)redisCommand(
+      context, "SCRIPT LOAD %b", scriptBody.data(), scriptBody.size());
 
     if (reply == nullptr) {
         throw std::runtime_error("Error loading script from Redis");
@@ -774,4 +776,23 @@ void Redis::dequeueBytes(const std::string& queueName,
 
     freeReplyObject(reply);
 }
+
+void Redis::publishSchedulerResult(const std::string& key,
+                                   const std::string& status_key,
+                                   const std::vector<uint8_t>& result)
+{
+    auto reply = (redisReply*)redisCommand(context,
+                                           "EVALSHA %s 2 %s %s %b %d %d",
+                                           instance.schedPublishSha.c_str(),
+                                           // keys
+                                           key.c_str(),
+                                           status_key.c_str(),
+                                           // argv
+                                           result.data(),
+                                           result.size(),
+                                           RESULT_KEY_EXPIRY,
+                                           STATUS_KEY_EXPIRY);
+    extractScriptResult(reply);
+}
+
 }

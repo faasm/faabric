@@ -26,7 +26,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     src.send(msg, expectedMsg.size());
 
     // Receive message
-    faabric::transport::Message recvMsg = dst.recv();
+    faabric::transport::Message recvMsg = dst.recv().value();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
@@ -48,7 +48,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
         // Receive message
         AsyncRecvMessageEndpoint dst(TEST_PORT);
-        faabric::transport::Message recvMsg = dst.recv();
+        faabric::transport::Message recvMsg = dst.recv().value();
 
         assert(recvMsg.size() == expectedMsg.size());
         std::string actualMsg(recvMsg.data(), recvMsg.size());
@@ -90,7 +90,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
 
     // Receive message
     SyncRecvMessageEndpoint dst(TEST_PORT);
-    faabric::transport::Message recvMsg = dst.recv();
+    faabric::transport::Message recvMsg = dst.recv().value();
     REQUIRE(recvMsg.size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data(), recvMsg.size());
     REQUIRE(actualMsg == expectedMsg);
@@ -125,7 +125,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     // Receive messages
     AsyncRecvMessageEndpoint dst(TEST_PORT);
     for (int i = 0; i < numMessages; i++) {
-        faabric::transport::Message recvMsg = dst.recv();
+        faabric::transport::Message recvMsg = dst.recv().value();
         // Check just a subset of the messages
         // Note - this implicitly tests in-order message delivery
         if ((i % (numMessages / 10)) == 0) {
@@ -165,7 +165,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     // Receive messages
     AsyncRecvMessageEndpoint dst(TEST_PORT);
     for (int i = 0; i < numSenders * numMessages; i++) {
-        faabric::transport::Message recvMsg = dst.recv();
+        faabric::transport::Message recvMsg = dst.recv().value();
         // Check just a subset of the messages
         if ((i % numMessages) == 0) {
             REQUIRE(recvMsg.size() == expectedMsg.size());
