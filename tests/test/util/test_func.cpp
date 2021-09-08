@@ -30,7 +30,7 @@ TEST_CASE("Test message factory shared", "[util]")
     REQUIRE(!msg->resultkey().empty());
 }
 
-TEST_CASE("Test adding id to message", "[util]")
+TEST_CASE("Test adding ids to message", "[util]")
 {
     faabric::Message msgA;
     faabric::Message msgB;
@@ -38,17 +38,22 @@ TEST_CASE("Test adding id to message", "[util]")
     REQUIRE(msgA.id() == 0);
     REQUIRE(msgA.resultkey().empty());
     REQUIRE(msgA.statuskey().empty());
+    REQUIRE(msgA.appid() == 0);
 
     REQUIRE(msgB.id() == 0);
     REQUIRE(msgB.resultkey().empty());
     REQUIRE(msgB.statuskey().empty());
+    REQUIRE(msgB.appid() == 0);
 
     faabric::util::setMessageId(msgA);
     faabric::util::setMessageId(msgB);
 
     REQUIRE(msgA.id() > 0);
+    REQUIRE(msgA.appid() > 0);
     REQUIRE(msgB.id() > 0);
+    REQUIRE(msgB.appid() > 0);
     REQUIRE(msgB.id() > msgA.id());
+    REQUIRE(msgB.appid() > msgA.appid());
 
     std::string expectedResultKeyA =
       std::string("result_" + std::to_string(msgA.id()));
@@ -65,21 +70,24 @@ TEST_CASE("Test adding id to message", "[util]")
     REQUIRE(msgB.statuskey() == expectedStatusKeyB);
 }
 
-TEST_CASE("Test adding ID to message with an existing ID")
+TEST_CASE("Test adding ids to message with existing ids")
 {
     faabric::Message msg;
     faabric::util::setMessageId(msg);
 
     int originalId = msg.id();
+    int originalAppId = msg.appid();
     std::string originalStatusKey = msg.statuskey();
     std::string originalResultKey = msg.resultkey();
 
     faabric::util::setMessageId(msg);
     int afterId = msg.id();
+    int afterAppId = msg.appid();
     std::string afterStatusKey = msg.statuskey();
     std::string afterResultKey = msg.resultkey();
 
     REQUIRE(afterId == originalId);
+    REQUIRE(afterAppId == originalAppId);
     REQUIRE(afterStatusKey == originalStatusKey);
     REQUIRE(afterResultKey == originalResultKey);
 }
