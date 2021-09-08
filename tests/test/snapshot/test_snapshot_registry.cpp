@@ -21,9 +21,24 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     std::string keyB = "snapB";
     std::string keyC = "snapC";
 
+    REQUIRE(!reg.snapshotExists(keyA));
+    REQUIRE(!reg.snapshotExists(keyB));
+    REQUIRE(!reg.snapshotExists(keyC));
+
     SnapshotData snapA = takeSnapshot(keyA, 1, true);
     SnapshotData snapB = takeSnapshot(keyB, 2, false);
-    SnapshotData snapC = takeSnapshot(keyA, 3, true);
+
+    REQUIRE(reg.snapshotExists(keyA));
+    REQUIRE(reg.snapshotExists(keyB));
+    REQUIRE(!reg.snapshotExists(keyC));
+    REQUIRE(reg.getSnapshotCount() == 2);
+
+    SnapshotData snapC = takeSnapshot(keyC, 3, true);
+
+    REQUIRE(reg.snapshotExists(keyA));
+    REQUIRE(reg.snapshotExists(keyB));
+    REQUIRE(reg.snapshotExists(keyC));
+    REQUIRE(reg.getSnapshotCount() == 3);
 
     // Add some random bits of data to the vectors
     for (int i = 0; i < HOST_PAGE_SIZE - 10; i += 50) {
@@ -32,11 +47,10 @@ TEST_CASE_METHOD(SnapshotTestFixture,
         snapC.data[i + 2] = i;
     }
 
+    // Take snapshots again with updated data
     reg.takeSnapshot(keyA, snapA);
     reg.takeSnapshot(keyB, snapB, false);
     reg.takeSnapshot(keyC, snapC);
-
-    REQUIRE(reg.getSnapshotCount() == 3);
 
     SnapshotData actualA = reg.getSnapshot(keyA);
     SnapshotData actualB = reg.getSnapshot(keyB);
@@ -81,7 +95,19 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     removeSnapshot(keyA, 1);
     removeSnapshot(keyB, 2);
+
+    REQUIRE(!reg.snapshotExists(keyA));
+    REQUIRE(!reg.snapshotExists(keyB));
+    REQUIRE(reg.snapshotExists(keyC));
+    REQUIRE(reg.getSnapshotCount() == 1);
+
     removeSnapshot(keyC, 3);
+
+    REQUIRE(!reg.snapshotExists(keyA));
+    REQUIRE(!reg.snapshotExists(keyB));
+    REQUIRE(!reg.snapshotExists(keyC));
+    REQUIRE(reg.getSnapshotCount() == 0);
+
     deallocatePages(actualDataA, 1);
     deallocatePages(actualDataB, 2);
     deallocatePages(actualDataC, 3);
