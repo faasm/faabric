@@ -106,6 +106,8 @@ class TestExecutor final : public Executor
                 nThreads = std::stoi(msg.inputdata());
             }
 
+            SPDLOG_DEBUG("TestExecutor spawning {} threads", nThreads);
+
             std::shared_ptr<faabric::BatchExecuteRequest> chainedReq =
               faabric::util::batchExecFactory(
                 "dummy", "thread-check", nThreads);
@@ -135,8 +137,14 @@ class TestExecutor final : public Executor
             for (const auto& msg : chainedReq->messages()) {
                 uint32_t mid = msg.id();
                 int threadRes = sch.awaitThreadResult(mid);
-                UNUSED(threadRes);
-                assert(threadRes == mid / 100);
+
+                if (threadRes != mid / 100) {
+                    SPDLOG_ERROR(
+                      "TestExecutor got invalid thread result, {} != {}",
+                      threadRes,
+                      mid / 100);
+                    return 1;
+                }
             }
 
             // Delete the snapshot
@@ -194,7 +202,7 @@ class TestExecutor final : public Executor
         if (msg.function() == "snap-check") {
             // Modify a page of the dummy memory
             uint8_t pageIdx = threadPoolIdx;
-            SPDLOG_DEBUG("TextExecutor Modifying page {} of memory", pageIdx);
+            SPDLOG_DEBUG("TestExecutor modifying page {} of memory", pageIdx);
             uint8_t* offsetPtr =
               dummyMemory + (pageIdx * faabric::util::HOST_PAGE_SIZE);
 
@@ -214,6 +222,7 @@ class TestExecutor final : public Executor
         }
 
         if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
+            SPDLOG_DEBUG("TestExecutor executing simple thread {}", msg.id());
             return msg.id() / 100;
         }
 
@@ -360,7 +369,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test executing threads indirectly",
+                 "Test executing chained threads",
                  "[executor]")
 {
     int nThreads;
@@ -386,7 +395,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test repeatedly executing threads indirectly",
+                 "Test repeatedly executing chained threads",
                  "[executor]")
 {
     // We really want to stress things here, but it's quite quick to run, so
@@ -421,7 +430,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test executing remote threads indirectly",
+                 "Test executing remote chained threads",
                  "[executor]")
 {
     faabric::util::setMockMode(true);
@@ -439,13 +448,13 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Set up other host to have some resources
     faabric::HostResources resOther;
-    resOther.set_slots(10);
+    resOther.set_slots(20);
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
     // Background thread to execute main function and await results
+    int nThreads = 8;
     auto latch = faabric::util::Latch::create(2);
-    std::thread t([&latch] {
-        int nThreads = 8;
+    std::thread t([&latch, nThreads] {
         std::shared_ptr<BatchExecuteRequest> req =
           faabric::util::batchExecFactory("dummy", "thread-check", 1);
         faabric::Message& msg = req->mutable_messages()->at(0);
@@ -455,48 +464,53 @@ TEST_CASE_METHOD(TestExecutorFixture,
         sch.callFunctions(req, false);
 
         latch->wait();
+
         faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
         assert(res.returnvalue() == 0);
     });
 
-    // Wait until the function has executed and submit another request
+    // Wait for the remote thread request to have been submitted
     auto reqs = faabric::scheduler::getBatchRequests();
     REQUIRE_RETRY(reqs = faabric::scheduler::getBatchRequests(),
                   reqs.size() == 1);
-
-    // Check restore hasn't been called yet
-    REQUIRE(restoreCount == 0);
-
-    // Get the request that's been submitted
     std::string actualHost = reqs.at(0).first;
     REQUIRE(actualHost == otherHost);
+
+    std::shared_ptr<faabric::BatchExecuteRequest> distReq = reqs.at(0).second;
+    REQUIRE(distReq->messages().size() == nThreads);
+    faabric::Message firstMsg = distReq->messages().at(0);
+
+    // Check restore hasn't been called (as we're the master)
+    REQUIRE(restoreCount == 0);
 
     // Check the snapshot has been pushed to the other host
     auto snapPushes = faabric::snapshot::getSnapshotPushes();
     REQUIRE(snapPushes.size() == 1);
     REQUIRE(snapPushes.at(0).first == otherHost);
 
-    std::shared_ptr<faabric::BatchExecuteRequest> distReq = reqs.at(0).second;
-    faabric::Message firstMsg = distReq->messages().at(0);
-
     // Now execute request on this host as if we were on the other host
     conf.endpointHost = otherHost;
     sch.callFunctions(distReq, true);
-    conf.endpointHost = thisHost;
 
-    // Check restore has been called as we're not on master
+    // Check restore has been called as we're no longer master
     REQUIRE(restoreCount == 1);
 
-    // Process the thread result requests
+    // Wait for the results
     auto results = faabric::snapshot::getThreadResults();
+    REQUIRE_RETRY(results = faabric::snapshot::getThreadResults(),
+                  results.size() == nThreads);
 
+    // Reset the host config for this host
+    conf.endpointHost = thisHost;
+
+    // Process the thread results
     for (auto& r : results) {
         REQUIRE(r.first == thisHost);
         auto args = r.second;
         sch.setThreadResultLocally(args.first, args.second);
     }
 
-    // Rejoin the other thread
+    // Rejoin the background thread
     latch->wait();
     if (t.joinable()) {
         t.join();
