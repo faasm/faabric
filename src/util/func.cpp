@@ -115,6 +115,11 @@ unsigned int setMessageId(faabric::Message& msg)
         msg.set_id(messageId);
     }
 
+    // Set an app ID if not already set
+    if (msg.appid() == 0) {
+        msg.set_appid(faabric::util::generateGid());
+    }
+
     // Set the timestamp if it doesn't have one
     if (msg.timestamp() <= 0) {
         Clock& clock = faabric::util::getGlobalClock();
