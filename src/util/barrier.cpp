@@ -44,6 +44,9 @@ void Barrier::wait()
         if (!cv.wait_until(lock, timePoint, [this, phaseCompletionVisits] {
                 return visits >= phaseCompletionVisits;
             })) {
+            std::string msg =
+              fmt::format("Barrier timed out ({}ms)", timeoutMs);
+            SPDLOG_ERROR(msg);
             throw std::runtime_error("Barrier timed out");
         }
     }

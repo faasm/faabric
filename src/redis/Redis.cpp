@@ -660,8 +660,11 @@ redisReply* Redis::dequeueBase(const std::string& queueName, int timeoutMs)
 
     // Check if we got anything
     if (reply == nullptr || reply->type == REDIS_REPLY_NIL) {
-        throw RedisNoResponseException(
-          "No response from Redis dequeue for queue " + queueName);
+        std::string msg =
+          fmt::format("No response from Redis dequeue in {}ms for queue {}",
+                      timeoutMs,
+                      queueName);
+        throw RedisNoResponseException(msg);
     }
 
     // Should get an array when doing a blpop, check it.
@@ -737,8 +740,8 @@ std::vector<uint8_t> Redis::dequeueBytes(const std::string& queueName,
 
     std::vector<uint8_t> replyBytes;
     if (isBlocking) {
-        // BLPOP will return the queue name and the value returned (elements 0
-        // and 1)
+        // BLPOP will return the queue name and the value returned (elements
+        // 0 and 1)
         redisReply* r = reply->element[1];
         replyBytes = getBytesFromReply(r);
     } else {
@@ -794,5 +797,4 @@ void Redis::publishSchedulerResult(const std::string& key,
                                            STATUS_KEY_EXPIRY);
     extractScriptResult(reply);
 }
-
 }
