@@ -1,6 +1,8 @@
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/sync/DistributedSync.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
@@ -12,6 +14,7 @@ FunctionCallServer::FunctionCallServer()
   : faabric::transport::MessageEndpointServer(FUNCTION_CALL_ASYNC_PORT,
                                               FUNCTION_CALL_SYNC_PORT)
   , scheduler(getScheduler())
+  , sync(faabric::sync::getDistributedSync())
 {}
 
 void FunctionCallServer::doAsyncRecv(int header,
@@ -101,20 +104,32 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
 void FunctionCallServer::recvFunctionGroupLock(const uint8_t* buffer,
                                                size_t bufferSize)
 {
+    PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
+    int32_t groupId = msg.groupid();
+    sync.localLock(groupId);
 }
 
 void FunctionCallServer::recvFunctionGroupUnlock(const uint8_t* buffer,
                                                  size_t bufferSize)
 {
+    PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
+    int32_t groupId = msg.groupid();
+    sync.localUnlock(groupId);
 }
 
 void FunctionCallServer::recvFunctionGroupNotify(const uint8_t* buffer,
                                                  size_t bufferSize)
 {
+    PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
+    int32_t groupId = msg.groupid();
+    sync.localNotify(groupId);
 }
 
 void FunctionCallServer::recvFunctionGroupBarrier(const uint8_t* buffer,
                                                   size_t bufferSize)
 {
+    PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
+    int32_t groupId = msg.groupid();
+    sync.localBarrier(groupId);
 }
 }
