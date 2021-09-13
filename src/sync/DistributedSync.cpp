@@ -147,7 +147,7 @@ void DistributedSync::localNotify(int32_t groupId)
     doLocalNotify(groupId, false);
 }
 
-void DistributedSync::localNotifyMaster(int32_t groupId)
+void DistributedSync::awaitNotify(int32_t groupId)
 {
     doLocalNotify(groupId, true);
 }

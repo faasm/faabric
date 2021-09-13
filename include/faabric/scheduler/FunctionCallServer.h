@@ -33,7 +33,7 @@ class FunctionCallServer final
 
     void recvUnregister(const uint8_t* buffer, size_t bufferSize);
 
-    // Function group operations
+    // --- Function group operations ---
     void recvFunctionGroupLock(const uint8_t* buffer, size_t bufferSize);
 
     void recvFunctionGroupUnlock(const uint8_t* buffer, size_t bufferSize);

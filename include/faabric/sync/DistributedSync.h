@@ -26,7 +26,7 @@ class DistributedSync
 
     void localNotify(int32_t groupId);
 
-    void localNotifyMaster(int32_t groupId);
+    void awaitNotify(int32_t groupId);
 
     void notify(const faabric::Message& msg);
 
