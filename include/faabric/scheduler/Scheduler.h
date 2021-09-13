@@ -160,6 +160,9 @@ class Scheduler
 
     void setThisHostResources(faabric::HostResources& res);
 
+    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+      const std::string& otherHost);
+
     // ----------------------------------
     // Testing
     // ----------------------------------
@@ -195,9 +198,6 @@ class Scheduler
     std::shared_mutex mx;
 
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
-
-    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
-      const std::string& otherHost);
 
     faabric::snapshot::SnapshotClient& getSnapshotClient(
       const std::string& otherHost);
