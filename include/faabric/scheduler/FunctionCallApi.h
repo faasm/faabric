@@ -8,6 +8,9 @@ enum FunctionCalls
     Flush = 2,
     Unregister = 3,
     GetResources = 4,
-    SetThreadResult = 5,
+    GroupLock = 5,
+    GroupUnlock = 6,
+    GroupNotify = 7,
+    GroupBarrier = 8,
 };
 }

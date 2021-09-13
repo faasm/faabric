@@ -38,8 +38,6 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
   public:
     explicit FunctionCallClient(const std::string& hostIn);
 
-    /* Function call client external API */
-
     void sendFlush();
 
     faabric::HostResources getResources();
@@ -49,7 +47,20 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     void unregister(faabric::UnregisterRequest& req);
 
+    // --- Function group operations ---
+
+    void functionGroupLock(int32_t groupId);
+
+    void functionGroupUnlock(int32_t groupId);
+
+    void functionGroupNotify(int32_t groupId);
+
+    void functionGroupBarrier(int32_t groupId);
+
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
+
+    void makeFunctionGroupRequest(int32_t groupId,
+                                  faabric::scheduler::FunctionCalls call);
 };
 }

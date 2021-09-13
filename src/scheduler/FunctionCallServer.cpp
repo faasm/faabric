@@ -97,4 +97,24 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
       scheduler.getThisHostResources());
     return response;
 }
+
+void FunctionCallServer::recvFunctionGroupLock(const uint8_t* buffer,
+                                               size_t bufferSize)
+{
+}
+
+void FunctionCallServer::recvFunctionGroupUnlock(const uint8_t* buffer,
+                                                 size_t bufferSize)
+{
+}
+
+void FunctionCallServer::recvFunctionGroupNotify(const uint8_t* buffer,
+                                                 size_t bufferSize)
+{
+}
+
+void FunctionCallServer::recvFunctionGroupBarrier(const uint8_t* buffer,
+                                                  size_t bufferSize)
+{
+}
 }

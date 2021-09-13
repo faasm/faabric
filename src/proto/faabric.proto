@@ -57,6 +57,25 @@ message FunctionStatusResponse {
     FunctionStatus status = 1;
 }
 
+// ---------------------------------------------
+// FUNCTION GROUPS
+// ---------------------------------------------
+
+message FunctionGroupRequest {
+    int32 groupId = 1;
+    enum FunctionGroupOperation {
+        LOCK = 0;
+        UNLOCK = 1;
+        NOTIFY = 2;
+        BARRIER = 3;
+    }
+    FunctionGroupOperation operation = 2;
+}
+
+// ---------------------------------------------
+// MPI
+// ---------------------------------------------
+
 message MPIMessage {
     enum MPIMessageType {
         NORMAL = 0;
