@@ -49,6 +49,18 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::GetResources: {
             return recvGetResources(buffer, bufferSize);
         }
+        case faabric::scheduler::FunctionCalls::GroupLock: {
+            return recvFunctionGroupLock(buffer, bufferSize);
+        }
+        case faabric::scheduler::FunctionCalls::GroupUnlock: {
+            return recvFunctionGroupUnlock(buffer, bufferSize);
+        }
+        case faabric::scheduler::FunctionCalls::GroupNotify: {
+            return recvFunctionGroupNotify(buffer, bufferSize);
+        }
+        case faabric::scheduler::FunctionCalls::GroupBarrier: {
+            return recvFunctionGroupBarrier(buffer, bufferSize);
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized sync call header: {}", header));
@@ -101,35 +113,43 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
     return response;
 }
 
-void FunctionCallServer::recvFunctionGroupLock(const uint8_t* buffer,
-                                               size_t bufferSize)
+std::unique_ptr<google::protobuf::Message>
+FunctionCallServer::recvFunctionGroupLock(const uint8_t* buffer,
+                                          size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
     int32_t groupId = msg.groupid();
     sync.localLock(groupId);
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
-void FunctionCallServer::recvFunctionGroupUnlock(const uint8_t* buffer,
-                                                 size_t bufferSize)
+std::unique_ptr<google::protobuf::Message>
+FunctionCallServer::recvFunctionGroupUnlock(const uint8_t* buffer,
+                                            size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
     int32_t groupId = msg.groupid();
     sync.localUnlock(groupId);
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
-void FunctionCallServer::recvFunctionGroupNotify(const uint8_t* buffer,
-                                                 size_t bufferSize)
+std::unique_ptr<google::protobuf::Message>
+FunctionCallServer::recvFunctionGroupNotify(const uint8_t* buffer,
+                                            size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
     int32_t groupId = msg.groupid();
     sync.localNotify(groupId);
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
-void FunctionCallServer::recvFunctionGroupBarrier(const uint8_t* buffer,
-                                                  size_t bufferSize)
+std::unique_ptr<google::protobuf::Message>
+FunctionCallServer::recvFunctionGroupBarrier(const uint8_t* buffer,
+                                             size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
     int32_t groupId = msg.groupid();
     sync.localBarrier(groupId);
+    return std::make_unique<faabric::EmptyResponse>();
 }
 }
