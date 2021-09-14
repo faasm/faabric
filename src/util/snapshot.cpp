@@ -4,6 +4,10 @@
 
 namespace faabric::util {
 
+SnapshotData::SnapshotData()
+  : merger(std::make_shared<SnapshotDiffMerger>())
+{}
+
 std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
 {
     if (data == nullptr || size == 0) {
@@ -81,12 +85,29 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
     return diffs;
 }
 
+void SnapshotDiffMerger::applyDiff(size_t diffOffset,
+                                   const uint8_t* diffData,
+                                   size_t diffLen,
+                                   uint8_t* targetBase)
+{
+    uint8_t* dest = targetBase + diffOffset;
+    std::memcpy(dest, diffData, diffLen);
+};
+
 void SnapshotData::applyDiff(size_t diffOffset,
                              const uint8_t* diffData,
                              size_t diffLen)
 {
-    uint8_t* dest = data + diffOffset;
-    std::memcpy(dest, diffData, diffLen);
+    getMerger()->applyDiff(diffOffset, diffData, diffLen, data);
 }
 
+std::shared_ptr<SnapshotDiffMerger> SnapshotData::getMerger()
+{
+    return merger;
+}
+
+void SnapshotData::setMerger(std::shared_ptr<SnapshotDiffMerger> mergerIn)
+{
+    merger = mergerIn;
+}
 }
