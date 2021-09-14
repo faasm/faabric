@@ -56,7 +56,7 @@ void DistributedSync::initGroup(const faabric::Message& msg, int groupSize)
     localGroups[msg.appid()] = groupSize;
 }
 
-void DistributedSync::checkGroupExistsLocally(int32_t groupId)
+void DistributedSync::checkGroupSizeSet(int32_t groupId)
 {
     if (localGroups.find(groupId) == localGroups.end()) {
         SPDLOG_ERROR("Group {} does not exist on this host", groupId);
@@ -69,18 +69,30 @@ void DistributedSync::clear()
     localGroups.clear();
 
     barriers.clear();
-    recursiveMutexes.clear();
 
+    recursiveMutexes.clear();
     mutexes.clear();
+
     counts.clear();
     cvs.clear();
 }
 
-void DistributedSync::localLock(int32_t groupId)
+void DistributedSync::localLockRecursive(int32_t groupId)
 {
-    checkGroupExistsLocally(groupId);
     FROM_MAP(mx, std::recursive_mutex, recursiveMutexes);
     mx->lock();
+}
+
+void DistributedSync::localLock(int32_t groupId)
+{
+    FROM_MAP(mx, std::mutex, mutexes);
+    mx->lock();
+}
+
+bool DistributedSync::localTryLock(int32_t groupId)
+{
+    FROM_MAP(mx, std::mutex, mutexes);
+    return mx->try_lock();
 }
 
 void DistributedSync::lock(const faabric::Message& msg)
@@ -88,10 +100,15 @@ void DistributedSync::lock(const faabric::Message& msg)
     DISTRIBUTED_SYNC_OP(localLock, client.functionGroupLock)
 }
 
+void DistributedSync::localUnlockRecursive(int32_t groupId)
+{
+    FROM_MAP(mx, std::recursive_mutex, recursiveMutexes);
+    mx->unlock();
+}
+
 void DistributedSync::localUnlock(int32_t groupId)
 {
-    checkGroupExistsLocally(groupId);
-    FROM_MAP(mx, std::recursive_mutex, recursiveMutexes);
+    FROM_MAP(mx, std::mutex, mutexes);
     mx->unlock();
 }
 
@@ -102,7 +119,7 @@ void DistributedSync::unlock(const faabric::Message& msg)
 
 void DistributedSync::doLocalNotify(int32_t groupId, bool master)
 {
-    checkGroupExistsLocally(groupId);
+    checkGroupSizeSet(groupId);
 
     // All members must lock when entering this function
     FROM_MAP(nowaitMutex, std::mutex, mutexes)
@@ -159,8 +176,7 @@ void DistributedSync::notify(const faabric::Message& msg)
 
 void DistributedSync::localBarrier(int32_t groupId)
 {
-    checkGroupExistsLocally(groupId);
-
+    checkGroupSizeSet(groupId);
     int32_t groupSize = localGroups[groupId];
 
     // Create if necessary

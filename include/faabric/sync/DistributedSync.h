@@ -16,20 +16,33 @@ class DistributedSync
 
     void clear();
 
+    // --- Lock ---
+    void lock(const faabric::Message& msg);
+
     void localLock(int32_t groupId);
 
-    void lock(const faabric::Message& msg);
+    // --- Unlock ---
+    void unlock(const faabric::Message& msg);
 
     void localUnlock(int32_t groupId);
 
-    void unlock(const faabric::Message& msg);
+    // --- Try lock ---
+    bool localTryLock(int32_t groupId);
+
+    // --- Lock recursive ---
+    void localLockRecursive(int32_t groupId);
+
+    // --- Unlock recursive
+    void localUnlockRecursive(int32_t groupId);
+
+    // --- Notify ---
+    void notify(const faabric::Message& msg);
 
     void localNotify(int32_t groupId);
 
     void awaitNotify(int32_t groupId);
 
-    void notify(const faabric::Message& msg);
-
+    // --- Barrier ---
     void localBarrier(int32_t groupId);
 
     void barrier(const faabric::Message& msg);
@@ -48,12 +61,13 @@ class DistributedSync
       recursiveMutexes;
 
     std::unordered_map<uint32_t, std::shared_ptr<std::mutex>> mutexes;
+
     std::unordered_map<uint32_t, std::shared_ptr<std::atomic<int>>> counts;
     std::unordered_map<uint32_t, std::shared_ptr<std::condition_variable>> cvs;
 
     void doLocalNotify(int32_t groupId, bool master);
 
-    void checkGroupExistsLocally(int32_t groupId);
+    void checkGroupSizeSet(int32_t groupId);
 };
 
 DistributedSync& getDistributedSync();

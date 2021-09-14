@@ -66,7 +66,8 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
                                               SNAPSHOT_SYNC_PORT)
 {}
 
-void SnapshotClient::pushSnapshot(const std::string& key,
+void SnapshotClient::pushSnapshot(int appId,
+                                  const std::string& key,
                                   const faabric::util::SnapshotData& data)
 {
     if (data.size == 0) {
@@ -86,7 +87,7 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         auto keyOffset = mb.CreateString(key);
         auto dataOffset = mb.CreateVector<uint8_t>(data.data, data.size);
         auto requestOffset =
-          CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
+          CreateSnapshotPushRequest(mb, appId, keyOffset, dataOffset);
         mb.Finish(requestOffset);
 
         // Send it

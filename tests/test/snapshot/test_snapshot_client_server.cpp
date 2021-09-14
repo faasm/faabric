@@ -58,9 +58,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     snapA.data = dataA.data();
     snapB.data = dataB.data();
 
+    int appIdA = 123;
+    int appIdB = 456;
+
     // Send the message
-    cli.pushSnapshot(snapKeyA, snapA);
-    cli.pushSnapshot(snapKeyB, snapB);
+    cli.pushSnapshot(appIdA, snapKeyA, snapA);
+    cli.pushSnapshot(appIdB, snapKeyB, snapB);
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);

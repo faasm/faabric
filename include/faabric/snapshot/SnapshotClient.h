@@ -36,7 +36,8 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
 
     /* Snapshot client external API */
 
-    void pushSnapshot(const std::string& key,
+    void pushSnapshot(int appId,
+                      const std::string& key,
                       const faabric::util::SnapshotData& data);
 
     void pushSnapshotDiffs(std::string snapshotKey,

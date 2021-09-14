@@ -3,6 +3,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/State.h>
+#include <faabric/sync/DistributedSync.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
@@ -117,10 +118,17 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
+    // Get the lock for this app
+    faabric::sync::DistributedSync& sync = faabric::sync::getDistributedSync();
+    sync.localLock(r->appid());
+
     // Copy diffs to snapshot
     for (const auto* r : *r->chunks()) {
         snap.applyDiff(r->offset(), r->data()->data(), r->data()->size());
     }
+
+    // Unlock
+    sync.localUnlock(r->appid());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
