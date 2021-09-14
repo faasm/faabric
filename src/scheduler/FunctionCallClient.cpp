@@ -1,4 +1,4 @@
-#include "faabric/scheduler/FunctionCallApi.h"
+#include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/transport/common.h>

@@ -1,5 +1,4 @@
 table SnapshotPushRequest {
-  appid:int;
   key:string;
   contents:[ubyte];
 }

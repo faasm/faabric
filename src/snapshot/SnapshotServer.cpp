@@ -66,9 +66,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
         throw std::runtime_error("Received snapshot with zero size");
     }
 
-    SPDLOG_DEBUG("Receiving shapshot {} (size {})",
+    SPDLOG_DEBUG("Receiving shapshot {} (size {}, lock {})",
                  r->key()->c_str(),
-                 r->contents()->size());
+                 r->contents()->size(),
+                 r->lockid());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
@@ -118,17 +119,10 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
-    // Get the lock for this app
-    faabric::sync::DistributedSync& sync = faabric::sync::getDistributedSync();
-    sync.localLock(r->appid());
-
     // Copy diffs to snapshot
     for (const auto* r : *r->chunks()) {
         snap.applyDiff(r->offset(), r->data()->data(), r->data()->size());
     }
-
-    // Unlock
-    sync.localUnlock(r->appid());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
