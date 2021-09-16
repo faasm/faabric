@@ -27,8 +27,8 @@ struct SnapshotMergeRegion
 {
     uint32_t offset = 0;
     size_t length = 0;
-    SnapshotDataType dataType;
-    SnapshotMergeOperation operation;
+    SnapshotDataType dataType = SnapshotDataType::Raw;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
 };
 
 class SnapshotDiff
@@ -37,8 +37,8 @@ class SnapshotDiff
     uint32_t offset = 0;
     size_t size = 0;
     const uint8_t* data = nullptr;
-    SnapshotDataType dataType;
-    SnapshotMergeOperation operation;
+    SnapshotDataType dataType = SnapshotDataType::Raw;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
 
     SnapshotDiff() = default;
 

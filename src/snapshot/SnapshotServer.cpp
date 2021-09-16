@@ -131,6 +131,12 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                         const auto* value =
                           reinterpret_cast<const int32_t*>(r->data()->data());
                         *(reinterpret_cast<int32_t*>(dest)) += *value;
+                        break;
+                    }
+                    default: {
+                        SPDLOG_ERROR("Unsupported sum data type : {}",
+                                     r->dataType());
+                        throw std::runtime_error("Unsupported sum data type");
                     }
                 }
             }
