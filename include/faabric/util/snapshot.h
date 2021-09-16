@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -30,13 +31,16 @@ struct SnapshotMergeRegion
     SnapshotMergeOperation operation;
 };
 
-struct SnapshotDiff
+class SnapshotDiff
 {
+  public:
     uint32_t offset = 0;
     size_t size = 0;
     const uint8_t* data = nullptr;
     SnapshotDataType dataType;
     SnapshotMergeOperation operation;
+
+    SnapshotDiff() = default;
 
     SnapshotDiff(uint32_t offsetIn, const uint8_t* dataIn, size_t sizeIn)
     {
@@ -65,9 +69,9 @@ class SnapshotData
                         SnapshotDataType dataType,
                         SnapshotMergeOperation operation);
 
-    void applyDiff(size_t diffOffset, const uint8_t* diffData, size_t diffLen);
-
   private:
-    std::vector<SnapshotMergeRegion> mergeRegions;
+    // Note - we care about the order of this map, as we iterate through it in
+    // order of offsets
+    std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
 };
 }

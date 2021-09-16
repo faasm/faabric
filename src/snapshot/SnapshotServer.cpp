@@ -117,9 +117,28 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
-    // Copy diffs to snapshot
+    // Apply diffs to snapshot
     for (const auto* r : *r->chunks()) {
-        snap.applyDiff(r->offset(), r->data()->data(), r->data()->size());
+        uint8_t* dest = snap.data + r->offset();
+        switch (r->mergeOp()) {
+            case (SnapshotDiffMergeOp_Overwrite): {
+                std::memcpy(dest, r->data()->data(), r->data()->size());
+                break;
+            }
+            case (SnapshotDiffMergeOp_Sum): {
+                switch (r->dataType()) {
+                    case (SnapshotDiffDataType_Integer): {
+                        const auto* value =
+                          reinterpret_cast<const int32_t*>(r->data()->data());
+                        *(reinterpret_cast<int32_t*>(dest)) += *value;
+                    }
+                }
+            }
+            default: {
+                SPDLOG_ERROR("Unsupported diff operation: {}", r->mergeOp());
+                throw std::runtime_error("Unsupported diff operation");
+            }
+        }
     }
 
     // Send response
