@@ -136,23 +136,69 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
     std::vector<uint8_t> updatedData;
     std::vector<uint8_t> expectedData;
 
-    faabric::util::SnapshotDataType dataType;
-    faabric::util::SnapshotMergeOperation operation;
-    size_t dataLength;
+    faabric::util::SnapshotDataType dataType =
+      faabric::util::SnapshotDataType::Raw;
+    faabric::util::SnapshotMergeOperation operation =
+      faabric::util::SnapshotMergeOperation::Overwrite;
+    size_t dataLength = 0;
 
-    SECTION("Integer sum")
+    SECTION("Integer")
     {
-        int originalValue = 100;
-        int finalValue = 150;
-        int sumValue = 50;
-
-        originalData = faabric::util::valueToBytes<int>(originalValue);
-        updatedData = faabric::util::valueToBytes<int>(finalValue);
-        expectedData = faabric::util::valueToBytes<int>(sumValue);
+        int originalValue = 0;
+        int finalValue = 0;
+        int diffValue = 0;
 
         dataType = faabric::util::SnapshotDataType::Int;
         dataLength = sizeof(int32_t);
-        operation = faabric::util::SnapshotMergeOperation::Sum;
+
+        SECTION("Integer sum")
+        {
+            originalValue = 100;
+            finalValue = 150;
+            diffValue = 50;
+
+            operation = faabric::util::SnapshotMergeOperation::Sum;
+        }
+
+        SECTION("Integer subtract")
+        {
+            originalValue = 150;
+            finalValue = 100;
+            diffValue = 50;
+
+            operation = faabric::util::SnapshotMergeOperation::Subtract;
+        }
+
+        SECTION("Integer product")
+        {
+            originalValue = 3;
+            finalValue = 150;
+            diffValue = 50;
+
+            operation = faabric::util::SnapshotMergeOperation::Product;
+        }
+
+        SECTION("Integer max")
+        {
+            originalValue = 10;
+            finalValue = 200;
+            diffValue = 200;
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        SECTION("Integer min")
+        {
+            originalValue = 30;
+            finalValue = 10;
+            diffValue = 10;
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        originalData = faabric::util::valueToBytes<int>(originalValue);
+        updatedData = faabric::util::valueToBytes<int>(finalValue);
+        expectedData = faabric::util::valueToBytes<int>(diffValue);
     }
 
     // Write the original data into place

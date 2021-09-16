@@ -175,35 +175,6 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                 throw std::runtime_error("Unsupported merge data type");
             }
         }
-
-        switch (r->mergeOp()) {
-            case (faabric::util::SnapshotMergeOperation::Overwrite): {
-                std::memcpy(dest, r->data()->data(), r->data()->size());
-                break;
-            }
-            case (faabric::util::SnapshotMergeOperation::Sum): {
-                switch (r->dataType()) {
-                    case (faabric::util::SnapshotDataType::Int): {
-                        const auto* value =
-                          reinterpret_cast<const int32_t*>(r->data()->data());
-
-                        // Add the value
-                        *(reinterpret_cast<int32_t*>(dest)) += *value;
-                        break;
-                    }
-                    default: {
-                        SPDLOG_ERROR("Unsupported sum data type : {}",
-                                     r->dataType());
-                        throw std::runtime_error("Unsupported sum data type");
-                    }
-                }
-                break;
-            }
-            default: {
-                SPDLOG_ERROR("Unsupported diff operation: {}", r->mergeOp());
-                throw std::runtime_error("Unsupported diff operation");
-            }
-        }
     }
 
     // Send response

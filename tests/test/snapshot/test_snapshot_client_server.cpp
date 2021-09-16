@@ -7,6 +7,7 @@
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
@@ -126,7 +127,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
-                 "Test push snapshot diffs with merge ops",
+                 "Test detailed snapshot diffs with merge ops",
                  "[snapshot]")
 {
     // Set up a snapshot
@@ -148,10 +149,10 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int diffIntA1 = 123;
     int diffIntA2 = 345;
 
-    std::vector<uint8_t> intDataA1(BYTES(&diffIntA1),
-                                   BYTES(&diffIntA1) + sizeof(int32_t));
-    std::vector<uint8_t> intDataA2(BYTES(&diffIntA2),
-                                   BYTES(&diffIntA2) + sizeof(int32_t));
+    std::vector<uint8_t> intDataA1 =
+      faabric::util::valueToBytes<int>(diffIntA1);
+    std::vector<uint8_t> intDataA2 =
+      faabric::util::valueToBytes<int>(diffIntA2);
 
     std::vector<faabric::util::SnapshotDiff> diffs;
 
@@ -171,6 +172,119 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Check diffs have been applied according to the merge operations
     REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
     REQUIRE(*basePtrA2 == baseA2 + diffIntA2);
+
+    deallocatePages(snap.data, 5);
+}
+
+TEST_CASE_METHOD(SnapshotClientServerFixture,
+                 "Test snapshot diffs with merge ops",
+                 "[snapshot]")
+{
+    // Set up a snapshot
+    std::string snapKey = std::to_string(faabric::util::generateGid());
+    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, false);
+
+    int offset = 5;
+    std::vector<uint8_t> originalData;
+    std::vector<uint8_t> diffData;
+    std::vector<uint8_t> expectedData;
+
+    faabric::util::SnapshotMergeOperation operation =
+      faabric::util::SnapshotMergeOperation::Overwrite;
+    faabric::util::SnapshotDataType dataType =
+      faabric::util::SnapshotDataType::Raw;
+
+    SECTION("Integer")
+    {
+        dataType = faabric::util::SnapshotDataType::Int;
+        int original = 0;
+        int diff = 0;
+        int expected = 0;
+
+        SECTION("Sum")
+        {
+            original = 100;
+            diff = 10;
+            expected = 110;
+
+            operation = faabric::util::SnapshotMergeOperation::Sum;
+        }
+
+        SECTION("Subtract")
+        {
+            original = 100;
+            diff = 10;
+            expected = 90;
+
+            operation = faabric::util::SnapshotMergeOperation::Subtract;
+        }
+
+        SECTION("Product")
+        {
+            original = 10;
+            diff = 20;
+            expected = 200;
+
+            operation = faabric::util::SnapshotMergeOperation::Product;
+        }
+
+        SECTION("Min")
+        {
+            SECTION("With change")
+            {
+                original = 1000;
+                diff = 100;
+                expected = 100;
+            }
+
+            SECTION("No change")
+            {
+                original = 10;
+                diff = 20;
+                expected = 10;
+            }
+
+            operation = faabric::util::SnapshotMergeOperation::Min;
+        }
+
+        SECTION("Max")
+        {
+            SECTION("With change")
+            {
+                original = 100;
+                diff = 1000;
+                expected = 1000;
+            }
+
+            SECTION("No change")
+            {
+                original = 20;
+                diff = 10;
+                expected = 20;
+            }
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        originalData = faabric::util::valueToBytes<int>(original);
+        diffData = faabric::util::valueToBytes<int>(diff);
+        expectedData = faabric::util::valueToBytes<int>(expected);
+    }
+
+    // Put original data in place
+    std::memcpy(snap.data + offset, originalData.data(), originalData.size());
+
+    faabric::util::SnapshotDiff diff(offset, diffData.data(), diffData.size());
+    diff.operation = operation;
+    diff.dataType = dataType;
+
+    std::vector<faabric::util::SnapshotDiff> diffs = { diff };
+    cli.pushSnapshotDiffs(snapKey, diffs);
+
+    // Check data is as expected
+    std::vector<uint8_t> actualData(snap.data + offset,
+                                    snap.data + offset + expectedData.size());
+    REQUIRE(actualData == expectedData);
 
     deallocatePages(snap.data, 5);
 }
