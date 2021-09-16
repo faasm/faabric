@@ -135,6 +135,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                           "Unsupported raw merge operation");
                     }
                 }
+                break;
             }
             case (faabric::util::SnapshotDataType::Int): {
                 const auto* value =

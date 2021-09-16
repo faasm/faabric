@@ -154,8 +154,9 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 // Add the diff to the list
                 diffs.emplace_back(diff);
 
-                // Bump the loop variable to the next byte after this region
-                int nextOffset = region.offset + region.length + 1;
+                // Bump the loop variable to the end of this region (note that
+                // the loop itself will increment onto the next)
+                int nextOffset = region.offset + region.length;
                 int jump = nextOffset - offset;
                 b += jump;
 
