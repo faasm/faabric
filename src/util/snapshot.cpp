@@ -1,5 +1,6 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
 
@@ -74,49 +75,47 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
             offset = pageOffset + b;
             bool isDirtyByte = *(data + offset) != *(updated + offset);
 
-            if (isDirtyByte && mergeIt != mergeRegions.end() &&
-                offset >= mergeIt->second.offset &&
-                offset <= (mergeIt->second.offset + mergeIt->second.length)) {
+            bool isInMergeRegion =
+              mergeIt != mergeRegions.end() &&
+              offset >= mergeIt->second.offset &&
+              offset <= (mergeIt->second.offset + mergeIt->second.length);
+
+            if (isDirtyByte && isInMergeRegion) {
+                SnapshotMergeRegion region = mergeIt->second;
 
                 // Set up the diff
-                const uint8_t* updatedData = updated + mergeIt->second.offset;
-                const uint8_t* originalData = data + mergeIt->second.offset;
-                SnapshotDiff diff(
-                  mergeIt->second.offset, updatedData, mergeIt->second.length);
-                diff.dataType = mergeIt->second.dataType;
-                diff.operation = mergeIt->second.operation;
+                const uint8_t* updatedValue = updated + region.offset;
+                const uint8_t* originalValue = data + region.offset;
+
+                SnapshotDiff diff(region.offset, updatedValue, region.length);
+                diff.dataType = region.dataType;
+                diff.operation = region.operation;
 
                 // Modify diff data for certain operations
-                switch (mergeIt->second.dataType) {
+                switch (region.dataType) {
                     case (SnapshotDataType::Int): {
-                        const int* original =
-                          reinterpret_cast<const int*>(originalData);
-                        const int* updated =
-                          reinterpret_cast<const int*>(updatedData);
+                        int originalInt =
+                          *(reinterpret_cast<const int*>(originalValue));
+                        int updatedInt =
+                          *(reinterpret_cast<const int*>(updatedValue));
 
-                        switch (mergeIt->second.operation) {
+                        switch (region.operation) {
                             case (SnapshotMergeOperation::Sum): {
                                 // Sums must send the value to be _added_, and
                                 // not the final result
-                                int change = *updated - *original;
-                                std::memcpy(
-                                  (int*)updated, &change, sizeof(int32_t));
+                                updatedInt -= originalInt;
                                 break;
                             }
                             case (SnapshotMergeOperation::Subtract): {
                                 // Subtractions must send the value to be
                                 // subtracted, not the result
-                                int change = *original - *updated;
-                                std::memcpy(
-                                  (int*)updated, &change, sizeof(int32_t));
+                                updatedInt = originalInt - updatedInt;
                                 break;
                             }
                             case (SnapshotMergeOperation::Product): {
                                 // Products must send the value to be
                                 // multiplied, not the result
-                                int change = *updated / *original;
-                                std::memcpy(
-                                  (int*)updated, &change, sizeof(int32_t));
+                                updatedInt /= originalInt;
                                 break;
                             }
                             case (SnapshotMergeOperation::Max):
@@ -126,11 +125,18 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                             default: {
                                 SPDLOG_ERROR(
                                   "Unhandled integer merge operation: {}",
-                                  mergeIt->second.operation);
+                                  region.operation);
                                 throw std::runtime_error(
                                   "Unhandled integer merge operation");
                             }
                         }
+
+                        // TODO - somehow avoid casting away the const here?
+                        // Modify the memory in-place here
+                        std::memcpy((uint8_t*)updatedValue,
+                                    BYTES(&updatedInt),
+                                    sizeof(int32_t));
+
                         break;
                     }
                     case (SnapshotDataType::Raw): {
@@ -139,7 +145,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     }
                     default: {
                         SPDLOG_ERROR("Merge region for unhandled data type: {}",
-                                     mergeIt->second.dataType);
+                                     region.dataType);
                         throw std::runtime_error(
                           "Merge region for unhandled data type");
                     }
@@ -149,8 +155,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 diffs.emplace_back(diff);
 
                 // Bump the loop variable to the next byte after this region
-                int nextOffset =
-                  mergeIt->second.offset + mergeIt->second.length + 1;
+                int nextOffset = region.offset + region.length + 1;
                 int jump = nextOffset - offset;
                 b += jump;
 

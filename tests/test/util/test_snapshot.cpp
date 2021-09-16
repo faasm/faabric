@@ -3,6 +3,7 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
@@ -145,12 +146,9 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
         int finalValue = 150;
         int sumValue = 50;
 
-        originalData = std::vector(BYTES(&originalValue),
-                                   BYTES(&originalValue) + sizeof(int32_t));
-        updatedData =
-          std::vector(BYTES(&finalValue), BYTES(&finalValue) + sizeof(int32_t));
-        expectedData =
-          std::vector(BYTES(&sumValue), BYTES(&sumValue) + sizeof(int32_t));
+        originalData = faabric::util::valueToBytes<int>(originalValue);
+        updatedData = faabric::util::valueToBytes<int>(finalValue);
+        expectedData = faabric::util::valueToBytes<int>(sumValue);
 
         dataType = faabric::util::SnapshotDataType::Int;
         dataLength = sizeof(int32_t);
@@ -192,7 +190,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
     REQUIRE(diff.size == dataLength);
 
     // Check actual and expected
-    std::vector<uint8_t> actualData(diff.data,diff.data + dataLength);
+    std::vector<uint8_t> actualData(diff.data, diff.data + dataLength);
     REQUIRE(actualData == expectedData);
 }
 }
