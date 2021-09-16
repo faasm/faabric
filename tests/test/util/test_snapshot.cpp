@@ -3,6 +3,7 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
 
@@ -10,7 +11,9 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
+TEST_CASE_METHOD(SnapshotTestFixture,
+                 "Detailed test snapshot merge regions with ints",
+                 "[util]")
 {
     std::string snapKey = "foobar123";
     int snapPages = 5;
@@ -115,5 +118,81 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
     std::vector<uint8_t> actualOtherData(diffOther.data,
                                          diffOther.data + diffOther.size);
     REQUIRE(actualOtherData == otherData);
+}
+
+TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
+{
+    std::string snapKey = "foobar123";
+    int snapPages = 5;
+
+    int offset = HOST_PAGE_SIZE + (10 * sizeof(int32_t));
+
+    faabric::util::SnapshotData snap;
+    snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
+    snap.data = allocatePages(snapPages);
+
+    std::vector<uint8_t> originalData;
+    std::vector<uint8_t> updatedData;
+    std::vector<uint8_t> expectedData;
+
+    faabric::util::SnapshotDataType dataType;
+    faabric::util::SnapshotMergeOperation operation;
+    size_t dataLength;
+
+    SECTION("Integer sum")
+    {
+        int originalValue = 100;
+        int finalValue = 150;
+        int sumValue = 50;
+
+        originalData = std::vector(BYTES(&originalValue),
+                                   BYTES(&originalValue) + sizeof(int32_t));
+        updatedData =
+          std::vector(BYTES(&finalValue), BYTES(&finalValue) + sizeof(int32_t));
+        expectedData =
+          std::vector(BYTES(&sumValue), BYTES(&sumValue) + sizeof(int32_t));
+
+        dataType = faabric::util::SnapshotDataType::Int;
+        dataLength = sizeof(int32_t);
+        operation = faabric::util::SnapshotMergeOperation::Sum;
+    }
+
+    // Write the original data into place
+    std::memcpy(snap.data + offset, originalData.data(), originalData.size());
+
+    // Take the snapshot
+    reg.takeSnapshot(snapKey, snap, true);
+
+    // Map the snapshot to some memory
+    size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
+    uint8_t* sharedMem = allocatePages(snapPages);
+
+    reg.mapSnapshot(snapKey, sharedMem);
+
+    // Reset dirty tracking
+    faabric::util::resetDirtyTracking();
+
+    // Set up the merge region
+    snap.addMergeRegion(offset, dataLength, dataType, operation);
+
+    // Modify the value
+    std::memcpy(sharedMem + offset, updatedData.data(), updatedData.size());
+
+    // Get the snapshot diffs
+    std::vector<SnapshotDiff> actualDiffs =
+      snap.getChangeDiffs(sharedMem, sharedMemSize);
+
+    // Check number of diffs
+    REQUIRE(actualDiffs.size() == 1);
+
+    SnapshotDiff diff = actualDiffs.at(0);
+    REQUIRE(diff.offset == offset);
+    REQUIRE(diff.operation == operation);
+    REQUIRE(diff.dataType == dataType);
+    REQUIRE(diff.size == dataLength);
+
+    // Check actual and expected
+    std::vector<uint8_t> actualData(diff.data,diff.data + dataLength);
+    REQUIRE(actualData == expectedData);
 }
 }
