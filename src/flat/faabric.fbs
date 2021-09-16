@@ -7,9 +7,19 @@ table SnapshotDeleteRequest {
   key:string;
 }
 
+enum SnapshotDiffDataType : byte {
+    Raw = 1, Integer
+}
+
+enum SnapshotDiffMergeOp : byte {
+    Overwrite = 1, Sum, Product, Subtract, Max, Min
+}
+
 table SnapshotDiffChunk {
   offset:int;
   data:[ubyte];
+  dataType: SnapshotDiffDataType = Raw;
+  mergeOp: SnapshotDiffMergeOp = Overwrite;
 }
 
 table SnapshotDiffPushRequest {
