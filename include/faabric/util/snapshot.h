@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -70,6 +71,8 @@ class SnapshotData
                         SnapshotMergeOperation operation);
 
   private:
+    std::mutex snapMx;
+
     // Note - we care about the order of this map, as we iterate through it in
     // order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;

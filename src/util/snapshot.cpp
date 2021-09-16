@@ -1,3 +1,4 @@
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
@@ -186,12 +187,13 @@ void SnapshotData::addMergeRegion(uint32_t offset,
                                   SnapshotDataType dataType,
                                   SnapshotMergeOperation operation)
 {
-    // TODO - do we need locking here?
     SnapshotMergeRegion region{ .offset = offset,
                                 .length = length,
                                 .dataType = dataType,
                                 .operation = operation };
 
+    // Locking as this may be called in bursts by multiple threads
+    faabric::util::UniqueLock lock(snapMx);
     mergeRegions[offset] = region;
 }
 }
