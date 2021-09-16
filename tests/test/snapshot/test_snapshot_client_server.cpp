@@ -12,6 +12,7 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 
 namespace tests {
@@ -120,6 +121,56 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Check changes have been applied
     checkDiffsApplied(snap.data, diffsA);
     checkDiffsApplied(snap.data, diffsB);
+
+    deallocatePages(snap.data, 5);
+}
+
+TEST_CASE_METHOD(SnapshotClientServerFixture,
+                 "Test push snapshot diffs with merge ops",
+                 "[snapshot]")
+{
+    // Set up a snapshot
+    std::string snapKey = std::to_string(faabric::util::generateGid());
+    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, false);
+
+    // Set up a couple of ints in the snapshot
+    int offsetA1 = 5;
+    int offsetA2 = 2 * faabric::util::HOST_PAGE_SIZE;
+    int baseA1 = 25;
+    int baseA2 = 60;
+
+    int* basePtrA1 = (int*)(snap.data + offsetA1);
+    int* basePtrA2 = (int*)(snap.data + offsetA2);
+    *basePtrA1 = baseA1;
+    *basePtrA2 = baseA2;
+
+    // Set up some diffs with different merge operations
+    int diffIntA1 = 123;
+    int diffIntA2 = 345;
+
+    std::vector<uint8_t> intDataA1(BYTES(&diffIntA1),
+                                   BYTES(&diffIntA1) + sizeof(int32_t));
+    std::vector<uint8_t> intDataA2(BYTES(&diffIntA2),
+                                   BYTES(&diffIntA2) + sizeof(int32_t));
+
+    std::vector<faabric::util::SnapshotDiff> diffs;
+
+    faabric::util::SnapshotDiff diffA1(
+      offsetA1, intDataA1.data(), intDataA1.size());
+    diffA1.operation = faabric::util::SnapshotMergeOperation::Sum;
+    diffA1.dataType = faabric::util::SnapshotDataType::Int;
+
+    faabric::util::SnapshotDiff diffA2(
+      offsetA2, intDataA2.data(), intDataA2.size());
+    diffA2.operation = faabric::util::SnapshotMergeOperation::Sum;
+    diffA2.dataType = faabric::util::SnapshotDataType::Int;
+
+    diffs = { diffA1, diffA2 };
+    cli.pushSnapshotDiffs(snapKey, diffs);
+
+    // Check diffs have been applied according to the merge operations
+    REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
+    REQUIRE(*basePtrA2 == baseA2 + diffIntA2);
 
     deallocatePages(snap.data, 5);
 }

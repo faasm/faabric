@@ -56,13 +56,14 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
     // Reset dirty tracking to get a clean start
     faabric::util::resetDirtyTracking();
 
-    // Set up the merge regions
-    snap.addMergeRegion(intAOffset,
+    // Set up the merge regions, deliberately do the one at higher offsets first
+    // to check the ordering
+    snap.addMergeRegion(intBOffset,
                         sizeof(int),
                         SnapshotDataType::Int,
                         SnapshotMergeOperation::Sum);
 
-    snap.addMergeRegion(intBOffset,
+    snap.addMergeRegion(intAOffset,
                         sizeof(int),
                         SnapshotDataType::Int,
                         SnapshotMergeOperation::Sum);

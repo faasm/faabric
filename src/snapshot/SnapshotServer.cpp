@@ -7,6 +7,7 @@
 #include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/snapshot.h>
 
 #include <sys/mman.h>
 
@@ -121,15 +122,17 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     for (const auto* r : *r->chunks()) {
         uint8_t* dest = snap.data + r->offset();
         switch (r->mergeOp()) {
-            case (SnapshotDiffMergeOp_Overwrite): {
+            case (faabric::util::SnapshotMergeOperation::Overwrite): {
                 std::memcpy(dest, r->data()->data(), r->data()->size());
                 break;
             }
-            case (SnapshotDiffMergeOp_Sum): {
+            case (faabric::util::SnapshotMergeOperation::Sum): {
                 switch (r->dataType()) {
-                    case (SnapshotDiffDataType_Integer): {
+                    case (faabric::util::SnapshotDataType::Int): {
                         const auto* value =
                           reinterpret_cast<const int32_t*>(r->data()->data());
+
+                        // Add the value
                         *(reinterpret_cast<int32_t*>(dest)) += *value;
                         break;
                     }
@@ -139,6 +142,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                         throw std::runtime_error("Unsupported sum data type");
                     }
                 }
+                break;
             }
             default: {
                 SPDLOG_ERROR("Unsupported diff operation: {}", r->mergeOp());

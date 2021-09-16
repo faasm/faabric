@@ -5,6 +5,10 @@
 
 namespace faabric::util {
 
+// TODO - this would be better as an instance variable on the SnapshotData
+// class, but it can't be copy-constructed.
+static std::mutex snapMx;
+
 std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
 {
     if (data == nullptr || size == 0) {
@@ -191,7 +195,6 @@ void SnapshotData::addMergeRegion(uint32_t offset,
                                 .length = length,
                                 .dataType = dataType,
                                 .operation = operation };
-
     // Locking as this may be called in bursts by multiple threads
     faabric::util::UniqueLock lock(snapMx);
     mergeRegions[offset] = region;
