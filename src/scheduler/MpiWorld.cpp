@@ -110,10 +110,9 @@ void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)
     std::pair<int, int> sendRecvPorts = getPortForRanks(localRank, remoteRank);
 
     // Create MPI message endpoint
-    mpiMessageEndpoints.emplace(
-      mpiMessageEndpoints.begin() + index,
+    mpiMessageEndpoints.at(index) =
       std::make_unique<faabric::transport::MpiMessageEndpoint>(
-        otherHost, sendRecvPorts.first, sendRecvPorts.second));
+        otherHost, sendRecvPorts.first, sendRecvPorts.second);
 }
 
 void MpiWorld::sendRemoteMpiMessage(
@@ -164,9 +163,8 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     assert(index >= 0 && index < size * size);
 
     if (unackedMessageBuffers[index] == nullptr) {
-        unackedMessageBuffers.emplace(
-          unackedMessageBuffers.begin() + index,
-          std::make_shared<faabric::scheduler::MpiMessageBuffer>());
+        unackedMessageBuffers.at(index) =
+          std::make_shared<faabric::scheduler::MpiMessageBuffer>();
     }
 
     return unackedMessageBuffers[index];
