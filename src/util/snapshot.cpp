@@ -139,10 +139,6 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
 
                         break;
                     }
-                    case (SnapshotDataType::Raw): {
-                        // Do nothing for raw data
-                        break;
-                    }
                     default: {
                         SPDLOG_ERROR("Merge region for unhandled data type: {}",
                                      region.dataType);

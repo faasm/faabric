@@ -119,6 +119,8 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     std::vector<uint8_t> actualOtherData(diffOther.data,
                                          diffOther.data + diffOther.size);
     REQUIRE(actualOtherData == otherData);
+
+    deallocatePages(snap.data, snapPages);
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
@@ -238,5 +240,70 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
     // Check actual and expected
     std::vector<uint8_t> actualData(diff.data, diff.data + dataLength);
     REQUIRE(actualData == expectedData);
+
+    deallocatePages(snap.data, snapPages);
+}
+
+TEST_CASE_METHOD(SnapshotTestFixture, "Test invalid snapshot merges", "[util]")
+{
+    std::string snapKey = "foobar123";
+    int snapPages = 3;
+    int offset = HOST_PAGE_SIZE + (2 * sizeof(int32_t));
+
+    faabric::util::SnapshotData snap;
+    snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
+    snap.data = allocatePages(snapPages);
+
+    faabric::util::SnapshotDataType dataType =
+      faabric::util::SnapshotDataType::Raw;
+    faabric::util::SnapshotMergeOperation operation =
+      faabric::util::SnapshotMergeOperation::Overwrite;
+    size_t dataLength = 0;
+
+    std::string expectedMsg;
+
+    SECTION("Integer overwrite")
+    {
+        dataType = faabric::util::SnapshotDataType::Int;
+        dataLength = sizeof(int32_t);
+        expectedMsg = "Unhandled integer merge operation";
+    }
+
+    SECTION("Raw sum")
+    {
+        dataType = faabric::util::SnapshotDataType::Raw;
+        dataLength = 123;
+        expectedMsg = "Merge region for unhandled data type";
+    }
+
+    // Take the snapshot
+    reg.takeSnapshot(snapKey, snap, true);
+
+    // Map the snapshot
+    size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
+    uint8_t* sharedMem = allocatePages(snapPages);
+    reg.mapSnapshot(snapKey, sharedMem);
+
+    // Reset dirty tracking
+    faabric::util::resetDirtyTracking();
+
+    // Set up the merge region
+    snap.addMergeRegion(offset, dataLength, dataType, operation);
+
+    // Modify the value
+    std::vector<uint8_t> bytes(dataLength, 3);
+    std::memcpy(sharedMem + offset, bytes.data(), bytes.size());
+
+    // Check getting diffs throws an exception
+    bool failed = false;
+    try {
+        snap.getChangeDiffs(sharedMem, sharedMemSize);
+    } catch (std::runtime_error& ex) {
+        failed = true;
+        REQUIRE(ex.what() == expectedMsg);
+    }
+
+    REQUIRE(failed);
+    deallocatePages(snap.data, snapPages);
 }
 }
