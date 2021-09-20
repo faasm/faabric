@@ -33,7 +33,7 @@ class MessageEndpoint
     MessageEndpoint(const std::string& hostIn, int portIn, int timeoutMsIn);
 
     // Delete assignment and copy-constructor as we need to be very careful with
-    // socping and same-thread instantiation
+    // scoping and same-thread instantiation
     MessageEndpoint& operator=(const MessageEndpoint&) = delete;
 
     MessageEndpoint(const MessageEndpoint& ctx) = delete;

@@ -180,6 +180,10 @@ class MpiWorld
 
     double getWTime();
 
+    std::vector<bool> getInitedRemoteMpiEndpoints();
+
+    std::vector<bool> getInitedUMB();
+
   private:
     int id = -1;
     int size = -1;
