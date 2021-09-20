@@ -180,6 +180,12 @@ class MpiWorld
 
     double getWTime();
 
+    // ---------- Testing only methods ----------
+
+    std::vector<bool> getInitedRemoteMpiEndpoints();
+
+    std::vector<bool> getInitedUMB();
+
   private:
     int id = -1;
     int size = -1;
