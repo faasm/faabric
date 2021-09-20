@@ -1377,14 +1377,8 @@ double MpiWorld::getWTime()
     return t / 1000.0;
 }
 
-// This method is only used for testing
 std::vector<bool> MpiWorld::getInitedRemoteMpiEndpoints()
 {
-    if (!faabric::util::isTestMode()) {
-        SPDLOG_ERROR("Called method for testing outside test mode");
-        throw std::runtime_error("This method can only be called in testing");
-    }
-
     std::vector<bool> retVec(mpiMessageEndpoints.size());
     for (int i = 0; i < mpiMessageEndpoints.size(); i++) {
         retVec.at(i) = mpiMessageEndpoints.at(i) != nullptr;
@@ -1393,14 +1387,8 @@ std::vector<bool> MpiWorld::getInitedRemoteMpiEndpoints()
     return retVec;
 }
 
-// This method is only used for testing
 std::vector<bool> MpiWorld::getInitedUMB()
 {
-    if (!faabric::util::isTestMode()) {
-        SPDLOG_ERROR("Called method for testing outside test mode");
-        throw std::runtime_error("This method can only be called in testing");
-    }
-
     std::vector<bool> retVec(unackedMessageBuffers.size());
     for (int i = 0; i < unackedMessageBuffers.size(); i++) {
         retVec.at(i) = unackedMessageBuffers.at(i) != nullptr;
