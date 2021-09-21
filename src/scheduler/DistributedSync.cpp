@@ -1,4 +1,4 @@
-#include <faabric/sync/DistributedSync.h>
+#include <faabric/scheduler/DistributedSync.h>
 #include <faabric/util/timing.h>
 
 #define GROUP_TIMEOUT_MS 20000
@@ -31,7 +31,7 @@
         varName = m[groupId];                                                  \
     }
 
-namespace faabric::sync {
+namespace faabric::scheduler {
 
 DistributedSync& getDistributedSync()
 {
@@ -202,4 +202,4 @@ void DistributedSync::barrier(const faabric::Message& msg)
     DISTRIBUTED_SYNC_OP(localBarrier, client.functionGroupBarrier)
 }
 
-} // namespace faabric::sync
+}

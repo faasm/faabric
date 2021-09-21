@@ -1,9 +1,9 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/DistributedSync.h>
 #include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/sync/DistributedSync.h>
 #include <faabric/transport/MessageEndpointServer.h>
 
 namespace faabric::scheduler {
@@ -16,7 +16,7 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    faabric::sync::DistributedSync& sync;
+    faabric::scheduler::DistributedSync& sync;
 
     void doAsyncRecv(int header,
                      const uint8_t* buffer,

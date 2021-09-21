@@ -5,7 +5,7 @@
 #include <faabric/util/barrier.h>
 #include <faabric/util/locks.h>
 
-namespace faabric::sync {
+namespace faabric::scheduler {
 
 class DistributedSync
 {

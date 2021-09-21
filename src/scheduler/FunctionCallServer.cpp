@@ -2,7 +2,7 @@
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
-#include <faabric/sync/DistributedSync.h>
+#include <faabric/scheduler/DistributedSync.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
@@ -14,7 +14,7 @@ FunctionCallServer::FunctionCallServer()
   : faabric::transport::MessageEndpointServer(FUNCTION_CALL_ASYNC_PORT,
                                               FUNCTION_CALL_SYNC_PORT)
   , scheduler(getScheduler())
-  , sync(faabric::sync::getDistributedSync())
+  , sync(getDistributedSync())
 {}
 
 void FunctionCallServer::doAsyncRecv(int header,
