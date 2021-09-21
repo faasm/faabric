@@ -25,6 +25,9 @@ getResourceRequests();
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests();
 
+std::vector<std::pair<std::string, faabric::FunctionGroupRequest>>
+getFunctionGroupRequests();
+
 void queueResourceResponse(const std::string& host,
                            faabric::HostResources& res);
 

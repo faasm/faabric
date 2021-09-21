@@ -1,4 +1,5 @@
 #include <catch.hpp>
+#include <faabric_utils.h>
 
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
@@ -16,7 +17,6 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
-#include <faabric_utils.h>
 
 using namespace faabric::scheduler;
 
@@ -30,10 +30,12 @@ class ClientServerFixture
     FunctionCallServer server;
     FunctionCallClient cli;
     std::shared_ptr<DummyExecutorFactory> executorFactory;
+    DistributedSync& sync;
 
   public:
     ClientServerFixture()
       : cli(LOCALHOST)
+      , sync(getDistributedSync())
     {
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
@@ -238,5 +240,39 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
 
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();
+}
+
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test distributed lock/ unlock",
+                 "[scheduler][sync]")
+{
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+
+    // Acquire lock in main thread locally
+    sync.localLock(msg.appid());
+
+    std::atomic<int> sharedInt = 0;
+
+    // Background thread to make request and check
+    std::thread t([this, &sharedInt, &msg] {
+        cli.functionGroupLock(msg.appid());
+
+        sharedInt = 10;
+
+        cli.functionGroupUnlock(msg.appid());
+    });
+
+    SLEEP_MS(1000);
+
+    // Check thread change hasn't been made
+    REQUIRE(sharedInt == 0);
+
+    // Unlock, join and check change made
+    sync.localUnlock(msg.appid());
+
+    if (t.joinable()) {
+        t.join();
+    }
+    REQUIRE(sharedInt == 10);
 }
 }

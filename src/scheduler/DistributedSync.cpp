@@ -139,8 +139,8 @@ void DistributedSync::doLocalNotify(int32_t groupId, bool master)
                 return nowaitCount->load() >= groupSize - 1;
             })) {
 
-            SPDLOG_ERROR("Group {} master wait timed out", groupId);
-            throw std::runtime_error("Group wait on master timed out");
+            SPDLOG_ERROR("Group {} await notify timed out", groupId);
+            throw std::runtime_error("Group notify timed out");
         }
 
         // Reset, after we've finished
@@ -151,11 +151,11 @@ void DistributedSync::doLocalNotify(int32_t groupId, bool master)
         if (countBefore == groupSize - 2) {
             nowaitCv->notify_one();
         } else if (countBefore > groupSize - 2) {
-            SPDLOG_ERROR("Group {} master wait error, {} > {}",
+            SPDLOG_ERROR("Group {} notify exceeded group size, {} > {}",
                          groupId,
                          countBefore,
                          groupSize - 2);
-            throw std::runtime_error("Group master notify error");
+            throw std::runtime_error("Group notify exceeded size");
         }
     }
 }
