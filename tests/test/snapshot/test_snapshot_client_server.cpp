@@ -62,8 +62,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int appIdB = 456;
 
     // Send the message
-    cli.pushSnapshot(appIdA, snapKeyA, snapA);
-    cli.pushSnapshot(appIdB, snapKeyB, snapB);
+    cli.pushSnapshot(snapKeyA, appIdA, snapA);
+    cli.pushSnapshot(snapKeyB, appIdB, snapB);
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
@@ -97,6 +97,9 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "Test push snapshot diffs",
                  "[snapshot]")
 {
+    int appIdA = 123;
+    int appIdB = 234;
+
     // Set up a snapshot
     std::string snapKey = std::to_string(faabric::util::generateGid());
     faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, true);
@@ -113,12 +116,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     faabric::util::SnapshotDiff diffA2(
       2 * faabric::util::HOST_PAGE_SIZE, diffDataA2.data(), diffDataA2.size());
     diffsA = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, diffsA);
+    cli.pushSnapshotDiffs(snapKey, appIdA, diffsA);
 
     faabric::util::SnapshotDiff diffB(
       3 * faabric::util::HOST_PAGE_SIZE, diffDataB.data(), diffDataB.size());
     diffsB = { diffB };
-    cli.pushSnapshotDiffs(snapKey, diffsB);
+    cli.pushSnapshotDiffs(snapKey, appIdB, diffsB);
 
     // Check changes have been applied
     checkDiffsApplied(snap.data, diffsA);

@@ -67,6 +67,7 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
 {}
 
 void SnapshotClient::pushSnapshot(const std::string& key,
+                                  int32_t appId,
                                   const faabric::util::SnapshotData& data)
 {
     if (data.size == 0) {
@@ -86,7 +87,7 @@ void SnapshotClient::pushSnapshot(const std::string& key,
         auto keyOffset = mb.CreateString(key);
         auto dataOffset = mb.CreateVector<uint8_t>(data.data, data.size);
         auto requestOffset =
-          CreateSnapshotPushRequest(mb, keyOffset, dataOffset);
+          CreateSnapshotPushRequest(mb, keyOffset, appId, dataOffset);
         mb.Finish(requestOffset);
 
         // Send it
@@ -96,6 +97,7 @@ void SnapshotClient::pushSnapshot(const std::string& key,
 
 void SnapshotClient::pushSnapshotDiffs(
   std::string snapshotKey,
+  int32_t appId,
   std::vector<faabric::util::SnapshotDiff> diffs)
 {
     if (faabric::util::isMockMode()) {
@@ -122,7 +124,7 @@ void SnapshotClient::pushSnapshotDiffs(
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
         auto requestOffset =
-          CreateSnapshotDiffPushRequest(mb, keyOffset, diffsOffset);
+          CreateSnapshotDiffPushRequest(mb, keyOffset, appId, diffsOffset);
         mb.Finish(requestOffset);
 
         SEND_FB_MSG(SnapshotCalls::PushSnapshotDiffs, mb);

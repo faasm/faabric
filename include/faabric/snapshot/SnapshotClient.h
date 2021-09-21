@@ -26,7 +26,7 @@ getThreadResults();
 void clearMockSnapshotRequests();
 
 // -----------------------------------
-// gRPC client
+// Client
 // -----------------------------------
 
 class SnapshotClient final : public faabric::transport::MessageEndpointClient
@@ -34,12 +34,12 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
   public:
     explicit SnapshotClient(const std::string& hostIn);
 
-    /* Snapshot client external API */
-
     void pushSnapshot(const std::string& key,
+                      int32_t appId,
                       const faabric::util::SnapshotData& data);
 
     void pushSnapshotDiffs(std::string snapshotKey,
+                           int32_t appId,
                            std::vector<faabric::util::SnapshotDiff> diffs);
 
     void deleteSnapshot(const std::string& key);

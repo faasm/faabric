@@ -12,7 +12,7 @@ class DistributedSync
   public:
     DistributedSync();
 
-    void initGroup(const faabric::Message& msg, int groupSize);
+    void setGroupSize(const faabric::Message& msg, int groupSize);
 
     void clear();
 
@@ -52,7 +52,7 @@ class DistributedSync
 
     std::shared_mutex sharedMutex;
 
-    std::unordered_map<int32_t, int32_t> localGroups;
+    std::unordered_map<int32_t, int32_t> groupSizes;
 
     std::unordered_map<uint32_t, std::shared_ptr<faabric::util::Barrier>>
       barriers;

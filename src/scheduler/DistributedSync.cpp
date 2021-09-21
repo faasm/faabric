@@ -43,30 +43,31 @@ DistributedSync::DistributedSync()
   : sch(faabric::scheduler::getScheduler())
 {}
 
-void DistributedSync::initGroup(const faabric::Message& msg, int groupSize)
+void DistributedSync::setGroupSize(const faabric::Message& msg, int groupSize)
 {
     if (msg.masterhost() != sch.getThisHost()) {
-        SPDLOG_ERROR("Initialising sync group not on master ({} != {})",
+        SPDLOG_ERROR("Setting group {} size not on master ({} != {})",
+                     msg.appid(),
                      msg.masterhost(),
                      sch.getThisHost());
 
-        throw std::runtime_error("Initialising sync group not on master");
+        throw std::runtime_error("Setting sync group size on non-master");
     }
 
-    localGroups[msg.appid()] = groupSize;
+    groupSizes[msg.appid()] = groupSize;
 }
 
 void DistributedSync::checkGroupSizeSet(int32_t groupId)
 {
-    if (localGroups.find(groupId) == localGroups.end()) {
-        SPDLOG_ERROR("Group {} does not exist on this host", groupId);
-        throw std::runtime_error("Group does not exist on this host");
+    if (groupSizes.find(groupId) == groupSizes.end()) {
+        SPDLOG_ERROR("Group {} size not set", groupId);
+        throw std::runtime_error("Group size not set");
     }
 }
 
 void DistributedSync::clear()
 {
-    localGroups.clear();
+    groupSizes.clear();
 
     barriers.clear();
 
@@ -128,7 +129,7 @@ void DistributedSync::doLocalNotify(int32_t groupId, bool master)
     FROM_MAP(nowaitCount, std::atomic<int>, counts)
     FROM_MAP(nowaitCv, std::condition_variable, cvs)
 
-    int groupSize = localGroups[groupId];
+    int groupSize = groupSizes[groupId];
 
     if (master) {
         auto timePoint = std::chrono::system_clock::now() +
@@ -177,7 +178,7 @@ void DistributedSync::notify(const faabric::Message& msg)
 void DistributedSync::localBarrier(int32_t groupId)
 {
     checkGroupSizeSet(groupId);
-    int32_t groupSize = localGroups[groupId];
+    int32_t groupSize = groupSizes[groupId];
 
     // Create if necessary
     if (barriers.find(groupId) == barriers.end()) {

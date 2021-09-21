@@ -69,7 +69,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     SPDLOG_DEBUG("Receiving shapshot {} (size {}, lock {})",
                  r->key()->c_str(),
                  r->contents()->size(),
-                 r->lockid());
+                 r->appid());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
