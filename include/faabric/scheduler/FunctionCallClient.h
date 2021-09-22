@@ -52,18 +52,18 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     // --- Function group operations ---
 
-    void functionGroupLock(int32_t groupId);
+    void functionGroupLock(int32_t appId);
 
-    void functionGroupUnlock(int32_t groupId);
+    void functionGroupUnlock(int32_t appId);
 
-    void functionGroupNotify(int32_t groupId);
+    void functionGroupNotify(int32_t appId);
 
-    void functionGroupBarrier(int32_t groupId);
+    void functionGroupBarrier(int32_t appId);
 
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
-    void makeFunctionGroupRequest(int32_t groupId,
+    void makeFunctionGroupRequest(int32_t appId,
                                   faabric::scheduler::FunctionCalls call);
 };
 }

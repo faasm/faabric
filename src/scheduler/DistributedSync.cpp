@@ -5,30 +5,30 @@
 
 #define DISTRIBUTED_SYNC_OP(opLocal, opRemote)                                 \
     {                                                                          \
-        int32_t groupId = msg.appid();                                         \
+        int32_t appId = msg.appid();                                         \
         if (msg.masterhost() == sch.getThisHost()) {                           \
-            opLocal(groupId);                                                  \
+            opLocal(appId);                                                  \
         } else {                                                               \
             std::string host = msg.masterhost();                               \
             faabric::scheduler::FunctionCallClient& client =                   \
               sch.getFunctionCallClient(host);                                 \
-            opRemote(groupId);                                                 \
+            opRemote(appId);                                                 \
         }                                                                      \
     }
 
 #define FROM_MAP(varName, T, m, ...)                                           \
     {                                                                          \
-        if (m.find(groupId) == m.end()) {                                      \
+        if (m.find(appId) == m.end()) {                                      \
             faabric::util::FullLock lock(sharedMutex);                         \
-            if (m.find(groupId) == m.end()) {                                  \
-                m[groupId] = std::make_shared<T>(__VA_ARGS__);                 \
+            if (m.find(appId) == m.end()) {                                  \
+                m[appId] = std::make_shared<T>(__VA_ARGS__);                 \
             }                                                                  \
         }                                                                      \
     }                                                                          \
     std::shared_ptr<T> varName;                                                \
     {                                                                          \
         faabric::util::SharedLock lock(sharedMutex);                           \
-        varName = m[groupId];                                                  \
+        varName = m[appId];                                                  \
     }
 
 namespace faabric::scheduler {
@@ -43,7 +43,7 @@ DistributedSync::DistributedSync()
   : sch(faabric::scheduler::getScheduler())
 {}
 
-void DistributedSync::setGroupSize(const faabric::Message& msg, int groupSize)
+void DistributedSync::setAppSize(const faabric::Message& msg, int appSize)
 {
     if (msg.masterhost() != sch.getThisHost()) {
         SPDLOG_ERROR("Setting group {} size not on master ({} != {})",
@@ -54,20 +54,20 @@ void DistributedSync::setGroupSize(const faabric::Message& msg, int groupSize)
         throw std::runtime_error("Setting sync group size on non-master");
     }
 
-    groupSizes[msg.appid()] = groupSize;
+    appSizes[msg.appid()] = appSize;
 }
 
-void DistributedSync::checkGroupSizeSet(int32_t groupId)
+void DistributedSync::checkAppSizeSet(int32_t appId)
 {
-    if (groupSizes.find(groupId) == groupSizes.end()) {
-        SPDLOG_ERROR("Group {} size not set", groupId);
+    if (appSizes.find(appId) == appSizes.end()) {
+        SPDLOG_ERROR("Group {} size not set", appId);
         throw std::runtime_error("Group size not set");
     }
 }
 
 void DistributedSync::clear()
 {
-    groupSizes.clear();
+    appSizes.clear();
 
     barriers.clear();
 
@@ -78,19 +78,19 @@ void DistributedSync::clear()
     cvs.clear();
 }
 
-void DistributedSync::localLockRecursive(int32_t groupId)
+void DistributedSync::localLockRecursive(int32_t appId)
 {
     FROM_MAP(mx, std::recursive_mutex, recursiveMutexes);
     mx->lock();
 }
 
-void DistributedSync::localLock(int32_t groupId)
+void DistributedSync::localLock(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
     mx->lock();
 }
 
-bool DistributedSync::localTryLock(int32_t groupId)
+bool DistributedSync::localTryLock(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
     return mx->try_lock();
@@ -101,13 +101,13 @@ void DistributedSync::lock(const faabric::Message& msg)
     DISTRIBUTED_SYNC_OP(localLock, client.functionGroupLock)
 }
 
-void DistributedSync::localUnlockRecursive(int32_t groupId)
+void DistributedSync::localUnlockRecursive(int32_t appId)
 {
     FROM_MAP(mx, std::recursive_mutex, recursiveMutexes);
     mx->unlock();
 }
 
-void DistributedSync::localUnlock(int32_t groupId)
+void DistributedSync::localUnlock(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
     mx->unlock();
@@ -118,9 +118,9 @@ void DistributedSync::unlock(const faabric::Message& msg)
     DISTRIBUTED_SYNC_OP(localUnlock, client.functionGroupUnlock)
 }
 
-void DistributedSync::doLocalNotify(int32_t groupId, bool master)
+void DistributedSync::doLocalNotify(int32_t appId, bool master)
 {
-    checkGroupSizeSet(groupId);
+    checkAppSizeSet(appId);
 
     // All members must lock when entering this function
     FROM_MAP(nowaitMutex, std::mutex, mutexes)
@@ -129,17 +129,17 @@ void DistributedSync::doLocalNotify(int32_t groupId, bool master)
     FROM_MAP(nowaitCount, std::atomic<int>, counts)
     FROM_MAP(nowaitCv, std::condition_variable, cvs)
 
-    int groupSize = groupSizes[groupId];
+    int appSize = appSizes[appId];
 
     if (master) {
         auto timePoint = std::chrono::system_clock::now() +
                          std::chrono::milliseconds(GROUP_TIMEOUT_MS);
 
         if (!nowaitCv->wait_until(lock, timePoint, [&] {
-                return nowaitCount->load() >= groupSize - 1;
+                return nowaitCount->load() >= appSize - 1;
             })) {
 
-            SPDLOG_ERROR("Group {} await notify timed out", groupId);
+            SPDLOG_ERROR("Group {} await notify timed out", appId);
             throw std::runtime_error("Group notify timed out");
         }
 
@@ -148,26 +148,26 @@ void DistributedSync::doLocalNotify(int32_t groupId, bool master)
     } else {
         // If this is the last non-master member, notify
         int countBefore = nowaitCount->fetch_add(1);
-        if (countBefore == groupSize - 2) {
+        if (countBefore == appSize - 2) {
             nowaitCv->notify_one();
-        } else if (countBefore > groupSize - 2) {
+        } else if (countBefore > appSize - 2) {
             SPDLOG_ERROR("Group {} notify exceeded group size, {} > {}",
-                         groupId,
+                         appId,
                          countBefore,
-                         groupSize - 2);
+                         appSize - 2);
             throw std::runtime_error("Group notify exceeded size");
         }
     }
 }
 
-void DistributedSync::localNotify(int32_t groupId)
+void DistributedSync::localNotify(int32_t appId)
 {
-    doLocalNotify(groupId, false);
+    doLocalNotify(appId, false);
 }
 
-void DistributedSync::awaitNotify(int32_t groupId)
+void DistributedSync::awaitNotify(int32_t appId)
 {
-    doLocalNotify(groupId, true);
+    doLocalNotify(appId, true);
 }
 
 void DistributedSync::notify(const faabric::Message& msg)
@@ -175,16 +175,16 @@ void DistributedSync::notify(const faabric::Message& msg)
     DISTRIBUTED_SYNC_OP(localNotify, client.functionGroupNotify)
 }
 
-void DistributedSync::localBarrier(int32_t groupId)
+void DistributedSync::localBarrier(int32_t appId)
 {
-    checkGroupSizeSet(groupId);
-    int32_t groupSize = groupSizes[groupId];
+    checkAppSizeSet(appId);
+    int32_t appSize = appSizes[appId];
 
     // Create if necessary
-    if (barriers.find(groupId) == barriers.end()) {
+    if (barriers.find(appId) == barriers.end()) {
         faabric::util::FullLock lock(sharedMutex);
-        if (barriers.find(groupId) == barriers.end()) {
-            barriers[groupId] = faabric::util::Barrier::create(groupSize);
+        if (barriers.find(appId) == barriers.end()) {
+            barriers[appId] = faabric::util::Barrier::create(appSize);
         }
     }
 
@@ -192,7 +192,7 @@ void DistributedSync::localBarrier(int32_t groupId)
     std::shared_ptr<faabric::util::Barrier> barrier;
     {
         faabric::util::SharedLock lock(sharedMutex);
-        barrier = barriers[groupId];
+        barrier = barriers[appId];
     }
 
     barrier->wait();
@@ -203,7 +203,7 @@ void DistributedSync::barrier(const faabric::Message& msg)
     DISTRIBUTED_SYNC_OP(localBarrier, client.functionGroupBarrier)
 }
 
-bool DistributedSync::isLocalLocked(int32_t groupId)
+bool DistributedSync::isLocalLocked(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
 
@@ -217,7 +217,7 @@ bool DistributedSync::isLocalLocked(int32_t groupId)
     return true;
 }
 
-int32_t DistributedSync::getNotifyCount(int32_t groupId)
+int32_t DistributedSync::getNotifyCount(int32_t appId)
 {
     FROM_MAP(nowaitMutex, std::mutex, mutexes)
     std::unique_lock<std::mutex> lock(*nowaitMutex);
@@ -227,9 +227,9 @@ int32_t DistributedSync::getNotifyCount(int32_t groupId)
     return nowaitCount->load();
 }
 
-int32_t DistributedSync::getGroupSize(int32_t groupId)
+int32_t DistributedSync::getAppSize(int32_t appId)
 {
-    checkGroupSizeSet(groupId);
-    return groupSizes[groupId];
+    checkAppSizeSet(appId);
+    return appSizes[appId];
 }
 }

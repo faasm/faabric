@@ -3,8 +3,8 @@
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/DistributedSync.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -94,7 +94,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     std::string actualMsg;
 
     try {
-        sync.setGroupSize(msg, 123);
+        sync.setAppSize(msg, 123);
     } catch (std::runtime_error& ex) {
         failed = true;
         actualMsg = ex.what();
@@ -174,7 +174,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
 {
     int nThreads = 5;
 
-    sync.setGroupSize(msg, nThreads);
+    sync.setAppSize(msg, nThreads);
 
     // Spawn n-1 child threads to add to shared sums over several barriers so
     // that the main thread can check all threads have completed after each.
@@ -287,7 +287,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture, "Test notify and await", "[sync]")
     int actual[3] = { 0, 0, 0 };
 
     // Initialise the group size (including master thread)
-    sync.setGroupSize(msg, nThreads + 1);
+    sync.setAppSize(msg, nThreads + 1);
 
     std::vector<std::thread> threads;
     for (int i = 0; i < nThreads; i++) {

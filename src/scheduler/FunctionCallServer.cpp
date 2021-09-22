@@ -118,8 +118,8 @@ FunctionCallServer::recvFunctionGroupLock(const uint8_t* buffer,
                                           size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localLock(groupId);
+    int32_t appId = msg.appid();
+    sync.localLock(appId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -128,8 +128,8 @@ FunctionCallServer::recvFunctionGroupUnlock(const uint8_t* buffer,
                                             size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localUnlock(groupId);
+    int32_t appId = msg.appid();
+    sync.localUnlock(appId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -138,8 +138,8 @@ FunctionCallServer::recvFunctionGroupNotify(const uint8_t* buffer,
                                             size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localNotify(groupId);
+    int32_t appId = msg.appid();
+    sync.localNotify(appId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -148,8 +148,8 @@ FunctionCallServer::recvFunctionGroupBarrier(const uint8_t* buffer,
                                              size_t bufferSize)
 {
     PARSE_MSG(faabric::FunctionGroupRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localBarrier(groupId);
+    int32_t appId = msg.appid();
+    sync.localBarrier(appId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 }

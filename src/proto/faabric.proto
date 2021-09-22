@@ -62,7 +62,7 @@ message FunctionStatusResponse {
 // ---------------------------------------------
 
 message FunctionGroupRequest {
-    int32 groupId = 1;
+    int32 appId = 1;
     enum FunctionGroupOperation {
         LOCK = 0;
         UNLOCK = 1;

@@ -154,11 +154,11 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
 }
 
 void FunctionCallClient::makeFunctionGroupRequest(
-  int32_t groupId,
+  int32_t appId,
   faabric::scheduler::FunctionCalls call)
 {
     faabric::FunctionGroupRequest req;
-    req.set_groupid(groupId);
+    req.set_appid(appId);
 
     faabric::FunctionGroupRequest::FunctionGroupOperation op;
     switch (call) {
@@ -195,27 +195,27 @@ void FunctionCallClient::makeFunctionGroupRequest(
     }
 }
 
-void FunctionCallClient::functionGroupLock(int32_t groupId)
+void FunctionCallClient::functionGroupLock(int32_t appId)
 {
-    makeFunctionGroupRequest(groupId,
+    makeFunctionGroupRequest(appId,
                              faabric::scheduler::FunctionCalls::GroupLock);
 }
 
-void FunctionCallClient::functionGroupUnlock(int32_t groupId)
+void FunctionCallClient::functionGroupUnlock(int32_t appId)
 {
-    makeFunctionGroupRequest(groupId,
+    makeFunctionGroupRequest(appId,
                              faabric::scheduler::FunctionCalls::GroupUnlock);
 }
 
-void FunctionCallClient::functionGroupNotify(int32_t groupId)
+void FunctionCallClient::functionGroupNotify(int32_t appId)
 {
-    makeFunctionGroupRequest(groupId,
+    makeFunctionGroupRequest(appId,
                              faabric::scheduler::FunctionCalls::GroupNotify);
 }
 
-void FunctionCallClient::functionGroupBarrier(int32_t groupId)
+void FunctionCallClient::functionGroupBarrier(int32_t appId)
 {
-    makeFunctionGroupRequest(groupId,
+    makeFunctionGroupRequest(appId,
                              faabric::scheduler::FunctionCalls::GroupBarrier);
 }
 

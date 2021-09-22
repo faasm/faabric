@@ -246,17 +246,17 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "Test distributed lock/ unlock",
                  "[scheduler][sync]")
 {
-    int groupId = 123;
+    int appId = 123;
 
-    REQUIRE(!sync.isLocalLocked(groupId));
+    REQUIRE(!sync.isLocalLocked(appId));
 
-    cli.functionGroupLock(groupId);
+    cli.functionGroupLock(appId);
 
-    REQUIRE(sync.isLocalLocked(groupId));
+    REQUIRE(sync.isLocalLocked(appId));
 
-    cli.functionGroupUnlock(groupId);
+    cli.functionGroupUnlock(appId);
 
-    REQUIRE(!sync.isLocalLocked(groupId));
+    REQUIRE(!sync.isLocalLocked(appId));
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
@@ -264,7 +264,7 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    sync.setGroupSize(msg, 10);
+    sync.setAppSize(msg, 10);
 
     REQUIRE(sync.getNotifyCount(msg.appid()) == 0);
 
@@ -283,15 +283,15 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    sync.setGroupSize(msg, 2);
+    sync.setAppSize(msg, 2);
 
-    int groupId = msg.appid();
+    int appId = msg.appid();
 
-    REQUIRE(sync.getNotifyCount(groupId) == 0);
+    REQUIRE(sync.getNotifyCount(appId) == 0);
 
-    std::thread t([groupId] {
+    std::thread t([appId] {
         FunctionCallClient cli(LOCALHOST);
-        cli.functionGroupBarrier(groupId);
+        cli.functionGroupBarrier(appId);
     });
 
     // Wait on the barrier in this thread
