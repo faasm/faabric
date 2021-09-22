@@ -7,10 +7,10 @@
 
 namespace faabric::scheduler {
 
-class DistributedSync
+class DistributedCoordination
 {
   public:
-    DistributedSync();
+    DistributedCoordination();
 
     void setAppSize(const faabric::Message& msg, int appSize);
 
@@ -77,6 +77,6 @@ class DistributedSync
     void checkAppSizeSet(int32_t appId);
 };
 
-DistributedSync& getDistributedSync();
+DistributedCoordination& getDistributedCoordination();
 }
 

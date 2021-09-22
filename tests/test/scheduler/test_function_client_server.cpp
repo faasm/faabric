@@ -30,12 +30,12 @@ class ClientServerFixture
     FunctionCallServer server;
     FunctionCallClient cli;
     std::shared_ptr<DummyExecutorFactory> executorFactory;
-    DistributedSync& sync;
+    DistributedCoordination& sync;
 
   public:
     ClientServerFixture()
       : cli(LOCALHOST)
-      , sync(getDistributedSync())
+      , sync(getDistributedCoordination())
     {
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();

@@ -1,6 +1,6 @@
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedSync.h>
+#include <faabric/scheduler/DistributedCoordination.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/State.h>
@@ -15,7 +15,7 @@ namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(SNAPSHOT_ASYNC_PORT,
                                               SNAPSHOT_SYNC_PORT)
-  , sync(faabric::scheduler::getDistributedSync())
+  , sync(faabric::scheduler::getDistributedCoordination())
 {}
 
 void SnapshotServer::doAsyncRecv(int header,

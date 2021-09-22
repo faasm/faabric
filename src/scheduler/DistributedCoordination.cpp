@@ -1,4 +1,4 @@
-#include <faabric/scheduler/DistributedSync.h>
+#include <faabric/scheduler/DistributedCoordination.h>
 #include <faabric/util/timing.h>
 
 #define GROUP_TIMEOUT_MS 20000
@@ -33,17 +33,17 @@
 
 namespace faabric::scheduler {
 
-DistributedSync& getDistributedSync()
+DistributedCoordination& getDistributedCoordination()
 {
-    static DistributedSync sync;
+    static DistributedCoordination sync;
     return sync;
 }
 
-DistributedSync::DistributedSync()
+DistributedCoordination::DistributedCoordination()
   : sch(faabric::scheduler::getScheduler())
 {}
 
-void DistributedSync::setAppSize(const faabric::Message& msg, int appSize)
+void DistributedCoordination::setAppSize(const faabric::Message& msg, int appSize)
 {
     if (msg.masterhost() != sch.getThisHost()) {
         SPDLOG_ERROR("Setting group {} size not on master ({} != {})",
@@ -57,7 +57,7 @@ void DistributedSync::setAppSize(const faabric::Message& msg, int appSize)
     appSizes[msg.appid()] = appSize;
 }
 
-void DistributedSync::checkAppSizeSet(int32_t appId)
+void DistributedCoordination::checkAppSizeSet(int32_t appId)
 {
     if (appSizes.find(appId) == appSizes.end()) {
         SPDLOG_ERROR("Group {} size not set", appId);
@@ -65,7 +65,7 @@ void DistributedSync::checkAppSizeSet(int32_t appId)
     }
 }
 
-void DistributedSync::clear()
+void DistributedCoordination::clear()
 {
     appSizes.clear();
 
@@ -78,47 +78,47 @@ void DistributedSync::clear()
     cvs.clear();
 }
 
-void DistributedSync::localLockRecursive(int32_t appId)
+void DistributedCoordination::localLockRecursive(int32_t appId)
 {
     FROM_MAP(mx, std::recursive_mutex, recursiveMutexes);
     mx->lock();
 }
 
-void DistributedSync::localLock(int32_t appId)
+void DistributedCoordination::localLock(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
     mx->lock();
 }
 
-bool DistributedSync::localTryLock(int32_t appId)
+bool DistributedCoordination::localTryLock(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
     return mx->try_lock();
 }
 
-void DistributedSync::lock(const faabric::Message& msg)
+void DistributedCoordination::lock(const faabric::Message& msg)
 {
     DISTRIBUTED_SYNC_OP(localLock, client.functionGroupLock)
 }
 
-void DistributedSync::localUnlockRecursive(int32_t appId)
+void DistributedCoordination::localUnlockRecursive(int32_t appId)
 {
     FROM_MAP(mx, std::recursive_mutex, recursiveMutexes);
     mx->unlock();
 }
 
-void DistributedSync::localUnlock(int32_t appId)
+void DistributedCoordination::localUnlock(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
     mx->unlock();
 }
 
-void DistributedSync::unlock(const faabric::Message& msg)
+void DistributedCoordination::unlock(const faabric::Message& msg)
 {
     DISTRIBUTED_SYNC_OP(localUnlock, client.functionGroupUnlock)
 }
 
-void DistributedSync::doLocalNotify(int32_t appId, bool master)
+void DistributedCoordination::doLocalNotify(int32_t appId, bool master)
 {
     checkAppSizeSet(appId);
 
@@ -160,22 +160,22 @@ void DistributedSync::doLocalNotify(int32_t appId, bool master)
     }
 }
 
-void DistributedSync::localNotify(int32_t appId)
+void DistributedCoordination::localNotify(int32_t appId)
 {
     doLocalNotify(appId, false);
 }
 
-void DistributedSync::awaitNotify(int32_t appId)
+void DistributedCoordination::awaitNotify(int32_t appId)
 {
     doLocalNotify(appId, true);
 }
 
-void DistributedSync::notify(const faabric::Message& msg)
+void DistributedCoordination::notify(const faabric::Message& msg)
 {
     DISTRIBUTED_SYNC_OP(localNotify, client.functionGroupNotify)
 }
 
-void DistributedSync::localBarrier(int32_t appId)
+void DistributedCoordination::localBarrier(int32_t appId)
 {
     checkAppSizeSet(appId);
     int32_t appSize = appSizes[appId];
@@ -198,12 +198,12 @@ void DistributedSync::localBarrier(int32_t appId)
     barrier->wait();
 }
 
-void DistributedSync::barrier(const faabric::Message& msg)
+void DistributedCoordination::barrier(const faabric::Message& msg)
 {
     DISTRIBUTED_SYNC_OP(localBarrier, client.functionGroupBarrier)
 }
 
-bool DistributedSync::isLocalLocked(int32_t appId)
+bool DistributedCoordination::isLocalLocked(int32_t appId)
 {
     FROM_MAP(mx, std::mutex, mutexes);
 
@@ -217,7 +217,7 @@ bool DistributedSync::isLocalLocked(int32_t appId)
     return true;
 }
 
-int32_t DistributedSync::getNotifyCount(int32_t appId)
+int32_t DistributedCoordination::getNotifyCount(int32_t appId)
 {
     FROM_MAP(nowaitMutex, std::mutex, mutexes)
     std::unique_lock<std::mutex> lock(*nowaitMutex);
@@ -227,7 +227,7 @@ int32_t DistributedSync::getNotifyCount(int32_t appId)
     return nowaitCount->load();
 }
 
-int32_t DistributedSync::getAppSize(int32_t appId)
+int32_t DistributedCoordination::getAppSize(int32_t appId)
 {
     checkAppSizeSet(appId);
     return appSizes[appId];

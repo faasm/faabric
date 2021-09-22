@@ -3,7 +3,7 @@
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedSync.h>
+#include <faabric/scheduler/DistributedCoordination.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
@@ -16,18 +16,18 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-class DistributedSyncTestFixture : public ConfTestFixture
+class DistributedCoordinationTestFixture : public ConfTestFixture
 {
   public:
-    DistributedSyncTestFixture()
-      : sync(getDistributedSync())
+    DistributedCoordinationTestFixture()
+      : sync(getDistributedCoordination())
     {
         faabric::util::setMockMode(true);
 
         msg = faabric::util::messageFactory("foo", "bar");
     }
 
-    ~DistributedSyncTestFixture()
+    ~DistributedCoordinationTestFixture()
     {
         faabric::scheduler::clearMockRequests();
         faabric::util::setMockMode(false);
@@ -35,11 +35,11 @@ class DistributedSyncTestFixture : public ConfTestFixture
     }
 
   protected:
-    DistributedSync& sync;
+    DistributedCoordination& sync;
     faabric::Message msg;
 };
 
-TEST_CASE_METHOD(DistributedSyncTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
                  "Test remote requests sent on non-master",
                  "[sync]")
 {
@@ -84,7 +84,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     REQUIRE(req.operation() == op);
 }
 
-TEST_CASE_METHOD(DistributedSyncTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
                  "Test can't set group size on non-master",
                  "[sync]")
 {
@@ -104,7 +104,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     REQUIRE(actualMsg == "Setting sync group size on non-master");
 }
 
-TEST_CASE_METHOD(DistributedSyncTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
                  "Test operations fail when group size not set",
                  "[sync]")
 {
@@ -135,7 +135,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     REQUIRE(errMsg == "Group size not set");
 }
 
-TEST_CASE_METHOD(DistributedSyncTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
                  "Test local locking and unlocking",
                  "[sync]")
 {
@@ -144,12 +144,12 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     sync.localLock(msg.appid());
 
     std::thread tA([this, &sharedInt] {
-        getDistributedSync().localLock(msg.appid());
+        getDistributedCoordination().localLock(msg.appid());
 
         assert(sharedInt == 99);
         sharedInt = 88;
 
-        getDistributedSync().localUnlock(msg.appid());
+        getDistributedCoordination().localUnlock(msg.appid());
     });
 
     // Main thread sleep for a while, make sure the other can't run and update
@@ -168,7 +168,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     REQUIRE(sharedInt == 88);
 }
 
-TEST_CASE_METHOD(DistributedSyncTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
                  "Test sync barrier locally",
                  "[sync]")
 {
@@ -188,7 +188,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
         threads.emplace_back([this, nSums, &sharedSums] {
             for (int s = 0; s < nSums; s++) {
                 sharedSums.at(s).fetch_add(s + 1);
-                getDistributedSync().localBarrier(msg.appid());
+                getDistributedCoordination().localBarrier(msg.appid());
             }
         });
     }
@@ -206,7 +206,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     }
 }
 
-TEST_CASE_METHOD(DistributedSyncTestFixture, "Test local try lock", "[sync]")
+TEST_CASE_METHOD(DistributedCoordinationTestFixture, "Test local try lock", "[sync]")
 {
     int otherId = 345;
 
@@ -236,7 +236,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture, "Test local try lock", "[sync]")
     sync.localUnlock(otherId);
 }
 
-TEST_CASE_METHOD(DistributedSyncTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
                  "Test local recursive lock",
                  "[sync]")
 {
@@ -281,7 +281,7 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     REQUIRE(sharedInt == 4);
 }
 
-TEST_CASE_METHOD(DistributedSyncTestFixture, "Test notify and await", "[sync]")
+TEST_CASE_METHOD(DistributedCoordinationTestFixture, "Test notify and await", "[sync]")
 {
     int nThreads = 3;
     int actual[3] = { 0, 0, 0 };
