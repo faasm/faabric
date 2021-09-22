@@ -61,15 +61,15 @@ message FunctionStatusResponse {
 // FUNCTION GROUPS
 // ---------------------------------------------
 
-message FunctionGroupRequest {
+message CoordinationRequest {
     int32 appId = 1;
-    enum FunctionGroupOperation {
+    enum CoordinationOperation {
         LOCK = 0;
         UNLOCK = 1;
         NOTIFY = 2;
         BARRIER = 3;
     }
-    FunctionGroupOperation operation = 2;
+    CoordinationOperation operation = 2;
 }
 
 // ---------------------------------------------

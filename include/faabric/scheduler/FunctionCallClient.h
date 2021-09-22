@@ -25,8 +25,8 @@ getResourceRequests();
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests();
 
-std::vector<std::pair<std::string, faabric::FunctionGroupRequest>>
-getFunctionGroupRequests();
+std::vector<std::pair<std::string, faabric::CoordinationRequest>>
+getCoordinationRequests();
 
 void queueResourceResponse(const std::string& host,
                            faabric::HostResources& res);
@@ -52,18 +52,18 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     // --- Function group operations ---
 
-    void functionGroupLock(int32_t appId);
+    void coordinationLock(int32_t appId);
 
-    void functionGroupUnlock(int32_t appId);
+    void coordinationUnlock(int32_t appId);
 
-    void functionGroupNotify(int32_t appId);
+    void coordinationNotify(int32_t appId);
 
-    void functionGroupBarrier(int32_t appId);
+    void coordinationBarrier(int32_t appId);
 
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
-    void makeFunctionGroupRequest(int32_t appId,
-                                  faabric::scheduler::FunctionCalls call);
+    void makeCoordinationRequest(int32_t appId,
+                                 faabric::scheduler::FunctionCalls call);
 };
 }

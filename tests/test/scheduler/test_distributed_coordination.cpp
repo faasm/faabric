@@ -46,41 +46,41 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     std::string otherHost = "other";
     msg.set_masterhost(otherHost);
 
-    faabric::FunctionGroupRequest::FunctionGroupOperation op =
-      faabric::FunctionGroupRequest::FunctionGroupOperation::
-        FunctionGroupRequest_FunctionGroupOperation_LOCK;
+    faabric::CoordinationRequest::CoordinationOperation op =
+      faabric::CoordinationRequest::CoordinationOperation::
+        CoordinationRequest_CoordinationOperation_LOCK;
 
     SECTION("Lock")
     {
-        op = faabric::FunctionGroupRequest::LOCK;
+        op = faabric::CoordinationRequest::LOCK;
         sync.lock(msg);
     }
 
     SECTION("Unlock")
     {
-        op = faabric::FunctionGroupRequest::UNLOCK;
+        op = faabric::CoordinationRequest::UNLOCK;
         sync.unlock(msg);
     }
 
     SECTION("Barrier")
     {
-        op = faabric::FunctionGroupRequest::BARRIER;
+        op = faabric::CoordinationRequest::BARRIER;
         sync.barrier(msg);
     }
 
     SECTION("Notify")
     {
-        op = faabric::FunctionGroupRequest::NOTIFY;
+        op = faabric::CoordinationRequest::NOTIFY;
         sync.notify(msg);
     }
 
-    std::vector<std::pair<std::string, faabric::FunctionGroupRequest>>
-      actualRequests = getFunctionGroupRequests();
+    std::vector<std::pair<std::string, faabric::CoordinationRequest>>
+      actualRequests = getCoordinationRequests();
 
     REQUIRE(actualRequests.size() == 1);
     REQUIRE(actualRequests.at(0).first == otherHost);
 
-    faabric::FunctionGroupRequest req = actualRequests.at(0).second;
+    faabric::CoordinationRequest req = actualRequests.at(0).second;
     REQUIRE(req.operation() == op);
 }
 
@@ -206,7 +206,9 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     }
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture, "Test local try lock", "[sync]")
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+                 "Test local try lock",
+                 "[sync]")
 {
     int otherId = 345;
 
@@ -281,7 +283,9 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     REQUIRE(sharedInt == 4);
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture, "Test notify and await", "[sync]")
+TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+                 "Test notify and await",
+                 "[sync]")
 {
     int nThreads = 3;
     int actual[3] = { 0, 0, 0 };

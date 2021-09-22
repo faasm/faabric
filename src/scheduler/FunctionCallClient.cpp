@@ -1,5 +1,5 @@
-#include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
@@ -31,8 +31,8 @@ static std::unordered_map<std::string,
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
-static std::vector<std::pair<std::string, faabric::FunctionGroupRequest>>
-  functionGroupRequests;
+static std::vector<std::pair<std::string, faabric::CoordinationRequest>>
+  coordinationRequests;
 
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
@@ -62,10 +62,10 @@ getUnregisterRequests()
     return unregisterRequests;
 }
 
-std::vector<std::pair<std::string, faabric::FunctionGroupRequest>>
-getFunctionGroupRequests()
+std::vector<std::pair<std::string, faabric::CoordinationRequest>>
+getCoordinationRequests()
 {
-    return functionGroupRequests;
+    return coordinationRequests;
 }
 
 void queueResourceResponse(const std::string& host, faabric::HostResources& res)
@@ -79,7 +79,7 @@ void clearMockRequests()
     batchMessages.clear();
     resourceRequests.clear();
     unregisterRequests.clear();
-    functionGroupRequests.clear();
+    coordinationRequests.clear();
 
     for (auto& p : queuedResourceResponses) {
         p.second.reset();
@@ -153,29 +153,29 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
     }
 }
 
-void FunctionCallClient::makeFunctionGroupRequest(
+void FunctionCallClient::makeCoordinationRequest(
   int32_t appId,
   faabric::scheduler::FunctionCalls call)
 {
-    faabric::FunctionGroupRequest req;
+    faabric::CoordinationRequest req;
     req.set_appid(appId);
 
-    faabric::FunctionGroupRequest::FunctionGroupOperation op;
+    faabric::CoordinationRequest::CoordinationOperation op;
     switch (call) {
         case (faabric::scheduler::FunctionCalls::GroupLock): {
-            op = faabric::FunctionGroupRequest::LOCK;
+            op = faabric::CoordinationRequest::LOCK;
             break;
         }
         case (faabric::scheduler::FunctionCalls::GroupUnlock): {
-            op = faabric::FunctionGroupRequest::UNLOCK;
+            op = faabric::CoordinationRequest::UNLOCK;
             break;
         }
         case (faabric::scheduler::FunctionCalls::GroupNotify): {
-            op = faabric::FunctionGroupRequest::NOTIFY;
+            op = faabric::CoordinationRequest::NOTIFY;
             break;
         }
         case (faabric::scheduler::FunctionCalls::GroupBarrier): {
-            op = faabric::FunctionGroupRequest::BARRIER;
+            op = faabric::CoordinationRequest::BARRIER;
             break;
         }
         default: {
@@ -188,35 +188,35 @@ void FunctionCallClient::makeFunctionGroupRequest(
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
-        functionGroupRequests.emplace_back(host, req);
+        coordinationRequests.emplace_back(host, req);
     } else {
         faabric::EmptyResponse resp;
         syncSend(call, &req, &resp);
     }
 }
 
-void FunctionCallClient::functionGroupLock(int32_t appId)
+void FunctionCallClient::coordinationLock(int32_t appId)
 {
-    makeFunctionGroupRequest(appId,
-                             faabric::scheduler::FunctionCalls::GroupLock);
+    makeCoordinationRequest(appId,
+                            faabric::scheduler::FunctionCalls::GroupLock);
 }
 
-void FunctionCallClient::functionGroupUnlock(int32_t appId)
+void FunctionCallClient::coordinationUnlock(int32_t appId)
 {
-    makeFunctionGroupRequest(appId,
-                             faabric::scheduler::FunctionCalls::GroupUnlock);
+    makeCoordinationRequest(appId,
+                            faabric::scheduler::FunctionCalls::GroupUnlock);
 }
 
-void FunctionCallClient::functionGroupNotify(int32_t appId)
+void FunctionCallClient::coordinationNotify(int32_t appId)
 {
-    makeFunctionGroupRequest(appId,
-                             faabric::scheduler::FunctionCalls::GroupNotify);
+    makeCoordinationRequest(appId,
+                            faabric::scheduler::FunctionCalls::GroupNotify);
 }
 
-void FunctionCallClient::functionGroupBarrier(int32_t appId)
+void FunctionCallClient::coordinationBarrier(int32_t appId)
 {
-    makeFunctionGroupRequest(appId,
-                             faabric::scheduler::FunctionCalls::GroupBarrier);
+    makeCoordinationRequest(appId,
+                            faabric::scheduler::FunctionCalls::GroupBarrier);
 }
 
 }

@@ -79,4 +79,3 @@ class DistributedCoordination
 
 DistributedCoordination& getDistributedCoordination();
 }
-

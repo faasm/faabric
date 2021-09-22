@@ -5,30 +5,30 @@
 
 #define DISTRIBUTED_SYNC_OP(opLocal, opRemote)                                 \
     {                                                                          \
-        int32_t appId = msg.appid();                                         \
+        int32_t appId = msg.appid();                                           \
         if (msg.masterhost() == sch.getThisHost()) {                           \
-            opLocal(appId);                                                  \
+            opLocal(appId);                                                    \
         } else {                                                               \
             std::string host = msg.masterhost();                               \
             faabric::scheduler::FunctionCallClient& client =                   \
               sch.getFunctionCallClient(host);                                 \
-            opRemote(appId);                                                 \
+            opRemote(appId);                                                   \
         }                                                                      \
     }
 
 #define FROM_MAP(varName, T, m, ...)                                           \
     {                                                                          \
-        if (m.find(appId) == m.end()) {                                      \
+        if (m.find(appId) == m.end()) {                                        \
             faabric::util::FullLock lock(sharedMutex);                         \
-            if (m.find(appId) == m.end()) {                                  \
-                m[appId] = std::make_shared<T>(__VA_ARGS__);                 \
+            if (m.find(appId) == m.end()) {                                    \
+                m[appId] = std::make_shared<T>(__VA_ARGS__);                   \
             }                                                                  \
         }                                                                      \
     }                                                                          \
     std::shared_ptr<T> varName;                                                \
     {                                                                          \
         faabric::util::SharedLock lock(sharedMutex);                           \
-        varName = m[appId];                                                  \
+        varName = m[appId];                                                    \
     }
 
 namespace faabric::scheduler {
@@ -43,7 +43,8 @@ DistributedCoordination::DistributedCoordination()
   : sch(faabric::scheduler::getScheduler())
 {}
 
-void DistributedCoordination::setAppSize(const faabric::Message& msg, int appSize)
+void DistributedCoordination::setAppSize(const faabric::Message& msg,
+                                         int appSize)
 {
     if (msg.masterhost() != sch.getThisHost()) {
         SPDLOG_ERROR("Setting group {} size not on master ({} != {})",
@@ -98,7 +99,7 @@ bool DistributedCoordination::localTryLock(int32_t appId)
 
 void DistributedCoordination::lock(const faabric::Message& msg)
 {
-    DISTRIBUTED_SYNC_OP(localLock, client.functionGroupLock)
+    DISTRIBUTED_SYNC_OP(localLock, client.coordinationLock)
 }
 
 void DistributedCoordination::localUnlockRecursive(int32_t appId)
@@ -115,7 +116,7 @@ void DistributedCoordination::localUnlock(int32_t appId)
 
 void DistributedCoordination::unlock(const faabric::Message& msg)
 {
-    DISTRIBUTED_SYNC_OP(localUnlock, client.functionGroupUnlock)
+    DISTRIBUTED_SYNC_OP(localUnlock, client.coordinationUnlock)
 }
 
 void DistributedCoordination::doLocalNotify(int32_t appId, bool master)
@@ -172,7 +173,7 @@ void DistributedCoordination::awaitNotify(int32_t appId)
 
 void DistributedCoordination::notify(const faabric::Message& msg)
 {
-    DISTRIBUTED_SYNC_OP(localNotify, client.functionGroupNotify)
+    DISTRIBUTED_SYNC_OP(localNotify, client.coordinationNotify)
 }
 
 void DistributedCoordination::localBarrier(int32_t appId)
@@ -200,7 +201,7 @@ void DistributedCoordination::localBarrier(int32_t appId)
 
 void DistributedCoordination::barrier(const faabric::Message& msg)
 {
-    DISTRIBUTED_SYNC_OP(localBarrier, client.functionGroupBarrier)
+    DISTRIBUTED_SYNC_OP(localBarrier, client.coordinationBarrier)
 }
 
 bool DistributedCoordination::isLocalLocked(int32_t appId)

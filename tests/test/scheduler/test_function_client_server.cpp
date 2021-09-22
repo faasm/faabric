@@ -250,11 +250,11 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     REQUIRE(!sync.isLocalLocked(appId));
 
-    cli.functionGroupLock(appId);
+    cli.coordinationLock(appId);
 
     REQUIRE(sync.isLocalLocked(appId));
 
-    cli.functionGroupUnlock(appId);
+    cli.coordinationUnlock(appId);
 
     REQUIRE(!sync.isLocalLocked(appId));
 }
@@ -268,12 +268,12 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     REQUIRE(sync.getNotifyCount(msg.appid()) == 0);
 
-    cli.functionGroupNotify(msg.appid());
+    cli.coordinationNotify(msg.appid());
 
     REQUIRE(sync.getNotifyCount(msg.appid()) == 1);
 
-    cli.functionGroupNotify(msg.appid());
-    cli.functionGroupNotify(msg.appid());
+    cli.coordinationNotify(msg.appid());
+    cli.coordinationNotify(msg.appid());
 
     REQUIRE(sync.getNotifyCount(msg.appid()) == 3);
 }
@@ -291,7 +291,7 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     std::thread t([appId] {
         FunctionCallClient cli(LOCALHOST);
-        cli.functionGroupBarrier(appId);
+        cli.coordinationBarrier(appId);
     });
 
     // Wait on the barrier in this thread
