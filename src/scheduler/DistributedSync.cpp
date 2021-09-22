@@ -217,7 +217,19 @@ bool DistributedSync::isLocalLocked(int32_t groupId)
     return true;
 }
 
-int32_t DistributedSync::getNotifyCount(int32_t groupId) {}
+int32_t DistributedSync::getNotifyCount(int32_t groupId)
+{
+    FROM_MAP(nowaitMutex, std::mutex, mutexes)
+    std::unique_lock<std::mutex> lock(*nowaitMutex);
 
-int32_t DistributedSync::getGroupSize(int32_t groupId) {}
+    FROM_MAP(nowaitCount, std::atomic<int>, counts)
+
+    return nowaitCount->load();
+}
+
+int32_t DistributedSync::getGroupSize(int32_t groupId)
+{
+    checkGroupSizeSet(groupId);
+    return groupSizes[groupId];
+}
 }

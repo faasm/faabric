@@ -3,6 +3,7 @@
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/DistributedSync.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
@@ -28,6 +29,7 @@ class DistributedSyncTestFixture : public ConfTestFixture
 
     ~DistributedSyncTestFixture()
     {
+        faabric::scheduler::clearMockRequests();
         faabric::util::setMockMode(false);
         sync.clear();
     }
@@ -52,6 +54,24 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     {
         op = faabric::FunctionGroupRequest::LOCK;
         sync.lock(msg);
+    }
+
+    SECTION("Unlock")
+    {
+        op = faabric::FunctionGroupRequest::UNLOCK;
+        sync.unlock(msg);
+    }
+
+    SECTION("Barrier")
+    {
+        op = faabric::FunctionGroupRequest::BARRIER;
+        sync.barrier(msg);
+    }
+
+    SECTION("Notify")
+    {
+        op = faabric::FunctionGroupRequest::NOTIFY;
+        sync.notify(msg);
     }
 
     std::vector<std::pair<std::string, faabric::FunctionGroupRequest>>
