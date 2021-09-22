@@ -15,6 +15,7 @@ namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(SNAPSHOT_ASYNC_PORT,
                                               SNAPSHOT_SYNC_PORT)
+  , sync(faabric::scheduler::getDistributedSync())
 {}
 
 void SnapshotServer::doAsyncRecv(int header,
@@ -78,6 +79,9 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
 
+    // Lock the application
+    sync.localLock(r->appid());
+
     // TODO - avoid this copy by changing server superclass to allow subclasses
     // to provide a buffer to receive data.
     // TODO - work out snapshot ownership here, how do we know when to delete
@@ -87,6 +91,9 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     std::memcpy(data.data, r->contents()->Data(), data.size);
 
     reg.takeSnapshot(r->key()->str(), data, true);
+
+    // Unlock the application
+    sync.localUnlock(r->appid());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -119,10 +126,16 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
+    // Lock the application
+    sync.localLock(r->appid());
+
     // Copy diffs to snapshot
     for (const auto* r : *r->chunks()) {
         snap.applyDiff(r->offset(), r->data()->data(), r->data()->size());
     }
+
+    // Unlock
+    sync.localUnlock(r->appid());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();

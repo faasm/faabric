@@ -2,6 +2,7 @@
 
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/DistributedSync.h>
 #include <faabric/snapshot/SnapshotApi.h>
 #include <faabric/transport/MessageEndpointServer.h>
 
@@ -30,5 +31,8 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
     void recvDeleteSnapshot(const uint8_t* buffer, size_t bufferSize);
 
     void recvThreadResult(const uint8_t* buffer, size_t bufferSize);
+
+  private:
+    faabric::scheduler::DistributedSync &sync;
 };
 }

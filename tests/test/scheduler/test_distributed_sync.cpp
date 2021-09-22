@@ -44,7 +44,10 @@ TEST_CASE_METHOD(DistributedSyncTestFixture,
     std::string otherHost = "other";
     msg.set_masterhost(otherHost);
 
-    faabric::FunctionGroupRequest::FunctionGroupOperation op;
+    faabric::FunctionGroupRequest::FunctionGroupOperation op =
+      faabric::FunctionGroupRequest::FunctionGroupOperation::
+        FunctionGroupRequest_FunctionGroupOperation_LOCK;
+
     SECTION("Lock")
     {
         op = faabric::FunctionGroupRequest::LOCK;

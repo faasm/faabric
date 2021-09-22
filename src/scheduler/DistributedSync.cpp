@@ -203,4 +203,21 @@ void DistributedSync::barrier(const faabric::Message& msg)
     DISTRIBUTED_SYNC_OP(localBarrier, client.functionGroupBarrier)
 }
 
+bool DistributedSync::isLocalLocked(int32_t groupId)
+{
+    FROM_MAP(mx, std::mutex, mutexes);
+
+    bool canLock = mx->try_lock();
+
+    if (canLock) {
+        mx->unlock();
+        return false;
+    }
+
+    return true;
+}
+
+int32_t DistributedSync::getNotifyCount(int32_t groupId) {}
+
+int32_t DistributedSync::getGroupSize(int32_t groupId) {}
 }

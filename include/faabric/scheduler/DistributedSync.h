@@ -47,6 +47,13 @@ class DistributedSync
 
     void barrier(const faabric::Message& msg);
 
+    // --- Querying state ---
+    bool isLocalLocked(int32_t groupId);
+
+    int32_t getNotifyCount(int32_t groupId);
+
+    int32_t getGroupSize(int32_t groupId);
+
   private:
     faabric::scheduler::Scheduler& sch;
 

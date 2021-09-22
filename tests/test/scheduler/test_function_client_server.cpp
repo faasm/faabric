@@ -248,31 +248,14 @@ TEST_CASE_METHOD(ClientServerFixture,
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
 
-    // Acquire lock in main thread locally
-    sync.localLock(msg.appid());
+    cli.functionGroupLock(msg.appid());
 
-    std::atomic<int> sharedInt = 0;
+    REQUIRE(sync.isLocalLocked(msg.appid()));
 
-    // Background thread to make request and check
-    std::thread t([this, &sharedInt, &msg] {
-        cli.functionGroupLock(msg.appid());
+    cli.functionGroupUnlock(msg.appid());
 
-        sharedInt = 10;
-
-        cli.functionGroupUnlock(msg.appid());
-    });
-
-    SLEEP_MS(1000);
-
-    // Check thread change hasn't been made
-    REQUIRE(sharedInt == 0);
-
-    // Unlock, join and check change made
-    sync.localUnlock(msg.appid());
-
-    if (t.joinable()) {
-        t.join();
-    }
-    REQUIRE(sharedInt == 10);
+    REQUIRE(!sync.isLocalLocked(msg.appid()));
 }
+
+
 }
