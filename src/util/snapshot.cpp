@@ -1,8 +1,14 @@
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
 
 namespace faabric::util {
+
+// TODO - this would be better as an instance variable on the SnapshotData
+// class, but it can't be copy-constructed.
+static std::mutex snapMx;
 
 std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
 {
@@ -31,27 +37,126 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
 std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                                                        size_t updatedSize)
 {
-    // Work out which pages have changed in the comparison
+    // Work out which pages have changed
     size_t nThisPages = getRequiredHostPages(size);
     std::vector<int> dirtyPageNumbers =
       getDirtyPageNumbers(updated, nThisPages);
 
+    // Get iterator over merge regions
+    std::map<uint32_t, SnapshotMergeRegion>::iterator mergeIt =
+      mergeRegions.begin();
+
     // Get byte-wise diffs _within_ the dirty pages
+    //
     // NOTE - this will cause diffs to be split across pages if they hit a page
     // boundary, but we can be relatively confident that variables will be
     // page-aligned so this shouldn't be a problem
+    //
+    // For each byte we encounter have the following possible scenarios:
+    //
+    // 1. the byte is dirty, and is the start of a new diff
+    // 2. the byte is dirty, but the byte before was also dirty, so we
+    // are inside a diff
+    // 3. the byte is not dirty but the previous one was, so we've reached the
+    // end of a diff
+    // 4. the last byte of the page is dirty, so we've also come to the end of
+    // a diff
+    // 5. the byte is dirty, but is within a special merge region, in which
+    // case we need to add a diff for that whole region, then skip
+    // to the next byte after that region
     std::vector<SnapshotDiff> diffs;
     for (int i : dirtyPageNumbers) {
         int pageOffset = i * HOST_PAGE_SIZE;
 
-        // Iterate through each byte of the page
         bool diffInProgress = false;
         int diffStart = 0;
         int offset = pageOffset;
         for (int b = 0; b < HOST_PAGE_SIZE; b++) {
             offset = pageOffset + b;
             bool isDirtyByte = *(data + offset) != *(updated + offset);
-            if (isDirtyByte && !diffInProgress) {
+
+            bool isInMergeRegion =
+              mergeIt != mergeRegions.end() &&
+              offset >= mergeIt->second.offset &&
+              offset < (mergeIt->second.offset + mergeIt->second.length);
+
+            if (isDirtyByte && isInMergeRegion) {
+                SnapshotMergeRegion region = mergeIt->second;
+
+                // Set up the diff
+                const uint8_t* updatedValue = updated + region.offset;
+                const uint8_t* originalValue = data + region.offset;
+
+                SnapshotDiff diff(region.offset, updatedValue, region.length);
+                diff.dataType = region.dataType;
+                diff.operation = region.operation;
+
+                // Modify diff data for certain operations
+                switch (region.dataType) {
+                    case (SnapshotDataType::Int): {
+                        int originalInt =
+                          *(reinterpret_cast<const int*>(originalValue));
+                        int updatedInt =
+                          *(reinterpret_cast<const int*>(updatedValue));
+
+                        switch (region.operation) {
+                            case (SnapshotMergeOperation::Sum): {
+                                // Sums must send the value to be _added_, and
+                                // not the final result
+                                updatedInt -= originalInt;
+                                break;
+                            }
+                            case (SnapshotMergeOperation::Subtract): {
+                                // Subtractions must send the value to be
+                                // subtracted, not the result
+                                updatedInt = originalInt - updatedInt;
+                                break;
+                            }
+                            case (SnapshotMergeOperation::Product): {
+                                // Products must send the value to be
+                                // multiplied, not the result
+                                updatedInt /= originalInt;
+                                break;
+                            }
+                            case (SnapshotMergeOperation::Max):
+                            case (SnapshotMergeOperation::Min):
+                                // Min and max don't need to change
+                                break;
+                            default: {
+                                SPDLOG_ERROR(
+                                  "Unhandled integer merge operation: {}",
+                                  region.operation);
+                                throw std::runtime_error(
+                                  "Unhandled integer merge operation");
+                            }
+                        }
+
+                        // TODO - somehow avoid casting away the const here?
+                        // Modify the memory in-place here
+                        std::memcpy((uint8_t*)updatedValue,
+                                    BYTES(&updatedInt),
+                                    sizeof(int32_t));
+
+                        break;
+                    }
+                    default: {
+                        SPDLOG_ERROR("Merge region for unhandled data type: {}",
+                                     region.dataType);
+                        throw std::runtime_error(
+                          "Merge region for unhandled data type");
+                    }
+                }
+
+                // Add the diff to the list
+                diffs.emplace_back(diff);
+
+                // Bump the loop variable to the end of this region (note that
+                // the loop itself will increment onto the next)
+                b = (region.offset - pageOffset) + (region.length - 1);
+
+                // Move onto the next merge region
+                ++mergeIt;
+            } else if (isDirtyByte && !diffInProgress) {
                 // Diff starts here if it's different and diff not in progress
                 diffInProgress = true;
                 diffStart = offset;
@@ -81,12 +186,17 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
     return diffs;
 }
 
-void SnapshotData::applyDiff(size_t diffOffset,
-                             const uint8_t* diffData,
-                             size_t diffLen)
+void SnapshotData::addMergeRegion(uint32_t offset,
+                                  size_t length,
+                                  SnapshotDataType dataType,
+                                  SnapshotMergeOperation operation)
 {
-    uint8_t* dest = data + diffOffset;
-    std::memcpy(dest, diffData, diffLen);
+    SnapshotMergeRegion region{ .offset = offset,
+                                .length = length,
+                                .dataType = dataType,
+                                .operation = operation };
+    // Locking as this may be called in bursts by multiple threads
+    faabric::util::UniqueLock lock(snapMx);
+    mergeRegions[offset] = region;
 }
-
 }

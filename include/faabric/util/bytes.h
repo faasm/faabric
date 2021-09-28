@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include <faabric/util/macros.h>
+
 namespace faabric::util {
 std::vector<uint8_t> stringToBytes(const std::string& str);
 
@@ -41,5 +43,11 @@ size_t readBytesOf(const std::vector<uint8_t>& container,
     uint8_t* outStart = reinterpret_cast<uint8_t*>(outValue);
     std::copy_n(container.data() + offset, sizeof(T), outStart);
     return offset + sizeof(T);
+}
+
+template<typename T>
+std::vector<uint8_t> valueToBytes(T val)
+{
+    return std::vector(BYTES(&val), BYTES(&val) + sizeof(T));
 }
 }

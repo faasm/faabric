@@ -9,6 +9,8 @@ table SnapshotDeleteRequest {
 
 table SnapshotDiffChunk {
   offset:int;
+  dataType:int;
+  mergeOp:int;
   data:[ubyte];
 }
 

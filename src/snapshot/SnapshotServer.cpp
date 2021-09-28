@@ -7,6 +7,7 @@
 #include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/snapshot.h>
 
 #include <sys/mman.h>
 
@@ -117,9 +118,64 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
-    // Copy diffs to snapshot
+    // Apply diffs to snapshot
     for (const auto* r : *r->chunks()) {
-        snap.applyDiff(r->offset(), r->data()->data(), r->data()->size());
+        uint8_t* dest = snap.data + r->offset();
+        switch (r->dataType()) {
+            case (faabric::util::SnapshotDataType::Raw): {
+                switch (r->mergeOp()) {
+                    case (faabric::util::SnapshotMergeOperation::Overwrite): {
+                        std::memcpy(dest, r->data()->data(), r->data()->size());
+                        break;
+                    }
+                    default: {
+                        SPDLOG_ERROR("Unsupported raw merge operation: {}",
+                                     r->mergeOp());
+                        throw std::runtime_error(
+                          "Unsupported raw merge operation");
+                    }
+                }
+                break;
+            }
+            case (faabric::util::SnapshotDataType::Int): {
+                const auto* value =
+                  reinterpret_cast<const int32_t*>(r->data()->data());
+                auto* destValue = reinterpret_cast<int32_t*>(dest);
+                switch (r->mergeOp()) {
+                    case (faabric::util::SnapshotMergeOperation::Sum): {
+                        *destValue += *value;
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Subtract): {
+                        *destValue -= *value;
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Product): {
+                        *destValue *= *value;
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Min): {
+                        *destValue = std::min(*destValue, *value);
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Max): {
+                        *destValue = std::max(*destValue, *value);
+                        break;
+                    }
+                    default: {
+                        SPDLOG_ERROR("Unsupported int merge operation: {}",
+                                     r->mergeOp());
+                        throw std::runtime_error(
+                          "Unsupported int merge operation");
+                    }
+                }
+                break;
+            }
+            default: {
+                SPDLOG_ERROR("Unsupported data type: {}", r->dataType());
+                throw std::runtime_error("Unsupported merge data type");
+            }
+        }
     }
 
     // Send response
