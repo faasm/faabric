@@ -78,7 +78,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
             bool isInMergeRegion =
               mergeIt != mergeRegions.end() &&
               offset >= mergeIt->second.offset &&
-              offset <= (mergeIt->second.offset + mergeIt->second.length);
+              offset < (mergeIt->second.offset + mergeIt->second.length);
 
             if (isDirtyByte && isInMergeRegion) {
                 SnapshotMergeRegion region = mergeIt->second;
@@ -152,9 +152,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
 
                 // Bump the loop variable to the end of this region (note that
                 // the loop itself will increment onto the next)
-                int nextOffset = region.offset + region.length;
-                int jump = nextOffset - offset;
-                b += jump;
+                b = (region.offset - pageOffset) + (region.length - 1);
 
                 // Move onto the next merge region
                 ++mergeIt;

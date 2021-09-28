@@ -123,6 +123,110 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     deallocatePages(snap.data, snapPages);
 }
 
+TEST_CASE_METHOD(SnapshotTestFixture,
+                 "Test edge-cases of snapshot merge regions",
+                 "[util]")
+{
+    // Region edge cases:
+    // - start
+    // - adjacent
+    // - finish
+
+    std::string snapKey = "foobar123";
+    int snapPages = 5;
+    int snapSize = snapPages * faabric::util::HOST_PAGE_SIZE;
+
+    int originalA = 50;
+    int finalA = 25;
+    int subA = 25;
+    int offsetA = 0;
+
+    int originalB = 100;
+    int finalB = 200;
+    int sumB = 100;
+    int offsetB = HOST_PAGE_SIZE + (2 * sizeof(int32_t));
+
+    int originalC = 200;
+    int finalC = 150;
+    int subC = 50;
+    int offsetC = offsetB + sizeof(int32_t);
+
+    int originalD = 100;
+    int finalD = 150;
+    int sumD = 50;
+    int offsetD = snapSize - sizeof(int32_t);
+
+    faabric::util::SnapshotData snap;
+    snap.size = snapSize;
+    snap.data = allocatePages(snapPages);
+
+    // Set up original values
+    *(int*)(snap.data + offsetA) = originalA;
+    *(int*)(snap.data + offsetB) = originalB;
+    *(int*)(snap.data + offsetC) = originalC;
+    *(int*)(snap.data + offsetD) = originalD;
+
+    // Take the snapshot
+    reg.takeSnapshot(snapKey, snap, true);
+
+    // Map the snapshot to some memory
+    size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
+    uint8_t* sharedMem = allocatePages(snapPages);
+
+    reg.mapSnapshot(snapKey, sharedMem);
+
+    // Reset dirty tracking
+    faabric::util::resetDirtyTracking();
+
+    // Set up the merge regions
+    snap.addMergeRegion(offsetA,
+                        sizeof(int),
+                        SnapshotDataType::Int,
+                        SnapshotMergeOperation::Subtract);
+
+    snap.addMergeRegion(
+      offsetB, sizeof(int), SnapshotDataType::Int, SnapshotMergeOperation::Sum);
+
+    snap.addMergeRegion(offsetC,
+                        sizeof(int),
+                        SnapshotDataType::Int,
+                        SnapshotMergeOperation::Subtract);
+
+    snap.addMergeRegion(
+      offsetD, sizeof(int), SnapshotDataType::Int, SnapshotMergeOperation::Sum);
+
+    // Set final values
+    *(int*)(sharedMem + offsetA) = finalA;
+    *(int*)(sharedMem + offsetB) = finalB;
+    *(int*)(sharedMem + offsetC) = finalC;
+    *(int*)(sharedMem + offsetD) = finalD;
+
+    // Check the diffs
+    std::vector<SnapshotDiff> actualDiffs =
+      snap.getChangeDiffs(sharedMem, sharedMemSize);
+    REQUIRE(actualDiffs.size() == 4);
+
+    SnapshotDiff diffA = actualDiffs.at(0);
+    SnapshotDiff diffB = actualDiffs.at(1);
+    SnapshotDiff diffC = actualDiffs.at(2);
+    SnapshotDiff diffD = actualDiffs.at(3);
+
+    REQUIRE(diffA.offset == offsetA);
+    REQUIRE(diffB.offset == offsetB);
+    REQUIRE(diffC.offset == offsetC);
+    REQUIRE(diffD.offset == offsetD);
+
+    REQUIRE(diffA.operation == SnapshotMergeOperation::Subtract);
+    REQUIRE(diffB.operation == SnapshotMergeOperation::Sum);
+    REQUIRE(diffC.operation == SnapshotMergeOperation::Subtract);
+    REQUIRE(diffD.operation == SnapshotMergeOperation::Sum);
+
+    REQUIRE(*(int*)diffA.data == subA);
+    REQUIRE(*(int*)diffB.data == sumB);
+    REQUIRE(*(int*)diffC.data == subC);
+    REQUIRE(*(int*)diffD.data == sumD);
+}
+
 TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
 {
     std::string snapKey = "foobar123";
