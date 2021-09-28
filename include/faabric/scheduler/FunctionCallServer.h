@@ -1,7 +1,7 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordination.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/MessageEndpointServer.h>
@@ -16,7 +16,7 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    faabric::scheduler::DistributedCoordination& sync;
+    faabric::scheduler::DistributedCoordinator& sync;
 
     void doAsyncRecv(int header,
                      const uint8_t* buffer,

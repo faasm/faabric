@@ -51,19 +51,18 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
     void unregister(faabric::UnregisterRequest& req);
 
     // --- Function group operations ---
+    void coordinationLock(const faabric::Message& msg);
 
-    void coordinationLock(int32_t appId);
+    void coordinationUnlock(const faabric::Message& msg);
 
-    void coordinationUnlock(int32_t appId);
+    void coordinationNotify(const faabric::Message& msg);
 
-    void coordinationNotify(int32_t appId);
-
-    void coordinationBarrier(int32_t appId);
+    void coordinationBarrier(const faabric::Message& msg);
 
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
-    void makeCoordinationRequest(int32_t appId,
+    void makeCoordinationRequest(int32_t groupId,
                                  faabric::scheduler::FunctionCalls call);
 };
 }

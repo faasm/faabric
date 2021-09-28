@@ -1,5 +1,5 @@
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordination.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -14,7 +14,7 @@ FunctionCallServer::FunctionCallServer()
   : faabric::transport::MessageEndpointServer(FUNCTION_CALL_ASYNC_PORT,
                                               FUNCTION_CALL_SYNC_PORT)
   , scheduler(getScheduler())
-  , sync(getDistributedCoordination())
+  , sync(getDistributedCoordinator())
 {}
 
 void FunctionCallServer::doAsyncRecv(int header,
@@ -118,8 +118,8 @@ FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
                                          size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t appId = msg.appid();
-    sync.localLock(appId);
+    int32_t groupId = msg.groupid();
+    sync.localLock(groupId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -128,8 +128,8 @@ FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
                                            size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t appId = msg.appid();
-    sync.localUnlock(appId);
+    int32_t groupId = msg.groupid();
+    sync.localUnlock(groupId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -138,8 +138,8 @@ FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
                                            size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t appId = msg.appid();
-    sync.localNotify(appId);
+    int32_t groupId = msg.groupid();
+    sync.localNotify(groupId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -148,8 +148,8 @@ FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
                                             size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t appId = msg.appid();
-    sync.localBarrier(appId);
+    int32_t groupId = msg.groupid();
+    sync.localBarrier(groupId);
     return std::make_unique<faabric::EmptyResponse>();
 }
 }

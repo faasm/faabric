@@ -283,7 +283,7 @@ std::vector<std::string> Scheduler::callFunctions(
                                      h);
                         SnapshotClient& c = getSnapshotClient(h);
                         c.pushSnapshotDiffs(
-                          snapshotKey, firstMsg.appid(), snapshotDiffs);
+                          snapshotKey, firstMsg.groupid(), snapshotDiffs);
                     }
                 }
 
@@ -543,7 +543,7 @@ int Scheduler::scheduleFunctionsOnHost(
     std::string snapshotKey = firstMsg.snapshotkey();
     if (snapshot != nullptr && !snapshotKey.empty()) {
         SnapshotClient& c = getSnapshotClient(host);
-        c.pushSnapshot(snapshotKey, firstMsg.appid(), *snapshot);
+        c.pushSnapshot(snapshotKey, firstMsg.groupid(), *snapshot);
     }
 
     getFunctionCallClient(host).executeFunctions(hostRequest);
@@ -743,7 +743,7 @@ void Scheduler::pushSnapshotDiffs(
 
     if (!isMaster && !diffs.empty()) {
         SnapshotClient& c = getSnapshotClient(msg.masterhost());
-        c.pushSnapshotDiffs(msg.snapshotkey(), msg.appid(), diffs);
+        c.pushSnapshotDiffs(msg.snapshotkey(), msg.groupid(), diffs);
     }
 }
 

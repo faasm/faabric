@@ -1,7 +1,7 @@
 #pragma once
 
 #include <faabric/flat/faabric_generated.h>
-#include <faabric/scheduler/DistributedCoordination.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotApi.h>
 #include <faabric/transport/MessageEndpointServer.h>
@@ -33,6 +33,6 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
     void recvThreadResult(const uint8_t* buffer, size_t bufferSize);
 
   private:
-    faabric::scheduler::DistributedCoordination& sync;
+    faabric::scheduler::DistributedCoordinator& sync;
 };
 }

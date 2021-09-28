@@ -1,6 +1,6 @@
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordination.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/State.h>
@@ -15,7 +15,7 @@ namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(SNAPSHOT_ASYNC_PORT,
                                               SNAPSHOT_SYNC_PORT)
-  , sync(faabric::scheduler::getDistributedCoordination())
+  , sync(faabric::scheduler::getDistributedCoordinator())
 {}
 
 void SnapshotServer::doAsyncRecv(int header,
@@ -70,7 +70,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     SPDLOG_DEBUG("Receiving shapshot {} (size {}, lock {})",
                  r->key()->c_str(),
                  r->contents()->size(),
-                 r->appid());
+                 r->groupid());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
@@ -79,8 +79,8 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
 
-    // Lock the application
-    sync.localLock(r->appid());
+    // Lock the function group
+    sync.localLock(r->groupid());
 
     // TODO - avoid this copy by changing server superclass to allow subclasses
     // to provide a buffer to receive data.
@@ -93,7 +93,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     reg.takeSnapshot(r->key()->str(), data, true);
 
     // Unlock the application
-    sync.localUnlock(r->appid());
+    sync.localUnlock(r->groupid());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -126,8 +126,8 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
-    // Lock the application
-    sync.localLock(r->appid());
+    // Lock the function group
+    sync.localLock(r->groupid());
 
     // Copy diffs to snapshot
     for (const auto* r : *r->chunks()) {
@@ -135,7 +135,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     }
 
     // Unlock
-    sync.localUnlock(r->appid());
+    sync.localUnlock(r->groupid());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();

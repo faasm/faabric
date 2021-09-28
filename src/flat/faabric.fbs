@@ -1,6 +1,6 @@
 table SnapshotPushRequest {
   key:string;
-  appid:int;
+  groupid:int;
   contents:[ubyte];
 }
 
@@ -15,7 +15,7 @@ table SnapshotDiffChunk {
 
 table SnapshotDiffPushRequest {
   key:string;
-  appid:int;
+  groupid:int;
   chunks:[SnapshotDiffChunk];
 }
 

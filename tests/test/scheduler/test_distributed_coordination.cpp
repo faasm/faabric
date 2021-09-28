@@ -3,7 +3,7 @@
 #include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordination.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
@@ -16,18 +16,18 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-class DistributedCoordinationTestFixture : public ConfTestFixture
+class DistributedCoordinatorTestFixture : public ConfTestFixture
 {
   public:
-    DistributedCoordinationTestFixture()
-      : sync(getDistributedCoordination())
+    DistributedCoordinatorTestFixture()
+      : sync(getDistributedCoordinator())
     {
         faabric::util::setMockMode(true);
 
         msg = faabric::util::messageFactory("foo", "bar");
     }
 
-    ~DistributedCoordinationTestFixture()
+    ~DistributedCoordinatorTestFixture()
     {
         faabric::scheduler::clearMockRequests();
         faabric::util::setMockMode(false);
@@ -35,11 +35,11 @@ class DistributedCoordinationTestFixture : public ConfTestFixture
     }
 
   protected:
-    DistributedCoordination& sync;
+    DistributedCoordinator& sync;
     faabric::Message msg;
 };
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test remote requests sent on non-master",
                  "[sync]")
 {
@@ -84,7 +84,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     REQUIRE(req.operation() == op);
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test can't set group size on non-master",
                  "[sync]")
 {
@@ -94,7 +94,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     std::string actualMsg;
 
     try {
-        sync.setAppSize(msg, 123);
+        sync.setGroupSize(msg, 123);
     } catch (std::runtime_error& ex) {
         failed = true;
         actualMsg = ex.what();
@@ -104,7 +104,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     REQUIRE(actualMsg == "Setting sync group size on non-master");
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test operations fail when group size not set",
                  "[sync]")
 {
@@ -135,7 +135,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     REQUIRE(errMsg == "Group size not set");
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test local locking and unlocking",
                  "[sync]")
 {
@@ -144,12 +144,12 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     sync.localLock(msg.appid());
 
     std::thread tA([this, &sharedInt] {
-        getDistributedCoordination().localLock(msg.appid());
+        getDistributedCoordinator().localLock(msg.appid());
 
         assert(sharedInt == 99);
         sharedInt = 88;
 
-        getDistributedCoordination().localUnlock(msg.appid());
+        getDistributedCoordinator().localUnlock(msg.appid());
     });
 
     // Main thread sleep for a while, make sure the other can't run and update
@@ -168,13 +168,13 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     REQUIRE(sharedInt == 88);
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test sync barrier locally",
                  "[sync]")
 {
     int nThreads = 5;
 
-    sync.setAppSize(msg, nThreads);
+    sync.setGroupSize(msg, nThreads);
 
     // Spawn n-1 child threads to add to shared sums over several barriers so
     // that the main thread can check all threads have completed after each.
@@ -188,7 +188,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
         threads.emplace_back([this, nSums, &sharedSums] {
             for (int s = 0; s < nSums; s++) {
                 sharedSums.at(s).fetch_add(s + 1);
-                getDistributedCoordination().localBarrier(msg.appid());
+                getDistributedCoordinator().localBarrier(msg.appid());
             }
         });
     }
@@ -206,7 +206,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     }
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test local try lock",
                  "[sync]")
 {
@@ -238,7 +238,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     sync.localUnlock(otherId);
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test local recursive lock",
                  "[sync]")
 {
@@ -283,7 +283,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     REQUIRE(sharedInt == 4);
 }
 
-TEST_CASE_METHOD(DistributedCoordinationTestFixture,
+TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test notify and await",
                  "[sync]")
 {
@@ -291,7 +291,7 @@ TEST_CASE_METHOD(DistributedCoordinationTestFixture,
     int actual[3] = { 0, 0, 0 };
 
     // Initialise the group size (including master thread)
-    sync.setAppSize(msg, nThreads + 1);
+    sync.setGroupSize(msg, nThreads + 1);
 
     std::vector<std::thread> threads;
     for (int i = 0; i < nThreads; i++) {

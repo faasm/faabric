@@ -30,12 +30,12 @@ class ClientServerFixture
     FunctionCallServer server;
     FunctionCallClient cli;
     std::shared_ptr<DummyExecutorFactory> executorFactory;
-    DistributedCoordination& sync;
+    DistributedCoordinator& sync;
 
   public:
     ClientServerFixture()
       : cli(LOCALHOST)
-      , sync(getDistributedCoordination())
+      , sync(getDistributedCoordinator())
     {
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
@@ -246,17 +246,17 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "Test distributed lock/ unlock",
                  "[scheduler][sync]")
 {
-    int appId = 123;
+    int groupId = 123;
 
-    REQUIRE(!sync.isLocalLocked(appId));
+    REQUIRE(!sync.isLocalLocked(groupId));
 
-    cli.coordinationLock(appId);
+    cli.coordinationLock(groupId);
 
-    REQUIRE(sync.isLocalLocked(appId));
+    REQUIRE(sync.isLocalLocked(groupId));
 
-    cli.coordinationUnlock(appId);
+    cli.coordinationUnlock(groupId);
 
-    REQUIRE(!sync.isLocalLocked(appId));
+    REQUIRE(!sync.isLocalLocked(groupId));
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
@@ -264,7 +264,7 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    sync.setAppSize(msg, 10);
+    sync.setGroupSize(msg, 10);
 
     REQUIRE(sync.getNotifyCount(msg.appid()) == 0);
 
@@ -283,15 +283,15 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    sync.setAppSize(msg, 2);
+    sync.setGroupSize(msg, 2);
 
-    int appId = msg.appid();
+    int groupId = msg.appid();
 
-    REQUIRE(sync.getNotifyCount(appId) == 0);
+    REQUIRE(sync.getNotifyCount(groupId) == 0);
 
-    std::thread t([appId] {
+    std::thread t([groupId] {
         FunctionCallClient cli(LOCALHOST);
-        cli.coordinationBarrier(appId);
+        cli.coordinationBarrier(groupId);
     });
 
     // Wait on the barrier in this thread

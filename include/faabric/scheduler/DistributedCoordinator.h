@@ -1,0 +1,105 @@
+#pragma once
+
+#include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/barrier.h>
+#include <faabric/util/locks.h>
+
+namespace faabric::scheduler {
+
+class DistributedCoordinationGroup
+{
+  public:
+      DistributedCoordinationGroup(int32_t groupSizeIn);
+
+    int32_t groupSize;
+
+    std::shared_ptr<faabric::util::Barrier> barrier;
+    std::recursive_mutex recursiveMutex;
+    std::mutex mutex;
+    std::atomic<int> count;
+    std::condition_variable cv;
+};
+
+class DistributedCoordinator
+{
+  public:
+    DistributedCoordinator();
+
+    void setGroupSize(const faabric::Message& msg, int appSize);
+
+    void clear();
+
+    // --- Lock ---
+    void lock(const faabric::Message& msg);
+
+    void localLock(const faabric::Message& msg);
+
+    void localLock(int32_t groupId, int32_t groupSize);
+
+    // --- Unlock ---
+    void unlock(const faabric::Message& msg);
+
+    void localUnlock(const faabric::Message& msg);
+
+    void localUnlock(int32_t groupId, int32_t groupSize);
+
+    // --- Try lock ---
+    void localTryLock(const faabric::Message& msg);
+
+    bool localTryLock(int32_t groupId, int32_t groupSize);
+
+    // --- Lock recursive ---
+    void localLockRecursive(const faabric::Message& msg);
+
+    void localLockRecursive(int32_t groupId, int32_t groupSize);
+
+    // --- Unlock recursive
+    void localUnlockRecursive(const faabric::Message& msg);
+
+    void localUnlockRecursive(int32_t groupId, int32_t groupSize);
+
+    // --- Notify ---
+    void notify(const faabric::Message& msg);
+
+    void localNotify(const faabric::Message& msg);
+
+    void localNotify(int32_t groupId, int32_t groupSize);
+
+    void awaitNotify(const faabric::Message& msg);
+
+    void awaitNotify(int32_t groupId, int32_t groupSize);
+
+    // --- Barrier ---
+    void localBarrier(const faabric::Message& msg);
+
+    void localBarrier(int32_t groupId, int32_t groupSize);
+
+    void barrier(const faabric::Message& msg);
+
+    // --- Querying state ---
+    void isLocalLocked(const faabric::Message& msg);
+
+    void getNotifyCount(const faabric::Message& msg);
+
+    void getGroupSize(const faabric::Message& msg);
+
+  private:
+    faabric::scheduler::Scheduler& sch;
+
+    std::shared_mutex sharedMutex;
+
+    std::unordered_map<int32_t, DistributedCoordinationGroup>
+      groups;
+
+    DistributedCoordinationGroup& getCoordinationGroup(
+      int32_t groupId, int32_t groupSize);
+
+    void doLocalNotify(int32_t groupId, bool master);
+
+    void checkGroupSizeSet(int32_t groupId);
+};
+
+DistributedCoordinator& getDistributedCoordinator();
+
+}
