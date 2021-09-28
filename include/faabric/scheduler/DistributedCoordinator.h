@@ -10,7 +10,7 @@ namespace faabric::scheduler {
 class DistributedCoordinationGroup
 {
   public:
-      DistributedCoordinationGroup(int32_t groupSizeIn);
+    DistributedCoordinationGroup(int32_t groupSizeIn);
 
     int32_t groupSize;
 
@@ -26,14 +26,14 @@ class DistributedCoordinator
   public:
     DistributedCoordinator();
 
-    void setGroupSize(const faabric::Message& msg, int appSize);
-
     void clear();
 
     // --- Lock ---
     void lock(const faabric::Message& msg);
 
     void localLock(const faabric::Message& msg);
+
+    void localLock(int32_t groupId);
 
     void localLock(int32_t groupId, int32_t groupSize);
 
@@ -42,10 +42,12 @@ class DistributedCoordinator
 
     void localUnlock(const faabric::Message& msg);
 
+    void localUnlock(int32_t groupId);
+
     void localUnlock(int32_t groupId, int32_t groupSize);
 
     // --- Try lock ---
-    void localTryLock(const faabric::Message& msg);
+    bool localTryLock(const faabric::Message& msg);
 
     bool localTryLock(int32_t groupId, int32_t groupSize);
 
@@ -71,33 +73,32 @@ class DistributedCoordinator
     void awaitNotify(int32_t groupId, int32_t groupSize);
 
     // --- Barrier ---
+    void barrier(const faabric::Message& msg);
+
     void localBarrier(const faabric::Message& msg);
 
     void localBarrier(int32_t groupId, int32_t groupSize);
 
-    void barrier(const faabric::Message& msg);
-
     // --- Querying state ---
-    void isLocalLocked(const faabric::Message& msg);
+    bool isLocalLocked(const faabric::Message& msg);
 
-    void getNotifyCount(const faabric::Message& msg);
-
-    void getGroupSize(const faabric::Message& msg);
+    int getNotifyCount(const faabric::Message& msg);
 
   private:
     faabric::scheduler::Scheduler& sch;
 
     std::shared_mutex sharedMutex;
 
-    std::unordered_map<int32_t, DistributedCoordinationGroup>
-      groups;
+    std::unordered_map<int32_t, DistributedCoordinationGroup> groups;
 
-    DistributedCoordinationGroup& getCoordinationGroup(
-      int32_t groupId, int32_t groupSize);
+    DistributedCoordinationGroup& getCoordinationGroup(int32_t groupId);
 
-    void doLocalNotify(int32_t groupId, bool master);
+    DistributedCoordinationGroup& getCoordinationGroup(int32_t groupId,
+                                                       int32_t groupSize);
 
-    void checkGroupSizeSet(int32_t groupId);
+    void doLocalNotify(int32_t groupId, int32_t groupSize, bool master);
+
+    void checkGroupSizeSet(int32_t groupSize);
 };
 
 DistributedCoordinator& getDistributedCoordinator();

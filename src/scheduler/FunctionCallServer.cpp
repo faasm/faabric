@@ -118,8 +118,7 @@ FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
                                          size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localLock(groupId);
+    sync.localLock(msg.groupid(), msg.groupsize());
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -128,8 +127,7 @@ FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
                                            size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localUnlock(groupId);
+    sync.localUnlock(msg.groupid(), msg.groupsize());
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -138,8 +136,7 @@ FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
                                            size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localNotify(groupId);
+    sync.localNotify(msg.groupid(), msg.groupsize());
     return std::make_unique<faabric::EmptyResponse>();
 }
 
@@ -148,8 +145,7 @@ FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
                                             size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    int32_t groupId = msg.groupid();
-    sync.localBarrier(groupId);
+    sync.localBarrier(msg.groupid(), msg.groupsize());
     return std::make_unique<faabric::EmptyResponse>();
 }
 }

@@ -79,8 +79,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
 
-    // Lock the function group
-    sync.localLock(r->groupid());
+    // Lock the function group if necessary
+    if (r->groupid() > 0) {
+        sync.localLock(r->groupid());
+    }
 
     // TODO - avoid this copy by changing server superclass to allow subclasses
     // to provide a buffer to receive data.
@@ -93,7 +95,9 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     reg.takeSnapshot(r->key()->str(), data, true);
 
     // Unlock the application
-    sync.localUnlock(r->groupid());
+    if (r->groupid() > 0) {
+        sync.localUnlock(r->groupid());
+    }
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -127,7 +131,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
     // Lock the function group
-    sync.localLock(r->groupid());
+    if (r->groupid() > 0) {
+        sync.localLock(r->groupid());
+    }
 
     // Copy diffs to snapshot
     for (const auto* r : *r->chunks()) {
@@ -135,7 +141,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     }
 
     // Unlock
-    sync.localUnlock(r->groupid());
+    if (r->groupid() > 0) {
+        sync.localUnlock(r->groupid());
+    }
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();

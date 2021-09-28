@@ -246,17 +246,17 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "Test distributed lock/ unlock",
                  "[scheduler][sync]")
 {
-    int groupId = 123;
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
 
-    REQUIRE(!sync.isLocalLocked(groupId));
+    REQUIRE(!sync.isLocalLocked(msg));
 
-    cli.coordinationLock(groupId);
+    cli.coordinationLock(msg);
 
-    REQUIRE(sync.isLocalLocked(groupId));
+    REQUIRE(sync.isLocalLocked(msg));
 
-    cli.coordinationUnlock(groupId);
+    cli.coordinationUnlock(msg);
 
-    REQUIRE(!sync.isLocalLocked(groupId));
+    REQUIRE(!sync.isLocalLocked(msg));
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
@@ -264,18 +264,18 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    sync.setGroupSize(msg, 10);
+    msg.set_groupid(123);
 
-    REQUIRE(sync.getNotifyCount(msg.appid()) == 0);
+    REQUIRE(sync.getNotifyCount(msg) == 0);
 
-    cli.coordinationNotify(msg.appid());
+    cli.coordinationNotify(msg);
 
-    REQUIRE(sync.getNotifyCount(msg.appid()) == 1);
+    REQUIRE(sync.getNotifyCount(msg) == 1);
 
-    cli.coordinationNotify(msg.appid());
-    cli.coordinationNotify(msg.appid());
+    cli.coordinationNotify(msg);
+    cli.coordinationNotify(msg);
 
-    REQUIRE(sync.getNotifyCount(msg.appid()) == 3);
+    REQUIRE(sync.getNotifyCount(msg) == 3);
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
@@ -283,15 +283,14 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    sync.setGroupSize(msg, 2);
+    msg.set_groupid(123);
+    msg.set_groupsize(2);
 
-    int groupId = msg.appid();
+    REQUIRE(sync.getNotifyCount(msg) == 0);
 
-    REQUIRE(sync.getNotifyCount(groupId) == 0);
-
-    std::thread t([groupId] {
+    std::thread t([&msg] {
         FunctionCallClient cli(LOCALHOST);
-        cli.coordinationBarrier(groupId);
+        cli.coordinationBarrier(msg);
     });
 
     // Wait on the barrier in this thread

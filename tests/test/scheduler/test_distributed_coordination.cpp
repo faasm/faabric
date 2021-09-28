@@ -1,6 +1,7 @@
+#include <catch.hpp>
+
 #include "faabric_utils.h"
 #include "fixtures.h"
-#include <catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/DistributedCoordinator.h>
@@ -25,6 +26,9 @@ class DistributedCoordinatorTestFixture : public ConfTestFixture
         faabric::util::setMockMode(true);
 
         msg = faabric::util::messageFactory("foo", "bar");
+
+        msg.set_groupid(123);
+        msg.set_groupsize(10);
     }
 
     ~DistributedCoordinatorTestFixture()
@@ -85,36 +89,18 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
-                 "Test can't set group size on non-master",
-                 "[sync]")
-{
-    msg.set_masterhost("blahhost");
-
-    bool failed = false;
-    std::string actualMsg;
-
-    try {
-        sync.setGroupSize(msg, 123);
-    } catch (std::runtime_error& ex) {
-        failed = true;
-        actualMsg = ex.what();
-    }
-
-    REQUIRE(failed);
-    REQUIRE(actualMsg == "Setting sync group size on non-master");
-}
-
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test operations fail when group size not set",
                  "[sync]")
 {
     bool failed = false;
     std::string errMsg;
 
+    msg.set_groupsize(0);
+
     SECTION("Notify")
     {
         try {
-            sync.localNotify(msg.appid());
+            sync.localNotify(msg);
         } catch (std::runtime_error& ex) {
             failed = true;
             errMsg = ex.what();
@@ -124,7 +110,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     SECTION("Barrier")
     {
         try {
-            sync.localBarrier(msg.appid());
+            sync.localBarrier(msg);
         } catch (std::runtime_error& ex) {
             failed = true;
             errMsg = ex.what();
@@ -141,15 +127,15 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 {
     std::atomic<int> sharedInt = 0;
 
-    sync.localLock(msg.appid());
+    sync.localLock(msg);
 
     std::thread tA([this, &sharedInt] {
-        getDistributedCoordinator().localLock(msg.appid());
+        getDistributedCoordinator().localLock(msg);
 
         assert(sharedInt == 99);
         sharedInt = 88;
 
-        getDistributedCoordinator().localUnlock(msg.appid());
+        getDistributedCoordinator().localUnlock(msg);
     });
 
     // Main thread sleep for a while, make sure the other can't run and update
@@ -159,7 +145,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(sharedInt == 0);
     sharedInt.store(99);
 
-    sync.localUnlock(msg.appid());
+    sync.localUnlock(msg);
 
     if (tA.joinable()) {
         tA.join();
@@ -173,8 +159,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "[sync]")
 {
     int nThreads = 5;
-
-    sync.setGroupSize(msg, nThreads);
+    msg.set_groupsize(nThreads);
 
     // Spawn n-1 child threads to add to shared sums over several barriers so
     // that the main thread can check all threads have completed after each.
@@ -188,13 +173,13 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
         threads.emplace_back([this, nSums, &sharedSums] {
             for (int s = 0; s < nSums; s++) {
                 sharedSums.at(s).fetch_add(s + 1);
-                getDistributedCoordinator().localBarrier(msg.appid());
+                getDistributedCoordinator().localBarrier(msg);
             }
         });
     }
 
     for (int i = 0; i < nSums; i++) {
-        sync.localBarrier(msg.appid());
+        sync.localBarrier(msg);
         REQUIRE(sharedSums.at(i).load() == (i + 1) * (nThreads - 1));
     }
 
@@ -210,32 +195,32 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test local try lock",
                  "[sync]")
 {
-    int otherId = 345;
+    faabric::Message otherMsg = faabric::util::messageFactory("foo", "other");
 
     // Should work for un-acquired lock
-    REQUIRE(sync.localTryLock(msg.appid()));
+    REQUIRE(sync.localTryLock(msg));
 
     // Should also work for another lock
-    REQUIRE(sync.localTryLock(otherId));
+    REQUIRE(sync.localTryLock(otherMsg));
 
     // Should not work for already-acquired locks
-    REQUIRE(!sync.localTryLock(msg.appid()));
-    REQUIRE(!sync.localTryLock(otherId));
+    REQUIRE(!sync.localTryLock(msg));
+    REQUIRE(!sync.localTryLock(otherMsg));
 
     // Should work again after unlock
-    sync.localUnlock(msg.appid());
+    sync.localUnlock(msg);
 
-    REQUIRE(sync.localTryLock(msg.appid()));
-    REQUIRE(!sync.localTryLock(otherId));
+    REQUIRE(sync.localTryLock(msg));
+    REQUIRE(!sync.localTryLock(otherMsg));
 
-    sync.localUnlock(msg.appid());
-    sync.localUnlock(otherId);
+    sync.localUnlock(msg);
+    sync.localUnlock(otherMsg);
 
-    REQUIRE(sync.localTryLock(msg.appid()));
-    REQUIRE(sync.localTryLock(otherId));
+    REQUIRE(sync.localTryLock(msg));
+    REQUIRE(sync.localTryLock(otherMsg));
 
-    sync.localUnlock(msg.appid());
-    sync.localUnlock(otherId);
+    sync.localUnlock(msg);
+    sync.localUnlock(otherMsg);
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
@@ -245,12 +230,12 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     std::atomic<int> sharedInt = 3;
 
     // Lock several times
-    sync.localLockRecursive(msg.appid());
-    sync.localLockRecursive(msg.appid());
-    sync.localLockRecursive(msg.appid());
+    sync.localLockRecursive(msg);
+    sync.localLockRecursive(msg);
+    sync.localLockRecursive(msg);
 
     // Unlock once
-    sync.localUnlockRecursive(msg.appid());
+    sync.localUnlockRecursive(msg);
 
     // Check background thread can't lock
     std::thread t([this, &sharedInt] {
@@ -259,12 +244,12 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
         assert(sharedInt.load() == 3);
 
         // Won't be able to lock until main thread has unlocked
-        sync.localLockRecursive(msg.appid());
+        sync.localLockRecursive(msg);
 
         // Set to some other value
         sharedInt.store(4);
 
-        sync.localUnlockRecursive(msg.appid());
+        sync.localUnlockRecursive(msg);
     });
 
     // Allow other thread to start and block on locking
@@ -272,8 +257,8 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(sharedInt == 3);
 
     // Unlock
-    sync.localUnlockRecursive(msg.appid());
-    sync.localUnlockRecursive(msg.appid());
+    sync.localUnlockRecursive(msg);
+    sync.localUnlockRecursive(msg);
 
     // Wait for other thread to finish
     if (t.joinable()) {
@@ -291,7 +276,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     int actual[3] = { 0, 0, 0 };
 
     // Initialise the group size (including master thread)
-    sync.setGroupSize(msg, nThreads + 1);
+    msg.set_groupsize(nThreads + 1);
 
     std::vector<std::thread> threads;
     for (int i = 0; i < nThreads; i++) {
@@ -300,13 +285,13 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
             SLEEP_MS(1000);
             actual[i] = i;
 
-            sync.localNotify(msg.appid());
+            sync.localNotify(msg);
         });
     }
 
     // Master thread to await, should only go through once all threads have
     // finished
-    sync.awaitNotify(msg.appid());
+    sync.awaitNotify(msg);
 
     for (int i = 0; i < nThreads; i++) {
         REQUIRE(actual[i] == i);
