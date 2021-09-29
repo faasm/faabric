@@ -110,10 +110,9 @@ void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)
     std::pair<int, int> sendRecvPorts = getPortForRanks(localRank, remoteRank);
 
     // Create MPI message endpoint
-    mpiMessageEndpoints.emplace(
-      mpiMessageEndpoints.begin() + index,
+    mpiMessageEndpoints.at(index) =
       std::make_unique<faabric::transport::MpiMessageEndpoint>(
-        otherHost, sendRecvPorts.first, sendRecvPorts.second));
+        otherHost, sendRecvPorts.first, sendRecvPorts.second);
 }
 
 void MpiWorld::sendRemoteMpiMessage(
@@ -164,9 +163,8 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     assert(index >= 0 && index < size * size);
 
     if (unackedMessageBuffers[index] == nullptr) {
-        unackedMessageBuffers.emplace(
-          unackedMessageBuffers.begin() + index,
-          std::make_shared<faabric::scheduler::MpiMessageBuffer>());
+        unackedMessageBuffers.at(index) =
+          std::make_shared<faabric::scheduler::MpiMessageBuffer>();
     }
 
     return unackedMessageBuffers[index];
@@ -1377,6 +1375,26 @@ double MpiWorld::getWTime()
 {
     double t = faabric::util::getTimeDiffMillis(creationTime);
     return t / 1000.0;
+}
+
+std::vector<bool> MpiWorld::getInitedRemoteMpiEndpoints()
+{
+    std::vector<bool> retVec(mpiMessageEndpoints.size());
+    for (int i = 0; i < mpiMessageEndpoints.size(); i++) {
+        retVec.at(i) = mpiMessageEndpoints.at(i) != nullptr;
+    }
+
+    return retVec;
+}
+
+std::vector<bool> MpiWorld::getInitedUMB()
+{
+    std::vector<bool> retVec(unackedMessageBuffers.size());
+    for (int i = 0; i < unackedMessageBuffers.size(); i++) {
+        retVec.at(i) = unackedMessageBuffers.at(i) != nullptr;
+    }
+
+    return retVec;
 }
 
 std::string MpiWorld::getUser()

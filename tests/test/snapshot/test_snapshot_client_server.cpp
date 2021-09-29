@@ -8,11 +8,13 @@
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 
 namespace tests {
@@ -131,6 +133,169 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Check changes have been applied
     checkDiffsApplied(snap.data, diffsA);
     checkDiffsApplied(snap.data, diffsB);
+
+    deallocatePages(snap.data, 5);
+}
+
+TEST_CASE_METHOD(SnapshotClientServerFixture,
+                 "Test detailed snapshot diffs with merge ops",
+                 "[snapshot]")
+{
+    // Set up a snapshot
+    std::string snapKey = std::to_string(faabric::util::generateGid());
+    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, false);
+
+    // Set up a couple of ints in the snapshot
+    int offsetA1 = 5;
+    int offsetA2 = 2 * faabric::util::HOST_PAGE_SIZE;
+    int baseA1 = 25;
+    int baseA2 = 60;
+
+    int* basePtrA1 = (int*)(snap.data + offsetA1);
+    int* basePtrA2 = (int*)(snap.data + offsetA2);
+    *basePtrA1 = baseA1;
+    *basePtrA2 = baseA2;
+
+    // Set up some diffs with different merge operations
+    int diffIntA1 = 123;
+    int diffIntA2 = 345;
+
+    std::vector<uint8_t> intDataA1 =
+      faabric::util::valueToBytes<int>(diffIntA1);
+    std::vector<uint8_t> intDataA2 =
+      faabric::util::valueToBytes<int>(diffIntA2);
+
+    std::vector<faabric::util::SnapshotDiff> diffs;
+
+    faabric::util::SnapshotDiff diffA1(
+      offsetA1, intDataA1.data(), intDataA1.size());
+    diffA1.operation = faabric::util::SnapshotMergeOperation::Sum;
+    diffA1.dataType = faabric::util::SnapshotDataType::Int;
+
+    faabric::util::SnapshotDiff diffA2(
+      offsetA2, intDataA2.data(), intDataA2.size());
+    diffA2.operation = faabric::util::SnapshotMergeOperation::Sum;
+    diffA2.dataType = faabric::util::SnapshotDataType::Int;
+
+    diffs = { diffA1, diffA2 };
+    cli.pushSnapshotDiffs(snapKey, diffs);
+
+    // Check diffs have been applied according to the merge operations
+    REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
+    REQUIRE(*basePtrA2 == baseA2 + diffIntA2);
+
+    deallocatePages(snap.data, 5);
+}
+
+TEST_CASE_METHOD(SnapshotClientServerFixture,
+                 "Test snapshot diffs with merge ops",
+                 "[snapshot]")
+{
+    // Set up a snapshot
+    std::string snapKey = std::to_string(faabric::util::generateGid());
+    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, false);
+
+    int offset = 5;
+    std::vector<uint8_t> originalData;
+    std::vector<uint8_t> diffData;
+    std::vector<uint8_t> expectedData;
+
+    faabric::util::SnapshotMergeOperation operation =
+      faabric::util::SnapshotMergeOperation::Overwrite;
+    faabric::util::SnapshotDataType dataType =
+      faabric::util::SnapshotDataType::Raw;
+
+    SECTION("Integer")
+    {
+        dataType = faabric::util::SnapshotDataType::Int;
+        int original = 0;
+        int diff = 0;
+        int expected = 0;
+
+        SECTION("Sum")
+        {
+            original = 100;
+            diff = 10;
+            expected = 110;
+
+            operation = faabric::util::SnapshotMergeOperation::Sum;
+        }
+
+        SECTION("Subtract")
+        {
+            original = 100;
+            diff = 10;
+            expected = 90;
+
+            operation = faabric::util::SnapshotMergeOperation::Subtract;
+        }
+
+        SECTION("Product")
+        {
+            original = 10;
+            diff = 20;
+            expected = 200;
+
+            operation = faabric::util::SnapshotMergeOperation::Product;
+        }
+
+        SECTION("Min")
+        {
+            SECTION("With change")
+            {
+                original = 1000;
+                diff = 100;
+                expected = 100;
+            }
+
+            SECTION("No change")
+            {
+                original = 10;
+                diff = 20;
+                expected = 10;
+            }
+
+            operation = faabric::util::SnapshotMergeOperation::Min;
+        }
+
+        SECTION("Max")
+        {
+            SECTION("With change")
+            {
+                original = 100;
+                diff = 1000;
+                expected = 1000;
+            }
+
+            SECTION("No change")
+            {
+                original = 20;
+                diff = 10;
+                expected = 20;
+            }
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        originalData = faabric::util::valueToBytes<int>(original);
+        diffData = faabric::util::valueToBytes<int>(diff);
+        expectedData = faabric::util::valueToBytes<int>(expected);
+    }
+
+    // Put original data in place
+    std::memcpy(snap.data + offset, originalData.data(), originalData.size());
+
+    faabric::util::SnapshotDiff diff(offset, diffData.data(), diffData.size());
+    diff.operation = operation;
+    diff.dataType = dataType;
+
+    std::vector<faabric::util::SnapshotDiff> diffs = { diff };
+    cli.pushSnapshotDiffs(snapKey, diffs);
+
+    // Check data is as expected
+    std::vector<uint8_t> actualData(snap.data + offset,
+                                    snap.data + offset + expectedData.size());
+    REQUIRE(actualData == expectedData);
 
     deallocatePages(snap.data, 5);
 }
