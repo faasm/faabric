@@ -37,6 +37,8 @@ class ClientServerFixture
       : cli(LOCALHOST)
       , sync(getDistributedCoordinator())
     {
+        sync.clear();
+
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
@@ -46,6 +48,8 @@ class ClientServerFixture
 
     ~ClientServerFixture()
     {
+        sync.clear();
+
         server.stop();
         executorFactory->reset();
     }
@@ -264,6 +268,7 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    msg.set_groupsize(5);
     msg.set_groupid(123);
 
     REQUIRE(sync.getNotifyCount(msg) == 0);

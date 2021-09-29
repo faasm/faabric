@@ -28,6 +28,9 @@ DistributedCoordinationGroup::DistributedCoordinationGroup(int32_t groupSizeIn)
 DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
   int32_t groupId)
 {
+    // Should not be calling this with a zero group ID
+    assert(groupId > 0);
+
     if (groups.find(groupId) == groups.end()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
         throw std::runtime_error("Group ID not found on host");
@@ -66,6 +69,12 @@ DistributedCoordinator::DistributedCoordinator()
 void DistributedCoordinator::clear()
 {
     groups.clear();
+}
+
+void DistributedCoordinator::initGroup(int32_t groupId, int32_t groupSize)
+{
+    // This will implicitly initialise the group
+    getCoordinationGroup(groupId, groupSize);
 }
 
 // -----------------------------

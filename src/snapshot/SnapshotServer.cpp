@@ -67,7 +67,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
         throw std::runtime_error("Received snapshot with zero size");
     }
 
-    SPDLOG_DEBUG("Receiving shapshot {} (size {}, lock {})",
+    SPDLOG_DEBUG("Receiving snapshot {} (size {}, lock {})",
                  r->key()->c_str(),
                  r->contents()->size(),
                  r->groupid());

@@ -94,11 +94,13 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 {
     bool failed = false;
     std::string errMsg;
+    std::string expectedErrMsg;
 
     msg.set_groupsize(0);
 
     SECTION("Notify")
     {
+        expectedErrMsg = "Group notify exceeded size";
         try {
             sync.localNotify(msg);
         } catch (std::runtime_error& ex) {
@@ -109,6 +111,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 
     SECTION("Barrier")
     {
+        expectedErrMsg = "Message does not have group size set";
         try {
             sync.localBarrier(msg);
         } catch (std::runtime_error& ex) {
@@ -118,7 +121,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     }
 
     REQUIRE(failed);
-    REQUIRE(errMsg == "Group size not set");
+    REQUIRE(errMsg == expectedErrMsg);
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,

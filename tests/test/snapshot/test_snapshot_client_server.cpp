@@ -1,3 +1,4 @@
+#include "faabric/scheduler/DistributedCoordinator.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 #include <catch.hpp>
@@ -58,8 +59,10 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     snapA.data = dataA.data();
     snapB.data = dataB.data();
 
-    int groupIdA = 123;
-    int groupIdB = 456;
+    // One request with no group, another with a group we must initialise
+    int groupIdA = 0;
+    int groupIdB = 123;
+    faabric::scheduler::getDistributedCoordinator().initGroup(groupIdB, 10);
 
     // Send the message
     cli.pushSnapshot(snapKeyA, groupIdA, snapA);
@@ -97,8 +100,10 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "Test push snapshot diffs",
                  "[snapshot]")
 {
-    int groupIdA = 123;
+    // One request with no group, another with a group we must initialise
+    int groupIdA = 0;
     int groupIdB = 234;
+    faabric::scheduler::getDistributedCoordinator().initGroup(groupIdB, 5);
 
     // Set up a snapshot
     std::string snapKey = std::to_string(faabric::util::generateGid());

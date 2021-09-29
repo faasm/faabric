@@ -17,7 +17,7 @@ class DistributedCoordinationGroup
     std::shared_ptr<faabric::util::Barrier> barrier;
     std::recursive_mutex recursiveMutex;
     std::mutex mutex;
-    std::atomic<int> count;
+    std::atomic<int> count = 0;
     std::condition_variable cv;
 };
 
@@ -27,6 +27,8 @@ class DistributedCoordinator
     DistributedCoordinator();
 
     void clear();
+
+    void initGroup(int32_t groupId, int32_t groupSize);
 
     // --- Lock ---
     void lock(const faabric::Message& msg);
