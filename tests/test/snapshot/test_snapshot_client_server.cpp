@@ -178,7 +178,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     diffA2.dataType = faabric::util::SnapshotDataType::Int;
 
     diffs = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, diffs);
+    cli.pushSnapshotDiffs(snapKey, 0, diffs);
 
     // Check diffs have been applied according to the merge operations
     REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
@@ -290,7 +290,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     diff.dataType = dataType;
 
     std::vector<faabric::util::SnapshotDiff> diffs = { diff };
-    cli.pushSnapshotDiffs(snapKey, diffs);
+    cli.pushSnapshotDiffs(snapKey, 0, diffs);
 
     // Check data is as expected
     std::vector<uint8_t> actualData(snap.data + offset,
