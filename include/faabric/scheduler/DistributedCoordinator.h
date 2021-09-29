@@ -95,8 +95,9 @@ class DistributedCoordinator
 
     DistributedCoordinationGroup& getCoordinationGroup(int32_t groupId);
 
-    DistributedCoordinationGroup& getCoordinationGroup(int32_t groupId,
-                                                       int32_t groupSize);
+    DistributedCoordinationGroup& getOrCreateCoordinationGroup(
+      int32_t groupId,
+      int32_t groupSize);
 
     void doLocalNotify(int32_t groupId, int32_t groupSize, bool master);
 

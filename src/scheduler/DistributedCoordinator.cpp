@@ -39,9 +39,9 @@ DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
     return groups.at(groupId);
 }
 
-DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
-  int32_t groupId,
-  int32_t groupSize)
+DistributedCoordinationGroup&
+DistributedCoordinator::getOrCreateCoordinationGroup(int32_t groupId,
+                                                     int32_t groupSize)
 {
     if (groups.find(groupId) == groups.end()) {
         faabric::util::FullLock lock(sharedMutex);
@@ -74,7 +74,7 @@ void DistributedCoordinator::clear()
 void DistributedCoordinator::initGroup(int32_t groupId, int32_t groupSize)
 {
     // This will implicitly initialise the group
-    getCoordinationGroup(groupId, groupSize);
+    getOrCreateCoordinationGroup(groupId, groupSize);
 }
 
 // -----------------------------
@@ -98,7 +98,7 @@ void DistributedCoordinator::localLock(int32_t groupId)
 
 void DistributedCoordinator::localLock(int32_t groupId, int32_t groupSize)
 {
-    getCoordinationGroup(groupId, groupSize).mutex.lock();
+    getOrCreateCoordinationGroup(groupId, groupSize).mutex.lock();
 }
 
 // -----------------------------
@@ -122,7 +122,7 @@ void DistributedCoordinator::localUnlock(int32_t groupId)
 
 void DistributedCoordinator::localUnlock(int32_t groupId, int32_t groupSize)
 {
-    getCoordinationGroup(groupId, groupSize).mutex.unlock();
+    getOrCreateCoordinationGroup(groupId, groupSize).mutex.unlock();
 }
 
 // -----------------------------
@@ -136,7 +136,7 @@ bool DistributedCoordinator::localTryLock(const faabric::Message& msg)
 
 bool DistributedCoordinator::localTryLock(int32_t groupId, int32_t groupSize)
 {
-    return getCoordinationGroup(groupId, groupSize).mutex.try_lock();
+    return getOrCreateCoordinationGroup(groupId, groupSize).mutex.try_lock();
 }
 
 // -----------------------------
@@ -151,7 +151,7 @@ void DistributedCoordinator::localLockRecursive(const faabric::Message& msg)
 void DistributedCoordinator::localLockRecursive(int32_t groupId,
                                                 int32_t groupSize)
 {
-    getCoordinationGroup(groupId, groupSize).recursiveMutex.lock();
+    getOrCreateCoordinationGroup(groupId, groupSize).recursiveMutex.lock();
 }
 
 void DistributedCoordinator::localUnlockRecursive(const faabric::Message& msg)
@@ -162,7 +162,7 @@ void DistributedCoordinator::localUnlockRecursive(const faabric::Message& msg)
 void DistributedCoordinator::localUnlockRecursive(int32_t groupId,
                                                   int32_t groupSize)
 {
-    getCoordinationGroup(groupId, groupSize).recursiveMutex.unlock();
+    getOrCreateCoordinationGroup(groupId, groupSize).recursiveMutex.unlock();
 }
 
 // -----------------------------
@@ -201,7 +201,7 @@ void DistributedCoordinator::doLocalNotify(int32_t groupId,
     checkGroupSizeSet(groupId);
 
     DistributedCoordinationGroup& group =
-      getCoordinationGroup(groupId, groupSize);
+      getOrCreateCoordinationGroup(groupId, groupSize);
 
     // All members must lock when entering this function
     std::unique_lock<std::mutex> lock(group.mutex);
@@ -254,7 +254,7 @@ void DistributedCoordinator::localBarrier(int32_t groupId, int32_t groupSize)
     checkGroupSizeSet(groupSize);
 
     DistributedCoordinationGroup& group =
-      getCoordinationGroup(groupId, groupSize);
+      getOrCreateCoordinationGroup(groupId, groupSize);
 
     group.barrier->wait();
 }
@@ -266,7 +266,7 @@ void DistributedCoordinator::localBarrier(int32_t groupId, int32_t groupSize)
 bool DistributedCoordinator::isLocalLocked(const faabric::Message& msg)
 {
     DistributedCoordinationGroup& group =
-      getCoordinationGroup(msg.groupid(), msg.groupsize());
+      getOrCreateCoordinationGroup(msg.groupid(), msg.groupsize());
     bool canLock = group.mutex.try_lock();
 
     if (canLock) {
@@ -280,7 +280,7 @@ bool DistributedCoordinator::isLocalLocked(const faabric::Message& msg)
 int32_t DistributedCoordinator::getNotifyCount(const faabric::Message& msg)
 {
     DistributedCoordinationGroup& group =
-      getCoordinationGroup(msg.groupid(), msg.groupsize());
+      getOrCreateCoordinationGroup(msg.groupid(), msg.groupsize());
     std::unique_lock<std::mutex> lock(group.mutex);
 
     return group.count.load();
