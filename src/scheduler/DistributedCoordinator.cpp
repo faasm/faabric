@@ -18,6 +18,14 @@
         }                                                                      \
     }
 
+#define LOCK_TIMEOUT(mx, ms)                                                   \
+    auto timePoint =                                                           \
+      std::chrono::system_clock::now() + std::chrono::milliseconds(ms);        \
+    bool success = mx.try_lock_until(timePoint);                               \
+    if (!success) {                                                            \
+        throw std::runtime_error("Distributed coordination timeout");          \
+    }
+
 namespace faabric::scheduler {
 
 DistributedCoordinationGroup::DistributedCoordinationGroup(int32_t groupSizeIn)
@@ -93,12 +101,13 @@ void DistributedCoordinator::localLock(const faabric::Message& msg)
 
 void DistributedCoordinator::localLock(int32_t groupId)
 {
-    getCoordinationGroup(groupId).mutex.lock();
+    LOCK_TIMEOUT(getCoordinationGroup(groupId).mutex, timeoutMs);
 }
 
 void DistributedCoordinator::localLock(int32_t groupId, int32_t groupSize)
 {
-    getOrCreateCoordinationGroup(groupId, groupSize).mutex.lock();
+    LOCK_TIMEOUT(getOrCreateCoordinationGroup(groupId, groupSize).mutex,
+                 timeoutMs);
 }
 
 // -----------------------------
@@ -151,7 +160,9 @@ void DistributedCoordinator::localLockRecursive(const faabric::Message& msg)
 void DistributedCoordinator::localLockRecursive(int32_t groupId,
                                                 int32_t groupSize)
 {
-    getOrCreateCoordinationGroup(groupId, groupSize).recursiveMutex.lock();
+    LOCK_TIMEOUT(
+      getOrCreateCoordinationGroup(groupId, groupSize).recursiveMutex,
+      timeoutMs);
 }
 
 void DistributedCoordinator::localUnlockRecursive(const faabric::Message& msg)
@@ -204,7 +215,7 @@ void DistributedCoordinator::doLocalNotify(int32_t groupId,
       getOrCreateCoordinationGroup(groupId, groupSize);
 
     // All members must lock when entering this function
-    std::unique_lock<std::mutex> lock(group.mutex);
+    std::unique_lock<std::mutex> lock(group.notifyMutex);
 
     if (master) {
         auto timePoint = std::chrono::system_clock::now() +
@@ -281,7 +292,7 @@ int32_t DistributedCoordinator::getNotifyCount(const faabric::Message& msg)
 {
     DistributedCoordinationGroup& group =
       getOrCreateCoordinationGroup(msg.groupid(), msg.groupsize());
-    std::unique_lock<std::mutex> lock(group.mutex);
+    std::unique_lock<std::mutex> lock(group.notifyMutex);
 
     return group.count.load();
 }

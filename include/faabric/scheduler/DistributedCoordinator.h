@@ -5,6 +5,8 @@
 #include <faabric/util/barrier.h>
 #include <faabric/util/locks.h>
 
+#define DEFAULT_DISTRIBUTED_TIMEOUT_MS 30000
+
 namespace faabric::scheduler {
 
 class DistributedCoordinationGroup
@@ -15,8 +17,10 @@ class DistributedCoordinationGroup
     int32_t groupSize;
 
     std::shared_ptr<faabric::util::Barrier> barrier;
-    std::recursive_mutex recursiveMutex;
-    std::mutex mutex;
+    std::recursive_timed_mutex recursiveMutex;
+    std::timed_mutex mutex;
+
+    std::mutex notifyMutex;
     std::atomic<int> count = 0;
     std::condition_variable cv;
 };
@@ -92,6 +96,8 @@ class DistributedCoordinator
     std::shared_mutex sharedMutex;
 
     std::unordered_map<int32_t, DistributedCoordinationGroup> groups;
+
+    int32_t timeoutMs = DEFAULT_DISTRIBUTED_TIMEOUT_MS;
 
     DistributedCoordinationGroup& getCoordinationGroup(int32_t groupId);
 
