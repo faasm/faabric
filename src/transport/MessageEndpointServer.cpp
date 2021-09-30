@@ -11,17 +11,17 @@ namespace faabric::transport {
 
 static const std::vector<uint8_t> shutdownHeader = { 0, 0, 1, 1 };
 
-MessageEndpointServerThread::MessageEndpointServerThread(
+MessageEndpointServerHandler::MessageEndpointServerHandler(
   MessageEndpointServer* serverIn,
   bool asyncIn)
   : server(serverIn)
   , async(asyncIn)
 {}
 
-void MessageEndpointServerThread::start(
+void MessageEndpointServerHandler::start(
   std::shared_ptr<faabric::util::Latch> latch)
 {
-    backgroundThread = std::thread([this, latch] {
+    receiverThread = std::thread([this, latch] {
         std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
         int port = -1;
 
@@ -100,18 +100,18 @@ void MessageEndpointServerThread::start(
     });
 }
 
-void MessageEndpointServerThread::join()
+void MessageEndpointServerHandler::join()
 {
-    if (backgroundThread.joinable()) {
-        backgroundThread.join();
+    if (receiverThread.joinable()) {
+        receiverThread.join();
     }
 }
 
 MessageEndpointServer::MessageEndpointServer(int asyncPortIn, int syncPortIn)
   : asyncPort(asyncPortIn)
   , syncPort(syncPortIn)
-  , asyncThread(this, true)
-  , syncThread(this, false)
+  , asyncHandler(this, true)
+  , syncHandler(this, false)
   , asyncShutdownSender(LOCALHOST, asyncPort)
   , syncShutdownSender(LOCALHOST, syncPort)
 {}
@@ -123,8 +123,8 @@ void MessageEndpointServer::start()
     // ready to use).
     auto startLatch = faabric::util::Latch::create(3);
 
-    asyncThread.start(startLatch);
-    syncThread.start(startLatch);
+    asyncHandler.start(startLatch);
+    syncHandler.start(startLatch);
 
     startLatch->wait();
 }
@@ -139,9 +139,9 @@ void MessageEndpointServer::stop()
 
     syncShutdownSender.sendRaw(shutdownHeader.data(), shutdownHeader.size());
 
-    // Join the threads
-    asyncThread.join();
-    syncThread.join();
+    // Join the handlers
+    asyncHandler.join();
+    syncHandler.join();
 }
 
 void MessageEndpointServer::setAsyncLatch()

@@ -47,12 +47,8 @@
 
 namespace faabric::transport {
 
-MessageEndpoint::MessageEndpoint(const std::string& hostIn,
-                                 int portIn,
-                                 int timeoutMsIn)
-  : host(hostIn)
-  , port(portIn)
-  , address("tcp://" + host + ":" + std::to_string(port))
+MessageEndpoint::MessageEndpoint(const std::string& addressIn, int timeoutMsIn)
+  : address(addressIn)
   , timeoutMs(timeoutMsIn)
   , tid(std::this_thread::get_id())
   , id(faabric::util::generateGid())
@@ -64,8 +60,15 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn,
     }
 }
 
-zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
-                                           int socketPort)
+// Convenience constructor for standard TCP ports
+MessageEndpoint::MessageEndpoint(const std::string& hostIn,
+                                 int portIn,
+                                 int timeoutMsIn)
+  : MessageEndpoint("tcp://" + hostIn + ":" + std::to_string(portIn),
+                    timeoutMsIn)
+{}
+
+zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType)
 {
     zmq::socket_t socket;
 
@@ -82,25 +85,37 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType,
     switch (socketType) {
         case zmq::socket_type::req: {
             SPDLOG_TRACE(
-              "New socket: req {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: req {} (timeout {}ms)", address, timeoutMs);
             CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::push: {
             SPDLOG_TRACE(
-              "New socket: push {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: push {} (timeout {}ms)", address, timeoutMs);
             CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
             break;
         }
         case zmq::socket_type::pull: {
             SPDLOG_TRACE(
-              "New socket: pull {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: pull {} (timeout {}ms)", address, timeoutMs);
             CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
             break;
         }
         case zmq::socket_type::rep: {
             SPDLOG_TRACE(
-              "New socket: rep {}:{} (timeout {}ms)", host, port, timeoutMs);
+              "New socket: rep {} (timeout {}ms)", address, timeoutMs);
+            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+            break;
+        }
+        case zmq::socket_type::router: {
+            SPDLOG_TRACE(
+              "New socket: router {} (timeout {}ms)", address, timeoutMs);
+            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+            break;
+        }
+        case zmq::socket_type::dealer: {
+            SPDLOG_TRACE(
+              "New socket: dealer {} (timeout {}ms)", address, timeoutMs);
             CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
             break;
         }
@@ -171,7 +186,7 @@ std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
-              SPDLOG_WARN("Endpoint {}:{} received ETERM on recv", host, port);
+              SPDLOG_WARN("Endpoint {} received ETERM on recv", address);
               return Message();
           }
 
@@ -195,7 +210,7 @@ std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
-              SPDLOG_WARN("Endpoint {}:{} received ETERM on recv", host, port);
+              SPDLOG_WARN("Endpoint {} received ETERM on recv", address);
               return Message();
           }
           throw;
@@ -204,16 +219,6 @@ std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
 
     // Copy the received message to a buffer whose scope we control
     return Message(msg);
-}
-
-std::string MessageEndpoint::getHost()
-{
-    return host;
-}
-
-int MessageEndpoint::getPort()
-{
-    return port;
 }
 
 // ----------------------------------------------
@@ -225,7 +230,7 @@ AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
                                                    int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    pushSocket = setUpSocket(zmq::socket_type::push, portIn);
+    pushSocket = setUpSocket(zmq::socket_type::push);
 }
 
 void AsyncSendMessageEndpoint::sendHeader(int header)
@@ -238,7 +243,7 @@ void AsyncSendMessageEndpoint::send(const uint8_t* data,
                                     size_t dataSize,
                                     bool more)
 {
-    SPDLOG_TRACE("PUSH {}:{} ({} bytes, more {})", host, port, dataSize, more);
+    SPDLOG_TRACE("PUSH {} ({} bytes, more {})", address, dataSize, more);
     doSend(pushSocket, data, dataSize, more);
 }
 
@@ -251,7 +256,7 @@ SyncSendMessageEndpoint::SyncSendMessageEndpoint(const std::string& hostIn,
                                                  int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    reqSocket = setUpSocket(zmq::socket_type::req, portIn);
+    reqSocket = setUpSocket(zmq::socket_type::req);
 }
 
 void SyncSendMessageEndpoint::sendHeader(int header)
@@ -262,7 +267,7 @@ void SyncSendMessageEndpoint::sendHeader(int header)
 
 void SyncSendMessageEndpoint::sendRaw(const uint8_t* data, size_t dataSize)
 {
-    SPDLOG_TRACE("REQ {}:{} ({} bytes)", host, port, dataSize);
+    SPDLOG_TRACE("REQ {} ({} bytes)", address, dataSize);
     doSend(reqSocket, data, dataSize, false);
 }
 
@@ -270,11 +275,11 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
                                                    size_t dataSize,
                                                    bool more)
 {
-    SPDLOG_TRACE("REQ {}:{} ({} bytes, more {})", host, port, dataSize, more);
+    SPDLOG_TRACE("REQ {} ({} bytes, more {})", address, dataSize, more);
     doSend(reqSocket, data, dataSize, more);
 
     // Do the receive
-    SPDLOG_TRACE("RECV (REQ) {}", port);
+    SPDLOG_TRACE("RECV (REQ) {}", address);
     auto msgMaybe = recvNoBuffer(reqSocket);
     if (!msgMaybe.has_value()) {
         throw MessageTimeoutException("SendAwaitResponse timeout");
@@ -286,18 +291,39 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
 // RECV ENDPOINT
 // ----------------------------------------------
 
+RecvMessageEndpoint::RecvMessageEndpoint(std::string inProcLabel,
+                                         int timeoutMs,
+                                         zmq::socket_type socketType)
+  : MessageEndpoint("inproc://" + inProcLabel, timeoutMs)
+{
+    socket = setUpSocket(socketType);
+}
+
 RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
                                          int timeoutMs,
                                          zmq::socket_type socketType)
   : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
 {
-    socket = setUpSocket(socketType, portIn);
+    socket = setUpSocket(socketType);
 }
 
 std::optional<Message> RecvMessageEndpoint::recv(int size)
 {
     return doRecv(socket, size);
 }
+
+// ----------------------------------------------
+// ROUTER AND DEALER ENDPOINTS
+// ----------------------------------------------
+
+RouterMessageEndpoint::RouterMessageEndpoint(int portIn, int timeoutMs)
+  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::router)
+{}
+
+DealerMessageEndpoint::DealerMessageEndpoint(const std::string& inProcLabel,
+                                             int timeoutMs)
+  : RecvMessageEndpoint(inProcLabel, timeoutMs, zmq::socket_type::dealer)
+{}
 
 // ----------------------------------------------
 // ASYNC RECV ENDPOINT
@@ -309,7 +335,7 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
 
 std::optional<Message> AsyncRecvMessageEndpoint::recv(int size)
 {
-    SPDLOG_TRACE("PULL {} ({} bytes)", port, size);
+    SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);
 }
 
@@ -323,13 +349,13 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
 
 std::optional<Message> SyncRecvMessageEndpoint::recv(int size)
 {
-    SPDLOG_TRACE("RECV (REP) {} ({} bytes)", port, size);
+    SPDLOG_TRACE("RECV (REP) {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);
 }
 
 void SyncRecvMessageEndpoint::sendResponse(const uint8_t* data, int size)
 {
-    SPDLOG_TRACE("REP {} ({} bytes)", port, size);
+    SPDLOG_TRACE("REP {} ({} bytes)", address, size);
     doSend(socket, data, size, false);
 }
 }

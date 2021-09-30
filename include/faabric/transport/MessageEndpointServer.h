@@ -13,10 +13,10 @@ namespace faabric::transport {
 // one for asynchronous. Each is run inside its own background thread.
 class MessageEndpointServer;
 
-class MessageEndpointServerThread
+class MessageEndpointServerHandler
 {
   public:
-    MessageEndpointServerThread(MessageEndpointServer* serverIn, bool asyncIn);
+    MessageEndpointServerHandler(MessageEndpointServer* serverIn, bool asyncIn);
 
     void start(std::shared_ptr<faabric::util::Latch> latch);
 
@@ -26,7 +26,9 @@ class MessageEndpointServerThread
     MessageEndpointServer* server;
     bool async = false;
 
-    std::thread backgroundThread;
+    std::thread receiverThread;
+
+    std::vector<std::thread> workerThreads;
 };
 
 class MessageEndpointServer
@@ -51,13 +53,13 @@ class MessageEndpointServer
     doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) = 0;
 
   private:
-    friend class MessageEndpointServerThread;
+    friend class MessageEndpointServerHandler;
 
     const int asyncPort;
     const int syncPort;
 
-    MessageEndpointServerThread asyncThread;
-    MessageEndpointServerThread syncThread;
+    MessageEndpointServerHandler asyncHandler;
+    MessageEndpointServerHandler syncHandler;
 
     AsyncSendMessageEndpoint asyncShutdownSender;
     SyncSendMessageEndpoint syncShutdownSender;

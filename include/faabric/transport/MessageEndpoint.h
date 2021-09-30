@@ -32,25 +32,21 @@ class MessageEndpoint
   public:
     MessageEndpoint(const std::string& hostIn, int portIn, int timeoutMsIn);
 
+    MessageEndpoint(const std::string& addressIn, int timeoutMsIn);
+
     // Delete assignment and copy-constructor as we need to be very careful with
     // scoping and same-thread instantiation
     MessageEndpoint& operator=(const MessageEndpoint&) = delete;
 
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
 
-    std::string getHost();
-
-    int getPort();
-
   protected:
-    const std::string host;
-    const int port;
     const std::string address;
     const int timeoutMs;
     const std::thread::id tid;
     const int id;
 
-    zmq::socket_t setUpSocket(zmq::socket_type socketType, int socketPort);
+    zmq::socket_t setUpSocket(zmq::socket_type socketType);
 
     void doSend(zmq::socket_t& socket,
                 const uint8_t* data,
@@ -103,12 +99,29 @@ class RecvMessageEndpoint : public MessageEndpoint
   public:
     RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
 
+    RecvMessageEndpoint(std::string inProcLabel,
+                        int timeoutMs,
+                        zmq::socket_type socketType);
+
     virtual ~RecvMessageEndpoint(){};
 
     virtual std::optional<Message> recv(int size = 0);
 
   protected:
     zmq::socket_t socket;
+};
+
+class RouterMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    RouterMessageEndpoint(int portIn, int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+};
+
+class DealerMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    DealerMessageEndpoint(const std::string& inProcLabel,
+                          int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 };
 
 class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint

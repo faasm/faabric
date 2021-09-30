@@ -42,6 +42,11 @@ class SystemConfig
     int endpointPort;
     int endpointNumThreads;
 
+    // Transport
+    int functionCallServerNumThreads = 4;
+    int stateServerNumThreads = 2;
+    int snapshotServerNumThreads = 2;
+
     SystemConfig();
 
     void print();
