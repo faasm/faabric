@@ -25,5 +25,20 @@ class DistTestsFixture
           std::make_shared<tests::DistTestExecutorFactory>();
         faabric::scheduler::setExecutorFactory(fac);
     }
+
+    std::string getWorkerIP()
+    {
+        if (workerIP.empty()) {
+            workerIP = faabric::util::getIPFromHostname("dist-test-server");
+        }
+
+        return workerIP;
+    }
+
+    std::string getMasterIP() { return conf.endpointHost; }
+
+  private:
+    std::string workerIP;
+    std::string masterIP;
 };
 }

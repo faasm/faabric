@@ -52,7 +52,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     res.set_slots(0);
     sch.setThisHostResources(res);
 
-    std::vector<std::string> expectedHosts = { WORKER_IP };
+    std::vector<std::string> expectedHosts = { getWorkerIP() };
     std::vector<std::string> executedHosts = sch.callFunctions(req);
     REQUIRE(expectedHosts == executedHosts);
 
@@ -93,7 +93,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     res.set_slots(1);
     sch.setThisHostResources(res);
 
-    std::vector<std::string> expectedHosts = { MASTER_IP };
+    std::vector<std::string> expectedHosts = { getMasterIP() };
     std::vector<std::string> executedHosts = sch.callFunctions(req);
     REQUIRE(expectedHosts == executedHosts);
 

@@ -9,7 +9,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /usr/bin/docker:/usr/bin/docker
-      - .:/code/faabric
+      - ./:/code/faabric
       - ./build:/build/faabric
     working_dir: /code/faabric
     stdin_open: true
@@ -19,5 +19,19 @@ services:
       - LOG_LEVEL=debug
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
+    depends_on:
+      - redis
+
+  dist-test-server:
+    image: ${FAABRIC_CLI_IMAGE}
+    volumes:
+      - ./:/code/faabric
+      - ./build:/build/faabric
+    working_dir: /build/faabric/static
+    environment:
+      - LOG_LEVEL=debug
+      - REDIS_STATE_HOST=redis
+      - REDIS_QUEUE_HOST=redis
+    command: ./bin/faabric_dist_test_server
     depends_on:
       - redis

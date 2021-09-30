@@ -36,7 +36,7 @@ TEST_CASE_METHOD(DistTestsFixture,
 
         sch.getFunctionResult(m.id(), 1000);
         std::string expected =
-          fmt::format("Function {} executed on host {}", m.id(), MASTER_IP);
+          fmt::format("Function {} executed on host {}", m.id(), getMasterIP());
 
         REQUIRE(m.outputdata() == expected);
     }
@@ -47,7 +47,7 @@ TEST_CASE_METHOD(DistTestsFixture,
         faabric::Message result = sch.getFunctionResult(m.id(), 1000);
 
         std::string expected =
-          fmt::format("Function {} executed on host {}", m.id(), WORKER_IP);
+          fmt::format("Function {} executed on host {}", m.id(), getWorkerIP());
 
         REQUIRE(result.outputdata() == expected);
     }
