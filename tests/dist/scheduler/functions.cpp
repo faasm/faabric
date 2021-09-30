@@ -200,35 +200,30 @@ int handleFakeDiffsThreadedFunction(
     return 333;
 }
 
-int handleDistributedBarrier(faabric::scheduler::Executor* exec,
-                             int threadPoolIdx,
-                             int msgIdx,
-                             std::shared_ptr<faabric::BatchExecuteRequest> req)
+int doDistributedBarrier(faabric::Message& msg, bool isWorker)
 {
-    bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
-    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-
-    int nThreads = 4;
+    int nChainedFuncs = 4;
 
     // Build up list of state keys used in all cases
     std::vector<std::string> stateKeys;
-    for (int i = 0; i < nThreads; i++) {
+    for (int i = 0; i < nChainedFuncs; i++) {
         stateKeys.emplace_back("barrier-test-" + std::to_string(i));
     }
 
     faabric::state::State& state = state::getGlobalState();
 
-    if (!isThread) {
+    if (!isWorker) {
         // Set up chained messages
-        auto chainReq =
-          faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
-        for (int i = 0; i < chainReq->messages_size(); i++) {
+        auto chainReq = faabric::util::batchExecFactory(
+          msg.user(), "barrier-worker", nChainedFuncs);
+
+        for (int i = 0; i < nChainedFuncs; i++) {
             auto& msg = chainReq->mutable_messages()->at(i);
 
             // Set app index and group data
             msg.set_appindex(i);
             msg.set_groupid(123);
-            msg.set_groupsize(nThreads);
+            msg.set_groupsize(nChainedFuncs);
 
             // Set up state for result
             int initialValue = 0;
@@ -238,11 +233,11 @@ int handleDistributedBarrier(faabric::scheduler::Executor* exec,
 
         // Make request and wait for results
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        std::vector<std::string> executedHosts = sch.callFunctions(req);
+        std::vector<std::string> executedHosts = sch.callFunctions(chainReq);
         bool success = true;
-        for (const auto& m : req->messages()) {
-            int32_t thisRes = sch.awaitThreadResult(m.id());
-            if (thisRes != 0) {
+        for (const auto& m : chainReq->messages()) {
+            faabric::Message result = sch.getFunctionResult(m.id(), 10000);
+            if (result.returnvalue() != 0) {
                 SPDLOG_ERROR("Distributed barrier check call failed: {}",
                              m.id());
                 success = false;
@@ -255,26 +250,34 @@ int handleDistributedBarrier(faabric::scheduler::Executor* exec,
 
         // Sleep for some time
         int waitMs = 500 * appIdx;
+        SPDLOG_DEBUG("barrier-worker {} sleeping for {}ms", appIdx, waitMs);
         SLEEP_MS(waitMs);
 
         // Write result for this thread
+        SPDLOG_DEBUG("barrier-worker {} writing result", appIdx);
         std::string stateKey = "barrier-test-" + std::to_string(appIdx);
-        state.getKV(msg.user(), stateKey, sizeof(int32_t))->set(BYTES(&appIdx));
+        std::shared_ptr<faabric::state::StateKeyValue> kv =
+          state.getKV(msg.user(), stateKey, sizeof(int32_t));
+        kv->set(BYTES(&appIdx));
+        kv->pushFull();
 
         // Wait on a barrier
+        SPDLOG_DEBUG("barrier-worker {} waiting on barrier (size {})",
+                     appIdx,
+                     msg.groupsize());
         faabric::scheduler::DistributedCoordinator& sync =
           faabric::scheduler::getDistributedCoordinator();
         sync.barrier(msg);
 
         // Check that all other values have been set
-        for (int i = 0; i < nThreads; i++) {
+        for (int i = 0; i < nChainedFuncs; i++) {
             auto idxKv =
               state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
             uint8_t* idxRawValue = idxKv->get();
             int actualIdxValue = *(int*)idxRawValue;
             if (actualIdxValue != i) {
                 SPDLOG_ERROR(
-                  "Distributed barrier check failed on host {}. {} = {}",
+                  "barrier-worker check failed on host {}. {} = {}",
                   faabric::util::getSystemConfig().endpointHost,
                   stateKeys.at(i),
                   actualIdxValue);
@@ -284,6 +287,25 @@ int handleDistributedBarrier(faabric::scheduler::Executor* exec,
     }
 
     return 0;
+}
+
+int handleDistributedBarrier(faabric::scheduler::Executor* exec,
+                             int threadPoolIdx,
+                             int msgIdx,
+                             std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+    return doDistributedBarrier(msg, false);
+}
+
+int handleDistributedBarrierWorker(
+  faabric::scheduler::Executor* exec,
+  int threadPoolIdx,
+  int msgIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+    return doDistributedBarrier(msg, true);
 }
 
 void registerSchedulerTestFunctions()
@@ -298,6 +320,10 @@ void registerSchedulerTestFunctions()
     registerDistTestExecutorCallback(
       "snapshots", "fake-diffs-threaded", handleFakeDiffsThreadedFunction);
 
-    registerDistTestExecutorCallback("coord", "barrier", handleSimpleFunction);
+    registerDistTestExecutorCallback(
+      "coord", "barrier", handleDistributedBarrier);
+
+    registerDistTestExecutorCallback(
+      "coord", "barrier-worker", handleDistributedBarrierWorker);
 }
 }
