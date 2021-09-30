@@ -1,46 +1,32 @@
 #!/bin/bash
 
 export PROJ_ROOT=$(dirname $(dirname $(readlink -f $0)))
-pushd ${PROJ_ROOT}/dist-test >> /dev/null
-
-# Set up image name
-if [[ -z "${FAABRIC_CLI_IMAGE}" ]]; then
-    VERSION=$(cat ../VERSION)
-    export FAABRIC_CLI_IMAGE=faasm/faabric:${VERSION}
-fi
+pushd ${PROJ_ROOT} >> /dev/null
 
 RETURN_VAL=0
 
-if [ "$1" == "local" ]; then
-    INNER_SHELL=${SHELL:-"/bin/bash"}
+# Run the test server in the background
+docker-compose \
+    up \
+    -d \
+    dist-test-server
 
-    # Start everything in the background
-    docker-compose \
-        up \
-        --no-recreate \
-        -d \
-        master
+# Run the tests directly
+docker-compose \
+    run \
+    --rm \
+    cli \
+    /build/faabric/static/bin/faabric_dist_tests
 
-    # Run the CLI
-    docker-compose \
-        exec \
-        master \
-        ${INNER_SHELL}
-else
-    # Run the tests directly
-    docker-compose \
-        run \
-        master \
-        /build/faabric/static/bin/faabric_dist_tests
-    RETURN_VAL=$?
+RETURN_VAL=$?
 
-    echo "-------------------------------------------"
-    echo "                WORKER LOGS                "
-    echo "-------------------------------------------"
-    docker-compose logs worker
+echo "-------------------------------------------"
+echo "                SERVER LOGS                "
+echo "-------------------------------------------"
+docker-compose logs dist-test-server
 
-    docker-compose stop
-fi
+# Stop everything
+docker-compose stop
 
 popd >> /dev/null
 

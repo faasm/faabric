@@ -7,16 +7,6 @@ PROJ_ROOT=${THIS_DIR}/..
 
 pushd ${PROJ_ROOT} > /dev/null
 
-# See if someone has specified a CLI image through an environment variable
-if [[ -z "${FAABRIC_CLI_IMAGE}" ]]; then
-    # Prepare the default version
-    VERSION=$(cat VERSION)
-    DEFAULT_IMAGE=faasm/faabric:${VERSION}
-
-    # Take the script argument if provided, else use the default
-    export FAABRIC_CLI_IMAGE=${1:-${DEFAULT_IMAGE}}
-fi
-
 echo "Running Faabric CLI (${FAABRIC_CLI_IMAGE})"
 
 INNER_SHELL=${SHELL:-"/bin/bash"}
