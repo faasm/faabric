@@ -165,18 +165,22 @@ void FunctionCallClient::makeCoordinationRequest(
     faabric::CoordinationRequest::CoordinationOperation op;
     switch (call) {
         case (faabric::scheduler::FunctionCalls::GroupLock): {
+            SPDLOG_TRACE("Requesting lock on {} at {}", groupId, host);
             op = faabric::CoordinationRequest::LOCK;
             break;
         }
         case (faabric::scheduler::FunctionCalls::GroupUnlock): {
+            SPDLOG_TRACE("Requesting unlock on {} at {}", groupId, host);
             op = faabric::CoordinationRequest::UNLOCK;
             break;
         }
         case (faabric::scheduler::FunctionCalls::GroupNotify): {
+            SPDLOG_TRACE("Requesting notify on {} at {}", groupId, host);
             op = faabric::CoordinationRequest::NOTIFY;
             break;
         }
         case (faabric::scheduler::FunctionCalls::GroupBarrier): {
+            SPDLOG_TRACE("Requesting barrier {} at {}", groupId, host);
             op = faabric::CoordinationRequest::BARRIER;
             break;
         }

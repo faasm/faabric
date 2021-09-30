@@ -276,11 +276,10 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
             uint8_t* idxRawValue = idxKv->get();
             int actualIdxValue = *(int*)idxRawValue;
             if (actualIdxValue != i) {
-                SPDLOG_ERROR(
-                  "barrier-worker check failed on host {}. {} = {}",
-                  faabric::util::getSystemConfig().endpointHost,
-                  stateKeys.at(i),
-                  actualIdxValue);
+                SPDLOG_ERROR("barrier-worker check failed on host {}. {} = {}",
+                             faabric::util::getSystemConfig().endpointHost,
+                             stateKeys.at(i),
+                             actualIdxValue);
                 return 1;
             }
         }
