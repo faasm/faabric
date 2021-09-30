@@ -7,6 +7,7 @@
 #include <sys/mman.h>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
@@ -199,6 +200,92 @@ int handleFakeDiffsThreadedFunction(
     return 333;
 }
 
+int handleDistributedBarrier(faabric::scheduler::Executor* exec,
+                             int threadPoolIdx,
+                             int msgIdx,
+                             std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
+    int nThreads = 4;
+
+    // Build up list of state keys used in all cases
+    std::vector<std::string> stateKeys;
+    for (int i = 0; i < nThreads; i++) {
+        stateKeys.emplace_back("barrier-test-" + std::to_string(i));
+    }
+
+    faabric::state::State& state = state::getGlobalState();
+
+    if (!isThread) {
+        // Set up chained messages
+        auto chainReq =
+          faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
+        for (int i = 0; i < chainReq->messages_size(); i++) {
+            auto& msg = chainReq->mutable_messages()->at(i);
+
+            // Set app index and group data
+            msg.set_appindex(i);
+            msg.set_groupid(123);
+            msg.set_groupsize(nThreads);
+
+            // Set up state for result
+            int initialValue = 0;
+            state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t))
+              ->set(BYTES(&initialValue));
+        }
+
+        // Make request and wait for results
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        std::vector<std::string> executedHosts = sch.callFunctions(req);
+        bool success = true;
+        for (const auto& m : req->messages()) {
+            int32_t thisRes = sch.awaitThreadResult(m.id());
+            if (thisRes != 0) {
+                SPDLOG_ERROR("Distributed barrier check call failed: {}",
+                             m.id());
+                success = false;
+            }
+        }
+
+        return success ? 0 : 1;
+    } else {
+        int appIdx = msg.appindex();
+
+        // Sleep for some time
+        int waitMs = 500 * appIdx;
+        SLEEP_MS(waitMs);
+
+        // Write result for this thread
+        std::string stateKey = "barrier-test-" + std::to_string(appIdx);
+        state.getKV(msg.user(), stateKey, sizeof(int32_t))->set(BYTES(&appIdx));
+
+        // Wait on a barrier
+        faabric::scheduler::DistributedCoordinator& sync =
+          faabric::scheduler::getDistributedCoordinator();
+        sync.barrier(msg);
+
+        // Check that all other values have been set
+        for (int i = 0; i < nThreads; i++) {
+            auto idxKv =
+              state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
+            uint8_t* idxRawValue = idxKv->get();
+            int actualIdxValue = *(int*)idxRawValue;
+            if (actualIdxValue != i) {
+                SPDLOG_ERROR(
+                  "Distributed barrier check failed on host {}. {} = {}",
+                  faabric::util::getSystemConfig().endpointHost,
+                  stateKeys.at(i),
+                  actualIdxValue);
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 void registerSchedulerTestFunctions()
 {
     registerDistTestExecutorCallback("threads", "simple", handleSimpleThread);
@@ -210,5 +297,7 @@ void registerSchedulerTestFunctions()
 
     registerDistTestExecutorCallback(
       "snapshots", "fake-diffs-threaded", handleFakeDiffsThreadedFunction);
+
+    registerDistTestExecutorCallback("coord", "barrier", handleSimpleFunction);
 }
 }
