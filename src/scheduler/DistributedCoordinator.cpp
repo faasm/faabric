@@ -37,7 +37,7 @@ DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
   int32_t groupId)
 {
     // Should not be calling this with a zero group ID
-    assert(groupId > 0);
+    checkGroupIdSet(groupId);
 
     if (groups.find(groupId) == groups.end()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
@@ -51,6 +51,8 @@ DistributedCoordinationGroup&
 DistributedCoordinator::getOrCreateCoordinationGroup(int32_t groupId,
                                                      int32_t groupSize)
 {
+    checkGroupIdSet(groupId);
+
     if (groups.find(groupId) == groups.end()) {
         faabric::util::FullLock lock(sharedMutex);
         if (groups.find(groupId) == groups.end()) {
@@ -81,6 +83,8 @@ void DistributedCoordinator::clear()
 
 void DistributedCoordinator::initGroup(int32_t groupId, int32_t groupSize)
 {
+    checkGroupIdSet(groupId);
+
     // This will implicitly initialise the group
     getOrCreateCoordinationGroup(groupId, groupSize);
 }
@@ -91,6 +95,7 @@ void DistributedCoordinator::initGroup(int32_t groupId, int32_t groupSize)
 
 void DistributedCoordinator::lock(const faabric::Message& msg)
 {
+    checkGroupIdSet(msg.groupid());
     DISTRIBUTED_SYNC_OP(localLock, client.coordinationLock)
 }
 
@@ -116,6 +121,7 @@ void DistributedCoordinator::localLock(int32_t groupId, int32_t groupSize)
 
 void DistributedCoordinator::unlock(const faabric::Message& msg)
 {
+    checkGroupIdSet(msg.groupid());
     DISTRIBUTED_SYNC_OP(localUnlock, client.coordinationUnlock)
 }
 
@@ -182,6 +188,7 @@ void DistributedCoordinator::localUnlockRecursive(int32_t groupId,
 
 void DistributedCoordinator::notify(const faabric::Message& msg)
 {
+    checkGroupIdSet(msg.groupid());
     DISTRIBUTED_SYNC_OP(localNotify, client.coordinationNotify)
 }
 
@@ -209,7 +216,7 @@ void DistributedCoordinator::doLocalNotify(int32_t groupId,
                                            int32_t groupSize,
                                            bool master)
 {
-    checkGroupSizeSet(groupId);
+    checkGroupSizeSet(groupSize);
 
     DistributedCoordinationGroup& group =
       getOrCreateCoordinationGroup(groupId, groupSize);
@@ -252,6 +259,7 @@ void DistributedCoordinator::doLocalNotify(int32_t groupId,
 
 void DistributedCoordinator::barrier(const faabric::Message& msg)
 {
+    checkGroupIdSet(msg.groupid());
     DISTRIBUTED_SYNC_OP(localBarrier, client.coordinationBarrier)
 }
 
@@ -295,6 +303,13 @@ int32_t DistributedCoordinator::getNotifyCount(const faabric::Message& msg)
     std::unique_lock<std::mutex> lock(group.notifyMutex);
 
     return group.count.load();
+}
+
+void DistributedCoordinator::checkGroupIdSet(int32_t groupId)
+{
+    if (groupId <= 0) {
+        throw std::runtime_error("Message does not have group id set");
+    }
 }
 
 void DistributedCoordinator::checkGroupSizeSet(int32_t groupSize)

@@ -107,6 +107,8 @@ class DistributedCoordinator
 
     void doLocalNotify(int32_t groupId, int32_t groupSize, bool master);
 
+    void checkGroupIdSet(int32_t groupId);
+
     void checkGroupSizeSet(int32_t groupSize);
 };
 
