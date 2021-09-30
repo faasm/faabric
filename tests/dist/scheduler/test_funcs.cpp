@@ -5,30 +5,30 @@
 #include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/config.h>
+#include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 
 namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture,
-                 "Test distributed barrier coordination"
-                 "[sync]")
+                 "Test executing functions on multiple hosts",
+                 "[funcs]")
 {
     // Set up this host's resources
-    int nLocalSlots = 1;
+    int nLocalSlots = 2;
+    int nFuncs = 4;
     faabric::HostResources res;
     res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);
 
     // Set up the messages
     std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("coord", "barrier", 1);
+      faabric::util::batchExecFactory("funcs", "simple", nFuncs);
 
-    // Call the function
+    // Call the functions
     sch.callFunctions(req);
-<<<<<<< HEAD
-=======
 
     // Check functions executed on this host
     for (int i = 0; i < nLocalSlots; i++) {
@@ -51,6 +51,5 @@ TEST_CASE_METHOD(DistTestsFixture,
 
         REQUIRE(result.outputdata() == expected);
     }
->>>>>>> master
 }
 }
