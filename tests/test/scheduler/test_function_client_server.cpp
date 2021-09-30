@@ -251,6 +251,7 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    msg.set_groupid(123);
 
     REQUIRE(!sync.isLocalLocked(msg));
 

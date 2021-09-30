@@ -15,6 +15,13 @@
 
 using namespace faabric::scheduler;
 
+#define CAPTURE_ERR_MSG(msgVar, op)                                            \
+    try {                                                                      \
+        op;                                                                    \
+    } catch (std::runtime_error & ex) {                                        \
+        errMsg = ex.what();                                                    \
+    }
+
 namespace tests {
 
 class DistributedCoordinatorTestFixture : public ConfTestFixture
@@ -24,6 +31,8 @@ class DistributedCoordinatorTestFixture : public ConfTestFixture
       : sync(getDistributedCoordinator())
     {
         faabric::util::setMockMode(true);
+
+        sync.clear();
 
         msg = faabric::util::messageFactory("foo", "bar");
 
@@ -89,38 +98,63 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
-                 "Test operations fail when group size not set",
+                 "Test operations fail when group size and id not set",
                  "[sync]")
 {
-    bool failed = false;
     std::string errMsg;
     std::string expectedErrMsg;
 
-    msg.set_groupsize(0);
+    std::string noGroupIdMsg = "Message does not have group id set";
+    std::string noGroupSizeMsg = "Message does not have group size set";
+
+    SECTION("Lock")
+    {
+        msg.set_groupid(0);
+        expectedErrMsg = noGroupIdMsg;
+        CAPTURE_ERR_MSG(errMsg, sync.localLock(msg));
+    }
+
+    SECTION("Unlock")
+    {
+        msg.set_groupid(0);
+        expectedErrMsg = noGroupIdMsg;
+        CAPTURE_ERR_MSG(errMsg, sync.localLock(msg));
+    }
 
     SECTION("Notify")
     {
-        expectedErrMsg = "Group notify exceeded size";
-        try {
-            sync.localNotify(msg);
-        } catch (std::runtime_error& ex) {
-            failed = true;
-            errMsg = ex.what();
+        SECTION("Without group size")
+        {
+            msg.set_groupsize(0);
+            expectedErrMsg = noGroupSizeMsg;
         }
+
+        SECTION("Without group id")
+        {
+            msg.set_groupid(0);
+            expectedErrMsg = noGroupIdMsg;
+        }
+
+        CAPTURE_ERR_MSG(errMsg, sync.localNotify(msg));
     }
 
-    SECTION("Barrier")
+    SECTION("Barrier without group size")
     {
-        expectedErrMsg = "Message does not have group size set";
-        try {
-            sync.localBarrier(msg);
-        } catch (std::runtime_error& ex) {
-            failed = true;
-            errMsg = ex.what();
+        SECTION("Without group size")
+        {
+            msg.set_groupsize(0);
+            expectedErrMsg = noGroupSizeMsg;
         }
+
+        SECTION("Without group id")
+        {
+            msg.set_groupid(0);
+            expectedErrMsg = noGroupIdMsg;
+        }
+
+        CAPTURE_ERR_MSG(errMsg, sync.localBarrier(msg));
     }
 
-    REQUIRE(failed);
     REQUIRE(errMsg == expectedErrMsg);
 }
 
@@ -199,6 +233,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "[sync]")
 {
     faabric::Message otherMsg = faabric::util::messageFactory("foo", "other");
+    otherMsg.set_groupid(345);
 
     // Should work for un-acquired lock
     REQUIRE(sync.localTryLock(msg));
