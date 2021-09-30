@@ -13,7 +13,9 @@
 
 namespace faabric::state {
 StateServer::StateServer(State& stateIn)
-  : faabric::transport::MessageEndpointServer(STATE_ASYNC_PORT, STATE_SYNC_PORT)
+  : faabric::transport::MessageEndpointServer(STATE_ASYNC_PORT,
+                                              STATE_SYNC_PORT,
+                                              STATE_INPROC_LABEL)
   , state(stateIn)
 {}
 

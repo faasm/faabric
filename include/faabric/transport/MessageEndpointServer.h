@@ -7,6 +7,8 @@
 
 #include <thread>
 
+#define DEFAULT_MESSAGE_SERVER_THREADS 4
+
 namespace faabric::transport {
 
 // Each server has two underlying sockets, one for synchronous communication and
@@ -16,7 +18,10 @@ class MessageEndpointServer;
 class MessageEndpointServerHandler
 {
   public:
-    MessageEndpointServerHandler(MessageEndpointServer* serverIn, bool asyncIn);
+    MessageEndpointServerHandler(MessageEndpointServer* serverIn,
+                                 bool asyncIn,
+                                 const std::string& inprocLabelIn,
+                                 int nThreadsIn);
 
     void start(std::shared_ptr<faabric::util::Latch> latch);
 
@@ -25,6 +30,8 @@ class MessageEndpointServerHandler
   private:
     MessageEndpointServer* server;
     bool async = false;
+    const std::string inprocLabel;
+    int nThreads;
 
     std::thread receiverThread;
 
@@ -34,7 +41,10 @@ class MessageEndpointServerHandler
 class MessageEndpointServer
 {
   public:
-    MessageEndpointServer(int asyncPortIn, int syncPortIn);
+    MessageEndpointServer(int asyncPortIn,
+                          int syncPortIn,
+                          const std::string &inprocLabelIn,
+                          int nThreadsIn = DEFAULT_MESSAGE_SERVER_THREADS);
 
     virtual void start();
 
@@ -57,6 +67,8 @@ class MessageEndpointServer
 
     const int asyncPort;
     const int syncPort;
+    const std::string inprocLabel;
+    const int nThreads;
 
     MessageEndpointServerHandler asyncHandler;
     MessageEndpointServerHandler syncHandler;

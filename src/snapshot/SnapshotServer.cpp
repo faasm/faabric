@@ -14,7 +14,8 @@
 namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(SNAPSHOT_ASYNC_PORT,
-                                              SNAPSHOT_SYNC_PORT)
+                                              SNAPSHOT_SYNC_PORT,
+                                              SNAPSHOT_INPROC_LABEL)
 {}
 
 void SnapshotServer::doAsyncRecv(int header,

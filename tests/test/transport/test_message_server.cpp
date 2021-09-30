@@ -20,7 +20,7 @@ class DummyServer final : public MessageEndpointServer
 {
   public:
     DummyServer()
-      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC)
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-dummy")
     {}
 
     std::atomic<int> messageCount = 0;
@@ -46,7 +46,7 @@ class EchoServer final : public MessageEndpointServer
 {
   public:
     EchoServer()
-      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC)
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-echo")
     {}
 
   protected:
@@ -75,7 +75,7 @@ class SleepServer final : public MessageEndpointServer
     int delayMs = 1000;
 
     SleepServer()
-      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC)
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-sleep")
     {}
 
   protected:

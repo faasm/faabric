@@ -96,15 +96,24 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType)
             break;
         }
         case zmq::socket_type::pull: {
+
             SPDLOG_TRACE(
               "New socket: pull {} (timeout {}ms)", address, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+            if (forceConnectNotBind) {
+                CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+            } else {
+                CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+            }
             break;
         }
         case zmq::socket_type::rep: {
             SPDLOG_TRACE(
               "New socket: rep {} (timeout {}ms)", address, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+            if (forceConnectNotBind) {
+                CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+            } else {
+                CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+            }
             break;
         }
         case zmq::socket_type::router: {
@@ -296,6 +305,10 @@ RecvMessageEndpoint::RecvMessageEndpoint(std::string inProcLabel,
                                          zmq::socket_type socketType)
   : MessageEndpoint("inproc://" + inProcLabel, timeoutMs)
 {
+    // Because this is listening to a local dealer we have to force
+    // a connect rather than a bind
+    forceConnectNotBind = true;
+
     socket = setUpSocket(socketType);
 }
 
@@ -316,18 +329,31 @@ std::optional<Message> RecvMessageEndpoint::recv(int size)
 // ROUTER AND DEALER ENDPOINTS
 // ----------------------------------------------
 
-RouterMessageEndpoint::RouterMessageEndpoint(int portIn, int timeoutMs)
-  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::router)
-{}
-
 DealerMessageEndpoint::DealerMessageEndpoint(const std::string& inProcLabel,
                                              int timeoutMs)
   : RecvMessageEndpoint(inProcLabel, timeoutMs, zmq::socket_type::dealer)
 {}
 
+RouterMessageEndpoint::RouterMessageEndpoint(int portIn, int timeoutMs)
+  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::router)
+{}
+
+void RouterMessageEndpoint::proxyWithDealer(
+  std::unique_ptr<DealerMessageEndpoint>& dealer)
+{
+    // Connect this router to a dealer via a queue
+    zmq::proxy(socket, dealer->socket);
+}
+
 // ----------------------------------------------
 // ASYNC RECV ENDPOINT
 // ----------------------------------------------
+
+AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(
+  const std::string& inprocLabel,
+  int timeoutMs)
+  : RecvMessageEndpoint(inprocLabel, timeoutMs, zmq::socket_type::pull)
+{}
 
 AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
@@ -342,6 +368,11 @@ std::optional<Message> AsyncRecvMessageEndpoint::recv(int size)
 // ----------------------------------------------
 // SYNC RECV ENDPOINT
 // ----------------------------------------------
+
+SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(const std::string& inprocLabel,
+                                                 int timeoutMs)
+  : RecvMessageEndpoint(inprocLabel, timeoutMs, zmq::socket_type::rep)
+{}
 
 SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::rep)
