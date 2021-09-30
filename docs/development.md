@@ -73,51 +73,48 @@ inv dev.cc faabric
 We have some standard tests using [Catch2](https://github.com/catchorg/Catch2)
 under the `faabric_tests` target.
 
-### Distributed tests
+## Distributed tests
 
-The distributed tests are aimed at testing a more "realistic" distributed
-environment and use multiple containers.
+The distributed tests are aimed at testing distributed features across more than
+one host.
 
-To set up the initial build:
+### Running locally
 
-```bash
-# Build the relevant binaries
-./dist-test/build.sh
-```
-
-Then to run and develop locally:
+To set up the distributed tests locally:
 
 ```bash
-# Start up the CLI container
-./dist-test/run.sh local
+# Start the CLI
+./bin/cli.sh
 
-# Rebuild and run inside CLI container as usual
+# Build both the tests and the server
 inv dev.cc faabric_dist_tests
-/build/static/bin/faabric_dist_tests
-
-# To rebuild the server, you'll need to rebuild and restart
 inv dev.cc faabric_dist_test_server
-
-# Outside the container
-./dist-test/restart_server.sh
 ```
 
-To see logs locally:
+In another terminal, start the server:
 
 ```bash
-cd dist-test
-docker-compose logs -f
+./dist-tests/dev_server.sh
 ```
 
-To run as if in CI:
+Back in the CLI, you can then run the tests:
+
+```bash
+faabric_dist_tests
+```
+
+You can repeat this process of rebuilding, restarting the server, and running.
+
+### Running as if in CI
+
+To run the distributed tests as if in CI:
 
 ```bash
 # Clean up
-cd dist-test
 docker-compose stop
-docker-compose rm
 
-# Run once through
+# Build and run
+./dist-test/build.sh
 ./dist-test/run.sh
 ```
 
