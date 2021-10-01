@@ -57,94 +57,107 @@ void MessageEndpointServerHandler::start(
 
         // Lauch worker threads
         for (int i = 0; i < nThreads; i++) {
-            workerThreads.emplace_back([this] {
-                std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
-
-                if (async) {
-                    // Async workers have a PULL socket
-                    endpoint =
-                      std::make_unique<AsyncRecvMessageEndpoint>(inprocLabel);
-                } else {
-                    // Sync workers have an in-proc REP socket
-                    endpoint =
-                      std::make_unique<SyncRecvMessageEndpoint>(inprocLabel);
-                }
-
-                while (true) {
-                    // Receive header and body
-                    std::optional<Message> headerMessageMaybe =
-                      endpoint->recv();
-                    if (!headerMessageMaybe.has_value()) {
-                        SPDLOG_TRACE("Server on {}, looping after no message",
-                                     endpoint->getAddress());
-                        continue;
-                    }
-
-                    Message& headerMessage = headerMessageMaybe.value();
-
-                    if (headerMessage.size() == shutdownHeader.size()) {
-                        if (headerMessage.dataCopy() == shutdownHeader) {
-                            SPDLOG_TRACE(
-                              "Server on {} received shutdown message",
-                              endpoint->getAddress());
-
-                            // Allow things to wait on shutdown
-                            if (server->workerLatch != nullptr) {
-                                server->workerLatch->wait();
-                            }
-
-                            break;
-                        }
-                    }
-
-                    if (!headerMessage.more()) {
-                        throw std::runtime_error(
-                          "Header sent without SNDMORE flag");
-                    }
-
-                    std::optional<Message> bodyMaybe = endpoint->recv();
-                    if (!bodyMaybe.has_value()) {
-                        SPDLOG_ERROR(
-                          "Server on port {}, got header, timed out on body",
-                          endpoint->getAddress());
-                        throw MessageTimeoutException(
-                          "Server, got header, timed out on body");
-                    }
-
-                    Message& body = bodyMaybe.value();
-                    if (body.more()) {
-                        throw std::runtime_error("Body sent with SNDMORE flag");
-                    }
-
-                    assert(headerMessage.size() == sizeof(uint8_t));
-                    uint8_t header =
-                      static_cast<uint8_t>(*headerMessage.data());
+            workerThreads.emplace_back([this, i] {
+                // Here we want to isolate all ZeroMQ stuff in its own
+                // context, so we can do things after it's been destroyed
+                {
+                    std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
 
                     if (async) {
-                        // Server-specific async handling
-                        server->doAsyncRecv(header, body.udata(), body.size());
+                        // Async workers have a PULL socket
+                        endpoint = std::make_unique<AsyncRecvMessageEndpoint>(
+                          inprocLabel);
                     } else {
-                        // Server-specific sync handling
-                        std::unique_ptr<google::protobuf::Message> resp =
-                          server->doSyncRecv(header, body.udata(), body.size());
-                        size_t respSize = resp->ByteSizeLong();
+                        // Sync workers have an in-proc REP socket
+                        endpoint = std::make_unique<SyncRecvMessageEndpoint>(
+                          inprocLabel);
+                    }
 
-                        uint8_t buffer[respSize];
-                        if (!resp->SerializeToArray(buffer, respSize)) {
-                            throw std::runtime_error(
-                              "Error serialising message");
+                    while (true) {
+                        // Receive header and body
+                        std::optional<Message> headerMessageMaybe =
+                          endpoint->recv();
+                        if (!headerMessageMaybe.has_value()) {
+                            SPDLOG_TRACE(
+                              "Server on {}, looping after no message",
+                              endpoint->getAddress());
+                            continue;
                         }
 
-                        // Return the response
-                        static_cast<SyncRecvMessageEndpoint*>(endpoint.get())
-                          ->sendResponse(buffer, respSize);
-                    }
+                        Message& headerMessage = headerMessageMaybe.value();
 
-                    // Wait on the async latch if necessary
-                    if (server->workerLatch != nullptr) {
-                        SPDLOG_TRACE("Server thread waiting on async latch");
-                        server->workerLatch->wait();
+                        if (headerMessage.size() == shutdownHeader.size()) {
+                            if (headerMessage.dataCopy() == shutdownHeader) {
+                                SPDLOG_TRACE(
+                                  "Server thread {} on {} got shutdown message",
+                                  i,
+                                  endpoint->getAddress());
+
+                                break;
+                            }
+                        }
+
+                        if (!headerMessage.more()) {
+                            throw std::runtime_error(
+                              "Header sent without SNDMORE flag");
+                        }
+
+                        std::optional<Message> bodyMaybe = endpoint->recv();
+                        if (!bodyMaybe.has_value()) {
+                            SPDLOG_ERROR("Server on port {}, got header, timed "
+                                         "out on body",
+                                         endpoint->getAddress());
+                            throw MessageTimeoutException(
+                              "Server, got header, timed out on body");
+                        }
+
+                        Message& body = bodyMaybe.value();
+                        if (body.more()) {
+                            throw std::runtime_error(
+                              "Body sent with SNDMORE flag");
+                        }
+
+                        assert(headerMessage.size() == sizeof(uint8_t));
+                        uint8_t header =
+                          static_cast<uint8_t>(*headerMessage.data());
+
+                        if (async) {
+                            // Server-specific async handling
+                            server->doAsyncRecv(
+                              header, body.udata(), body.size());
+                        } else {
+                            // Server-specific sync handling
+                            std::unique_ptr<google::protobuf::Message> resp =
+                              server->doSyncRecv(
+                                header, body.udata(), body.size());
+                            size_t respSize = resp->ByteSizeLong();
+
+                            uint8_t buffer[respSize];
+                            if (!resp->SerializeToArray(buffer, respSize)) {
+                                throw std::runtime_error(
+                                  "Error serialising message");
+                            }
+
+                            // Return the response
+                            static_cast<SyncRecvMessageEndpoint*>(
+                              endpoint.get())
+                              ->sendResponse(buffer, respSize);
+                        }
+
+                        // Wait on the async latch if necessary
+                        if (server->workerLatch != nullptr) {
+                            SPDLOG_TRACE(
+                              "Server thread waiting on async latch");
+                            server->workerLatch->wait();
+                        }
                     }
+                }
+
+                // Just before the thread dies, check if there's something
+                // waiting on the latch
+                if (server->workerLatch != nullptr) {
+                    SPDLOG_TRACE("Server thread {} waiting on async latch", i);
+                    server->workerLatch->wait();
                 }
             });
         }
