@@ -74,7 +74,9 @@ std::string MessageEndpoint::getAddress()
     return address;
 }
 
-zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType)
+zmq::socket_t MessageEndpoint::setUpSocket(
+  zmq::socket_type socketType,
+  MessageEndpointConnectType connectType)
 {
     zmq::socket_t socket;
 
@@ -88,53 +90,95 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType)
     // Note - setting linger here is essential to avoid infinite hangs
     socket.set(zmq::sockopt::linger, LINGER_MS);
 
-    switch (socketType) {
-        case zmq::socket_type::req: {
-            SPDLOG_TRACE(
-              "New socket: req {} (timeout {}ms)", address, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-            break;
-        }
-        case zmq::socket_type::push: {
-            SPDLOG_TRACE(
-              "New socket: push {} (timeout {}ms)", address, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-            break;
-        }
-        case zmq::socket_type::pull: {
-            SPDLOG_TRACE(
-              "New socket: pull {} (timeout {}ms)", address, timeoutMs);
-            if (forceConnectNotBind) {
-                CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-            } else {
-                CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+    switch (connectType) {
+        case (MessageEndpointConnectType::BIND): {
+            switch (socketType) {
+                case zmq::socket_type::push: {
+                    SPDLOG_TRACE("Bind socket: push {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::pull: {
+                    SPDLOG_TRACE("Bind socket: pull {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::rep: {
+                    SPDLOG_TRACE(
+                      "Bind socket: rep {} (timeout {}ms)", address, timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::router: {
+                    SPDLOG_TRACE("Bind socket: router {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::dealer: {
+                    SPDLOG_TRACE("Bind socket: dealer {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                default: {
+                    SPDLOG_ERROR(
+                      "Invalid bind socket type {} ({})", socketType, address);
+                    throw std::runtime_error(
+                      "Binding with invalid socket type");
+                }
             }
             break;
         }
-        case zmq::socket_type::rep: {
-            SPDLOG_TRACE(
-              "New socket: rep {} (timeout {}ms)", address, timeoutMs);
-            if (forceConnectNotBind) {
-                CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-            } else {
-                CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+        case (MessageEndpointConnectType::CONNECT): {
+            switch (socketType) {
+                case zmq::socket_type::req: {
+                    SPDLOG_TRACE("Connect socket: req {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                case zmq::socket_type::push: {
+                    SPDLOG_TRACE("Connect socket: push {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                case zmq::socket_type::pull: {
+                    SPDLOG_TRACE("Connect socket: pull {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                case zmq::socket_type::rep: {
+                    SPDLOG_TRACE("Connect socket: rep {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                default: {
+                    SPDLOG_ERROR("Invalid connect socket type {} ({})",
+                                 socketType,
+                                 address);
+                    throw std::runtime_error(
+                      "Connecting with unrecognized socket type");
+                }
             }
-            break;
-        }
-        case zmq::socket_type::router: {
-            SPDLOG_TRACE(
-              "New socket: router {} (timeout {}ms)", address, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-            break;
-        }
-        case zmq::socket_type::dealer: {
-            SPDLOG_TRACE(
-              "New socket: dealer {} (timeout {}ms)", address, timeoutMs);
-            CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
             break;
         }
         default: {
-            throw std::runtime_error("Opening unrecognized socket type");
+            SPDLOG_ERROR("Unrecognised socket connect type {}", connectType);
+            throw std::runtime_error("Unrecognised connect type");
         }
     }
 
@@ -244,7 +288,8 @@ AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
                                                    int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    pushSocket = setUpSocket(zmq::socket_type::push);
+    pushSocket =
+      setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::CONNECT);
 }
 
 void AsyncSendMessageEndpoint::sendHeader(int header)
@@ -270,7 +315,8 @@ SyncSendMessageEndpoint::SyncSendMessageEndpoint(const std::string& hostIn,
                                                  int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    reqSocket = setUpSocket(zmq::socket_type::req);
+    reqSocket =
+      setUpSocket(zmq::socket_type::req, MessageEndpointConnectType::CONNECT);
 }
 
 void SyncSendMessageEndpoint::sendHeader(int header)
@@ -307,26 +353,19 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
 
 RecvMessageEndpoint::RecvMessageEndpoint(std::string inProcLabel,
                                          int timeoutMs,
-                                         zmq::socket_type socketType)
+                                         zmq::socket_type socketType,
+                                         MessageEndpointConnectType connectType)
   : MessageEndpoint("inproc://" + inProcLabel, timeoutMs)
 {
-    // All inproc sockets will be listening to a dealer port in our case, so we
-    // always connect, not bind
-    forceConnectNotBind = true;
-
-    socket = setUpSocket(socketType);
+    socket = setUpSocket(socketType, connectType);
 }
 
 RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
                                          int timeoutMs,
-                                         zmq::socket_type socketType,
-                                         bool connectNotBind)
+                                         zmq::socket_type socketType)
   : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
 {
-    // In some cases (e.g. many PULLs, we may want to connect, not bind)
-    forceConnectNotBind = connectNotBind;
-
-    socket = setUpSocket(socketType);
+    socket = setUpSocket(socketType, MessageEndpointConnectType::BIND);
 }
 
 std::optional<Message> RecvMessageEndpoint::recv(int size)
@@ -335,22 +374,65 @@ std::optional<Message> RecvMessageEndpoint::recv(int size)
 }
 
 // ----------------------------------------------
-// ROUTER AND DEALER ENDPOINTS
+// ASYNC FAN IN AND FAN OUT
 // ----------------------------------------------
 
-DealerMessageEndpoint::DealerMessageEndpoint(const std::string& inProcLabel,
-                                             int timeoutMs)
-  : RecvMessageEndpoint(inProcLabel, timeoutMs, zmq::socket_type::dealer)
+AsyncFanOutMessageEndpoint::AsyncFanOutMessageEndpoint(
+  const std::string& inprocLabel,
+  int timeoutMs)
+  : MessageEndpoint("inproc://" + inprocLabel, timeoutMs)
+{
+    socket =
+      setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::BIND);
+}
+
+void AsyncFanOutMessageEndpoint::sendHeader(int header)
+{
+    uint8_t headerBytes = static_cast<uint8_t>(header);
+    doSend(socket, &headerBytes, sizeof(headerBytes), true);
+}
+
+void AsyncFanOutMessageEndpoint::send(const uint8_t* data,
+                                      size_t dataSize,
+                                      bool more)
+{
+    SPDLOG_TRACE("PUSH {} ({} bytes, more {})", address, dataSize, more);
+    doSend(socket, data, dataSize, more);
+}
+
+AsyncFanInMessageEndpoint::AsyncFanInMessageEndpoint(int portIn, int timeoutMs)
+  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
 {}
 
-RouterMessageEndpoint::RouterMessageEndpoint(int portIn, int timeoutMs)
+void AsyncFanInMessageEndpoint::attachFanOut(
+  std::unique_ptr<AsyncFanOutMessageEndpoint>& dealer)
+{
+    // Connect this to a fan out
+    SPDLOG_TRACE("Proxying {} to {}", address, dealer->getAddress());
+    zmq::proxy(socket, dealer->socket);
+}
+
+// ----------------------------------------------
+// SYNC FAN IN AND FAN OUT
+// ----------------------------------------------
+
+SyncFanOutMessageEndpoint::SyncFanOutMessageEndpoint(
+  const std::string& inProcLabel,
+  int timeoutMs)
+  : RecvMessageEndpoint(inProcLabel,
+                        timeoutMs,
+                        zmq::socket_type::dealer,
+                        MessageEndpointConnectType::BIND)
+{}
+
+SyncFanInMessageEndpoint::SyncFanInMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::router)
 {}
 
-void RouterMessageEndpoint::proxyWithDealer(
-  std::unique_ptr<DealerMessageEndpoint>& dealer)
+void SyncFanInMessageEndpoint::attachFanOut(
+  std::unique_ptr<SyncFanOutMessageEndpoint>& dealer)
 {
-    // Connect this router to a dealer via a queue
+    // Connect this to a fan out
     SPDLOG_TRACE("Proxying {} to {}", address, dealer->getAddress());
     zmq::proxy(socket, dealer->socket);
 }
@@ -358,6 +440,15 @@ void RouterMessageEndpoint::proxyWithDealer(
 // ----------------------------------------------
 // ASYNC RECV ENDPOINT
 // ----------------------------------------------
+
+AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(
+  const std::string& inprocLabel,
+  int timeoutMs)
+  : RecvMessageEndpoint(inprocLabel,
+                        timeoutMs,
+                        zmq::socket_type::pull,
+                        MessageEndpointConnectType::CONNECT)
+{}
 
 AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
@@ -370,27 +461,15 @@ std::optional<Message> AsyncRecvMessageEndpoint::recv(int size)
 }
 
 // ----------------------------------------------
-// MULTI ASYNC RECV ENDPOINT
-// ----------------------------------------------
-
-MultiAsyncRecvMessageEndpoint::MultiAsyncRecvMessageEndpoint(int portIn,
-                                                             int timeoutMs)
-  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull, true)
-{}
-
-std::optional<Message> MultiAsyncRecvMessageEndpoint::recv(int size)
-{
-    SPDLOG_TRACE("PULL (multi) {} ({} bytes)", address, size);
-    return RecvMessageEndpoint::recv(size);
-}
-
-// ----------------------------------------------
 // SYNC RECV ENDPOINT
 // ----------------------------------------------
 
 SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(const std::string& inprocLabel,
                                                  int timeoutMs)
-  : RecvMessageEndpoint(inprocLabel, timeoutMs, zmq::socket_type::rep)
+  : RecvMessageEndpoint(inprocLabel,
+                        timeoutMs,
+                        zmq::socket_type::rep,
+                        MessageEndpointConnectType::CONNECT)
 {}
 
 SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)

@@ -24,6 +24,12 @@
 
 namespace faabric::transport {
 
+enum MessageEndpointConnectType
+{
+    BIND = 0,
+    CONNECT = 1,
+};
+
 // Note: sockets must be open-ed and close-ed from the _same_ thread. In a given
 // communication group, one socket may bind, and all the rest must connect.
 // Order does not matter.
@@ -40,8 +46,6 @@ class MessageEndpoint
 
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
 
-    bool forceConnectNotBind = false;
-
     std::string getAddress();
 
   protected:
@@ -50,7 +54,8 @@ class MessageEndpoint
     const std::thread::id tid;
     const int id;
 
-    zmq::socket_t setUpSocket(zmq::socket_type socketType);
+    zmq::socket_t setUpSocket(zmq::socket_type socketType,
+                              MessageEndpointConnectType connectType);
 
     void doSend(zmq::socket_t& socket,
                 const uint8_t* data,
@@ -75,7 +80,6 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
 
     void send(const uint8_t* data, size_t dataSize, bool more = false);
 
-  private:
     zmq::socket_t pushSocket;
 };
 
@@ -101,14 +105,12 @@ class SyncSendMessageEndpoint final : public MessageEndpoint
 class RecvMessageEndpoint : public MessageEndpoint
 {
   public:
-    RecvMessageEndpoint(int portIn,
-                        int timeoutMs,
-                        zmq::socket_type socketType,
-                        bool connectNotBind = false);
+    RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
 
     RecvMessageEndpoint(std::string inProcLabel,
                         int timeoutMs,
-                        zmq::socket_type socketType);
+                        zmq::socket_type socketType,
+                        MessageEndpointConnectType connectType);
 
     virtual ~RecvMessageEndpoint(){};
 
@@ -117,35 +119,52 @@ class RecvMessageEndpoint : public MessageEndpoint
     zmq::socket_t socket;
 };
 
-class DealerMessageEndpoint final : public RecvMessageEndpoint
+class AsyncFanOutMessageEndpoint final : public MessageEndpoint
 {
   public:
-    DealerMessageEndpoint(const std::string& inProcLabel,
-                          int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+    AsyncFanOutMessageEndpoint(const std::string& inProcLabel,
+                               int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    void sendHeader(int header);
+
+    void send(const uint8_t* data, size_t dataSize, bool more = false);
+
+    zmq::socket_t socket;
 };
 
-class RouterMessageEndpoint final : public RecvMessageEndpoint
+class AsyncFanInMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
-    RouterMessageEndpoint(int portIn, int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+    AsyncFanInMessageEndpoint(int portIn,
+                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    void proxyWithDealer(std::unique_ptr<DealerMessageEndpoint>& dealer);
+    void attachFanOut(std::unique_ptr<AsyncFanOutMessageEndpoint>& dealer);
+};
+
+class SyncFanOutMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    SyncFanOutMessageEndpoint(const std::string& inProcLabel,
+                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+};
+
+class SyncFanInMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    SyncFanInMessageEndpoint(int portIn,
+                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    void attachFanOut(std::unique_ptr<SyncFanOutMessageEndpoint>& dealer);
 };
 
 class AsyncRecvMessageEndpoint : public RecvMessageEndpoint
 {
   public:
-    AsyncRecvMessageEndpoint(int portIn,
+    AsyncRecvMessageEndpoint(const std::string& inprocLabel,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    std::optional<Message> recv(int size = 0) override;
-};
-
-class MultiAsyncRecvMessageEndpoint final : public RecvMessageEndpoint
-{
-  public:
-    MultiAsyncRecvMessageEndpoint(int portIn,
-                                  int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+    AsyncRecvMessageEndpoint(int portIn,
+                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
     std::optional<Message> recv(int size = 0) override;
 };

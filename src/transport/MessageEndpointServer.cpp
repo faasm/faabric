@@ -26,30 +26,44 @@ MessageEndpointServerHandler::MessageEndpointServerHandler(
 void MessageEndpointServerHandler::start(
   std::shared_ptr<faabric::util::Latch> latch)
 {
-    // See 0MQ docs on multi-threaded server for req/ rep:
+    // For both sync and async, we want to fan out the messages to multiple
+    // worker threads.
+    // For sync, we use the router/ dealer pattern:
     // https://zguide.zeromq.org/docs/chapter2/#Multithreading-with-ZeroMQ
+    // For push/ pull we receive on a pull socket, then proxy with another push
+    // to multiple downstream pull sockets
+    // In both cases, the downstream fan-out is done over inproc sockets.
     receiverThread = std::thread([this, latch] {
         int port = async ? server->asyncPort : server->syncPort;
 
-        // For sync, we need to set up a router and dealer
-        std::unique_ptr<RouterMessageEndpoint> router = nullptr;
-        std::unique_ptr<DealerMessageEndpoint> dealer = nullptr;
+        // Sync: router and dealer
+        std::unique_ptr<SyncFanInMessageEndpoint> syncFanIn = nullptr;
+        std::unique_ptr<SyncFanOutMessageEndpoint> syncFanOut = nullptr;
 
-        if (!async) {
+        // Async: pull/ push pair
+        std::unique_ptr<AsyncFanInMessageEndpoint> asyncFanIn = nullptr;
+        std::unique_ptr<AsyncFanOutMessageEndpoint> asyncFanOut = nullptr;
+
+        if (async) {
+            asyncFanIn = std::make_unique<AsyncFanInMessageEndpoint>(port);
+            asyncFanOut =
+              std::make_unique<AsyncFanOutMessageEndpoint>(inprocLabel);
+        } else {
             // Set up router/ dealer
-            router = std::make_unique<RouterMessageEndpoint>(port);
-            dealer = std::make_unique<DealerMessageEndpoint>(inprocLabel);
+            syncFanIn = std::make_unique<SyncFanInMessageEndpoint>(port);
+            syncFanOut =
+              std::make_unique<SyncFanOutMessageEndpoint>(inprocLabel);
         }
 
         // Lauch worker threads
         for (int i = 0; i < nThreads; i++) {
-            workerThreads.emplace_back([this, port] {
+            workerThreads.emplace_back([this] {
                 std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
 
                 if (async) {
                     // Async workers have a PULL socket
                     endpoint =
-                      std::make_unique<MultiAsyncRecvMessageEndpoint>(port);
+                      std::make_unique<AsyncRecvMessageEndpoint>(inprocLabel);
                 } else {
                     // Sync workers have an in-proc REP socket
                     endpoint =
@@ -65,6 +79,7 @@ void MessageEndpointServerHandler::start(
                                      endpoint->getAddress());
                         continue;
                     }
+
                     Message& headerMessage = headerMessageMaybe.value();
 
                     if (headerMessage.size() == shutdownHeader.size()) {
@@ -77,6 +92,7 @@ void MessageEndpointServerHandler::start(
                             if (server->workerLatch != nullptr) {
                                 server->workerLatch->wait();
                             }
+
                             break;
                         }
                     }
@@ -137,8 +153,10 @@ void MessageEndpointServerHandler::start(
         latch->wait();
 
         // Connect the router and dealer if sync
-        if (!async) {
-            router->proxyWithDealer(dealer);
+        if (async) {
+            asyncFanIn->attachFanOut(asyncFanOut);
+        } else {
+            syncFanIn->attachFanOut(syncFanOut);
         }
     });
 }
@@ -187,18 +205,24 @@ void MessageEndpointServer::start()
 
 void MessageEndpointServer::stop()
 {
-    // Send shutdown messages
-    SPDLOG_TRACE(
-      "Server sending shutdown messages to ports {} {}", asyncPort, syncPort);
-
     for (int i = 0; i < nThreads; i++) {
         setWorkerLatch();
+        SPDLOG_TRACE("Sending async shutdown message {}/{} to port {}",
+                     i + 1,
+                     nThreads,
+                     asyncPort);
+
         asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
         awaitWorkerLatch();
     }
 
     for (int i = 0; i < nThreads; i++) {
         setWorkerLatch();
+        SPDLOG_TRACE("Sending sync shutdown message {}/{} to port {}",
+                     i + 1,
+                     nThreads,
+                     syncPort);
+
         syncShutdownSender.sendRaw(shutdownHeader.data(),
                                    shutdownHeader.size());
         awaitWorkerLatch();
