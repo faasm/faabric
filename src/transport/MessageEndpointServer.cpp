@@ -179,9 +179,9 @@ void MessageEndpointServerHandler::start(
         // Connect the relevant fan-in/ out sockets (these will run until
         // context is closed)
         if (async) {
-            asyncFanIn->attachFanOut(asyncFanOut);
+            asyncFanIn->attachFanOut(asyncFanOut->socket);
         } else {
-            syncFanIn->attachFanOut(syncFanOut);
+            syncFanIn->attachFanOut(syncFanOut->socket);
         }
     });
 }

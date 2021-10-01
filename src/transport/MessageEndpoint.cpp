@@ -377,6 +377,19 @@ std::optional<Message> RecvMessageEndpoint::recv(int size)
 // ASYNC FAN IN AND FAN OUT
 // ----------------------------------------------
 
+FanInMessageEndpoint::FanInMessageEndpoint(int portIn,
+                                           int timeoutMs,
+                                           zmq::socket_type socketType)
+  : RecvMessageEndpoint(portIn, timeoutMs, socketType)
+{}
+
+void FanInMessageEndpoint::attachFanOut(zmq::socket_t& fanOutSock)
+{
+    zmq::proxy_steerable(socket, fanOutSock, zmq::socket_ref(), controlSock);
+}
+
+void FanInMessageEndpoint::stop() {}
+
 AsyncFanOutMessageEndpoint::AsyncFanOutMessageEndpoint(
   const std::string& inprocLabel,
   int timeoutMs)
@@ -401,16 +414,8 @@ void AsyncFanOutMessageEndpoint::send(const uint8_t* data,
 }
 
 AsyncFanInMessageEndpoint::AsyncFanInMessageEndpoint(int portIn, int timeoutMs)
-  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
+  : FanInMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
 {}
-
-void AsyncFanInMessageEndpoint::attachFanOut(
-  std::unique_ptr<AsyncFanOutMessageEndpoint>& dealer)
-{
-    // Connect this to a fan out
-    SPDLOG_TRACE("Proxying {} to {}", address, dealer->getAddress());
-    zmq::proxy(socket, dealer->socket);
-}
 
 // ----------------------------------------------
 // SYNC FAN IN AND FAN OUT
@@ -426,16 +431,8 @@ SyncFanOutMessageEndpoint::SyncFanOutMessageEndpoint(
 {}
 
 SyncFanInMessageEndpoint::SyncFanInMessageEndpoint(int portIn, int timeoutMs)
-  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::router)
+  : FanInMessageEndpoint(portIn, timeoutMs, zmq::socket_type::router)
 {}
-
-void SyncFanInMessageEndpoint::attachFanOut(
-  std::unique_ptr<SyncFanOutMessageEndpoint>& dealer)
-{
-    // Connect this to a fan out
-    SPDLOG_TRACE("Proxying {} to {}", address, dealer->getAddress());
-    zmq::proxy(socket, dealer->socket);
-}
 
 // ----------------------------------------------
 // ASYNC RECV ENDPOINT

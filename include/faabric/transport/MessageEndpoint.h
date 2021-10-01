@@ -119,6 +119,21 @@ class RecvMessageEndpoint : public MessageEndpoint
     zmq::socket_t socket;
 };
 
+class FanInMessageEndpoint : public RecvMessageEndpoint
+{
+  public:
+    FanInMessageEndpoint(int portIn,
+                         int timeoutMs,
+                         zmq::socket_type socketType);
+
+    void attachFanOut(zmq::socket_t& fanOutSock);
+
+    void stop();
+
+  private:
+    zmq::socket_t controlSock;
+};
+
 class AsyncFanOutMessageEndpoint final : public MessageEndpoint
 {
   public:
@@ -132,13 +147,11 @@ class AsyncFanOutMessageEndpoint final : public MessageEndpoint
     zmq::socket_t socket;
 };
 
-class AsyncFanInMessageEndpoint final : public RecvMessageEndpoint
+class AsyncFanInMessageEndpoint final : public FanInMessageEndpoint
 {
   public:
     AsyncFanInMessageEndpoint(int portIn,
                               int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
-
-    void attachFanOut(std::unique_ptr<AsyncFanOutMessageEndpoint>& dealer);
 };
 
 class SyncFanOutMessageEndpoint final : public RecvMessageEndpoint
@@ -148,13 +161,11 @@ class SyncFanOutMessageEndpoint final : public RecvMessageEndpoint
                               int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 };
 
-class SyncFanInMessageEndpoint final : public RecvMessageEndpoint
+class SyncFanInMessageEndpoint final : public FanInMessageEndpoint
 {
   public:
     SyncFanInMessageEndpoint(int portIn,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
-
-    void attachFanOut(std::unique_ptr<SyncFanOutMessageEndpoint>& dealer);
 };
 
 class AsyncRecvMessageEndpoint : public RecvMessageEndpoint
