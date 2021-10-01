@@ -220,9 +220,9 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     *reqA.mutable_function() = msg;
 
     // Check that nothing's happened
-    server.setAsyncLatch();
+    server.setWorkerLatch();
     cli.unregister(reqA);
-    server.awaitAsyncLatch();
+    server.awaitWorkerLatch();
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Make the request to unregister the actual host
@@ -230,9 +230,9 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
 
-    server.setAsyncLatch();
+    server.setWorkerLatch();
     cli.unregister(reqB);
-    server.awaitAsyncLatch();
+    server.awaitWorkerLatch();
 
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 

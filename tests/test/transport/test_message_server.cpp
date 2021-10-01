@@ -101,10 +101,12 @@ class SleepServer final : public MessageEndpointServer
 
 namespace tests {
 
-TEST_CASE("Test send one message to server", "[transport]")
+TEST_CASE("Test sending one message to server", "[transport]")
 {
     DummyServer server;
     server.start();
+
+    SPDLOG_DEBUG("Dummy server started");
 
     REQUIRE(server.messageCount == 0);
 
@@ -114,16 +116,16 @@ TEST_CASE("Test send one message to server", "[transport]")
     std::string body = "body";
     const uint8_t* bodyMsg = BYTES_CONST(body.c_str());
 
-    server.setAsyncLatch();
+    server.setWorkerLatch();
     cli.asyncSend(0, bodyMsg, body.size());
-    server.awaitAsyncLatch();
+    server.awaitWorkerLatch();
 
     REQUIRE(server.messageCount == 1);
 
     server.stop();
 }
 
-TEST_CASE("Test send response to client", "[transport]")
+TEST_CASE("Test sending response to client", "[transport]")
 {
     EchoServer server;
     server.start();
@@ -137,7 +139,7 @@ TEST_CASE("Test send response to client", "[transport]")
     faabric::StatePart response;
     cli.syncSend(0, BYTES(expectedMsg.data()), expectedMsg.size(), &response);
 
-    assert(response.data() == expectedMsg);
+    REQUIRE(response.data() == expectedMsg);
 
     server.stop();
 }

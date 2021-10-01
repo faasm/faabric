@@ -42,6 +42,8 @@ class MessageEndpoint
 
     bool forceConnectNotBind = false;
 
+    std::string getAddress();
+
   protected:
     const std::string address;
     const int timeoutMs;
@@ -99,7 +101,10 @@ class SyncSendMessageEndpoint final : public MessageEndpoint
 class RecvMessageEndpoint : public MessageEndpoint
 {
   public:
-    RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
+    RecvMessageEndpoint(int portIn,
+                        int timeoutMs,
+                        zmq::socket_type socketType,
+                        bool connectNotBind = false);
 
     RecvMessageEndpoint(std::string inProcLabel,
                         int timeoutMs,
@@ -127,14 +132,20 @@ class RouterMessageEndpoint final : public RecvMessageEndpoint
     void proxyWithDealer(std::unique_ptr<DealerMessageEndpoint>& dealer);
 };
 
-class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
+class AsyncRecvMessageEndpoint : public RecvMessageEndpoint
 {
   public:
-    AsyncRecvMessageEndpoint(const std::string& inprocLabel,
-                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
-
     AsyncRecvMessageEndpoint(int portIn,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    std::optional<Message> recv(int size = 0) override;
+};
+
+class MultiAsyncRecvMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    MultiAsyncRecvMessageEndpoint(int portIn,
+                                  int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
     std::optional<Message> recv(int size = 0) override;
 };

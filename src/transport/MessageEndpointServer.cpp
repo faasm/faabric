@@ -26,14 +26,20 @@ MessageEndpointServerHandler::MessageEndpointServerHandler(
 void MessageEndpointServerHandler::start(
   std::shared_ptr<faabric::util::Latch> latch)
 {
+    // See 0MQ docs on multi-threaded server for req/ rep:
+    // https://zguide.zeromq.org/docs/chapter2/#Multithreading-with-ZeroMQ
     receiverThread = std::thread([this, latch] {
-        // TODO - pass through proper inproc label to here
-        // Make it a class property set through the constructor
         int port = async ? server->asyncPort : server->syncPort;
 
-        // Set up router/ dealer
-        auto router = std::make_unique<RouterMessageEndpoint>(port);
-        auto dealer = std::make_unique<DealerMessageEndpoint>(inprocLabel);
+        // For sync, we need to set up a router and dealer
+        std::unique_ptr<RouterMessageEndpoint> router = nullptr;
+        std::unique_ptr<DealerMessageEndpoint> dealer = nullptr;
+
+        if (!async) {
+            // Set up router/ dealer
+            router = std::make_unique<RouterMessageEndpoint>(port);
+            dealer = std::make_unique<DealerMessageEndpoint>(inprocLabel);
+        }
 
         // Lauch worker threads
         for (int i = 0; i < nThreads; i++) {
@@ -41,9 +47,11 @@ void MessageEndpointServerHandler::start(
                 std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
 
                 if (async) {
+                    // Async workers have a PULL socket
                     endpoint =
-                      std::make_unique<AsyncRecvMessageEndpoint>(inprocLabel);
+                      std::make_unique<MultiAsyncRecvMessageEndpoint>(port);
                 } else {
+                    // Sync workers have an in-proc REP socket
                     endpoint =
                       std::make_unique<SyncRecvMessageEndpoint>(inprocLabel);
                 }
@@ -53,8 +61,8 @@ void MessageEndpointServerHandler::start(
                     std::optional<Message> headerMessageMaybe =
                       endpoint->recv();
                     if (!headerMessageMaybe.has_value()) {
-                        SPDLOG_TRACE(
-                          "Server on port {}, looping after no message", port);
+                        SPDLOG_TRACE("Server on {}, looping after no message",
+                                     endpoint->getAddress());
                         continue;
                     }
                     Message& headerMessage = headerMessageMaybe.value();
@@ -62,7 +70,13 @@ void MessageEndpointServerHandler::start(
                     if (headerMessage.size() == shutdownHeader.size()) {
                         if (headerMessage.dataCopy() == shutdownHeader) {
                             SPDLOG_TRACE(
-                              "Server on {} received shutdown message", port);
+                              "Server on {} received shutdown message",
+                              endpoint->getAddress());
+
+                            // Allow things to wait on shutdown
+                            if (server->workerLatch != nullptr) {
+                                server->workerLatch->wait();
+                            }
                             break;
                         }
                     }
@@ -76,10 +90,11 @@ void MessageEndpointServerHandler::start(
                     if (!bodyMaybe.has_value()) {
                         SPDLOG_ERROR(
                           "Server on port {}, got header, timed out on body",
-                          port);
+                          endpoint->getAddress());
                         throw MessageTimeoutException(
                           "Server, got header, timed out on body");
                     }
+
                     Message& body = bodyMaybe.value();
                     if (body.more()) {
                         throw std::runtime_error("Body sent with SNDMORE flag");
@@ -110,23 +125,34 @@ void MessageEndpointServerHandler::start(
                     }
 
                     // Wait on the async latch if necessary
-                    if (server->asyncLatch != nullptr) {
+                    if (server->workerLatch != nullptr) {
                         SPDLOG_TRACE("Server thread waiting on async latch");
-                        server->asyncLatch->wait();
+                        server->workerLatch->wait();
                     }
                 }
             });
         }
 
-        // Connect the router and dealer
-        router->proxyWithDealer(dealer);
-
+        // Wait on the latch
         latch->wait();
+
+        // Connect the router and dealer if sync
+        if (!async) {
+            router->proxyWithDealer(dealer);
+        }
     });
 }
 
 void MessageEndpointServerHandler::join()
 {
+    // Join each worker
+    for (auto& t : workerThreads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+
+    // Join the receiver thread
     if (receiverThread.joinable()) {
         receiverThread.join();
     }
@@ -140,7 +166,7 @@ MessageEndpointServer::MessageEndpointServer(int asyncPortIn,
   , syncPort(syncPortIn)
   , inprocLabel(inprocLabelIn)
   , nThreads(nThreadsIn)
-  , asyncHandler(this, true, inprocLabel + "async", nThreadsIn)
+  , asyncHandler(this, true, inprocLabel + "-async", nThreadsIn)
   , syncHandler(this, false, inprocLabel, nThreadsIn)
   , asyncShutdownSender(LOCALHOST, asyncPort)
   , syncShutdownSender(LOCALHOST, syncPort)
@@ -165,26 +191,35 @@ void MessageEndpointServer::stop()
     SPDLOG_TRACE(
       "Server sending shutdown messages to ports {} {}", asyncPort, syncPort);
 
-    asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
+    for (int i = 0; i < nThreads; i++) {
+        setWorkerLatch();
+        asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
+        awaitWorkerLatch();
+    }
 
-    syncShutdownSender.sendRaw(shutdownHeader.data(), shutdownHeader.size());
+    for (int i = 0; i < nThreads; i++) {
+        setWorkerLatch();
+        syncShutdownSender.sendRaw(shutdownHeader.data(),
+                                   shutdownHeader.size());
+        awaitWorkerLatch();
+    }
 
     // Join the handlers
     asyncHandler.join();
     syncHandler.join();
 }
 
-void MessageEndpointServer::setAsyncLatch()
+void MessageEndpointServer::setWorkerLatch()
 {
-    asyncLatch = faabric::util::Latch::create(2);
+    workerLatch = faabric::util::Latch::create(2);
 }
 
-void MessageEndpointServer::awaitAsyncLatch()
+void MessageEndpointServer::awaitWorkerLatch()
 {
     SPDLOG_TRACE("Waiting on async latch for port {}", asyncPort);
-    asyncLatch->wait();
+    workerLatch->wait();
 
     SPDLOG_TRACE("Finished async latch for port {}", asyncPort);
-    asyncLatch = nullptr;
+    workerLatch = nullptr;
 }
 }

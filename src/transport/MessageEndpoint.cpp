@@ -1,3 +1,4 @@
+#include "zmq.hpp"
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/context.h>
@@ -68,6 +69,11 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn,
                     timeoutMsIn)
 {}
 
+std::string MessageEndpoint::getAddress()
+{
+    return address;
+}
+
 zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType)
 {
     zmq::socket_t socket;
@@ -96,7 +102,6 @@ zmq::socket_t MessageEndpoint::setUpSocket(zmq::socket_type socketType)
             break;
         }
         case zmq::socket_type::pull: {
-
             SPDLOG_TRACE(
               "New socket: pull {} (timeout {}ms)", address, timeoutMs);
             if (forceConnectNotBind) {
@@ -305,8 +310,8 @@ RecvMessageEndpoint::RecvMessageEndpoint(std::string inProcLabel,
                                          zmq::socket_type socketType)
   : MessageEndpoint("inproc://" + inProcLabel, timeoutMs)
 {
-    // Because this is listening to a local dealer we have to force
-    // a connect rather than a bind
+    // All inproc sockets will be listening to a dealer port in our case, so we
+    // always connect, not bind
     forceConnectNotBind = true;
 
     socket = setUpSocket(socketType);
@@ -314,9 +319,13 @@ RecvMessageEndpoint::RecvMessageEndpoint(std::string inProcLabel,
 
 RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
                                          int timeoutMs,
-                                         zmq::socket_type socketType)
+                                         zmq::socket_type socketType,
+                                         bool connectNotBind)
   : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
 {
+    // In some cases (e.g. many PULLs, we may want to connect, not bind)
+    forceConnectNotBind = connectNotBind;
+
     socket = setUpSocket(socketType);
 }
 
@@ -342,18 +351,13 @@ void RouterMessageEndpoint::proxyWithDealer(
   std::unique_ptr<DealerMessageEndpoint>& dealer)
 {
     // Connect this router to a dealer via a queue
+    SPDLOG_TRACE("Proxying {} to {}", address, dealer->getAddress());
     zmq::proxy(socket, dealer->socket);
 }
 
 // ----------------------------------------------
 // ASYNC RECV ENDPOINT
 // ----------------------------------------------
-
-AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(
-  const std::string& inprocLabel,
-  int timeoutMs)
-  : RecvMessageEndpoint(inprocLabel, timeoutMs, zmq::socket_type::pull)
-{}
 
 AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
@@ -362,6 +366,21 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
 std::optional<Message> AsyncRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
+    return RecvMessageEndpoint::recv(size);
+}
+
+// ----------------------------------------------
+// MULTI ASYNC RECV ENDPOINT
+// ----------------------------------------------
+
+MultiAsyncRecvMessageEndpoint::MultiAsyncRecvMessageEndpoint(int portIn,
+                                                             int timeoutMs)
+  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull, true)
+{}
+
+std::optional<Message> MultiAsyncRecvMessageEndpoint::recv(int size)
+{
+    SPDLOG_TRACE("PULL (multi) {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);
 }
 
