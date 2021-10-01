@@ -1,8 +1,9 @@
-#include "faabric/transport/MessageEndpoint.h"
+#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/transport/common.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 
 #include <csignal>
@@ -93,6 +94,16 @@ void MessageEndpointServerHandler::start(
                                   i,
                                   endpoint->getAddress());
 
+                                // Send an empty response if in sync mode
+                                // (otherwise upstream socket will hang)
+                                if (!async) {
+                                    std::vector<uint8_t> empty(4, 0);
+                                    static_cast<SyncRecvMessageEndpoint*>(
+                                      endpoint.get())
+                                      ->sendResponse(empty.data(),
+                                                     empty.size());
+                                }
+
                                 break;
                             }
                         }
@@ -162,10 +173,11 @@ void MessageEndpointServerHandler::start(
             });
         }
 
-        // Wait on the latch
+        // Wait on the start-up latch
         latch->wait();
 
-        // Connect the router and dealer if sync
+        // Connect the relevant fan-in/ out sockets (these will run until
+        // context is closed)
         if (async) {
             asyncFanIn->attachFanOut(asyncFanOut);
         } else {
@@ -219,25 +231,25 @@ void MessageEndpointServer::start()
 void MessageEndpointServer::stop()
 {
     for (int i = 0; i < nThreads; i++) {
-        setWorkerLatch();
         SPDLOG_TRACE("Sending async shutdown message {}/{} to port {}",
                      i + 1,
                      nThreads,
                      asyncPort);
 
+        setWorkerLatch();
         asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
         awaitWorkerLatch();
     }
 
     for (int i = 0; i < nThreads; i++) {
-        setWorkerLatch();
         SPDLOG_TRACE("Sending sync shutdown message {}/{} to port {}",
                      i + 1,
                      nThreads,
                      syncPort);
 
-        syncShutdownSender.sendRaw(shutdownHeader.data(),
-                                   shutdownHeader.size());
+        setWorkerLatch();
+        syncShutdownSender.sendAwaitResponse(shutdownHeader.data(),
+                                             shutdownHeader.size());
         awaitWorkerLatch();
     }
 
