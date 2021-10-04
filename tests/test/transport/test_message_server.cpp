@@ -20,7 +20,7 @@ class DummyServer final : public MessageEndpointServer
 {
   public:
     DummyServer()
-      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-dummy")
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-dummy", 2)
     {}
 
     std::atomic<int> messageCount = 0;
@@ -46,7 +46,7 @@ class EchoServer final : public MessageEndpointServer
 {
   public:
     EchoServer()
-      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-echo")
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-echo", 2)
     {}
 
   protected:
@@ -75,7 +75,7 @@ class SleepServer final : public MessageEndpointServer
     int delayMs = 1000;
 
     SleepServer()
-      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-sleep")
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-sleep", 2)
     {}
 
   protected:
@@ -215,9 +215,23 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     faabric::StatePart response;
 
     if (expectFailure) {
-        // Check for failure
-        REQUIRE_THROWS_AS(cli.syncSend(0, sleepBytes, sizeof(int), &response),
-                          MessageTimeoutException);
+        bool failed = false;
+
+        // Note - here we must wait until the server has finished handling the
+        // request, even though it's failed
+        server.setWorkerLatch();
+
+        // Make the call and check it fails
+        try {
+            cli.syncSend(0, sleepBytes, sizeof(int), &response);
+        } catch (MessageTimeoutException& ex) {
+            failed = true;
+        }
+
+        REQUIRE(failed);
+
+        // Wait for request to finish
+        server.awaitWorkerLatch();
     } else {
         cli.syncSend(0, sleepBytes, sizeof(int), &response);
         REQUIRE(response.data() == "Response after sleep");

@@ -56,6 +56,14 @@ void SystemConfig::initialise()
         endpointHost =
           faabric::util::getPrimaryIPForThisHost(endpointInterface);
     }
+
+    // Transport
+    functionServerThreads =
+      this->getSystemConfIntParam("FUNCTION_SERVER_THREADS", "2");
+    stateServerThreads =
+      this->getSystemConfIntParam("STATE_SERVER_THREADS", "2");
+    snapshotServerThreads =
+      this->getSystemConfIntParam("SNAPSHOT_SERVER_THREADS", "2");
 }
 
 int SystemConfig::getSystemConfIntParam(const char* name,

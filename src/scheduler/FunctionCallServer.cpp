@@ -9,9 +9,11 @@
 
 namespace faabric::scheduler {
 FunctionCallServer::FunctionCallServer()
-  : faabric::transport::MessageEndpointServer(FUNCTION_CALL_ASYNC_PORT,
-                                              FUNCTION_CALL_SYNC_PORT,
-                                              FUNCTION_INPROC_LABEL)
+  : faabric::transport::MessageEndpointServer(
+      FUNCTION_CALL_ASYNC_PORT,
+      FUNCTION_CALL_SYNC_PORT,
+      FUNCTION_INPROC_LABEL,
+      faabric::util::getSystemConfig().functionServerThreads)
   , scheduler(getScheduler())
 {}
 

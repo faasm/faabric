@@ -43,9 +43,9 @@ class SystemConfig
     int endpointNumThreads;
 
     // Transport
-    int functionCallServerNumThreads = 4;
-    int stateServerNumThreads = 2;
-    int snapshotServerNumThreads = 2;
+    int functionServerThreads;
+    int stateServerThreads;
+    int snapshotServerThreads;
 
     SystemConfig();
 

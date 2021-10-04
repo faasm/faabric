@@ -47,7 +47,7 @@ class MessageEndpointServer
     MessageEndpointServer(int asyncPortIn,
                           int syncPortIn,
                           const std::string& inprocLabelIn,
-                          int nThreadsIn = DEFAULT_MESSAGE_SERVER_THREADS);
+                          int nThreadsIn);
 
     virtual void start();
 
