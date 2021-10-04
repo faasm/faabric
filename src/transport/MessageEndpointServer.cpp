@@ -37,9 +37,6 @@ void MessageEndpointServerHandler::start(
     receiverThread = std::thread([this, latch] {
         int port = async ? server->asyncPort : server->syncPort;
 
-        std::unique_ptr<SyncFanOutMessageEndpoint> syncFanOut = nullptr;
-        std::unique_ptr<AsyncFanOutMessageEndpoint> asyncFanOut = nullptr;
-
         if (async) {
             // Set up push/ pull pair
             asyncFanIn = std::make_unique<AsyncFanInMessageEndpoint>(port);
@@ -169,12 +166,13 @@ void MessageEndpointServerHandler::start(
             });
         }
 
-        // Wait on the start-up latch passed in by the caller.
-        // TODO - does this still work with the fan-in/-out approach?
+        // Wait on the start-up latch passed in by the caller. This means that
+        // once the latch is freed, this handler is just about to start its
+        // proxy, so a short sleep should mean things are ready to go.
         latch->wait();
 
         // Connect the relevant fan-in/ out sockets (these will run until
-        // context is closed)
+        // they receive a terminate message)
         if (async) {
             asyncFanIn->attachFanOut(asyncFanOut->socket);
         } else {
@@ -222,17 +220,24 @@ MessageEndpointServer::MessageEndpointServer(int asyncPortIn,
   , syncShutdownSender(LOCALHOST, syncPort)
 {}
 
+/**
+ * We need to guarantee to callers of this function, that when it returns, the
+ * server will be ready to use.
+ */
 void MessageEndpointServer::start()
 {
-    // This latch means that callers can guarantee that when this function
-    // completes, both sockets will have been opened (and hence the server is
-    // ready to use).
+    // This latch allows use to block on the handlers until _just_ before they
+    // start their proxies.
     auto startLatch = faabric::util::Latch::create(3);
 
     asyncHandler.start(startLatch);
     syncHandler.start(startLatch);
 
     startLatch->wait();
+
+    // Unfortunately we can't know precisely when the proxies have started,
+    // hence have to add a sleep.
+    SLEEP_MS(500);
 }
 
 void MessageEndpointServer::stop()

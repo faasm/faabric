@@ -141,10 +141,6 @@ class AsyncFanOutMessageEndpoint final : public MessageEndpoint
     AsyncFanOutMessageEndpoint(const std::string& inProcLabel,
                                int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    void sendHeader(int header);
-
-    void send(const uint8_t* data, size_t dataSize, bool more = false);
-
     zmq::socket_t socket;
 };
 

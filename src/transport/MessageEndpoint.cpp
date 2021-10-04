@@ -1,4 +1,3 @@
-#include "zmq.hpp"
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/context.h>
@@ -49,9 +48,9 @@
 namespace faabric::transport {
 
 /**
- * This is the core of our zmq usage, where we set up sockets. It handles
- * setting timeouts and catching errors in the creation process, as well as
- * logging and validating our use of socket types and connection types.
+ * This is where we set up all our sockets. It handles setting timeouts and
+ * catching errors in the creation process, as well as logging and validating
+ * our use of socket types and connection types.
  */
 zmq::socket_t socketFactory(zmq::socket_type socketType,
                             MessageEndpointConnectType connectType,
@@ -422,7 +421,7 @@ FanInMessageEndpoint::FanInMessageEndpoint(int portIn,
 
 void FanInMessageEndpoint::attachFanOut(zmq::socket_t& fanOutSock)
 {
-    // Discussion on proxy_steerable here:
+    // Useful discussion on proxy_steerable here:
     // https://github.com/zeromq/cppzmq/issues/478
     SPDLOG_TRACE("Connecting proxy on {} ({})", address, controlSockAddress);
     zmq::proxy_steerable(socket, fanOutSock, zmq::socket_ref(), controlSock);
@@ -450,20 +449,6 @@ AsyncFanOutMessageEndpoint::AsyncFanOutMessageEndpoint(
 {
     socket =
       setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::BIND);
-}
-
-void AsyncFanOutMessageEndpoint::sendHeader(int header)
-{
-    uint8_t headerBytes = static_cast<uint8_t>(header);
-    doSend(socket, &headerBytes, sizeof(headerBytes), true);
-}
-
-void AsyncFanOutMessageEndpoint::send(const uint8_t* data,
-                                      size_t dataSize,
-                                      bool more)
-{
-    SPDLOG_TRACE("PUSH {} ({} bytes, more {})", address, dataSize, more);
-    doSend(socket, data, dataSize, more);
 }
 
 AsyncFanInMessageEndpoint::AsyncFanInMessageEndpoint(int portIn, int timeoutMs)

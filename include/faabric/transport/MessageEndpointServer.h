@@ -37,8 +37,11 @@ class MessageEndpointServerHandler
 
     std::vector<std::thread> workerThreads;
 
-    std::unique_ptr<AsyncFanInMessageEndpoint> asyncFanIn = nullptr;
     std::unique_ptr<SyncFanInMessageEndpoint> syncFanIn = nullptr;
+    std::unique_ptr<SyncFanOutMessageEndpoint> syncFanOut = nullptr;
+
+    std::unique_ptr<AsyncFanInMessageEndpoint> asyncFanIn = nullptr;
+    std::unique_ptr<AsyncFanOutMessageEndpoint> asyncFanOut = nullptr;
 };
 
 class MessageEndpointServer
