@@ -248,6 +248,8 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
       faabric::util::SnapshotMergeOperation::Overwrite;
     size_t dataLength = 0;
 
+    int expectedNumDiffs = 1;
+
     SECTION("Integer")
     {
         int originalValue = 0;
@@ -307,6 +309,28 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
         expectedData = faabric::util::valueToBytes<int>(diffValue);
     }
 
+    SECTION("Raw")
+    {
+        dataLength = 2 * sizeof(int32_t);
+        originalData = std::vector<uint8_t>(dataLength, 3);
+        updatedData = originalData;
+        expectedData = originalData;
+
+        dataType = faabric::util::SnapshotDataType::Raw;
+        operation = faabric::util::SnapshotMergeOperation::Ignore;
+
+        SECTION("Ignore")
+        {
+            // Scatter some modifications through the updated data, to make sure
+            // none are picked up
+            updatedData[0] = 1;
+            updatedData[sizeof(int32_t) - 2] = 1;
+            updatedData[sizeof(int32_t) + 10] = 1;
+
+            expectedNumDiffs = 0;
+        }
+    }
+
     // Write the original data into place
     std::memcpy(snap.data + offset, originalData.data(), originalData.size());
 
@@ -333,17 +357,19 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
       snap.getChangeDiffs(sharedMem, sharedMemSize);
 
     // Check number of diffs
-    REQUIRE(actualDiffs.size() == 1);
+    REQUIRE(actualDiffs.size() == expectedNumDiffs);
 
-    SnapshotDiff diff = actualDiffs.at(0);
-    REQUIRE(diff.offset == offset);
-    REQUIRE(diff.operation == operation);
-    REQUIRE(diff.dataType == dataType);
-    REQUIRE(diff.size == dataLength);
+    if (expectedNumDiffs == 1) {
+        SnapshotDiff diff = actualDiffs.at(0);
+        REQUIRE(diff.offset == offset);
+        REQUIRE(diff.operation == operation);
+        REQUIRE(diff.dataType == dataType);
+        REQUIRE(diff.size == dataLength);
 
-    // Check actual and expected
-    std::vector<uint8_t> actualData(diff.data, diff.data + dataLength);
-    REQUIRE(actualData == expectedData);
+        // Check actual and expected
+        std::vector<uint8_t> actualData(diff.data, diff.data + dataLength);
+        REQUIRE(actualData == expectedData);
+    }
 
     deallocatePages(snap.data, snapPages);
 }
