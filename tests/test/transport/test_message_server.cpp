@@ -99,6 +99,39 @@ class SleepServer final : public MessageEndpointServer
     }
 };
 
+class BlockServer final : public MessageEndpointServer
+{
+  public:
+    BlockServer()
+      : MessageEndpointServer(TEST_PORT_ASYNC, TEST_PORT_SYNC, "test-lock", 2)
+      , latch(faabric::util::Latch::create(2))
+    {}
+
+  protected:
+    void doAsyncRecv(int header,
+                     const uint8_t* buffer,
+                     size_t bufferSize) override
+    {
+        throw std::runtime_error("Lock server not expecting async recv");
+    }
+
+    std::unique_ptr<google::protobuf::Message>
+    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override
+    {
+        // Wait on the latch, requires multiple threads executing in parallel to
+        // get a response.
+        latch->wait();
+
+        // Echo input data
+        auto response = std::make_unique<faabric::StatePart>();
+        response->set_data(buffer, bufferSize);
+        return response;
+    }
+
+  private:
+    std::shared_ptr<faabric::util::Latch> latch = nullptr;
+};
+
 namespace tests {
 
 TEST_CASE("Test sending one message to server", "[transport]")
@@ -236,6 +269,68 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         cli.syncSend(0, sleepBytes, sizeof(int), &response);
         REQUIRE(response.data() == "Response after sleep");
     }
+
+    server.stop();
+}
+
+TEST_CASE("Test blocking requests in multi-threaded server", "[transport]")
+{
+    // Start server in the background
+    BlockServer server;
+    server.start();
+
+    bool successes[2] = { false, false };
+
+    // Create two background threads to make the blocking requests
+    std::thread tA([&successes] {
+        MessageEndpointClient cli(LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
+
+        std::string expectedMsg = "Background thread A";
+
+        faabric::StatePart response;
+        cli.syncSend(
+          0, BYTES(expectedMsg.data()), expectedMsg.size(), &response);
+
+        if (response.data() != expectedMsg) {
+            SPDLOG_ERROR("A did not get expected response: {} != {}",
+                         response.data(),
+                         expectedMsg);
+            successes[0] = false;
+        } else {
+            successes[0] = true;
+        }
+    });
+
+    std::thread tB([&successes] {
+        MessageEndpointClient cli(LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
+
+        std::string expectedMsg = "Background thread B";
+
+        faabric::StatePart response;
+        cli.syncSend(
+          0, BYTES(expectedMsg.data()), expectedMsg.size(), &response);
+
+        if (response.data() != expectedMsg) {
+            SPDLOG_ERROR("B did not get expected response: {} != {}",
+                         response.data(),
+                         expectedMsg);
+
+            successes[1] = false;
+        } else {
+            successes[1] = true;
+        }
+    });
+
+    if (tA.joinable()) {
+        tA.join();
+    }
+
+    if (tB.joinable()) {
+        tB.join();
+    }
+
+    REQUIRE(successes[0]);
+    REQUIRE(successes[1]);
 
     server.stop();
 }
