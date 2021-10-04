@@ -44,6 +44,7 @@ jobs:
       HOST_TYPE: ci
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
+      LOG_LEVEL: trace
     container:
       image: faasm/faabric:0.1.2
     defaults:
