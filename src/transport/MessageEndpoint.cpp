@@ -48,6 +48,136 @@
 
 namespace faabric::transport {
 
+/**
+ * This is the core of our zmq usage, where we set up sockets. It handles
+ * setting timeouts and catching errors in the creation process, as well as
+ * logging and validating our use of socket types and connection types.
+ */
+zmq::socket_t socketFactory(zmq::socket_type socketType,
+                            MessageEndpointConnectType connectType,
+                            int timeoutMs,
+                            const std::string& address)
+{
+    zmq::socket_t socket;
+
+    // Create the socket
+    CATCH_ZMQ_ERR(socket =
+                    zmq::socket_t(*getGlobalMessageContext(), socketType),
+                  "socket_create")
+    socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
+    socket.set(zmq::sockopt::sndtimeo, timeoutMs);
+
+    // Note - setting linger here is essential to avoid infinite hangs
+    socket.set(zmq::sockopt::linger, LINGER_MS);
+
+    switch (connectType) {
+        case (MessageEndpointConnectType::BIND): {
+            switch (socketType) {
+                case zmq::socket_type::dealer: {
+                    SPDLOG_TRACE("Bind socket: dealer {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::pub: {
+                    SPDLOG_TRACE(
+                      "Bind socket: pub {} (timeout {}ms)", address, timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::pull: {
+                    SPDLOG_TRACE("Bind socket: pull {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::push: {
+                    SPDLOG_TRACE("Bind socket: push {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::rep: {
+                    SPDLOG_TRACE(
+                      "Bind socket: rep {} (timeout {}ms)", address, timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                case zmq::socket_type::router: {
+                    SPDLOG_TRACE("Bind socket: router {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
+                default: {
+                    SPDLOG_ERROR(
+                      "Invalid bind socket type {} ({})", socketType, address);
+                    throw std::runtime_error(
+                      "Binding with invalid socket type");
+                }
+            }
+            break;
+        }
+        case (MessageEndpointConnectType::CONNECT): {
+            switch (socketType) {
+                case zmq::socket_type::pull: {
+                    SPDLOG_TRACE("Connect socket: pull {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                case zmq::socket_type::push: {
+                    SPDLOG_TRACE("Connect socket: push {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                case zmq::socket_type::rep: {
+                    SPDLOG_TRACE("Connect socket: rep {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                case zmq::socket_type::req: {
+                    SPDLOG_TRACE("Connect socket: req {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                case zmq::socket_type::sub: {
+                    SPDLOG_TRACE("Connect socket: sub {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
+                default: {
+                    SPDLOG_ERROR("Invalid connect socket type {} ({})",
+                                 socketType,
+                                 address);
+                    throw std::runtime_error(
+                      "Connecting with unrecognized socket type");
+                }
+            }
+            break;
+        }
+        default: {
+            SPDLOG_ERROR("Unrecognised socket connect type {}", connectType);
+            throw std::runtime_error("Unrecognised connect type");
+        }
+    }
+
+    return socket;
+}
+
 MessageEndpoint::MessageEndpoint(const std::string& addressIn, int timeoutMsIn)
   : address(addressIn)
   , timeoutMs(timeoutMsIn)
@@ -78,111 +208,7 @@ zmq::socket_t MessageEndpoint::setUpSocket(
   zmq::socket_type socketType,
   MessageEndpointConnectType connectType)
 {
-    zmq::socket_t socket;
-
-    // Create the socket
-    CATCH_ZMQ_ERR(socket =
-                    zmq::socket_t(*getGlobalMessageContext(), socketType),
-                  "socket_create")
-    socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
-    socket.set(zmq::sockopt::sndtimeo, timeoutMs);
-
-    // Note - setting linger here is essential to avoid infinite hangs
-    socket.set(zmq::sockopt::linger, LINGER_MS);
-
-    switch (connectType) {
-        case (MessageEndpointConnectType::BIND): {
-            switch (socketType) {
-                case zmq::socket_type::push: {
-                    SPDLOG_TRACE("Bind socket: push {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::pull: {
-                    SPDLOG_TRACE("Bind socket: pull {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::rep: {
-                    SPDLOG_TRACE(
-                      "Bind socket: rep {} (timeout {}ms)", address, timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::router: {
-                    SPDLOG_TRACE("Bind socket: router {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::dealer: {
-                    SPDLOG_TRACE("Bind socket: dealer {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                default: {
-                    SPDLOG_ERROR(
-                      "Invalid bind socket type {} ({})", socketType, address);
-                    throw std::runtime_error(
-                      "Binding with invalid socket type");
-                }
-            }
-            break;
-        }
-        case (MessageEndpointConnectType::CONNECT): {
-            switch (socketType) {
-                case zmq::socket_type::req: {
-                    SPDLOG_TRACE("Connect socket: req {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::push: {
-                    SPDLOG_TRACE("Connect socket: push {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::pull: {
-                    SPDLOG_TRACE("Connect socket: pull {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::rep: {
-                    SPDLOG_TRACE("Connect socket: rep {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                default: {
-                    SPDLOG_ERROR("Invalid connect socket type {} ({})",
-                                 socketType,
-                                 address);
-                    throw std::runtime_error(
-                      "Connecting with unrecognized socket type");
-                }
-            }
-            break;
-        }
-        default: {
-            SPDLOG_ERROR("Unrecognised socket connect type {}", connectType);
-            throw std::runtime_error("Unrecognised connect type");
-        }
-    }
-
-    return socket;
+    return socketFactory(socketType, connectType, timeoutMs, address);
 }
 
 void MessageEndpoint::doSend(zmq::socket_t& socket,
@@ -381,14 +407,41 @@ FanInMessageEndpoint::FanInMessageEndpoint(int portIn,
                                            int timeoutMs,
                                            zmq::socket_type socketType)
   : RecvMessageEndpoint(portIn, timeoutMs, socketType)
-{}
+  , controlSockAddress("inproc://" + std::to_string(portIn) + "-control")
+{
+    // Connect the control sock. Note that even though the control socket lives
+    // longer than the control killer socket, we must *connect* here, not bind.
+    controlSock = socketFactory(zmq::socket_type::sub,
+                                MessageEndpointConnectType::CONNECT,
+                                timeoutMs,
+                                controlSockAddress);
+
+    // Subscribe to all topics
+    controlSock.set(zmq::sockopt::subscribe, zmq::str_buffer(""));
+}
 
 void FanInMessageEndpoint::attachFanOut(zmq::socket_t& fanOutSock)
 {
+    // Discussion on proxy_steerable here:
+    // https://github.com/zeromq/cppzmq/issues/478
+    SPDLOG_TRACE("Connecting proxy on {} ({})", address, controlSockAddress);
     zmq::proxy_steerable(socket, fanOutSock, zmq::socket_ref(), controlSock);
 }
 
-void FanInMessageEndpoint::stop() {}
+void FanInMessageEndpoint::stop()
+{
+    SPDLOG_TRACE("Sending TERMINATE on control socket {}", controlSockAddress);
+    // Note that even though this killer socket is short-lived sending a message
+    // to the control socket, we must *bind* here, not connect.
+    zmq::socket_t controlKillerSock =
+      socketFactory(zmq::socket_type::pub,
+                    MessageEndpointConnectType::BIND,
+                    timeoutMs,
+                    controlSockAddress);
+
+    controlKillerSock.send(zmq::str_buffer("TERMINATE"), zmq::send_flags::none);
+    controlKillerSock.close();
+}
 
 AsyncFanOutMessageEndpoint::AsyncFanOutMessageEndpoint(
   const std::string& inprocLabel,

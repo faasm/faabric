@@ -132,6 +132,7 @@ class FanInMessageEndpoint : public RecvMessageEndpoint
 
   private:
     zmq::socket_t controlSock;
+    std::string controlSockAddress;
 };
 
 class AsyncFanOutMessageEndpoint final : public MessageEndpoint

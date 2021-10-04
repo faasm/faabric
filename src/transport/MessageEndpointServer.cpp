@@ -37,15 +37,11 @@ void MessageEndpointServerHandler::start(
     receiverThread = std::thread([this, latch] {
         int port = async ? server->asyncPort : server->syncPort;
 
-        // Sync: router and dealer
-        std::unique_ptr<SyncFanInMessageEndpoint> syncFanIn = nullptr;
         std::unique_ptr<SyncFanOutMessageEndpoint> syncFanOut = nullptr;
-
-        // Async: pull/ push pair
-        std::unique_ptr<AsyncFanInMessageEndpoint> asyncFanIn = nullptr;
         std::unique_ptr<AsyncFanOutMessageEndpoint> asyncFanOut = nullptr;
 
         if (async) {
+            // Set up push/ pull pair
             asyncFanIn = std::make_unique<AsyncFanInMessageEndpoint>(port);
             asyncFanOut =
               std::make_unique<AsyncFanOutMessageEndpoint>(inprocLabel);
@@ -155,10 +151,10 @@ void MessageEndpointServerHandler::start(
                               ->sendResponse(buffer, respSize);
                         }
 
-                        // Wait on the async latch if necessary
+                        // Wait on the worker latch if necessary
                         if (server->workerLatch != nullptr) {
                             SPDLOG_TRACE(
-                              "Server thread waiting on async latch");
+                              "Server thread waiting on worker latch");
                             server->workerLatch->wait();
                         }
                     }
@@ -167,13 +163,14 @@ void MessageEndpointServerHandler::start(
                 // Just before the thread dies, check if there's something
                 // waiting on the latch
                 if (server->workerLatch != nullptr) {
-                    SPDLOG_TRACE("Server thread {} waiting on async latch", i);
+                    SPDLOG_TRACE("Server thread {} waiting on worker latch", i);
                     server->workerLatch->wait();
                 }
             });
         }
 
-        // Wait on the start-up latch
+        // Wait on the start-up latch passed in by the caller.
+        // TODO - does this still work with the fan-in/-out approach?
         latch->wait();
 
         // Connect the relevant fan-in/ out sockets (these will run until
@@ -188,6 +185,16 @@ void MessageEndpointServerHandler::start(
 
 void MessageEndpointServerHandler::join()
 {
+    // Note that we have to kill any running proxies before anything else
+    // https://github.com/zeromq/cppzmq/issues/478
+    if (syncFanIn != nullptr) {
+        syncFanIn->stop();
+    }
+
+    if (asyncFanIn != nullptr) {
+        asyncFanIn->stop();
+    }
+
     // Join each worker
     for (auto& t : workerThreads) {
         if (t.joinable()) {
@@ -230,6 +237,12 @@ void MessageEndpointServer::start()
 
 void MessageEndpointServer::stop()
 {
+    // Here we send shutdown messages to each worker in turn, however, because
+    // they're all connected on the same inproc port, we have to wait until each
+    // one has shut down fully (i.e. the zmq socket has gone out of scope),
+    // before sending the next shutdown message (hence the use of the latch). If
+    // we don't do this, zmq will direct messages to sockets that are in the
+    // process of shutting down and cause errors.
     for (int i = 0; i < nThreads; i++) {
         SPDLOG_TRACE("Sending async shutdown message {}/{} to port {}",
                      i + 1,
@@ -265,10 +278,10 @@ void MessageEndpointServer::setWorkerLatch()
 
 void MessageEndpointServer::awaitWorkerLatch()
 {
-    SPDLOG_TRACE("Waiting on async latch for port {}", asyncPort);
+    SPDLOG_TRACE("Waiting on worker latch for port {}", asyncPort);
     workerLatch->wait();
 
-    SPDLOG_TRACE("Finished async latch for port {}", asyncPort);
+    SPDLOG_TRACE("Finished worker latch for port {}", asyncPort);
     workerLatch = nullptr;
 }
 }
