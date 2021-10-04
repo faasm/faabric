@@ -13,6 +13,9 @@ set(LIB_FILES
 
 add_library(faabric_test_utils "${LIB_FILES}")
 
+target_compile_options(faabric_test_utils PUBLIC -fno-omit-frame-pointer)
+target_link_options(faabric_test_utils PUBLIC -Wl,--export-dynamic)
+
 add_dependencies(faabric_test_utils catch_ext)
 target_include_directories(faabric_test_utils PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 

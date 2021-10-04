@@ -7,6 +7,7 @@ set(LIB_FILES
         bytes.cpp
         config.cpp
         clock.cpp
+        crash.cpp
         delta.cpp
         environment.cpp
         files.cpp
