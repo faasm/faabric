@@ -26,8 +26,6 @@ class FaabricMain
     void shutdown();
 
   private:
-    void setupCrashHandler();
-
     faabric::state::StateServer stateServer;
     faabric::scheduler::FunctionCallServer functionServer;
     faabric::snapshot::SnapshotServer snapshotServer;
