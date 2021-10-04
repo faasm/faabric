@@ -56,9 +56,11 @@ class MessageEndpointServer
 
     virtual void stop();
 
-    void setWorkerLatch();
+    void setRequestLatch();
 
-    void awaitWorkerLatch();
+    void awaitRequestLatch();
+
+    int getNThreads();
 
   protected:
     virtual void doAsyncRecv(int header,
@@ -76,12 +78,17 @@ class MessageEndpointServer
     const std::string inprocLabel;
     const int nThreads;
 
+    void setShutdownLatch();
+
+    void awaitShutdownLatch();
+
     MessageEndpointServerHandler asyncHandler;
     MessageEndpointServerHandler syncHandler;
 
     AsyncSendMessageEndpoint asyncShutdownSender;
     SyncSendMessageEndpoint syncShutdownSender;
 
-    std::shared_ptr<faabric::util::Latch> workerLatch;
+    std::shared_ptr<faabric::util::Latch> requestLatch;
+    std::shared_ptr<faabric::util::Latch> shutdownLatch;
 };
 }

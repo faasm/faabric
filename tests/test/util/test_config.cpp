@@ -47,6 +47,10 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string globalTimeout = setEnvVar("GLOBAL_MESSAGE_TIMEOUT", "9876");
     std::string boundTimeout = setEnvVar("BOUND_TIMEOUT", "6666");
 
+    std::string functionThreads = setEnvVar("FUNCTION_SERVER_THREADS", "111");
+    std::string stateThreads = setEnvVar("STATE_SERVER_THREADS", "222");
+    std::string snapshotThreads = setEnvVar("SNAPSHOT_SERVER_THREADS", "333");
+
     std::string mpiSize = setEnvVar("DEFAULT_MPI_WORLD_SIZE", "2468");
 
     // Create new conf for test
@@ -66,6 +70,10 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.globalMessageTimeout == 9876);
     REQUIRE(conf.boundTimeout == 6666);
 
+    REQUIRE(conf.functionServerThreads == 111);
+    REQUIRE(conf.stateServerThreads == 222);
+    REQUIRE(conf.snapshotServerThreads == 333);
+
     REQUIRE(conf.defaultMpiWorldSize == 2468);
 
     // Be careful with host type
@@ -84,6 +92,10 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
 
     setEnvVar("GLOBAL_MESSAGE_TIMEOUT", globalTimeout);
     setEnvVar("BOUND_TIMEOUT", boundTimeout);
+
+    setEnvVar("FUNCTION_SERVER_THREADS", functionThreads);
+    setEnvVar("STATE_SERVER_THREADS", stateThreads);
+    setEnvVar("SNAPSHOT_SERVER_THREADS", snapshotThreads);
 
     setEnvVar("DEFAULT_MPI_WORLD_SIZE", mpiSize);
 }

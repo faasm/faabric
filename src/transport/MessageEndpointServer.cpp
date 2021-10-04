@@ -148,20 +148,21 @@ void MessageEndpointServerHandler::start(
                               ->sendResponse(buffer, respSize);
                         }
 
-                        // Wait on the worker latch if necessary
-                        if (server->workerLatch != nullptr) {
+                        // Wait on the request latch if necessary
+                        if (server->requestLatch != nullptr) {
                             SPDLOG_TRACE(
                               "Server thread waiting on worker latch");
-                            server->workerLatch->wait();
+                            server->requestLatch->wait();
                         }
                     }
                 }
 
                 // Just before the thread dies, check if there's something
-                // waiting on the latch
-                if (server->workerLatch != nullptr) {
-                    SPDLOG_TRACE("Server thread {} waiting on worker latch", i);
-                    server->workerLatch->wait();
+                // waiting on the shutdown latch
+                if (server->shutdownLatch != nullptr) {
+                    SPDLOG_TRACE("Server thread {} waiting on shutdown latch",
+                                 i);
+                    server->shutdownLatch->wait();
                 }
             });
         }
@@ -254,9 +255,9 @@ void MessageEndpointServer::stop()
                      nThreads,
                      asyncPort);
 
-        setWorkerLatch();
+        setShutdownLatch();
         asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
-        awaitWorkerLatch();
+        awaitShutdownLatch();
     }
 
     for (int i = 0; i < nThreads; i++) {
@@ -265,10 +266,10 @@ void MessageEndpointServer::stop()
                      nThreads,
                      syncPort);
 
-        setWorkerLatch();
+        setShutdownLatch();
         syncShutdownSender.sendAwaitResponse(shutdownHeader.data(),
                                              shutdownHeader.size());
-        awaitWorkerLatch();
+        awaitShutdownLatch();
     }
 
     // Join the handlers
@@ -276,17 +277,36 @@ void MessageEndpointServer::stop()
     syncHandler.join();
 }
 
-void MessageEndpointServer::setWorkerLatch()
+void MessageEndpointServer::setRequestLatch()
 {
-    workerLatch = faabric::util::Latch::create(2);
+    requestLatch = faabric::util::Latch::create(2);
 }
 
-void MessageEndpointServer::awaitWorkerLatch()
+void MessageEndpointServer::awaitRequestLatch()
 {
     SPDLOG_TRACE("Waiting on worker latch for port {}", asyncPort);
-    workerLatch->wait();
+    requestLatch->wait();
 
     SPDLOG_TRACE("Finished worker latch for port {}", asyncPort);
-    workerLatch = nullptr;
+    requestLatch = nullptr;
+}
+
+void MessageEndpointServer::setShutdownLatch()
+{
+    shutdownLatch = faabric::util::Latch::create(2);
+}
+
+void MessageEndpointServer::awaitShutdownLatch()
+{
+    SPDLOG_TRACE("Waiting on shutdown latch for port {}", asyncPort);
+    shutdownLatch->wait();
+
+    SPDLOG_TRACE("Finished shutdown latch for port {}", asyncPort);
+    shutdownLatch = nullptr;
+}
+
+int MessageEndpointServer::getNThreads()
+{
+    return nThreads;
 }
 }

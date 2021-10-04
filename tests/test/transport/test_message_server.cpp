@@ -149,9 +149,9 @@ TEST_CASE("Test sending one message to server", "[transport]")
     std::string body = "body";
     const uint8_t* bodyMsg = BYTES_CONST(body.c_str());
 
-    server.setWorkerLatch();
+    server.setRequestLatch();
     cli.asyncSend(0, bodyMsg, body.size());
-    server.awaitWorkerLatch();
+    server.awaitRequestLatch();
 
     REQUIRE(server.messageCount == 1);
 
@@ -252,7 +252,7 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 
         // Note - here we must wait until the server has finished handling the
         // request, even though it's failed
-        server.setWorkerLatch();
+        server.setRequestLatch();
 
         // Make the call and check it fails
         try {
@@ -264,7 +264,7 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
         REQUIRE(failed);
 
         // Wait for request to finish
-        server.awaitWorkerLatch();
+        server.awaitRequestLatch();
     } else {
         cli.syncSend(0, sleepBytes, sizeof(int), &response);
         REQUIRE(response.data() == "Response after sleep");
