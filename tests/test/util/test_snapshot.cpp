@@ -403,7 +403,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test invalid snapshot merges", "[util]")
     {
         dataType = faabric::util::SnapshotDataType::Raw;
         dataLength = 123;
-        expectedMsg = "Merge region for unhandled data type";
+        expectedMsg = "Unhandled raw merge operation";
     }
 
     // Take the snapshot
