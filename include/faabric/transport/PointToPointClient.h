@@ -1,6 +1,6 @@
 #pragma once
 
-#include "faabric/proto/faabric.pb.h"
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/MessageEndpointClient.h>
 
 namespace faabric::transport {

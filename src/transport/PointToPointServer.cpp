@@ -1,4 +1,4 @@
-#include "faabric/transport/PointToPointRegistry.h"
+#include <faabric/transport/PointToPointRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/transport/common.h>
