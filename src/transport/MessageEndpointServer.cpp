@@ -49,7 +49,7 @@ void MessageEndpointServerHandler::start(
               std::make_unique<SyncFanOutMessageEndpoint>(inprocLabel);
         }
 
-        // Lauch worker threads
+        // Launch worker threads
         for (int i = 0; i < nThreads; i++) {
             workerThreads.emplace_back([this, i] {
                 // Here we want to isolate all ZeroMQ stuff in its own
@@ -246,18 +246,24 @@ void MessageEndpointServer::stop()
     // Here we send shutdown messages to each worker in turn, however, because
     // they're all connected on the same inproc port, we have to wait until each
     // one has shut down fully (i.e. the zmq socket has gone out of scope),
-    // before sending the next shutdown message (hence the use of the latch). If
-    // we don't do this, zmq will direct messages to sockets that are in the
+    // before sending the next shutdown message.
+    // If we don't do this, zmq will direct messages to sockets that are in the
     // process of shutting down and cause errors.
+    // To ensure each socket has closed, we use a latch with two slots, where
+    // this thread takes one of the slots, and the worker thread takes the other
+    // once it's finished shutting down.
     for (int i = 0; i < nThreads; i++) {
         SPDLOG_TRACE("Sending async shutdown message {}/{} to port {}",
                      i + 1,
                      nThreads,
                      asyncPort);
 
-        setShutdownLatch();
+        shutdownLatch = faabric::util::Latch::create(2);
+
         asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
-        awaitShutdownLatch();
+
+        shutdownLatch->wait();
+        shutdownLatch = nullptr;
     }
 
     for (int i = 0; i < nThreads; i++) {
@@ -266,10 +272,13 @@ void MessageEndpointServer::stop()
                      nThreads,
                      syncPort);
 
-        setShutdownLatch();
+        shutdownLatch = faabric::util::Latch::create(2);
+
         syncShutdownSender.sendAwaitResponse(shutdownHeader.data(),
                                              shutdownHeader.size());
-        awaitShutdownLatch();
+
+        shutdownLatch->wait();
+        shutdownLatch = nullptr;
     }
 
     // Join the handlers
@@ -289,20 +298,6 @@ void MessageEndpointServer::awaitRequestLatch()
 
     SPDLOG_TRACE("Finished worker latch for port {}", asyncPort);
     requestLatch = nullptr;
-}
-
-void MessageEndpointServer::setShutdownLatch()
-{
-    shutdownLatch = faabric::util::Latch::create(2);
-}
-
-void MessageEndpointServer::awaitShutdownLatch()
-{
-    SPDLOG_TRACE("Waiting on shutdown latch for port {}", asyncPort);
-    shutdownLatch->wait();
-
-    SPDLOG_TRACE("Finished shutdown latch for port {}", asyncPort);
-    shutdownLatch = nullptr;
 }
 
 int MessageEndpointServer::getNThreads()

@@ -78,10 +78,6 @@ class MessageEndpointServer
     const std::string inprocLabel;
     const int nThreads;
 
-    void setShutdownLatch();
-
-    void awaitShutdownLatch();
-
     MessageEndpointServerHandler asyncHandler;
     MessageEndpointServerHandler syncHandler;
 

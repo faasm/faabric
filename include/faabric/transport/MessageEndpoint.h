@@ -105,8 +105,14 @@ class SyncSendMessageEndpoint final : public MessageEndpoint
 class RecvMessageEndpoint : public MessageEndpoint
 {
   public:
+    /**
+     * Constructor for external TCP sockets
+     */
     RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
 
+    /**
+     * Constructor for internal inproc sockets
+     */
     RecvMessageEndpoint(std::string inProcLabel,
                         int timeoutMs,
                         zmq::socket_type socketType,
@@ -165,7 +171,7 @@ class SyncFanInMessageEndpoint final : public FanInMessageEndpoint
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 };
 
-class AsyncRecvMessageEndpoint : public RecvMessageEndpoint
+class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
     AsyncRecvMessageEndpoint(const std::string& inprocLabel,
