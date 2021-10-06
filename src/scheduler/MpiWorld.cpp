@@ -39,6 +39,7 @@ namespace faabric::scheduler {
 
 MpiWorld::MpiWorld()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
+  , basePort(faabric::util::getSystemConfig().mpiBasePort)
   , creationTime(faabric::util::startTimer())
   , cartProcsPerDim(2)
 {}
