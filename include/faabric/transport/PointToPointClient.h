@@ -10,8 +10,8 @@ class PointToPointClient : public faabric::transport::MessageEndpointClient
   public:
     PointToPointClient(const std::string& hostIn);
 
-    void sendMappings(faabric::PointToPointMappings &mappings);
+    void sendMappings(faabric::PointToPointMappings& mappings);
 
-    void sendMessage(faabric::PointToPointMessage &msg);
+    void sendMessage(faabric::PointToPointMessage& msg);
 };
 }
