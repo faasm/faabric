@@ -27,6 +27,7 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.boundTimeout == 30000);
 
     REQUIRE(conf.defaultMpiWorldSize == 5);
+    REQUIRE(conf.mpiBasePort == 10800);
 }
 
 TEST_CASE("Test overriding system config initialisation", "[util]")
@@ -52,6 +53,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string snapshotThreads = setEnvVar("SNAPSHOT_SERVER_THREADS", "333");
 
     std::string mpiSize = setEnvVar("DEFAULT_MPI_WORLD_SIZE", "2468");
+    std::string mpiPort = setEnvVar("MPI_BASE_PORT", "9999");
 
     // Create new conf for test
     SystemConfig conf;
@@ -75,6 +77,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.snapshotServerThreads == 333);
 
     REQUIRE(conf.defaultMpiWorldSize == 2468);
+    REQUIRE(conf.mpiBasePort == 9999);
 
     // Be careful with host type
     setEnvVar("LOG_LEVEL", logLevel);
@@ -98,6 +101,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("SNAPSHOT_SERVER_THREADS", snapshotThreads);
 
     setEnvVar("DEFAULT_MPI_WORLD_SIZE", mpiSize);
+    setEnvVar("MPI_BASE_PORT", mpiPort);
 }
 
 }

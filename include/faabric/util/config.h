@@ -35,6 +35,7 @@ class SystemConfig
 
     // MPI
     int defaultMpiWorldSize;
+    int mpiBasePort;
 
     // Endpoint
     std::string endpointInterface;

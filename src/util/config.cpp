@@ -43,6 +43,7 @@ void SystemConfig::initialise()
     // MPI
     defaultMpiWorldSize =
       this->getSystemConfIntParam("DEFAULT_MPI_WORLD_SIZE", "5");
+    mpiBasePort = this->getSystemConfIntParam("MPI_BASE_PORT", "10800");
 
     // Endpoint
     endpointInterface = getEnvVar("ENDPOINT_INTERFACE", "");
@@ -104,6 +105,7 @@ void SystemConfig::print()
 
     SPDLOG_INFO("--- MPI ---");
     SPDLOG_INFO("DEFAULT_MPI_WORLD_SIZE  {}", defaultMpiWorldSize);
+    SPDLOG_INFO("MPI_BASE_PORT  {}", mpiBasePort);
 
     SPDLOG_INFO("--- Endpoint ---");
     SPDLOG_INFO("ENDPOINT_INTERFACE         {}", endpointInterface);
