@@ -24,6 +24,12 @@
 
 namespace faabric::transport {
 
+enum MessageEndpointConnectType
+{
+    BIND = 0,
+    CONNECT = 1,
+};
+
 // Note: sockets must be open-ed and close-ed from the _same_ thread. In a given
 // communication group, one socket may bind, and all the rest must connect.
 // Order does not matter.
@@ -32,25 +38,24 @@ class MessageEndpoint
   public:
     MessageEndpoint(const std::string& hostIn, int portIn, int timeoutMsIn);
 
+    MessageEndpoint(const std::string& addressIn, int timeoutMsIn);
+
     // Delete assignment and copy-constructor as we need to be very careful with
     // scoping and same-thread instantiation
     MessageEndpoint& operator=(const MessageEndpoint&) = delete;
 
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
 
-    std::string getHost();
-
-    int getPort();
+    std::string getAddress();
 
   protected:
-    const std::string host;
-    const int port;
     const std::string address;
     const int timeoutMs;
     const std::thread::id tid;
     const int id;
 
-    zmq::socket_t setUpSocket(zmq::socket_type socketType, int socketPort);
+    zmq::socket_t setUpSocket(zmq::socket_type socketType,
+                              MessageEndpointConnectType connectType);
 
     void doSend(zmq::socket_t& socket,
                 const uint8_t* data,
@@ -75,7 +80,6 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
 
     void send(const uint8_t* data, size_t dataSize, bool more = false);
 
-  private:
     zmq::socket_t pushSocket;
 };
 
@@ -101,19 +105,78 @@ class SyncSendMessageEndpoint final : public MessageEndpoint
 class RecvMessageEndpoint : public MessageEndpoint
 {
   public:
+    /**
+     * Constructor for external TCP sockets
+     */
     RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
+
+    /**
+     * Constructor for internal inproc sockets
+     */
+    RecvMessageEndpoint(std::string inProcLabel,
+                        int timeoutMs,
+                        zmq::socket_type socketType,
+                        MessageEndpointConnectType connectType);
 
     virtual ~RecvMessageEndpoint(){};
 
     virtual std::optional<Message> recv(int size = 0);
 
-  protected:
     zmq::socket_t socket;
+};
+
+class FanInMessageEndpoint : public RecvMessageEndpoint
+{
+  public:
+    FanInMessageEndpoint(int portIn,
+                         int timeoutMs,
+                         zmq::socket_type socketType);
+
+    void attachFanOut(zmq::socket_t& fanOutSock);
+
+    void stop();
+
+  private:
+    zmq::socket_t controlSock;
+    std::string controlSockAddress;
+};
+
+class AsyncFanOutMessageEndpoint final : public MessageEndpoint
+{
+  public:
+    AsyncFanOutMessageEndpoint(const std::string& inProcLabel,
+                               int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    zmq::socket_t socket;
+};
+
+class AsyncFanInMessageEndpoint final : public FanInMessageEndpoint
+{
+  public:
+    AsyncFanInMessageEndpoint(int portIn,
+                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+};
+
+class SyncFanOutMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    SyncFanOutMessageEndpoint(const std::string& inProcLabel,
+                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+};
+
+class SyncFanInMessageEndpoint final : public FanInMessageEndpoint
+{
+  public:
+    SyncFanInMessageEndpoint(int portIn,
+                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 };
 
 class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
+    AsyncRecvMessageEndpoint(const std::string& inprocLabel,
+                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
     AsyncRecvMessageEndpoint(int portIn,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
@@ -123,6 +186,9 @@ class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
 class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
+    SyncRecvMessageEndpoint(const std::string& inprocLabel,
+                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
     SyncRecvMessageEndpoint(int portIn,
                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 

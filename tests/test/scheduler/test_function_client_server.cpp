@@ -49,6 +49,17 @@ class ClientServerFixture
     }
 };
 
+TEST_CASE_METHOD(ConfTestFixture,
+                 "Test setting function call server threads",
+                 "[scheduler]")
+{
+    conf.functionServerThreads = 6;
+
+    faabric::scheduler::FunctionCallServer server;
+
+    REQUIRE(server.getNThreads() == 6);
+}
+
 TEST_CASE_METHOD(ClientServerFixture,
                  "Test sending flush message",
                  "[scheduler]")
@@ -220,9 +231,9 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     *reqA.mutable_function() = msg;
 
     // Check that nothing's happened
-    server.setAsyncLatch();
+    server.setRequestLatch();
     cli.unregister(reqA);
-    server.awaitAsyncLatch();
+    server.awaitRequestLatch();
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Make the request to unregister the actual host
@@ -230,9 +241,9 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqB.set_host(otherHost);
     *reqB.mutable_function() = msg;
 
-    server.setAsyncLatch();
+    server.setRequestLatch();
     cli.unregister(reqB);
-    server.awaitAsyncLatch();
+    server.awaitRequestLatch();
 
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 

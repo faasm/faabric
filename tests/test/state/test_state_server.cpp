@@ -56,6 +56,17 @@ class SimpleStateServerTestFixture
     std::vector<uint8_t> dataB;
 };
 
+TEST_CASE_METHOD(ConfTestFixture,
+                 "Test setting state server threads",
+                 "[state]")
+{
+    conf.stateServerThreads = 7;
+
+    StateServer server(faabric::state::getGlobalState());
+
+    REQUIRE(server.getNThreads() == 7);
+}
+
 TEST_CASE_METHOD(SimpleStateServerTestFixture,
                  "Test state request/ response",
                  "[state]")
