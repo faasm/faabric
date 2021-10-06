@@ -13,8 +13,11 @@
 
 namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
-  : faabric::transport::MessageEndpointServer(SNAPSHOT_ASYNC_PORT,
-                                              SNAPSHOT_SYNC_PORT)
+  : faabric::transport::MessageEndpointServer(
+      SNAPSHOT_ASYNC_PORT,
+      SNAPSHOT_SYNC_PORT,
+      SNAPSHOT_INPROC_LABEL,
+      faabric::util::getSystemConfig().snapshotServerThreads)
 {}
 
 void SnapshotServer::doAsyncRecv(int header,
