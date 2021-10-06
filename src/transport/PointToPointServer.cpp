@@ -1,14 +1,19 @@
+#include "faabric/transport/PointToPointRegistry.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
 namespace faabric::transport {
 PointToPointServer::PointToPointServer()
-  : faabric::transport::MessageEndpointServer(POINT_TO_POINT_ASYNC_PORT,
-                                              POINT_TO_POINT_SYNC_PORT)
+  : faabric::transport::MessageEndpointServer(
+      POINT_TO_POINT_ASYNC_PORT,
+      POINT_TO_POINT_SYNC_PORT,
+      POINT_TO_POINT_INPROC_LABEL,
+      faabric::util::getSystemConfig().pointToPointServerThreads)
 {}
 
 void PointToPointServer::doAsyncRecv(int header,
@@ -17,7 +22,7 @@ void PointToPointServer::doAsyncRecv(int header,
 {
     PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
 
-    std::shared_ptr<AsyncSendMessageEndpoint> endpoint =
+    std::unique_ptr<AsyncInternalSendMessageEndpoint> endpoint =
       getSendEndpoint(msg.appid(), msg.sendidx(), msg.recvidx());
 
     // TODO - is this copying the data? Would be nice to avoid if poss
@@ -29,16 +34,22 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
   const uint8_t* buffer,
   size_t bufferSize)
 {
-    std::string errMsg = "Point-to-point sync messaging not supported";
-    SPDLOG_ERROR(errMsg);
-    throw std::runtime_error(errMsg);
+    PARSE_MSG(faabric::PointToPointMappings, buffer, bufferSize)
+
+    PointToPointRegistry& reg = getPointToPointRegistry();
+
+    for (const auto& m : msg.mappings()) {
+        reg.setHostForReceiver(m.appid(), m.recvidx(), m.host());
+    }
+
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
 std::vector<uint8_t> PointToPointServer::recvMessage(int appId,
                                                      int sendIdx,
                                                      int recvIdx)
 {
-    std::shared_ptr<AsyncRecvMessageEndpoint> endpoint =
+    std::unique_ptr<AsyncInternalRecvMessageEndpoint> endpoint =
       getRecvEndpoint(appId, sendIdx, recvIdx);
 
     std::optional<Message> messageDataMaybe = endpoint->recv().value();
@@ -53,5 +64,19 @@ std::string PointToPointServer::getInprocLabel(int appId,
                                                int recvIdx)
 {
     return fmt::format("{}-{}-{}", appId, sendIdx, recvIdx);
+}
+
+std::unique_ptr<AsyncInternalSendMessageEndpoint>
+PointToPointServer::getSendEndpoint(int appId, int sendIdx, int recvIdx)
+{
+    std::string label = getInprocLabel(appId, sendIdx, recvIdx);
+    return std::make_unique<AsyncInternalSendMessageEndpoint>(label);
+}
+
+std::unique_ptr<AsyncInternalRecvMessageEndpoint>
+PointToPointServer::getRecvEndpoint(int appId, int sendIdx, int recvIdx)
+{
+    std::string label = getInprocLabel(appId, sendIdx, recvIdx);
+    return std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
 }
 }

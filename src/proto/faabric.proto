@@ -217,6 +217,7 @@ message PointToPointMappings {
     message PointToPointMapping {
         int32 appId = 1;
         int32 recvIdx = 2;
+        string host = 3;
     }
     repeated PointToPointMapping mappings = 1;
 }

@@ -313,14 +313,14 @@ AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
                                                    int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    pushSocket =
+    socket =
       setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::CONNECT);
 }
 
 void AsyncSendMessageEndpoint::sendHeader(int header)
 {
     uint8_t headerBytes = static_cast<uint8_t>(header);
-    doSend(pushSocket, &headerBytes, sizeof(headerBytes), true);
+    doSend(socket, &headerBytes, sizeof(headerBytes), true);
 }
 
 void AsyncSendMessageEndpoint::send(const uint8_t* data,
@@ -328,7 +328,24 @@ void AsyncSendMessageEndpoint::send(const uint8_t* data,
                                     bool more)
 {
     SPDLOG_TRACE("PUSH {} ({} bytes, more {})", address, dataSize, more);
-    doSend(pushSocket, data, dataSize, more);
+    doSend(socket, data, dataSize, more);
+}
+
+AsyncInternalSendMessageEndpoint::AsyncInternalSendMessageEndpoint(
+  const std::string& inprocLabel,
+  int timeoutMs)
+  : MessageEndpoint("inproc://" + inprocLabel, timeoutMs)
+{
+    socket =
+      setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::CONNECT);
+}
+
+void AsyncInternalSendMessageEndpoint::send(const uint8_t* data,
+                                            size_t dataSize,
+                                            bool more)
+{
+    SPDLOG_TRACE("PUSH {} ({} bytes, more {})", address, dataSize, more);
+    doSend(socket, data, dataSize, more);
 }
 
 // ----------------------------------------------
@@ -490,6 +507,21 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
 {}
 
 std::optional<Message> AsyncRecvMessageEndpoint::recv(int size)
+{
+    SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
+    return RecvMessageEndpoint::recv(size);
+}
+
+AsyncInternalRecvMessageEndpoint::AsyncInternalRecvMessageEndpoint(
+  const std::string& inprocLabel,
+  int timeoutMs)
+  : RecvMessageEndpoint(inprocLabel,
+                        timeoutMs,
+                        zmq::socket_type::pull,
+                        MessageEndpointConnectType::BIND)
+{}
+
+std::optional<Message> AsyncInternalRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);

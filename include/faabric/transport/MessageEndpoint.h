@@ -80,7 +80,18 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
 
     void send(const uint8_t* data, size_t dataSize, bool more = false);
 
-    zmq::socket_t pushSocket;
+    zmq::socket_t socket;
+};
+
+class AsyncInternalSendMessageEndpoint final : public MessageEndpoint
+{
+  public:
+    AsyncInternalSendMessageEndpoint(const std::string& inProcLabel,
+                                     int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    void send(const uint8_t* data, size_t dataSize, bool more = false);
+
+    zmq::socket_t socket;
 };
 
 class SyncSendMessageEndpoint final : public MessageEndpoint
@@ -179,6 +190,15 @@ class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
 
     AsyncRecvMessageEndpoint(int portIn,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    std::optional<Message> recv(int size = 0) override;
+};
+
+class AsyncInternalRecvMessageEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    AsyncInternalRecvMessageEndpoint(const std::string& inprocLabel,
+                                     int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
     std::optional<Message> recv(int size = 0) override;
 };

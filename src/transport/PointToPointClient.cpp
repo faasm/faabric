@@ -1,4 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointCall.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
@@ -11,33 +13,14 @@ PointToPointClient::PointToPointClient(const std::string& hostIn)
                                               POINT_TO_POINT_SYNC_PORT)
 {}
 
-void PointToPointClient::broadcastPointToPointMappings(
-  int appId,
-  std::map<int, std::string> idxToHosts)
+void PointToPointClient::sendMappings(faabric::PointToPointMappings& mappings)
 {
-    message::PointToPointMappings mappings;
-    for (auto m : idxToHosts) {
-        auto appendedValue = mappings->add_mappings();
-        appendedValue->set_appid(m.first);
-        appendedValue->set_recvidx(m.second);
-    }
-
-    // TODO get hosts
-    // TODO send mappings to all of them
+    faabric::EmptyResponse resp;
+    syncSend(PointToPointCall::MAPPING, &mappings, &resp);
 }
 
-void PointToPointClient::send(int appId,
-                              int sendIdx,
-                              int recvIdx,
-                              const uint8_t* data,
-                              size_t dataSize)
+void PointToPointClient::sendMessage(faabric::PointToPointMessage& msg)
 {
-    faabric::PointToPointMessage msg;
-    msg.set_appid(appId);
-    msg.set_sendidx(sendIdx);
-    msg.set_recvidx(recvIdx);
-    msg.set_data(data, dataSize);
-
-    asyncSend(1, &msg);
+    asyncSend(PointToPointCall::MESSAGE, &msg);
 }
 }

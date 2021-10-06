@@ -40,6 +40,9 @@ void FaabricMain::startBackground()
     // Snapshots
     startSnapshotServer();
 
+    // Point-to-point messaging
+    startPointToPointServer();
+
     // Work sharing
     startFunctionCallServer();
 }
@@ -69,6 +72,12 @@ void FaabricMain::startSnapshotServer()
 {
     SPDLOG_INFO("Starting snapshot server");
     snapshotServer.start();
+}
+
+void FaabricMain::startPointToPointServer()
+{
+    SPDLOG_INFO("Starting point-to-point server");
+    pointToPointServer.start();
 }
 
 void FaabricMain::startStateServer()

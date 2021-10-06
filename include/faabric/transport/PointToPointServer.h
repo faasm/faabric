@@ -20,12 +20,10 @@ class PointToPointServer final : public MessageEndpointServer
 
     std::string getInprocLabel(int appId, int sendIdx, int recvIdx);
 
-    std::shared_ptr<AsyncSendMessageEndpoint> getSendEndpoint(int appId,
-                                                              int sendIdx,
-                                                              int recvIdx);
+    std::unique_ptr<AsyncInternalSendMessageEndpoint>
+    getSendEndpoint(int appId, int sendIdx, int recvIdx);
 
-    std::shared_ptr<AsyncRecvMessageEndpoint> getRecvEndpoint(int appId,
-                                                              int sendIdx,
-                                                              int recvIdx);
+    std::unique_ptr<AsyncInternalRecvMessageEndpoint>
+    getRecvEndpoint(int appId, int sendIdx, int recvIdx);
 };
 }
