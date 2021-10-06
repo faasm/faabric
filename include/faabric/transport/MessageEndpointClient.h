@@ -30,7 +30,6 @@ class MessageEndpointClient
   protected:
     const std::string host;
 
-  private:
     const int asyncPort;
 
     const int syncPort;
