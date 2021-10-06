@@ -202,7 +202,7 @@ int handleFakeDiffsThreadedFunction(
 
 int doDistributedBarrier(faabric::Message& msg, bool isWorker)
 {
-    int nChainedFuncs = 4;
+    int nChainedFuncs = std::stoi(msg.inputdata());
 
     // Build up list of state keys used in all cases
     std::vector<std::string> stateKeys;
@@ -218,16 +218,17 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
           msg.user(), "barrier-worker", nChainedFuncs);
 
         for (int i = 0; i < nChainedFuncs; i++) {
-            auto& msg = chainReq->mutable_messages()->at(i);
+            auto& m = chainReq->mutable_messages()->at(i);
 
             // Set app index and group data
-            msg.set_appindex(i);
-            msg.set_groupid(123);
-            msg.set_groupsize(nChainedFuncs);
+            m.set_appindex(i);
+            m.set_groupid(123);
+            m.set_groupsize(nChainedFuncs);
+            m.set_inputdata(msg.inputdata());
 
             // Set up state for result
             int initialValue = 0;
-            state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t))
+            state.getKV(m.user(), stateKeys.at(i), sizeof(int32_t))
               ->set(BYTES(&initialValue));
         }
 
