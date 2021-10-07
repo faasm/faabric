@@ -289,7 +289,8 @@ void MessageEndpointServer::stop()
     syncHandler.join();
 }
 
-void MessageEndpointServer::onWorkerStop() {
+void MessageEndpointServer::onWorkerStop()
+{
     // Nothing to do by default
 }
 

@@ -47,7 +47,8 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void PointToPointServer::onWorkerStop() {
+void PointToPointServer::onWorkerStop()
+{
     // Clear any thread-local cached sockets
     reg.resetThreadLocalCache();
 }
