@@ -47,7 +47,7 @@ class SystemConfig
     int functionServerThreads;
     int stateServerThreads;
     int snapshotServerThreads;
-    int pointToPointBrokerThreads;
+    int pointToPointServerThreads;
 
     SystemConfig();
 

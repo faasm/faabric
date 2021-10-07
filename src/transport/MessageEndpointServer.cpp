@@ -158,7 +158,7 @@ void MessageEndpointServerHandler::start(
                 }
 
                 // Perform the tidy-up
-                server->onThreadStop();
+                server->onWorkerStop();
 
                 // Just before the thread dies, check if there's something
                 // waiting on the shutdown latch
@@ -289,7 +289,7 @@ void MessageEndpointServer::stop()
     syncHandler.join();
 }
 
-void MessageEndpointServer::onThreadStop() {
+void MessageEndpointServer::onWorkerStop() {
     // Nothing to do by default
 }
 

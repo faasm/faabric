@@ -8,11 +8,12 @@
 
 namespace faabric::transport {
 
-// NOTE: 0MQ sockets must _never_ be shared between threads, and must be closed
-// _before_ the context. As a result, storing them in TLS can cause problems
-// unless we're very careful to close them manually. In this case it's worth it
-// to cache the sockets as there may be high churn in this broker. See the
-// tidy-up methods that reference these maps for more info.
+// NOTE: Keeping 0MQ socketsin TLS is usually a bad idea, as they _must_ be
+// closed before the global context. However, in this case it's worth it
+// to cache the sockets across messages, as otherwise we'd be creating and
+// destroying a lot of them under high throughput. To ensure things are cleared
+// up, see the thread-local tidy-up message on this class and its usage in the
+// rest of the codebase.
 thread_local std::
   unordered_map<std::string, std::unique_ptr<AsyncInternalRecvMessageEndpoint>>
     recvEndpoints;
@@ -37,7 +38,7 @@ PointToPointBroker::PointToPointBroker()
 
 std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
 {
-    faabric::util::SharedLock lock(registryMutex);
+    faabric::util::SharedLock lock(brokerMutex);
 
     std::string key = getPointToPointKey(appId, recvIdx);
 
@@ -54,7 +55,7 @@ void PointToPointBroker::setHostForReceiver(int appId,
                                             int recvIdx,
                                             const std::string& host)
 {
-    faabric::util::FullLock lock(registryMutex);
+    faabric::util::FullLock lock(brokerMutex);
 
     SPDLOG_TRACE(
       "Setting point-to-point mapping {}:{} to {}", appId, recvIdx, host);
@@ -82,7 +83,7 @@ void PointToPointBroker::broadcastMappings(int appId)
 
 void PointToPointBroker::sendMappings(int appId, const std::string& host)
 {
-    faabric::util::SharedLock lock(registryMutex);
+    faabric::util::SharedLock lock(brokerMutex);
 
     faabric::PointToPointMappings msg;
 
@@ -104,7 +105,7 @@ void PointToPointBroker::sendMappings(int appId, const std::string& host)
 
 std::set<int> PointToPointBroker::getIdxsRegisteredForApp(int appId)
 {
-    faabric::util::SharedLock lock(registryMutex);
+    faabric::util::SharedLock lock(brokerMutex);
     return appIdxs[appId];
 }
 
@@ -178,7 +179,7 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int appId,
 
 void PointToPointBroker::clear()
 {
-    faabric::util::SharedLock lock(registryMutex);
+    faabric::util::SharedLock lock(brokerMutex);
 
     appIdxs.clear();
     mappings.clear();

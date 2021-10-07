@@ -14,7 +14,7 @@ PointToPointServer::PointToPointServer()
       POINT_TO_POINT_ASYNC_PORT,
       POINT_TO_POINT_SYNC_PORT,
       POINT_TO_POINT_INPROC_LABEL,
-      faabric::util::getSystemConfig().pointToPointBrokerThreads)
+      faabric::util::getSystemConfig().pointToPointServerThreads)
   , reg(getPointToPointBroker())
 {}
 
@@ -47,7 +47,7 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void PointToPointServer::onThreadStop() {
+void PointToPointServer::onWorkerStop() {
     // Clear any thread-local cached sockets
     reg.resetThreadLocalCache();
 }

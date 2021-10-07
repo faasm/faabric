@@ -32,6 +32,6 @@ class FaabricMain
     faabric::state::StateServer stateServer;
     faabric::scheduler::FunctionCallServer functionServer;
     faabric::snapshot::SnapshotServer snapshotServer;
-    faabric::transport::PointToPointServer pointToPointBroker;
+    faabric::transport::PointToPointServer pointToPointServer;
 };
 }

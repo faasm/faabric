@@ -37,7 +37,7 @@ class PointToPointBroker
     void resetThreadLocalCache();
 
   private:
-    std::shared_mutex registryMutex;
+    std::shared_mutex brokerMutex;
 
     std::unordered_map<int, std::set<int>> appIdxs;
     std::unordered_map<std::string, std::string> mappings;

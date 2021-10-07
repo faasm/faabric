@@ -77,7 +77,7 @@ void FaabricMain::startSnapshotServer()
 void FaabricMain::startPointToPointServer()
 {
     SPDLOG_INFO("Starting point-to-point server");
-    pointToPointBroker.start();
+    pointToPointServer.start();
 }
 
 void FaabricMain::startStateServer()
