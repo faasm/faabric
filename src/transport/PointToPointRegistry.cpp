@@ -9,6 +9,11 @@
 
 namespace faabric::transport {
 
+std::string getPointToPointInprocLabel(int appId, int sendIdx, int recvIdx)
+{
+    return fmt::format("{}-{}-{}", appId, sendIdx, recvIdx);
+}
+
 PointToPointRegistry::PointToPointRegistry()
   : sch(faabric::scheduler::getScheduler())
 {}
@@ -99,16 +104,36 @@ void PointToPointRegistry::sendMessage(int appId,
 {
     std::string host = getHostForReceiver(appId, recvIdx);
 
-    // TODO - if this host, put directly onto queue
     if (host == faabric::util::getSystemConfig().endpointHost) {
         std::string label = getPointToPointInprocLabel(appId, sendIdx, recvIdx);
 
         // TODO - need to keep this endpoint in scope in the same thread until
         // the message is consumed.
-        std::unique_ptr<AsyncInternalSendMessageEndpoint> sendEndpoint =
+        std::unique_ptr<AsyncInternalSendMessageEndpoint> endpoint =
           std::make_unique<AsyncInternalSendMessageEndpoint>(label);
+        SPDLOG_TRACE("Local point-to-point message {}:{}:{} to {}",
+                     appId,
+                     sendIdx,
+                     recvIdx,
+                     endpoint->getAddress());
+
+        endpoint->send(buffer, bufferSize);
+
     } else {
-        // TODO - if not, create client and send to remote host
+        PointToPointClient cli(host);
+        faabric::PointToPointMessage msg;
+        msg.set_appid(appId);
+        msg.set_sendidx(sendIdx);
+        msg.set_recvidx(recvIdx);
+        msg.set_data(buffer, bufferSize);
+
+        SPDLOG_TRACE("Remote point-to-point message {}:{}:{} to {}",
+                     appId,
+                     sendIdx,
+                     recvIdx,
+                     host);
+
+        cli.sendMessage(msg);
     }
 }
 

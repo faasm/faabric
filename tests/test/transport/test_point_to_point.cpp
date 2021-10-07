@@ -1,17 +1,64 @@
-#include "faabric/util/testing.h"
+#include "faabric/util/config.h"
+#include "faabric_utils.h"
 #include <catch.hpp>
 
-#include <faabric_utils.h>
+#include <sys/mman.h>
 
-#include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/Scheduler.h>
-#include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointRegistry.h>
-#include <faabric/transport/PointToPointBroker.h>
 
 using namespace faabric::transport;
+using namespace faabric::util;
 
 namespace tests {
+
+TEST_CASE_METHOD(PointToPointFixture,
+                 "Test set and get point-to-point hosts",
+                 "[transport]")
+{
+    // Note - deliberately overlap app indexes to make sure app id counts
+    int appIdA = 123;
+    int appIdB = 345;
+    int idxA1 = 0;
+    int idxB1 = 2;
+    int idxA2 = 10;
+    int idxB2 = 10;
+
+    std::string hostA = "host-a";
+    std::string hostB = "host-b";
+    std::string hostC = "host-c";
+
+    REQUIRE_THROWS(reg.getHostForReceiver(appIdA, idxA1));
+    REQUIRE_THROWS(reg.getHostForReceiver(appIdA, idxA2));
+    REQUIRE_THROWS(reg.getHostForReceiver(appIdB, idxB1));
+    REQUIRE_THROWS(reg.getHostForReceiver(appIdB, idxB2));
+
+    reg.setHostForReceiver(appIdA, idxA1, hostA);
+    reg.setHostForReceiver(appIdB, idxB1, hostB);
+
+    std::set<int> expectedA = { idxA1 };
+    std::set<int> expectedB = { idxB1 };
+    REQUIRE(reg.getIdxsRegisteredForApp(appIdA) == expectedA);
+    REQUIRE(reg.getIdxsRegisteredForApp(appIdB) == expectedB);
+
+    REQUIRE(reg.getHostForReceiver(appIdA, idxA1) == hostA);
+    REQUIRE_THROWS(reg.getHostForReceiver(appIdA, idxA2));
+    REQUIRE(reg.getHostForReceiver(appIdB, idxB1) == hostB);
+    REQUIRE_THROWS(reg.getHostForReceiver(appIdB, idxB2));
+
+    reg.setHostForReceiver(appIdA, idxA2, hostB);
+    reg.setHostForReceiver(appIdB, idxB2, hostC);
+
+    expectedA = { idxA1, idxA2 };
+    expectedB = { idxB1, idxB2 };
+
+    REQUIRE(reg.getIdxsRegisteredForApp(appIdA) == expectedA);
+    REQUIRE(reg.getIdxsRegisteredForApp(appIdB) == expectedB);
+
+    REQUIRE(reg.getHostForReceiver(appIdA, idxA1) == hostA);
+    REQUIRE(reg.getHostForReceiver(appIdA, idxA2) == hostB);
+    REQUIRE(reg.getHostForReceiver(appIdB, idxB1) == hostB);
+    REQUIRE(reg.getHostForReceiver(appIdB, idxB2) == hostC);
+}
 
 TEST_CASE_METHOD(PointToPointFixture,
                  "Test sending mappings via registry",
@@ -118,21 +165,31 @@ TEST_CASE_METHOD(PointToPointFixture,
     int sendIdx = 5;
     int recvIdx = 10;
 
+    // Ensure this host is set to localhost
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    conf.endpointHost = LOCALHOST;
+
     // Register the recv index on this host
     reg.setHostForReceiver(appId, recvIdx, LOCALHOST);
 
-    std::vector<uint8_t> data = { 0, 1, 2, 3 };
+    std::vector<uint8_t> sentData = { 0, 1, 2, 3 };
+    std::vector<uint8_t> receivedData;
 
-    faabric::PointToPointMessage msg;
-    msg.set_appid(appId);
-    msg.set_recvidx(recvIdx);
-    msg.set_sendidx(sendIdx);
+    // Make sure we send the message before a receiver is available to check
+    // async handling
+    reg.sendMessage(appId, sendIdx, recvIdx, sentData.data(), sentData.size());
 
-    // Make sure we send the message before a receiver is available
-    cli.sendMessage(msg);
-
-    std::thread t([] {
-
+    std::thread t([appId, sendIdx, recvIdx, &receivedData] {
+        PointToPointRegistry& reg = getPointToPointRegistry();
+        receivedData = reg.recvMessage(appId, sendIdx, recvIdx);
     });
+
+    if (t.joinable()) {
+        t.join();
+    }
+
+    REQUIRE(receivedData == sentData);
+
+    conf.reset();
 }
 }

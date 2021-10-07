@@ -9,17 +9,13 @@
 
 namespace faabric::transport {
 
-std::string getPointToPointInprocLabel(int appId, int sendIdx, int recvIdx)
-{
-    return fmt::format("{}-{}-{}", appId, sendIdx, recvIdx);
-}
-
 PointToPointBroker::PointToPointBroker()
   : faabric::transport::MessageEndpointServer(
       POINT_TO_POINT_ASYNC_PORT,
       POINT_TO_POINT_SYNC_PORT,
       POINT_TO_POINT_INPROC_LABEL,
       faabric::util::getSystemConfig().pointToPointBrokerThreads)
+  , reg(getPointToPointRegistry())
 {}
 
 void PointToPointBroker::doAsyncRecv(int header,
@@ -28,17 +24,11 @@ void PointToPointBroker::doAsyncRecv(int header,
 {
     PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
 
-    std::unique_ptr<AsyncInternalSendMessageEndpoint> endpoint =
-      getSendEndpoint(msg.appid(), msg.sendidx(), msg.recvidx());
-
-    SPDLOG_TRACE("Forwarding point-to-point message {}:{}:{} to {}",
-                 msg.appid(),
-                 msg.sendidx(),
-                 msg.recvidx(),
-                 endpoint->getAddress());
-
-    // TODO - is this copying the data? Would be nice to avoid if poss
-    endpoint->send(BYTES_CONST(msg.data().c_str()), msg.data().size());
+    reg.sendMessage(msg.appid(),
+                    msg.sendidx(),
+                    msg.recvidx(),
+                    BYTES_CONST(msg.data().c_str()),
+                    msg.data().size());
 }
 
 std::unique_ptr<google::protobuf::Message> PointToPointBroker::doSyncRecv(
@@ -55,13 +45,6 @@ std::unique_ptr<google::protobuf::Message> PointToPointBroker::doSyncRecv(
     }
 
     return std::make_unique<faabric::EmptyResponse>();
-}
-
-std::unique_ptr<AsyncInternalSendMessageEndpoint>
-PointToPointBroker::getSendEndpoint(int appId, int sendIdx, int recvIdx)
-{
-    std::string label = getPointToPointInprocLabel(appId, sendIdx, recvIdx);
-    return std::make_unique<AsyncInternalSendMessageEndpoint>(label);
 }
 
 }
