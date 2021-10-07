@@ -63,7 +63,7 @@ TEST_CASE_METHOD(PointToPointFixture,
 }
 
 TEST_CASE_METHOD(PointToPointFixture,
-                 "Test sending mappings via broker",
+                 "Test sending point-to-point mappings via broker",
                  "[transport][ptp]")
 {
     faabric::util::setMockMode(true);
@@ -116,7 +116,7 @@ TEST_CASE_METHOD(PointToPointFixture,
 }
 
 TEST_CASE_METHOD(PointToPointFixture,
-                 "Test sending mappings from client",
+                 "Test sending point-to-point mappings from client",
                  "[transport][ptp]")
 {
     int appIdA = 123;
@@ -160,7 +160,7 @@ TEST_CASE_METHOD(PointToPointFixture,
 }
 
 TEST_CASE_METHOD(PointToPointFixture,
-                 "Test sending point-to-point message"
+                 "Test sending point-to-point message",
                  "[transport][ptp]")
 {
     int appId = 123;
@@ -187,6 +187,8 @@ TEST_CASE_METHOD(PointToPointFixture,
     std::thread t([appId, sendIdx, recvIdx, &receivedData] {
         PointToPointBroker& broker = getPointToPointBroker();
         receivedData = broker.recvMessage(appId, sendIdx, recvIdx);
+
+        broker.resetThreadLocalCache();
     });
 
     if (t.joinable()) {

@@ -34,6 +34,8 @@ class PointToPointBroker
 
     void clear();
 
+    void resetThreadLocalCache();
+
   private:
     std::shared_mutex registryMutex;
 

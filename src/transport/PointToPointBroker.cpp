@@ -1,12 +1,25 @@
-#include "faabric/util/config.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::transport {
+
+// NOTE: 0MQ sockets must _never_ be shared between threads, and must be closed
+// _before_ the context. As a result, storing them in TLS can cause problems
+// unless we're very careful to close them manually. In this case it's worth it
+// to cache the sockets as there may be high churn in this broker. See the
+// tidy-up methods that reference these maps for more info.
+thread_local std::
+  unordered_map<std::string, std::unique_ptr<AsyncInternalRecvMessageEndpoint>>
+    recvEndpoints;
+
+thread_local std::
+  unordered_map<std::string, std::unique_ptr<AsyncInternalSendMessageEndpoint>>
+    sendEndpoints;
 
 std::string getPointToPointKey(int appId, int sendIdx, int recvIdx)
 {
@@ -106,16 +119,22 @@ void PointToPointBroker::sendMessage(int appId,
     if (host == faabric::util::getSystemConfig().endpointHost) {
         std::string label = getPointToPointKey(appId, sendIdx, recvIdx);
 
-        // TODO - need to keep this endpoint in scope in the same thread until
-        // the message is consumed.
-        AsyncInternalSendMessageEndpoint endpoint(label);
+        // Note - this map is thread-local so no locking required
+        if (sendEndpoints.find(label) == sendEndpoints.end()) {
+            sendEndpoints[label] =
+              std::make_unique<AsyncInternalSendMessageEndpoint>(label);
+
+            SPDLOG_TRACE("Created new internal send endpoint {}",
+                         sendEndpoints[label]->getAddress());
+        }
+
         SPDLOG_TRACE("Local point-to-point message {}:{}:{} to {}",
                      appId,
                      sendIdx,
                      recvIdx,
-                     endpoint.getAddress());
+                     sendEndpoints[label]->getAddress());
 
-        endpoint.send(buffer, bufferSize);
+        sendEndpoints[label]->send(buffer, bufferSize);
 
     } else {
         PointToPointClient cli(host);
@@ -140,9 +159,17 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int appId,
                                                      int recvIdx)
 {
     std::string label = getPointToPointKey(appId, sendIdx, recvIdx);
-    AsyncInternalRecvMessageEndpoint endpoint(label);
 
-    std::optional<Message> messageDataMaybe = endpoint.recv().value();
+    // Note: this map is thread-local so no locking required
+    if (recvEndpoints.find(label) == recvEndpoints.end()) {
+        recvEndpoints[label] =
+          std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
+        SPDLOG_TRACE("Created new internal recv endpoint {}",
+                     recvEndpoints[label]->getAddress());
+    }
+
+    std::optional<Message> messageDataMaybe =
+      recvEndpoints[label]->recv().value();
     Message messageData = messageDataMaybe.value();
 
     // TODO - possible to avoid this copy?
@@ -155,6 +182,16 @@ void PointToPointBroker::clear()
 
     appIdxs.clear();
     mappings.clear();
+}
+
+void PointToPointBroker::resetThreadLocalCache()
+{
+    auto tid = (pid_t)syscall(SYS_gettid);
+    SPDLOG_TRACE("Resetting point-to-point thread-local cache for thread {}",
+                 tid);
+
+    sendEndpoints.clear();
+    recvEndpoints.clear();
 }
 
 PointToPointBroker& getPointToPointBroker()

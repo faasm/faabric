@@ -282,6 +282,10 @@ class PointToPointFixture
 
     ~PointToPointFixture()
     {
+        // Note - here we reset the thread-local cache for the test thread. If
+        // other threads are used in the tests, they too must do this.
+        broker.resetThreadLocalCache();
+
         server.stop();
         broker.clear();
         faabric::util::setMockMode(false);

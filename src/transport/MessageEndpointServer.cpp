@@ -157,6 +157,9 @@ void MessageEndpointServerHandler::start(
                     }
                 }
 
+                // Perform the tidy-up
+                server->onThreadStop();
+
                 // Just before the thread dies, check if there's something
                 // waiting on the shutdown latch
                 if (server->shutdownLatch != nullptr) {
@@ -284,6 +287,10 @@ void MessageEndpointServer::stop()
     // Join the handlers
     asyncHandler.join();
     syncHandler.join();
+}
+
+void MessageEndpointServer::onThreadStop() {
+    // Nothing to do by default
 }
 
 void MessageEndpointServer::setRequestLatch()
