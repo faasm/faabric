@@ -25,6 +25,7 @@ class PointToPointRegistry
     std::set<int> getIdxsRegisteredForApp(int appId);
 
     void clear();
+
   private:
     std::shared_mutex registryMutex;
 

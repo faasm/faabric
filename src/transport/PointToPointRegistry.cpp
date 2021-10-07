@@ -93,6 +93,7 @@ void PointToPointRegistry::clear()
 {
     faabric::util::SharedLock lock(registryMutex);
 
+    appIdxs.clear();
     mappings.clear();
 }
 
