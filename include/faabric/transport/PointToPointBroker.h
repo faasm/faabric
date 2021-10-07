@@ -1,23 +1,49 @@
 #pragma once
 
-#include <faabric/transport/MessageEndpointServer.h>
-#include <faabric/transport/PointToPointRegistry.h>
+#include <faabric/scheduler/Scheduler.h>
+
+#include <set>
+#include <shared_mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace faabric::transport {
-
-class PointToPointBroker final : public MessageEndpointServer
+class PointToPointBroker
 {
   public:
     PointToPointBroker();
 
-  private:
-    PointToPointRegistry &reg;
+    std::string getHostForReceiver(int appId, int recvIdx);
 
-    void doAsyncRecv(int header,
+    void setHostForReceiver(int appId, int recvIdx, const std::string& host);
+
+    void broadcastMappings(int appId);
+
+    void sendMappings(int appId, const std::string& host);
+
+    std::set<int> getIdxsRegisteredForApp(int appId);
+
+    void sendMessage(int appId,
+                     int sendIdx,
+                     int recvIdx,
                      const uint8_t* buffer,
-                     size_t bufferSize) override;
+                     size_t bufferSize);
 
-    std::unique_ptr<google::protobuf::Message>
-    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override;
+    std::vector<uint8_t> recvMessage(int appId, int sendIdx, int recvIdx);
+
+    void clear();
+
+  private:
+    std::shared_mutex registryMutex;
+
+    std::unordered_map<int, std::set<int>> appIdxs;
+    std::unordered_map<std::string, std::string> mappings;
+
+    faabric::scheduler::Scheduler& sch;
+
+    std::string getKey(int appId, int recvIdx);
 };
+
+PointToPointBroker& getPointToPointBroker();
 }

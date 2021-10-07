@@ -10,9 +10,9 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
-#include <faabric/transport/PointToPointClient.h>
-#include <faabric/transport/PointToPointRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointClient.h>
+#include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
@@ -273,23 +273,23 @@ class PointToPointFixture
 {
   public:
     PointToPointFixture()
-      : reg(faabric::transport::getPointToPointRegistry())
+      : broker(faabric::transport::getPointToPointBroker())
       , cli(LOCALHOST)
     {
-        reg.clear();
+        broker.clear();
         server.start();
     }
 
     ~PointToPointFixture()
     {
         server.stop();
-        reg.clear();
+        broker.clear();
         faabric::util::setMockMode(false);
     }
 
   protected:
-    faabric::transport::PointToPointRegistry& reg;
-    faabric::transport::PointToPointBroker server;
+    faabric::transport::PointToPointBroker& broker;
+    faabric::transport::PointToPointServer server;
     faabric::transport::PointToPointClient cli;
 };
 }

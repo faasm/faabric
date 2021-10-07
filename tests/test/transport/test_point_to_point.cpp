@@ -4,7 +4,7 @@
 
 #include <sys/mman.h>
 
-#include <faabric/transport/PointToPointRegistry.h>
+#include <faabric/transport/PointToPointBroker.h>
 
 using namespace faabric::transport;
 using namespace faabric::util;
@@ -13,7 +13,7 @@ namespace tests {
 
 TEST_CASE_METHOD(PointToPointFixture,
                  "Test set and get point-to-point hosts",
-                 "[transport]")
+                 "[transport][ptp]")
 {
     // Note - deliberately overlap app indexes to make sure app id counts
     int appIdA = 123;
@@ -27,42 +27,42 @@ TEST_CASE_METHOD(PointToPointFixture,
     std::string hostB = "host-b";
     std::string hostC = "host-c";
 
-    REQUIRE_THROWS(reg.getHostForReceiver(appIdA, idxA1));
-    REQUIRE_THROWS(reg.getHostForReceiver(appIdA, idxA2));
-    REQUIRE_THROWS(reg.getHostForReceiver(appIdB, idxB1));
-    REQUIRE_THROWS(reg.getHostForReceiver(appIdB, idxB2));
+    REQUIRE_THROWS(broker.getHostForReceiver(appIdA, idxA1));
+    REQUIRE_THROWS(broker.getHostForReceiver(appIdA, idxA2));
+    REQUIRE_THROWS(broker.getHostForReceiver(appIdB, idxB1));
+    REQUIRE_THROWS(broker.getHostForReceiver(appIdB, idxB2));
 
-    reg.setHostForReceiver(appIdA, idxA1, hostA);
-    reg.setHostForReceiver(appIdB, idxB1, hostB);
+    broker.setHostForReceiver(appIdA, idxA1, hostA);
+    broker.setHostForReceiver(appIdB, idxB1, hostB);
 
     std::set<int> expectedA = { idxA1 };
     std::set<int> expectedB = { idxB1 };
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdA) == expectedA);
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdB) == expectedB);
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdA) == expectedA);
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdB) == expectedB);
 
-    REQUIRE(reg.getHostForReceiver(appIdA, idxA1) == hostA);
-    REQUIRE_THROWS(reg.getHostForReceiver(appIdA, idxA2));
-    REQUIRE(reg.getHostForReceiver(appIdB, idxB1) == hostB);
-    REQUIRE_THROWS(reg.getHostForReceiver(appIdB, idxB2));
+    REQUIRE(broker.getHostForReceiver(appIdA, idxA1) == hostA);
+    REQUIRE_THROWS(broker.getHostForReceiver(appIdA, idxA2));
+    REQUIRE(broker.getHostForReceiver(appIdB, idxB1) == hostB);
+    REQUIRE_THROWS(broker.getHostForReceiver(appIdB, idxB2));
 
-    reg.setHostForReceiver(appIdA, idxA2, hostB);
-    reg.setHostForReceiver(appIdB, idxB2, hostC);
+    broker.setHostForReceiver(appIdA, idxA2, hostB);
+    broker.setHostForReceiver(appIdB, idxB2, hostC);
 
     expectedA = { idxA1, idxA2 };
     expectedB = { idxB1, idxB2 };
 
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdA) == expectedA);
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdB) == expectedB);
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdA) == expectedA);
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdB) == expectedB);
 
-    REQUIRE(reg.getHostForReceiver(appIdA, idxA1) == hostA);
-    REQUIRE(reg.getHostForReceiver(appIdA, idxA2) == hostB);
-    REQUIRE(reg.getHostForReceiver(appIdB, idxB1) == hostB);
-    REQUIRE(reg.getHostForReceiver(appIdB, idxB2) == hostC);
+    REQUIRE(broker.getHostForReceiver(appIdA, idxA1) == hostA);
+    REQUIRE(broker.getHostForReceiver(appIdA, idxA2) == hostB);
+    REQUIRE(broker.getHostForReceiver(appIdB, idxB1) == hostB);
+    REQUIRE(broker.getHostForReceiver(appIdB, idxB2) == hostC);
 }
 
 TEST_CASE_METHOD(PointToPointFixture,
-                 "Test sending mappings via registry",
-                 "[transport]")
+                 "Test sending mappings via brokeristry",
+                 "[transport][ptp]")
 {
     faabric::util::setMockMode(true);
 
@@ -76,11 +76,11 @@ TEST_CASE_METHOD(PointToPointFixture,
     std::string hostA = "host-a";
     std::string hostB = "host-b";
 
-    reg.setHostForReceiver(appIdA, idxA1, hostA);
-    reg.setHostForReceiver(appIdA, idxA2, hostB);
-    reg.setHostForReceiver(appIdB, idxB1, hostB);
+    broker.setHostForReceiver(appIdA, idxA1, hostA);
+    broker.setHostForReceiver(appIdA, idxA2, hostB);
+    broker.setHostForReceiver(appIdB, idxB1, hostB);
 
-    reg.sendMappings(appIdA, "other-host");
+    broker.sendMappings(appIdA, "other-host");
 
     auto actualSent = getSentMappings();
     REQUIRE(actualSent.size() == 1);
@@ -115,7 +115,7 @@ TEST_CASE_METHOD(PointToPointFixture,
 
 TEST_CASE_METHOD(PointToPointFixture,
                  "Test sending mappings from client",
-                 "[transport]")
+                 "[transport][ptp]")
 {
     int appIdA = 123;
     int appIdB = 345;
@@ -127,8 +127,8 @@ TEST_CASE_METHOD(PointToPointFixture,
     std::string hostA = "host-a";
     std::string hostB = "host-b";
 
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdA).empty());
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdB).empty());
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdA).empty());
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdB).empty());
 
     faabric::PointToPointMappings mappings;
 
@@ -149,17 +149,17 @@ TEST_CASE_METHOD(PointToPointFixture,
 
     cli.sendMappings(mappings);
 
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdA).size() == 2);
-    REQUIRE(reg.getIdxsRegisteredForApp(appIdB).size() == 1);
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdA).size() == 2);
+    REQUIRE(broker.getIdxsRegisteredForApp(appIdB).size() == 1);
 
-    REQUIRE(reg.getHostForReceiver(appIdA, idxA1) == hostA);
-    REQUIRE(reg.getHostForReceiver(appIdA, idxA2) == hostB);
-    REQUIRE(reg.getHostForReceiver(appIdB, idxB1) == hostA);
+    REQUIRE(broker.getHostForReceiver(appIdA, idxA1) == hostA);
+    REQUIRE(broker.getHostForReceiver(appIdA, idxA2) == hostB);
+    REQUIRE(broker.getHostForReceiver(appIdB, idxB1) == hostA);
 }
 
 TEST_CASE_METHOD(PointToPointFixture,
                  "Test sending point-to-point message"
-                 "[transport]")
+                 "[transport][ptp]")
 {
     int appId = 123;
     int sendIdx = 5;
@@ -169,19 +169,20 @@ TEST_CASE_METHOD(PointToPointFixture,
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     conf.endpointHost = LOCALHOST;
 
-    // Register the recv index on this host
-    reg.setHostForReceiver(appId, recvIdx, LOCALHOST);
+    // brokerister the recv index on this host
+    broker.setHostForReceiver(appId, recvIdx, LOCALHOST);
 
     std::vector<uint8_t> sentData = { 0, 1, 2, 3 };
     std::vector<uint8_t> receivedData;
 
     // Make sure we send the message before a receiver is available to check
     // async handling
-    reg.sendMessage(appId, sendIdx, recvIdx, sentData.data(), sentData.size());
+    broker.sendMessage(
+      appId, sendIdx, recvIdx, sentData.data(), sentData.size());
 
     std::thread t([appId, sendIdx, recvIdx, &receivedData] {
-        PointToPointRegistry& reg = getPointToPointRegistry();
-        receivedData = reg.recvMessage(appId, sendIdx, recvIdx);
+        PointToPointBroker& broker = getPointToPointBroker();
+        receivedData = broker.recvMessage(appId, sendIdx, recvIdx);
     });
 
     if (t.joinable()) {
