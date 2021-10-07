@@ -10,21 +10,6 @@ using namespace faabric::util;
 
 namespace tests {
 
-class PointToPointFixture
-{
-  public:
-    PointToPointFixture()
-      : reg(faabric::transport::getPointToPointRegistry())
-    {
-        reg.clear();
-    }
-
-    ~PointToPointFixture() { reg.clear(); }
-
-  protected:
-    faabric::transport::PointToPointRegistry& reg;
-};
-
 TEST_CASE_METHOD(PointToPointFixture,
                  "Test set and get point-to-point hosts",
                  "[transport]")

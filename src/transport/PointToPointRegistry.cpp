@@ -7,7 +7,9 @@
 
 namespace faabric::transport {
 
-PointToPointRegistry::PointToPointRegistry() {}
+PointToPointRegistry::PointToPointRegistry()
+  : sch(faabric::scheduler::getScheduler())
+{}
 
 std::string PointToPointRegistry::getKey(int appId, int recvIdx)
 {
@@ -21,7 +23,8 @@ std::string PointToPointRegistry::getHostForReceiver(int appId, int recvIdx)
     std::string key = getKey(appId, recvIdx);
 
     if (mappings.find(key) == mappings.end()) {
-        SPDLOG_ERROR("No point-to-point mapping for app {} idx {}", appId, recvIdx);
+        SPDLOG_ERROR(
+          "No point-to-point mapping for app {} idx {}", appId, recvIdx);
         throw std::runtime_error("No point-to-point mapping found");
     }
 
@@ -34,6 +37,9 @@ void PointToPointRegistry::setHostForReceiver(int appId,
 {
     faabric::util::FullLock lock(registryMutex);
 
+    SPDLOG_TRACE(
+      "Setting point-to-point mapping {}:{} to {}", appId, recvIdx, host);
+
     // Record this index for this app
     appIdxs[appId].insert(recvIdx);
 
@@ -43,6 +49,19 @@ void PointToPointRegistry::setHostForReceiver(int appId,
 }
 
 void PointToPointRegistry::broadcastMappings(int appId)
+{
+    auto& sch = faabric::scheduler::getScheduler();
+
+    // TODO seems excessive to broadcast to all hosts, could we perhaps use the
+    // set of registered hosts?
+    std::set<std::string> hosts = sch.getAvailableHosts();
+
+    for (const auto& host : hosts) {
+        sendMappings(appId, host);
+    }
+}
+
+void PointToPointRegistry::sendMappings(int appId, const std::string& host)
 {
     faabric::util::SharedLock lock(registryMutex);
 
@@ -60,16 +79,8 @@ void PointToPointRegistry::broadcastMappings(int appId)
         mapping->set_host(host);
     }
 
-    auto& sch = faabric::scheduler::getScheduler();
-
-    // TODO seems excessive to broadcast to all hosts, could we perhaps use the
-    // set of registered hosts?
-    std::set<std::string> hosts = sch.getAvailableHosts();
-
-    for (const auto& host : hosts) {
-        PointToPointClient cli(host);
-        cli.sendMappings(msg);
-    }
+    PointToPointClient cli(host);
+    cli.sendMappings(msg);
 }
 
 std::set<int> PointToPointRegistry::getIdxsRegisteredForApp(int appId)

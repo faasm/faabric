@@ -10,6 +10,9 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/PointToPointClient.h>
+#include <faabric/transport/PointToPointRegistry.h>
+#include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
@@ -264,5 +267,29 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     std::shared_ptr<faabric::util::Latch> testLatch;
 
     faabric::scheduler::MpiWorld otherWorld;
+};
+
+class PointToPointFixture
+{
+  public:
+    PointToPointFixture()
+      : reg(faabric::transport::getPointToPointRegistry())
+      , cli(LOCALHOST)
+    {
+        reg.clear();
+        server.start();
+    }
+
+    ~PointToPointFixture()
+    {
+        server.stop();
+        reg.clear();
+        faabric::util::setMockMode(false);
+    }
+
+  protected:
+    faabric::transport::PointToPointRegistry& reg;
+    faabric::transport::PointToPointServer server;
+    faabric::transport::PointToPointClient cli;
 };
 }

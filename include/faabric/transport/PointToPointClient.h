@@ -5,6 +5,14 @@
 
 namespace faabric::transport {
 
+std::vector<std::pair<std::string, faabric::PointToPointMappings>>
+getSentMappings();
+
+std::vector<std::pair<std::string, faabric::PointToPointMessage>>
+getSentPointToPointMessages();
+
+void clearSentMessages();
+
 class PointToPointClient : public faabric::transport::MessageEndpointClient
 {
   public:

@@ -25,6 +25,12 @@ void PointToPointServer::doAsyncRecv(int header,
     std::unique_ptr<AsyncInternalSendMessageEndpoint> endpoint =
       getSendEndpoint(msg.appid(), msg.sendidx(), msg.recvidx());
 
+    SPDLOG_TRACE("Forwarding point-to-point message {}:{}:{} to {}",
+                 msg.appid(),
+                 msg.sendidx(),
+                 msg.recvidx(),
+                 endpoint->getAddress());
+
     // TODO - is this copying the data? Would be nice to avoid if poss
     endpoint->send(BYTES_CONST(msg.data().c_str()), msg.data().size());
 }

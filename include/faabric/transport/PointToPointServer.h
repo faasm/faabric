@@ -8,6 +8,7 @@ class PointToPointServer final : public MessageEndpointServer
   public:
     PointToPointServer();
 
+  protected:
     std::vector<uint8_t> recvMessage(int appId, int sendIdx, int recvIdx);
 
   private:
