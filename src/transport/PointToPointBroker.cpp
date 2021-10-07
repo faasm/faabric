@@ -3,31 +3,30 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
-#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::transport {
 
-std::string getPointToPointInprocLabel(int appId, int sendIdx, int recvIdx)
+std::string getPointToPointKey(int appId, int sendIdx, int recvIdx)
 {
     return fmt::format("{}-{}-{}", appId, sendIdx, recvIdx);
+}
+
+std::string getPointToPointKey(int appId, int recvIdx)
+{
+    return fmt::format("{}-{}", appId, recvIdx);
 }
 
 PointToPointBroker::PointToPointBroker()
   : sch(faabric::scheduler::getScheduler())
 {}
 
-std::string PointToPointBroker::getKey(int appId, int recvIdx)
-{
-    return fmt::format("{}-{}", appId, recvIdx);
-}
-
 std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
 {
     faabric::util::SharedLock lock(registryMutex);
 
-    std::string key = getKey(appId, recvIdx);
+    std::string key = getPointToPointKey(appId, recvIdx);
 
     if (mappings.find(key) == mappings.end()) {
         SPDLOG_ERROR(
@@ -39,8 +38,8 @@ std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
 }
 
 void PointToPointBroker::setHostForReceiver(int appId,
-                                              int recvIdx,
-                                              const std::string& host)
+                                            int recvIdx,
+                                            const std::string& host)
 {
     faabric::util::FullLock lock(registryMutex);
 
@@ -51,7 +50,7 @@ void PointToPointBroker::setHostForReceiver(int appId,
     appIdxs[appId].insert(recvIdx);
 
     // Add host mapping
-    std::string key = getKey(appId, recvIdx);
+    std::string key = getPointToPointKey(appId, recvIdx);
     mappings[key] = host;
 }
 
@@ -77,7 +76,7 @@ void PointToPointBroker::sendMappings(int appId, const std::string& host)
     std::set<int>& indexes = appIdxs[appId];
 
     for (auto i : indexes) {
-        std::string key = getKey(appId, i);
+        std::string key = getPointToPointKey(appId, i);
         std::string host = mappings[key];
 
         auto* mapping = msg.add_mappings();
@@ -97,27 +96,26 @@ std::set<int> PointToPointBroker::getIdxsRegisteredForApp(int appId)
 }
 
 void PointToPointBroker::sendMessage(int appId,
-                                       int sendIdx,
-                                       int recvIdx,
-                                       const uint8_t* buffer,
-                                       size_t bufferSize)
+                                     int sendIdx,
+                                     int recvIdx,
+                                     const uint8_t* buffer,
+                                     size_t bufferSize)
 {
     std::string host = getHostForReceiver(appId, recvIdx);
 
     if (host == faabric::util::getSystemConfig().endpointHost) {
-        std::string label = getPointToPointInprocLabel(appId, sendIdx, recvIdx);
+        std::string label = getPointToPointKey(appId, sendIdx, recvIdx);
 
         // TODO - need to keep this endpoint in scope in the same thread until
         // the message is consumed.
-        std::unique_ptr<AsyncInternalSendMessageEndpoint> endpoint =
-          std::make_unique<AsyncInternalSendMessageEndpoint>(label);
+        AsyncInternalSendMessageEndpoint endpoint(label);
         SPDLOG_TRACE("Local point-to-point message {}:{}:{} to {}",
                      appId,
                      sendIdx,
                      recvIdx,
-                     endpoint->getAddress());
+                     endpoint.getAddress());
 
-        endpoint->send(buffer, bufferSize);
+        endpoint.send(buffer, bufferSize);
 
     } else {
         PointToPointClient cli(host);
@@ -138,14 +136,13 @@ void PointToPointBroker::sendMessage(int appId,
 }
 
 std::vector<uint8_t> PointToPointBroker::recvMessage(int appId,
-                                                       int sendIdx,
-                                                       int recvIdx)
+                                                     int sendIdx,
+                                                     int recvIdx)
 {
-    std::string label = getPointToPointInprocLabel(appId, sendIdx, recvIdx);
-    std::unique_ptr<AsyncInternalRecvMessageEndpoint> endpoint =
-      std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
+    std::string label = getPointToPointKey(appId, sendIdx, recvIdx);
+    AsyncInternalRecvMessageEndpoint endpoint(label);
 
-    std::optional<Message> messageDataMaybe = endpoint->recv().value();
+    std::optional<Message> messageDataMaybe = endpoint.recv().value();
     Message messageData = messageDataMaybe.value();
 
     // TODO - possible to avoid this copy?

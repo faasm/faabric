@@ -1,10 +1,12 @@
-#include "faabric/util/config.h"
-#include "faabric_utils.h"
 #include <catch.hpp>
+
+#include "faabric_utils.h"
 
 #include <sys/mman.h>
 
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/util/config.h>
+#include <faabric/util/macros.h>
 
 using namespace faabric::transport;
 using namespace faabric::util;
@@ -61,7 +63,7 @@ TEST_CASE_METHOD(PointToPointFixture,
 }
 
 TEST_CASE_METHOD(PointToPointFixture,
-                 "Test sending mappings via brokeristry",
+                 "Test sending mappings via broker",
                  "[transport][ptp]")
 {
     faabric::util::setMockMode(true);
@@ -179,6 +181,8 @@ TEST_CASE_METHOD(PointToPointFixture,
     // async handling
     broker.sendMessage(
       appId, sendIdx, recvIdx, sentData.data(), sentData.size());
+
+    SLEEP_MS(1000);
 
     std::thread t([appId, sendIdx, recvIdx, &receivedData] {
         PointToPointBroker& broker = getPointToPointBroker();

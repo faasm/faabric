@@ -41,8 +41,6 @@ class PointToPointBroker
     std::unordered_map<std::string, std::string> mappings;
 
     faabric::scheduler::Scheduler& sch;
-
-    std::string getKey(int appId, int recvIdx);
 };
 
 PointToPointBroker& getPointToPointBroker();
