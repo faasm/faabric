@@ -9,6 +9,11 @@ namespace faabric::transport {
 
 PointToPointRegistry::PointToPointRegistry() {}
 
+std::string PointToPointRegistry::getKey(int appId, int recvIdx)
+{
+    return fmt::format("{}-{}", appId, recvIdx);
+}
+
 std::string PointToPointRegistry::getHostForReceiver(int appId, int recvIdx)
 {
     faabric::util::SharedLock lock(registryMutex);
@@ -16,11 +21,11 @@ std::string PointToPointRegistry::getHostForReceiver(int appId, int recvIdx)
     std::string key = getKey(appId, recvIdx);
 
     if (mappings.find(key) == mappings.end()) {
-        SPDLOG_ERROR("No point-to-point mapping for {}/{}", appId, recvIdx);
+        SPDLOG_ERROR("No point-to-point mapping for app {} idx {}", appId, recvIdx);
         throw std::runtime_error("No point-to-point mapping found");
     }
 
-    return key;
+    return mappings[key];
 }
 
 void PointToPointRegistry::setHostForReceiver(int appId,
@@ -29,17 +34,21 @@ void PointToPointRegistry::setHostForReceiver(int appId,
 {
     faabric::util::FullLock lock(registryMutex);
 
-    std::string key = getKey(appId, recvIdx);
+    // Record this index for this app
+    appIdxs[appId].insert(recvIdx);
 
+    // Add host mapping
+    std::string key = getKey(appId, recvIdx);
     mappings[key] = host;
 }
 
-void PointToPointRegistry::broadcastMappings(int appId,
-                                             std::vector<int> indexes)
+void PointToPointRegistry::broadcastMappings(int appId)
 {
     faabric::util::SharedLock lock(registryMutex);
 
     faabric::PointToPointMappings msg;
+
+    std::set<int>& indexes = appIdxs[appId];
 
     for (auto i : indexes) {
         std::string key = getKey(appId, i);
@@ -53,13 +62,27 @@ void PointToPointRegistry::broadcastMappings(int appId,
 
     auto& sch = faabric::scheduler::getScheduler();
 
-    // TODO - can we just do the set of registered hosts here somehow?
+    // TODO seems excessive to broadcast to all hosts, could we perhaps use the
+    // set of registered hosts?
     std::set<std::string> hosts = sch.getAvailableHosts();
 
     for (const auto& host : hosts) {
         PointToPointClient cli(host);
         cli.sendMappings(msg);
     }
+}
+
+std::set<int> PointToPointRegistry::getIdxsRegisteredForApp(int appId)
+{
+    faabric::util::SharedLock lock(registryMutex);
+    return appIdxs[appId];
+}
+
+void PointToPointRegistry::clear()
+{
+    faabric::util::SharedLock lock(registryMutex);
+
+    mappings.clear();
 }
 
 PointToPointRegistry& getPointToPointRegistry()
