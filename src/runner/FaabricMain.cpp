@@ -41,7 +41,7 @@ void FaabricMain::startBackground()
     startSnapshotServer();
 
     // Point-to-point messaging
-    startPointToPointServer();
+    startPointToPointBroker();
 
     // Work sharing
     startFunctionCallServer();
@@ -74,10 +74,10 @@ void FaabricMain::startSnapshotServer()
     snapshotServer.start();
 }
 
-void FaabricMain::startPointToPointServer()
+void FaabricMain::startPointToPointBroker()
 {
     SPDLOG_INFO("Starting point-to-point server");
-    pointToPointServer.start();
+    pointToPointBroker.start();
 }
 
 void FaabricMain::startStateServer()

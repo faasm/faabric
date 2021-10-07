@@ -7,7 +7,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointRegistry.h>
-#include <faabric/transport/PointToPointServer.h>
+#include <faabric/transport/PointToPointBroker.h>
 
 using namespace faabric::transport;
 
@@ -108,5 +108,31 @@ TEST_CASE_METHOD(PointToPointFixture,
     REQUIRE(reg.getHostForReceiver(appIdA, idxA1) == hostA);
     REQUIRE(reg.getHostForReceiver(appIdA, idxA2) == hostB);
     REQUIRE(reg.getHostForReceiver(appIdB, idxB1) == hostA);
+}
+
+TEST_CASE_METHOD(PointToPointFixture,
+                 "Test sending point-to-point message"
+                 "[transport]")
+{
+    int appId = 123;
+    int sendIdx = 5;
+    int recvIdx = 10;
+
+    // Register the recv index on this host
+    reg.setHostForReceiver(appId, recvIdx, LOCALHOST);
+
+    std::vector<uint8_t> data = { 0, 1, 2, 3 };
+
+    faabric::PointToPointMessage msg;
+    msg.set_appid(appId);
+    msg.set_recvidx(recvIdx);
+    msg.set_sendidx(sendIdx);
+
+    // Make sure we send the message before a receiver is available
+    cli.sendMessage(msg);
+
+    std::thread t([] {
+
+    });
 }
 }

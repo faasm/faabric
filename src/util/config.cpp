@@ -65,8 +65,8 @@ void SystemConfig::initialise()
       this->getSystemConfIntParam("STATE_SERVER_THREADS", "2");
     snapshotServerThreads =
       this->getSystemConfIntParam("SNAPSHOT_SERVER_THREADS", "2");
-    pointToPointServerThreads =
-      this->getSystemConfIntParam("POINT_TO_POINT_SERVER_THREADS", "2");
+    pointToPointBrokerThreads =
+      this->getSystemConfIntParam("POINT_TO_POINT_BROKER_THREADS", "2");
 }
 
 int SystemConfig::getSystemConfIntParam(const char* name,

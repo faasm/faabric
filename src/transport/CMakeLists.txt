@@ -12,7 +12,7 @@ set(HEADERS
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MessageEndpointServer.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/MpiMessageEndpoint.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/PointToPointClient.h"
-    "${FAABRIC_INCLUDE_DIR}/faabric/transport/PointToPointServer.h"
+    "${FAABRIC_INCLUDE_DIR}/faabric/transport/PointToPointBroker.h"
     "${FAABRIC_INCLUDE_DIR}/faabric/transport/PointToPointRegistry.h"
 )
 
@@ -24,7 +24,7 @@ set(LIB_FILES
     MessageEndpointServer.cpp
     MpiMessageEndpoint.cpp
     PointToPointClient.cpp
-    PointToPointServer.cpp
+    PointToPointBroker.cpp
     PointToPointRegistry.cpp
     ${HEADERS}
 )

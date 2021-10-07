@@ -1,6 +1,8 @@
-#include "faabric/transport/PointToPointClient.h"
+#include "faabric/util/config.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointRegistry.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -87,6 +89,42 @@ std::set<int> PointToPointRegistry::getIdxsRegisteredForApp(int appId)
 {
     faabric::util::SharedLock lock(registryMutex);
     return appIdxs[appId];
+}
+
+void PointToPointRegistry::sendMessage(int appId,
+                                       int sendIdx,
+                                       int recvIdx,
+                                       const uint8_t* buffer,
+                                       size_t bufferSize)
+{
+    std::string host = getHostForReceiver(appId, recvIdx);
+
+    // TODO - if this host, put directly onto queue
+    if (host == faabric::util::getSystemConfig().endpointHost) {
+        std::string label = getPointToPointInprocLabel(appId, sendIdx, recvIdx);
+
+        // TODO - need to keep this endpoint in scope in the same thread until
+        // the message is consumed.
+        std::unique_ptr<AsyncInternalSendMessageEndpoint> sendEndpoint =
+          std::make_unique<AsyncInternalSendMessageEndpoint>(label);
+    } else {
+        // TODO - if not, create client and send to remote host
+    }
+}
+
+std::vector<uint8_t> PointToPointRegistry::recvMessage(int appId,
+                                                       int sendIdx,
+                                                       int recvIdx)
+{
+    std::string label = getPointToPointInprocLabel(appId, sendIdx, recvIdx);
+    std::unique_ptr<AsyncInternalRecvMessageEndpoint> endpoint =
+      std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
+
+    std::optional<Message> messageDataMaybe = endpoint->recv().value();
+    Message messageData = messageDataMaybe.value();
+
+    // TODO - possible to avoid this copy?
+    return messageData.dataCopy();
 }
 
 void PointToPointRegistry::clear()
