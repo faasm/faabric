@@ -12,7 +12,6 @@
 #include <faabric/state/State.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
-#include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>

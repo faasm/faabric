@@ -28,13 +28,7 @@ class DistTestsFixture
         faabric::scheduler::setExecutorFactory(fac);
     }
 
-    ~DistTestsFixture()
-    {
-        // Clear thread-local cache for this main thread
-        faabric::transport::PointToPointBroker& broker =
-          faabric::transport::getPointToPointBroker();
-        broker.resetThreadLocalCache();
-    }
+    ~DistTestsFixture() {}
 
     std::string getWorkerIP()
     {

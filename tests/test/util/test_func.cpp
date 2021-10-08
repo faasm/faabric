@@ -30,6 +30,27 @@ TEST_CASE("Test message factory shared", "[util]")
     REQUIRE(!msg->resultkey().empty());
 }
 
+TEST_CASE("Test batch exec factory", "[util]")
+{
+    int nMessages = 4;
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("demo", "echo", nMessages);
+
+    REQUIRE(req->messages().size() == nMessages);
+
+    REQUIRE(req->id() > 0);
+
+    // Expect all messages to have the same app ID by default
+    int appId = req->messages().at(0).appid();
+    REQUIRE(appId > 0);
+
+    for (const auto& m : req->messages()) {
+        REQUIRE(m.appid() == appId);
+        REQUIRE(m.user() == "demo");
+        REQUIRE(m.function() == "echo");
+    }
+}
+
 TEST_CASE("Test adding ids to message", "[util]")
 {
     faabric::Message msgA;

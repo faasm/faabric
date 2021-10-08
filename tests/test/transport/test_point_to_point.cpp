@@ -1,12 +1,12 @@
 #include <catch.hpp>
 
-#include "faabric/proto/faabric.pb.h"
-#include "faabric/scheduler/Scheduler.h"
 #include "faabric_utils.h"
 
 #include <sys/mman.h>
 
-#include <faabric/transport/PointToPointBroker.h>
+#include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/config.h>
 #include <faabric/util/macros.h>
 
