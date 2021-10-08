@@ -108,6 +108,9 @@ void FaabricMain::shutdown()
     SPDLOG_INFO("Waiting for the snapshot server to finish");
     snapshotServer.stop();
 
+    SPDLOG_INFO("Waiting for the point-to-point server to finish");
+    pointToPointServer.stop();
+
     auto& sch = faabric::scheduler::getScheduler();
     sch.shutdown();
 
