@@ -212,38 +212,50 @@ TEST_CASE_METHOD(PointToPointSchedulerFixture,
                  "[transport][ptp]")
 {
     int appId = 123;
-    int sendIdx = 5;
-    int recvIdx = 10;
+    int idxA = 5;
+    int idxB = 10;
 
     // Ensure this host is set to localhost
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     conf.endpointHost = LOCALHOST;
 
-    // brokerister the recv index on this host
-    broker.setHostForReceiver(appId, recvIdx, LOCALHOST);
+    // Register both indexes on this host
+    broker.setHostForReceiver(appId, idxA, LOCALHOST);
+    broker.setHostForReceiver(appId, idxB, LOCALHOST);
 
-    std::vector<uint8_t> sentData = { 0, 1, 2, 3 };
-    std::vector<uint8_t> receivedData;
+    std::vector<uint8_t> sentDataA = { 0, 1, 2, 3 };
+    std::vector<uint8_t> receivedDataA;
+    std::vector<uint8_t> sentDataB = { 3, 4, 5 };
+    std::vector<uint8_t> receivedDataB;
 
     // Make sure we send the message before a receiver is available to check
     // async handling
-    broker.sendMessage(
-      appId, sendIdx, recvIdx, sentData.data(), sentData.size());
+    broker.sendMessage(appId, idxA, idxB, sentDataA.data(), sentDataA.size());
 
     SLEEP_MS(1000);
 
-    std::thread t([appId, sendIdx, recvIdx, &receivedData] {
+    std::thread t([appId, idxA, idxB, &receivedDataA, &sentDataB] {
         PointToPointBroker& broker = getPointToPointBroker();
-        receivedData = broker.recvMessage(appId, sendIdx, recvIdx);
+
+        // Receive the first message
+        receivedDataA = broker.recvMessage(appId, idxA, idxB);
+
+        // Send a message back (note reversing the indexes)
+        broker.sendMessage(
+          appId, idxB, idxA, sentDataB.data(), sentDataB.size());
 
         broker.resetThreadLocalCache();
     });
+
+    // Receive the message sent back
+    receivedDataB = broker.recvMessage(appId, idxB, idxA);
 
     if (t.joinable()) {
         t.join();
     }
 
-    REQUIRE(receivedData == sentData);
+    REQUIRE(receivedDataA == sentDataA);
+    REQUIRE(receivedDataB == sentDataB);
 
     conf.reset();
 }
