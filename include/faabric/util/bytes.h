@@ -12,7 +12,7 @@ std::vector<uint8_t> stringToBytes(const std::string& str);
 
 std::string bytesToString(const std::vector<uint8_t>& bytes);
 
-std::string formatByteArrayToIntString(const std::vector<uint8_t>&bytes);
+std::string formatByteArrayToIntString(const std::vector<uint8_t>& bytes);
 
 void trimTrailingZeros(std::vector<uint8_t>& vectorIn);
 
