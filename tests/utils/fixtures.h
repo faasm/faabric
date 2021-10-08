@@ -274,11 +274,9 @@ class PointToPointTestFixture
   public:
     PointToPointTestFixture()
       : broker(faabric::transport::getPointToPointBroker())
-      , cli(LOCALHOST)
     {
         faabric::util::setMockMode(false);
         broker.clear();
-        server.start();
     }
 
     ~PointToPointTestFixture()
@@ -289,14 +287,11 @@ class PointToPointTestFixture
 
         faabric::transport::clearSentMessages();
 
-        server.stop();
         broker.clear();
         faabric::util::setMockMode(false);
     }
 
   protected:
     faabric::transport::PointToPointBroker& broker;
-    faabric::transport::PointToPointServer server;
-    faabric::transport::PointToPointClient cli;
 };
 }

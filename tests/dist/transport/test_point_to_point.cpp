@@ -16,6 +16,10 @@ TEST_CASE_METHOD(DistTestsFixture,
                  "Test point-to-point messaging on multiple hosts",
                  "[ptp]")
 {
+    std::set<std::string> actualAvailable = sch.getAvailableHosts();
+    std::set<std::string> expectedAvailable = { getMasterIP(), getWorkerIP() };
+    REQUIRE(actualAvailable == expectedAvailable);
+
     // Set up this host's resources
     // Make sure some functions execute remotely, some locally
     int nLocalSlots = 1;

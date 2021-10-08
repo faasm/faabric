@@ -15,16 +15,25 @@ using namespace faabric::util;
 
 namespace tests {
 
-class PointToPointSchedulerFixture
+class PointToPointClientServerFixture
   : public PointToPointTestFixture
   , SchedulerTestFixture
 {
   public:
-    PointToPointSchedulerFixture() {}
-    ~PointToPointSchedulerFixture() {}
+    PointToPointClientServerFixture()
+      : cli(LOCALHOST)
+    {
+        server.start();
+    }
+
+    ~PointToPointClientServerFixture() { server.stop(); }
+
+  protected:
+    faabric::transport::PointToPointClient cli;
+    faabric::transport::PointToPointServer server;
 };
 
-TEST_CASE_METHOD(PointToPointSchedulerFixture,
+TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test set and get point-to-point hosts",
                  "[transport][ptp]")
 {
@@ -73,7 +82,7 @@ TEST_CASE_METHOD(PointToPointSchedulerFixture,
     REQUIRE(broker.getHostForReceiver(appIdB, idxB2) == hostC);
 }
 
-TEST_CASE_METHOD(PointToPointSchedulerFixture,
+TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test sending point-to-point mappings via broker",
                  "[transport][ptp]")
 {
@@ -163,7 +172,7 @@ TEST_CASE_METHOD(PointToPointSchedulerFixture,
     }
 }
 
-TEST_CASE_METHOD(PointToPointSchedulerFixture,
+TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test sending point-to-point mappings from client",
                  "[transport][ptp]")
 {
@@ -207,7 +216,7 @@ TEST_CASE_METHOD(PointToPointSchedulerFixture,
     REQUIRE(broker.getHostForReceiver(appIdB, idxB1) == hostA);
 }
 
-TEST_CASE_METHOD(PointToPointSchedulerFixture,
+TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test send and receive point-to-point messages",
                  "[transport][ptp]")
 {
