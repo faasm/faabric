@@ -1,5 +1,7 @@
 #include <catch.hpp>
 
+#include "faabric/proto/faabric.pb.h"
+#include "faabric/scheduler/Scheduler.h"
 #include "faabric_utils.h"
 
 #include <sys/mman.h>
@@ -13,7 +15,16 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE_METHOD(PointToPointFixture,
+class PointToPointSchedulerFixture
+  : public PointToPointTestFixture
+  , SchedulerTestFixture
+{
+  public:
+    PointToPointSchedulerFixture() {}
+    ~PointToPointSchedulerFixture() {}
+};
+
+TEST_CASE_METHOD(PointToPointSchedulerFixture,
                  "Test set and get point-to-point hosts",
                  "[transport][ptp]")
 {
@@ -62,7 +73,7 @@ TEST_CASE_METHOD(PointToPointFixture,
     REQUIRE(broker.getHostForReceiver(appIdB, idxB2) == hostC);
 }
 
-TEST_CASE_METHOD(PointToPointFixture,
+TEST_CASE_METHOD(PointToPointSchedulerFixture,
                  "Test sending point-to-point mappings via broker",
                  "[transport][ptp]")
 {
@@ -77,45 +88,82 @@ TEST_CASE_METHOD(PointToPointFixture,
 
     std::string hostA = "host-a";
     std::string hostB = "host-b";
+    std::string hostC = "host-c";
+
+    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+    sch.reset();
+
+    sch.addHostToGlobalSet(hostA);
+    sch.addHostToGlobalSet(hostB);
+    sch.addHostToGlobalSet(hostC);
+
+    // Includes this host
+    REQUIRE(sch.getAvailableHosts().size() == 4);
 
     broker.setHostForReceiver(appIdA, idxA1, hostA);
     broker.setHostForReceiver(appIdA, idxA2, hostB);
     broker.setHostForReceiver(appIdB, idxB1, hostB);
 
-    broker.sendMappings(appIdA, "other-host");
+    std::vector<std::string> expectedHosts;
+    SECTION("Send single host")
+    {
+        broker.sendMappings(appIdA, hostC);
+        expectedHosts = { hostC };
+    }
+
+    SECTION("Broadcast all hosts")
+    {
+        broker.broadcastMappings(appIdA);
+
+        // Don't expect to be broadcast to this host
+        expectedHosts = { hostA, hostB, hostC };
+    }
 
     auto actualSent = getSentMappings();
-    REQUIRE(actualSent.size() == 1);
+    REQUIRE(actualSent.size() == expectedHosts.size());
 
-    faabric::PointToPointMappings actualMappings = actualSent.at(0).second;
-    REQUIRE(actualMappings.mappings().size() == 2);
+    // Sort the sent mappings based on host
+    std::sort(actualSent.begin(),
+              actualSent.end(),
+              [](const std::pair<std::string, faabric::PointToPointMappings>& a,
+                 const std::pair<std::string, faabric::PointToPointMappings>& b)
+                -> bool { return a.first < b.first; });
 
-    faabric::PointToPointMappings::PointToPointMapping mappingA =
-      actualMappings.mappings().at(0);
-    faabric::PointToPointMappings::PointToPointMapping mappingB =
-      actualMappings.mappings().at(1);
+    // Check each of the sent mappings is as we would expect
+    for (int i = 0; i < expectedHosts.size(); i++) {
+        REQUIRE(actualSent.at(i).first == expectedHosts.at(i));
 
-    REQUIRE(mappingA.appid() == appIdA);
-    REQUIRE(mappingB.appid() == appIdA);
+        faabric::PointToPointMappings actualMappings = actualSent.at(i).second;
+        REQUIRE(actualMappings.mappings().size() == 2);
 
-    // Note - we don't know the order the mappings are sent in so we have to
-    // check both possibilities
-    if (mappingA.recvidx() == idxA1) {
-        REQUIRE(mappingA.host() == hostA);
+        faabric::PointToPointMappings::PointToPointMapping mappingA =
+          actualMappings.mappings().at(0);
+        faabric::PointToPointMappings::PointToPointMapping mappingB =
+          actualMappings.mappings().at(1);
 
-        REQUIRE(mappingB.recvidx() == idxA2);
-        REQUIRE(mappingB.host() == hostB);
-    } else if (mappingA.recvidx() == idxA2) {
-        REQUIRE(mappingA.host() == hostB);
+        REQUIRE(mappingA.appid() == appIdA);
+        REQUIRE(mappingB.appid() == appIdA);
 
-        REQUIRE(mappingB.recvidx() == idxA1);
-        REQUIRE(mappingB.host() == hostA);
-    } else {
-        FAIL();
+        // Note - we don't know the order of the mappings and can't easily sort
+        // the data in the protobuf object, so it's easiest just to check both
+        // possible orderings.
+        if (mappingA.recvidx() == idxA1) {
+            REQUIRE(mappingA.host() == hostA);
+
+            REQUIRE(mappingB.recvidx() == idxA2);
+            REQUIRE(mappingB.host() == hostB);
+        } else if (mappingA.recvidx() == idxA2) {
+            REQUIRE(mappingA.host() == hostB);
+
+            REQUIRE(mappingB.recvidx() == idxA1);
+            REQUIRE(mappingB.host() == hostA);
+        } else {
+            FAIL();
+        }
     }
 }
 
-TEST_CASE_METHOD(PointToPointFixture,
+TEST_CASE_METHOD(PointToPointSchedulerFixture,
                  "Test sending point-to-point mappings from client",
                  "[transport][ptp]")
 {
@@ -159,8 +207,8 @@ TEST_CASE_METHOD(PointToPointFixture,
     REQUIRE(broker.getHostForReceiver(appIdB, idxB1) == hostA);
 }
 
-TEST_CASE_METHOD(PointToPointFixture,
-                 "Test sending point-to-point message",
+TEST_CASE_METHOD(PointToPointSchedulerFixture,
+                 "Test send and receive point-to-point messages",
                  "[transport][ptp]")
 {
     int appId = 123;

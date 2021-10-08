@@ -1,3 +1,4 @@
+#include "faabric/transport/PointToPointCall.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointServer.h>
@@ -22,6 +23,20 @@ void PointToPointServer::doAsyncRecv(int header,
                                      const uint8_t* buffer,
                                      size_t bufferSize)
 {
+    switch (header) {
+        case (faabric::transport::PointToPointCall::MESSAGE): {
+            doSendMessage(buffer, bufferSize);
+            break;
+        }
+        default: {
+            SPDLOG_ERROR("Invalid aync point-to-point header: {}", header);
+            throw std::runtime_error("Invalid async point-to-point message");
+        }
+    }
+}
+
+void PointToPointServer::doSendMessage(const uint8_t* buffer, size_t bufferSize)
+{
     PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
 
     reg.sendMessage(msg.appid(),
@@ -33,6 +48,21 @@ void PointToPointServer::doAsyncRecv(int header,
 
 std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
   int header,
+  const uint8_t* buffer,
+  size_t bufferSize)
+{
+    switch (header) {
+        case (faabric::transport::PointToPointCall::MAPPING): {
+            return doRecvMappings(buffer, bufferSize);
+        }
+        default: {
+            SPDLOG_ERROR("Invalid sync point-to-point header: {}", header);
+            throw std::runtime_error("Invalid sync point-to-point message");
+        }
+    }
+}
+
+std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
   const uint8_t* buffer,
   size_t bufferSize)
 {

@@ -8,7 +8,7 @@
 
 namespace faabric::transport {
 
-// NOTE: Keeping 0MQ socketsin TLS is usually a bad idea, as they _must_ be
+// NOTE: Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be
 // closed before the global context. However, in this case it's worth it
 // to cache the sockets across messages, as otherwise we'd be creating and
 // destroying a lot of them under high throughput. To ensure things are cleared
@@ -76,7 +76,14 @@ void PointToPointBroker::broadcastMappings(int appId)
     // set of registered hosts?
     std::set<std::string> hosts = sch.getAvailableHosts();
 
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+
     for (const auto& host : hosts) {
+        // Skip this host
+        if (host == conf.endpointHost) {
+            continue;
+        }
+
         sendMappings(appId, host);
     }
 }
@@ -99,6 +106,10 @@ void PointToPointBroker::sendMappings(int appId, const std::string& host)
         mapping->set_host(host);
     }
 
+    SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",
+                 indexes.size(),
+                 appId,
+                 host);
     PointToPointClient cli(host);
     cli.sendMappings(msg);
 }

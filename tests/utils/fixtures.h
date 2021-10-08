@@ -269,22 +269,25 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     faabric::scheduler::MpiWorld otherWorld;
 };
 
-class PointToPointFixture
+class PointToPointTestFixture
 {
   public:
-    PointToPointFixture()
+    PointToPointTestFixture()
       : broker(faabric::transport::getPointToPointBroker())
       , cli(LOCALHOST)
     {
+        faabric::util::setMockMode(false);
         broker.clear();
         server.start();
     }
 
-    ~PointToPointFixture()
+    ~PointToPointTestFixture()
     {
         // Note - here we reset the thread-local cache for the test thread. If
         // other threads are used in the tests, they too must do this.
         broker.resetThreadLocalCache();
+
+        faabric::transport::clearSentMessages();
 
         server.stop();
         broker.clear();

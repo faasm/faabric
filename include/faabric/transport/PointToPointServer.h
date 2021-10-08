@@ -21,5 +21,11 @@ class PointToPointServer final : public MessageEndpointServer
     doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override;
 
     void onWorkerStop() override;
+
+    void doSendMessage(const uint8_t* buffer, size_t bufferSize);
+
+    std::unique_ptr<google::protobuf::Message> doRecvMappings(
+      const uint8_t* buffer,
+      size_t bufferSize);
 };
 }
