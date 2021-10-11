@@ -81,7 +81,8 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
     }
 
     faabric::util::UniqueLock lock(snapshotsMx);
-    if (snapshotExists(key) && overwrite) {
+
+    if (snapshotExists(key) && !overwrite) {
         SPDLOG_TRACE("Skipping already existing snapshot {}", key);
         return;
     }
