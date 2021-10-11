@@ -24,6 +24,10 @@ class SnapshotRegistry
                       faabric::util::SnapshotData data,
                       bool locallyRestorable = true);
 
+    void takeSnapshotIfNotExists(const std::string& key,
+                                 faabric::util::SnapshotData data,
+                                 bool locallyRestorable = true);
+
     void deleteSnapshot(const std::string& key);
 
     size_t getSnapshotCount();
@@ -36,6 +40,11 @@ class SnapshotRegistry
     std::mutex snapshotsMx;
 
     int writeSnapshotToFd(const std::string& key);
+
+    void doTakeSnapshot(const std::string& key,
+                        faabric::util::SnapshotData data,
+                        bool locallyRestorable,
+                        bool overwrite);
 };
 
 SnapshotRegistry& getSnapshotRegistry();
