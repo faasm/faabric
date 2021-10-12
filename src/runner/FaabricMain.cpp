@@ -12,12 +12,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#if (FAASM_SGX)
-namespace sgx {
-extern void checkSgxSetup();
-}
-#endif
-
 namespace faabric::runner {
 FaabricMain::FaabricMain(
   std::shared_ptr<faabric::scheduler::ExecutorFactory> execFactory)
@@ -52,11 +46,6 @@ void FaabricMain::startRunner()
 
     auto& sch = faabric::scheduler::getScheduler();
     sch.addHostToGlobalSet();
-
-#if (FAASM_SGX)
-    // Check for SGX capability and create shared enclave
-    sgx::checkSgxSetup();
-#endif
 }
 
 void FaabricMain::startFunctionCallServer()
