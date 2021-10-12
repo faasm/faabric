@@ -114,6 +114,55 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,
+                 "Test set snapshot if not exists",
+                 "[snapshot]")
+{
+    REQUIRE(reg.getSnapshotCount() == 0);
+
+    std::string keyA = "snapA";
+    std::string keyB = "snapB";
+
+    REQUIRE(!reg.snapshotExists(keyA));
+    REQUIRE(!reg.snapshotExists(keyB));
+
+    // Take one of the snapshots
+    SnapshotData snapBefore = takeSnapshot(keyA, 1, true);
+
+    REQUIRE(reg.snapshotExists(keyA));
+    REQUIRE(!reg.snapshotExists(keyB));
+    REQUIRE(reg.getSnapshotCount() == 1);
+
+    // Set up some different data
+    std::vector<uint8_t> otherDataA(snapBefore.size + 10, 1);
+    std::vector<uint8_t> otherDataB(snapBefore.size + 5, 2);
+
+    SnapshotData snapUpdateA;
+    snapUpdateA.data = otherDataA.data();
+    snapUpdateA.size = otherDataA.size();
+
+    SnapshotData snapUpdateB;
+    snapUpdateB.data = otherDataB.data();
+    snapUpdateB.size = otherDataB.size();
+
+    // Check existing snapshot is not overwritten
+    reg.takeSnapshotIfNotExists(keyA, snapUpdateA, true);
+    SnapshotData snapAfterA = reg.getSnapshot(keyA);
+    REQUIRE(snapAfterA.data == snapBefore.data);
+    REQUIRE(snapAfterA.size == snapBefore.size);
+
+    // Check new snapshot is still created
+    reg.takeSnapshotIfNotExists(keyB, snapUpdateB, true);
+
+    REQUIRE(reg.snapshotExists(keyA));
+    REQUIRE(reg.snapshotExists(keyB));
+    REQUIRE(reg.getSnapshotCount() == 2);
+
+    SnapshotData snapAfterB = reg.getSnapshot(keyB);
+    REQUIRE(snapAfterB.data == otherDataB.data());
+    REQUIRE(snapAfterB.size == otherDataB.size());
+}
+
+TEST_CASE_METHOD(SnapshotTestFixture,
                  "Test can't get snapshot with empty key",
                  "[snapshot]")
 {
