@@ -86,5 +86,7 @@ class MessageEndpointServer
 
     std::shared_ptr<faabric::util::Latch> requestLatch;
     std::shared_ptr<faabric::util::Latch> shutdownLatch;
+
+    bool started = false;
 };
 }

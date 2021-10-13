@@ -227,6 +227,8 @@ MessageEndpointServer::MessageEndpointServer(int asyncPortIn,
  */
 void MessageEndpointServer::start()
 {
+    started = true;
+
     // This latch allows use to block on the handlers until _just_ before they
     // start their proxies.
     auto startLatch = faabric::util::Latch::create(3);
@@ -243,6 +245,11 @@ void MessageEndpointServer::start()
 
 void MessageEndpointServer::stop()
 {
+    if (!started) {
+        SPDLOG_DEBUG("Not stopping server on {}, not started", syncPort);
+        return;
+    }
+
     // Here we send shutdown messages to each worker in turn, however, because
     // they're all connected on the same inproc port, we have to wait until each
     // one has shut down fully (i.e. the zmq socket has gone out of scope),
@@ -284,6 +291,8 @@ void MessageEndpointServer::stop()
     // Join the handlers
     asyncHandler.join();
     syncHandler.join();
+
+    started = false;
 }
 
 void MessageEndpointServer::setRequestLatch()
