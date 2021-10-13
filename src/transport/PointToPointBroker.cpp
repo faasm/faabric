@@ -22,6 +22,10 @@ thread_local std::
   unordered_map<std::string, std::unique_ptr<AsyncInternalSendMessageEndpoint>>
     sendEndpoints;
 
+thread_local std::unordered_map<std::string,
+                                std::shared_ptr<PointToPointClient>>
+  clients;
+
 std::string getPointToPointKey(int appId, int sendIdx, int recvIdx)
 {
     return fmt::format("{}-{}-{}", appId, sendIdx, recvIdx);
@@ -110,8 +114,9 @@ void PointToPointBroker::sendMappings(int appId, const std::string& host)
                  indexes.size(),
                  appId,
                  host);
-    PointToPointClient cli(host);
-    cli.sendMappings(msg);
+
+    auto cli = getClient(host);
+    cli->sendMappings(msg);
 }
 
 std::set<int> PointToPointBroker::getIdxsRegisteredForApp(int appId)
@@ -149,7 +154,7 @@ void PointToPointBroker::sendMessage(int appId,
         sendEndpoints[label]->send(buffer, bufferSize);
 
     } else {
-        PointToPointClient cli(host);
+        auto cli = getClient(host);
         faabric::PointToPointMessage msg;
         msg.set_appid(appId);
         msg.set_sendidx(sendIdx);
@@ -162,7 +167,7 @@ void PointToPointBroker::sendMessage(int appId,
                      recvIdx,
                      host);
 
-        cli.sendMessage(msg);
+        cli->sendMessage(msg);
     }
 }
 
@@ -188,6 +193,19 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int appId,
     return messageData.dataCopy();
 }
 
+std::shared_ptr<PointToPointClient> PointToPointBroker::getClient(
+  const std::string& host)
+{
+    // Note - this map is thread-local so no locking required
+    if (clients.find(host) == clients.end()) {
+        clients[host] = std::make_shared<PointToPointClient>(host);
+
+        SPDLOG_TRACE("Created new point-to-point client {}", host);
+    }
+
+    return clients[host];
+}
+
 void PointToPointBroker::clear()
 {
     faabric::util::SharedLock lock(brokerMutex);
@@ -198,12 +216,11 @@ void PointToPointBroker::clear()
 
 void PointToPointBroker::resetThreadLocalCache()
 {
-    auto tid = (pid_t)syscall(SYS_gettid);
-    SPDLOG_TRACE("Resetting point-to-point thread-local cache for thread {}",
-                 tid);
+    SPDLOG_TRACE("Resetting point-to-point thread-local cache");
 
     sendEndpoints.clear();
     recvEndpoints.clear();
+    clients.clear();
 }
 
 PointToPointBroker& getPointToPointBroker()

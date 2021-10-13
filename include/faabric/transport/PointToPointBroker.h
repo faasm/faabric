@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointClient.h>
 
 #include <set>
 #include <shared_mutex>
@@ -41,6 +42,8 @@ class PointToPointBroker
 
     std::unordered_map<int, std::set<int>> appIdxs;
     std::unordered_map<std::string, std::string> mappings;
+
+    std::shared_ptr<PointToPointClient> getClient(const std::string& host);
 
     faabric::scheduler::Scheduler& sch;
 };
