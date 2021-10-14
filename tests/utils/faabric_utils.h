@@ -66,10 +66,12 @@ void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);
 
 void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
-                                const scheduler::ExecGraphNode& nodeB);
+                                const scheduler::ExecGraphNode& nodeB,
+                                bool isMpi = false);
 
 void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
-                            const scheduler::ExecGraph& graphB);
+                            const scheduler::ExecGraph& graphB,
+                            bool isMpi = false);
 
 std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
                                                   int port,

@@ -3,8 +3,11 @@
 #include "faabric_utils.h"
 
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 
 using namespace scheduler;
 
@@ -66,5 +69,61 @@ TEST_CASE("Test execution graph", "[scheduler]")
     REQUIRE(countExecGraphNodes(expected) == 7);
 
     checkExecGraphEquality(expected, actual);
+}
+
+TEST_CASE_METHOD(MpiBaseTestFixture,
+                 "Test MPI execution graph",
+                 "[mpi][scheduler]")
+{
+    faabric::scheduler::MpiWorld world;
+
+    // Build the message vector to reconstruct the graph
+    std::vector<faabric::Message> messages(worldSize);
+    for (int rank = 0; rank < worldSize; rank++) {
+        messages.at(rank) = faabric::util::messageFactory("mpi", "hellompi");
+        messages.at(rank).set_mpirank(rank);
+        messages.at(rank).set_mpiworldid(worldId);
+    }
+
+    world.create(msg, worldId, worldSize);
+
+    world.destroy();
+
+    // Update the result for the master message
+    sch.setFunctionResult(msg);
+    // Wait for the scheduler to set the result on the MPI non-master messages
+    SLEEP_MS(500);
+
+    // Build expected graph
+    ExecGraphNode nodeB1 = { .msg = messages.at(1) };
+    ExecGraphNode nodeB2 = { .msg = messages.at(2) };
+    ExecGraphNode nodeB3 = { .msg = messages.at(3) };
+    ExecGraphNode nodeB4 = { .msg = messages.at(4) };
+
+    ExecGraphNode nodeA = { .msg = messages.at(0),
+                            .children = { nodeB1, nodeB2, nodeB3, nodeB4 } };
+
+    ExecGraph expected{ .rootNode = nodeA };
+
+    // Check the execution graph
+    ExecGraph actual = sch.getFunctionExecGraph(msg.id());
+    REQUIRE(countExecGraphNodes(actual) == worldSize);
+    REQUIRE(countExecGraphNodes(expected) == worldSize);
+
+    // Print contents of actual
+    SPDLOG_INFO("Actual root node. MsgId-World id: {}-{}, Rank: {}/{}",
+                actual.rootNode.msg.id(),
+                actual.rootNode.msg.mpiworldid(),
+                actual.rootNode.msg.mpirank(),
+                actual.rootNode.msg.mpiworldsize());
+    for (const auto& node : actual.rootNode.children) {
+        SPDLOG_INFO("Actual children node. MsgId-World id: {}-{}, Rank: {}/{}",
+                    node.msg.id(),
+                    node.msg.mpiworldid(),
+                    node.msg.mpirank(),
+                    node.msg.mpiworldsize());
+    }
+
+    checkExecGraphEquality(expected, actual, true);
 }
 }
