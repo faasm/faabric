@@ -200,3 +200,24 @@ message StateAppendedResponse {
     string key = 2;
     repeated AppendedValue values = 3;
 }
+
+// ---------------------------------------------
+// POINT-TO-POINT
+// ---------------------------------------------
+
+message PointToPointMessage {
+    int32 appId = 1;
+    int32 sendIdx = 2;
+    int32 recvIdx = 3;
+
+    bytes data = 4;
+}
+
+message PointToPointMappings {
+    message PointToPointMapping {
+        int32 appId = 1;
+        int32 recvIdx = 2;
+        string host = 3;
+    }
+    repeated PointToPointMapping mappings = 1;
+}

@@ -5,6 +5,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/StateServer.h>
+#include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/config.h>
 
 namespace faabric::runner {
@@ -23,11 +24,14 @@ class FaabricMain
 
     void startSnapshotServer();
 
+    void startPointToPointServer();
+
     void shutdown();
 
   private:
     faabric::state::StateServer stateServer;
     faabric::scheduler::FunctionCallServer functionServer;
     faabric::snapshot::SnapshotServer snapshotServer;
+    faabric::transport::PointToPointServer pointToPointServer;
 };
 }

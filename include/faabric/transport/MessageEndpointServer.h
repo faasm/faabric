@@ -56,6 +56,8 @@ class MessageEndpointServer
 
     virtual void stop();
 
+    virtual void onWorkerStop();
+
     void setRequestLatch();
 
     void awaitRequestLatch();

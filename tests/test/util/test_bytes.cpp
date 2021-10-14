@@ -137,4 +137,25 @@ TEST_CASE("Test integer encoding to/from bytes", "[util]")
     REQUIRE_THROWS_AS(readBytesOf(buffer, offset, &r1), std::range_error);
 }
 
+TEST_CASE("Test format byte array to string", "[util]")
+{
+    std::vector<uint8_t> bytesIn;
+    std::string expectedString;
+
+    SECTION("Empty") { expectedString = "[]"; }
+
+    SECTION("Non-empty")
+    {
+        bytesIn = { 0, 1, 2, 3, 4, 5, 6, 7 };
+        expectedString = "[0, 1, 2, 3, 4, 5, 6, 7]";
+    }
+
+    SECTION("Larger int values")
+    {
+        bytesIn = { 23, 9, 100 };
+        expectedString = "[23, 9, 100]";
+    }
+
+    REQUIRE(formatByteArrayToIntString(bytesIn) == expectedString);
+}
 }
