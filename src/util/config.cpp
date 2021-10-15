@@ -58,6 +58,9 @@ void SystemConfig::initialise()
           faabric::util::getPrimaryIPForThisHost(endpointInterface);
     }
 
+    // Monitoring
+    schedulerMonitorFile = getEnvVar("SCHEDULER_MONITOR_FILE", "");
+
     // Transport
     functionServerThreads =
       this->getSystemConfIntParam("FUNCTION_SERVER_THREADS", "2");
@@ -114,5 +117,8 @@ void SystemConfig::print()
     SPDLOG_INFO("ENDPOINT_HOST              {}", endpointHost);
     SPDLOG_INFO("ENDPOINT_PORT              {}", endpointPort);
     SPDLOG_INFO("ENDPOINT_NUM_THREADS       {}", endpointNumThreads);
+
+    SPDLOG_INFO("--- Monitoring ---");
+    SPDLOG_INFO("SCHEDULER_MONITOR_FILE     {}", schedulerMonitorFile);
 }
 }

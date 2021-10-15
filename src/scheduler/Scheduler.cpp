@@ -7,6 +7,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/random.h>
@@ -15,6 +16,10 @@
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
 
+#include <sys/eventfd.h>
+#include <sys/file.h>
+
+#include <chrono>
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
@@ -36,6 +41,24 @@ static thread_local std::unordered_map<std::string,
                                        faabric::snapshot::SnapshotClient>
   snapshotClients;
 
+MessageLocalResult::MessageLocalResult()
+{
+    event_fd = eventfd(0, EFD_CLOEXEC);
+}
+
+MessageLocalResult::~MessageLocalResult()
+{
+    if (event_fd >= 0) {
+        close(event_fd);
+    }
+}
+
+void MessageLocalResult::set_value(std::unique_ptr<faabric::Message>&& msg)
+{
+    this->promise.set_value(std::move(msg));
+    eventfd_write(this->event_fd, (eventfd_t)1);
+}
+
 Scheduler& getScheduler()
 {
     static Scheduler sch;
@@ -49,6 +72,17 @@ Scheduler::Scheduler()
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
     thisHostResources.set_slots(cores);
+
+    if (!this->conf.schedulerMonitorFile.empty()) {
+        this->monitorFd = open(conf.schedulerMonitorFile.c_str(),
+                               O_RDWR | O_CREAT | O_NOATIME | O_TRUNC,
+                               S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+        if (this->monitorFd < 0) {
+            perror("Couldn't open monitoring fd");
+            this->monitorFd = -1;
+        }
+        this->updateMonitoring();
+    }
 }
 
 std::set<std::string> Scheduler::getAvailableHosts()
@@ -407,7 +441,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
             std::shared_ptr<Executor> e = nullptr;
             if (thisExecutors.empty()) {
                 // Create executor if not exists
-                e = claimExecutor(firstMsg, lock);
+                e = claimExecutor(firstMsg);
             } else if (thisExecutors.size() == 1) {
                 // Use existing executor if exists
                 e = thisExecutors.back();
@@ -427,13 +461,16 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
             // Non-threads require one executor per task
             for (auto i : localMessageIdxs) {
                 faabric::Message& localMsg = req->mutable_messages()->at(i);
+                if (localMsg.directresulthost() == conf.endpointHost) {
+                    localMsg.set_directresulthost("");
+                }
                 if (localMsg.executeslocally()) {
                     faabric::util::UniqueLock resultsLock(localResultsMutex);
                     localResults.insert(
                       { localMsg.id(),
-                        std::promise<std::unique_ptr<faabric::Message>>() });
+                        std::make_shared<MessageLocalResult>() });
                 }
-                std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
+                std::shared_ptr<Executor> e = claimExecutor(localMsg);
                 e->executeTasks({ i }, req);
             }
         }
@@ -537,6 +574,11 @@ int Scheduler::scheduleFunctionsOnHost(
         *newMsg = req->messages().at(i);
         newMsg->set_executeslocally(false);
         decision.addMessage(host, req->messages().at(i));
+        if (!newMsg->directresulthost().empty()) {
+            faabric::util::UniqueLock resultsLock(localResultsMutex);
+            localResults.insert(
+              { newMsg->id(), std::make_shared<MessageLocalResult>() });
+        }
     }
 
     SPDLOG_DEBUG(
@@ -611,9 +653,7 @@ Scheduler::getRecordedMessagesShared()
     return recordedMessagesShared;
 }
 
-std::shared_ptr<Executor> Scheduler::claimExecutor(
-  faabric::Message& msg,
-  faabric::util::FullLock& schedulerLock)
+std::shared_ptr<Executor> Scheduler::claimExecutor(faabric::Message& msg)
 {
     std::string funcStr = faabric::util::funcToString(msg, false);
 
@@ -637,11 +677,7 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(
         int nExecutors = thisExecutors.size();
         SPDLOG_DEBUG(
           "Scaling {} from {} -> {}", funcStr, nExecutors, nExecutors + 1);
-        // Spinning up a new executor can be lengthy, allow other things to run
-        // in parallel
-        schedulerLock.unlock();
         auto executor = factory->createExecutor(msg);
-        schedulerLock.lock();
         thisExecutors.push_back(std::move(executor));
         claimed = thisExecutors.back();
 
@@ -688,24 +724,42 @@ void Scheduler::flushLocally()
 
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
+    const auto& myHostname = faabric::util::getSystemConfig().endpointHost;
+
+    const auto& directResultHost = msg.directresulthost();
+    if (directResultHost == myHostname) {
+        faabric::util::UniqueLock resultsLock(localResultsMutex);
+        auto it = localResults.find(msg.id());
+        if (it != localResults.end()) {
+            it->second->set_value(std::make_unique<faabric::Message>(msg));
+        } else {
+            throw std::runtime_error(
+              "Got direct result, but promise is registered");
+        }
+        return;
+    }
 
     // Record which host did the execution
-    msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
+    msg.set_executedhost(myHostname);
 
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
+
+    if (!directResultHost.empty()) {
+        faabric::util::FullLock lock(mx);
+        auto& fc = getFunctionCallClient(directResultHost);
+        lock.unlock();
+        fc.sendDirectResult(msg);
+        return;
+    }
 
     if (msg.executeslocally()) {
         faabric::util::UniqueLock resultsLock(localResultsMutex);
         auto it = localResults.find(msg.id());
         if (it != localResults.end()) {
-            it->second.set_value(std::make_unique<faabric::Message>(msg));
+            it->second->set_value(std::make_unique<faabric::Message>(msg));
         }
-        // Sync messages can't have their results read twice, so skip redis
-        if (!msg.isasync()) {
-            return;
-        }
+        return;
     }
 
     std::string key = msg.resultkey();
@@ -715,6 +769,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // Write the successful result to the result queue
     std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
+    redis::Redis& redis = redis::Redis::getQueue();
     redis.publishSchedulerResult(key, msg.statuskey(), inputData);
 }
 
@@ -769,6 +824,19 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
                                               int timeoutMs)
 {
+    std::atomic_int* waitingCtr = &monitorWaitingTasks;
+    waitingCtr->fetch_add(1, std::memory_order_acq_rel);
+    struct WaitingGuard
+    {
+        std::atomic_int* ctr;
+        ~WaitingGuard()
+        {
+            if (ctr != nullptr) {
+                ctr->fetch_sub(1, std::memory_order_acq_rel);
+                ctr = nullptr;
+            }
+        }
+    } waitingGuard{ waitingCtr };
     bool isBlocking = timeoutMs > 0;
 
     if (messageId == 0) {
@@ -783,7 +851,7 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
             if (it == localResults.end()) {
                 break; // fallback to redis
             }
-            fut = it->second.get_future();
+            fut = it->second->promise.get_future();
         }
         if (!isBlocking) {
             auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
@@ -833,6 +901,92 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
     }
 
     return msgResult;
+}
+
+void Scheduler::getFunctionResultAsync(
+  unsigned int messageId,
+  int timeoutMs,
+  asio::io_context& ioc,
+  asio::any_io_executor& executor,
+  std::function<void(faabric::Message&)> handler)
+{
+    if (messageId == 0) {
+        throw std::runtime_error("Must provide non-zero message ID");
+    }
+
+    do {
+        std::shared_ptr<MessageLocalResult> mlr;
+        {
+            faabric::util::UniqueLock resultsLock(localResultsMutex);
+            auto it = localResults.find(messageId);
+            if (it == localResults.end()) {
+                break; // fallback to redis
+            }
+            mlr = it->second;
+        }
+        struct MlrAwaiter : public std::enable_shared_from_this<MlrAwaiter>
+        {
+            unsigned int messageId;
+            Scheduler* sched;
+            std::shared_ptr<MessageLocalResult> mlr;
+            asio::posix::stream_descriptor dsc;
+            std::function<void(faabric::Message&)> handler;
+            MlrAwaiter(unsigned int messageId,
+                       Scheduler* sched,
+                       std::shared_ptr<MessageLocalResult> mlr,
+                       asio::posix::stream_descriptor dsc,
+                       std::function<void(faabric::Message&)> handler)
+              : messageId(messageId)
+              , sched(sched)
+              , mlr(std::move(mlr))
+              , dsc(std::move(dsc))
+              , handler(handler)
+            {}
+            ~MlrAwaiter() { dsc.release(); }
+            void await(const boost::system::error_code& ec)
+            {
+                if (!ec) {
+                    auto msg = mlr->promise.get_future().get();
+                    handler(*msg);
+                    {
+                        faabric::util::UniqueLock resultsLock(
+                          sched->localResultsMutex);
+                        sched->localResults.erase(messageId);
+                    }
+                } else {
+                    doAwait();
+                }
+            }
+            void doAwait()
+            {
+                dsc.async_wait(asio::posix::stream_descriptor::wait_read,
+                               beast::bind_front_handler(
+                                 &MlrAwaiter::await, this->shared_from_this()));
+            }
+        };
+        auto awaiter = std::make_shared<MlrAwaiter>(
+          messageId,
+          this,
+          mlr,
+          asio::posix::stream_descriptor(ioc, mlr->event_fd),
+          std::move(handler));
+        awaiter->doAwait();
+        return;
+    } while (0);
+
+    // TODO: Non-blocking redis
+    redis::Redis& redis = redis::Redis::getQueue();
+
+    std::string resultKey = faabric::util::resultKeyFromMessageId(messageId);
+
+    faabric::Message msgResult;
+
+    // Blocking version will throw an exception when timing out
+    // which is handled by the caller.
+    std::vector<uint8_t> result = redis.dequeueBytes(resultKey, timeoutMs);
+    msgResult.ParseFromArray(result.data(), (int)result.size());
+
+    handler(msgResult);
 }
 
 faabric::HostResources Scheduler::getThisHostResources()
@@ -886,6 +1040,48 @@ std::set<unsigned int> Scheduler::getChainedFunctions(unsigned int msgId)
     }
 
     return chainedIds;
+}
+
+void Scheduler::updateMonitoring()
+{
+    if (this->monitorFd < 0) {
+        return;
+    }
+    static std::mutex monitorMx;
+    std::unique_lock<std::mutex> monitorLock(monitorMx);
+    thread_local std::string wrBuffer = std::string(size_t(128), char('\0'));
+    wrBuffer.clear();
+    constexpr auto ord = std::memory_order_acq_rel;
+    int32_t locallySched = monitorLocallyScheduledTasks.load(ord);
+    int32_t started = monitorStartedTasks.load(ord);
+    int32_t waiting = monitorWaitingTasks.load(ord);
+    fmt::format_to(
+      std::back_inserter(wrBuffer),
+      "local_sched,{},waiting_queued,{},started,{},waiting,{},active,{}\n",
+      locallySched,
+      locallySched - started,
+      started,
+      waiting,
+      started - waiting);
+    const size_t size = wrBuffer.size();
+    flock(monitorFd, LOCK_EX);
+    ftruncate(monitorFd, size);
+    lseek(monitorFd, 0, SEEK_SET);
+    ssize_t pos = 0;
+    while (pos < size) {
+        ssize_t written = write(monitorFd, wrBuffer.data() + pos, size - pos);
+        if (written < 0 && errno != EAGAIN) {
+            perror("Couldn't write monitoring data");
+        }
+        if (written == 0) {
+            SPDLOG_WARN("Couldn't write monitoring data");
+            break;
+        }
+        if (written > 0) {
+            pos += written;
+        }
+    }
+    flock(monitorFd, LOCK_UN);
 }
 
 ExecGraph Scheduler::getFunctionExecGraph(unsigned int messageId)

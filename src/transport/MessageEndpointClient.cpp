@@ -13,17 +13,21 @@ MessageEndpointClient::MessageEndpointClient(std::string hostIn,
   , syncEndpoint(host, syncPort, timeoutMs)
 {}
 
+namespace {
+thread_local std::vector<uint8_t> msgBuffer;
+}
+
 void MessageEndpointClient::asyncSend(int header,
                                       google::protobuf::Message* msg)
 {
     size_t msgSize = msg->ByteSizeLong();
-    uint8_t buffer[msgSize];
+    msgBuffer.resize(msgSize);
 
-    if (!msg->SerializeToArray(buffer, msgSize)) {
+    if (!msg->SerializeToArray(msgBuffer.data(), msgBuffer.size())) {
         throw std::runtime_error("Error serialising message");
     }
 
-    asyncSend(header, buffer, msgSize);
+    asyncSend(header, msgBuffer.data(), msgBuffer.size());
 }
 
 void MessageEndpointClient::asyncSend(int header,
@@ -40,12 +44,12 @@ void MessageEndpointClient::syncSend(int header,
                                      google::protobuf::Message* response)
 {
     size_t msgSize = msg->ByteSizeLong();
-    uint8_t buffer[msgSize];
-    if (!msg->SerializeToArray(buffer, msgSize)) {
+    msgBuffer.resize(msgSize);
+    if (!msg->SerializeToArray(msgBuffer.data(), msgBuffer.size())) {
         throw std::runtime_error("Error serialising message");
     }
 
-    syncSend(header, buffer, msgSize, response);
+    syncSend(header, msgBuffer.data(), msgBuffer.size(), response);
 }
 
 void MessageEndpointClient::syncSend(int header,

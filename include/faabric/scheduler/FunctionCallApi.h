@@ -9,5 +9,6 @@ enum FunctionCalls
     Unregister = 3,
     GetResources = 4,
     SetThreadResult = 5,
+    DirectResult = 6,
 };
 }

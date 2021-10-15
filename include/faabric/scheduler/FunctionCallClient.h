@@ -47,6 +47,8 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
     void executeFunctions(
       const std::shared_ptr<faabric::BatchExecuteRequest> req);
 
+    void sendDirectResult(faabric::Message msg);
+
     void unregister(faabric::UnregisterRequest& req);
 
   private:

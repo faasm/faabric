@@ -148,6 +148,11 @@ message Message {
     string sgxTag = 35;
     bytes sgxPolicy = 36;
     bytes sgxResult = 37;
+    string directResultHost = 38;
+}
+
+message DirectResultTransmission {
+    Message result = 1;
 }
 
 // ---------------------------------------------

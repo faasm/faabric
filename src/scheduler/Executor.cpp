@@ -34,6 +34,7 @@ Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
   , threadPoolSize(faabric::util::getUsableCores())
   , threadPoolThreads(threadPoolSize)
+  , setupDone(false)
   , threadTaskQueues(threadPoolSize)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
@@ -150,6 +151,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // original function call will cause a reset
     bool skipReset = isMaster && isThreads;
 
+    getScheduler().monitorLocallyScheduledTasks.fetch_add(
+      msgIdxs.size(), std::memory_order_acq_rel);
+
     // Iterate through and invoke tasks
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
@@ -181,6 +185,13 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 void Executor::threadPoolThread(int threadPoolIdx)
 {
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
+    if (!setupDone.load(std::memory_order_acquire)) {
+        std::unique_lock<std::mutex> _lock(setupMutex);
+        if (!setupDone.load(std::memory_order_acquire)) {
+            setup(boundMessage);
+            setupDone.store(true, std::memory_order_release);
+        }
+    }
 
     auto& sch = faabric::scheduler::getScheduler();
     const auto& conf = faabric::util::getSystemConfig();
@@ -226,17 +237,28 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      msg.id(),
                      isThreads);
 
-        int32_t returnValue;
-        try {
-            returnValue =
-              executeTask(threadPoolIdx, task.messageIndex, task.req);
-        } catch (const std::exception& ex) {
-            returnValue = 1;
+        getScheduler().monitorStartedTasks.fetch_add(1,
+                                                     std::memory_order_acq_rel);
 
-            std::string errorMessage = fmt::format(
-              "Task {} threw exception. What: {}", msg.id(), ex.what());
-            SPDLOG_ERROR(errorMessage);
-            msg.set_outputdata(errorMessage);
+        int64_t msgTimestamp = msg.timestamp();
+        int64_t nowTimestamp = faabric::util::getGlobalClock().epochMillis();
+        int32_t returnValue;
+        bool skippedExec = false;
+        if ((nowTimestamp - msgTimestamp) >= conf.globalMessageTimeout) {
+            returnValue = 1;
+            skippedExec = true;
+        } else {
+            try {
+                returnValue =
+                  executeTask(threadPoolIdx, task.messageIndex, task.req);
+            } catch (const std::exception& ex) {
+                returnValue = 1;
+
+                std::string errorMessage = fmt::format(
+                  "Task {} threw exception. What: {}", msg.id(), ex.what());
+                SPDLOG_ERROR(errorMessage);
+                msg.set_outputdata(errorMessage);
+            }
         }
 
         // Set the return value
@@ -254,7 +276,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        if (isLastInBatch && task.needsSnapshotPush) {
+        if (!skippedExec && isLastInBatch && task.needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
             faabric::util::SnapshotData snapshotPostExecution = snapshot();
 
@@ -276,7 +298,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Note that we have to release the claim _after_ resetting, otherwise
         // the executor won't be ready for reuse.
         if (isLastInBatch) {
-            if (task.skipReset) {
+            if (task.skipReset || skippedExec) {
                 SPDLOG_TRACE("Skipping reset for {}",
                              faabric::util::funcToString(msg, true));
             } else {
@@ -285,6 +307,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             releaseClaim();
         }
+
+        getScheduler().monitorStartedTasks.fetch_sub(1,
+                                                     std::memory_order_acq_rel);
+        getScheduler().monitorLocallyScheduledTasks.fetch_sub(
+          1, std::memory_order_acq_rel);
 
         // Vacate the slot occupied by this task. This must be done after
         // releasing the claim on this executor, otherwise the scheduler may try
@@ -329,6 +356,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         if (isFinished) {
             // Notify that this executor is finished
             sch.notifyExecutorShutdown(this, boundMessage);
+            softShutdown();
         }
     }
 
@@ -349,6 +377,8 @@ void Executor::releaseClaim()
     claimed.store(false);
 }
 
+void Executor::softShutdown() {}
+
 // ------------------------------------------
 // HOOKS
 // ------------------------------------------
@@ -361,6 +391,8 @@ int32_t Executor::executeTask(int threadPoolIdx,
 }
 
 void Executor::postFinish() {}
+
+void Executor::setup(faabric::Message& msg) {}
 
 void Executor::reset(faabric::Message& msg) {}
 

@@ -5,13 +5,6 @@
 #include <faabric/util/crash.h>
 #include <faabric/util/logging.h>
 
-#include <array>
-#include <execinfo.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
 namespace faabric::runner {
 FaabricMain::FaabricMain(
   std::shared_ptr<faabric::scheduler::ExecutorFactory> execFactory)

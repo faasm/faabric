@@ -2,12 +2,15 @@
 
 #include "faabric_utils.h"
 
-#include <faabric/endpoint/FaabricEndpoint.h>
+#include <faabric/endpoint/Endpoint.h>
 #include <faabric/endpoint/FaabricEndpointHandler.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/json.h>
 #include <faabric/util/macros.h>
+
+#include <pistache/endpoint.h>
+#include <pistache/http.h>
 
 using namespace Pistache;
 using namespace faabric::scheduler;
@@ -88,9 +91,10 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
 {
     port++;
 
-    faabric::endpoint::FaabricEndpoint endpoint(port, 2);
+    faabric::endpoint::Endpoint endpoint(
+      port, 2, std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
 
-    std::thread serverThread([&endpoint]() { endpoint.start(false); });
+    endpoint.start(false);
 
     // Wait for the server to start
     SLEEP_MS(2000);
@@ -101,7 +105,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
 
     SECTION("Empty request")
     {
-        expectedReturnCode = 500;
+        expectedReturnCode = 400;
         expectedResponseBody = "Empty request";
     }
 
@@ -111,7 +115,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         body = faabric::util::messageToJson(msg);
         expectedReturnCode = 200;
         expectedResponseBody =
-          fmt::format("Endpoint API test executed {}\n", msg.id());
+          fmt::format("Endpoint API test executed {}", msg.id());
     }
 
     SECTION("Error request")
@@ -120,7 +124,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         body = faabric::util::messageToJson(msg);
         expectedReturnCode = 500;
         expectedResponseBody =
-          fmt::format("Endpoint API returning 1 for {}\n", msg.id());
+          fmt::format("Endpoint API returning 1 for {}", msg.id());
     }
 
     SECTION("Invalid function")
@@ -129,7 +133,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         body = faabric::util::messageToJson(msg);
         expectedReturnCode = 500;
         expectedResponseBody = fmt::format(
-          "Task {} threw exception. What: Endpoint API error\n", msg.id());
+          "Task {} threw exception. What: Endpoint API error", msg.id());
     }
 
     std::pair<int, std::string> result =
@@ -138,10 +142,6 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
     REQUIRE(result.second == expectedResponseBody);
 
     endpoint.stop();
-
-    if (serverThread.joinable()) {
-        serverThread.join();
-    }
 }
 
 TEST_CASE_METHOD(EndpointApiTestFixture,
@@ -149,9 +149,10 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
                  "[endpoint]")
 {
     port++;
-    faabric::endpoint::FaabricEndpoint endpoint(port, 2);
+    faabric::endpoint::Endpoint endpoint(
+      port, 2, std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
 
-    std::thread serverThread([&endpoint]() { endpoint.start(false); });
+    endpoint.start(false);
 
     // Wait for the server to start
     SLEEP_MS(2000);
@@ -193,9 +194,5 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
             fmt::format("SUCCESS: Finished async message {}", msg.id()));
 
     endpoint.stop();
-
-    if (serverThread.joinable()) {
-        serverThread.join();
-    }
 }
 }

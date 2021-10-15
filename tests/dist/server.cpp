@@ -1,7 +1,8 @@
 #include "DistTestExecutor.h"
 #include "init.h"
 
-#include <faabric/endpoint/FaabricEndpoint.h>
+#include <faabric/endpoint/Endpoint.h>
+#include <faabric/endpoint/FaabricEndpointHandler.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/transport/context.h>
@@ -32,7 +33,11 @@ int main()
 
         // Note, endpoint will block until killed
         SPDLOG_INFO("Starting HTTP endpoint on worker");
-        faabric::endpoint::FaabricEndpoint endpoint;
+        const auto& config = faabric::util::getSystemConfig();
+        faabric::endpoint::Endpoint endpoint(
+          config.endpointPort,
+          config.endpointNumThreads,
+          std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
         endpoint.start();
 
         SPDLOG_INFO("Shutting down");

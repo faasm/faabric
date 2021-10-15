@@ -52,6 +52,8 @@ void MessageEndpointServerHandler::start(
         // Launch worker threads
         for (int i = 0; i < nThreads; i++) {
             workerThreads.emplace_back([this, i] {
+                std::vector<uint8_t> msgBuffer;
+                msgBuffer.reserve(8192);
                 // Here we want to isolate all ZeroMQ stuff in its own
                 // context, so we can do things after it's been destroyed
                 {
@@ -136,8 +138,9 @@ void MessageEndpointServerHandler::start(
                                 header, body.udata(), body.size());
                             size_t respSize = resp->ByteSizeLong();
 
-                            uint8_t buffer[respSize];
-                            if (!resp->SerializeToArray(buffer, respSize)) {
+                            msgBuffer.resize(respSize);
+                            if (!resp->SerializeToArray(msgBuffer.data(),
+                                                        msgBuffer.size())) {
                                 throw std::runtime_error(
                                   "Error serialising message");
                             }
@@ -145,7 +148,8 @@ void MessageEndpointServerHandler::start(
                             // Return the response
                             static_cast<SyncRecvMessageEndpoint*>(
                               endpoint.get())
-                              ->sendResponse(buffer, respSize);
+                              ->sendResponse(msgBuffer.data(),
+                                             msgBuffer.size());
                         }
 
                         // Wait on the request latch if necessary

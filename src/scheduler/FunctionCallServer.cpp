@@ -30,6 +30,10 @@ void FunctionCallServer::doAsyncRecv(int header,
             recvUnregister(buffer, bufferSize);
             break;
         }
+        case faabric::scheduler::FunctionCalls::DirectResult: {
+            recvDirectResult(buffer, bufferSize);
+            break;
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized async call header: {}", header));
@@ -67,6 +71,14 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
     scheduler.flushLocally();
 
     return std::make_unique<faabric::EmptyResponse>();
+}
+
+void FunctionCallServer::recvDirectResult(const uint8_t* buffer,
+                                          size_t bufferSize)
+{
+    PARSE_MSG(faabric::DirectResultTransmission, buffer, bufferSize)
+
+    scheduler.setFunctionResult(*msg.mutable_result());
 }
 
 void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,

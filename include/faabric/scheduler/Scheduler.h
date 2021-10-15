@@ -5,6 +5,7 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
+#include <faabric/util/asio.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/queue.h>
@@ -12,7 +13,12 @@
 #include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
 
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <functional>
 #include <future>
+#include <optional>
 #include <shared_mutex>
 
 #define AVAILABLE_HOST_SET "available_hosts"
@@ -55,6 +61,8 @@ class Executor
 
     void finish();
 
+    virtual void setup(faabric::Message& msg);
+
     virtual void reset(faabric::Message& msg);
 
     virtual int32_t executeTask(
@@ -73,6 +81,8 @@ class Executor
   protected:
     virtual void restore(faabric::Message& msg);
 
+    virtual void softShutdown();
+
     virtual void postFinish();
 
     faabric::Message boundMessage;
@@ -88,9 +98,35 @@ class Executor
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<std::shared_ptr<std::thread>> deadThreads;
 
+    std::mutex setupMutex;
+    std::atomic_bool setupDone;
+
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
     void threadPoolThread(int threadPoolIdx);
+};
+
+struct MessageLocalResult final
+{
+    std::promise<std::unique_ptr<faabric::Message>> promise;
+    int event_fd = -1;
+
+    MessageLocalResult();
+    MessageLocalResult(const MessageLocalResult&) = delete;
+    inline MessageLocalResult(MessageLocalResult&& other)
+    {
+        this->operator=(std::move(other));
+    }
+    MessageLocalResult& operator=(const MessageLocalResult&) = delete;
+    inline MessageLocalResult& operator=(MessageLocalResult&& other)
+    {
+        this->promise = std::move(other.promise);
+        this->event_fd = other.event_fd;
+        other.event_fd = -1;
+        return *this;
+    }
+    ~MessageLocalResult();
+    void set_value(std::unique_ptr<faabric::Message>&& msg);
 };
 
 class Scheduler
@@ -127,6 +163,12 @@ class Scheduler
     void setFunctionResult(faabric::Message& msg);
 
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
+
+    void getFunctionResultAsync(unsigned int messageId,
+                                int timeoutMs,
+                                asio::io_context& ioc,
+                                asio::any_io_executor& executor,
+                                std::function<void(faabric::Message&)> handler);
 
     void setThreadResult(const faabric::Message& msg, int32_t returnValue);
 
@@ -183,7 +225,15 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    void updateMonitoring();
+
+    std::atomic_int32_t monitorLocallyScheduledTasks;
+    std::atomic_int32_t monitorStartedTasks;
+    std::atomic_int32_t monitorWaitingTasks;
+
   private:
+    int monitorFd = -1;
+
     std::string thisHost;
 
     faabric::util::SystemConfig& conf;
@@ -208,8 +258,7 @@ class Scheduler
     std::set<std::string> availableHostsCache;
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
-    std::unordered_map<uint32_t,
-                       std::promise<std::unique_ptr<faabric::Message>>>
+    std::unordered_map<uint32_t, std::shared_ptr<MessageLocalResult>>
       localResults;
     std::mutex localResultsMutex;
 
@@ -221,9 +270,7 @@ class Scheduler
     std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
                                                   bool noCache = false);
 
-    std::shared_ptr<Executor> claimExecutor(
-      faabric::Message& msg,
-      faabric::util::FullLock& schedulerLock);
+    std::shared_ptr<Executor> claimExecutor(faabric::Message& msg);
 
     faabric::HostResources getHostResources(const std::string& host);
 

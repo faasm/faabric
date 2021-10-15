@@ -132,6 +132,13 @@ void FunctionCallClient::executeFunctions(
     }
 }
 
+void FunctionCallClient::sendDirectResult(faabric::Message msg)
+{
+    faabric::DirectResultTransmission drt;
+    *drt.mutable_result() = std::move(msg);
+    asyncSend(faabric::scheduler::FunctionCalls::DirectResult, &drt);
+}
+
 void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
 {
     if (faabric::util::isMockMode()) {

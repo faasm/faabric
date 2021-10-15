@@ -1,7 +1,9 @@
-#include <faabric/endpoint/FaabricEndpoint.h>
+#include <faabric/endpoint/Endpoint.h>
+#include <faabric/endpoint/FaabricEndpointHandler.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/transport/context.h>
+#include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
@@ -50,7 +52,11 @@ int main()
 
     // Start endpoint (will also have multiple threads)
     SPDLOG_INFO("Starting endpoint");
-    faabric::endpoint::FaabricEndpoint endpoint;
+    const auto& config = faabric::util::getSystemConfig();
+    faabric::endpoint::Endpoint endpoint(
+      config.endpointPort,
+      config.endpointNumThreads,
+      std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
     endpoint.start();
 
     SPDLOG_INFO("Shutting down endpoint");

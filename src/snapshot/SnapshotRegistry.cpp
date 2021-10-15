@@ -30,7 +30,7 @@ bool SnapshotRegistry::snapshotExists(const std::string& key)
     return snapshotMap.find(key) != snapshotMap.end();
 }
 
-void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
+uint8_t* SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
     faabric::util::SnapshotData d = getSnapshot(key);
 
@@ -46,14 +46,21 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
         throw std::runtime_error("Mapping non-restorable snapshot");
     }
 
+    int mmapFlags = MAP_PRIVATE;
+
+    if (target != nullptr) {
+        mmapFlags |= MAP_FIXED;
+    }
+
     void* mmapRes =
-      mmap(target, d.size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, d.fd, 0);
+      mmap(target, d.size, PROT_READ | PROT_WRITE, mmapFlags, d.fd, 0);
 
     if (mmapRes == MAP_FAILED) {
         SPDLOG_ERROR(
           "mmapping snapshot failed: {} ({})", errno, ::strerror(errno));
         throw std::runtime_error("mmapping snapshot failed");
     }
+    return reinterpret_cast<uint8_t*>(mmapRes);
 }
 
 void SnapshotRegistry::takeSnapshotIfNotExists(const std::string& key,

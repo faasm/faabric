@@ -18,7 +18,7 @@ class SnapshotRegistry
 
     bool snapshotExists(const std::string& key);
 
-    void mapSnapshot(const std::string& key, uint8_t* target);
+    uint8_t* mapSnapshot(const std::string& key, uint8_t* target);
 
     void takeSnapshot(const std::string& key,
                       faabric::util::SnapshotData data,

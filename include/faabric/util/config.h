@@ -43,6 +43,9 @@ class SystemConfig
     int endpointPort;
     int endpointNumThreads;
 
+    // Monitoring
+    std::string schedulerMonitorFile;
+
     // Transport
     int functionServerThreads;
     int stateServerThreads;

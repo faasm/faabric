@@ -32,5 +32,7 @@ class FunctionCallServer final
     void recvExecuteFunctions(const uint8_t* buffer, size_t bufferSize);
 
     void recvUnregister(const uint8_t* buffer, size_t bufferSize);
+
+    void recvDirectResult(const uint8_t* buffer, size_t bufferSize);
 };
 }
