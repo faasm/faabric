@@ -5,6 +5,7 @@
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/macros.h>
 
@@ -84,6 +85,13 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     std::vector<faabric::Message> messages(worldSize);
     for (int rank = 0; rank < worldSize; rank++) {
         messages.at(rank) = faabric::util::messageFactory("mpi", "hellompi");
+        messages.at(rank).set_id(0);
+        messages.at(rank).set_timestamp(0);
+        messages.at(rank).set_finishtimestamp(0);
+        messages.at(rank).set_resultkey("");
+        messages.at(rank).set_statuskey("");
+        messages.at(rank).set_executedhost(
+          faabric::util::getSystemConfig().endpointHost);
         messages.at(rank).set_ismpi(true);
         messages.at(rank).set_mpiworldid(worldId);
         messages.at(rank).set_mpirank(rank);
@@ -110,12 +118,28 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     for (const auto& id : sch.getChainedFunctions(msg.id())) {
         sch.getFunctionResult(id, 500);
     }
+    ExecGraph actual = sch.getFunctionExecGraph(msg.id());
+
+    // Unset the fields that we can't recreate
+    actual.rootNode.msg.set_id(0);
+    actual.rootNode.msg.set_finishtimestamp(0);
+    actual.rootNode.msg.set_timestamp(0);
+    actual.rootNode.msg.set_resultkey("");
+    actual.rootNode.msg.set_statuskey("");
+    actual.rootNode.msg.set_outputdata("");
+    for (auto& node : actual.rootNode.children) {
+        node.msg.set_id(0);
+        node.msg.set_finishtimestamp(0);
+        node.msg.set_timestamp(0);
+        node.msg.set_resultkey("");
+        node.msg.set_statuskey("");
+        node.msg.set_outputdata("");
+    }
 
     // Check the execution graph
-    ExecGraph actual = sch.getFunctionExecGraph(msg.id());
     REQUIRE(countExecGraphNodes(actual) == worldSize);
     REQUIRE(countExecGraphNodes(expected) == worldSize);
 
-    checkExecGraphEquality(expected, actual, true);
+    checkExecGraphEquality(expected, actual);
 }
 }

@@ -65,16 +65,11 @@ void cleanFaabric();
 void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);
 
-void checkMpiMessageEquivalence(const faabric::Message& msgA,
-                                const faabric::Message& msgB);
-
 void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
-                                const scheduler::ExecGraphNode& nodeB,
-                                bool isMpi = false);
+                                const scheduler::ExecGraphNode& nodeB);
 
 void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
-                            const scheduler::ExecGraph& graphB,
-                            bool isMpi = false);
+                            const scheduler::ExecGraph& graphB);
 
 std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
                                                   int port,

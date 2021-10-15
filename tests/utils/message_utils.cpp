@@ -48,16 +48,4 @@ void checkMessageEquality(const faabric::Message& msgA,
     REQUIRE(msgA.sgxpolicy() == msgB.sgxpolicy());
     REQUIRE(msgA.sgxresult() == msgB.sgxresult());
 }
-
-void checkMpiMessageEquivalence(const faabric::Message& msgA,
-                                const faabric::Message& msgB)
-{
-    REQUIRE(msgA.user() == msgB.user());
-    REQUIRE(msgA.function() == msgB.function());
-
-    REQUIRE(msgA.ismpi() == msgB.ismpi());
-    REQUIRE(msgA.mpiworldid() == msgB.mpiworldid());
-    REQUIRE(msgA.mpirank() == msgB.mpirank());
-    REQUIRE(msgA.mpiworldsize() == msgB.mpiworldsize());
-}
 }
