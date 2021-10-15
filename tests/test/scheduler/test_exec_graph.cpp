@@ -6,7 +6,6 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/environment.h>
-#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
 using namespace scheduler;
