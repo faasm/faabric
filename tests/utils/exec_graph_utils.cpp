@@ -11,7 +11,7 @@ void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
 {
     // Check the message itself
     if (isMpi) {
-        REQUIRE(nodeA.msg.mpirank() == nodeB.msg.mpirank());
+        checkMpiMessageEquivalence(nodeA.msg, nodeB.msg);
     } else {
         checkMessageEquality(nodeA.msg, nodeB.msg);
     }

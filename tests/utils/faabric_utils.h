@@ -65,6 +65,9 @@ void cleanFaabric();
 void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);
 
+void checkMpiMessageEquivalence(const faabric::Message& msgA,
+                                const faabric::Message& msgB);
+
 void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
                                 const scheduler::ExecGraphNode& nodeB,
                                 bool isMpi = false);

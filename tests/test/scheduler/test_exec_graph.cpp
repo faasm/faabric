@@ -76,13 +76,16 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
                  "[mpi][scheduler]")
 {
     faabric::scheduler::MpiWorld world;
+    msg.set_ismpi(true);
 
     // Build the message vector to reconstruct the graph
     std::vector<faabric::Message> messages(worldSize);
     for (int rank = 0; rank < worldSize; rank++) {
         messages.at(rank) = faabric::util::messageFactory("mpi", "hellompi");
-        messages.at(rank).set_mpirank(rank);
+        messages.at(rank).set_ismpi(true);
         messages.at(rank).set_mpiworldid(worldId);
+        messages.at(rank).set_mpirank(rank);
+        messages.at(rank).set_mpiworldsize(worldSize);
     }
 
     world.create(msg, worldId, worldSize);
@@ -109,20 +112,6 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     ExecGraph actual = sch.getFunctionExecGraph(msg.id());
     REQUIRE(countExecGraphNodes(actual) == worldSize);
     REQUIRE(countExecGraphNodes(expected) == worldSize);
-
-    // Print contents of actual
-    SPDLOG_INFO("Actual root node. MsgId-World id: {}-{}, Rank: {}/{}",
-                actual.rootNode.msg.id(),
-                actual.rootNode.msg.mpiworldid(),
-                actual.rootNode.msg.mpirank(),
-                actual.rootNode.msg.mpiworldsize());
-    for (const auto& node : actual.rootNode.children) {
-        SPDLOG_INFO("Actual children node. MsgId-World id: {}-{}, Rank: {}/{}",
-                    node.msg.id(),
-                    node.msg.mpiworldid(),
-                    node.msg.mpirank(),
-                    node.msg.mpiworldsize());
-    }
 
     checkExecGraphEquality(expected, actual, true);
 }
