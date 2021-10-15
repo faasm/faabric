@@ -77,6 +77,9 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     faabric::scheduler::MpiWorld world;
     msg.set_ismpi(true);
 
+    // Update the result for the master message
+    sch.setFunctionResult(msg);
+
     // Build the message vector to reconstruct the graph
     std::vector<faabric::Message> messages(worldSize);
     for (int rank = 0; rank < worldSize; rank++) {
@@ -91,11 +94,6 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
 
     world.destroy();
 
-    // Update the result for the master message
-    sch.setFunctionResult(msg);
-    // Wait for the scheduler to set the result on the MPI non-master messages
-    SLEEP_MS(500);
-
     // Build expected graph
     ExecGraphNode nodeB1 = { .msg = messages.at(1) };
     ExecGraphNode nodeB2 = { .msg = messages.at(2) };
@@ -106,6 +104,12 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
                             .children = { nodeB1, nodeB2, nodeB3, nodeB4 } };
 
     ExecGraph expected{ .rootNode = nodeA };
+
+    // Wait for the MPI messages to finish
+    sch.getFunctionResult(msg.id(), 500);
+    for (const auto& id : sch.getChainedFunctions(msg.id())) {
+        sch.getFunctionResult(id, 500);
+    }
 
     // Check the execution graph
     ExecGraph actual = sch.getFunctionExecGraph(msg.id());
