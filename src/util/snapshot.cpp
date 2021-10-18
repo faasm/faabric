@@ -147,6 +147,10 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                                 isIgnore = true;
                                 break;
                             }
+                            case (SnapshotMergeOperation::Overwrite): {
+                                // Default behaviour
+                                break;
+                            }
                             default: {
                                 SPDLOG_ERROR(
                                   "Unhandled raw merge operation: {}",
@@ -170,12 +174,21 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     diffs.emplace_back(diff);
                 }
 
-                // Bump the loop variable to the end of this region (note that
-                // the loop itself will increment onto the next)
-                b = (region.offset - pageOffset) + (region.length - 1);
+                // Work out the offset to where this region ends
+                int regionEndOffset =
+                  (region.offset - pageOffset) + region.length;
 
-                // Move onto the next merge region
-                ++mergeIt;
+                if (regionEndOffset <= HOST_PAGE_SIZE) {
+                    // Bump the loop variable to the end of this region (note
+                    // that the loop itself will increment onto the next).
+                    b = regionEndOffset - 1;
+
+                    // Move onto the next merge region
+                    ++mergeIt;
+                } else {
+                    // End work on this page
+                    break;
+                }
             } else if (isDirtyByte && !diffInProgress) {
                 // Diff starts here if it's different and diff not in progress
                 diffInProgress = true;

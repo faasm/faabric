@@ -311,23 +311,40 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
 
     SECTION("Raw")
     {
-        dataLength = 2 * sizeof(int32_t);
+        // Make the raw data span several pages
+        dataLength = 4 * HOST_PAGE_SIZE;
         originalData = std::vector<uint8_t>(dataLength, 3);
         updatedData = originalData;
         expectedData = originalData;
 
         dataType = faabric::util::SnapshotDataType::Raw;
-        operation = faabric::util::SnapshotMergeOperation::Ignore;
+        operation = faabric::util::SnapshotMergeOperation::Overwrite;
 
         SECTION("Ignore")
         {
-            // Scatter some modifications through the updated data, to make sure
-            // none are picked up
-            updatedData[0] = 1;
-            updatedData[sizeof(int32_t) - 2] = 1;
-            updatedData[sizeof(int32_t) + 10] = 1;
+            // Add an ignore region within the snapshot which still spans
+            // multiple pages
+            int ignoreOffset = offset + 200;
+            int ignoreLength = dataLength - 300;
 
-            expectedNumDiffs = 0;
+            snap.addMergeRegion(ignoreOffset,
+                                ignoreLength,
+                                dataType,
+                                faabric::util::SnapshotMergeOperation::Ignore);
+
+            // Make a modification that will _not_ be ignored
+            updatedData[10] = 3;
+            expectedData[10] = 3;
+
+            // Scatter some modifications through the ignore region, spanning
+            // multiple pages
+            updatedData[ignoreOffset + 5] = 1;
+            updatedData[ignoreOffset + HOST_PAGE_SIZE + 2] = 1;
+            updatedData[ignoreOffset + (2 * HOST_PAGE_SIZE) + 5] = 1;
+
+            // Make changes right at the start and end of the ignore region
+            updatedData[ignoreOffset] = 1;
+            updatedData[ignoreOffset + ignoreLength] = 1;
         }
     }
 
@@ -395,6 +412,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test invalid snapshot merges", "[util]")
     SECTION("Integer overwrite")
     {
         dataType = faabric::util::SnapshotDataType::Int;
+        operation = faabric::util::SnapshotMergeOperation::Overwrite;
         dataLength = sizeof(int32_t);
         expectedMsg = "Unhandled integer merge operation";
     }
@@ -402,6 +420,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test invalid snapshot merges", "[util]")
     SECTION("Raw sum")
     {
         dataType = faabric::util::SnapshotDataType::Raw;
+        operation = faabric::util::SnapshotMergeOperation::Sum;
         dataLength = 123;
         expectedMsg = "Unhandled raw merge operation";
     }
