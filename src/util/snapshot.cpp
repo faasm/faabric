@@ -48,9 +48,12 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
 
     // Get byte-wise diffs _within_ the dirty pages
     //
-    // NOTE - this will cause diffs to be split across pages if they hit a page
-    // boundary, but we can be relatively confident that variables will be
-    // page-aligned so this shouldn't be a problem
+    // NOTE - if raw diffs cover page boundaries, they will be split into
+    // multiple diffs, each of which is page-aligned.
+    // We can be relatively confident that variables will be page-aligned so
+    // this shouldn't be a problem.
+    //
+    // Merge regions support crossing page boundaries.
     //
     // For each byte we encounter have the following possible scenarios:
     //
@@ -81,6 +84,22 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
               offset < (mergeIt->second.offset + mergeIt->second.length);
 
             if (isDirtyByte && isInMergeRegion) {
+                // If we've entered a merge region with a diff in progress, we
+                // need to close it off
+                if (diffInProgress) {
+                    diffs.emplace_back(
+                      diffStart, updated + diffStart, offset - diffStart);
+
+                    SPDLOG_TRACE(
+                      "Finished {} {} diff between {}-{} before merge region",
+                      snapshotDataTypeStr(diffs.back().dataType),
+                      snapshotMergeOpStr(diffs.back().operation),
+                      diffs.back().offset,
+                      diffs.back().offset + diffs.back().size);
+
+                    diffInProgress = false;
+                }
+
                 SnapshotMergeRegion region = mergeIt->second;
 
                 // Set up the diff
@@ -99,7 +118,6 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                         int updatedInt =
                           *(reinterpret_cast<const int*>(updatedValue));
 
-                        std::string label;
                         switch (region.operation) {
                             case (SnapshotMergeOperation::Sum): {
                                 // Sums must send the value to be _added_, and
@@ -185,16 +203,26 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                   (region.offset - pageOffset) + region.length;
 
                 if (regionEndOffset < HOST_PAGE_SIZE) {
+                    // Finish this region, move onto the next
+                    SPDLOG_TRACE(
+                      "{} {} merge region {}-{} finished. Skipping to {}",
+                      snapshotDataTypeStr(region.dataType),
+                      snapshotMergeOpStr(region.operation),
+                      region.offset,
+                      region.offset + region.length,
+                      regionEndOffset);
+
                     // Bump the loop variable to the end of this region (note
                     // that the loop itself will increment onto the next).
                     b = regionEndOffset - 1;
 
                     // Move onto the next merge region
                     ++mergeIt;
+
                 } else {
                     // End work on this page, region continues into next
                     SPDLOG_TRACE(
-                      "{} {} merge region {}-{} crosses page {} ({}-{})",
+                      "{} {} merge region {}-{} over page boundary {} ({}-{})",
                       snapshotDataTypeStr(region.dataType),
                       snapshotMergeOpStr(region.operation),
                       region.offset,
@@ -209,13 +237,15 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 // Diff starts here if it's different and diff not in progress
                 diffInProgress = true;
                 diffStart = offset;
+
+                SPDLOG_TRACE("Started Raw Overwrite diff at {}", diffStart);
             } else if (!isDirtyByte && diffInProgress) {
                 // Diff ends if it's not different and diff is in progress
                 diffInProgress = false;
                 diffs.emplace_back(
                   diffStart, updated + diffStart, offset - diffStart);
 
-                SPDLOG_TRACE("Found {} {} diff between {}-{}",
+                SPDLOG_TRACE("Finished {} {} diff between {}-{}",
                              snapshotDataTypeStr(diffs.back().dataType),
                              snapshotMergeOpStr(diffs.back().operation),
                              diffs.back().offset,
