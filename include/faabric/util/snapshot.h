@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include <faabric/util/logging.h>
+
 namespace faabric::util {
 
 enum SnapshotDataType
@@ -76,4 +78,8 @@ class SnapshotData
     // order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
 };
+
+std::string snapshotDataTypeStr(SnapshotDataType dt);
+
+std::string snapshotMergeOpStr(SnapshotMergeOperation op);
 }

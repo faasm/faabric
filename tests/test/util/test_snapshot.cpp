@@ -469,19 +469,18 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test cross-page ignores", "[util]")
                         faabric::util::SnapshotDataType::Raw,
                         faabric::util::SnapshotMergeOperation::Ignore);
 
-    // Add modifications that *will* cause diffs
-    // Make sure these are both just before, and just after the ignore region
-    sharedMem[0] = 1;
-    sharedMem[ignoreOffset - 1] = 1;
-    sharedMem[ignoreOffset + ignoreLength + 1] = 1;
+    // Add modifications that *will* cause diffs and some should be ignored,
+    // including just inside and outside both ends of the ignore region
+    std::vector<uint8_t> dataA(10, 1);
 
-    // Add modifications that should be ignored, including just inside both ends
-    // of the region
-    sharedMem[ignoreOffset] = 1;
-    sharedMem[ignoreOffset + HOST_PAGE_SIZE - 1] = 1;
-    sharedMem[ignoreOffset + HOST_PAGE_SIZE] = 1;
-    sharedMem[ignoreOffset + HOST_PAGE_SIZE + 1] = 1;
-    sharedMem[ignoreOffset + ignoreLength] = 1;
+    std::memcpy(sharedMem, dataA.data(), dataA.size()); // Not ignored
+    sharedMem[ignoreOffset - 1] = 3; // Not ignored
+    sharedMem[ignoreOffset] = 1; // Ignored
+    sharedMem[ignoreOffset + HOST_PAGE_SIZE - 1] = 1; // Ignored
+    sharedMem[ignoreOffset + HOST_PAGE_SIZE] = 1; // Ignored
+    sharedMem[ignoreOffset + HOST_PAGE_SIZE + 1] = 1; // Ignored
+    sharedMem[ignoreOffset + ignoreLength] = 1; // Ignored
+    sharedMem[ignoreOffset + ignoreLength + 1] = 1; // Not ignored
 
     // Check number of diffs
     std::vector<SnapshotDiff> actualDiffs =
@@ -489,5 +488,25 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test cross-page ignores", "[util]")
 
     // Check number of diffs
     REQUIRE(actualDiffs.size() == 3);
+
+    SnapshotDiff diffA = actualDiffs.at(0);
+    SnapshotDiff diffB = actualDiffs.at(1);
+    SnapshotDiff diffC = actualDiffs.at(2);
+
+    REQUIRE(diffA.offset == 0);
+    REQUIRE(diffB.offset == ignoreOffset - 1);
+    REQUIRE(diffC.offset == ignoreOffset + ignoreLength + 1);
+
+    REQUIRE(diffA.operation == SnapshotMergeOperation::Overwrite);
+    REQUIRE(diffB.operation == SnapshotMergeOperation::Overwrite);
+    REQUIRE(diffC.operation == SnapshotMergeOperation::Overwrite);
+
+    REQUIRE(diffA.dataType == SnapshotDataType::Raw);
+    REQUIRE(diffB.dataType == SnapshotDataType::Raw);
+    REQUIRE(diffC.dataType == SnapshotDataType::Raw);
+
+    REQUIRE(diffA.size == dataA.size());
+    REQUIRE(diffB.size == 1);
+    REQUIRE(diffC.size == 1);
 }
 }

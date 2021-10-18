@@ -91,8 +91,6 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 diff.dataType = region.dataType;
                 diff.operation = region.operation;
 
-                bool isIgnore = false;
-
                 // Modify diff data for certain operations
                 switch (region.dataType) {
                     case (SnapshotDataType::Int): {
@@ -101,6 +99,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                         int updatedInt =
                           *(reinterpret_cast<const int*>(updatedValue));
 
+                        std::string label;
                         switch (region.operation) {
                             case (SnapshotMergeOperation::Sum): {
                                 // Sums must send the value to be _added_, and
@@ -144,7 +143,6 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     case (SnapshotDataType::Raw): {
                         switch (region.operation) {
                             case (SnapshotMergeOperation::Ignore): {
-                                isIgnore = true;
                                 break;
                             }
                             case (SnapshotMergeOperation::Overwrite): {
@@ -159,6 +157,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                                   "Unhandled raw merge operation");
                             }
                         }
+
                         break;
                     }
                     default: {
@@ -169,8 +168,15 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     }
                 }
 
+                SPDLOG_TRACE("Diff at {} falls in {} {} merge region {}-{}",
+                             pageOffset + b,
+                             snapshotDataTypeStr(region.dataType),
+                             snapshotMergeOpStr(region.operation),
+                             region.offset,
+                             region.offset + region.length);
+
                 // Add the diff to the list
-                if (!isIgnore) {
+                if (diff.operation != SnapshotMergeOperation::Ignore) {
                     diffs.emplace_back(diff);
                 }
 
@@ -178,7 +184,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 int regionEndOffset =
                   (region.offset - pageOffset) + region.length;
 
-                if (regionEndOffset <= HOST_PAGE_SIZE) {
+                if (regionEndOffset < HOST_PAGE_SIZE) {
                     // Bump the loop variable to the end of this region (note
                     // that the loop itself will increment onto the next).
                     b = regionEndOffset - 1;
@@ -186,7 +192,17 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     // Move onto the next merge region
                     ++mergeIt;
                 } else {
-                    // End work on this page
+                    // End work on this page, region continues into next
+                    SPDLOG_TRACE(
+                      "{} {} merge region {}-{} crosses page {} ({}-{})",
+                      snapshotDataTypeStr(region.dataType),
+                      snapshotMergeOpStr(region.operation),
+                      region.offset,
+                      region.offset + region.length,
+                      i,
+                      pageOffset,
+                      pageOffset + HOST_PAGE_SIZE);
+
                     break;
                 }
             } else if (isDirtyByte && !diffInProgress) {
@@ -198,6 +214,12 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 diffInProgress = false;
                 diffs.emplace_back(
                   diffStart, updated + diffStart, offset - diffStart);
+
+                SPDLOG_TRACE("Found {} {} diff between {}-{}",
+                             snapshotDataTypeStr(diffs.back().dataType),
+                             snapshotMergeOpStr(diffs.back().operation),
+                             diffs.back().offset,
+                             diffs.back().offset + diffs.back().size);
             }
         }
 
@@ -205,8 +227,15 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
         // off
         if (diffInProgress) {
             offset++;
+
             diffs.emplace_back(
               diffStart, updated + diffStart, offset - diffStart);
+
+            SPDLOG_TRACE("Found {} {} diff between {}-{} at end of page",
+                         snapshotDataTypeStr(diffs.back().dataType),
+                         snapshotMergeOpStr(diffs.back().operation),
+                         diffs.back().offset,
+                         diffs.back().offset + diffs.back().size);
         }
     }
 
@@ -231,5 +260,52 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     // Locking as this may be called in bursts by multiple threads
     faabric::util::UniqueLock lock(snapMx);
     mergeRegions[offset] = region;
+}
+
+std::string snapshotDataTypeStr(SnapshotDataType dt)
+{
+    switch (dt) {
+        case (SnapshotDataType::Raw): {
+            return "Raw";
+        }
+        case (SnapshotDataType::Int): {
+            return "Int";
+        }
+        default: {
+            SPDLOG_ERROR("Cannot convert snapshot data type to string: {}", dt);
+            throw std::runtime_error("Cannot convert data type to string");
+        }
+    }
+}
+
+std::string snapshotMergeOpStr(SnapshotMergeOperation op)
+{
+    switch (op) {
+        case (SnapshotMergeOperation::Ignore): {
+            return "Ignore";
+        }
+        case (SnapshotMergeOperation::Max): {
+            return "Max";
+        }
+        case (SnapshotMergeOperation::Min): {
+            return "Min";
+        }
+        case (SnapshotMergeOperation::Overwrite): {
+            return "Overwrite";
+        }
+        case (SnapshotMergeOperation::Product): {
+            return "Product";
+        }
+        case (SnapshotMergeOperation::Subtract): {
+            return "Subtract";
+        }
+        case (SnapshotMergeOperation::Sum): {
+            return "Sum";
+        }
+        default: {
+            SPDLOG_ERROR("Cannot convert snapshot merge op to string: {}", op);
+            throw std::runtime_error("Cannot convert merge op to string");
+        }
+    }
 }
 }
