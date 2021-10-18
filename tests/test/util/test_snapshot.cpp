@@ -311,8 +311,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
 
     SECTION("Raw")
     {
-        // Make the raw data span several pages
-        dataLength = 4 * HOST_PAGE_SIZE;
+        dataLength = 2 * sizeof(int32_t);
         originalData = std::vector<uint8_t>(dataLength, 3);
         updatedData = originalData;
         expectedData = originalData;
@@ -322,29 +321,15 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot merge regions", "[util]")
 
         SECTION("Ignore")
         {
-            // Add an ignore region within the snapshot which still spans
-            // multiple pages
-            int ignoreOffset = offset + 200;
-            int ignoreLength = dataLength - 300;
+            operation = faabric::util::SnapshotMergeOperation::Ignore;
 
-            snap.addMergeRegion(ignoreOffset,
-                                ignoreLength,
-                                dataType,
-                                faabric::util::SnapshotMergeOperation::Ignore);
+            // Scatter some modifications through the updated data, to make sure
+            // none are picked up
+            updatedData[0] = 1;
+            updatedData[sizeof(int32_t) - 2] = 1;
+            updatedData[sizeof(int32_t) + 10] = 1;
 
-            // Make a modification that will _not_ be ignored
-            updatedData[10] = 3;
-            expectedData[10] = 3;
-
-            // Scatter some modifications through the ignore region, spanning
-            // multiple pages
-            updatedData[ignoreOffset + 5] = 1;
-            updatedData[ignoreOffset + HOST_PAGE_SIZE + 2] = 1;
-            updatedData[ignoreOffset + (2 * HOST_PAGE_SIZE) + 5] = 1;
-
-            // Make changes right at the start and end of the ignore region
-            updatedData[ignoreOffset] = 1;
-            updatedData[ignoreOffset + ignoreLength] = 1;
+            expectedNumDiffs = 0;
         }
     }
 
@@ -454,5 +439,55 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test invalid snapshot merges", "[util]")
 
     REQUIRE(failed);
     deallocatePages(snap.data, snapPages);
+}
+
+TEST_CASE_METHOD(SnapshotTestFixture, "Test cross-page ignores", "[util]")
+{
+    std::string snapKey = "foobar123";
+    int snapPages = 5;
+
+    faabric::util::SnapshotData snap;
+    snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
+    snap.data = allocatePages(snapPages);
+
+    // Take the snapshot
+    reg.takeSnapshot(snapKey, snap, true);
+
+    // Map the snapshot
+    size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
+    uint8_t* sharedMem = allocatePages(snapPages);
+    reg.mapSnapshot(snapKey, sharedMem);
+
+    // Reset dirty tracking
+    faabric::util::resetDirtyTracking();
+
+    // Single ignore region to cover multiple pages
+    int ignoreOffset = HOST_PAGE_SIZE + 100;
+    int ignoreLength = 2 * HOST_PAGE_SIZE;
+    snap.addMergeRegion(ignoreOffset,
+                        ignoreLength,
+                        faabric::util::SnapshotDataType::Raw,
+                        faabric::util::SnapshotMergeOperation::Ignore);
+
+    // Add modifications that *will* cause diffs
+    // Make sure these are both just before, and just after the ignore region
+    sharedMem[0] = 1;
+    sharedMem[ignoreOffset - 1] = 1;
+    sharedMem[ignoreOffset + ignoreLength + 1] = 1;
+
+    // Add modifications that should be ignored, including just inside both ends
+    // of the region
+    sharedMem[ignoreOffset] = 1;
+    sharedMem[ignoreOffset + HOST_PAGE_SIZE - 1] = 1;
+    sharedMem[ignoreOffset + HOST_PAGE_SIZE] = 1;
+    sharedMem[ignoreOffset + HOST_PAGE_SIZE + 1] = 1;
+    sharedMem[ignoreOffset + ignoreLength] = 1;
+
+    // Check number of diffs
+    std::vector<SnapshotDiff> actualDiffs =
+      snap.getChangeDiffs(sharedMem, sharedMemSize);
+
+    // Check number of diffs
+    REQUIRE(actualDiffs.size() == 3);
 }
 }
