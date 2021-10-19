@@ -502,48 +502,70 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture, "Test cross-page ignores", "[util]")
 {
-    int snapPages = 5;
+    int snapPages = 6;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
     uint8_t* sharedMem = setUpSnapshot(snapPages);
 
-    // Single ignore region to cover multiple pages
-    int ignoreOffset = HOST_PAGE_SIZE + 100;
-    int ignoreLength = 2 * HOST_PAGE_SIZE;
-    snap.addMergeRegion(ignoreOffset,
-                        ignoreLength,
+    // Add ignore regions that cover multiple pages
+    int ignoreOffsetA = HOST_PAGE_SIZE + 100;
+    int ignoreLengthA = 2 * HOST_PAGE_SIZE;
+    snap.addMergeRegion(ignoreOffsetA,
+                        ignoreLengthA,
                         faabric::util::SnapshotDataType::Raw,
                         faabric::util::SnapshotMergeOperation::Ignore);
 
-    // Add modifications that *will* cause diffs and some should be ignored,
-    // including just inside and outside both ends of the ignore region
+    int ignoreOffsetB = sharedMemSize - (HOST_PAGE_SIZE + 10);
+    int ignoreLengthB = 30;
+    snap.addMergeRegion(ignoreOffsetB,
+                        ignoreLengthB,
+                        faabric::util::SnapshotDataType::Raw,
+                        faabric::util::SnapshotMergeOperation::Ignore);
+
+    // Add some modifications that will cause diffs, and some should be ignored
     std::vector<uint8_t> dataA(10, 1);
     std::vector<uint8_t> dataB(1, 1);
     std::vector<uint8_t> dataC(1, 1);
+    std::vector<uint8_t> dataD(3, 1);
 
+    // Not ignored, start of memory
     uint32_t offsetA = 0;
-    std::memcpy(sharedMem + offsetA, dataA.data(), dataA.size()); // Not ignored
+    std::memcpy(sharedMem + offsetA, dataA.data(), dataA.size());
 
-    uint32_t offsetB = ignoreOffset - 1;
-    std::memcpy(sharedMem + offsetB, dataB.data(), dataB.size()); // Not ignored
+    // Not ignored, just before first ignore region
+    uint32_t offsetB = ignoreOffsetA - 1;
+    std::memcpy(sharedMem + offsetB, dataB.data(), dataB.size());
 
-    sharedMem[ignoreOffset] = (uint8_t)1; // Ignored
+    // Not ignored, just after first ignore region
+    uint32_t offsetC = ignoreOffsetA + ignoreLengthA;
+    std::memcpy(sharedMem + offsetC, dataC.data(), dataC.size());
 
-    sharedMem[ignoreOffset + HOST_PAGE_SIZE - 1] = (uint8_t)1; // Ignored
+    // Not ignored, just before second ignore region
+    uint32_t offsetD = ignoreOffsetB - 4;
+    std::memcpy(sharedMem + offsetD, dataD.data(), dataD.size());
 
-    sharedMem[ignoreOffset + HOST_PAGE_SIZE] = (uint8_t)1; // Ignored
+    // Ignored, start of first ignore region
+    sharedMem[ignoreOffsetA] = (uint8_t)1;
 
-    sharedMem[ignoreOffset + HOST_PAGE_SIZE + 1] = (uint8_t)1; // Ignored
+    // Ignored, just before page boundary in ignore region
+    sharedMem[(2 * HOST_PAGE_SIZE) - 1] = (uint8_t)1;
 
-    sharedMem[ignoreOffset + ignoreLength - 1] = (uint8_t)1; // Ignored
+    // Ignored, just after page boundary in ignore region
+    sharedMem[(2 * HOST_PAGE_SIZE)] = (uint8_t)1;
 
-    uint32_t offsetC = ignoreOffset + ignoreLength;
-    std::memcpy(sharedMem + offsetC, dataC.data(),
-                dataC.size()); // Not ignored
+    // Deliberately don't put any changes after the next page boundary to check
+    // that it rolls over properly
+
+    // Ignored, just inside second region
+    sharedMem[ignoreOffsetB + 2] = (uint8_t)1;
+
+    // Ignored, end of second region
+    sharedMem[ignoreOffsetB + ignoreLengthB - 1] = (uint8_t)1;
 
     std::vector<SnapshotDiff> expectedDiffs = {
         { offsetA, dataA.data(), dataA.size() },
         { offsetB, dataB.data(), dataB.size() },
         { offsetC, dataC.data(), dataC.size() },
+        { offsetD, dataD.data(), dataD.size() },
     };
 
     // Check number of diffs

@@ -42,6 +42,20 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
     std::vector<int> dirtyPageNumbers =
       getDirtyPageNumbers(updated, nThisPages);
 
+    SPDLOG_TRACE("Diffing {} pages with {} changed pages and {} merge regions",
+                 nThisPages,
+                 dirtyPageNumbers.size(),
+                 mergeRegions.size());
+
+    for (auto& m : mergeRegions) {
+        SPDLOG_TRACE("{} {} merge region at {} {}-{}",
+                     snapshotDataTypeStr(m.second.dataType),
+                     snapshotMergeOpStr(m.second.operation),
+                     m.first,
+                     m.second.offset,
+                     m.second.offset + m.second.length);
+    }
+
     // Get iterator over merge regions
     std::map<uint32_t, SnapshotMergeRegion>::iterator mergeIt =
       mergeRegions.begin();
@@ -78,6 +92,21 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
             offset = pageOffset + b;
             bool isDirtyByte = *(data + offset) != *(updated + offset);
 
+            // Skip any merge regions we've passed
+            while (mergeIt != mergeRegions.end() &&
+                   offset > (mergeIt->second.offset + mergeIt->second.length)) {
+                SnapshotMergeRegion region = mergeIt->second;
+                SPDLOG_TRACE("At offset {}, skipping region {} {} {}-{}",
+                             offset,
+                             snapshotDataTypeStr(region.dataType),
+                             snapshotMergeOpStr(region.operation),
+                             region.offset,
+                             region.offset + region.length);
+
+                ++mergeIt;
+            }
+
+            // Check if we're in a merge region
             bool isInMergeRegion =
               mergeIt != mergeRegions.end() &&
               offset >= mergeIt->second.offset &&
@@ -198,12 +227,13 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     diffs.emplace_back(diff);
                 }
 
-                // Work out the offset to where this region ends
+                // Work out the offset where this region ends
                 int regionEndOffset =
                   (region.offset - pageOffset) + region.length;
 
                 if (regionEndOffset < HOST_PAGE_SIZE) {
-                    // Finish this region, move onto the next
+                    // Skip over this region, still more offsets left in this
+                    // page
                     SPDLOG_TRACE(
                       "{} {} merge region {}-{} finished. Skipping to {}",
                       snapshotDataTypeStr(region.dataType),
@@ -215,12 +245,8 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     // Bump the loop variable to the end of this region (note
                     // that the loop itself will increment onto the next).
                     b = regionEndOffset - 1;
-
-                    // Move onto the next merge region
-                    ++mergeIt;
-
                 } else {
-                    // End work on this page, region continues into next
+                    // Merge region extends over this page, move onto next
                     SPDLOG_TRACE(
                       "{} {} merge region {}-{} over page boundary {} ({}-{})",
                       snapshotDataTypeStr(region.dataType),
@@ -253,8 +279,8 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
             }
         }
 
-        // If we've reached the end with a diff in progress, we need to close it
-        // off
+        // If we've reached the end of this page with a diff in progress, we
+        // need to close it off
         if (diffInProgress) {
             offset++;
 
