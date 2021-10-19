@@ -38,6 +38,17 @@ class SnapshotClientServerFixture
     ~SnapshotClientServerFixture() { server.stop(); }
 };
 
+TEST_CASE_METHOD(ConfTestFixture,
+                 "Test setting snapshot server threads",
+                 "[snapshot]")
+{
+    conf.snapshotServerThreads = 5;
+
+    faabric::snapshot::SnapshotServer server;
+
+    REQUIRE(server.getNThreads() == 5);
+}
+
 TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "Test pushing and deleting snapshots",
                  "[snapshot]")

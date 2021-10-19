@@ -91,6 +91,8 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 diff.dataType = region.dataType;
                 diff.operation = region.operation;
 
+                bool isIgnore = false;
+
                 // Modify diff data for certain operations
                 switch (region.dataType) {
                     case (SnapshotDataType::Int): {
@@ -139,6 +141,22 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
 
                         break;
                     }
+                    case (SnapshotDataType::Raw): {
+                        switch (region.operation) {
+                            case (SnapshotMergeOperation::Ignore): {
+                                isIgnore = true;
+                                break;
+                            }
+                            default: {
+                                SPDLOG_ERROR(
+                                  "Unhandled raw merge operation: {}",
+                                  region.operation);
+                                throw std::runtime_error(
+                                  "Unhandled raw merge operation");
+                            }
+                        }
+                        break;
+                    }
                     default: {
                         SPDLOG_ERROR("Merge region for unhandled data type: {}",
                                      region.dataType);
@@ -148,7 +166,9 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                 }
 
                 // Add the diff to the list
-                diffs.emplace_back(diff);
+                if (!isIgnore) {
+                    diffs.emplace_back(diff);
+                }
 
                 // Bump the loop variable to the end of this region (note that
                 // the loop itself will increment onto the next)

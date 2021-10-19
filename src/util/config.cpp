@@ -43,6 +43,7 @@ void SystemConfig::initialise()
     // MPI
     defaultMpiWorldSize =
       this->getSystemConfIntParam("DEFAULT_MPI_WORLD_SIZE", "5");
+    mpiBasePort = this->getSystemConfIntParam("MPI_BASE_PORT", "10800");
 
     // Endpoint
     endpointInterface = getEnvVar("ENDPOINT_INTERFACE", "");
@@ -56,6 +57,16 @@ void SystemConfig::initialise()
         endpointHost =
           faabric::util::getPrimaryIPForThisHost(endpointInterface);
     }
+
+    // Transport
+    functionServerThreads =
+      this->getSystemConfIntParam("FUNCTION_SERVER_THREADS", "2");
+    stateServerThreads =
+      this->getSystemConfIntParam("STATE_SERVER_THREADS", "2");
+    snapshotServerThreads =
+      this->getSystemConfIntParam("SNAPSHOT_SERVER_THREADS", "2");
+    pointToPointServerThreads =
+      this->getSystemConfIntParam("POINT_TO_POINT_SERVER_THREADS", "2");
 }
 
 int SystemConfig::getSystemConfIntParam(const char* name,
@@ -96,6 +107,7 @@ void SystemConfig::print()
 
     SPDLOG_INFO("--- MPI ---");
     SPDLOG_INFO("DEFAULT_MPI_WORLD_SIZE  {}", defaultMpiWorldSize);
+    SPDLOG_INFO("MPI_BASE_PORT  {}", mpiBasePort);
 
     SPDLOG_INFO("--- Endpoint ---");
     SPDLOG_INFO("ENDPOINT_INTERFACE         {}", endpointInterface);

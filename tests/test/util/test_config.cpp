@@ -27,6 +27,7 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.boundTimeout == 30000);
 
     REQUIRE(conf.defaultMpiWorldSize == 5);
+    REQUIRE(conf.mpiBasePort == 10800);
 }
 
 TEST_CASE("Test overriding system config initialisation", "[util]")
@@ -47,7 +48,14 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string globalTimeout = setEnvVar("GLOBAL_MESSAGE_TIMEOUT", "9876");
     std::string boundTimeout = setEnvVar("BOUND_TIMEOUT", "6666");
 
+    std::string functionThreads = setEnvVar("FUNCTION_SERVER_THREADS", "111");
+    std::string stateThreads = setEnvVar("STATE_SERVER_THREADS", "222");
+    std::string snapshotThreads = setEnvVar("SNAPSHOT_SERVER_THREADS", "333");
+    std::string pointToPointThreads =
+      setEnvVar("POINT_TO_POINT_SERVER_THREADS", "444");
+
     std::string mpiSize = setEnvVar("DEFAULT_MPI_WORLD_SIZE", "2468");
+    std::string mpiPort = setEnvVar("MPI_BASE_PORT", "9999");
 
     // Create new conf for test
     SystemConfig conf;
@@ -66,7 +74,13 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.globalMessageTimeout == 9876);
     REQUIRE(conf.boundTimeout == 6666);
 
+    REQUIRE(conf.functionServerThreads == 111);
+    REQUIRE(conf.stateServerThreads == 222);
+    REQUIRE(conf.snapshotServerThreads == 333);
+    REQUIRE(conf.pointToPointServerThreads == 444);
+
     REQUIRE(conf.defaultMpiWorldSize == 2468);
+    REQUIRE(conf.mpiBasePort == 9999);
 
     // Be careful with host type
     setEnvVar("LOG_LEVEL", logLevel);
@@ -85,7 +99,13 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("GLOBAL_MESSAGE_TIMEOUT", globalTimeout);
     setEnvVar("BOUND_TIMEOUT", boundTimeout);
 
+    setEnvVar("FUNCTION_SERVER_THREADS", functionThreads);
+    setEnvVar("STATE_SERVER_THREADS", stateThreads);
+    setEnvVar("SNAPSHOT_SERVER_THREADS", snapshotThreads);
+    setEnvVar("POINT_TO_POINT_SERVER_THREADS", pointToPointThreads);
+
     setEnvVar("DEFAULT_MPI_WORLD_SIZE", mpiSize);
+    setEnvVar("MPI_BASE_PORT", mpiPort);
 }
 
 }

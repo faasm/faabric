@@ -1,5 +1,6 @@
 #include <faabric/util/bytes.h>
 
+#include <sstream>
 #include <vector>
 
 namespace faabric::util {
@@ -71,5 +72,22 @@ std::string bytesToString(const std::vector<uint8_t>& bytes)
     const std::string result = std::string(charPtr, charPtr + byteLen);
 
     return result;
+}
+
+std::string formatByteArrayToIntString(const std::vector<uint8_t>& bytes)
+{
+    std::stringstream ss;
+
+    ss << "[";
+    for (int i = 0; i < bytes.size(); i++) {
+        ss << (int)bytes.at(i);
+
+        if (i < bytes.size() - 1) {
+            ss << ", ";
+        }
+    }
+    ss << "]";
+
+    return ss.str();
 }
 }

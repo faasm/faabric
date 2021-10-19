@@ -10,6 +10,8 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
@@ -264,5 +266,31 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     std::shared_ptr<faabric::util::Latch> testLatch;
 
     faabric::scheduler::MpiWorld otherWorld;
+};
+
+class PointToPointTestFixture
+{
+  public:
+    PointToPointTestFixture()
+      : broker(faabric::transport::getPointToPointBroker())
+    {
+        faabric::util::setMockMode(false);
+        broker.clear();
+    }
+
+    ~PointToPointTestFixture()
+    {
+        // Note - here we reset the thread-local cache for the test thread. If
+        // other threads are used in the tests, they too must do this.
+        broker.resetThreadLocalCache();
+
+        faabric::transport::clearSentMessages();
+
+        broker.clear();
+        faabric::util::setMockMode(false);
+    }
+
+  protected:
+    faabric::transport::PointToPointBroker& broker;
 };
 }

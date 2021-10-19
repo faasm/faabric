@@ -35,12 +35,19 @@ class SystemConfig
 
     // MPI
     int defaultMpiWorldSize;
+    int mpiBasePort;
 
     // Endpoint
     std::string endpointInterface;
     std::string endpointHost;
     int endpointPort;
     int endpointNumThreads;
+
+    // Transport
+    int functionServerThreads;
+    int stateServerThreads;
+    int snapshotServerThreads;
+    int pointToPointServerThreads;
 
     SystemConfig();
 

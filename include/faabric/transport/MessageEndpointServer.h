@@ -7,16 +7,21 @@
 
 #include <thread>
 
+#define DEFAULT_MESSAGE_SERVER_THREADS 4
+
 namespace faabric::transport {
 
 // Each server has two underlying sockets, one for synchronous communication and
 // one for asynchronous. Each is run inside its own background thread.
 class MessageEndpointServer;
 
-class MessageEndpointServerThread
+class MessageEndpointServerHandler
 {
   public:
-    MessageEndpointServerThread(MessageEndpointServer* serverIn, bool asyncIn);
+    MessageEndpointServerHandler(MessageEndpointServer* serverIn,
+                                 bool asyncIn,
+                                 const std::string& inprocLabelIn,
+                                 int nThreadsIn);
 
     void start(std::shared_ptr<faabric::util::Latch> latch);
 
@@ -25,22 +30,39 @@ class MessageEndpointServerThread
   private:
     MessageEndpointServer* server;
     bool async = false;
+    const std::string inprocLabel;
+    int nThreads;
 
-    std::thread backgroundThread;
+    std::thread receiverThread;
+
+    std::vector<std::thread> workerThreads;
+
+    std::unique_ptr<SyncFanInMessageEndpoint> syncFanIn = nullptr;
+    std::unique_ptr<SyncFanOutMessageEndpoint> syncFanOut = nullptr;
+
+    std::unique_ptr<AsyncFanInMessageEndpoint> asyncFanIn = nullptr;
+    std::unique_ptr<AsyncFanOutMessageEndpoint> asyncFanOut = nullptr;
 };
 
 class MessageEndpointServer
 {
   public:
-    MessageEndpointServer(int asyncPortIn, int syncPortIn);
+    MessageEndpointServer(int asyncPortIn,
+                          int syncPortIn,
+                          const std::string& inprocLabelIn,
+                          int nThreadsIn);
 
     virtual void start();
 
     virtual void stop();
 
-    void setAsyncLatch();
+    virtual void onWorkerStop();
 
-    void awaitAsyncLatch();
+    void setRequestLatch();
+
+    void awaitRequestLatch();
+
+    int getNThreads();
 
   protected:
     virtual void doAsyncRecv(int header,
@@ -51,17 +73,22 @@ class MessageEndpointServer
     doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) = 0;
 
   private:
-    friend class MessageEndpointServerThread;
+    friend class MessageEndpointServerHandler;
 
     const int asyncPort;
     const int syncPort;
+    const std::string inprocLabel;
+    const int nThreads;
 
-    MessageEndpointServerThread asyncThread;
-    MessageEndpointServerThread syncThread;
+    MessageEndpointServerHandler asyncHandler;
+    MessageEndpointServerHandler syncHandler;
 
     AsyncSendMessageEndpoint asyncShutdownSender;
     SyncSendMessageEndpoint syncShutdownSender;
 
-    std::shared_ptr<faabric::util::Latch> asyncLatch;
+    std::shared_ptr<faabric::util::Latch> requestLatch;
+    std::shared_ptr<faabric::util::Latch> shutdownLatch;
+
+    bool started = false;
 };
 }

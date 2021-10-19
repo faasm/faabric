@@ -58,6 +58,10 @@ function(faabric_lib lib_name lib_deps)
         target_compile_options(${lib_name} PRIVATE "-fPIC")
         target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
     endif()
+
+    # Ensure library generates readable stack traces
+    target_compile_options(${lib_name} PUBLIC -fno-omit-frame-pointer)
+    target_link_options(${lib_name} PUBLIC -Wl,--export-dynamic)
 endfunction()
 
 add_subdirectory(src/endpoint)
