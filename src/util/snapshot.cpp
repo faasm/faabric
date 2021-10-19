@@ -94,9 +94,10 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
 
             // Skip any merge regions we've passed
             while (mergeIt != mergeRegions.end() &&
-                   offset > (mergeIt->second.offset + mergeIt->second.length)) {
+                   offset >=
+                     (mergeIt->second.offset + mergeIt->second.length)) {
                 SnapshotMergeRegion region = mergeIt->second;
-                SPDLOG_TRACE("At offset {}, skipping region {} {} {}-{}",
+                SPDLOG_TRACE("At offset {}, past region {} {} {}-{}",
                              offset,
                              snapshotDataTypeStr(region.dataType),
                              snapshotMergeOpStr(region.operation),
@@ -240,7 +241,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                       snapshotMergeOpStr(region.operation),
                       region.offset,
                       region.offset + region.length,
-                      regionEndOffset);
+                      pageOffset + regionEndOffset);
 
                     // Bump the loop variable to the end of this region (note
                     // that the loop itself will increment onto the next).
