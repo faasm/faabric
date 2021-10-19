@@ -652,9 +652,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Add a sum region and data that should also take effect
     uint32_t sumOffset = (4 * HOST_PAGE_SIZE) + 100;
-    int sumValue = 111;
-    int sumOriginal = 222;
-    int sumExpected = 333;
+    int sumValue = 333;
+    int sumOriginal = 111;
+    int sumExpected = 222;
     snap.addMergeRegion(sumOffset,
                         sizeof(int32_t),
                         faabric::util::SnapshotDataType::Int,
