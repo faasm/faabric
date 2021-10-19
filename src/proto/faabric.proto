@@ -64,13 +64,15 @@ message FunctionStatusResponse {
 message CoordinationRequest {
     int32 groupId = 1;
     int32 groupSize = 2;
+    int32 sendIdx = 3;
+
     enum CoordinationOperation {
         LOCK = 0;
         UNLOCK = 1;
         NOTIFY = 2;
         BARRIER = 3;
     }
-    CoordinationOperation operation = 3;
+    CoordinationOperation operation = 4;
 }
 
 // ---------------------------------------------

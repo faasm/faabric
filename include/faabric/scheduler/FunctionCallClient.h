@@ -62,8 +62,7 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
-    void makeCoordinationRequest(int32_t groupId,
-                                 int32_t groupSize,
+    void makeCoordinationRequest(const faabric::Message& msg,
                                  faabric::scheduler::FunctionCalls call);
 };
 }

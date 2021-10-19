@@ -8,6 +8,8 @@
 #define RESULT_KEY_EXPIRY 30000
 #define STATUS_KEY_EXPIRY 300000
 
+#define AVAILABLE_HOST_SET "available_hosts"
+
 namespace faabric::util {
 class SystemConfig
 {

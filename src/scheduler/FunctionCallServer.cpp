@@ -1,5 +1,4 @@
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -120,19 +119,20 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
     return response;
 }
 
-void
-FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
-                                         size_t bufferSize)
+void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
+                                              size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
 
     SPDLOG_TRACE("Receiving lock on {}", msg.groupid());
+
+    // TODO - synchronously locking here blocks the server thread. We need to
+    // somehow perform the locking, then send the ptp message back.
     sync.localLock(msg.groupid(), msg.groupsize());
 }
 
-void
-FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
-                                           size_t bufferSize)
+void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
+                                                size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
 
@@ -140,9 +140,8 @@ FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
     sync.localUnlock(msg.groupid(), msg.groupsize());
 }
 
-void
-FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
-                                           size_t bufferSize)
+void FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
+                                                size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
 
@@ -150,13 +149,15 @@ FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
     sync.localNotify(msg.groupid(), msg.groupsize());
 }
 
-void
-FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
-                                            size_t bufferSize)
+void FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
+                                                 size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
 
     SPDLOG_TRACE("Receiving barrier on {}", msg.groupid());
+
+    // TODO - synchronously locking here blocks the server thread. We need to
+    // somehow perform the locking, then send the ptp message back.
     sync.localBarrier(msg.groupid(), msg.groupsize());
 }
 }

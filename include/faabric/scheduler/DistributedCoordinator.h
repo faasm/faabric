@@ -1,8 +1,9 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/barrier.h>
+#include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 
 #define DEFAULT_DISTRIBUTED_TIMEOUT_MS 30000
@@ -91,11 +92,13 @@ class DistributedCoordinator
     int getNotifyCount(const faabric::Message& msg);
 
   private:
-    faabric::scheduler::Scheduler& sch;
-
     std::shared_mutex sharedMutex;
 
     std::unordered_map<int32_t, DistributedCoordinationGroup> groups;
+
+    faabric::transport::PointToPointBroker& ptpBroker;
+
+    faabric::util::SystemConfig& conf;
 
     int32_t timeoutMs = DEFAULT_DISTRIBUTED_TIMEOUT_MS;
 

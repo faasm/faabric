@@ -1,6 +1,10 @@
 #include <faabric/scheduler/DistributedCoordinator.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/barrier.h>
+#include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
 #define GROUP_TIMEOUT_MS 20000
@@ -8,12 +12,12 @@
 #define DISTRIBUTED_SYNC_OP(opLocal, opRemote)                                 \
     {                                                                          \
         int32_t groupId = msg.groupid();                                       \
-        if (msg.masterhost() == sch.getThisHost()) {                           \
+        if (msg.masterhost() == conf.endpointHost) {                           \
             opLocal(groupId, msg.groupsize());                                 \
         } else {                                                               \
             std::string host = msg.masterhost();                               \
             faabric::scheduler::FunctionCallClient& client =                   \
-              sch.getFunctionCallClient(host);                                 \
+              faabric::scheduler::getScheduler().getFunctionCallClient(host);  \
             opRemote(msg);                                                     \
         }                                                                      \
     }
@@ -73,7 +77,8 @@ DistributedCoordinator& getDistributedCoordinator()
 }
 
 DistributedCoordinator::DistributedCoordinator()
-  : sch(faabric::scheduler::getScheduler())
+  : ptpBroker(faabric::transport::getPointToPointBroker())
+  , conf(faabric::util::getSystemConfig())
 {}
 
 void DistributedCoordinator::clear()

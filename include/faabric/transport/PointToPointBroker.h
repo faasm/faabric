@@ -1,6 +1,5 @@
 #pragma once
 
-#include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointClient.h>
 
 #include <set>
@@ -44,8 +43,6 @@ class PointToPointBroker
     std::unordered_map<std::string, std::string> mappings;
 
     std::shared_ptr<PointToPointClient> getClient(const std::string& host);
-
-    faabric::scheduler::Scheduler& sch;
 };
 
 PointToPointBroker& getPointToPointBroker();

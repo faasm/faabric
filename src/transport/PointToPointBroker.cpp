@@ -1,5 +1,5 @@
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/redis/Redis.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/config.h>
@@ -36,9 +36,7 @@ std::string getPointToPointKey(int appId, int recvIdx)
     return fmt::format("{}-{}", appId, recvIdx);
 }
 
-PointToPointBroker::PointToPointBroker()
-  : sch(faabric::scheduler::getScheduler())
-{}
+PointToPointBroker::PointToPointBroker() {}
 
 std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
 {
@@ -74,11 +72,10 @@ void PointToPointBroker::setHostForReceiver(int appId,
 
 void PointToPointBroker::broadcastMappings(int appId)
 {
-    auto& sch = faabric::scheduler::getScheduler();
-
     // TODO seems excessive to broadcast to all hosts, could we perhaps use the
     // set of registered hosts?
-    std::set<std::string> hosts = sch.getAvailableHosts();
+    redis::Redis& redis = redis::Redis::getQueue();
+    std::set<std::string> hosts = redis.smembers(AVAILABLE_HOST_SET);
 
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
