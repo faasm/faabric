@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include <faabric/util/logging.h>
+
 namespace faabric::util {
 
 enum SnapshotDataType
@@ -36,13 +38,26 @@ struct SnapshotMergeRegion
 class SnapshotDiff
 {
   public:
+    SnapshotDataType dataType = SnapshotDataType::Raw;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
     uint32_t offset = 0;
     size_t size = 0;
     const uint8_t* data = nullptr;
-    SnapshotDataType dataType = SnapshotDataType::Raw;
-    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
 
     SnapshotDiff() = default;
+
+    SnapshotDiff(SnapshotDataType dataTypeIn,
+                 SnapshotMergeOperation operationIn,
+                 uint32_t offsetIn,
+                 const uint8_t* dataIn,
+                 size_t sizeIn)
+    {
+        dataType = dataTypeIn;
+        operation = operationIn;
+        offset = offsetIn;
+        data = dataIn;
+        size = sizeIn;
+    }
 
     SnapshotDiff(uint32_t offsetIn, const uint8_t* dataIn, size_t sizeIn)
     {
@@ -76,4 +91,8 @@ class SnapshotData
     // order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
 };
+
+std::string snapshotDataTypeStr(SnapshotDataType dt);
+
+std::string snapshotMergeOpStr(SnapshotMergeOperation op);
 }
