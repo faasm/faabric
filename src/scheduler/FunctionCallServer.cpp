@@ -33,6 +33,22 @@ void FunctionCallServer::doAsyncRecv(int header,
             recvUnregister(buffer, bufferSize);
             break;
         }
+        case faabric::scheduler::FunctionCalls::GroupLock: {
+            recvCoordinationLock(buffer, bufferSize);
+            break;
+        }
+        case faabric::scheduler::FunctionCalls::GroupUnlock: {
+            recvCoordinationUnlock(buffer, bufferSize);
+            break;
+        }
+        case faabric::scheduler::FunctionCalls::GroupNotify: {
+            recvCoordinationNotify(buffer, bufferSize);
+            break;
+        }
+        case faabric::scheduler::FunctionCalls::GroupBarrier: {
+            recvCoordinationBarrier(buffer, bufferSize);
+            break;
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized async call header: {}", header));
@@ -51,18 +67,6 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         }
         case faabric::scheduler::FunctionCalls::GetResources: {
             return recvGetResources(buffer, bufferSize);
-        }
-        case faabric::scheduler::FunctionCalls::GroupLock: {
-            return recvCoordinationLock(buffer, bufferSize);
-        }
-        case faabric::scheduler::FunctionCalls::GroupUnlock: {
-            return recvCoordinationUnlock(buffer, bufferSize);
-        }
-        case faabric::scheduler::FunctionCalls::GroupNotify: {
-            return recvCoordinationNotify(buffer, bufferSize);
-        }
-        case faabric::scheduler::FunctionCalls::GroupBarrier: {
-            return recvCoordinationBarrier(buffer, bufferSize);
         }
         default: {
             throw std::runtime_error(
@@ -116,7 +120,7 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
     return response;
 }
 
-std::unique_ptr<google::protobuf::Message>
+void
 FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
                                          size_t bufferSize)
 {
@@ -124,10 +128,9 @@ FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
 
     SPDLOG_TRACE("Receiving lock on {}", msg.groupid());
     sync.localLock(msg.groupid(), msg.groupsize());
-    return std::make_unique<faabric::EmptyResponse>();
 }
 
-std::unique_ptr<google::protobuf::Message>
+void
 FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
                                            size_t bufferSize)
 {
@@ -135,10 +138,9 @@ FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
 
     SPDLOG_TRACE("Receiving unlock on {}", msg.groupid());
     sync.localUnlock(msg.groupid(), msg.groupsize());
-    return std::make_unique<faabric::EmptyResponse>();
 }
 
-std::unique_ptr<google::protobuf::Message>
+void
 FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
                                            size_t bufferSize)
 {
@@ -146,10 +148,9 @@ FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
 
     SPDLOG_TRACE("Receiving notify on {}", msg.groupid());
     sync.localNotify(msg.groupid(), msg.groupsize());
-    return std::make_unique<faabric::EmptyResponse>();
 }
 
-std::unique_ptr<google::protobuf::Message>
+void
 FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
                                             size_t bufferSize)
 {
@@ -157,6 +158,5 @@ FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
 
     SPDLOG_TRACE("Receiving barrier on {}", msg.groupid());
     sync.localBarrier(msg.groupid(), msg.groupsize());
-    return std::make_unique<faabric::EmptyResponse>();
 }
 }

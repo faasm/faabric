@@ -21,6 +21,7 @@ void Latch::wait()
     waiters++;
 
     if (waiters > count) {
+        SPDLOG_ERROR("Latch already used: {} > {}", waiters, count);
         throw std::runtime_error("Latch already used");
     }
 

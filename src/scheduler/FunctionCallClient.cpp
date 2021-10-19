@@ -196,8 +196,7 @@ void FunctionCallClient::makeCoordinationRequest(
         faabric::util::UniqueLock lock(mockMutex);
         coordinationRequests.emplace_back(host, req);
     } else {
-        faabric::EmptyResponse resp;
-        syncSend(call, &req, &resp);
+        asyncSend(call, &req);
     }
 }
 

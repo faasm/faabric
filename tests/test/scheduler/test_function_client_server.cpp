@@ -266,11 +266,15 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     REQUIRE(!sync.isLocalLocked(msg));
 
+    server.setRequestLatch();
     cli.coordinationLock(msg);
+    server.awaitRequestLatch();
 
     REQUIRE(sync.isLocalLocked(msg));
 
+    server.setRequestLatch();
     cli.coordinationUnlock(msg);
+    server.awaitRequestLatch();
 
     REQUIRE(!sync.isLocalLocked(msg));
 }
@@ -285,12 +289,19 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     REQUIRE(sync.getNotifyCount(msg) == 0);
 
+    server.setRequestLatch();
     cli.coordinationNotify(msg);
+    server.awaitRequestLatch();
 
     REQUIRE(sync.getNotifyCount(msg) == 1);
 
+    server.setRequestLatch();
     cli.coordinationNotify(msg);
+    server.awaitRequestLatch();
+
+    server.setRequestLatch();
     cli.coordinationNotify(msg);
+    server.awaitRequestLatch();
 
     REQUIRE(sync.getNotifyCount(msg) == 3);
 }

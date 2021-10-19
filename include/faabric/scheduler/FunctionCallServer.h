@@ -37,20 +37,12 @@ class FunctionCallServer final
     void recvUnregister(const uint8_t* buffer, size_t bufferSize);
 
     // --- Function group operations ---
-    std::unique_ptr<google::protobuf::Message> recvCoordinationLock(
-      const uint8_t* buffer,
-      size_t bufferSize);
+    void recvCoordinationLock(const uint8_t* buffer, size_t bufferSize);
 
-    std::unique_ptr<google::protobuf::Message> recvCoordinationUnlock(
-      const uint8_t* buffer,
-      size_t bufferSize);
+    void recvCoordinationUnlock(const uint8_t* buffer, size_t bufferSize);
 
-    std::unique_ptr<google::protobuf::Message> recvCoordinationNotify(
-      const uint8_t* buffer,
-      size_t bufferSize);
+    void recvCoordinationNotify(const uint8_t* buffer, size_t bufferSize);
 
-    std::unique_ptr<google::protobuf::Message> recvCoordinationBarrier(
-      const uint8_t* buffer,
-      size_t bufferSize);
+    void recvCoordinationBarrier(const uint8_t* buffer, size_t bufferSize);
 };
 }
