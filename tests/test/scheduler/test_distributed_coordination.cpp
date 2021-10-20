@@ -28,27 +28,31 @@ class DistributedCoordinatorTestFixture : public ConfTestFixture
 {
   public:
     DistributedCoordinatorTestFixture()
-      : sync(getDistributedCoordinator())
+      : distCoord(getDistributedCoordinator())
     {
         faabric::util::setMockMode(true);
 
-        sync.clear();
+        distCoord.clear();
 
         msg = faabric::util::messageFactory("foo", "bar");
-
         msg.set_groupid(123);
         msg.set_groupsize(10);
+
+        distCoord.initGroup(msg);
+
+        coordGroup = distCoord.getCoordinationGroup(msg.groupid());
     }
 
     ~DistributedCoordinatorTestFixture()
     {
         faabric::scheduler::clearMockRequests();
         faabric::util::setMockMode(false);
-        sync.clear();
+        distCoord.clear();
     }
 
   protected:
-    DistributedCoordinator& sync;
+    DistributedCoordinator& distCoord;
+    std::shared_ptr<DistributedCoordinationGroup> coordGroup = nullptr;
     faabric::Message msg;
 };
 
@@ -66,25 +70,25 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     SECTION("Lock")
     {
         op = faabric::CoordinationRequest::LOCK;
-        sync.lock(msg);
+        coordGroup->lock(msg.appindex());
     }
 
     SECTION("Unlock")
     {
         op = faabric::CoordinationRequest::UNLOCK;
-        sync.unlock(msg);
+        coordGroup->unlock(msg.appindex());
     }
 
     SECTION("Barrier")
     {
         op = faabric::CoordinationRequest::BARRIER;
-        sync.barrier(msg);
+        coordGroup->barrier(msg.appindex());
     }
 
     SECTION("Notify")
     {
         op = faabric::CoordinationRequest::NOTIFY;
-        sync.notify(msg);
+        coordGroup->notify(msg.appindex());
     }
 
     std::vector<std::pair<std::string, faabric::CoordinationRequest>>
@@ -98,81 +102,20 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
-                 "Test operations fail when group size and id not set",
-                 "[sync]")
-{
-    std::string errMsg;
-    std::string expectedErrMsg;
-
-    std::string noGroupIdMsg = "Message does not have group id set";
-    std::string noGroupSizeMsg = "Message does not have group size set";
-
-    SECTION("Lock")
-    {
-        msg.set_groupid(0);
-        expectedErrMsg = noGroupIdMsg;
-        CAPTURE_ERR_MSG(errMsg, sync.localLock(msg));
-    }
-
-    SECTION("Unlock")
-    {
-        msg.set_groupid(0);
-        expectedErrMsg = noGroupIdMsg;
-        CAPTURE_ERR_MSG(errMsg, sync.localLock(msg));
-    }
-
-    SECTION("Notify")
-    {
-        SECTION("Without group size")
-        {
-            msg.set_groupsize(0);
-            expectedErrMsg = noGroupSizeMsg;
-        }
-
-        SECTION("Without group id")
-        {
-            msg.set_groupid(0);
-            expectedErrMsg = noGroupIdMsg;
-        }
-
-        CAPTURE_ERR_MSG(errMsg, sync.localNotify(msg));
-    }
-
-    SECTION("Barrier without group size")
-    {
-        SECTION("Without group size")
-        {
-            msg.set_groupsize(0);
-            expectedErrMsg = noGroupSizeMsg;
-        }
-
-        SECTION("Without group id")
-        {
-            msg.set_groupid(0);
-            expectedErrMsg = noGroupIdMsg;
-        }
-
-        CAPTURE_ERR_MSG(errMsg, sync.localBarrier(msg));
-    }
-
-    REQUIRE(errMsg == expectedErrMsg);
-}
-
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test local locking and unlocking",
                  "[sync]")
 {
     std::atomic<int> sharedInt = 0;
 
-    sync.localLock(msg);
+    coordGroup->localLock();
 
     std::thread tA([this, &sharedInt] {
-        getDistributedCoordinator().localLock(msg);
+        coordGroup->localLock();
 
         assert(sharedInt == 99);
         sharedInt = 88;
 
-        getDistributedCoordinator().localUnlock(msg);
+        coordGroup->localUnlock();
     });
 
     // Main thread sleep for a while, make sure the other can't run and update
@@ -182,7 +125,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(sharedInt == 0);
     sharedInt.store(99);
 
-    sync.localUnlock(msg);
+    coordGroup->localUnlock();
 
     if (tA.joinable()) {
         tA.join();
@@ -207,16 +150,16 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     std::vector<std::atomic<int>> sharedSums(nSums);
     std::vector<std::thread> threads;
     for (int i = 1; i < nThreads; i++) {
-        threads.emplace_back([this, nSums, &sharedSums] {
+        threads.emplace_back([this, i, nSums, &sharedSums] {
             for (int s = 0; s < nSums; s++) {
                 sharedSums.at(s).fetch_add(s + 1);
-                getDistributedCoordinator().localBarrier(msg);
+                coordGroup->barrier(i);
             }
         });
     }
 
     for (int i = 0; i < nSums; i++) {
-        sync.localBarrier(msg);
+        coordGroup->barrier(0);
         REQUIRE(sharedSums.at(i).load() == (i + 1) * (nThreads - 1));
     }
 
@@ -234,31 +177,35 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 {
     faabric::Message otherMsg = faabric::util::messageFactory("foo", "other");
     otherMsg.set_groupid(345);
+    otherMsg.set_groupsize(2);
+    distCoord.initGroup(msg);
+
+    auto otherCoordGroup = distCoord.getCoordinationGroup(otherMsg.groupid());
 
     // Should work for un-acquired lock
-    REQUIRE(sync.localTryLock(msg));
+    REQUIRE(coordGroup->localTryLock());
 
     // Should also work for another lock
-    REQUIRE(sync.localTryLock(otherMsg));
+    REQUIRE(otherCoordGroup->localTryLock());
 
     // Should not work for already-acquired locks
-    REQUIRE(!sync.localTryLock(msg));
-    REQUIRE(!sync.localTryLock(otherMsg));
+    REQUIRE(!coordGroup->localTryLock());
+    REQUIRE(!otherCoordGroup->localTryLock());
 
     // Should work again after unlock
-    sync.localUnlock(msg);
+    coordGroup->localUnlock();
 
-    REQUIRE(sync.localTryLock(msg));
-    REQUIRE(!sync.localTryLock(otherMsg));
+    REQUIRE(coordGroup->localTryLock());
+    REQUIRE(otherCoordGroup->localTryLock());
 
-    sync.localUnlock(msg);
-    sync.localUnlock(otherMsg);
+    coordGroup->localUnlock();
+    otherCoordGroup->localUnlock();
 
-    REQUIRE(sync.localTryLock(msg));
-    REQUIRE(sync.localTryLock(otherMsg));
+    REQUIRE(coordGroup->localTryLock());
+    REQUIRE(otherCoordGroup->localTryLock());
 
-    sync.localUnlock(msg);
-    sync.localUnlock(otherMsg);
+    coordGroup->localUnlock();
+    otherCoordGroup->localUnlock();
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
@@ -268,12 +215,12 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     std::atomic<int> sharedInt = 3;
 
     // Lock several times
-    sync.localLockRecursive(msg);
-    sync.localLockRecursive(msg);
-    sync.localLockRecursive(msg);
+    coordGroup->localLock(true);
+    coordGroup->localLock(true);
+    coordGroup->localLock(true);
 
     // Unlock once
-    sync.localUnlockRecursive(msg);
+    coordGroup->localUnlock(true);
 
     // Check background thread can't lock
     std::thread t([this, &sharedInt] {
@@ -282,12 +229,12 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
         assert(sharedInt.load() == 3);
 
         // Won't be able to lock until main thread has unlocked
-        sync.localLockRecursive(msg);
+        coordGroup->localLock(true);
 
         // Set to some other value
         sharedInt.store(4);
 
-        sync.localUnlockRecursive(msg);
+        coordGroup->localUnlock(true);
     });
 
     // Allow other thread to start and block on locking
@@ -295,8 +242,8 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(sharedInt == 3);
 
     // Unlock
-    sync.localUnlockRecursive(msg);
-    sync.localUnlockRecursive(msg);
+    coordGroup->localUnlock(true);
+    coordGroup->localUnlock(true);
 
     // Wait for other thread to finish
     if (t.joinable()) {
@@ -323,13 +270,13 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
             SLEEP_MS(1000);
             actual[i] = i;
 
-            sync.localNotify(msg);
+            coordGroup->notify(i);
         });
     }
 
     // Master thread to await, should only go through once all threads have
     // finished
-    sync.awaitNotify(msg);
+    coordGroup->notify(0);
 
     for (int i = 0; i < nThreads; i++) {
         REQUIRE(actual[i] == i);

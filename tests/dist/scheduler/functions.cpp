@@ -266,9 +266,9 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
         SPDLOG_DEBUG("barrier-worker {} waiting on barrier (size {})",
                      appIdx,
                      msg.groupsize());
-        faabric::scheduler::DistributedCoordinator& sync =
-          faabric::scheduler::getDistributedCoordinator();
-        sync.barrier(msg);
+        faabric::scheduler::getDistributedCoordinator()
+          .getCoordinationGroup(msg.groupid())
+          ->barrier(msg.appindex());
 
         // Check that all other values have been set
         for (int i = 0; i < nChainedFuncs; i++) {

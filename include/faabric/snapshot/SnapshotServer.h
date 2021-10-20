@@ -33,6 +33,6 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
     void recvThreadResult(const uint8_t* buffer, size_t bufferSize);
 
   private:
-    faabric::scheduler::DistributedCoordinator& sync;
+    faabric::scheduler::DistributedCoordinator& distCoord;
 };
 }

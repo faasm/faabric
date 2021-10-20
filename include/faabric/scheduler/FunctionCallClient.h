@@ -45,8 +45,7 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     faabric::HostResources getResources();
 
-    void executeFunctions(
-      const std::shared_ptr<faabric::BatchExecuteRequest> req);
+    void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void unregister(faabric::UnregisterRequest& req);
 
@@ -59,7 +58,7 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
     void coordinationUnlock(int32_t groupId,
                             int32_t groupSize,
                             int32_t groupIdx,
-                            bool recursive=false);
+                            bool recursive = false);
 
     void coordinationNotify(int32_t groupId,
                             int32_t groupSize,
@@ -72,7 +71,10 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
   private:
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
-    void makeCoordinationRequest(const faabric::Message& msg,
+    void makeCoordinationRequest(int32_t groupId,
+                                 int32_t groupSize,
+                                 int32_t groupIdx,
+                                 bool recursive,
                                  faabric::scheduler::FunctionCalls call);
 };
 }

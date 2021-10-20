@@ -94,7 +94,6 @@ FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn,
                                               FUNCTION_CALL_ASYNC_PORT,
                                               FUNCTION_CALL_SYNC_PORT)
-  , ptpBroker(faabric::transport::getPointToPointBroker())
 {}
 
 void FunctionCallClient::sendFlush()
@@ -155,26 +154,23 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
 }
 
 void FunctionCallClient::makeCoordinationRequest(
-  const faabric::Message& msg,
+  int32_t groupId,
+  int32_t groupSize,
+  int32_t groupIdx,
+  bool recursive,
   faabric::scheduler::FunctionCalls call)
 {
-    int appIdx = msg.appindex();
-    int groupId = msg.groupid();
-    int groupSize = msg.groupsize();
-
     faabric::CoordinationRequest req;
     req.set_groupid(groupId);
     req.set_groupsize(groupSize);
-    req.set_sendidx(appIdx);
-
-    bool awaitResponse = false;
+    req.set_groupidx(groupIdx);
+    req.set_recursive(recursive);
 
     faabric::CoordinationRequest::CoordinationOperation op;
     switch (call) {
         case (faabric::scheduler::FunctionCalls::GroupLock): {
             SPDLOG_TRACE("Requesting lock on {} at {}", groupId, host);
             op = faabric::CoordinationRequest::LOCK;
-            awaitResponse = true;
             break;
         }
         case (faabric::scheduler::FunctionCalls::GroupUnlock): {
@@ -190,7 +186,6 @@ void FunctionCallClient::makeCoordinationRequest(
         case (faabric::scheduler::FunctionCalls::GroupBarrier): {
             SPDLOG_TRACE("Requesting barrier {} at {}", groupId, host);
             op = faabric::CoordinationRequest::BARRIER;
-            awaitResponse = true;
             break;
         }
         default: {
@@ -206,33 +201,52 @@ void FunctionCallClient::makeCoordinationRequest(
         coordinationRequests.emplace_back(host, req);
     } else {
         asyncSend(call, &req);
-
-        if (awaitResponse) {
-            ptpBroker.recvMessage(groupId, 0, msg.appindex());
-        }
     }
 }
 
-void FunctionCallClient::coordinationLock(const faabric::Message& msg)
+void FunctionCallClient::coordinationLock(int32_t groupId,
+                                          int32_t groupSize,
+                                          int32_t groupIdx,
+                                          bool recursive)
 {
-    makeCoordinationRequest(msg, faabric::scheduler::FunctionCalls::GroupLock);
+    makeCoordinationRequest(groupId,
+                            groupSize,
+                            groupIdx,
+                            recursive,
+                            faabric::scheduler::FunctionCalls::GroupLock);
 }
 
-void FunctionCallClient::coordinationUnlock(const faabric::Message& msg)
+void FunctionCallClient::coordinationUnlock(int32_t groupId,
+                                            int32_t groupSize,
+                                            int32_t groupIdx,
+                                            bool recursive)
 {
-    makeCoordinationRequest(msg,
+    makeCoordinationRequest(groupId,
+                            groupSize,
+                            groupIdx,
+                            recursive,
                             faabric::scheduler::FunctionCalls::GroupUnlock);
 }
 
-void FunctionCallClient::coordinationNotify(const faabric::Message& msg)
+void FunctionCallClient::coordinationNotify(int32_t groupId,
+                                            int32_t groupSize,
+                                            int32_t groupIdx)
 {
-    makeCoordinationRequest(msg,
+    makeCoordinationRequest(groupId,
+                            groupSize,
+                            groupIdx,
+                            false,
                             faabric::scheduler::FunctionCalls::GroupNotify);
 }
 
-void FunctionCallClient::coordinationBarrier(const faabric::Message& msg)
+void FunctionCallClient::coordinationBarrier(int32_t groupId,
+                                             int32_t groupSize,
+                                             int32_t groupIdx)
 {
-    makeCoordinationRequest(msg,
+    makeCoordinationRequest(groupId,
+                            groupSize,
+                            groupIdx,
+                            false,
                             faabric::scheduler::FunctionCalls::GroupBarrier);
 }
 

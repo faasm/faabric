@@ -5,6 +5,7 @@
 #include <DummyExecutorFactory.h>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
@@ -30,14 +31,18 @@ class ClientServerFixture
     FunctionCallServer server;
     FunctionCallClient cli;
     std::shared_ptr<DummyExecutorFactory> executorFactory;
-    DistributedCoordinator& sync;
+
+    DistributedCoordinator& distCoord;
+    std::shared_ptr<DistributedCoordinationGroup> coordGroup = nullptr;
+    int groupId = 123;
+    int groupSize = 2;
 
   public:
     ClientServerFixture()
       : cli(LOCALHOST)
-      , sync(getDistributedCoordinator())
+      , distCoord(getDistributedCoordinator())
     {
-        sync.clear();
+        distCoord.clear();
 
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
@@ -46,9 +51,19 @@ class ClientServerFixture
         server.start();
     }
 
+    void setUpCoordinationGroup(faabric::Message& msg)
+    {
+        msg.set_groupsize(groupSize);
+        msg.set_groupid(groupId);
+
+        distCoord.initGroup(msg);
+
+        coordGroup = distCoord.getCoordinationGroup(msg.groupid());
+    }
+
     ~ClientServerFixture()
     {
-        sync.clear();
+        distCoord.clear();
 
         server.stop();
         executorFactory->reset();
@@ -262,21 +277,21 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    msg.set_groupid(123);
+    setUpCoordinationGroup(msg);
 
-    REQUIRE(!sync.isLocalLocked(msg));
-
-    server.setRequestLatch();
-    cli.coordinationLock(msg);
-    server.awaitRequestLatch();
-
-    REQUIRE(sync.isLocalLocked(msg));
+    REQUIRE(!coordGroup->isLocalLocked());
 
     server.setRequestLatch();
-    cli.coordinationUnlock(msg);
+    cli.coordinationLock(msg.groupid(), msg.groupsize(), msg.appindex());
     server.awaitRequestLatch();
 
-    REQUIRE(!sync.isLocalLocked(msg));
+    REQUIRE(coordGroup->isLocalLocked());
+
+    server.setRequestLatch();
+    cli.coordinationUnlock(msg.groupid(), msg.groupsize(), msg.appindex());
+    server.awaitRequestLatch();
+
+    REQUIRE(!coordGroup->isLocalLocked());
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
@@ -284,26 +299,26 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    msg.set_groupsize(5);
-    msg.set_groupid(123);
+    groupSize = 5;
+    setUpCoordinationGroup(msg);
 
-    REQUIRE(sync.getNotifyCount(msg) == 0);
-
-    server.setRequestLatch();
-    cli.coordinationNotify(msg);
-    server.awaitRequestLatch();
-
-    REQUIRE(sync.getNotifyCount(msg) == 1);
+    REQUIRE(coordGroup->getNotifyCount() == 0);
 
     server.setRequestLatch();
-    cli.coordinationNotify(msg);
+    cli.coordinationNotify(msg.groupid(), msg.groupsize(), msg.appindex());
+    server.awaitRequestLatch();
+
+    REQUIRE(coordGroup->getNotifyCount() == 1);
+
+    server.setRequestLatch();
+    cli.coordinationNotify(msg.groupid(), msg.groupsize(), msg.appindex());
     server.awaitRequestLatch();
 
     server.setRequestLatch();
-    cli.coordinationNotify(msg);
+    cli.coordinationNotify(msg.groupid(), msg.groupsize(), msg.appindex());
     server.awaitRequestLatch();
 
-    REQUIRE(sync.getNotifyCount(msg) == 3);
+    REQUIRE(coordGroup->getNotifyCount() == 3);
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
@@ -311,18 +326,19 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "[scheduler][sync]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    msg.set_groupid(123);
-    msg.set_groupsize(2);
+    setUpCoordinationGroup(msg);
 
-    REQUIRE(sync.getNotifyCount(msg) == 0);
+    REQUIRE(coordGroup->getNotifyCount() == 0);
 
     std::thread t([&msg] {
         FunctionCallClient cli(LOCALHOST);
-        cli.coordinationBarrier(msg);
+        faabric::scheduler::getDistributedCoordinator()
+          .getCoordinationGroup(msg.groupid())
+          ->barrier(1);
     });
 
     // Wait on the barrier in this thread
-    sync.barrier(msg);
+    coordGroup->barrier(0);
 
     // Let the thread in the background also wait on the barrier
     if (t.joinable()) {

@@ -16,7 +16,7 @@ FunctionCallServer::FunctionCallServer()
       FUNCTION_INPROC_LABEL,
       faabric::util::getSystemConfig().functionServerThreads)
   , scheduler(getScheduler())
-  , sync(getDistributedCoordinator())
+  , distCoord(getDistributedCoordinator())
 {}
 
 void FunctionCallServer::doAsyncRecv(int header,
@@ -123,41 +123,35 @@ void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
                                               size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-
-    SPDLOG_TRACE("Receiving lock on {}", msg.groupid());
-
-    // TODO - synchronously locking here blocks the server thread. We need to
-    // somehow perform the locking, then send the ptp message back.
-    sync.localLock(msg.groupid(), msg.groupsize());
+    SPDLOG_TRACE(
+      "Receiving lock on {} for idx {}", msg.groupid(), msg.groupidx());
+    distCoord.getCoordinationGroup(msg.groupid())->lock(msg.groupidx());
 }
 
 void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
                                                 size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-
-    SPDLOG_TRACE("Receiving unlock on {}", msg.groupid());
-    sync.localUnlock(msg.groupid(), msg.groupsize());
+    SPDLOG_TRACE(
+      "Receiving unlock on {} for idx {}", msg.groupid(), msg.groupidx());
+    distCoord.getCoordinationGroup(msg.groupid())->unlock(msg.groupidx());
 }
 
 void FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
                                                 size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-
-    SPDLOG_TRACE("Receiving notify on {}", msg.groupid());
-    sync.localNotify(msg.groupid(), msg.groupsize());
+    SPDLOG_TRACE(
+      "Receiving notify on {} for idx {}", msg.groupid(), msg.groupidx());
+    distCoord.getCoordinationGroup(msg.groupid())->notify(msg.groupidx());
 }
 
 void FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
                                                  size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-
-    SPDLOG_TRACE("Receiving barrier on {}", msg.groupid());
-
-    // TODO - synchronously locking here blocks the server thread. We need to
-    // somehow perform the locking, then send the ptp message back.
-    sync.localBarrier(msg.groupid(), msg.groupsize());
+    SPDLOG_TRACE(
+      "Receiving barrier on {} for idx {}", msg.groupid(), msg.groupidx());
+    distCoord.getCoordinationGroup(msg.groupid())->barrier(msg.groupidx());
 }
 }

@@ -16,7 +16,7 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    faabric::scheduler::DistributedCoordinator& sync;
+    faabric::scheduler::DistributedCoordinator& distCoord;
 
     void doAsyncRecv(int header,
                      const uint8_t* buffer,

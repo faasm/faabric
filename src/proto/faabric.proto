@@ -64,7 +64,8 @@ message FunctionStatusResponse {
 message CoordinationRequest {
     int32 groupId = 1;
     int32 groupSize = 2;
-    int32 sendIdx = 3;
+    int32 groupIdx = 3;
+    bool recursive = 4;
 
     enum CoordinationOperation {
         LOCK = 0;
@@ -72,7 +73,7 @@ message CoordinationRequest {
         NOTIFY = 2;
         BARRIER = 3;
     }
-    CoordinationOperation operation = 4;
+    CoordinationOperation operation = 5;
 }
 
 // ---------------------------------------------

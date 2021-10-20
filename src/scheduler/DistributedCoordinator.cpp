@@ -34,14 +34,14 @@ DistributedCoordinationGroup::DistributedCoordinationGroup(
   , localBarrier(faabric::util::Barrier::create(groupSize, timeoutMs))
 {}
 
-void DistributedCoordinationGroup::lock(int32_t memberIdx, bool recursive)
+void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
 {
     if (!isMasteredThisHost) {
         // Send remote request
-        masterClient.coordinationLock(groupId, groupSize, memberIdx, recursive);
+        masterClient.coordinationLock(groupId, groupSize, groupIdx, recursive);
 
         // Await ptp response
-        ptpBroker.recvMessage(groupId, 0, memberIdx);
+        ptpBroker.recvMessage(groupId, 0, groupIdx);
 
         return;
     }
@@ -51,35 +51,35 @@ void DistributedCoordinationGroup::lock(int32_t memberIdx, bool recursive)
     bool success = false;
 
     if (recursive && (recursiveLockOwners.empty() ||
-                      recursiveLockOwners.top() == memberIdx)) {
-        recursiveLockOwners.push(memberIdx);
+                      recursiveLockOwners.top() == groupIdx)) {
+        recursiveLockOwners.push(groupIdx);
         success = true;
     } else if (lockOwnerIdx == -1) {
-        lockOwnerIdx = memberIdx;
+        lockOwnerIdx = groupIdx;
         success = true;
     }
 
     if (success) {
-        SPDLOG_TRACE("Member {} locked {}", memberIdx, groupId, memberIdx);
+        SPDLOG_TRACE("Member {} locked {}", groupIdx, groupId, groupIdx);
 
-        notifyLocked(memberIdx);
+        notifyLocked(groupIdx);
     } else {
         SPDLOG_TRACE("Member {} waiting on lock {}. Already locked by {}",
-                     memberIdx,
+                     groupIdx,
                      groupId,
-                     memberIdx);
+                     groupIdx);
 
         // Add member index to lock queue
-        lockWaiters.push(memberIdx);
+        lockWaiters.push(groupIdx);
     }
 }
 
 void DistributedCoordinationGroup::localLock(bool recursive)
 {
     if (recursive) {
-        localRecursiveMx.lock();
+        LOCK_TIMEOUT(localRecursiveMx, timeoutMs);
     } else {
-        localMx.lock();
+        LOCK_TIMEOUT(localMx, timeoutMs);
     }
 }
 
@@ -88,12 +88,12 @@ bool DistributedCoordinationGroup::localTryLock()
     return localMx.try_lock();
 }
 
-void DistributedCoordinationGroup::unlock(int32_t memberIdx, bool recursive)
+void DistributedCoordinationGroup::unlock(int32_t groupIdx, bool recursive)
 {
     if (!isMasteredThisHost) {
         // Send remote request
         masterClient.coordinationUnlock(
-          groupId, groupSize, memberIdx, recursive);
+          groupId, groupSize, groupIdx, recursive);
         return;
     }
 
@@ -106,7 +106,7 @@ void DistributedCoordinationGroup::unlock(int32_t memberIdx, bool recursive)
             return;
         }
 
-        if (lockWaiters.size() > 0) {
+        if (!lockWaiters.empty()) {
             recursiveLockOwners.push(lockWaiters.front());
             notifyLocked(lockWaiters.front());
             lockWaiters.pop();
@@ -114,7 +114,7 @@ void DistributedCoordinationGroup::unlock(int32_t memberIdx, bool recursive)
     } else {
         lockOwnerIdx = -1;
 
-        if (lockWaiters.size() > 0) {
+        if (!lockWaiters.empty()) {
             lockOwnerIdx = lockWaiters.front();
             notifyLocked(lockWaiters.front());
             lockWaiters.pop();
@@ -131,32 +131,32 @@ void DistributedCoordinationGroup::localUnlock(bool recursive)
     }
 }
 
-void DistributedCoordinationGroup::notifyLocked(int32_t memberIdx)
+void DistributedCoordinationGroup::notifyLocked(int32_t groupIdx)
 {
     std::vector<uint8_t> data(1, 0);
 
-    ptpBroker.sendMessage(groupId, 0, memberIdx, data.data(), data.size());
+    ptpBroker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
 }
 
-void DistributedCoordinationGroup::barrier(int32_t memberIdx)
+void DistributedCoordinationGroup::barrier(int32_t groupIdx)
 {
     if (!isMasteredThisHost) {
         // Send remote request
-        masterClient.coordinationBarrier(groupId, groupSize, memberIdx);
+        masterClient.coordinationBarrier(groupId, groupSize, groupIdx);
 
         // Await ptp response
-        ptpBroker.recvMessage(groupId, 0, memberIdx);
+        ptpBroker.recvMessage(groupId, 0, groupIdx);
 
         return;
     }
 
     faabric::util::UniqueLock lock(mx);
 
-    barrierWaiters.insert(memberIdx);
+    barrierWaiters.insert(groupIdx);
 
     if (barrierWaiters.size() == groupSize) {
         SPDLOG_TRACE("Member {} completes barrier {}. Notifying {} waiters",
-                     memberIdx,
+                     groupIdx,
                      groupId,
                      groupSize);
 
@@ -168,25 +168,25 @@ void DistributedCoordinationGroup::barrier(int32_t memberIdx)
         }
     } else {
         SPDLOG_TRACE("Member {} waiting on barrier {}. {}/{} waiters",
-                     memberIdx,
+                     groupIdx,
                      groupId,
                      barrierWaiters.size(),
                      groupSize);
     }
 }
 
-void DistributedCoordinationGroup::notify(int32_t memberIdx)
+void DistributedCoordinationGroup::notify(int32_t groupIdx)
 {
     if (!isMasteredThisHost) {
         // Send remote request
-        masterClient.coordinationNotify(groupId, groupSize, memberIdx);
+        masterClient.coordinationNotify(groupId, groupSize, groupIdx);
         return;
     }
 
     // All members must lock when entering this function
     std::unique_lock<std::mutex> lock(notifyMutex);
 
-    if (memberIdx == 0) {
+    if (groupIdx == 0) {
         auto timePoint = std::chrono::system_clock::now() +
                          std::chrono::milliseconds(GROUP_TIMEOUT_MS);
 
@@ -214,8 +214,24 @@ void DistributedCoordinationGroup::notify(int32_t memberIdx)
     }
 }
 
-DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
-  int32_t groupId)
+bool DistributedCoordinationGroup::isLocalLocked()
+{
+    bool canLock = localMx.try_lock();
+    if (canLock) {
+        localMx.unlock();
+        return false;
+    }
+
+    return true;
+}
+
+int32_t DistributedCoordinationGroup::getNotifyCount()
+{
+    return notifyCount;
+}
+
+std::shared_ptr<DistributedCoordinationGroup>
+DistributedCoordinator::getCoordinationGroup(int32_t groupId)
 {
     if (groups.find(groupId) == groups.end()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
@@ -225,7 +241,7 @@ DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
     return groups.at(groupId);
 }
 
-DistributedCoordinationGroup& DistributedCoordinator::initGroup(
+std::shared_ptr<DistributedCoordinationGroup> DistributedCoordinator::initGroup(
   const std::string& masterHost,
   int32_t groupId,
   int32_t groupSize)
@@ -233,7 +249,10 @@ DistributedCoordinationGroup& DistributedCoordinator::initGroup(
     if (groups.find(groupId) == groups.end()) {
         faabric::util::FullLock lock(sharedMutex);
         if (groups.find(groupId) == groups.end()) {
-            groups.emplace(masterHost, groupId, groupSize);
+            groups.emplace(
+              std::make_pair(groupId,
+                             std::make_shared<DistributedCoordinationGroup>(
+                               masterHost, groupId, groupSize)));
         }
     }
 
@@ -243,7 +262,7 @@ DistributedCoordinationGroup& DistributedCoordinator::initGroup(
     }
 }
 
-DistributedCoordinationGroup& DistributedCoordinator::initGroup(
+std::shared_ptr<DistributedCoordinationGroup> DistributedCoordinator::initGroup(
   const faabric::Message& msg)
 {
     return initGroup(msg.masterhost(), msg.groupid(), msg.groupsize());
