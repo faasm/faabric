@@ -20,77 +20,136 @@
 
 namespace faabric::scheduler {
 
-DistributedLock::DistributedLock(int32_t groupIdIn, bool recursiveIn)
-  : groupId(groupIdIn)
+DistributedCoordinationGroup::DistributedCoordinationGroup(
+  const std::string& masterHostIn,
+  int32_t groupIdIn,
+  int32_t groupSizeIn)
+  : masterHost(masterHostIn)
+  , groupId(groupIdIn)
+  , groupSize(groupSizeIn)
+  , isMasteredThisHost(faabric::util::getSystemConfig().endpointHost ==
+                       masterHost)
+  , masterClient(masterHost)
   , ptpBroker(faabric::transport::getPointToPointBroker())
-  , recursive(recursiveIn)
+  , localBarrier(faabric::util::Barrier::create(groupSize, timeoutMs))
 {}
 
-void DistributedLock::tryLock(int32_t memberIdx)
+void DistributedCoordinationGroup::lock(int32_t memberIdx, bool recursive)
 {
+    if (!isMasteredThisHost) {
+        // Send remote request
+        masterClient.coordinationLock(groupId, groupSize, memberIdx, recursive);
+
+        // Await ptp response
+        ptpBroker.recvMessage(groupId, 0, memberIdx);
+
+        return;
+    }
+
     faabric::util::UniqueLock lock(mx);
 
     bool success = false;
 
-    if (ownerIdx == -1) {
+    if (recursive && (recursiveLockOwners.empty() ||
+                      recursiveLockOwners.top() == memberIdx)) {
+        recursiveLockOwners.push(memberIdx);
         success = true;
-    } else if ((ownerIdx == memberIdx) && recursive) {
+    } else if (lockOwnerIdx == -1) {
+        lockOwnerIdx = memberIdx;
         success = true;
-    } else {
-        success = false;
     }
 
     if (success) {
-        ownerIdx = memberIdx;
+        SPDLOG_TRACE("Member {} locked {}", memberIdx, groupId, memberIdx);
 
-        SPDLOG_TRACE("Member {} locked {}", memberIdx, groupId, ownerIdx);
-
-        notifyLocked(ownerIdx);
+        notifyLocked(memberIdx);
     } else {
         SPDLOG_TRACE("Member {} waiting on lock {}. Already locked by {}",
                      memberIdx,
                      groupId,
-                     ownerIdx);
+                     memberIdx);
 
         // Add member index to lock queue
         lockWaiters.push(memberIdx);
     }
 }
 
-void DistributedLock::unlock(int32_t memberIdx)
+void DistributedCoordinationGroup::localLock(bool recursive)
 {
-    faabric::util::UniqueLock lock(mx);
-
-    ownerIdx = -1;
-
-    if (lockWaiters.size() > 0) {
-        ownerIdx = lockWaiters.front();
-        lockWaiters.pop();
-
-        SPDLOG_TRACE(
-          "Member {} unlocked {}. Notifying {}", memberIdx, groupId, ownerIdx);
-
-        notifyLocked(ownerIdx);
+    if (recursive) {
+        localRecursiveMx.lock();
     } else {
-        SPDLOG_TRACE("Member {} unlocked {}", memberIdx, groupId);
+        localMx.lock();
     }
 }
 
-void DistributedLock::notifyLocked(int32_t memberIdx)
+bool DistributedCoordinationGroup::localTryLock()
+{
+    return localMx.try_lock();
+}
+
+void DistributedCoordinationGroup::unlock(int32_t memberIdx, bool recursive)
+{
+    if (!isMasteredThisHost) {
+        // Send remote request
+        masterClient.coordinationUnlock(
+          groupId, groupSize, memberIdx, recursive);
+        return;
+    }
+
+    faabric::util::UniqueLock lock(mx);
+
+    if (recursive) {
+        recursiveLockOwners.pop();
+
+        if (!recursiveLockOwners.empty()) {
+            return;
+        }
+
+        if (lockWaiters.size() > 0) {
+            recursiveLockOwners.push(lockWaiters.front());
+            notifyLocked(lockWaiters.front());
+            lockWaiters.pop();
+        }
+    } else {
+        lockOwnerIdx = -1;
+
+        if (lockWaiters.size() > 0) {
+            lockOwnerIdx = lockWaiters.front();
+            notifyLocked(lockWaiters.front());
+            lockWaiters.pop();
+        }
+    }
+}
+
+void DistributedCoordinationGroup::localUnlock(bool recursive)
+{
+    if (recursive) {
+        localRecursiveMx.unlock();
+    } else {
+        localMx.unlock();
+    }
+}
+
+void DistributedCoordinationGroup::notifyLocked(int32_t memberIdx)
 {
     std::vector<uint8_t> data(1, 0);
 
     ptpBroker.sendMessage(groupId, 0, memberIdx, data.data(), data.size());
 }
 
-DistributedBarrier::DistributedBarrier(int32_t groupIdIn, int32_t groupSizeIn)
-  : groupId(groupIdIn)
-  , groupSize(groupSizeIn)
-  , ptpBroker(faabric::transport::getPointToPointBroker())
-{}
-
-void DistributedBarrier::wait(int32_t memberIdx)
+void DistributedCoordinationGroup::barrier(int32_t memberIdx)
 {
+    if (!isMasteredThisHost) {
+        // Send remote request
+        masterClient.coordinationBarrier(groupId, groupSize, memberIdx);
+
+        // Await ptp response
+        ptpBroker.recvMessage(groupId, 0, memberIdx);
+
+        return;
+    }
+
     faabric::util::UniqueLock lock(mx);
 
     barrierWaiters.insert(memberIdx);
@@ -116,22 +175,48 @@ void DistributedBarrier::wait(int32_t memberIdx)
     }
 }
 
-DistributedCoordinationGroup::DistributedCoordinationGroup(int32_t groupIdIn,
-                                                           int32_t groupSizeIn)
-  : groupId(groupIdIn)
-  , groupSize(groupSizeIn)
-  , barrier(groupId, groupSize)
-  , lock(groupId, false)
-  , recursiveLock(groupId, true)
-  , notify(groupId, groupSize)
-{}
+void DistributedCoordinationGroup::notify(int32_t memberIdx)
+{
+    if (!isMasteredThisHost) {
+        // Send remote request
+        masterClient.coordinationNotify(groupId, groupSize, memberIdx);
+        return;
+    }
+
+    // All members must lock when entering this function
+    std::unique_lock<std::mutex> lock(notifyMutex);
+
+    if (memberIdx == 0) {
+        auto timePoint = std::chrono::system_clock::now() +
+                         std::chrono::milliseconds(GROUP_TIMEOUT_MS);
+
+        if (!notifyCv.wait_until(
+              lock, timePoint, [&] { return notifyCount >= groupSize - 1; })) {
+
+            SPDLOG_ERROR("Group {} await notify timed out", groupId);
+            throw std::runtime_error("Group notify timed out");
+        }
+
+        // Reset, after we've finished
+        notifyCount = 0;
+    } else {
+        // If this is the last non-master member, notify
+        notifyCount += 1;
+        if (notifyCount == groupSize - 1) {
+            notifyCv.notify_one();
+        } else if (notifyCount > groupSize - 1) {
+            SPDLOG_ERROR("Group {} notify exceeded group size, {} > {}",
+                         groupId,
+                         notifyCount,
+                         groupSize - 1);
+            throw std::runtime_error("Group notify exceeded size");
+        }
+    }
+}
 
 DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
   int32_t groupId)
 {
-    // Should not be calling this with a zero group ID
-    checkGroupIdSet(groupId);
-
     if (groups.find(groupId) == groups.end()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
         throw std::runtime_error("Group ID not found on host");
@@ -140,16 +225,15 @@ DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
     return groups.at(groupId);
 }
 
-DistributedCoordinationGroup&
-DistributedCoordinator::getOrCreateCoordinationGroup(int32_t groupId,
-                                                     int32_t groupSize)
+DistributedCoordinationGroup& DistributedCoordinator::initGroup(
+  const std::string& masterHost,
+  int32_t groupId,
+  int32_t groupSize)
 {
-    checkGroupIdSet(groupId);
-
     if (groups.find(groupId) == groups.end()) {
         faabric::util::FullLock lock(sharedMutex);
         if (groups.find(groupId) == groups.end()) {
-            groups.emplace(groupId, groupSize);
+            groups.emplace(masterHost, groupId, groupSize);
         }
     }
 
@@ -159,17 +243,16 @@ DistributedCoordinator::getOrCreateCoordinationGroup(int32_t groupId,
     }
 }
 
+DistributedCoordinationGroup& DistributedCoordinator::initGroup(
+  const faabric::Message& msg)
+{
+    return initGroup(msg.masterhost(), msg.groupid(), msg.groupsize());
+}
+
 DistributedCoordinator& getDistributedCoordinator()
 {
     static DistributedCoordinator sync;
     return sync;
-}
-
-faabric::scheduler::FunctionCallClient& getFunctionCallClient(
-  const faabric::Message& msg)
-{
-    return faabric::scheduler::getScheduler().getFunctionCallClient(
-      msg.masterhost());
 }
 
 DistributedCoordinator::DistributedCoordinator()
@@ -181,275 +264,9 @@ void DistributedCoordinator::clear()
     groups.clear();
 }
 
-void DistributedCoordinator::initGroup(int32_t groupId, int32_t groupSize)
+bool DistributedCoordinator::groupExists(int32_t groupId)
 {
-    checkGroupIdSet(groupId);
-
-    // This will implicitly initialise the group
-    getOrCreateCoordinationGroup(groupId, groupSize);
-}
-
-// -----------------------------
-// LOCK
-// -----------------------------
-
-void DistributedCoordinator::lock(const faabric::Message& msg)
-{
-    checkGroupIdSet(msg.groupid());
-
-    int32_t groupId = msg.groupid();
-    if (msg.masterhost() == conf.endpointHost) {
-        localLock(groupId, msg.groupsize());
-    } else {
-        getFunctionCallClient(msg).coordinationLock(msg);
-    }
-}
-
-void DistributedCoordinator::localLock(const faabric::Message& msg)
-{
-    localLock(msg.groupid(), msg.groupsize());
-}
-
-void DistributedCoordinator::localLock(int32_t groupId, int32_t groupMember)
-{
-    LOCK_TIMEOUT(getCoordinationGroup(groupId).mutex, timeoutMs);
-}
-
-void DistributedCoordinator::localLock(int32_t groupId,
-                                       int32_t groupSize,
-                                       int32_t groupMember)
-{
-    LOCK_TIMEOUT(getOrCreateCoordinationGroup(groupId, groupSize).mutex,
-                 timeoutMs);
-}
-
-// -----------------------------
-// UNLOCK
-// -----------------------------
-
-void DistributedCoordinator::unlock(const faabric::Message& msg)
-{
-    checkGroupIdSet(msg.groupid());
-
-    int32_t groupId = msg.groupid();
-    if (msg.masterhost() == conf.endpointHost) {
-        localUnlock(groupId, msg.groupsize());
-    } else {
-        getFunctionCallClient(msg).coordinationUnlock(msg);
-    }
-}
-
-void DistributedCoordinator::localUnlock(const faabric::Message& msg)
-{
-    localUnlock(msg.groupid(), msg.groupsize(), msg.appindex());
-}
-
-void DistributedCoordinator::localUnlock(int32_t groupId, int32_t groupMember)
-{
-    getCoordinationGroup(groupId).mutex.unlock();
-}
-
-void DistributedCoordinator::localUnlock(int32_t groupId,
-                                         int32_t groupSize,
-                                         int32_t groupMember)
-{
-    getOrCreateCoordinationGroup(groupId, groupSize).mutex.unlock();
-}
-
-// -----------------------------
-// TRY LOCK
-// -----------------------------
-
-bool DistributedCoordinator::localTryLock(const faabric::Message& msg)
-{
-    return localTryLock(msg.groupid(), msg.groupsize(), msg.appindex());
-}
-
-bool DistributedCoordinator::localTryLock(int32_t groupId,
-                                          int32_t groupSize,
-                                          int32_t groupMember)
-{
-    return getOrCreateCoordinationGroup(groupId, groupSize).mutex.try_lock();
-}
-
-// -----------------------------
-// RECURSIVE LOCK/ UNLOCK
-// -----------------------------
-
-void DistributedCoordinator::localLockRecursive(const faabric::Message& msg)
-{
-    localLockRecursive(msg.groupid(), msg.groupsize(), msg.appindex());
-}
-
-void DistributedCoordinator::localLockRecursive(int32_t groupId,
-                                                int32_t groupSize,
-                                                int32_t groupMember)
-{
-    LOCK_TIMEOUT(
-      getOrCreateCoordinationGroup(groupId, groupSize).recursiveMutex,
-      timeoutMs);
-}
-
-void DistributedCoordinator::localUnlockRecursive(const faabric::Message& msg)
-{
-    localUnlockRecursive(msg.groupid(), msg.groupsize(), msg.appindex());
-}
-
-void DistributedCoordinator::localUnlockRecursive(int32_t groupId,
-                                                  int32_t groupSize)
-{
-    getOrCreateCoordinationGroup(groupId, groupSize).recursiveMutex.unlock();
-}
-
-// -----------------------------
-// NOTIFY
-// -----------------------------
-
-void DistributedCoordinator::notify(const faabric::Message& msg)
-{
-    checkGroupIdSet(msg.groupid());
-
-    int32_t groupId = msg.groupid();
-    if (msg.masterhost() == conf.endpointHost) {
-        localNotify(groupId, msg.groupsize(), msg.appindex());
-    } else {
-        getFunctionCallClient(msg).coordinationNotify(msg);
-    }
-}
-
-void DistributedCoordinator::localNotify(const faabric::Message& msg)
-{
-    localNotify(msg.groupid(), msg.groupsize(), msg.appindex());
-}
-
-void DistributedCoordinator::localNotify(int32_t groupId,
-                                         int32_t groupSize,
-                                         int32_t groupMember)
-{
-    doLocalNotify(groupId, groupSize, false);
-}
-
-void DistributedCoordinator::awaitNotify(const faabric::Message& msg)
-{
-    awaitNotify(msg.groupid(), msg.groupsize(), msg.appindex());
-}
-
-void DistributedCoordinator::awaitNotify(int32_t groupId,
-                                         int32_t groupSize,
-                                         int32_t groupMember)
-{
-    doLocalNotify(groupId, groupSize, true);
-}
-
-void DistributedCoordinator::doLocalNotify(int32_t groupId,
-                                           int32_t groupSize,
-                                           bool master)
-{
-    checkGroupSizeSet(groupSize);
-
-    DistributedCoordinationGroup& group =
-      getOrCreateCoordinationGroup(groupId, groupSize);
-
-    // All members must lock when entering this function
-    std::unique_lock<std::mutex> lock(group.notifyMutex);
-
-    if (master) {
-        auto timePoint = std::chrono::system_clock::now() +
-                         std::chrono::milliseconds(GROUP_TIMEOUT_MS);
-
-        if (!group.cv.wait_until(lock, timePoint, [&] {
-                return group.count.load() >= groupSize - 1;
-            })) {
-
-            SPDLOG_ERROR("Group {} await notify timed out", groupId);
-            throw std::runtime_error("Group notify timed out");
-        }
-
-        // Reset, after we've finished
-        group.count.store(0);
-    } else {
-        // If this is the last non-master member, notify
-        int countBefore = group.count.fetch_add(1);
-        if (countBefore == groupSize - 2) {
-            group.cv.notify_one();
-        } else if (countBefore > groupSize - 2) {
-            SPDLOG_ERROR("Group {} notify exceeded group size, {} > {}",
-                         groupId,
-                         countBefore,
-                         groupSize - 2);
-            throw std::runtime_error("Group notify exceeded size");
-        }
-    }
-}
-
-// -----------------------------
-// BARRIER
-// -----------------------------
-
-void DistributedCoordinator::barrier(const faabric::Message& msg)
-{
-    checkGroupIdSet(msg.groupid());
-    int32_t groupId = msg.groupid();
-    if (msg.masterhost() == conf.endpointHost) {
-        localBarrier(groupId, msg.groupsize());
-    } else {
-        getFunctionCallClient(msg).coordinationBarrier(msg);
-    }
-}
-
-void DistributedCoordinator::localBarrier(const faabric::Message& msg)
-{
-    localBarrier(msg.groupid(), msg.groupsize());
-}
-
-void DistributedCoordinator::localBarrier(int32_t groupId, int32_t groupSize)
-{
-    checkGroupSizeSet(groupSize);
-
-    DistributedCoordinationGroup& group =
-      getOrCreateCoordinationGroup(groupId, groupSize);
-
-    group.barrier->wait();
-}
-
-// -----------------------------
-// STATE
-// -----------------------------
-
-bool DistributedCoordinator::isLocalLocked(const faabric::Message& msg)
-{
-    DistributedCoordinationGroup& group =
-      getOrCreateCoordinationGroup(msg.groupid(), msg.groupsize());
-    bool canLock = group.mutex.try_lock();
-
-    if (canLock) {
-        group.mutex.unlock();
-        return false;
-    }
-
-    return true;
-}
-
-int32_t DistributedCoordinator::getNotifyCount(const faabric::Message& msg)
-{
-    DistributedCoordinationGroup& group =
-      getOrCreateCoordinationGroup(msg.groupid(), msg.groupsize());
-    std::unique_lock<std::mutex> lock(group.notifyMutex);
-
-    return group.count.load();
-}
-
-void DistributedCoordinator::checkGroupIdSet(int32_t groupId)
-{
-    if (groupId <= 0) {
-        throw std::runtime_error("Message does not have group id set");
-    }
-}
-
-void DistributedCoordinator::checkGroupSizeSet(int32_t groupSize)
-{
-    if (groupSize <= 0) {
-        throw std::runtime_error("Message does not have group size set");
-    }
+    faabric::util::SharedLock lock(sharedMutex);
+    return groups.find(groupId) != groups.end();
 }
 }
