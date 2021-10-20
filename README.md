@@ -1,4 +1,4 @@
-# Faabric [![Faabric tests](https://github.com/faasm/faabric/workflows/Tests/badge.svg?branch=master)](https://github.com/faasm/faabric/actions) [![License](https://img.shields.io/github/license/faasm/faabric.svg)](https://github.com/faasm/faabric/blob/master/LICENSE.md)
+# Faabric [![Faabric tests](https://github.com/faasm/faabric/workflows/Tests/badge.svg?branch=master)](https://github.com/faasm/faabric/actions) [![License](https://img.shields.io/github/license/faasm/faabric.svg)](https://github.com/faasm/faabric/blob/master/LICENSE.md) [![Release](https://img.shields.io/github/release/faasm/faabric.svg)](https://github.com/faasm/faabric/releases/) [![Contributors](https://img.shields.io/github/contributors/faasm/faabric.svg)](https://github.com/faasm/faabric/graphs/contributors/)
 
 Faabric is a library that provides scheduling, messaging and state for
 distributed serverless runtimes.
