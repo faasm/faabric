@@ -4,23 +4,11 @@
 #include <faabric/util/barrier.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
 #define GROUP_TIMEOUT_MS 20000
-
-#define DISTRIBUTED_SYNC_OP(opLocal, opRemote)                                 \
-    {                                                                          \
-        int32_t groupId = msg.groupid();                                       \
-        if (msg.masterhost() == conf.endpointHost) {                           \
-            opLocal(groupId, msg.groupsize());                                 \
-        } else {                                                               \
-            std::string host = msg.masterhost();                               \
-            faabric::scheduler::FunctionCallClient& client =                   \
-              faabric::scheduler::getScheduler().getFunctionCallClient(host);  \
-            opRemote(msg);                                                     \
-        }                                                                      \
-    }
 
 #define LOCK_TIMEOUT(mx, ms)                                                   \
     auto timePoint =                                                           \
@@ -32,9 +20,110 @@
 
 namespace faabric::scheduler {
 
-DistributedCoordinationGroup::DistributedCoordinationGroup(int32_t groupSizeIn)
-  : groupSize(groupSizeIn)
-  , barrier(faabric::util::Barrier::create(groupSizeIn))
+DistributedLock::DistributedLock(int32_t groupIdIn, bool recursiveIn)
+  : groupId(groupIdIn)
+  , ptpBroker(faabric::transport::getPointToPointBroker())
+  , recursive(recursiveIn)
+{}
+
+void DistributedLock::tryLock(int32_t memberIdx)
+{
+    faabric::util::UniqueLock lock(mx);
+
+    bool success = false;
+
+    if (ownerIdx == -1) {
+        success = true;
+    } else if ((ownerIdx == memberIdx) && recursive) {
+        success = true;
+    } else {
+        success = false;
+    }
+
+    if (success) {
+        ownerIdx = memberIdx;
+
+        SPDLOG_TRACE("Member {} locked {}", memberIdx, groupId, ownerIdx);
+
+        notifyLocked(ownerIdx);
+    } else {
+        SPDLOG_TRACE("Member {} waiting on lock {}. Already locked by {}",
+                     memberIdx,
+                     groupId,
+                     ownerIdx);
+
+        // Add member index to lock queue
+        lockWaiters.push(memberIdx);
+    }
+}
+
+void DistributedLock::unlock(int32_t memberIdx)
+{
+    faabric::util::UniqueLock lock(mx);
+
+    ownerIdx = -1;
+
+    if (lockWaiters.size() > 0) {
+        ownerIdx = lockWaiters.front();
+        lockWaiters.pop();
+
+        SPDLOG_TRACE(
+          "Member {} unlocked {}. Notifying {}", memberIdx, groupId, ownerIdx);
+
+        notifyLocked(ownerIdx);
+    } else {
+        SPDLOG_TRACE("Member {} unlocked {}", memberIdx, groupId);
+    }
+}
+
+void DistributedLock::notifyLocked(int32_t memberIdx)
+{
+    std::vector<uint8_t> data(1, 0);
+
+    ptpBroker.sendMessage(groupId, 0, memberIdx, data.data(), data.size());
+}
+
+DistributedBarrier::DistributedBarrier(int32_t groupIdIn, int32_t groupSizeIn)
+  : groupId(groupIdIn)
+  , groupSize(groupSizeIn)
+  , ptpBroker(faabric::transport::getPointToPointBroker())
+{}
+
+void DistributedBarrier::wait(int32_t memberIdx)
+{
+    faabric::util::UniqueLock lock(mx);
+
+    barrierWaiters.insert(memberIdx);
+
+    if (barrierWaiters.size() == groupSize) {
+        SPDLOG_TRACE("Member {} completes barrier {}. Notifying {} waiters",
+                     memberIdx,
+                     groupId,
+                     groupSize);
+
+        // Notify everyone we're done
+        for (auto m : barrierWaiters) {
+            std::vector<uint8_t> data(1, 0);
+
+            ptpBroker.sendMessage(groupId, 0, m, data.data(), data.size());
+        }
+    } else {
+        SPDLOG_TRACE("Member {} waiting on barrier {}. {}/{} waiters",
+                     memberIdx,
+                     groupId,
+                     barrierWaiters.size(),
+                     groupSize);
+    }
+}
+
+DistributedCoordinationGroup::DistributedCoordinationGroup(int32_t groupIdIn,
+                                                           int32_t groupSizeIn)
+  : groupId(groupIdIn)
+  , groupSize(groupSizeIn)
+  , barrier(groupId, groupSize)
+  , lock(groupId, false)
+  , recursiveLock(groupId, true)
+  , notify(groupId, groupSize)
 {}
 
 DistributedCoordinationGroup& DistributedCoordinator::getCoordinationGroup(
@@ -76,9 +165,15 @@ DistributedCoordinator& getDistributedCoordinator()
     return sync;
 }
 
+faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+  const faabric::Message& msg)
+{
+    return faabric::scheduler::getScheduler().getFunctionCallClient(
+      msg.masterhost());
+}
+
 DistributedCoordinator::DistributedCoordinator()
-  : ptpBroker(faabric::transport::getPointToPointBroker())
-  , conf(faabric::util::getSystemConfig())
+  : conf(faabric::util::getSystemConfig())
 {}
 
 void DistributedCoordinator::clear()
@@ -101,7 +196,13 @@ void DistributedCoordinator::initGroup(int32_t groupId, int32_t groupSize)
 void DistributedCoordinator::lock(const faabric::Message& msg)
 {
     checkGroupIdSet(msg.groupid());
-    DISTRIBUTED_SYNC_OP(localLock, client.coordinationLock)
+
+    int32_t groupId = msg.groupid();
+    if (msg.masterhost() == conf.endpointHost) {
+        localLock(groupId, msg.groupsize());
+    } else {
+        getFunctionCallClient(msg).coordinationLock(msg);
+    }
 }
 
 void DistributedCoordinator::localLock(const faabric::Message& msg)
@@ -109,12 +210,14 @@ void DistributedCoordinator::localLock(const faabric::Message& msg)
     localLock(msg.groupid(), msg.groupsize());
 }
 
-void DistributedCoordinator::localLock(int32_t groupId)
+void DistributedCoordinator::localLock(int32_t groupId, int32_t groupMember)
 {
     LOCK_TIMEOUT(getCoordinationGroup(groupId).mutex, timeoutMs);
 }
 
-void DistributedCoordinator::localLock(int32_t groupId, int32_t groupSize)
+void DistributedCoordinator::localLock(int32_t groupId,
+                                       int32_t groupSize,
+                                       int32_t groupMember)
 {
     LOCK_TIMEOUT(getOrCreateCoordinationGroup(groupId, groupSize).mutex,
                  timeoutMs);
@@ -127,7 +230,13 @@ void DistributedCoordinator::localLock(int32_t groupId, int32_t groupSize)
 void DistributedCoordinator::unlock(const faabric::Message& msg)
 {
     checkGroupIdSet(msg.groupid());
-    DISTRIBUTED_SYNC_OP(localUnlock, client.coordinationUnlock)
+
+    int32_t groupId = msg.groupid();
+    if (msg.masterhost() == conf.endpointHost) {
+        localUnlock(groupId, msg.groupsize());
+    } else {
+        getFunctionCallClient(msg).coordinationUnlock(msg);
+    }
 }
 
 void DistributedCoordinator::localUnlock(const faabric::Message& msg)
@@ -135,12 +244,14 @@ void DistributedCoordinator::localUnlock(const faabric::Message& msg)
     localUnlock(msg.groupid(), msg.groupsize());
 }
 
-void DistributedCoordinator::localUnlock(int32_t groupId)
+void DistributedCoordinator::localUnlock(int32_t groupId, int32_t groupMember)
 {
     getCoordinationGroup(groupId).mutex.unlock();
 }
 
-void DistributedCoordinator::localUnlock(int32_t groupId, int32_t groupSize)
+void DistributedCoordinator::localUnlock(int32_t groupId,
+                                         int32_t groupSize,
+                                         int32_t groupMember)
 {
     getOrCreateCoordinationGroup(groupId, groupSize).mutex.unlock();
 }
@@ -154,7 +265,9 @@ bool DistributedCoordinator::localTryLock(const faabric::Message& msg)
     return localTryLock(msg.groupid(), msg.groupsize());
 }
 
-bool DistributedCoordinator::localTryLock(int32_t groupId, int32_t groupSize)
+bool DistributedCoordinator::localTryLock(int32_t groupId,
+                                          int32_t groupSize,
+                                          int32_t groupMember)
 {
     return getOrCreateCoordinationGroup(groupId, groupSize).mutex.try_lock();
 }
@@ -169,7 +282,8 @@ void DistributedCoordinator::localLockRecursive(const faabric::Message& msg)
 }
 
 void DistributedCoordinator::localLockRecursive(int32_t groupId,
-                                                int32_t groupSize)
+                                                int32_t groupSize,
+                                                int32_t groupMember)
 {
     LOCK_TIMEOUT(
       getOrCreateCoordinationGroup(groupId, groupSize).recursiveMutex,
@@ -194,15 +308,23 @@ void DistributedCoordinator::localUnlockRecursive(int32_t groupId,
 void DistributedCoordinator::notify(const faabric::Message& msg)
 {
     checkGroupIdSet(msg.groupid());
-    DISTRIBUTED_SYNC_OP(localNotify, client.coordinationNotify)
+
+    int32_t groupId = msg.groupid();
+    if (msg.masterhost() == conf.endpointHost) {
+        localNotify(groupId, msg.groupsize(), msg.appindex());
+    } else {
+        getFunctionCallClient(msg).coordinationNotify(msg);
+    }
 }
 
 void DistributedCoordinator::localNotify(const faabric::Message& msg)
 {
-    localNotify(msg.groupid(), msg.groupsize());
+    localNotify(msg.groupid(), msg.groupsize(), msg.appindex());
 }
 
-void DistributedCoordinator::localNotify(int32_t groupId, int32_t groupSize)
+void DistributedCoordinator::localNotify(int32_t groupId,
+                                         int32_t groupSize,
+                                         int32_t groupMember)
 {
     doLocalNotify(groupId, groupSize, false);
 }
@@ -212,7 +334,9 @@ void DistributedCoordinator::awaitNotify(const faabric::Message& msg)
     awaitNotify(msg.groupid(), msg.groupsize());
 }
 
-void DistributedCoordinator::awaitNotify(int32_t groupId, int32_t groupSize)
+void DistributedCoordinator::awaitNotify(int32_t groupId,
+                                         int32_t groupSize,
+                                         int32_t groupMember)
 {
     doLocalNotify(groupId, groupSize, true);
 }
@@ -265,7 +389,12 @@ void DistributedCoordinator::doLocalNotify(int32_t groupId,
 void DistributedCoordinator::barrier(const faabric::Message& msg)
 {
     checkGroupIdSet(msg.groupid());
-    DISTRIBUTED_SYNC_OP(localBarrier, client.coordinationBarrier)
+    int32_t groupId = msg.groupid();
+    if (msg.masterhost() == conf.endpointHost) {
+        localBarrier(groupId, msg.groupsize());
+    } else {
+        getFunctionCallClient(msg).coordinationBarrier(msg);
+    }
 }
 
 void DistributedCoordinator::localBarrier(const faabric::Message& msg)
