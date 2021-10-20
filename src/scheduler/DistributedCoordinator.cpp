@@ -241,7 +241,7 @@ void DistributedCoordinator::unlock(const faabric::Message& msg)
 
 void DistributedCoordinator::localUnlock(const faabric::Message& msg)
 {
-    localUnlock(msg.groupid(), msg.groupsize());
+    localUnlock(msg.groupid(), msg.groupsize(), msg.appindex());
 }
 
 void DistributedCoordinator::localUnlock(int32_t groupId, int32_t groupMember)
@@ -262,7 +262,7 @@ void DistributedCoordinator::localUnlock(int32_t groupId,
 
 bool DistributedCoordinator::localTryLock(const faabric::Message& msg)
 {
-    return localTryLock(msg.groupid(), msg.groupsize());
+    return localTryLock(msg.groupid(), msg.groupsize(), msg.appindex());
 }
 
 bool DistributedCoordinator::localTryLock(int32_t groupId,
@@ -278,7 +278,7 @@ bool DistributedCoordinator::localTryLock(int32_t groupId,
 
 void DistributedCoordinator::localLockRecursive(const faabric::Message& msg)
 {
-    localLockRecursive(msg.groupid(), msg.groupsize());
+    localLockRecursive(msg.groupid(), msg.groupsize(), msg.appindex());
 }
 
 void DistributedCoordinator::localLockRecursive(int32_t groupId,
@@ -292,7 +292,7 @@ void DistributedCoordinator::localLockRecursive(int32_t groupId,
 
 void DistributedCoordinator::localUnlockRecursive(const faabric::Message& msg)
 {
-    localUnlockRecursive(msg.groupid(), msg.groupsize());
+    localUnlockRecursive(msg.groupid(), msg.groupsize(), msg.appindex());
 }
 
 void DistributedCoordinator::localUnlockRecursive(int32_t groupId,
@@ -331,7 +331,7 @@ void DistributedCoordinator::localNotify(int32_t groupId,
 
 void DistributedCoordinator::awaitNotify(const faabric::Message& msg)
 {
-    awaitNotify(msg.groupid(), msg.groupsize());
+    awaitNotify(msg.groupid(), msg.groupsize(), msg.appindex());
 }
 
 void DistributedCoordinator::awaitNotify(int32_t groupId,
