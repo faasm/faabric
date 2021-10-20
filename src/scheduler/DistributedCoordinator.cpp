@@ -230,6 +230,12 @@ int32_t DistributedCoordinationGroup::getNotifyCount()
     return notifyCount;
 }
 
+void DistributedCoordinationGroup::overrideMasterHost(const std::string& host)
+{
+    masterHost = host;
+    isMasteredThisHost = faabric::util::getSystemConfig().endpointHost == host;
+}
+
 std::shared_ptr<DistributedCoordinationGroup>
 DistributedCoordinator::getCoordinationGroup(int32_t groupId)
 {

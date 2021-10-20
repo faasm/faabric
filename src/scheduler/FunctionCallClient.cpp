@@ -1,3 +1,4 @@
+#include "faabric/util/config.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/FunctionCallClient.h>
@@ -165,6 +166,7 @@ void FunctionCallClient::makeCoordinationRequest(
     req.set_groupsize(groupSize);
     req.set_groupidx(groupIdx);
     req.set_recursive(recursive);
+    req.set_fromhost(faabric::util::getSystemConfig().endpointHost);
 
     faabric::CoordinationRequest::CoordinationOperation op;
     switch (call) {

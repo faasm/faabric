@@ -61,7 +61,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "[sync]")
 {
     std::string otherHost = "other";
-    msg.set_masterhost(otherHost);
+    coordGroup->overrideMasterHost(otherHost);
 
     faabric::CoordinationRequest::CoordinationOperation op =
       faabric::CoordinationRequest::CoordinationOperation::

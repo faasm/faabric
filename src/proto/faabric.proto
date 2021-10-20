@@ -66,6 +66,7 @@ message CoordinationRequest {
     int32 groupSize = 2;
     int32 groupIdx = 3;
     bool recursive = 4;
+    string fromHost = 5;
 
     enum CoordinationOperation {
         LOCK = 0;
@@ -73,7 +74,7 @@ message CoordinationRequest {
         NOTIFY = 2;
         BARRIER = 3;
     }
-    CoordinationOperation operation = 5;
+    CoordinationOperation operation = 6;
 }
 
 // ---------------------------------------------

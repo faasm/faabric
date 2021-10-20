@@ -1,3 +1,4 @@
+#include "faabric/transport/PointToPointBroker.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -125,6 +126,11 @@ void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
     SPDLOG_TRACE(
       "Receiving lock on {} for idx {}", msg.groupid(), msg.groupidx());
+
+    // Set up point-to-point mapping back to the host
+    faabric::transport::getPointToPointBroker().setHostForReceiver(
+      msg.groupid(), msg.groupidx(), msg.fromhost());
+
     distCoord.getCoordinationGroup(msg.groupid())->lock(msg.groupidx());
 }
 
@@ -132,8 +138,10 @@ void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
                                                 size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
+
     SPDLOG_TRACE(
       "Receiving unlock on {} for idx {}", msg.groupid(), msg.groupidx());
+
     distCoord.getCoordinationGroup(msg.groupid())->unlock(msg.groupidx());
 }
 
@@ -141,8 +149,10 @@ void FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
                                                 size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
+
     SPDLOG_TRACE(
       "Receiving notify on {} for idx {}", msg.groupid(), msg.groupidx());
+
     distCoord.getCoordinationGroup(msg.groupid())->notify(msg.groupidx());
 }
 
@@ -150,8 +160,14 @@ void FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
                                                  size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
+
+    // Set up point-to-point mapping back to the host
+    faabric::transport::getPointToPointBroker().setHostForReceiver(
+      msg.groupid(), msg.groupidx(), msg.fromhost());
+
     SPDLOG_TRACE(
       "Receiving barrier on {} for idx {}", msg.groupid(), msg.groupidx());
+
     distCoord.getCoordinationGroup(msg.groupid())->barrier(msg.groupidx());
 }
 }

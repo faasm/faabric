@@ -39,10 +39,12 @@ class DistributedCoordinationGroup
 
     int32_t getNotifyCount();
 
+    void overrideMasterHost(const std::string& host);
+
   private:
     int32_t timeoutMs = DEFAULT_DISTRIBUTED_TIMEOUT_MS;
 
-    const std::string masterHost;
+    std::string masterHost;
     int32_t groupId = 0;
     int32_t groupSize = 0;
 
