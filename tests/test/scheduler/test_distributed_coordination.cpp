@@ -72,7 +72,7 @@ class DistributedCoordinatorTestFixture
 };
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
-                 "Test remote requests sent on non-master",
+                 "Test remote lock requests",
                  "[sync]")
 {
     std::string otherHost = "other";
@@ -89,6 +89,8 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     ptpBroker.setHostForReceiver(msg.groupid(), groupIdx, thisHost);
     std::vector<uint8_t> data(1, 0);
 
+    bool recursive = false;
+
     SECTION("Lock")
     {
         op = faabric::CoordinationRequest::LOCK;
@@ -96,29 +98,31 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
         ptpBroker.sendMessage(
           msg.groupid(), 0, groupIdx, data.data(), data.size());
 
-        coordGroup->lock(groupIdx);
+        coordGroup->lock(groupIdx, false);
+    }
+
+    SECTION("Lock recursive")
+    {
+        op = faabric::CoordinationRequest::LOCK;
+
+        ptpBroker.sendMessage(
+          msg.groupid(), 0, groupIdx, data.data(), data.size());
+
+        recursive = true;
+        coordGroup->lock(groupIdx, recursive);
     }
 
     SECTION("Unlock")
     {
         op = faabric::CoordinationRequest::UNLOCK;
-        coordGroup->unlock(groupIdx);
+        coordGroup->unlock(groupIdx, false);
     }
 
-    SECTION("Barrier")
+    SECTION("Unlock recursive")
     {
-        op = faabric::CoordinationRequest::BARRIER;
-
-        ptpBroker.sendMessage(
-          msg.groupid(), 0, groupIdx, data.data(), data.size());
-
-        coordGroup->barrier(groupIdx);
-    }
-
-    SECTION("Notify")
-    {
-        op = faabric::CoordinationRequest::NOTIFY;
-        coordGroup->notify(groupIdx);
+        op = faabric::CoordinationRequest::UNLOCK;
+        recursive = true;
+        coordGroup->unlock(groupIdx, recursive);
     }
 
     std::vector<std::pair<std::string, faabric::CoordinationRequest>>
@@ -129,6 +133,8 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 
     faabric::CoordinationRequest req = actualRequests.at(0).second;
     REQUIRE(req.operation() == op);
+    REQUIRE(req.fromhost() == thisHost);
+    REQUIRE(req.recursive() == recursive);
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
@@ -137,15 +143,15 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 {
     std::atomic<int> sharedInt = 0;
 
-    coordGroup->localLock();
+    coordGroup->localLock(false);
 
     std::thread tA([this, &sharedInt] {
-        coordGroup->localLock();
+        coordGroup->localLock(false);
 
         assert(sharedInt == 99);
         sharedInt = 88;
 
-        coordGroup->localUnlock();
+        coordGroup->localUnlock(false);
     });
 
     // Main thread sleep for a while, make sure the other can't run and update
@@ -155,7 +161,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(sharedInt == 0);
     sharedInt.store(99);
 
-    coordGroup->localUnlock();
+    coordGroup->localUnlock(false);
 
     if (tA.joinable()) {
         tA.join();
@@ -171,11 +177,6 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     int nThreads = 5;
     setUpGroup(nThreads);
 
-    // Spawn n-1 child threads to add to shared sums over several barriers so
-    // that the main thread can check all threads have completed after each.
-    // We want to do this as many times as possible to deliberately create
-    // contention
-
     // Prepare point to point message mappings
     for (int i = 0; i < nThreads; i++) {
         ptpBroker.setHostForReceiver(msg.groupid(), i, thisHost);
@@ -184,8 +185,15 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     int nSums = 2;
     SECTION("Single operation") { nSums = 1; }
 
-    SECTION("Lots of operations") { nSums = 1000; }
+    SECTION("Lots of operations")
+    {
+        // We want to do this as many times as possible to deliberately create
+        // contention
+        nSums = 1000;
+    }
 
+    // Spawn n-1 child threads to add to shared sums over several barriers so
+    // that the main thread can check all threads have completed after each.
     std::vector<std::atomic<int>> sharedSums(nSums);
     std::vector<std::thread> threads;
     for (int i = 1; i < nThreads; i++) {
@@ -233,22 +241,22 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(!otherCoordGroup->localTryLock());
 
     // Should work again after unlock
-    coordGroup->localUnlock();
+    coordGroup->localUnlock(false);
 
     REQUIRE(coordGroup->localTryLock());
     REQUIRE(!otherCoordGroup->localTryLock());
 
     // Running again should have no effect
-    coordGroup->localUnlock();
+    coordGroup->localUnlock(false);
 
     // Unlock other group
-    otherCoordGroup->localUnlock();
+    otherCoordGroup->localUnlock(false);
 
     REQUIRE(coordGroup->localTryLock());
     REQUIRE(otherCoordGroup->localTryLock());
 
-    coordGroup->localUnlock();
-    otherCoordGroup->localUnlock();
+    coordGroup->localUnlock(false);
+    otherCoordGroup->localUnlock(false);
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
@@ -300,16 +308,21 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test notify and await",
                  "[sync]")
 {
-    // Initialise the group size (including master thread)
-    int nThreads = 3;
-    setUpGroup(nThreads + 1);
+    int nThreads = 4;
+    int actual[4] = { 0, 0, 0, 0 };
 
-    int actual[3] = { 0, 0, 0 };
+    // Initialise the group
+    setUpGroup(nThreads);
 
-    std::vector<std::thread> threads;
+    // Prepare point to point message mappings
     for (int i = 0; i < nThreads; i++) {
+        ptpBroker.setHostForReceiver(msg.groupid(), i, thisHost);
+    }
+
+    // Run threads in background to force a wait from the master
+    std::vector<std::thread> threads;
+    for (int i = 1; i < nThreads; i++) {
         threads.emplace_back([this, i, &actual] {
-            // Make anything waiting wait
             SLEEP_MS(1000);
             actual[i] = i;
 

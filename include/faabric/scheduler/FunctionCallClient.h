@@ -51,12 +51,10 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     // --- Function group locks ---
     void coordinationLock(int32_t groupId,
-                          int32_t groupSize,
                           int32_t groupIdx,
                           bool recursive = false);
 
     void coordinationUnlock(int32_t groupId,
-                            int32_t groupSize,
                             int32_t groupIdx,
                             bool recursive = false);
 
@@ -64,7 +62,6 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
     void sendHeader(faabric::scheduler::FunctionCalls call);
 
     void makeCoordinationRequest(int32_t groupId,
-                                 int32_t groupSize,
                                  int32_t groupIdx,
                                  bool recursive,
                                  faabric::scheduler::FunctionCalls call);

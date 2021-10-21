@@ -156,14 +156,12 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
 
 void FunctionCallClient::makeCoordinationRequest(
   int32_t groupId,
-  int32_t groupSize,
   int32_t groupIdx,
   bool recursive,
   faabric::scheduler::FunctionCalls call)
 {
     faabric::CoordinationRequest req;
     req.set_groupid(groupId);
-    req.set_groupsize(groupSize);
     req.set_groupidx(groupIdx);
     req.set_recursive(recursive);
     req.set_fromhost(faabric::util::getSystemConfig().endpointHost);
@@ -207,30 +205,20 @@ void FunctionCallClient::makeCoordinationRequest(
 }
 
 void FunctionCallClient::coordinationLock(int32_t groupId,
-                                          int32_t groupSize,
                                           int32_t groupIdx,
                                           bool recursive)
 {
-    SPDLOG_TRACE(
-      "Sending lock on group {} by idx {} to {}", groupId, groupIdx, host);
-
     makeCoordinationRequest(groupId,
-                            groupSize,
                             groupIdx,
                             recursive,
                             faabric::scheduler::FunctionCalls::GroupLock);
 }
 
 void FunctionCallClient::coordinationUnlock(int32_t groupId,
-                                            int32_t groupSize,
                                             int32_t groupIdx,
                                             bool recursive)
 {
-    SPDLOG_TRACE(
-      "Sending unlock on group {} by idx {} to {}", groupId, groupIdx, host);
-
     makeCoordinationRequest(groupId,
-                            groupSize,
                             groupIdx,
                             recursive,
                             faabric::scheduler::FunctionCalls::GroupUnlock);

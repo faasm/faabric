@@ -41,14 +41,6 @@ void FunctionCallServer::doAsyncRecv(int header,
             recvCoordinationUnlock(buffer, bufferSize);
             break;
         }
-        case faabric::scheduler::FunctionCalls::GroupNotify: {
-            recvCoordinationNotify(buffer, bufferSize);
-            break;
-        }
-        case faabric::scheduler::FunctionCalls::GroupBarrier: {
-            recvCoordinationBarrier(buffer, bufferSize);
-            break;
-        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized async call header: {}", header));
@@ -125,13 +117,14 @@ void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
     SPDLOG_TRACE(
-      "Receiving lock on {} for idx {}", msg.groupid(), msg.groupidx());
+      "Receiving lock on {} for idx {} (recursive {})", msg.groupid(), msg.groupidx(), msg.recursive());
 
     // Set up point-to-point mapping back to the host
     faabric::transport::getPointToPointBroker().setHostForReceiver(
       msg.groupid(), msg.groupidx(), msg.fromhost());
 
-    distCoord.getCoordinationGroup(msg.groupid())->lock(msg.groupidx());
+    distCoord.getCoordinationGroup(msg.groupid())
+      ->lock(msg.groupidx(), msg.recursive());
 }
 
 void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
@@ -140,34 +133,10 @@ void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
 
     SPDLOG_TRACE(
-      "Receiving unlock on {} for idx {}", msg.groupid(), msg.groupidx());
+      "Receiving unlock on {} for idx {} (recursive {})", msg.groupid(), msg.groupidx(),
+      msg.recursive());
 
-    distCoord.getCoordinationGroup(msg.groupid())->unlock(msg.groupidx());
-}
-
-void FunctionCallServer::recvCoordinationNotify(const uint8_t* buffer,
-                                                size_t bufferSize)
-{
-    PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-
-    SPDLOG_TRACE(
-      "Receiving notify on {} for idx {}", msg.groupid(), msg.groupidx());
-
-    distCoord.getCoordinationGroup(msg.groupid())->notify(msg.groupidx());
-}
-
-void FunctionCallServer::recvCoordinationBarrier(const uint8_t* buffer,
-                                                 size_t bufferSize)
-{
-    PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-
-    // Set up point-to-point mapping back to the host
-    faabric::transport::getPointToPointBroker().setHostForReceiver(
-      msg.groupid(), msg.groupidx(), msg.fromhost());
-
-    SPDLOG_TRACE(
-      "Receiving barrier on {} for idx {}", msg.groupid(), msg.groupidx());
-
-    distCoord.getCoordinationGroup(msg.groupid())->barrier(msg.groupidx());
+    distCoord.getCoordinationGroup(msg.groupid())
+      ->unlock(msg.groupidx(), msg.recursive());
 }
 }

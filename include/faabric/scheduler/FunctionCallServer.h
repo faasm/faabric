@@ -40,9 +40,5 @@ class FunctionCallServer final
     void recvCoordinationLock(const uint8_t* buffer, size_t bufferSize);
 
     void recvCoordinationUnlock(const uint8_t* buffer, size_t bufferSize);
-
-    void recvCoordinationNotify(const uint8_t* buffer, size_t bufferSize);
-
-    void recvCoordinationBarrier(const uint8_t* buffer, size_t bufferSize);
 };
 }

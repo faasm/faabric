@@ -85,7 +85,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
 
     // Lock the function group if necessary
     if (r->groupid() > 0) {
-        distCoord.getCoordinationGroup(r->groupid())->localLock();
+        distCoord.getCoordinationGroup(r->groupid())->localLock(false);
     }
 
     // TODO - avoid this copy by changing server superclass to allow subclasses
@@ -100,7 +100,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
 
     // Unlock the application
     if (r->groupid() > 0) {
-        distCoord.getCoordinationGroup(r->groupid())->localUnlock();
+        distCoord.getCoordinationGroup(r->groupid())->localUnlock(false);
     }
 
     // Send response
@@ -136,7 +136,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Lock the function group
     if (r->groupid() > 0) {
-        distCoord.getCoordinationGroup(r->groupid())->localLock();
+        distCoord.getCoordinationGroup(r->groupid())->localLock(false);
     }
 
     // Apply diffs to snapshot
@@ -201,7 +201,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Unlock
     if (r->groupid() > 0) {
-        distCoord.getCoordinationGroup(r->groupid())->localLock();
+        distCoord.getCoordinationGroup(r->groupid())->localLock(false);
     }
 
     // Send response

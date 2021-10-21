@@ -1,5 +1,7 @@
 #include <catch.hpp>
-#include <faabric_utils.h>
+
+#include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
@@ -26,10 +28,12 @@ class ClientServerFixture
   : public RedisTestFixture
   , public SchedulerTestFixture
   , public StateTestFixture
+  , public PointToPointTestFixture
 {
   protected:
     FunctionCallServer server;
     FunctionCallClient cli;
+
     std::shared_ptr<DummyExecutorFactory> executorFactory;
 
     DistributedCoordinator& distCoord;
@@ -279,18 +283,46 @@ TEST_CASE_METHOD(ClientServerFixture,
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     setUpCoordinationGroup(msg);
 
-    REQUIRE(!coordGroup->isLocalLocked());
+    // Set up ptp mapping
+    for (int i = 0; i < groupSize; i++) {
+        broker.setHostForReceiver(
+          groupId, i, faabric::util::getSystemConfig().endpointHost);
+    }
 
-    server.setRequestLatch();
-    cli.coordinationLock(msg.groupid(), msg.groupsize(), msg.appindex());
-    server.awaitRequestLatch();
+    bool recursive = false;
+    int nCalls = 1;
 
-    REQUIRE(coordGroup->isLocalLocked());
+    SECTION("Recursive")
+    {
+        recursive = true;
+        nCalls = 10;
+    }
+    SECTION("Non-recursive")
+    {
+        recursive = false;
+        nCalls = 1;
+    }
 
-    server.setRequestLatch();
-    cli.coordinationUnlock(msg.groupid(), msg.groupsize(), msg.appindex());
-    server.awaitRequestLatch();
+    REQUIRE(coordGroup->isLocalLockable(recursive));
 
-    REQUIRE(!coordGroup->isLocalLocked());
+    for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
+        cli.coordinationLock(msg.groupid(), msg.appindex(), recursive);
+        server.awaitRequestLatch();
+
+        broker.recvMessage(groupId, 0, msg.appindex());
+    }
+
+    // Note that the server runs a background thread, therefore the recursive
+    // lock will also not be available
+    REQUIRE(!coordGroup->isLocalLockable(recursive));
+
+    for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
+        cli.coordinationUnlock(msg.groupid(), msg.appindex(), recursive);
+        server.awaitRequestLatch();
+    }
+
+    REQUIRE(coordGroup->isLocalLockable(recursive));
 }
 }

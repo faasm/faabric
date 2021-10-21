@@ -42,7 +42,7 @@ void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
 {
     if (!isMasteredThisHost) {
         // Send remote request
-        masterClient.coordinationLock(groupId, groupSize, groupIdx, recursive);
+        masterClient.coordinationLock(groupId, groupIdx, recursive);
 
         // Await ptp response
         ptpBroker.recvMessage(groupId, 0, groupIdx);
@@ -50,31 +50,43 @@ void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
         return;
     }
 
-    faabric::util::UniqueLock lock(mx);
-
     bool success = false;
+    {
+        faabric::util::UniqueLock lock(mx);
+        if (recursive) {
+            bool isFree = recursiveLockOwners.empty();
 
-    if (recursive && (recursiveLockOwners.empty() ||
-                      recursiveLockOwners.top() == groupIdx)) {
-        recursiveLockOwners.push(groupIdx);
-        success = true;
-    } else if (lockOwnerIdx == -1) {
-        lockOwnerIdx = groupIdx;
-        success = true;
+            bool isLockedByMe =
+              !isFree && (recursiveLockOwners.top() == groupIdx);
+
+            if (isFree || isLockedByMe) {
+                // Recursive and either free, or already locked by this idx
+                SPDLOG_TRACE("Group idx {} recursively locked {} ({})",
+                             groupIdx,
+                             groupId,
+                             lockWaiters.size());
+                recursiveLockOwners.push(groupIdx);
+                success = true;
+            } else {
+                SPDLOG_TRACE("Group idx {} unable to recursively lock {} ({})",
+                             groupIdx,
+                             groupId,
+                             lockWaiters.size());
+            }
+        } else if (!recursive && lockOwnerIdx == -1) {
+            // Non-recursive and free
+            SPDLOG_TRACE("Group idx {} locked {}", groupIdx, groupId);
+            lockOwnerIdx = groupIdx;
+            success = true;
+        } else {
+            // Unable to lock, wait in queue
+            SPDLOG_TRACE("Group idx {} unable to lock {}", groupIdx, groupId);
+            lockWaiters.push(groupIdx);
+        }
     }
 
     if (success) {
-        SPDLOG_TRACE("Group idx {} locked {}", groupIdx, groupId, groupIdx);
-
         notifyLocked(groupIdx);
-    } else {
-        SPDLOG_TRACE("Group idx {} waiting on lock {}. Already locked by {}",
-                     groupIdx,
-                     groupId,
-                     groupIdx);
-
-        // Add to lock queue
-        lockWaiters.push(groupIdx);
     }
 }
 
@@ -97,8 +109,7 @@ void DistributedCoordinationGroup::unlock(int32_t groupIdx, bool recursive)
 {
     if (!isMasteredThisHost) {
         // Send remote request
-        masterClient.coordinationUnlock(
-          groupId, groupSize, groupIdx, recursive);
+        masterClient.coordinationUnlock(groupId, groupIdx, recursive);
         return;
     }
 
@@ -173,19 +184,26 @@ void DistributedCoordinationGroup::notify(int32_t groupIdx)
         }
     } else {
         std::vector<uint8_t> data(1, 0);
-        ptpBroker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
+        ptpBroker.sendMessage(groupId, groupIdx, 0, data.data(), data.size());
     }
 }
 
-bool DistributedCoordinationGroup::isLocalLocked()
+bool DistributedCoordinationGroup::isLocalLockable(bool recursive)
 {
-    bool canLock = localMx.try_lock();
-    if (canLock) {
-        localMx.unlock();
-        return false;
+    if (recursive) {
+        bool canLock = localRecursiveMx.try_lock();
+        if (canLock) {
+            localRecursiveMx.unlock();
+            return true;
+        }
+    } else {
+        bool canLock = localMx.try_lock();
+        if (canLock) {
+            localMx.unlock();
+            return true;
+        }
     }
-
-    return true;
+    return false;
 }
 
 void DistributedCoordinationGroup::overrideMasterHost(const std::string& host)
