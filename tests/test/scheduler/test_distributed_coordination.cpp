@@ -1,5 +1,6 @@
 #include <catch.hpp>
 
+#include "faabric/transport/PointToPointBroker.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -24,23 +25,19 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-class DistributedCoordinatorTestFixture : public ConfTestFixture
+class DistributedCoordinatorTestFixture
+  : public ConfTestFixture
+  , public PointToPointClientServerFixture
 {
   public:
     DistributedCoordinatorTestFixture()
       : distCoord(getDistributedCoordinator())
+      , ptpBroker(faabric::transport::getPointToPointBroker())
+      , thisHost(conf.endpointHost)
     {
         faabric::util::setMockMode(true);
 
-        distCoord.clear();
-
-        msg = faabric::util::messageFactory("foo", "bar");
-        msg.set_groupid(123);
-        msg.set_groupsize(10);
-
-        distCoord.initGroup(msg);
-
-        coordGroup = distCoord.getCoordinationGroup(msg.groupid());
+        setUpGroup(4);
     }
 
     ~DistributedCoordinatorTestFixture()
@@ -50,9 +47,27 @@ class DistributedCoordinatorTestFixture : public ConfTestFixture
         distCoord.clear();
     }
 
+    void setUpGroup(int groupSize)
+    {
+        distCoord.clear();
+
+        msg = faabric::util::messageFactory("foo", "bar");
+        msg.set_groupid(123);
+        msg.set_groupsize(groupSize);
+
+        distCoord.initGroup(msg);
+
+        coordGroup = distCoord.getCoordinationGroup(msg.groupid());
+    }
+
   protected:
     DistributedCoordinator& distCoord;
+    faabric::transport::PointToPointBroker& ptpBroker;
+
+    std::string thisHost;
+
     std::shared_ptr<DistributedCoordinationGroup> coordGroup = nullptr;
+
     faabric::Message msg;
 };
 
@@ -63,39 +78,54 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     std::string otherHost = "other";
     coordGroup->overrideMasterHost(otherHost);
 
+    int groupIdx = 2;
+    msg.set_appindex(groupIdx);
+
     faabric::CoordinationRequest::CoordinationOperation op =
       faabric::CoordinationRequest::CoordinationOperation::
         CoordinationRequest_CoordinationOperation_LOCK;
 
+    // Prepare the ptp message response
+    ptpBroker.setHostForReceiver(msg.groupid(), groupIdx, thisHost);
+    std::vector<uint8_t> data(1, 0);
+
     SECTION("Lock")
     {
         op = faabric::CoordinationRequest::LOCK;
-        coordGroup->lock(msg.appindex());
+
+        ptpBroker.sendMessage(
+          msg.groupid(), 0, groupIdx, data.data(), data.size());
+
+        coordGroup->lock(groupIdx);
     }
 
     SECTION("Unlock")
     {
         op = faabric::CoordinationRequest::UNLOCK;
-        coordGroup->unlock(msg.appindex());
+        coordGroup->unlock(groupIdx);
     }
 
     SECTION("Barrier")
     {
         op = faabric::CoordinationRequest::BARRIER;
-        coordGroup->barrier(msg.appindex());
+
+        ptpBroker.sendMessage(
+          msg.groupid(), 0, groupIdx, data.data(), data.size());
+
+        coordGroup->barrier(groupIdx);
     }
 
     SECTION("Notify")
     {
         op = faabric::CoordinationRequest::NOTIFY;
-        coordGroup->notify(msg.appindex());
+        coordGroup->notify(groupIdx);
     }
 
     std::vector<std::pair<std::string, faabric::CoordinationRequest>>
       actualRequests = getCoordinationRequests();
 
     REQUIRE(actualRequests.size() == 1);
-    REQUIRE(actualRequests.at(0).first == otherHost);
+    REQUIRE(actualRequests.at(0).first == thisHost);
 
     faabric::CoordinationRequest req = actualRequests.at(0).second;
     REQUIRE(req.operation() == op);
@@ -135,18 +165,27 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
-                 "Test sync barrier locally",
+                 "Test distributed coordination barrier",
                  "[sync]")
 {
     int nThreads = 5;
-    msg.set_groupsize(nThreads);
+    setUpGroup(nThreads);
 
     // Spawn n-1 child threads to add to shared sums over several barriers so
     // that the main thread can check all threads have completed after each.
     // We want to do this as many times as possible to deliberately create
     // contention
 
-    int nSums = 1000;
+    // Prepare point to point message mappings
+    for (int i = 0; i < nThreads; i++) {
+        ptpBroker.setHostForReceiver(msg.groupid(), i, thisHost);
+    }
+
+    int nSums = 2;
+    SECTION("Single operation") { nSums = 1; }
+
+    SECTION("Lots of operations") { nSums = 1000; }
+
     std::vector<std::atomic<int>> sharedSums(nSums);
     std::vector<std::thread> threads;
     for (int i = 1; i < nThreads; i++) {
@@ -178,7 +217,8 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     faabric::Message otherMsg = faabric::util::messageFactory("foo", "other");
     otherMsg.set_groupid(345);
     otherMsg.set_groupsize(2);
-    distCoord.initGroup(msg);
+
+    distCoord.initGroup(otherMsg);
 
     auto otherCoordGroup = distCoord.getCoordinationGroup(otherMsg.groupid());
 
@@ -196,9 +236,12 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     coordGroup->localUnlock();
 
     REQUIRE(coordGroup->localTryLock());
-    REQUIRE(otherCoordGroup->localTryLock());
+    REQUIRE(!otherCoordGroup->localTryLock());
 
+    // Running again should have no effect
     coordGroup->localUnlock();
+
+    // Unlock other group
     otherCoordGroup->localUnlock();
 
     REQUIRE(coordGroup->localTryLock());
@@ -257,11 +300,11 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
                  "Test notify and await",
                  "[sync]")
 {
-    int nThreads = 3;
-    int actual[3] = { 0, 0, 0 };
-
     // Initialise the group size (including master thread)
-    msg.set_groupsize(nThreads + 1);
+    int nThreads = 3;
+    setUpGroup(nThreads + 1);
+
+    int actual[3] = { 0, 0, 0 };
 
     std::vector<std::thread> threads;
     for (int i = 0; i < nThreads; i++) {

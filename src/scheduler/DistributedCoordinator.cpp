@@ -6,6 +6,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
 
 #define GROUP_TIMEOUT_MS 20000
@@ -20,6 +21,10 @@
 
 namespace faabric::scheduler {
 
+// -----------------------------------
+// COORDINATION GROUP
+// -----------------------------------
+
 DistributedCoordinationGroup::DistributedCoordinationGroup(
   const std::string& masterHostIn,
   int32_t groupIdIn,
@@ -31,7 +36,6 @@ DistributedCoordinationGroup::DistributedCoordinationGroup(
                        masterHost)
   , masterClient(masterHost)
   , ptpBroker(faabric::transport::getPointToPointBroker())
-  , localBarrier(faabric::util::Barrier::create(groupSize, timeoutMs))
 {}
 
 void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
@@ -60,16 +64,16 @@ void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
     }
 
     if (success) {
-        SPDLOG_TRACE("Member {} locked {}", groupIdx, groupId, groupIdx);
+        SPDLOG_TRACE("Group idx {} locked {}", groupIdx, groupId, groupIdx);
 
         notifyLocked(groupIdx);
     } else {
-        SPDLOG_TRACE("Member {} waiting on lock {}. Already locked by {}",
+        SPDLOG_TRACE("Group idx {} waiting on lock {}. Already locked by {}",
                      groupIdx,
                      groupId,
                      groupIdx);
 
-        // Add member index to lock queue
+        // Add to lock queue
         lockWaiters.push(groupIdx);
     }
 }
@@ -85,6 +89,7 @@ void DistributedCoordinationGroup::localLock(bool recursive)
 
 bool DistributedCoordinationGroup::localTryLock()
 {
+    SPDLOG_TRACE("Trying local lock on {}", groupId);
     return localMx.try_lock();
 }
 
@@ -140,77 +145,36 @@ void DistributedCoordinationGroup::notifyLocked(int32_t groupIdx)
 
 void DistributedCoordinationGroup::barrier(int32_t groupIdx)
 {
-    if (!isMasteredThisHost) {
-        // Send remote request
-        masterClient.coordinationBarrier(groupId, groupSize, groupIdx);
+    // This is a ring barrier, so we send to the next in the ring, and receive
+    // from the previous
+    uint8_t sendToIdx = groupIdx < (groupSize - 1) ? groupIdx + 1 : 0;
+    uint8_t recvFromIdx = groupIdx > 0 ? groupIdx - 1 : groupSize - 1;
 
-        // Await ptp response
-        ptpBroker.recvMessage(groupId, 0, groupIdx);
+    SPDLOG_TRACE("Group idx {} sending ring barrier to {}, waiting on {}",
+                 groupIdx,
+                 sendToIdx,
+                 recvFromIdx);
 
-        return;
-    }
+    // Do the send
+    std::vector<uint8_t> data(1, 0);
+    ptpBroker.sendMessage(
+      groupId, groupIdx, sendToIdx, data.data(), data.size());
 
-    faabric::util::UniqueLock lock(mx);
+    // Do the receive
+    ptpBroker.recvMessage(groupId, recvFromIdx, groupIdx);
 
-    barrierWaiters.insert(groupIdx);
-
-    if (barrierWaiters.size() == groupSize) {
-        SPDLOG_TRACE("Member {} completes barrier {}. Notifying {} waiters",
-                     groupIdx,
-                     groupId,
-                     groupSize);
-
-        // Notify everyone we're done
-        for (auto m : barrierWaiters) {
-            std::vector<uint8_t> data(1, 0);
-
-            ptpBroker.sendMessage(groupId, 0, m, data.data(), data.size());
-        }
-    } else {
-        SPDLOG_TRACE("Member {} waiting on barrier {}. {}/{} waiters",
-                     groupIdx,
-                     groupId,
-                     barrierWaiters.size(),
-                     groupSize);
-    }
+    SPDLOG_TRACE("Group idx {} ring barrier finished", groupIdx);
 }
 
 void DistributedCoordinationGroup::notify(int32_t groupIdx)
 {
-    if (!isMasteredThisHost) {
-        // Send remote request
-        masterClient.coordinationNotify(groupId, groupSize, groupIdx);
-        return;
-    }
-
-    // All members must lock when entering this function
-    std::unique_lock<std::mutex> lock(notifyMutex);
-
     if (groupIdx == 0) {
-        auto timePoint = std::chrono::system_clock::now() +
-                         std::chrono::milliseconds(GROUP_TIMEOUT_MS);
-
-        if (!notifyCv.wait_until(
-              lock, timePoint, [&] { return notifyCount >= groupSize - 1; })) {
-
-            SPDLOG_ERROR("Group {} await notify timed out", groupId);
-            throw std::runtime_error("Group notify timed out");
+        for (int i = 1; i < groupSize; i++) {
+            ptpBroker.recvMessage(groupId, i, 0);
         }
-
-        // Reset, after we've finished
-        notifyCount = 0;
     } else {
-        // If this is the last non-master member, notify
-        notifyCount += 1;
-        if (notifyCount == groupSize - 1) {
-            notifyCv.notify_one();
-        } else if (notifyCount > groupSize - 1) {
-            SPDLOG_ERROR("Group {} notify exceeded group size, {} > {}",
-                         groupId,
-                         notifyCount,
-                         groupSize - 1);
-            throw std::runtime_error("Group notify exceeded size");
-        }
+        std::vector<uint8_t> data(1, 0);
+        ptpBroker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
     }
 }
 
@@ -225,16 +189,19 @@ bool DistributedCoordinationGroup::isLocalLocked()
     return true;
 }
 
-int32_t DistributedCoordinationGroup::getNotifyCount()
-{
-    return notifyCount;
-}
-
 void DistributedCoordinationGroup::overrideMasterHost(const std::string& host)
 {
     masterHost = host;
     isMasteredThisHost = faabric::util::getSystemConfig().endpointHost == host;
 }
+
+// -----------------------------------
+// COORDINATOR
+// -----------------------------------
+
+DistributedCoordinator::DistributedCoordinator()
+  : conf(faabric::util::getSystemConfig())
+{}
 
 std::shared_ptr<DistributedCoordinationGroup>
 DistributedCoordinator::getCoordinationGroup(int32_t groupId)
@@ -279,10 +246,6 @@ DistributedCoordinator& getDistributedCoordinator()
     static DistributedCoordinator sync;
     return sync;
 }
-
-DistributedCoordinator::DistributedCoordinator()
-  : conf(faabric::util::getSystemConfig())
-{}
 
 void DistributedCoordinator::clear()
 {

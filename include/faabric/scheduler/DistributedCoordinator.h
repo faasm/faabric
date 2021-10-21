@@ -17,7 +17,7 @@ namespace faabric::scheduler {
 class DistributedCoordinationGroup
 {
   public:
-    DistributedCoordinationGroup(const std::string& masterHost,
+    DistributedCoordinationGroup(const std::string& masterHostIn,
                                  int32_t groupIdIn,
                                  int32_t groupSizeIn);
 
@@ -56,29 +56,16 @@ class DistributedCoordinationGroup
     faabric::scheduler::FunctionCallClient masterClient;
     faabric::transport::PointToPointBroker& ptpBroker;
 
+    // Local lock
+    std::timed_mutex localMx;
+    std::recursive_timed_mutex localRecursiveMx;
+
     // Distributed lock
     std::stack<int32_t> recursiveLockOwners;
     int32_t lockOwnerIdx = -1;
     std::queue<int32_t> lockWaiters;
 
-    void notifyLocked(int32_t memberIdx);
-
-    // Local lock
-    std::timed_mutex localMx;
-    std::recursive_timed_mutex localRecursiveMx;
-
-    // Distributed barrier
-    std::set<int32_t> barrierWaiters;
-
-    void notifyBarrierFinished(int32_t memberIdx);
-
-    // Local barrier
-    std::shared_ptr<faabric::util::Barrier> localBarrier = nullptr;
-
-    // Local/ distributed notify
-    std::mutex notifyMutex;
-    int32_t notifyCount;
-    std::condition_variable notifyCv;
+    void notifyLocked(int32_t groupIdx);
 };
 
 class DistributedCoordinator

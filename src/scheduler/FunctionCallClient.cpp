@@ -1,9 +1,9 @@
-#include "faabric/util/config.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/config.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
@@ -211,6 +211,9 @@ void FunctionCallClient::coordinationLock(int32_t groupId,
                                           int32_t groupIdx,
                                           bool recursive)
 {
+    SPDLOG_TRACE(
+      "Sending lock on group {} by idx {} to {}", groupId, groupIdx, host);
+
     makeCoordinationRequest(groupId,
                             groupSize,
                             groupIdx,
@@ -223,33 +226,13 @@ void FunctionCallClient::coordinationUnlock(int32_t groupId,
                                             int32_t groupIdx,
                                             bool recursive)
 {
+    SPDLOG_TRACE(
+      "Sending unlock on group {} by idx {} to {}", groupId, groupIdx, host);
+
     makeCoordinationRequest(groupId,
                             groupSize,
                             groupIdx,
                             recursive,
                             faabric::scheduler::FunctionCalls::GroupUnlock);
 }
-
-void FunctionCallClient::coordinationNotify(int32_t groupId,
-                                            int32_t groupSize,
-                                            int32_t groupIdx)
-{
-    makeCoordinationRequest(groupId,
-                            groupSize,
-                            groupIdx,
-                            false,
-                            faabric::scheduler::FunctionCalls::GroupNotify);
-}
-
-void FunctionCallClient::coordinationBarrier(int32_t groupId,
-                                             int32_t groupSize,
-                                             int32_t groupIdx)
-{
-    makeCoordinationRequest(groupId,
-                            groupSize,
-                            groupIdx,
-                            false,
-                            faabric::scheduler::FunctionCalls::GroupBarrier);
-}
-
 }

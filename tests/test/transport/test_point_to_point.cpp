@@ -15,24 +15,6 @@ using namespace faabric::util;
 
 namespace tests {
 
-class PointToPointClientServerFixture
-  : public PointToPointTestFixture
-  , SchedulerTestFixture
-{
-  public:
-    PointToPointClientServerFixture()
-      : cli(LOCALHOST)
-    {
-        server.start();
-    }
-
-    ~PointToPointClientServerFixture() { server.stop(); }
-
-  protected:
-    faabric::transport::PointToPointClient cli;
-    faabric::transport::PointToPointServer server;
-};
-
 TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test set and get point-to-point hosts",
                  "[transport][ptp]")
