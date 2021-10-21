@@ -145,25 +145,24 @@ void DistributedCoordinationGroup::notifyLocked(int32_t groupIdx)
 
 void DistributedCoordinationGroup::barrier(int32_t groupIdx)
 {
-    // This is a ring barrier, so we send to the next in the ring, and receive
-    // from the previous
-    uint8_t sendToIdx = groupIdx < (groupSize - 1) ? groupIdx + 1 : 0;
-    uint8_t recvFromIdx = groupIdx > 0 ? groupIdx - 1 : groupSize - 1;
+    // TODO implement a more efficient barrier implementation to avoid load on
+    // the master
+    if (groupIdx == 0) {
+        // Receive from all
+        for (int i = 1; i < groupSize; i++) {
+            ptpBroker.recvMessage(groupId, i, 0);
+        }
 
-    SPDLOG_TRACE("Group idx {} sending ring barrier to {}, waiting on {}",
-                 groupIdx,
-                 sendToIdx,
-                 recvFromIdx);
-
-    // Do the send
-    std::vector<uint8_t> data(1, 0);
-    ptpBroker.sendMessage(
-      groupId, groupIdx, sendToIdx, data.data(), data.size());
-
-    // Do the receive
-    ptpBroker.recvMessage(groupId, recvFromIdx, groupIdx);
-
-    SPDLOG_TRACE("Group idx {} ring barrier finished", groupIdx);
+        // Reply to all
+        std::vector<uint8_t> data(1, 0);
+        for (int i = 1; i < groupSize; i++) {
+            ptpBroker.sendMessage(groupId, 0, i, data.data(), data.size());
+        }
+    } else {
+        // Do the send
+        std::vector<uint8_t> data(1, 0);
+        ptpBroker.sendMessage(groupId, groupIdx, 0, data.data(), data.size());
+    }
 }
 
 void DistributedCoordinationGroup::notify(int32_t groupIdx)
