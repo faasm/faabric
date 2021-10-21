@@ -10,7 +10,5 @@ enum FunctionCalls
     GetResources = 4,
     GroupLock = 5,
     GroupUnlock = 6,
-    GroupNotify = 7,
-    GroupBarrier = 8,
 };
 }

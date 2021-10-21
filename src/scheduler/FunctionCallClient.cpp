@@ -178,16 +178,6 @@ void FunctionCallClient::makeCoordinationRequest(
             op = faabric::CoordinationRequest::UNLOCK;
             break;
         }
-        case (faabric::scheduler::FunctionCalls::GroupNotify): {
-            SPDLOG_TRACE("Requesting notify on {} at {}", groupId, host);
-            op = faabric::CoordinationRequest::NOTIFY;
-            break;
-        }
-        case (faabric::scheduler::FunctionCalls::GroupBarrier): {
-            SPDLOG_TRACE("Requesting barrier {} at {}", groupId, host);
-            op = faabric::CoordinationRequest::BARRIER;
-            break;
-        }
         default: {
             SPDLOG_ERROR("Invalid function group call {}", call);
             throw std::runtime_error("Invalid function group call");
