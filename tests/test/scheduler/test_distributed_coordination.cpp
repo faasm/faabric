@@ -1,6 +1,5 @@
 #include <catch.hpp>
 
-#include "faabric/transport/PointToPointBroker.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -8,6 +7,7 @@
 #include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
@@ -25,22 +25,21 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-class DistributedCoordinatorTestFixture
+class DistributedCoordinationGroupFixture
   : public ConfTestFixture
   , public PointToPointClientServerFixture
+  , public DistributedCoordinationTestFixture
 {
   public:
-    DistributedCoordinatorTestFixture()
-      : distCoord(getDistributedCoordinator())
-      , ptpBroker(faabric::transport::getPointToPointBroker())
-      , thisHost(conf.endpointHost)
+    DistributedCoordinationGroupFixture()
+      : thisHost(conf.endpointHost)
     {
         faabric::util::setMockMode(true);
 
         setUpGroup(4);
     }
 
-    ~DistributedCoordinatorTestFixture()
+    ~DistributedCoordinationGroupFixture()
     {
         faabric::scheduler::clearMockRequests();
         faabric::util::setMockMode(false);
@@ -61,17 +60,13 @@ class DistributedCoordinatorTestFixture
     }
 
   protected:
-    DistributedCoordinator& distCoord;
-    faabric::transport::PointToPointBroker& ptpBroker;
-
     std::string thisHost;
-
     std::shared_ptr<DistributedCoordinationGroup> coordGroup = nullptr;
 
     faabric::Message msg;
 };
 
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationGroupFixture,
                  "Test remote lock requests",
                  "[sync]")
 {
@@ -86,7 +81,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
         CoordinationRequest_CoordinationOperation_LOCK;
 
     // Prepare the ptp message response
-    ptpBroker.setHostForReceiver(msg.groupid(), groupIdx, thisHost);
+    broker.setHostForReceiver(msg.groupid(), groupIdx, thisHost);
     std::vector<uint8_t> data(1, 0);
 
     bool recursive = false;
@@ -95,7 +90,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     {
         op = faabric::CoordinationRequest::LOCK;
 
-        ptpBroker.sendMessage(
+        broker.sendMessage(
           msg.groupid(), 0, groupIdx, data.data(), data.size());
 
         coordGroup->lock(groupIdx, false);
@@ -105,7 +100,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     {
         op = faabric::CoordinationRequest::LOCK;
 
-        ptpBroker.sendMessage(
+        broker.sendMessage(
           msg.groupid(), 0, groupIdx, data.data(), data.size());
 
         recursive = true;
@@ -137,7 +132,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(req.recursive() == recursive);
 }
 
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationGroupFixture,
                  "Test local locking and unlocking",
                  "[sync]")
 {
@@ -170,7 +165,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(sharedInt == 88);
 }
 
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationGroupFixture,
                  "Test distributed coordination barrier",
                  "[sync]")
 {
@@ -179,7 +174,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 
     // Prepare point to point message mappings
     for (int i = 0; i < nThreads; i++) {
-        ptpBroker.setHostForReceiver(msg.groupid(), i, thisHost);
+        broker.setHostForReceiver(msg.groupid(), i, thisHost);
     }
 
     int nSums = 2;
@@ -218,7 +213,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     }
 }
 
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationGroupFixture,
                  "Test local try lock",
                  "[sync]")
 {
@@ -259,7 +254,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     otherCoordGroup->localUnlock();
 }
 
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
+TEST_CASE_METHOD(DistributedCoordinationGroupFixture,
                  "Test notify and await",
                  "[sync]")
 {
@@ -271,7 +266,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 
     // Prepare point to point message mappings
     for (int i = 0; i < nThreads; i++) {
-        ptpBroker.setHostForReceiver(msg.groupid(), i, thisHost);
+        broker.setHostForReceiver(msg.groupid(), i, thisHost);
     }
 
     // Run threads in background to force a wait from the master

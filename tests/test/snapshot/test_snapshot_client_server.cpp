@@ -1,7 +1,7 @@
-#include "faabric/scheduler/DistributedCoordinator.h"
+#include <catch.hpp>
+
 #include "faabric_utils.h"
 #include "fixtures.h"
-#include <catch.hpp>
 
 #include <sys/mman.h>
 
@@ -11,6 +11,7 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
@@ -23,6 +24,7 @@ class SnapshotClientServerFixture
   : public SchedulerTestFixture
   , public RedisTestFixture
   , public SnapshotTestFixture
+  , public DistributedCoordinationTestFixture
 {
   protected:
     faabric::snapshot::SnapshotServer server;
@@ -114,11 +116,13 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "Test push snapshot diffs",
                  "[snapshot]")
 {
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+
     // One request with no group, another with a group we must initialise
     int groupIdA = 0;
     int groupIdB = 234;
     faabric::scheduler::getDistributedCoordinator().initGroup(
-      faabric::util::getSystemConfig().endpointHost, groupIdB, 5);
+      thisHost, groupIdB, 5);
 
     // Set up a snapshot
     std::string snapKey = std::to_string(faabric::util::generateGid());

@@ -29,6 +29,7 @@ class ClientServerFixture
   , public SchedulerTestFixture
   , public StateTestFixture
   , public PointToPointTestFixture
+  , public DistributedCoordinationTestFixture
 {
   protected:
     FunctionCallServer server;
@@ -36,7 +37,6 @@ class ClientServerFixture
 
     std::shared_ptr<DummyExecutorFactory> executorFactory;
 
-    DistributedCoordinator& distCoord;
     std::shared_ptr<DistributedCoordinationGroup> coordGroup = nullptr;
     int groupId = 123;
     int groupSize = 2;
@@ -44,10 +44,7 @@ class ClientServerFixture
   public:
     ClientServerFixture()
       : cli(LOCALHOST)
-      , distCoord(getDistributedCoordinator())
     {
-        distCoord.clear();
-
         // Set up executor
         executorFactory = std::make_shared<DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
@@ -67,8 +64,6 @@ class ClientServerFixture
 
     ~ClientServerFixture()
     {
-        distCoord.clear();
-
         server.stop();
         executorFactory->reset();
     }

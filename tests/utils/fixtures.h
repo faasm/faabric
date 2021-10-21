@@ -19,6 +19,7 @@
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
+#include "faabric/scheduler/DistributedCoordinator.h"
 
 namespace tests {
 class RedisTestFixture
@@ -311,5 +312,18 @@ class PointToPointClientServerFixture
   protected:
     faabric::transport::PointToPointClient cli;
     faabric::transport::PointToPointServer server;
+};
+
+class DistributedCoordinationTestFixture
+{
+  public:
+    DistributedCoordinationTestFixture()
+      : distCoord(faabric::scheduler::getDistributedCoordinator())
+    {}
+
+    ~DistributedCoordinationTestFixture() { distCoord.clear(); }
+
+  protected:
+    faabric::scheduler::DistributedCoordinator& distCoord;
 };
 }

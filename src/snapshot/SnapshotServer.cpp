@@ -201,7 +201,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Unlock
     if (r->groupid() > 0) {
-        distCoord.getCoordinationGroup(r->groupid())->localLock();
+        distCoord.getCoordinationGroup(r->groupid())->localUnlock();
     }
 
     // Send response
