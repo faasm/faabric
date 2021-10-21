@@ -23,19 +23,19 @@ class DistributedCoordinationGroup
 
     void lock(int32_t groupIdx, bool recursive);
 
-    void localLock(bool recursive);
-
     void unlock(int32_t groupIdx, bool recursive);
 
-    void localUnlock(bool recursive);
+    void localLock();
+
+    void localUnlock();
 
     bool localTryLock();
+
+    bool isLocalLockable();
 
     void barrier(int32_t groupIdx);
 
     void notify(int32_t groupIdx);
-
-    bool isLocalLockable(bool recursive);
 
     int32_t getNotifyCount();
 

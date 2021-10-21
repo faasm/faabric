@@ -289,40 +289,17 @@ TEST_CASE_METHOD(ClientServerFixture,
           groupId, i, faabric::util::getSystemConfig().endpointHost);
     }
 
-    bool recursive = false;
-    int nCalls = 1;
+    REQUIRE(coordGroup->isLocalLockable());
 
-    SECTION("Recursive")
-    {
-        recursive = true;
-        nCalls = 10;
-    }
-    SECTION("Non-recursive")
-    {
-        recursive = false;
-        nCalls = 1;
-    }
+    cli.coordinationLock(msg.groupid(), msg.appindex());
+    broker.recvMessage(groupId, 0, msg.appindex());
 
-    REQUIRE(coordGroup->isLocalLockable(recursive));
+    REQUIRE(!coordGroup->isLocalLockable());
 
-    for (int i = 0; i < nCalls; i++) {
-        server.setRequestLatch();
-        cli.coordinationLock(msg.groupid(), msg.appindex(), recursive);
-        server.awaitRequestLatch();
+    server.setRequestLatch();
+    cli.coordinationUnlock(msg.groupid(), msg.appindex());
+    server.awaitRequestLatch();
 
-        broker.recvMessage(groupId, 0, msg.appindex());
-    }
-
-    // Note that the server runs a background thread, therefore the recursive
-    // lock will also not be available
-    REQUIRE(!coordGroup->isLocalLockable(recursive));
-
-    for (int i = 0; i < nCalls; i++) {
-        server.setRequestLatch();
-        cli.coordinationUnlock(msg.groupid(), msg.appindex(), recursive);
-        server.awaitRequestLatch();
-    }
-
-    REQUIRE(coordGroup->isLocalLockable(recursive));
+    REQUIRE(coordGroup->isLocalLockable());
 }
 }

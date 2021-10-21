@@ -116,8 +116,10 @@ void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
                                               size_t bufferSize)
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    SPDLOG_TRACE(
-      "Receiving lock on {} for idx {} (recursive {})", msg.groupid(), msg.groupidx(), msg.recursive());
+    SPDLOG_TRACE("Receiving lock on {} for idx {} (recursive {})",
+                 msg.groupid(),
+                 msg.groupidx(),
+                 msg.recursive());
 
     // Set up point-to-point mapping back to the host
     faabric::transport::getPointToPointBroker().setHostForReceiver(
@@ -132,9 +134,10 @@ void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
 {
     PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
 
-    SPDLOG_TRACE(
-      "Receiving unlock on {} for idx {} (recursive {})", msg.groupid(), msg.groupidx(),
-      msg.recursive());
+    SPDLOG_TRACE("Receiving unlock on {} for idx {} (recursive {})",
+                 msg.groupid(),
+                 msg.groupidx(),
+                 msg.recursive());
 
     distCoord.getCoordinationGroup(msg.groupid())
       ->unlock(msg.groupidx(), msg.recursive());

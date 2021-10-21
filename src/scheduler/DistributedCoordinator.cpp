@@ -90,13 +90,9 @@ void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
     }
 }
 
-void DistributedCoordinationGroup::localLock(bool recursive)
+void DistributedCoordinationGroup::localLock()
 {
-    if (recursive) {
-        LOCK_TIMEOUT(localRecursiveMx, timeoutMs);
-    } else {
-        LOCK_TIMEOUT(localMx, timeoutMs);
-    }
+    LOCK_TIMEOUT(localMx, timeoutMs);
 }
 
 bool DistributedCoordinationGroup::localTryLock()
@@ -138,13 +134,9 @@ void DistributedCoordinationGroup::unlock(int32_t groupIdx, bool recursive)
     }
 }
 
-void DistributedCoordinationGroup::localUnlock(bool recursive)
+void DistributedCoordinationGroup::localUnlock()
 {
-    if (recursive) {
-        localRecursiveMx.unlock();
-    } else {
-        localMx.unlock();
-    }
+    localMx.unlock();
 }
 
 void DistributedCoordinationGroup::notifyLocked(int32_t groupIdx)
@@ -188,20 +180,12 @@ void DistributedCoordinationGroup::notify(int32_t groupIdx)
     }
 }
 
-bool DistributedCoordinationGroup::isLocalLockable(bool recursive)
+bool DistributedCoordinationGroup::isLocalLockable()
 {
-    if (recursive) {
-        bool canLock = localRecursiveMx.try_lock();
-        if (canLock) {
-            localRecursiveMx.unlock();
-            return true;
-        }
-    } else {
-        bool canLock = localMx.try_lock();
-        if (canLock) {
-            localMx.unlock();
-            return true;
-        }
+    bool canLock = localMx.try_lock();
+    if (canLock) {
+        localMx.unlock();
+        return true;
     }
     return false;
 }

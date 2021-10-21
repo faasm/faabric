@@ -143,15 +143,15 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
 {
     std::atomic<int> sharedInt = 0;
 
-    coordGroup->localLock(false);
+    coordGroup->localLock();
 
     std::thread tA([this, &sharedInt] {
-        coordGroup->localLock(false);
+        coordGroup->localLock();
 
         assert(sharedInt == 99);
         sharedInt = 88;
 
-        coordGroup->localUnlock(false);
+        coordGroup->localUnlock();
     });
 
     // Main thread sleep for a while, make sure the other can't run and update
@@ -161,7 +161,7 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(sharedInt == 0);
     sharedInt.store(99);
 
-    coordGroup->localUnlock(false);
+    coordGroup->localUnlock();
 
     if (tA.joinable()) {
         tA.join();
@@ -241,67 +241,22 @@ TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
     REQUIRE(!otherCoordGroup->localTryLock());
 
     // Should work again after unlock
-    coordGroup->localUnlock(false);
+    coordGroup->localUnlock();
 
     REQUIRE(coordGroup->localTryLock());
     REQUIRE(!otherCoordGroup->localTryLock());
 
     // Running again should have no effect
-    coordGroup->localUnlock(false);
+    coordGroup->localUnlock();
 
     // Unlock other group
-    otherCoordGroup->localUnlock(false);
+    otherCoordGroup->localUnlock();
 
     REQUIRE(coordGroup->localTryLock());
     REQUIRE(otherCoordGroup->localTryLock());
 
-    coordGroup->localUnlock(false);
-    otherCoordGroup->localUnlock(false);
-}
-
-TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
-                 "Test local recursive lock",
-                 "[sync]")
-{
-    std::atomic<int> sharedInt = 3;
-
-    // Lock several times
-    coordGroup->localLock(true);
-    coordGroup->localLock(true);
-    coordGroup->localLock(true);
-
-    // Unlock once
-    coordGroup->localUnlock(true);
-
-    // Check background thread can't lock
-    std::thread t([this, &sharedInt] {
-        UNUSED(sharedInt);
-
-        assert(sharedInt.load() == 3);
-
-        // Won't be able to lock until main thread has unlocked
-        coordGroup->localLock(true);
-
-        // Set to some other value
-        sharedInt.store(4);
-
-        coordGroup->localUnlock(true);
-    });
-
-    // Allow other thread to start and block on locking
-    SLEEP_MS(1000);
-    REQUIRE(sharedInt == 3);
-
-    // Unlock
-    coordGroup->localUnlock(true);
-    coordGroup->localUnlock(true);
-
-    // Wait for other thread to finish
-    if (t.joinable()) {
-        t.join();
-    }
-
-    REQUIRE(sharedInt == 4);
+    coordGroup->localUnlock();
+    otherCoordGroup->localUnlock();
 }
 
 TEST_CASE_METHOD(DistributedCoordinatorTestFixture,
