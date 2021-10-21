@@ -289,17 +289,36 @@ TEST_CASE_METHOD(ClientServerFixture,
           groupId, i, faabric::util::getSystemConfig().endpointHost);
     }
 
-    REQUIRE(coordGroup->isLocalLockable());
+    bool recursive = false;
+    int nCalls = 1;
 
-    cli.coordinationLock(msg.groupid(), msg.appindex());
-    broker.recvMessage(groupId, 0, msg.appindex());
+    SECTION("Recursive")
+    {
+        recursive = true;
+        nCalls = 10;
+    }
 
-    REQUIRE(!coordGroup->isLocalLockable());
+    SECTION("Non-recursive")
+    {
+        recursive = false;
+        nCalls = 1;
+    }
 
-    server.setRequestLatch();
-    cli.coordinationUnlock(msg.groupid(), msg.appindex());
-    server.awaitRequestLatch();
+    REQUIRE(coordGroup->getLockOwner(recursive) == -1);
 
-    REQUIRE(coordGroup->isLocalLockable());
+    for (int i = 0; i < nCalls; i++) {
+        cli.coordinationLock(msg.groupid(), msg.appindex(), recursive);
+        broker.recvMessage(groupId, 0, msg.appindex());
+    }
+
+    REQUIRE(coordGroup->getLockOwner(recursive) == msg.appindex());
+
+    for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
+        cli.coordinationUnlock(msg.groupid(), msg.appindex(), recursive);
+        server.awaitRequestLatch();
+    }
+
+    REQUIRE(coordGroup->getLockOwner(recursive) == -1);
 }
 }

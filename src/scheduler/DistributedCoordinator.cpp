@@ -11,6 +11,8 @@
 
 #define GROUP_TIMEOUT_MS 20000
 
+#define NO_LOCK_OWNER_IDX -1
+
 #define LOCK_TIMEOUT(mx, ms)                                                   \
     auto timePoint =                                                           \
       std::chrono::system_clock::now() + std::chrono::milliseconds(ms);        \
@@ -56,10 +58,10 @@ void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
         if (recursive) {
             bool isFree = recursiveLockOwners.empty();
 
-            bool isLockedByMe =
+            bool getLockOwnerByMe =
               !isFree && (recursiveLockOwners.top() == groupIdx);
 
-            if (isFree || isLockedByMe) {
+            if (isFree || getLockOwnerByMe) {
                 // Recursive and either free, or already locked by this idx
                 SPDLOG_TRACE("Group idx {} recursively locked {} ({})",
                              groupIdx,
@@ -73,7 +75,7 @@ void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
                              groupId,
                              lockWaiters.size());
             }
-        } else if (!recursive && lockOwnerIdx == -1) {
+        } else if (!recursive && lockOwnerIdx == NO_LOCK_OWNER_IDX) {
             // Non-recursive and free
             SPDLOG_TRACE("Group idx {} locked {}", groupIdx, groupId);
             lockOwnerIdx = groupIdx;
@@ -124,7 +126,7 @@ void DistributedCoordinationGroup::unlock(int32_t groupIdx, bool recursive)
             lockWaiters.pop();
         }
     } else {
-        lockOwnerIdx = -1;
+        lockOwnerIdx = NO_LOCK_OWNER_IDX;
 
         if (!lockWaiters.empty()) {
             lockOwnerIdx = lockWaiters.front();
@@ -180,14 +182,24 @@ void DistributedCoordinationGroup::notify(int32_t groupIdx)
     }
 }
 
-bool DistributedCoordinationGroup::isLocalLockable()
+int32_t DistributedCoordinationGroup::getLockOwner(bool recursive)
 {
-    bool canLock = localMx.try_lock();
-    if (canLock) {
-        localMx.unlock();
-        return true;
+    if (!isMasteredThisHost) {
+        SPDLOG_ERROR(
+          "Cannot check if group {} locked, not mastered on this host",
+          groupId);
+        throw std::runtime_error("Checking group lock on non-master host");
     }
-    return false;
+
+    if (recursive) {
+        if (!recursiveLockOwners.empty()) {
+            return recursiveLockOwners.top();
+        }
+
+        return NO_LOCK_OWNER_IDX;
+    } else {
+        return lockOwnerIdx;
+    }
 }
 
 void DistributedCoordinationGroup::overrideMasterHost(const std::string& host)

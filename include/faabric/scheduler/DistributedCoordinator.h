@@ -25,13 +25,13 @@ class DistributedCoordinationGroup
 
     void unlock(int32_t groupIdx, bool recursive);
 
+    int32_t getLockOwner(bool recursive);
+
     void localLock();
 
     void localUnlock();
 
     bool localTryLock();
-
-    bool isLocalLockable();
 
     void barrier(int32_t groupIdx);
 
