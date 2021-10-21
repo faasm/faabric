@@ -5,13 +5,13 @@
 
 #include <sys/mman.h>
 
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
-#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
