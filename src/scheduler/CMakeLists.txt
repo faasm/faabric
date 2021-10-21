@@ -1,17 +1,18 @@
 file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/scheduler/*.h")
 
 set(LIB_FILES
+        DistributedCoordinationGroup.cpp
         DistributedCoordinator.cpp
         ExecutorFactory.cpp
         Executor.cpp
         ExecGraph.cpp
         FunctionCallClient.cpp
         FunctionCallServer.cpp
-        Scheduler.cpp
         MpiContext.cpp
         MpiMessageBuffer.cpp
         MpiWorldRegistry.cpp
         MpiWorld.cpp
+        Scheduler.cpp
         ${HEADERS}
         )
 
