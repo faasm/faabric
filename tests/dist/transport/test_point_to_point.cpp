@@ -64,7 +64,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Set up point-to-point mappings
     broker.setAndSendMappingsFromSchedulingDecision(actualDecision);
 
-    // Functions executed successfully
+    // Check functions executed successfully
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
 

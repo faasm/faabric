@@ -1,7 +1,6 @@
-#include "faabric/util/scheduling.h"
-#include "faabric_utils.h"
 #include <catch.hpp>
 
+#include "faabric_utils.h"
 #include "fixtures.h"
 #include "init.h"
 
@@ -15,6 +14,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 
 namespace tests {

@@ -8,12 +8,12 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn)
 void SchedulingDecision::addMessage(const std::string& host,
                                     const faabric::Message& msg)
 {
-    addDecision(host, msg.id(), msg.appindex());
+    addMessage(host, msg.id(), msg.appindex());
 }
 
-void SchedulingDecision::addDecision(const std::string& host,
-                                     int32_t messageId,
-                                     int32_t appIdx)
+void SchedulingDecision::addMessage(const std::string& host,
+                                    int32_t messageId,
+                                    int32_t appIdx)
 {
     nFunctions++;
 
@@ -28,7 +28,7 @@ SchedulingDecision SchedulingDecision::fromPointToPointMappings(
     SchedulingDecision decision(mappings.appid());
 
     for (const auto& m : mappings.mappings()) {
-        decision.addDecision(m.host(), m.messageid(), m.recvidx());
+        decision.addMessage(m.host(), m.messageid(), m.recvidx());
     }
 
     return decision;
