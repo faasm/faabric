@@ -14,6 +14,8 @@
 #include <future>
 #include <shared_mutex>
 
+#define AVAILABLE_HOST_SET "available_hosts"
+
 namespace faabric::scheduler {
 
 class Scheduler;

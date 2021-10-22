@@ -15,9 +15,6 @@ int main()
     faabric::transport::initGlobalMessageContext();
     tests::initDistTests();
 
-    // Need to provision enough threads to handle tests
-    faabric::util::getSystemConfig().functionServerThreads = 4;
-
     int slots = 4;
     SPDLOG_INFO("Forcing distributed test server to have {} slots", slots);
     faabric::HostResources res;

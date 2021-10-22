@@ -1,4 +1,3 @@
-#include "faabric/util/config.h"
 #define CATCH_CONFIG_RUNNER
 
 #include <catch.hpp>
@@ -22,9 +21,6 @@ int main(int argc, char* argv[])
 
     std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
       std::make_shared<tests::DistTestExecutorFactory>();
-
-    // Need to provision enough threads to handle tests
-    faabric::util::getSystemConfig().functionServerThreads = 4;
 
     // WARNING: all 0MQ sockets have to have gone *out of scope* before we shut
     // down the context, therefore this segment must be in a nested scope (or
