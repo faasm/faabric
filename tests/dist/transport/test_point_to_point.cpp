@@ -45,30 +45,24 @@ TEST_CASE_METHOD(DistTestsFixture,
                                                getWorkerIP(),
                                                getWorkerIP() };
 
-    faabric::util::SchedulingDecision expectedDecision(appId);
-    expectedDecision.addMessage(getMasterIP(), req->messages().at(0));
-    expectedDecision.addMessage(getWorkerIP(), req->messages().at(1));
-    expectedDecision.addMessage(getWorkerIP(), req->messages().at(2));
-
     // Set up individual messages
     // Note that this thread is acting as app index 0
+    faabric::util::SchedulingDecision expectedDecision(appId);
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
 
         msg.set_appindex(i + 1);
 
-        // Register function locations to where we assume they'll be executed
-        // (we'll confirm this is the case after scheduling)
-        broker.setHostForReceiver(
-          msg.appid(), msg.appindex(), expectedHosts.at(i));
+        // Add to expected decision
+        expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
     }
 
     // Call the functions
     faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
     checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
-    // Broadcast mappings to other hosts
-    broker.broadcastMappings(appId);
+    // Set up point-to-point mappings
+    broker.setAndSendMappingsFromSchedulingDecision(actualDecision);
 
     // Send kick-off message to all functions
     std::vector<uint8_t> kickOffData = { 0, 1, 2 };

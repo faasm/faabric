@@ -69,6 +69,10 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
 
     // Send out to relevant hosts
     for (const auto& h : hosts) {
+        if (h == faabric::util::getSystemConfig().endpointHost) {
+            continue;
+        }
+
         sendMappings(decision.appId, h);
     }
 }
