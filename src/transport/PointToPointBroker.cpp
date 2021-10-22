@@ -141,6 +141,26 @@ void PointToPointBroker::sendMappings(int appId, const std::string& host)
     cli->sendMappings(msg);
 }
 
+void PointToPointBroker::enableApp(int appId)
+{
+    std::vector<uint8_t> kickOffData = { 0 };
+    std::set<int> idxs = appIdxs[appId];
+
+    // Send a kick-off message to all indexes registered locally
+    for (int idx : idxs) {
+        std::string key = getPointToPointKey(appId, idx);
+        if (mappings[key] == faabric::util::getSystemConfig().endpointHost) {
+            sendMessage(appId, 0, idx, kickOffData.data(), kickOffData.size());
+        }
+    }
+}
+
+void PointToPointBroker::waitForAppToBeEnabled(int appId, int recvIdx)
+{
+    // Wait for the kick-off message for this index
+    recvMessage(appId, 0, recvIdx);
+}
+
 std::set<int> PointToPointBroker::getIdxsRegisteredForApp(int appId)
 {
     faabric::util::SharedLock lock(brokerMutex);

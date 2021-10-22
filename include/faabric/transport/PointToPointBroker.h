@@ -27,6 +27,10 @@ class PointToPointBroker
 
     void sendMappings(int appId, const std::string& host);
 
+    void enableApp(int appId);
+
+    void waitForAppToBeEnabled(int appId, int recvIdx);
+
     std::set<int> getIdxsRegisteredForApp(int appId);
 
     void sendMessage(int appId,

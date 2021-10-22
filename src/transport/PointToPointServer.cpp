@@ -16,7 +16,7 @@ PointToPointServer::PointToPointServer()
       POINT_TO_POINT_SYNC_PORT,
       POINT_TO_POINT_INPROC_LABEL,
       faabric::util::getSystemConfig().pointToPointServerThreads)
-  , reg(getPointToPointBroker())
+  , broker(getPointToPointBroker())
 {}
 
 void PointToPointServer::doAsyncRecv(int header,
@@ -28,11 +28,11 @@ void PointToPointServer::doAsyncRecv(int header,
             PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
 
             // Send the message locally to the downstream socket
-            reg.sendMessage(msg.appid(),
-                            msg.sendidx(),
-                            msg.recvidx(),
-                            BYTES_CONST(msg.data().c_str()),
-                            msg.data().size());
+            broker.sendMessage(msg.appid(),
+                               msg.sendidx(),
+                               msg.recvidx(),
+                               BYTES_CONST(msg.data().c_str()),
+                               msg.data().size());
             break;
         }
         default: {
@@ -65,8 +65,12 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
     PARSE_MSG(faabric::PointToPointMappings, buffer, bufferSize)
 
     for (const auto& m : msg.mappings()) {
-        reg.setHostForReceiver(m.appid(), m.recvidx(), m.host());
+        // Record the mapping
+        broker.setHostForReceiver(m.appid(), m.recvidx(), m.host());
     }
+
+    // Record that this group is now set up on this host
+    broker.enableApp(msg.mappings().at(0).appid());
 
     return std::make_unique<faabric::EmptyResponse>();
 }
@@ -74,7 +78,7 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
 void PointToPointServer::onWorkerStop()
 {
     // Clear any thread-local cached sockets
-    reg.resetThreadLocalCache();
+    broker.resetThreadLocalCache();
 }
 
 }

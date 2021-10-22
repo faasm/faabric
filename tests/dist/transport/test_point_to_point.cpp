@@ -64,14 +64,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Set up point-to-point mappings
     broker.setAndSendMappingsFromSchedulingDecision(actualDecision);
 
-    // Send kick-off message to all functions
-    std::vector<uint8_t> kickOffData = { 0, 1, 2 };
-    for (int i = 0; i < nFuncs; i++) {
-        broker.sendMessage(
-          appId, 0, i + 1, kickOffData.data(), kickOffData.size());
-    }
-
-    // Check other functions executed successfully
+    // Functions executed successfully
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
 

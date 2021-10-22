@@ -25,19 +25,8 @@ int handlePointToPointFunction(
     faabric::transport::PointToPointBroker& broker =
       faabric::transport::getPointToPointBroker();
 
-    // Start by receiving a kick-off message from the master (to make sure the
-    // mappings have been broadcasted)
-    std::vector<uint8_t> kickOffData =
-      broker.recvMessage(msg.appid(), 0, appIdx);
-
-    // Check data received
-    std::vector<uint8_t> expectedKickOffData = { 0, 1, 2 };
-    if (kickOffData != expectedKickOffData) {
-        SPDLOG_ERROR("Point-to-point kick-off not as expected {} != {}",
-                     formatByteArrayToIntString(kickOffData),
-                     formatByteArrayToIntString(expectedKickOffData));
-        return 1;
-    }
+    // Wait for this app to be initialised
+    broker.waitForAppToBeEnabled(msg.appid(), appIdx);
 
     // Send to next index in ring and recv from previous in ring.
     uint8_t minIdx = 1;
