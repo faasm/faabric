@@ -1,7 +1,7 @@
-#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include "DistTestExecutor.h"
+#include "faabric_utils.h"
 #include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
@@ -24,9 +24,6 @@ int handlePointToPointFunction(
 
     faabric::transport::PointToPointBroker& broker =
       faabric::transport::getPointToPointBroker();
-
-    // Wait for this app to be initialised
-    broker.waitForAppToBeEnabled(msg.appid(), appIdx);
 
     // Send to next index in ring and recv from previous in ring.
     uint8_t minIdx = 1;

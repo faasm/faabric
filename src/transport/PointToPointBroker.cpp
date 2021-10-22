@@ -6,6 +6,8 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
+#define MAPPING_TIMEOUT_MS 10000
+
 namespace faabric::transport {
 
 // NOTE: Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be
@@ -70,7 +72,7 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
             int recvIdx = decision.appIdxs.at(i);
             const std::string& host = decision.hosts.at(i);
 
-            SPDLOG_TRACE("Setting point-to-point mapping {}:{} to {}",
+            SPDLOG_DEBUG("Setting point-to-point mapping {}:{} to {}",
                          appId,
                          recvIdx,
                          host);
@@ -89,8 +91,16 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
         }
     }
 
-    // Enable the app locally
-    enableApp(appId);
+    {
+        // Lock this app
+        std::unique_lock<std::mutex> lock(appMappingMutexes[appId]);
+
+        // Enable the app
+        appMappingsFlags[appId] = true;
+
+        // Notify waiters
+        appMappingCvs[appId].notify_all();
+    }
 
     return hosts;
 }
@@ -128,24 +138,25 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     }
 }
 
-void PointToPointBroker::enableApp(int appId)
+void PointToPointBroker::waitForMappingsOnThisHost(int appId)
 {
-    std::vector<uint8_t> kickOffData = { 0 };
-    std::set<int> idxs = appIdxs[appId];
+    // Check if it's been enabled
+    if (!appMappingsFlags[appId]) {
+        // Lock this app
+        std::unique_lock<std::mutex> lock(appMappingMutexes[appId]);
 
-    // Send a kick-off message to all indexes registered locally
-    for (int idx : idxs) {
-        std::string key = getPointToPointKey(appId, idx);
-        if (mappings[key] == faabric::util::getSystemConfig().endpointHost) {
-            sendMessage(appId, 0, idx, kickOffData.data(), kickOffData.size());
+        // Wait for app to be enabled
+        auto timePoint = std::chrono::system_clock::now() +
+                         std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
+
+        if (!appMappingCvs[appId].wait_until(lock, timePoint, [this, appId] {
+                return appMappingsFlags[appId];
+            })) {
+
+            SPDLOG_ERROR("Timed out waiting for app mappings {}", appId);
+            throw std::runtime_error("Timed out waiting for app mappings");
         }
     }
-}
-
-void PointToPointBroker::waitForAppToBeEnabled(int appId, int recvIdx)
-{
-    // Wait for the kick-off message for this index
-    recvMessage(appId, 0, recvIdx);
 }
 
 std::set<int> PointToPointBroker::getIdxsRegisteredForApp(int appId)
@@ -160,6 +171,8 @@ void PointToPointBroker::sendMessage(int appId,
                                      const uint8_t* buffer,
                                      size_t bufferSize)
 {
+    waitForMappingsOnThisHost(appId);
+
     std::string host = getHostForReceiver(appId, recvIdx);
 
     if (host == faabric::util::getSystemConfig().endpointHost) {
@@ -241,6 +254,10 @@ void PointToPointBroker::clear()
 
     appIdxs.clear();
     mappings.clear();
+
+    appMappingMutexes.clear();
+    appMappingsFlags.clear();
+    appMappingCvs.clear();
 }
 
 void PointToPointBroker::resetThreadLocalCache()

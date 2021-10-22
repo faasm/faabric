@@ -1,7 +1,7 @@
-#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include "DistTestExecutor.h"
+#include "faabric_utils.h"
 #include "init.h"
 
 #include <sys/mman.h>

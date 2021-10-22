@@ -232,4 +232,37 @@ TEST_CASE_METHOD(
         REQUIRE(hostCIdxs == expectedHostCIdxs);
     }
 }
+
+TEST_CASE_METHOD(PointToPointClientServerFixture,
+                 "Test waiting for point-to-point messaging to be enabled",
+                 "[transport][ptp]")
+{
+    int appId = 123;
+    std::atomic<int> sharedInt = 5;
+
+    faabric::util::SchedulingDecision decision(appId);
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    decision.addMessage(faabric::util::getSystemConfig().endpointHost, msg);
+
+    // Background thread that will eventually enable the app and change the
+    // shared integer
+    std::thread t([this, &decision, &sharedInt] {
+        SLEEP_MS(1000);
+        broker.setUpLocalMappingsFromSchedulingDecision(decision);
+
+        sharedInt.fetch_add(100);
+    });
+
+    broker.waitForMappingsOnThisHost(appId);
+
+    // The sum won't have happened yet if this thread hasn't been forced to wait
+    REQUIRE(sharedInt == 105);
+
+    // Call again and check it doesn't block
+    broker.waitForMappingsOnThisHost(appId);
+
+    if (t.joinable()) {
+        t.join();
+    }
+}
 }
