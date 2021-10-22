@@ -1,7 +1,5 @@
 #include <catch.hpp>
 
-#include "faabric/util/func.h"
-#include "faabric/util/scheduling.h"
 #include "faabric_utils.h"
 
 #include <sys/mman.h>
@@ -10,7 +8,9 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/config.h>
+#include <faabric/util/func.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/scheduling.h>
 
 using namespace faabric::transport;
 using namespace faabric::util;
@@ -52,24 +52,26 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(broker.getIdxsRegisteredForApp(appIdA).empty());
     REQUIRE(broker.getIdxsRegisteredForApp(appIdB).empty());
 
-    faabric::PointToPointMappings mappings;
+    faabric::PointToPointMappings mappingsA;
+    mappingsA.set_appid(appIdA);
 
-    auto* mappingA1 = mappings.add_mappings();
-    mappingA1->set_appid(appIdA);
+    faabric::PointToPointMappings mappingsB;
+    mappingsB.set_appid(appIdB);
+
+    auto* mappingA1 = mappingsA.add_mappings();
     mappingA1->set_recvidx(idxA1);
     mappingA1->set_host(hostA);
 
-    auto* mappingA2 = mappings.add_mappings();
-    mappingA2->set_appid(appIdA);
+    auto* mappingA2 = mappingsA.add_mappings();
     mappingA2->set_recvidx(idxA2);
     mappingA2->set_host(hostB);
 
-    auto* mappingB1 = mappings.add_mappings();
-    mappingB1->set_appid(appIdB);
+    auto* mappingB1 = mappingsB.add_mappings();
     mappingB1->set_recvidx(idxB1);
     mappingB1->set_host(hostA);
 
-    cli.sendMappings(mappings);
+    cli.sendMappings(mappingsA);
+    cli.sendMappings(mappingsB);
 
     REQUIRE(broker.getIdxsRegisteredForApp(appIdA).size() == 2);
     REQUIRE(broker.getIdxsRegisteredForApp(appIdB).size() == 1);

@@ -59,28 +59,33 @@ std::set<std::string>
 PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
   const faabric::util::SchedulingDecision& decision)
 {
-    faabric::util::FullLock lock(brokerMutex);
-
     int appId = decision.appId;
-    // Set up the mappings
     std::set<std::string> hosts;
-    for (int i = 0; i < decision.nFunctions; i++) {
-        int recvIdx = decision.appIdxs.at(i);
-        const std::string& host = decision.hosts.at(i);
 
-        SPDLOG_TRACE(
-          "Setting point-to-point mapping {}:{} to {}", appId, recvIdx, host);
+    {
+        faabric::util::FullLock lock(brokerMutex);
 
-        // Record this index for this app
-        appIdxs[appId].insert(recvIdx);
+        // Set up the mappings
+        for (int i = 0; i < decision.nFunctions; i++) {
+            int recvIdx = decision.appIdxs.at(i);
+            const std::string& host = decision.hosts.at(i);
 
-        // Add host mapping
-        std::string key = getPointToPointKey(appId, recvIdx);
-        mappings[key] = host;
+            SPDLOG_TRACE("Setting point-to-point mapping {}:{} to {}",
+                         appId,
+                         recvIdx,
+                         host);
 
-        // If it's not this host, add to set of returned hosts
-        if (host != faabric::util::getSystemConfig().endpointHost) {
-            hosts.insert(host);
+            // Record this index for this app
+            appIdxs[appId].insert(recvIdx);
+
+            // Add host mapping
+            std::string key = getPointToPointKey(appId, recvIdx);
+            mappings[key] = host;
+
+            // If it's not this host, add to set of returned hosts
+            if (host != faabric::util::getSystemConfig().endpointHost) {
+                hosts.insert(host);
+            }
         }
     }
 
