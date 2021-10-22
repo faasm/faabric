@@ -1,6 +1,6 @@
-#include "faabric_utils.h"
 #include <catch.hpp>
 
+#include "faabric_utils.h"
 #include "fixtures.h"
 #include "init.h"
 
@@ -12,12 +12,13 @@
 namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture,
-                 "Test distributed barrier coordination"
+                 "Test distributed barrier coordination",
                  "[sync]")
 {
     // Set up this host's resources, force execution across hosts
     int nChainedFuncs = 4;
     int nLocalSlots = 2;
+
     faabric::HostResources res;
     res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);

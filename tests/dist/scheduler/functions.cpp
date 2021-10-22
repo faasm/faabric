@@ -1,7 +1,7 @@
-#include "faabric_utils.h"
 #include <catch.hpp>
 
 #include "DistTestExecutor.h"
+#include "faabric_utils.h"
 #include "init.h"
 
 #include <sys/mman.h>
@@ -210,6 +210,8 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
         stateKeys.emplace_back("barrier-test-" + std::to_string(i));
     }
 
+    int appIdx = msg.appindex();
+
     faabric::state::State& state = state::getGlobalState();
 
     if (!isWorker) {
@@ -246,43 +248,40 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
         }
 
         return success ? 0 : 1;
-    } else {
-        int appIdx = msg.appindex();
+    }
 
-        // Sleep for some time
-        int waitMs = 500 * appIdx;
-        SPDLOG_DEBUG("barrier-worker {} sleeping for {}ms", appIdx, waitMs);
-        SLEEP_MS(waitMs);
+    // Sleep for some time
+    int waitMs = 500 * appIdx;
+    SPDLOG_DEBUG("barrier-worker {} sleeping for {}ms", appIdx, waitMs);
+    SLEEP_MS(waitMs);
 
-        // Write result for this thread
-        SPDLOG_DEBUG("barrier-worker {} writing result", appIdx);
-        std::string stateKey = "barrier-test-" + std::to_string(appIdx);
-        std::shared_ptr<faabric::state::StateKeyValue> kv =
-          state.getKV(msg.user(), stateKey, sizeof(int32_t));
-        kv->set(BYTES(&appIdx));
-        kv->pushFull();
+    // Write result for this thread
+    SPDLOG_DEBUG("barrier-worker {} writing result", appIdx);
+    std::string stateKey = "barrier-test-" + std::to_string(appIdx);
+    std::shared_ptr<faabric::state::StateKeyValue> kv =
+      state.getKV(msg.user(), stateKey, sizeof(int32_t));
+    kv->set(BYTES(&appIdx));
+    kv->pushFull();
 
-        // Wait on a barrier
-        SPDLOG_DEBUG("barrier-worker {} waiting on barrier (size {})",
-                     appIdx,
-                     msg.groupsize());
-        faabric::scheduler::getDistributedCoordinator()
-          .getCoordinationGroup(msg.groupid())
-          ->barrier(msg.appindex());
+    // Wait on a barrier
+    SPDLOG_DEBUG("barrier-worker {} waiting on barrier (size {})",
+                 appIdx,
+                 msg.groupsize());
+    faabric::scheduler::getDistributedCoordinator()
+      .getCoordinationGroup(msg.groupid())
+      ->barrier(msg.appindex());
 
-        // Check that all other values have been set
-        for (int i = 0; i < nChainedFuncs; i++) {
-            auto idxKv =
-              state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
-            uint8_t* idxRawValue = idxKv->get();
-            int actualIdxValue = *(int*)idxRawValue;
-            if (actualIdxValue != i) {
-                SPDLOG_ERROR("barrier-worker check failed on host {}. {} = {}",
-                             faabric::util::getSystemConfig().endpointHost,
-                             stateKeys.at(i),
-                             actualIdxValue);
-                return 1;
-            }
+    // Check that all other values have been set
+    for (int i = 0; i < nChainedFuncs; i++) {
+        auto idxKv = state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
+        uint8_t* idxRawValue = idxKv->get();
+        int actualIdxValue = *(int*)idxRawValue;
+        if (actualIdxValue != i) {
+            SPDLOG_ERROR("barrier-worker check failed on host {}. {} = {}",
+                         faabric::util::getSystemConfig().endpointHost,
+                         stateKeys.at(i),
+                         actualIdxValue);
+            return 1;
         }
     }
 
