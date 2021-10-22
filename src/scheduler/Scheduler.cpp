@@ -10,6 +10,7 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/random.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
@@ -209,7 +210,6 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // Extract properties of the request
     int nMessages = req->messages_size();
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    std::vector<std::string> executed(nMessages);
 
     // Note, we assume all the messages are for the same function and have the
     // same master host
@@ -222,6 +222,9 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         throw std::runtime_error("Message with no master host");
     }
 
+    // Set up scheduling decision
+    SchedulingDecision decision(firstMsg.appid(), nMessages);
+
     // TODO - more granular locking, this is incredibly conservative
     faabric::util::FullLock lock(mx);
 
@@ -233,7 +236,8 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
           "Forwarding {} {} back to master {}", nMessages, funcStr, masterHost);
 
         getFunctionCallClient(masterHost).executeFunctions(req);
-        return executed;
+        decision.returnHost = masterHost;
+        return decision;
     }
 
     if (forceLocal) {
