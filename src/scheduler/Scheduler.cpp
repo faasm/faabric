@@ -202,7 +202,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
     }
 }
 
-std::vector<std::string> Scheduler::callFunctions(
+faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   bool forceLocal)
 {
