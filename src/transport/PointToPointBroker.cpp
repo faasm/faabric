@@ -55,90 +55,72 @@ std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
     return mappings[key];
 }
 
-void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
+std::set<std::string>
+PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
   const faabric::util::SchedulingDecision& decision)
-{
-    // Set up the mappings
-    std::set<std::string> hosts;
-    for (int i = 0; i < decision.nFunctions; i++) {
-        setHostForReceiver(
-          decision.appId, decision.appIdxs.at(i), decision.hosts.at(i));
-
-        hosts.insert(decision.hosts.at(i));
-    }
-
-    // Send out to relevant hosts
-    for (const auto& h : hosts) {
-        if (h == faabric::util::getSystemConfig().endpointHost) {
-            continue;
-        }
-
-        sendMappings(decision.appId, h);
-    }
-}
-
-void PointToPointBroker::setHostForReceiver(int appId,
-                                            int recvIdx,
-                                            const std::string& host)
 {
     faabric::util::FullLock lock(brokerMutex);
 
-    SPDLOG_TRACE(
-      "Setting point-to-point mapping {}:{} to {}", appId, recvIdx, host);
+    int appId = decision.appId;
+    // Set up the mappings
+    std::set<std::string> hosts;
+    for (int i = 0; i < decision.nFunctions; i++) {
+        int recvIdx = decision.appIdxs.at(i);
+        const std::string& host = decision.hosts.at(i);
 
-    // Record this index for this app
-    appIdxs[appId].insert(recvIdx);
+        SPDLOG_TRACE(
+          "Setting point-to-point mapping {}:{} to {}", appId, recvIdx, host);
 
-    // Add host mapping
-    std::string key = getPointToPointKey(appId, recvIdx);
-    mappings[key] = host;
+        // Record this index for this app
+        appIdxs[appId].insert(recvIdx);
+
+        // Add host mapping
+        std::string key = getPointToPointKey(appId, recvIdx);
+        mappings[key] = host;
+
+        // If it's not this host, add to set of returned hosts
+        if (host != faabric::util::getSystemConfig().endpointHost) {
+            hosts.insert(host);
+        }
+    }
+
+    // Enable the app locally
+    enableApp(appId);
+
+    return hosts;
 }
 
-void PointToPointBroker::broadcastMappings(int appId)
+void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
+  const faabric::util::SchedulingDecision& decision)
 {
-    auto& sch = faabric::scheduler::getScheduler();
+    int appId = decision.appId;
 
-    // TODO seems excessive to broadcast to all hosts, could we perhaps use the
-    // set of registered hosts?
-    std::set<std::string> hosts = sch.getAvailableHosts();
+    // Set up locally
+    std::set<std::string> otherHosts =
+      setUpLocalMappingsFromSchedulingDecision(decision);
 
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    // Send out to other hosts
+    for (const auto& host : otherHosts) {
+        faabric::PointToPointMappings msg;
+        msg.set_appid(appId);
 
-    for (const auto& host : hosts) {
-        // Skip this host
-        if (host == conf.endpointHost) {
-            continue;
+        std::set<int>& indexes = appIdxs[appId];
+
+        for (int i = 0; i < decision.nFunctions; i++) {
+            auto* mapping = msg.add_mappings();
+            mapping->set_host(decision.hosts.at(i));
+            mapping->set_messageid(decision.messageIds.at(i));
+            mapping->set_recvidx(decision.appIdxs.at(i));
         }
 
-        sendMappings(appId, host);
+        SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",
+                     indexes.size(),
+                     appId,
+                     host);
+
+        auto cli = getClient(host);
+        cli->sendMappings(msg);
     }
-}
-
-void PointToPointBroker::sendMappings(int appId, const std::string& host)
-{
-    faabric::util::SharedLock lock(brokerMutex);
-
-    faabric::PointToPointMappings msg;
-
-    std::set<int>& indexes = appIdxs[appId];
-
-    for (auto i : indexes) {
-        std::string key = getPointToPointKey(appId, i);
-        std::string host = mappings[key];
-
-        auto* mapping = msg.add_mappings();
-        mapping->set_appid(appId);
-        mapping->set_recvidx(i);
-        mapping->set_host(host);
-    }
-
-    SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",
-                 indexes.size(),
-                 appId,
-                 host);
-
-    auto cli = getClient(host);
-    cli->sendMappings(msg);
 }
 
 void PointToPointBroker::enableApp(int appId)

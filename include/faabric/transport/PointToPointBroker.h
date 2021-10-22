@@ -18,16 +18,11 @@ class PointToPointBroker
 
     std::string getHostForReceiver(int appId, int recvIdx);
 
-    void setAndSendMappingsFromSchedulingDecision(
+    std::set<std::string> setUpLocalMappingsFromSchedulingDecision(
       const faabric::util::SchedulingDecision& decision);
 
-    void setHostForReceiver(int appId, int recvIdx, const std::string& host);
-
-    void broadcastMappings(int appId);
-
-    void sendMappings(int appId, const std::string& host);
-
-    void enableApp(int appId);
+    void setAndSendMappingsFromSchedulingDecision(
+      const faabric::util::SchedulingDecision& decision);
 
     void waitForAppToBeEnabled(int appId, int recvIdx);
 
@@ -54,6 +49,8 @@ class PointToPointBroker
     std::shared_ptr<PointToPointClient> getClient(const std::string& host);
 
     faabric::scheduler::Scheduler& sch;
+
+    void enableApp(int appId);
 };
 
 PointToPointBroker& getPointToPointBroker();

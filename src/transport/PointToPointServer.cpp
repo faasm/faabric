@@ -1,7 +1,7 @@
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointCall.h>
 #include <faabric/transport/PointToPointServer.h>
-#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
@@ -64,13 +64,10 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
 {
     PARSE_MSG(faabric::PointToPointMappings, buffer, bufferSize)
 
-    for (const auto& m : msg.mappings()) {
-        // Record the mapping
-        reg.setHostForReceiver(m.appid(), m.recvidx(), m.host());
-    }
+    faabric::util::SchedulingDecision decision =
+      faabric::util::SchedulingDecision::fromPointToPointMappings(msg);
 
-    // Record that this group is now set up on this host
-    reg.enableApp(msg.mappings().at(0).appid());
+    reg.setUpLocalMappingsFromSchedulingDecision(decision);
 
     return std::make_unique<faabric::EmptyResponse>();
 }

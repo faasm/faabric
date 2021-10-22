@@ -11,6 +11,9 @@ namespace faabric::util {
 class SchedulingDecision
 {
   public:
+    static SchedulingDecision fromPointToPointMappings(
+      faabric::PointToPointMappings& mappings);
+
     SchedulingDecision(uint32_t appIdIn);
     uint32_t appId = 0;
 
@@ -24,5 +27,9 @@ class SchedulingDecision
     std::string returnHost;
 
     void addMessage(const std::string& host, const faabric::Message& msg);
+
+    void addDecision(const std::string& host,
+                     int32_t messageId,
+                     int32_t appIdx);
 };
 }
