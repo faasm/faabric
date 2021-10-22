@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faabric/util/scheduling.h"
 #include "fixtures.h"
 
 #include <faabric/scheduler/ExecGraph.h>
@@ -64,6 +65,10 @@ void cleanFaabric();
 
 void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);
+
+void checkSchedulingDecisionEquality(
+  const faabric::util::SchedulingDecision& decisionA,
+  const faabric::util::SchedulingDecision& decisionB);
 
 void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
                                 const scheduler::ExecGraphNode& nodeB);

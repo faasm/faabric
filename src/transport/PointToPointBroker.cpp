@@ -55,6 +55,24 @@ std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
     return mappings[key];
 }
 
+void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
+  const faabric::util::SchedulingDecision& decision)
+{
+    // Set up the mappings
+    std::set<std::string> hosts;
+    for (int i = 0; i < decision.nFunctions; i++) {
+        setHostForReceiver(
+          decision.appId, decision.appIdxs.at(i), decision.hosts.at(i));
+
+        hosts.insert(decision.hosts.at(i));
+    }
+
+    // Send out to relevant hosts
+    for (const auto& h : hosts) {
+        sendMappings(decision.appId, h);
+    }
+}
+
 void PointToPointBroker::setHostForReceiver(int appId,
                                             int recvIdx,
                                             const std::string& host)

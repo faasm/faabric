@@ -268,4 +268,82 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     conf.reset();
 }
+
+std::set<int32_t> getRecvIdxsFromMapping(
+  faabric::PointToPointMappings& mappings)
+{
+    std::set<int32_t> idxs;
+    for (const auto& m : mappings.mappings()) {
+        idxs.insert(m.recvidx());
+    }
+
+    return idxs;
+};
+
+TEST_CASE_METHOD(
+  PointToPointClientServerFixture,
+  "Test setting up point-to-point mappings with scheduling decision",
+  "[transport][ptp]")
+{
+    faabric::util::setMockMode(true);
+
+    std::string hostA = "hostA";
+    std::string hostB = "hostB";
+    std::string hostC = "hostC";
+
+    int nMessages = 6;
+    auto req = batchExecFactory("foo", "bar", nMessages);
+
+    faabric::Message msgA = req->mutable_messages()->at(0);
+    faabric::Message msgB = req->mutable_messages()->at(1);
+    faabric::Message msgC = req->mutable_messages()->at(2);
+    faabric::Message msgD = req->mutable_messages()->at(3);
+    faabric::Message msgE = req->mutable_messages()->at(4);
+    faabric::Message msgF = req->mutable_messages()->at(5);
+
+    for (int i = 0; i < nMessages; i++) {
+        req->mutable_messages()->at(i).set_appindex(i);
+    }
+
+    int appId = msgA.appid();
+    SchedulingDecision decision(appId);
+    decision.addMessage(hostB, msgA);
+    decision.addMessage(hostA, msgB);
+    decision.addMessage(hostC, msgC);
+    decision.addMessage(hostB, msgD);
+    decision.addMessage(hostB, msgE);
+    decision.addMessage(hostC, msgF);
+
+    // Set up and send the mappings
+    broker.setAndSendMappingsFromSchedulingDecision(decision);
+
+    // Check locally
+    REQUIRE(broker.getHostForReceiver(appId, msgA.appindex()) == hostB);
+    REQUIRE(broker.getHostForReceiver(appId, msgB.appindex()) == hostA);
+    REQUIRE(broker.getHostForReceiver(appId, msgC.appindex()) == hostC);
+    REQUIRE(broker.getHostForReceiver(appId, msgD.appindex()) == hostB);
+    REQUIRE(broker.getHostForReceiver(appId, msgE.appindex()) == hostB);
+    REQUIRE(broker.getHostForReceiver(appId, msgF.appindex()) == hostC);
+
+    // Check the mappings have been sent out to the relevant hosts
+    auto actualSent = getSentMappings();
+    REQUIRE(actualSent.size() == 3);
+
+    // Sort the sent mappings based on host
+    std::sort(actualSent.begin(),
+              actualSent.end(),
+              [](const std::pair<std::string, faabric::PointToPointMappings>& a,
+                 const std::pair<std::string, faabric::PointToPointMappings>& b)
+                -> bool { return a.first < b.first; });
+
+    std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
+
+    // Check all mappings are the same
+    for (int i = 0; i < 3; i++) {
+        REQUIRE(actualSent.at(i).first == expectedHosts.at(i));
+        faabric::PointToPointMappings actual = actualSent.at(i).second;
+
+        // TODO check mappings are correct
+    }
+}
 }

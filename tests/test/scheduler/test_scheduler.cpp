@@ -1,4 +1,5 @@
 #include "DummyExecutorFactory.h"
+#include "faabric/util/scheduling.h"
 #include "faabric_utils.h"
 #include <catch.hpp>
 
@@ -249,13 +250,14 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Set up the messages
-    std::vector<std::string> expectedHostsOne;
     std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
       faabric::util::batchExecFactory("foo", "bar", nCallsOne);
     reqOne->set_type(execMode);
     reqOne->set_subtype(expectedSubType);
     reqOne->set_contextdata(expectedContextData);
 
+    faabric::util::SchedulingDecision expectedDecisionOne(
+      reqOne->messages().at(0).appid());
     for (int i = 0; i < nCallsOne; i++) {
         // Set snapshot key
         faabric::Message& msg = reqOne->mutable_messages()->at(i);
@@ -267,14 +269,16 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         // Expect this host to handle up to its number of cores
         bool isThisHost = i < thisCores;
         if (isThisHost) {
-            expectedHostsOne.push_back(thisHost);
+            expectedDecisionOne.addMessage(thisHost, msg);
         } else {
-            expectedHostsOne.push_back(otherHost);
+            expectedDecisionOne.addMessage(otherHost, msg);
         }
     }
 
     // Schedule the functions
-    std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne).hosts;
+    faabric::util::SchedulingDecision actualDecisionOne =
+      sch.callFunctions(reqOne);
+    checkSchedulingDecisionEquality(actualDecisionOne, expectedDecisionOne);
 
     // Check resource requests have been made to other host
     auto resRequestsOne = faabric::scheduler::getResourceRequests();
@@ -292,9 +296,6 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         REQUIRE(pushedSnapshot.second.size == snapshot.size);
         REQUIRE(pushedSnapshot.second.data == snapshot.data);
     }
-
-    // Check scheduled on expected hosts
-    REQUIRE(actualHostsOne == expectedHostsOne);
 
     // Check the executor counts on this host
     faabric::Message m = reqOne->messages().at(0);
@@ -332,28 +333,30 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Now schedule a second batch and check they're all sent to the other host
-    std::vector<std::string> expectedHostsTwo;
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
       faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
+    faabric::util::SchedulingDecision expectedDecisionTwo(
+      reqTwo->messages().at(0).appid());
     for (int i = 0; i < nCallsTwo; i++) {
         faabric::Message& msg = reqTwo->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
-        expectedHostsTwo.push_back(otherHost);
+        expectedDecisionTwo.addMessage(otherHost, msg);
     }
 
     // Create the batch request
     reqTwo->set_type(execMode);
 
     // Schedule the functions
-    std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo).hosts;
+    faabric::util::SchedulingDecision actualDecisionTwo =
+      sch.callFunctions(reqTwo);
 
     // Check resource request made again
     auto resRequestsTwo = faabric::scheduler::getResourceRequests();
     REQUIRE(resRequestsTwo.size() == 1);
     REQUIRE(resRequestsTwo.at(0).first == otherHost);
 
-    // Check scheduled on expected hosts
-    REQUIRE(actualHostsTwo == expectedHostsTwo);
+    // Check scheduling decision
+    checkSchedulingDecisionEquality(actualDecisionTwo, expectedDecisionTwo);
 
     // Check no other functions have been scheduled on this host
     REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
@@ -429,21 +432,23 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("foo", "bar", nCalls);
     req->set_type(execMode);
+
+    faabric::util::SchedulingDecision expectedDecision(
+      req->messages().at(0).appid());
     for (int i = 0; i < nCalls; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
+
+        if (i == 1 || i == 2) {
+            expectedDecision.addMessage(otherHost, msg);
+        } else {
+            expectedDecision.addMessage(thisHost, msg);
+        }
     }
 
     // Submit the request
-    std::vector<std::string> executedHosts = sch.callFunctions(req).hosts;
-
-    // Check list of executed hosts
-    std::vector<std::string> expectedHosts =
-      std::vector<std::string>(nCalls, thisHost);
-    expectedHosts.at(1) = otherHost;
-    expectedHosts.at(2) = otherHost;
-
-    REQUIRE(executedHosts == expectedHosts);
+    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    checkSchedulingDecisionEquality(decision, expectedDecision);
 
     // Check status of local queueing
     int expectedLocalCalls = nCalls - 2;
@@ -704,11 +709,9 @@ TEST_CASE_METHOD(SlowExecutorFixture,
       faabric::util::batchExecFactory("blah", "foo", 1);
     req->mutable_messages()->at(0).set_masterhost(otherHost);
 
-    std::vector<std::string> expectedHosts;
     faabric::util::SchedulingDecision decision = sch.callFunctions(req);
     REQUIRE(decision.hosts.empty());
     REQUIRE(decision.returnHost == otherHost);
-    REQUIRE(executedHosts == expectedHosts);
 
     // Check forwarded to master
     auto actualReqs = faabric::scheduler::getBatchRequests();

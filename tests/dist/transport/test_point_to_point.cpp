@@ -1,3 +1,4 @@
+#include "faabric/util/scheduling.h"
 #include "faabric_utils.h"
 #include <catch.hpp>
 
@@ -44,6 +45,11 @@ TEST_CASE_METHOD(DistTestsFixture,
                                                getWorkerIP(),
                                                getWorkerIP() };
 
+    faabric::util::SchedulingDecision expectedDecision(appId);
+    expectedDecision.addMessage(getMasterIP(), req->messages().at(0));
+    expectedDecision.addMessage(getWorkerIP(), req->messages().at(1));
+    expectedDecision.addMessage(getWorkerIP(), req->messages().at(2));
+
     // Set up individual messages
     // Note that this thread is acting as app index 0
     for (int i = 0; i < nFuncs; i++) {
@@ -58,8 +64,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     }
 
     // Call the functions
-    std::vector<std::string> actualHosts = sch.callFunctions(req).hosts;
-    REQUIRE(actualHosts == expectedHosts);
+    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
     // Broadcast mappings to other hosts
     broker.broadcastMappings(appId);

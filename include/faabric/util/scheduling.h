@@ -16,18 +16,13 @@ class SchedulingDecision
 
     int32_t nFunctions = 0;
 
-    std::vector<uint32_t> messageIds;
+    std::vector<int32_t> messageIds;
     std::vector<std::string> hosts;
 
-    std::vector<uint32_t> appIdxs;
+    std::vector<int32_t> appIdxs;
 
     std::string returnHost;
 
     void addMessage(const std::string& host, const faabric::Message& msg);
-
-    void addMessageAt(int idx,
-                      const std::string& host,
-                      const faabric::Message& msg);
 };
-
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faabric/util/scheduling.h"
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointClient.h>
 
@@ -16,6 +17,9 @@ class PointToPointBroker
     PointToPointBroker();
 
     std::string getHostForReceiver(int appId, int recvIdx);
+
+    void setAndSendMappingsFromSchedulingDecision(
+      const faabric::util::SchedulingDecision& decision);
 
     void setHostForReceiver(int appId, int recvIdx, const std::string& host);
 
