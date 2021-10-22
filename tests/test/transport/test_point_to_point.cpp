@@ -293,17 +293,16 @@ TEST_CASE_METHOD(
 
     int nMessages = 6;
     auto req = batchExecFactory("foo", "bar", nMessages);
-
-    faabric::Message msgA = req->mutable_messages()->at(0);
-    faabric::Message msgB = req->mutable_messages()->at(1);
-    faabric::Message msgC = req->mutable_messages()->at(2);
-    faabric::Message msgD = req->mutable_messages()->at(3);
-    faabric::Message msgE = req->mutable_messages()->at(4);
-    faabric::Message msgF = req->mutable_messages()->at(5);
-
     for (int i = 0; i < nMessages; i++) {
         req->mutable_messages()->at(i).set_appindex(i);
     }
+
+    faabric::Message& msgA = req->mutable_messages()->at(0);
+    faabric::Message& msgB = req->mutable_messages()->at(1);
+    faabric::Message& msgC = req->mutable_messages()->at(2);
+    faabric::Message& msgD = req->mutable_messages()->at(3);
+    faabric::Message& msgE = req->mutable_messages()->at(4);
+    faabric::Message& msgF = req->mutable_messages()->at(5);
 
     int appId = msgA.appid();
     SchedulingDecision decision(appId);
