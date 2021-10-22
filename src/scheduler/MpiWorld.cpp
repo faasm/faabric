@@ -1,3 +1,4 @@
+#include "faabric/util/scheduling.h"
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/environment.h>
@@ -199,7 +200,8 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     std::vector<std::string> executedAt;
     if (size > 1) {
         // Send the init messages (note that message i corresponds to rank i+1)
-        executedAt = sch.callFunctions(req);
+        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+        executedAt = decision.hosts;
     }
     assert(executedAt.size() == size - 1);
 

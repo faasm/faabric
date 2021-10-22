@@ -128,7 +128,8 @@ int handleFakeDiffsThreadedFunction(
         // Dispatch the message, expecting them all to execute on other hosts
         std::string thisHost = faabric::util::getSystemConfig().endpointHost;
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        std::vector<std::string> executedHosts = sch.callFunctions(req);
+
+        std::vector<std::string> executedHosts = sch.callFunctions(req).hosts;
 
         bool rightHosts = true;
         for (auto& h : executedHosts) {

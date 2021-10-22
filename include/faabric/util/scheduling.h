@@ -11,7 +11,7 @@ namespace faabric::util {
 class SchedulingDecision
 {
   public:
-    SchedulingDecision(uint32_t appIdIn, int32_t nFunctionsIn);
+    SchedulingDecision(uint32_t appIdIn);
     uint32_t appId = 0;
 
     int32_t nFunctions = 0;
@@ -23,7 +23,11 @@ class SchedulingDecision
 
     std::string returnHost;
 
-    void addMessage(const std::string &host, const faabric::Message &msg);
+    void addMessage(const std::string& host, const faabric::Message& msg);
+
+    void addMessageAt(int idx,
+                      const std::string& host,
+                      const faabric::Message& msg);
 };
 
 }

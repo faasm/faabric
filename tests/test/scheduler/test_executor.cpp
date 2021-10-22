@@ -277,7 +277,7 @@ class TestExecutorFixture
         conf.overrideCpuCount = 10;
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
-        return sch.callFunctions(req, forceLocal);
+        return sch.callFunctions(req, forceLocal).hosts;
     }
 
   private:

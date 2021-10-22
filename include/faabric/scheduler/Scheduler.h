@@ -234,7 +234,7 @@ class Scheduler
     int scheduleFunctionsOnHost(
       const std::string& host,
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      std::vector<std::string>& records,
+      faabric::util::SchedulingDecision &decision,
       int offset,
       faabric::util::SnapshotData* snapshot);
 };

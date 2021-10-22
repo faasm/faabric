@@ -20,6 +20,7 @@ set(LIB_FILES
         network.cpp
         queue.cpp
         random.cpp
+        scheduling.cpp
         snapshot.cpp
         state.cpp
         string_tools.cpp

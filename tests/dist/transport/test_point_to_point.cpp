@@ -58,7 +58,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     }
 
     // Call the functions
-    std::vector<std::string> actualHosts = sch.callFunctions(req);
+    std::vector<std::string> actualHosts = sch.callFunctions(req).hosts;
     REQUIRE(actualHosts == expectedHosts);
 
     // Broadcast mappings to other hosts

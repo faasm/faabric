@@ -274,7 +274,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     }
 
     // Schedule the functions
-    std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne);
+    std::vector<std::string> actualHostsOne = sch.callFunctions(reqOne).hosts;
 
     // Check resource requests have been made to other host
     auto resRequestsOne = faabric::scheduler::getResourceRequests();
@@ -345,7 +345,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     reqTwo->set_type(execMode);
 
     // Schedule the functions
-    std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo);
+    std::vector<std::string> actualHostsTwo = sch.callFunctions(reqTwo).hosts;
 
     // Check resource request made again
     auto resRequestsTwo = faabric::scheduler::getResourceRequests();
@@ -435,7 +435,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     }
 
     // Submit the request
-    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    std::vector<std::string> executedHosts = sch.callFunctions(req).hosts;
 
     // Check list of executed hosts
     std::vector<std::string> expectedHosts =
@@ -704,8 +704,10 @@ TEST_CASE_METHOD(SlowExecutorFixture,
       faabric::util::batchExecFactory("blah", "foo", 1);
     req->mutable_messages()->at(0).set_masterhost(otherHost);
 
-    std::vector<std::string> expectedHosts = { "" };
-    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    std::vector<std::string> expectedHosts;
+    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    REQUIRE(decision.hosts.empty());
+    REQUIRE(decision.returnHost == otherHost);
     REQUIRE(executedHosts == expectedHosts);
 
     // Check forwarded to master
