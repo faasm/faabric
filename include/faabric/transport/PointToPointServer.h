@@ -11,7 +11,7 @@ class PointToPointServer final : public MessageEndpointServer
     PointToPointServer();
 
   private:
-    PointToPointBroker& broker;
+    PointToPointBroker& reg;
 
     void doAsyncRecv(int header,
                      const uint8_t* buffer,

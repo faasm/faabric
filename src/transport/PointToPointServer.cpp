@@ -1,7 +1,7 @@
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointCall.h>
 #include <faabric/transport/PointToPointServer.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
@@ -16,7 +16,7 @@ PointToPointServer::PointToPointServer()
       POINT_TO_POINT_SYNC_PORT,
       POINT_TO_POINT_INPROC_LABEL,
       faabric::util::getSystemConfig().pointToPointServerThreads)
-  , broker(getPointToPointBroker())
+  , reg(getPointToPointBroker())
 {}
 
 void PointToPointServer::doAsyncRecv(int header,
@@ -28,11 +28,11 @@ void PointToPointServer::doAsyncRecv(int header,
             PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
 
             // Send the message locally to the downstream socket
-            broker.sendMessage(msg.appid(),
-                               msg.sendidx(),
-                               msg.recvidx(),
-                               BYTES_CONST(msg.data().c_str()),
-                               msg.data().size());
+            reg.sendMessage(msg.appid(),
+                            msg.sendidx(),
+                            msg.recvidx(),
+                            BYTES_CONST(msg.data().c_str()),
+                            msg.data().size());
             break;
         }
         default: {
@@ -66,11 +66,11 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
 
     for (const auto& m : msg.mappings()) {
         // Record the mapping
-        broker.setHostForReceiver(m.appid(), m.recvidx(), m.host());
+        reg.setHostForReceiver(m.appid(), m.recvidx(), m.host());
     }
 
     // Record that this group is now set up on this host
-    broker.enableApp(msg.mappings().at(0).appid());
+    reg.enableApp(msg.mappings().at(0).appid());
 
     return std::make_unique<faabric::EmptyResponse>();
 }
@@ -78,7 +78,7 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
 void PointToPointServer::onWorkerStop()
 {
     // Clear any thread-local cached sockets
-    broker.resetThreadLocalCache();
+    reg.resetThreadLocalCache();
 }
 
 }
