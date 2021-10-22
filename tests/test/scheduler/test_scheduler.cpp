@@ -1,7 +1,7 @@
-#include "DummyExecutorFactory.h"
-#include "faabric/util/scheduling.h"
-#include "faabric_utils.h"
 #include <catch.hpp>
+
+#include "DummyExecutorFactory.h"
+#include "faabric_utils.h"
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
@@ -14,6 +14,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;

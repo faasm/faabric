@@ -269,17 +269,6 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     conf.reset();
 }
 
-std::set<int32_t> getRecvIdxsFromMapping(
-  faabric::PointToPointMappings& mappings)
-{
-    std::set<int32_t> idxs;
-    for (const auto& m : mappings.mappings()) {
-        idxs.insert(m.recvidx());
-    }
-
-    return idxs;
-};
-
 TEST_CASE_METHOD(
   PointToPointClientServerFixture,
   "Test setting up point-to-point mappings with scheduling decision",
@@ -336,13 +325,36 @@ TEST_CASE_METHOD(
                 -> bool { return a.first < b.first; });
 
     std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
+    std::set<int> expectedHostAIdxs = { msgB.appindex() };
+    std::set<int> expectedHostBIdxs = { msgA.appindex(),
+                                        msgD.appindex(),
+                                        msgE.appindex() };
+    std::set<int> expectedHostCIdxs = { msgC.appindex(), msgF.appindex() };
 
     // Check all mappings are the same
     for (int i = 0; i < 3; i++) {
         REQUIRE(actualSent.at(i).first == expectedHosts.at(i));
         faabric::PointToPointMappings actual = actualSent.at(i).second;
 
-        // TODO check mappings are correct
+        std::set<std::int32_t> hostAIdxs;
+        std::set<std::int32_t> hostBIdxs;
+        std::set<std::int32_t> hostCIdxs;
+
+        for (const auto& m : actual.mappings()) {
+            if (m.host() == hostA) {
+                hostAIdxs.insert(m.recvidx());
+            } else if (m.host() == hostB) {
+                hostBIdxs.insert(m.recvidx());
+            } else if (m.host() == hostC) {
+                hostCIdxs.insert(m.recvidx());
+            } else {
+                FAIL();
+            }
+        }
+
+        REQUIRE(hostAIdxs == expectedHostAIdxs);
+        REQUIRE(hostBIdxs == expectedHostBIdxs);
+        REQUIRE(hostCIdxs == expectedHostCIdxs);
     }
 }
 }

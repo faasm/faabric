@@ -1,8 +1,8 @@
 #pragma once
 
-#include "faabric/util/scheduling.h"
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/util/scheduling.h>
 
 #include <set>
 #include <shared_mutex>

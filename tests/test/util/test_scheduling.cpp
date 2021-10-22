@@ -1,9 +1,9 @@
 #include <catch.hpp>
 
-#include "faabric/util/func.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/util/func.h>
 #include <faabric/util/scheduling.h>
 
 using namespace faabric::util;

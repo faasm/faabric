@@ -1,10 +1,10 @@
-#include "faabric/util/scheduling.h"
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the

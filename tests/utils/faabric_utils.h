@@ -1,12 +1,12 @@
 #pragma once
 
-#include "faabric/util/scheduling.h"
 #include "fixtures.h"
 
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/state/State.h>
 #include <faabric/state/StateServer.h>
 #include <faabric/util/func.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric;
