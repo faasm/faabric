@@ -40,7 +40,7 @@ void SchedulingDecision::addMessage(const std::string& host,
 SchedulingDecision SchedulingDecision::fromPointToPointMappings(
   faabric::PointToPointMappings& mappings)
 {
-    SchedulingDecision decision(mappings.appid());
+    SchedulingDecision decision(mappings.appid(), mappings.groupid());
 
     for (const auto& m : mappings.mappings()) {
         decision.addMessage(m.host(), m.messageid(), m.recvidx());

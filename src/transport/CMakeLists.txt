@@ -25,7 +25,6 @@ set(LIB_FILES
     MpiMessageEndpoint.cpp
     PointToPointBroker.cpp
     PointToPointClient.cpp
-    PointToPointGroup.cpp
     PointToPointServer.cpp
     ${HEADERS}
 )

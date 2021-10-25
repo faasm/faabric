@@ -98,7 +98,7 @@ void PointToPointServer::recvGroupLock(const uint8_t* buffer,
                  msg.sendidx(),
                  recursive);
 
-    reg.getGroup(msg.groupid())->masterLock(msg.sendidx(), recursive);
+    PointToPointGroup::getGroup(msg.groupid())->lock(msg.sendidx(), recursive);
 }
 
 void PointToPointServer::recvGroupUnlock(const uint8_t* buffer,
@@ -112,7 +112,8 @@ void PointToPointServer::recvGroupUnlock(const uint8_t* buffer,
                  msg.sendidx(),
                  recursive);
 
-    reg.getGroup(msg.groupid())->masterUnlock(msg.sendidx(), recursive);
+    PointToPointGroup::getGroup(msg.groupid())
+      ->unlock(msg.sendidx(), recursive);
 }
 
 void PointToPointServer::onWorkerStop()

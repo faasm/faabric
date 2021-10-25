@@ -21,16 +21,19 @@ class PointToPointBroker;
 class PointToPointGroup
 {
   public:
-    PointToPointGroup(int groupIdIn,
-                      int groupSizeIn);
+    static std::shared_ptr<PointToPointGroup> getGroup(int groupId);
+
+    static bool groupExists(int groupId);
+
+    static void addGroup(int appId, int groupId, int groupSize);
+
+    static void clear();
+
+    PointToPointGroup(int appId, int groupIdIn, int groupSizeIn);
 
     void lock(int groupIdx, bool recursive);
 
-    void masterLock(int groupIdx, bool recursive);
-
     void unlock(int groupIdx, bool recursive);
-
-    void masterUnlock(int groupIdx, bool recursive);
 
     int getLockOwner(bool recursive);
 
@@ -47,9 +50,12 @@ class PointToPointGroup
     int getNotifyCount();
 
   private:
+    faabric::util::SystemConfig& conf;
+
     int timeoutMs = DEFAULT_DISTRIBUTED_TIMEOUT_MS;
 
     std::string masterHost;
+    int appId = 0;
     int groupId = 0;
     int groupSize = 0;
 
@@ -68,6 +74,10 @@ class PointToPointGroup
     std::queue<int> lockWaiters;
 
     void notifyLocked(int groupIdx);
+
+    void masterLock(int groupIdx, bool recursive);
+
+    void masterUnlock(int groupIdx, bool recursive);
 };
 
 class PointToPointBroker
@@ -93,10 +103,6 @@ class PointToPointBroker
                      const uint8_t* buffer,
                      size_t bufferSize);
 
-    std::shared_ptr<PointToPointGroup> getGroup(int groupId);
-
-    bool groupExists(int groupId);
-
     std::vector<uint8_t> recvMessage(int groupId, int sendIdx, int recvIdx);
 
     void clear();
@@ -112,10 +118,6 @@ class PointToPointBroker
     std::unordered_map<int, bool> groupMappingsFlags;
     std::unordered_map<int, std::mutex> groupMappingMutexes;
     std::unordered_map<int, std::condition_variable> groupMappingCvs;
-
-    std::shared_ptr<PointToPointClient> getClient(const std::string& host);
-
-    std::unordered_map<int, std::shared_ptr<PointToPointGroup>> groups;
 
     faabric::util::SystemConfig& conf;
 };

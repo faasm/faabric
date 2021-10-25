@@ -22,7 +22,9 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "[transport][ptp]")
 {
     int appIdA = 123;
+    int groupIdA = 321;
     int appIdB = 345;
+    int groupIdB = 543;
 
     int idxA1 = 1;
     int idxA2 = 2;
@@ -35,10 +37,12 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(broker.getIdxsRegisteredForGroup(appIdB).empty());
 
     faabric::PointToPointMappings mappingsA;
-    mappingsA.set_groupid(appIdA);
+    mappingsA.set_appid(appIdA);
+    mappingsA.set_groupid(groupIdA);
 
     faabric::PointToPointMappings mappingsB;
-    mappingsB.set_groupid(appIdB);
+    mappingsB.set_appid(appIdB);
+    mappingsB.set_groupid(groupIdB);
 
     auto* mappingA1 = mappingsA.add_mappings();
     mappingA1->set_recvidx(idxA1);
@@ -55,12 +59,12 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     cli.sendMappings(mappingsA);
     cli.sendMappings(mappingsB);
 
-    REQUIRE(broker.getIdxsRegisteredForGroup(appIdA).size() == 2);
-    REQUIRE(broker.getIdxsRegisteredForGroup(appIdB).size() == 1);
+    REQUIRE(broker.getIdxsRegisteredForGroup(groupIdA).size() == 2);
+    REQUIRE(broker.getIdxsRegisteredForGroup(groupIdB).size() == 1);
 
-    REQUIRE(broker.getHostForReceiver(appIdA, idxA1) == hostA);
-    REQUIRE(broker.getHostForReceiver(appIdA, idxA2) == hostB);
-    REQUIRE(broker.getHostForReceiver(appIdB, idxB1) == hostA);
+    REQUIRE(broker.getHostForReceiver(groupIdA, idxA1) == hostA);
+    REQUIRE(broker.getHostForReceiver(groupIdA, idxA2) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupIdB, idxB1) == hostA);
 }
 
 TEST_CASE_METHOD(PointToPointClientServerFixture,
@@ -250,7 +254,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
 TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test distributed lock/ unlock",
-                 "[ptp][sync]")
+                 "[ptp]")
 {
     int groupId = 123;
     int groupSize = 2;
@@ -282,7 +286,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         nCalls = 1;
     }
 
-    auto group = broker.getGroup(groupId);
+    auto group = PointToPointGroup::getGroup(groupId);
     REQUIRE(group->getLockOwner(recursive) == -1);
 
     for (int i = 0; i < nCalls; i++) {

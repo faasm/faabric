@@ -1,11 +1,11 @@
 #include <catch.hpp>
 
-#include "faabric/transport/PointToPointClient.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
@@ -32,8 +32,6 @@ class PointToPointGroupFixture
       : thisHost(conf.endpointHost)
     {
         faabric::util::setMockMode(true);
-
-        setUpGroup(4);
     }
 
     ~PointToPointGroupFixture()
@@ -42,7 +40,9 @@ class PointToPointGroupFixture
         faabric::util::setMockMode(false);
     }
 
-    void setUpGroup(int groupSize)
+    std::shared_ptr<PointToPointGroup> setUpGroup(int appId,
+                                                  int groupId,
+                                                  int groupSize)
     {
         req = faabric::util::batchExecFactory("foo", "bar", groupSize);
 
@@ -60,32 +60,43 @@ class PointToPointGroupFixture
 
         broker.setUpLocalMappingsFromSchedulingDecision(decision);
 
-        group = broker.getGroup(groupId);
+        return PointToPointGroup::getGroup(groupId);
     }
 
   protected:
     std::string thisHost;
 
-    int appId = 111;
-    int groupId = 123;
-
     std::shared_ptr<faabric::BatchExecuteRequest> req = nullptr;
-    std::shared_ptr<PointToPointGroup> group = nullptr;
 };
 
-TEST_CASE_METHOD(PointToPointGroupFixture,
-                 "Test remote lock requests",
-                 "[sync]")
+TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
 {
     std::string otherHost = "other";
-    group->overrideMasterHost(otherHost);
 
-    int groupIdx = 2;
-    msg.set_appindex(groupIdx);
+    int appId = 123;
+    int groupId = 345;
+    int groupIdx = 1;
 
-    faabric::CoordinationRequest::CoordinationOperation op =
-      faabric::CoordinationRequest::CoordinationOperation::
-        CoordinationRequest_CoordinationOperation_LOCK;
+    faabric::util::SchedulingDecision decision(appId, groupId);
+
+    faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
+    msgA.set_appid(appId);
+    msgA.set_groupid(groupId);
+    msgA.set_appindex(0);
+    msgA.set_groupindex(0);
+    decision.addMessage(otherHost, msgA);
+
+    faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
+    msgB.set_appid(appId);
+    msgB.set_groupid(groupId);
+    msgB.set_appindex(groupIdx);
+    msgB.set_groupindex(groupIdx);
+    decision.addMessage(thisHost, msgB);
+
+    broker.setUpLocalMappingsFromSchedulingDecision(decision);
+    auto group = PointToPointGroup::getGroup(groupId);
+
+    PointToPointCall op;
 
     std::vector<uint8_t> data(1, 0);
 
@@ -117,27 +128,36 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         group->unlock(groupIdx, recursive);
     }
 
-    std::vector<std::tuple<std::string, PointToPointCall, faabric::PointToPointMessage>>
+    std::vector<
+      std::tuple<std::string, PointToPointCall, faabric::PointToPointMessage>>
       actualRequests = getSentLockMessages();
 
     REQUIRE(actualRequests.size() == 1);
-    REQUIRE(actualRequests.at(0).first == thisHost);
+    REQUIRE(std::get<0>(actualRequests.at(0)) == otherHost);
 
-    faabric::CoordinationRequest req = actualRequests.at(0).second;
-    REQUIRE(req.operation() == op);
-    REQUIRE(req.fromhost() == thisHost);
-    REQUIRE(req.recursive() == recursive);
+    PointToPointCall actualOp = std::get<1>(actualRequests.at(0));
+    REQUIRE(actualOp == op);
+
+    faabric::PointToPointMessage req = std::get<2>(actualRequests.at(0));
+    REQUIRE(req.appid() == appId);
+    REQUIRE(req.groupid() == groupId);
+    REQUIRE(req.sendidx() == groupIdx);
+    REQUIRE(req.recvidx() == 0);
 }
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
                  "Test local locking and unlocking",
-                 "[sync]")
+                 "[ptp]")
 {
     std::atomic<int> sharedInt = 0;
+    int appId = 123;
+    int groupId = 234;
+
+    auto group = setUpGroup(appId, groupId, 3);
 
     group->localLock();
 
-    std::thread tA([this, &sharedInt] {
+    std::thread tA([&group, &sharedInt] {
         group->localLock();
 
         assert(sharedInt == 99);
@@ -164,10 +184,13 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
                  "Test distributed coordination barrier",
-                 "[sync]")
+                 "[ptp]")
 {
     int nThreads = 5;
-    setUpGroup(nThreads);
+    int appId = 123;
+    int groupId = 555;
+
+    auto group = setUpGroup(appId, groupId, nThreads);
 
     int nSums = 2;
     SECTION("Single operation") { nSums = 1; }
@@ -184,7 +207,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     std::vector<std::atomic<int>> sharedSums(nSums);
     std::vector<std::thread> threads;
     for (int i = 1; i < nThreads; i++) {
-        threads.emplace_back([this, i, nSums, &sharedSums] {
+        threads.emplace_back([&group, i, nSums, &sharedSums] {
             for (int s = 0; s < nSums; s++) {
                 sharedSums.at(s).fetch_add(s + 1);
                 group->barrier(i);
@@ -205,14 +228,20 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     }
 }
 
-TEST_CASE_METHOD(PointToPointGroupFixture, "Test local try lock", "[sync]")
+TEST_CASE_METHOD(PointToPointGroupFixture, "Test local try lock", "[ptp]")
 {
-    faabric::Message otherMsg = faabric::util::messageFactory("foo", "other");
-    otherMsg.set_groupid(345);
-    otherMsg.set_groupsize(2);
+    // Set up one group
+    int nThreads = 5;
+    int appId = 11;
+    int groupId = 111;
 
-    // TODO - set up group
-    auto otherGroup = broker.getGroup(otherMsg.groupid());
+    auto group = setUpGroup(appId, groupId, nThreads);
+
+    // Set up another group
+    int otherAppId = 22;
+    int otherGroupId = 222;
+
+    auto otherGroup = setUpGroup(otherAppId, otherGroupId, nThreads);
 
     // Should work for un-acquired lock
     REQUIRE(group->localTryLock());
@@ -243,17 +272,20 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test local try lock", "[sync]")
     otherGroup->localUnlock();
 }
 
-TEST_CASE_METHOD(PointToPointGroupFixture, "Test notify and await", "[sync]")
+TEST_CASE_METHOD(PointToPointGroupFixture, "Test notify and await", "[ptp]")
 {
     int nThreads = 4;
     int actual[4] = { 0, 0, 0, 0 };
 
-    // TODO - set up group
+    int appId = 11;
+    int groupId = 111;
+
+    auto group = setUpGroup(appId, groupId, nThreads);
 
     // Run threads in background to force a wait from the master
     std::vector<std::thread> threads;
     for (int i = 1; i < nThreads; i++) {
-        threads.emplace_back([this, i, &actual] {
+        threads.emplace_back([&group, i, &actual] {
             SLEEP_MS(1000);
             actual[i] = i;
 
