@@ -6,8 +6,6 @@ ARG FAABRIC_VERSION
 # Flag to say we're in a container
 ENV FAABRIC_DOCKER="on"
 
-RUN apt-get update
-
 # Put the code in place
 WORKDIR /code
 RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
