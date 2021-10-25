@@ -1,6 +1,6 @@
-#include "faabric_utils.h"
 #include <catch.hpp>
 
+#include "faabric_utils.h"
 #include "fixtures.h"
 #include "init.h"
 
@@ -9,6 +9,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/scheduling.h>
 
 namespace tests {
 
@@ -46,32 +47,24 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Set up individual messages
     // Note that this thread is acting as app index 0
+    faabric::util::SchedulingDecision expectedDecision(appId);
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
 
         msg.set_appindex(i + 1);
 
-        // Register function locations to where we assume they'll be executed
-        // (we'll confirm this is the case after scheduling)
-        broker.setHostForReceiver(
-          msg.appid(), msg.appindex(), expectedHosts.at(i));
+        // Add to expected decision
+        expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
     }
 
     // Call the functions
-    std::vector<std::string> actualHosts = sch.callFunctions(req);
-    REQUIRE(actualHosts == expectedHosts);
+    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
-    // Broadcast mappings to other hosts
-    broker.broadcastMappings(appId);
+    // Set up point-to-point mappings
+    broker.setAndSendMappingsFromSchedulingDecision(actualDecision);
 
-    // Send kick-off message to all functions
-    std::vector<uint8_t> kickOffData = { 0, 1, 2 };
-    for (int i = 0; i < nFuncs; i++) {
-        broker.sendMessage(
-          appId, 0, i + 1, kickOffData.data(), kickOffData.size());
-    }
-
-    // Check other functions executed successfully
+    // Check functions executed successfully
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
 

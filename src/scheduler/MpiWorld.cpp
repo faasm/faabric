@@ -4,6 +4,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
@@ -199,7 +200,8 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     std::vector<std::string> executedAt;
     if (size > 1) {
         // Send the init messages (note that message i corresponds to rank i+1)
-        executedAt = sch.callFunctions(req);
+        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+        executedAt = decision.hosts;
     }
     assert(executedAt.size() == size - 1);
 

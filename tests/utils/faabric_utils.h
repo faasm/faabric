@@ -6,6 +6,7 @@
 #include <faabric/state/State.h>
 #include <faabric/state/StateServer.h>
 #include <faabric/util/func.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric;
@@ -64,6 +65,10 @@ void cleanFaabric();
 
 void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);
+
+void checkSchedulingDecisionEquality(
+  const faabric::util::SchedulingDecision& decisionA,
+  const faabric::util::SchedulingDecision& decisionB);
 
 void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
                                 const scheduler::ExecGraphNode& nodeB);

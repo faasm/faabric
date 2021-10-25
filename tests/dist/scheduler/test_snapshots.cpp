@@ -1,6 +1,6 @@
-#include "faabric_utils.h"
 #include <catch.hpp>
 
+#include "faabric_utils.h"
 #include "fixtures.h"
 #include "init.h"
 
@@ -14,6 +14,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 
 namespace tests {
@@ -53,7 +54,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getWorkerIP() };
-    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
     int actualResult = sch.awaitThreadResult(m.id());
@@ -94,7 +96,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
     faabric::Message actualResult = sch.getFunctionResult(m.id(), 10000);

@@ -9,6 +9,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/scheduling.h>
 
 namespace tests {
 
@@ -23,12 +24,26 @@ TEST_CASE_METHOD(DistTestsFixture,
     res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);
 
+    std::string thisHost = conf.endpointHost;
+    std::string otherHost = getWorkerIP();
+
     // Set up the messages
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("funcs", "simple", nFuncs);
 
+    // Set up the expectation
+    faabric::util::SchedulingDecision expectedDecision(
+      req->messages().at(0).appid());
+    expectedDecision.addMessage(thisHost, req->messages().at(0));
+    expectedDecision.addMessage(thisHost, req->messages().at(1));
+    expectedDecision.addMessage(otherHost, req->messages().at(2));
+    expectedDecision.addMessage(otherHost, req->messages().at(3));
+
     // Call the functions
-    sch.callFunctions(req);
+    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+
+    // Check decision is as expected
+    checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
     // Check functions executed on this host
     for (int i = 0; i < nLocalSlots; i++) {

@@ -10,6 +10,7 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/random.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
@@ -202,14 +203,13 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
     }
 }
 
-std::vector<std::string> Scheduler::callFunctions(
+faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   bool forceLocal)
 {
     // Extract properties of the request
     int nMessages = req->messages_size();
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    std::vector<std::string> executed(nMessages);
 
     // Note, we assume all the messages are for the same function and have the
     // same master host
@@ -222,6 +222,9 @@ std::vector<std::string> Scheduler::callFunctions(
         throw std::runtime_error("Message with no master host");
     }
 
+    // Set up scheduling decision
+    SchedulingDecision decision(firstMsg.appid());
+
     // TODO - more granular locking, this is incredibly conservative
     faabric::util::FullLock lock(mx);
 
@@ -233,14 +236,15 @@ std::vector<std::string> Scheduler::callFunctions(
           "Forwarding {} {} back to master {}", nMessages, funcStr, masterHost);
 
         getFunctionCallClient(masterHost).executeFunctions(req);
-        return executed;
+        decision.returnHost = masterHost;
+        return decision;
     }
 
     if (forceLocal) {
         // We're forced to execute locally here so we do all the messages
         for (int i = 0; i < nMessages; i++) {
             localMessageIdxs.emplace_back(i);
-            executed.at(i) = thisHost;
+            decision.addMessage(thisHost, req->messages().at(i));
         }
     } else {
         // At this point we know we're the master host, and we've not been
@@ -316,7 +320,7 @@ std::vector<std::string> Scheduler::callFunctions(
               "Executing {}/{} {} locally", nLocally, nMessages, funcStr);
             for (int i = 0; i < nLocally; i++) {
                 localMessageIdxs.emplace_back(i);
-                executed.at(i) = thisHost;
+                decision.addMessage(thisHost, req->messages().at(i));
             }
         }
 
@@ -326,7 +330,7 @@ std::vector<std::string> Scheduler::callFunctions(
             // Schedule first to already registered hosts
             for (const auto& h : thisRegisteredHosts) {
                 int nOnThisHost = scheduleFunctionsOnHost(
-                  h, req, executed, offset, &snapshotData);
+                  h, req, decision, offset, &snapshotData);
 
                 offset += nOnThisHost;
                 if (offset >= nMessages) {
@@ -348,7 +352,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
                 // Schedule functions on the host
                 int nOnThisHost = scheduleFunctionsOnHost(
-                  h, req, executed, offset, &snapshotData);
+                  h, req, decision, offset, &snapshotData);
 
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
@@ -373,7 +377,7 @@ std::vector<std::string> Scheduler::callFunctions(
 
             for (; offset < nMessages; offset++) {
                 localMessageIdxs.emplace_back(offset);
-                executed.at(offset) = thisHost;
+                decision.addMessage(thisHost, req->messages().at(offset));
             }
         }
 
@@ -439,7 +443,7 @@ std::vector<std::string> Scheduler::callFunctions(
     // Records for tests
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
-            std::string executedHost = executed.at(i);
+            std::string executedHost = decision.hosts.at(i);
             faabric::Message msg = req->messages().at(i);
 
             // Log results if in test mode
@@ -452,7 +456,7 @@ std::vector<std::string> Scheduler::callFunctions(
         }
     }
 
-    return executed;
+    return decision;
 }
 
 std::vector<std::string> Scheduler::getUnregisteredHosts(
@@ -499,7 +503,7 @@ void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
 int Scheduler::scheduleFunctionsOnHost(
   const std::string& host,
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  std::vector<std::string>& records,
+  SchedulingDecision& decision,
   int offset,
   faabric::util::SnapshotData* snapshot)
 {
@@ -533,7 +537,7 @@ int Scheduler::scheduleFunctionsOnHost(
         auto* newMsg = hostRequest->add_messages();
         *newMsg = req->messages().at(i);
         newMsg->set_executeslocally(false);
-        records.at(i) = host;
+        decision.addMessage(host, req->messages().at(i));
     }
 
     SPDLOG_DEBUG(
