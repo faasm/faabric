@@ -1,5 +1,6 @@
 #include <catch.hpp>
 
+#include "faabric/transport/PointToPointClient.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -43,20 +44,33 @@ class PointToPointGroupFixture
 
     void setUpGroup(int groupSize)
     {
-        msg = faabric::util::messageFactory("foo", "bar");
-        msg.set_groupid(123);
-        msg.set_groupsize(groupSize);
+        req = faabric::util::batchExecFactory("foo", "bar", groupSize);
 
-        // TODO - set up group
+        faabric::util::SchedulingDecision decision(appId, groupId);
 
-        group = broker.getGroup(msg.groupid());
+        for (int i = 0; i < groupSize; i++) {
+            auto& msg = req->mutable_messages()->at(i);
+            msg.set_appid(appId);
+            msg.set_groupid(groupId);
+            msg.set_appindex(i);
+            msg.set_groupindex(i);
+
+            decision.addMessage(thisHost, msg);
+        }
+
+        broker.setUpLocalMappingsFromSchedulingDecision(decision);
+
+        group = broker.getGroup(groupId);
     }
 
   protected:
     std::string thisHost;
-    std::shared_ptr<PointToPointGroup> group = nullptr;
 
-    faabric::Message msg;
+    int appId = 111;
+    int groupId = 123;
+
+    std::shared_ptr<faabric::BatchExecuteRequest> req = nullptr;
+    std::shared_ptr<PointToPointGroup> group = nullptr;
 };
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
@@ -73,49 +87,38 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
       faabric::CoordinationRequest::CoordinationOperation::
         CoordinationRequest_CoordinationOperation_LOCK;
 
-    // Prepare the ptp message response
-    // TODO - set up group
-
     std::vector<uint8_t> data(1, 0);
 
     bool recursive = false;
 
     SECTION("Lock")
     {
-        op = faabric::CoordinationRequest::LOCK;
-
-        broker.sendMessage(
-          msg.groupid(), 0, groupIdx, data.data(), data.size());
-
+        op = PointToPointCall::LOCK_GROUP;
         group->lock(groupIdx, false);
     }
 
     SECTION("Lock recursive")
     {
-        op = faabric::CoordinationRequest::LOCK;
-
-        broker.sendMessage(
-          msg.groupid(), 0, groupIdx, data.data(), data.size());
-
+        op = PointToPointCall::LOCK_GROUP_RECURSIVE;
         recursive = true;
         group->lock(groupIdx, recursive);
     }
 
     SECTION("Unlock")
     {
-        op = faabric::CoordinationRequest::UNLOCK;
+        op = PointToPointCall::UNLOCK_GROUP;
         group->unlock(groupIdx, false);
     }
 
     SECTION("Unlock recursive")
     {
-        op = faabric::CoordinationRequest::UNLOCK;
+        op = PointToPointCall::UNLOCK_GROUP_RECURSIVE;
         recursive = true;
         group->unlock(groupIdx, recursive);
     }
 
-    std::vector<std::pair<std::string, faabric::CoordinationRequest>>
-      actualRequests = getCoordinationRequests();
+    std::vector<std::tuple<std::string, PointToPointCall, faabric::PointToPointMessage>>
+      actualRequests = getSentLockMessages();
 
     REQUIRE(actualRequests.size() == 1);
     REQUIRE(actualRequests.at(0).first == thisHost);
@@ -202,9 +205,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     }
 }
 
-TEST_CASE_METHOD(PointToPointGroupFixture,
-                 "Test local try lock",
-                 "[sync]")
+TEST_CASE_METHOD(PointToPointGroupFixture, "Test local try lock", "[sync]")
 {
     faabric::Message otherMsg = faabric::util::messageFactory("foo", "other");
     otherMsg.set_groupid(345);
@@ -242,9 +243,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     otherGroup->localUnlock();
 }
 
-TEST_CASE_METHOD(PointToPointGroupFixture,
-                 "Test notify and await",
-                 "[sync]")
+TEST_CASE_METHOD(PointToPointGroupFixture, "Test notify and await", "[sync]")
 {
     int nThreads = 4;
     int actual[4] = { 0, 0, 0, 0 };

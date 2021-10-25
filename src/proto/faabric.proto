@@ -216,15 +216,16 @@ message StateAppendedResponse {
 // ---------------------------------------------
 
 message PointToPointMessage {
-    int32 groupId = 1;
-    int32 sendIdx = 2;
-    int32 recvIdx = 3;
-
-    bytes data = 4;
+    int32 appId = 1;
+    int32 groupId = 2;
+    int32 sendIdx = 3;
+    int32 recvIdx = 4;
+    bytes data = 5;
 }
 
 message PointToPointMappings {
-    int32 groupId = 1;
+    int32 appId = 1;
+    int32 groupId = 2;
 
     message PointToPointMapping {
         string host = 1;
@@ -232,5 +233,5 @@ message PointToPointMappings {
         int32 recvIdx = 3;
     }
 
-    repeated PointToPointMapping mappings = 2;
+    repeated PointToPointMapping mappings = 3;
 }

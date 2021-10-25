@@ -16,6 +16,11 @@ static std::vector<std::pair<std::string, faabric::PointToPointMappings>>
 static std::vector<std::pair<std::string, faabric::PointToPointMessage>>
   sentMessages;
 
+static std::vector<std::tuple<std::string,
+                              faabric::transport::PointToPointCall,
+                              faabric::PointToPointMessage>>
+  sentLockMessages;
+
 std::vector<std::pair<std::string, faabric::PointToPointMappings>>
 getSentMappings()
 {
@@ -28,10 +33,19 @@ getSentPointToPointMessages()
     return sentMessages;
 }
 
+std::vector<std::tuple<std::string,
+                       faabric::transport::PointToPointCall,
+                       faabric::PointToPointMessage>>
+getSentLockMessages()
+{
+    return sentLockMessages;
+}
+
 void clearSentMessages()
 {
     sentMappings.clear();
     sentMessages.clear();
+    sentLockMessages.clear();
 }
 
 PointToPointClient::PointToPointClient(const std::string& hostIn)
@@ -60,11 +74,13 @@ void PointToPointClient::sendMessage(faabric::PointToPointMessage& msg)
 }
 
 void PointToPointClient::makeCoordinationRequest(
-  int32_t groupId,
-  int32_t groupIdx,
+  int appId,
+  int groupId,
+  int groupIdx,
   faabric::transport::PointToPointCall call)
 {
     faabric::PointToPointMessage req;
+    req.set_appid(appId);
     req.set_groupid(groupId);
     req.set_sendidx(groupIdx);
     req.set_recvidx(0);
@@ -96,27 +112,31 @@ void PointToPointClient::makeCoordinationRequest(
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
-        sentMessages.emplace_back(host, req);
+        sentLockMessages.emplace_back(host, call, req);
     } else {
         asyncSend(call, &req);
     }
 }
 
-void PointToPointClient::coordinationLock(int32_t groupId,
-                                          int32_t groupIdx,
-                                          bool recursive)
+void PointToPointClient::groupLock(int appId,
+                                   int groupId,
+                                   int groupIdx,
+                                   bool recursive)
 {
-    makeCoordinationRequest(groupId,
+    makeCoordinationRequest(appId,
+                            groupId,
                             groupIdx,
                             recursive ? PointToPointCall::LOCK_GROUP_RECURSIVE
                                       : PointToPointCall::LOCK_GROUP);
 }
 
-void PointToPointClient::coordinationUnlock(int32_t groupId,
-                                            int32_t groupIdx,
-                                            bool recursive)
+void PointToPointClient::groupUnlock(int appId,
+                                     int groupId,
+                                     int groupIdx,
+                                     bool recursive)
 {
-    makeCoordinationRequest(groupId,
+    makeCoordinationRequest(appId,
+                            groupId,
                             groupIdx,
                             recursive ? PointToPointCall::UNLOCK_GROUP_RECURSIVE
                                       : PointToPointCall::UNLOCK_GROUP);

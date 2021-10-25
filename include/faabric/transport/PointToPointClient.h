@@ -12,8 +12,10 @@ getSentMappings();
 std::vector<std::pair<std::string, faabric::PointToPointMessage>>
 getSentPointToPointMessages();
 
-std::vector<std::pair<std::string, faabric::CoordinationRequest>>
-getCoordinationRequests();
+std::vector<std::tuple<std::string,
+                       faabric::transport::PointToPointCall,
+                       faabric::PointToPointMessage>>
+getSentLockMessages();
 
 void clearSentMessages();
 
@@ -26,17 +28,20 @@ class PointToPointClient : public faabric::transport::MessageEndpointClient
 
     void sendMessage(faabric::PointToPointMessage& msg);
 
-    void coordinationLock(int32_t groupId,
-                          int32_t groupIdx,
-                          bool recursive = false);
+    void groupLock(int appId,
+                   int groupId,
+                   int groupIdx,
+                   bool recursive = false);
 
-    void coordinationUnlock(int32_t groupId,
-                            int32_t groupIdx,
-                            bool recursive = false);
+    void groupUnlock(int appId,
+                     int groupId,
+                     int groupIdx,
+                     bool recursive = false);
 
   private:
-    void makeCoordinationRequest(int32_t groupId,
-                                 int32_t groupIdx,
+    void makeCoordinationRequest(int appId,
+                                 int groupId,
+                                 int groupIdx,
                                  faabric::transport::PointToPointCall call);
 };
 }

@@ -1,9 +1,7 @@
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
-#include <faabric/util/config.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/testing.h>
 
@@ -12,6 +10,7 @@ namespace faabric::scheduler {
 // -----------------------------------
 // Mocking
 // -----------------------------------
+
 static std::mutex mockMutex;
 
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
@@ -143,5 +142,4 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
         asyncSend(faabric::scheduler::FunctionCalls::Unregister, &req);
     }
 }
-
 }

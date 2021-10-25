@@ -26,9 +26,12 @@ class PointToPointServer final : public MessageEndpointServer
       const uint8_t* buffer,
       size_t bufferSize);
 
-    // --- Function group operations ---
-    void recvCoordinationLock(const uint8_t* buffer, size_t bufferSize);
+    void recvGroupLock(const uint8_t* buffer,
+                       size_t bufferSize,
+                       bool recursive);
 
-    void recvCoordinationUnlock(const uint8_t* buffer, size_t bufferSize);
+    void recvGroupUnlock(const uint8_t* buffer,
+                         size_t bufferSize,
+                         bool recursive);
 };
 }

@@ -39,8 +39,7 @@ std::string getPointToPointKey(int groupId, int recvIdx)
 }
 
 PointToPointBroker::PointToPointBroker()
-    : conf(faabric::util::getSystemConfig()),
-  sch(faabric::scheduler::getScheduler())
+  : conf(faabric::util::getSystemConfig())
 {}
 
 std::string PointToPointBroker::getHostForReceiver(int groupId, int recvIdx)
@@ -63,6 +62,9 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
   const faabric::util::SchedulingDecision& decision)
 {
     int groupId = decision.groupId;
+    int groupSize = decision.nFunctions;
+
+    // Prepare set of hosts in these mappings
     std::set<std::string> hosts;
 
     {
@@ -88,6 +90,17 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
             // If it's not this host, add to set of returned hosts
             if (host != faabric::util::getSystemConfig().endpointHost) {
                 hosts.insert(host);
+            }
+        }
+    }
+
+    {
+        if (groups.find(groupId) == groups.end()) {
+            faabric::util::FullLock lock(brokerMutex);
+            if (groups.find(groupId) == groups.end()) {
+                groups.emplace(std::make_pair(
+                  groupId,
+                  std::make_shared<PointToPointGroup>(groupId, groupSize)));
             }
         }
     }
@@ -250,8 +263,7 @@ std::shared_ptr<PointToPointClient> PointToPointBroker::getClient(
     return clients[host];
 }
 
-std::shared_ptr<PointToPointGroup>
-PointToPointBroker::getGroup(int32_t groupId)
+std::shared_ptr<PointToPointGroup> PointToPointBroker::getGroup(int groupId)
 {
     if (groups.find(groupId) == groups.end()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
@@ -261,32 +273,12 @@ PointToPointBroker::getGroup(int32_t groupId)
     return groups.at(groupId);
 }
 
-std::shared_ptr<PointToPointGroup> PointToPointBroker::initGroup(
-  const std::string& masterHost,
-  int32_t groupId,
-  int32_t groupSize)
+bool PointToPointBroker::groupExists(int groupId)
 {
-    if (groups.find(groupId) == groups.end()) {
-        faabric::util::FullLock lock(sharedMutex);
-        if (groups.find(groupId) == groups.end()) {
-            groups.emplace(
-              std::make_pair(groupId,
-                             std::make_shared<PointToPointGroup>(
-                               masterHost, groupId, groupSize)));
-        }
-    }
-
-    {
-        faabric::util::SharedLock lock(sharedMutex);
-        return groups.at(groupId);
-    }
-}
-
-bool PointToPointBroker::groupExists(int32_t groupId)
-{
-    faabric::util::SharedLock lock(sharedMutex);
+    faabric::util::SharedLock lock(brokerMutex);
     return groups.find(groupId) != groups.end();
 }
+
 void PointToPointBroker::clear()
 {
     faabric::util::SharedLock lock(brokerMutex);

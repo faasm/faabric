@@ -67,7 +67,7 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
 {}
 
 void SnapshotClient::pushSnapshot(const std::string& key,
-                                  int32_t groupId,
+                                  int groupId,
                                   const faabric::util::SnapshotData& data)
 {
     if (data.size == 0) {
@@ -97,7 +97,7 @@ void SnapshotClient::pushSnapshot(const std::string& key,
 
 void SnapshotClient::pushSnapshotDiffs(
   std::string snapshotKey,
-  int32_t groupId,
+  int groupId,
   std::vector<faabric::util::SnapshotDiff> diffs)
 {
     if (faabric::util::isMockMode()) {

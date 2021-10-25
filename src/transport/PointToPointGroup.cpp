@@ -1,6 +1,4 @@
 #include <faabric/transport/PointToPointBroker.h>
-#include <faabric/transport/PointToPointGroup.h>
-
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -18,30 +16,22 @@
 
 namespace faabric::transport {
 
-PointToPointGroup::PointToPointGroup(const std::string& masterHostIn,
-                                     int32_t groupIdIn,
-                                     int32_t groupSizeIn)
-  : masterHost(masterHostIn)
-  , groupId(groupIdIn)
+PointToPointGroup::PointToPointGroup(int32_t groupIdIn, int32_t groupSizeIn)
+  : groupId(groupIdIn)
   , groupSize(groupSizeIn)
-  , isMasteredThisHost(faabric::util::getSystemConfig().endpointHost ==
-                       masterHost)
-  , masterClient(masterHost)
   , ptpBroker(faabric::transport::getPointToPointBroker())
 {}
 
 void PointToPointGroup::lock(int32_t groupIdx, bool recursive)
 {
-    if (!isMasteredThisHost) {
-        // Send remote request
-        masterClient.coordinationLock(groupId, groupIdx, recursive);
+    // TODO send ptp message to lock
 
-        // Await ptp response
-        ptpBroker.recvMessage(groupId, 0, groupIdx);
+    // Await ptp response
+    ptpBroker.recvMessage(groupId, 0, groupIdx);
+}
 
-        return;
-    }
-
+void PointToPointGroup::masterLock(int32_t groupIdx, bool recursive)
+{
     bool success = false;
     {
         faabric::util::UniqueLock lock(mx);
@@ -95,12 +85,11 @@ bool PointToPointGroup::localTryLock()
 
 void PointToPointGroup::unlock(int32_t groupIdx, bool recursive)
 {
-    if (!isMasteredThisHost) {
-        // Send remote request
-        masterClient.coordinationUnlock(groupId, groupIdx, recursive);
-        return;
-    }
+    // TODO send ptp unlock message
+}
 
+void PointToPointGroup::masterUnlock(int groupIdx, bool recursive)
+{
     faabric::util::UniqueLock lock(mx);
 
     if (recursive) {
@@ -174,13 +163,6 @@ void PointToPointGroup::notify(int32_t groupIdx)
 
 int32_t PointToPointGroup::getLockOwner(bool recursive)
 {
-    if (!isMasteredThisHost) {
-        SPDLOG_ERROR(
-          "Cannot check if group {} locked, not mastered on this host",
-          groupId);
-        throw std::runtime_error("Checking group lock on non-master host");
-    }
-
     if (recursive) {
         if (!recursiveLockOwners.empty()) {
             return recursiveLockOwners.top();
@@ -190,11 +172,5 @@ int32_t PointToPointGroup::getLockOwner(bool recursive)
     } else {
         return lockOwnerIdx;
     }
-}
-
-void PointToPointGroup::overrideMasterHost(const std::string& host)
-{
-    masterHost = host;
-    isMasteredThisHost = faabric::util::getSystemConfig().endpointHost == host;
 }
 }

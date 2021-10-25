@@ -286,7 +286,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(group->getLockOwner(recursive) == -1);
 
     for (int i = 0; i < nCalls; i++) {
-        cli.coordinationLock(msg.groupid(), msg.appindex(), recursive);
+        cli.groupLock(msg.groupid(), msg.appindex(), recursive);
         broker.recvMessage(groupId, 0, msg.appindex());
     }
 
@@ -294,7 +294,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     for (int i = 0; i < nCalls; i++) {
         server.setRequestLatch();
-        cli.coordinationUnlock(msg.groupid(), msg.appindex(), recursive);
+        cli.groupUnlock(msg.groupid(), msg.appindex(), recursive);
         server.awaitRequestLatch();
     }
 
