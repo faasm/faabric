@@ -1,9 +1,13 @@
 #include <catch.hpp>
 
+#include "faabric_utils.h"
+#include "fixtures.h"
+
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
@@ -16,7 +20,6 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
-#include <faabric_utils.h>
 
 using namespace faabric::scheduler;
 
@@ -25,11 +28,18 @@ class ClientServerFixture
   : public RedisTestFixture
   , public SchedulerTestFixture
   , public StateTestFixture
+  , public PointToPointTestFixture
+  , public DistributedCoordinationTestFixture
 {
   protected:
     FunctionCallServer server;
     FunctionCallClient cli;
+
     std::shared_ptr<DummyExecutorFactory> executorFactory;
+
+    std::shared_ptr<DistributedCoordinationGroup> coordGroup = nullptr;
+    int groupId = 123;
+    int groupSize = 2;
 
   public:
     ClientServerFixture()
@@ -40,6 +50,16 @@ class ClientServerFixture
         setExecutorFactory(executorFactory);
 
         server.start();
+    }
+
+    void setUpCoordinationGroup(faabric::Message& msg)
+    {
+        msg.set_groupsize(groupSize);
+        msg.set_groupid(groupId);
+
+        distCoord.initGroup(msg);
+
+        coordGroup = distCoord.getCoordinationGroup(msg.groupid());
     }
 
     ~ClientServerFixture()
@@ -249,5 +269,51 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
 
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();
+}
+
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test distributed lock/ unlock",
+                 "[scheduler][sync]")
+{
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    setUpCoordinationGroup(msg);
+
+    // Set up ptp mapping
+    for (int i = 0; i < groupSize; i++) {
+        broker.setHostForReceiver(
+          groupId, i, faabric::util::getSystemConfig().endpointHost);
+    }
+
+    bool recursive = false;
+    int nCalls = 1;
+
+    SECTION("Recursive")
+    {
+        recursive = true;
+        nCalls = 10;
+    }
+
+    SECTION("Non-recursive")
+    {
+        recursive = false;
+        nCalls = 1;
+    }
+
+    REQUIRE(coordGroup->getLockOwner(recursive) == -1);
+
+    for (int i = 0; i < nCalls; i++) {
+        cli.coordinationLock(msg.groupid(), msg.appindex(), recursive);
+        broker.recvMessage(groupId, 0, msg.appindex());
+    }
+
+    REQUIRE(coordGroup->getLockOwner(recursive) == msg.appindex());
+
+    for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
+        cli.coordinationUnlock(msg.groupid(), msg.appindex(), recursive);
+        server.awaitRequestLatch();
+    }
+
+    REQUIRE(coordGroup->getLockOwner(recursive) == -1);
 }
 }

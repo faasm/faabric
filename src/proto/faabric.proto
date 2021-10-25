@@ -57,6 +57,30 @@ message FunctionStatusResponse {
     FunctionStatus status = 1;
 }
 
+// ---------------------------------------------
+// FUNCTION GROUPS
+// ---------------------------------------------
+
+message CoordinationRequest {
+    int32 groupId = 1;
+    int32 groupSize = 2;
+    int32 groupIdx = 3;
+    bool recursive = 4;
+    string fromHost = 5;
+
+    enum CoordinationOperation {
+        LOCK = 0;
+        UNLOCK = 1;
+        NOTIFY = 2;
+        BARRIER = 3;
+    }
+    CoordinationOperation operation = 6;
+}
+
+// ---------------------------------------------
+// MPI
+// ---------------------------------------------
+
 message MPIMessage {
     enum MPIMessageType {
         NORMAL = 0;
@@ -133,21 +157,26 @@ message Message {
     string pythonFunction = 25;
     string pythonEntry = 26;
 
-    bool isMpi = 27;
-    int32 mpiWorldId = 28;
-    int32 mpiRank = 29;
-    int32 mpiWorldSize = 30;
+    // Function groups
+    int32 groupId = 27;
+    int32 groupSize = 28;
 
-    string cmdline = 31;
+    // MPI
+    bool isMpi = 29;
+    int32 mpiWorldId = 30;
+    int32 mpiRank = 31;
+    int32 mpiWorldSize = 32;
+
+    string cmdline = 33;
 
     // SGX
-    bool isSgx = 32;
+    bool isSgx = 34;
 
-    string sgxSid = 33;
-    string sgxNonce = 34;
-    string sgxTag = 35;
-    bytes sgxPolicy = 36;
-    bytes sgxResult = 37;
+    string sgxSid = 35;
+    string sgxNonce = 36;
+    string sgxTag = 37;
+    bytes sgxPolicy = 38;
+    bytes sgxResult = 39;
 }
 
 // ---------------------------------------------

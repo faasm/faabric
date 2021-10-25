@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/FunctionCallApi.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/MessageEndpointServer.h>
@@ -14,6 +15,8 @@ class FunctionCallServer final
 
   private:
     Scheduler& scheduler;
+
+    faabric::scheduler::DistributedCoordinator& distCoord;
 
     void doAsyncRecv(int header,
                      const uint8_t* buffer,
@@ -32,5 +35,10 @@ class FunctionCallServer final
     void recvExecuteFunctions(const uint8_t* buffer, size_t bufferSize);
 
     void recvUnregister(const uint8_t* buffer, size_t bufferSize);
+
+    // --- Function group operations ---
+    void recvCoordinationLock(const uint8_t* buffer, size_t bufferSize);
+
+    void recvCoordinationUnlock(const uint8_t* buffer, size_t bufferSize);
 };
 }

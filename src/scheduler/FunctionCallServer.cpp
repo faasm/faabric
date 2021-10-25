@@ -1,6 +1,8 @@
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
@@ -15,6 +17,7 @@ FunctionCallServer::FunctionCallServer()
       FUNCTION_INPROC_LABEL,
       faabric::util::getSystemConfig().functionServerThreads)
   , scheduler(getScheduler())
+  , distCoord(getDistributedCoordinator())
 {}
 
 void FunctionCallServer::doAsyncRecv(int header,
@@ -28,6 +31,14 @@ void FunctionCallServer::doAsyncRecv(int header,
         }
         case faabric::scheduler::FunctionCalls::Unregister: {
             recvUnregister(buffer, bufferSize);
+            break;
+        }
+        case faabric::scheduler::FunctionCalls::GroupLock: {
+            recvCoordinationLock(buffer, bufferSize);
+            break;
+        }
+        case faabric::scheduler::FunctionCalls::GroupUnlock: {
+            recvCoordinationUnlock(buffer, bufferSize);
             break;
         }
         default: {
@@ -99,5 +110,36 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
     auto response = std::make_unique<faabric::HostResources>(
       scheduler.getThisHostResources());
     return response;
+}
+
+void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
+                                              size_t bufferSize)
+{
+    PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
+    SPDLOG_TRACE("Receiving lock on {} for idx {} (recursive {})",
+                 msg.groupid(),
+                 msg.groupidx(),
+                 msg.recursive());
+
+    // Set up point-to-point mapping back to the host
+    faabric::transport::getPointToPointBroker().setHostForReceiver(
+      msg.groupid(), msg.groupidx(), msg.fromhost());
+
+    distCoord.getCoordinationGroup(msg.groupid())
+      ->lock(msg.groupidx(), msg.recursive());
+}
+
+void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
+                                                size_t bufferSize)
+{
+    PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
+
+    SPDLOG_TRACE("Receiving unlock on {} for idx {} (recursive {})",
+                 msg.groupid(),
+                 msg.groupidx(),
+                 msg.recursive());
+
+    distCoord.getCoordinationGroup(msg.groupid())
+      ->unlock(msg.groupidx(), msg.recursive());
 }
 }
