@@ -1,10 +1,12 @@
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/redis/Redis.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+
+#define MAPPING_TIMEOUT_MS 10000
 
 namespace faabric::transport {
 
@@ -36,7 +38,9 @@ std::string getPointToPointKey(int appId, int recvIdx)
     return fmt::format("{}-{}", appId, recvIdx);
 }
 
-PointToPointBroker::PointToPointBroker() {}
+PointToPointBroker::PointToPointBroker()
+  : sch(faabric::scheduler::getScheduler())
+{}
 
 std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
 {
@@ -53,67 +57,106 @@ std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
     return mappings[key];
 }
 
-void PointToPointBroker::setHostForReceiver(int appId,
-                                            int recvIdx,
-                                            const std::string& host)
+std::set<std::string>
+PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
+  const faabric::util::SchedulingDecision& decision)
 {
-    faabric::util::FullLock lock(brokerMutex);
+    int appId = decision.appId;
+    std::set<std::string> hosts;
 
-    SPDLOG_TRACE(
-      "Setting point-to-point mapping {}:{} to {}", appId, recvIdx, host);
+    {
+        faabric::util::FullLock lock(brokerMutex);
 
-    // Record this index for this app
-    appIdxs[appId].insert(recvIdx);
+        // Set up the mappings
+        for (int i = 0; i < decision.nFunctions; i++) {
+            int recvIdx = decision.appIdxs.at(i);
+            const std::string& host = decision.hosts.at(i);
 
-    // Add host mapping
-    std::string key = getPointToPointKey(appId, recvIdx);
-    mappings[key] = host;
+            SPDLOG_DEBUG("Setting point-to-point mapping {}:{} to {}",
+                         appId,
+                         recvIdx,
+                         host);
+
+            // Record this index for this app
+            appIdxs[appId].insert(recvIdx);
+
+            // Add host mapping
+            std::string key = getPointToPointKey(appId, recvIdx);
+            mappings[key] = host;
+
+            // If it's not this host, add to set of returned hosts
+            if (host != faabric::util::getSystemConfig().endpointHost) {
+                hosts.insert(host);
+            }
+        }
+    }
+
+    {
+        // Lock this app
+        std::unique_lock<std::mutex> lock(appMappingMutexes[appId]);
+
+        // Enable the app
+        appMappingsFlags[appId] = true;
+
+        // Notify waiters
+        appMappingCvs[appId].notify_all();
+    }
+
+    return hosts;
 }
 
-void PointToPointBroker::broadcastMappings(int appId)
+void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
+  const faabric::util::SchedulingDecision& decision)
 {
-    // TODO seems excessive to broadcast to all hosts, could we perhaps use the
-    // set of registered hosts?
-    redis::Redis& redis = redis::Redis::getQueue();
-    std::set<std::string> hosts = redis.smembers(AVAILABLE_HOST_SET);
+    int appId = decision.appId;
 
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    // Set up locally
+    std::set<std::string> otherHosts =
+      setUpLocalMappingsFromSchedulingDecision(decision);
 
-    for (const auto& host : hosts) {
-        // Skip this host
-        if (host == conf.endpointHost) {
-            continue;
+    // Send out to other hosts
+    for (const auto& host : otherHosts) {
+        faabric::PointToPointMappings msg;
+        msg.set_appid(appId);
+
+        std::set<int>& indexes = appIdxs[appId];
+
+        for (int i = 0; i < decision.nFunctions; i++) {
+            auto* mapping = msg.add_mappings();
+            mapping->set_host(decision.hosts.at(i));
+            mapping->set_messageid(decision.messageIds.at(i));
+            mapping->set_recvidx(decision.appIdxs.at(i));
         }
 
-        sendMappings(appId, host);
+        SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",
+                     indexes.size(),
+                     appId,
+                     host);
+
+        auto cli = getClient(host);
+        cli->sendMappings(msg);
     }
 }
 
-void PointToPointBroker::sendMappings(int appId, const std::string& host)
+void PointToPointBroker::waitForMappingsOnThisHost(int appId)
 {
-    faabric::util::SharedLock lock(brokerMutex);
+    // Check if it's been enabled
+    if (!appMappingsFlags[appId]) {
+        // Lock this app
+        std::unique_lock<std::mutex> lock(appMappingMutexes[appId]);
 
-    faabric::PointToPointMappings msg;
+        // Wait for app to be enabled
+        auto timePoint = std::chrono::system_clock::now() +
+                         std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
 
-    std::set<int>& indexes = appIdxs[appId];
+        if (!appMappingCvs[appId].wait_until(lock, timePoint, [this, appId] {
+                return appMappingsFlags[appId];
+            })) {
 
-    for (auto i : indexes) {
-        std::string key = getPointToPointKey(appId, i);
-        std::string host = mappings[key];
-
-        auto* mapping = msg.add_mappings();
-        mapping->set_appid(appId);
-        mapping->set_recvidx(i);
-        mapping->set_host(host);
+            SPDLOG_ERROR("Timed out waiting for app mappings {}", appId);
+            throw std::runtime_error("Timed out waiting for app mappings");
+        }
     }
-
-    SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",
-                 indexes.size(),
-                 appId,
-                 host);
-
-    auto cli = getClient(host);
-    cli->sendMappings(msg);
 }
 
 std::set<int> PointToPointBroker::getIdxsRegisteredForApp(int appId)
@@ -128,6 +171,8 @@ void PointToPointBroker::sendMessage(int appId,
                                      const uint8_t* buffer,
                                      size_t bufferSize)
 {
+    waitForMappingsOnThisHost(appId);
+
     std::string host = getHostForReceiver(appId, recvIdx);
 
     if (host == faabric::util::getSystemConfig().endpointHost) {
@@ -209,6 +254,10 @@ void PointToPointBroker::clear()
 
     appIdxs.clear();
     mappings.clear();
+
+    appMappingMutexes.clear();
+    appMappingsFlags.clear();
+    appMappingCvs.clear();
 }
 
 void PointToPointBroker::resetThreadLocalCache()
