@@ -64,9 +64,10 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
 {
     PARSE_MSG(faabric::PointToPointMappings, buffer, bufferSize)
 
-    for (const auto& m : msg.mappings()) {
-        reg.setHostForReceiver(m.appid(), m.recvidx(), m.host());
-    }
+    faabric::util::SchedulingDecision decision =
+      faabric::util::SchedulingDecision::fromPointToPointMappings(msg);
+
+    reg.setUpLocalMappingsFromSchedulingDecision(decision);
 
     return std::make_unique<faabric::EmptyResponse>();
 }

@@ -2,6 +2,7 @@
 
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/util/scheduling.h>
 
 #include <set>
 #include <shared_mutex>
@@ -17,11 +18,13 @@ class PointToPointBroker
 
     std::string getHostForReceiver(int appId, int recvIdx);
 
-    void setHostForReceiver(int appId, int recvIdx, const std::string& host);
+    std::set<std::string> setUpLocalMappingsFromSchedulingDecision(
+      const faabric::util::SchedulingDecision& decision);
 
-    void broadcastMappings(int appId);
+    void setAndSendMappingsFromSchedulingDecision(
+      const faabric::util::SchedulingDecision& decision);
 
-    void sendMappings(int appId, const std::string& host);
+    void waitForMappingsOnThisHost(int appId);
 
     std::set<int> getIdxsRegisteredForApp(int appId);
 
@@ -42,6 +45,10 @@ class PointToPointBroker
 
     std::unordered_map<int, std::set<int>> appIdxs;
     std::unordered_map<std::string, std::string> mappings;
+
+    std::unordered_map<int, bool> appMappingsFlags;
+    std::unordered_map<int, std::mutex> appMappingMutexes;
+    std::unordered_map<int, std::condition_variable> appMappingCvs;
 
     std::shared_ptr<PointToPointClient> getClient(const std::string& host);
 
