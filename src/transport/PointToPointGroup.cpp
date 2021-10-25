@@ -1,5 +1,5 @@
-#include <faabric/scheduler/DistributedCoordinationGroup.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointGroup.h>
 
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
@@ -16,12 +16,11 @@
         throw std::runtime_error("Distributed coordination timeout");          \
     }
 
-namespace faabric::scheduler {
+namespace faabric::transport {
 
-DistributedCoordinationGroup::DistributedCoordinationGroup(
-  const std::string& masterHostIn,
-  int32_t groupIdIn,
-  int32_t groupSizeIn)
+PointToPointGroup::PointToPointGroup(const std::string& masterHostIn,
+                                     int32_t groupIdIn,
+                                     int32_t groupSizeIn)
   : masterHost(masterHostIn)
   , groupId(groupIdIn)
   , groupSize(groupSizeIn)
@@ -31,7 +30,7 @@ DistributedCoordinationGroup::DistributedCoordinationGroup(
   , ptpBroker(faabric::transport::getPointToPointBroker())
 {}
 
-void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
+void PointToPointGroup::lock(int32_t groupIdx, bool recursive)
 {
     if (!isMasteredThisHost) {
         // Send remote request
@@ -83,18 +82,18 @@ void DistributedCoordinationGroup::lock(int32_t groupIdx, bool recursive)
     }
 }
 
-void DistributedCoordinationGroup::localLock()
+void PointToPointGroup::localLock()
 {
     LOCK_TIMEOUT(localMx, timeoutMs);
 }
 
-bool DistributedCoordinationGroup::localTryLock()
+bool PointToPointGroup::localTryLock()
 {
     SPDLOG_TRACE("Trying local lock on {}", groupId);
     return localMx.try_lock();
 }
 
-void DistributedCoordinationGroup::unlock(int32_t groupIdx, bool recursive)
+void PointToPointGroup::unlock(int32_t groupIdx, bool recursive)
 {
     if (!isMasteredThisHost) {
         // Send remote request
@@ -127,19 +126,19 @@ void DistributedCoordinationGroup::unlock(int32_t groupIdx, bool recursive)
     }
 }
 
-void DistributedCoordinationGroup::localUnlock()
+void PointToPointGroup::localUnlock()
 {
     localMx.unlock();
 }
 
-void DistributedCoordinationGroup::notifyLocked(int32_t groupIdx)
+void PointToPointGroup::notifyLocked(int32_t groupIdx)
 {
     std::vector<uint8_t> data(1, 0);
 
     ptpBroker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
 }
 
-void DistributedCoordinationGroup::barrier(int32_t groupIdx)
+void PointToPointGroup::barrier(int32_t groupIdx)
 {
     // TODO implement a more efficient barrier implementation to avoid load on
     // the master
@@ -161,7 +160,7 @@ void DistributedCoordinationGroup::barrier(int32_t groupIdx)
     }
 }
 
-void DistributedCoordinationGroup::notify(int32_t groupIdx)
+void PointToPointGroup::notify(int32_t groupIdx)
 {
     if (groupIdx == 0) {
         for (int i = 1; i < groupSize; i++) {
@@ -173,7 +172,7 @@ void DistributedCoordinationGroup::notify(int32_t groupIdx)
     }
 }
 
-int32_t DistributedCoordinationGroup::getLockOwner(bool recursive)
+int32_t PointToPointGroup::getLockOwner(bool recursive)
 {
     if (!isMasteredThisHost) {
         SPDLOG_ERROR(
@@ -193,7 +192,7 @@ int32_t DistributedCoordinationGroup::getLockOwner(bool recursive)
     }
 }
 
-void DistributedCoordinationGroup::overrideMasterHost(const std::string& host)
+void PointToPointGroup::overrideMasterHost(const std::string& host)
 {
     masterHost = host;
     isMasteredThisHost = faabric::util::getSystemConfig().endpointHost == host;

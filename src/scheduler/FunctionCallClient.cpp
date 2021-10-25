@@ -12,7 +12,7 @@ namespace faabric::scheduler {
 // -----------------------------------
 // Mocking
 // -----------------------------------
-std::mutex mockMutex;
+static std::mutex mockMutex;
 
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 
@@ -31,9 +31,6 @@ static std::unordered_map<std::string,
 
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
-
-static std::vector<std::pair<std::string, faabric::CoordinationRequest>>
-  coordinationRequests;
 
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
@@ -63,12 +60,6 @@ getUnregisterRequests()
     return unregisterRequests;
 }
 
-std::vector<std::pair<std::string, faabric::CoordinationRequest>>
-getCoordinationRequests()
-{
-    return coordinationRequests;
-}
-
 void queueResourceResponse(const std::string& host, faabric::HostResources& res)
 {
     queuedResourceResponses[host].enqueue(res);
@@ -80,7 +71,6 @@ void clearMockRequests()
     batchMessages.clear();
     resourceRequests.clear();
     unregisterRequests.clear();
-    coordinationRequests.clear();
 
     for (auto& p : queuedResourceResponses) {
         p.second.reset();
@@ -154,63 +144,4 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
     }
 }
 
-void FunctionCallClient::makeCoordinationRequest(
-  int32_t groupId,
-  int32_t groupIdx,
-  bool recursive,
-  faabric::scheduler::FunctionCalls call)
-{
-    faabric::CoordinationRequest req;
-    req.set_groupid(groupId);
-    req.set_groupidx(groupIdx);
-    req.set_recursive(recursive);
-    req.set_fromhost(faabric::util::getSystemConfig().endpointHost);
-
-    faabric::CoordinationRequest::CoordinationOperation op;
-    switch (call) {
-        case (faabric::scheduler::FunctionCalls::GroupLock): {
-            SPDLOG_TRACE("Requesting lock on {} at {}", groupId, host);
-            op = faabric::CoordinationRequest::LOCK;
-            break;
-        }
-        case (faabric::scheduler::FunctionCalls::GroupUnlock): {
-            SPDLOG_TRACE("Requesting unlock on {} at {}", groupId, host);
-            op = faabric::CoordinationRequest::UNLOCK;
-            break;
-        }
-        default: {
-            SPDLOG_ERROR("Invalid function group call {}", call);
-            throw std::runtime_error("Invalid function group call");
-        }
-    }
-
-    req.set_operation(op);
-
-    if (faabric::util::isMockMode()) {
-        faabric::util::UniqueLock lock(mockMutex);
-        coordinationRequests.emplace_back(host, req);
-    } else {
-        asyncSend(call, &req);
-    }
-}
-
-void FunctionCallClient::coordinationLock(int32_t groupId,
-                                          int32_t groupIdx,
-                                          bool recursive)
-{
-    makeCoordinationRequest(groupId,
-                            groupIdx,
-                            recursive,
-                            faabric::scheduler::FunctionCalls::GroupLock);
-}
-
-void FunctionCallClient::coordinationUnlock(int32_t groupId,
-                                            int32_t groupIdx,
-                                            bool recursive)
-{
-    makeCoordinationRequest(groupId,
-                            groupIdx,
-                            recursive,
-                            faabric::scheduler::FunctionCalls::GroupUnlock);
-}
 }

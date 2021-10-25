@@ -17,7 +17,6 @@ FunctionCallServer::FunctionCallServer()
       FUNCTION_INPROC_LABEL,
       faabric::util::getSystemConfig().functionServerThreads)
   , scheduler(getScheduler())
-  , distCoord(getDistributedCoordinator())
 {}
 
 void FunctionCallServer::doAsyncRecv(int header,
@@ -31,14 +30,6 @@ void FunctionCallServer::doAsyncRecv(int header,
         }
         case faabric::scheduler::FunctionCalls::Unregister: {
             recvUnregister(buffer, bufferSize);
-            break;
-        }
-        case faabric::scheduler::FunctionCalls::GroupLock: {
-            recvCoordinationLock(buffer, bufferSize);
-            break;
-        }
-        case faabric::scheduler::FunctionCalls::GroupUnlock: {
-            recvCoordinationUnlock(buffer, bufferSize);
             break;
         }
         default: {
@@ -110,32 +101,5 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
     auto response = std::make_unique<faabric::HostResources>(
       scheduler.getThisHostResources());
     return response;
-}
-
-void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
-                                              size_t bufferSize)
-{
-    PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-    SPDLOG_TRACE("Receiving lock on {} for idx {} (recursive {})",
-                 msg.groupid(),
-                 msg.groupidx(),
-                 msg.recursive());
-
-    distCoord.getCoordinationGroup(msg.groupid())
-      ->lock(msg.groupidx(), msg.recursive());
-}
-
-void FunctionCallServer::recvCoordinationUnlock(const uint8_t* buffer,
-                                                size_t bufferSize)
-{
-    PARSE_MSG(faabric::CoordinationRequest, buffer, bufferSize)
-
-    SPDLOG_TRACE("Receiving unlock on {} for idx {} (recursive {})",
-                 msg.groupid(),
-                 msg.groupidx(),
-                 msg.recursive());
-
-    distCoord.getCoordinationGroup(msg.groupid())
-      ->unlock(msg.groupidx(), msg.recursive());
 }
 }

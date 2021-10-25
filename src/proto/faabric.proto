@@ -58,26 +58,6 @@ message FunctionStatusResponse {
 }
 
 // ---------------------------------------------
-// FUNCTION GROUPS
-// ---------------------------------------------
-
-message CoordinationRequest {
-    int32 groupId = 1;
-    int32 groupSize = 2;
-    int32 groupIdx = 3;
-    bool recursive = 4;
-    string fromHost = 5;
-
-    enum CoordinationOperation {
-        LOCK = 0;
-        UNLOCK = 1;
-        NOTIFY = 2;
-        BARRIER = 3;
-    }
-    CoordinationOperation operation = 6;
-}
-
-// ---------------------------------------------
 // MPI
 // ---------------------------------------------
 

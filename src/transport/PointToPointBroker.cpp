@@ -39,7 +39,8 @@ std::string getPointToPointKey(int groupId, int recvIdx)
 }
 
 PointToPointBroker::PointToPointBroker()
-  : sch(faabric::scheduler::getScheduler())
+    : conf(faabric::util::getSystemConfig()),
+  sch(faabric::scheduler::getScheduler())
 {}
 
 std::string PointToPointBroker::getHostForReceiver(int groupId, int recvIdx)
@@ -249,12 +250,51 @@ std::shared_ptr<PointToPointClient> PointToPointBroker::getClient(
     return clients[host];
 }
 
+std::shared_ptr<PointToPointGroup>
+PointToPointBroker::getGroup(int32_t groupId)
+{
+    if (groups.find(groupId) == groups.end()) {
+        SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
+        throw std::runtime_error("Group ID not found on host");
+    }
+
+    return groups.at(groupId);
+}
+
+std::shared_ptr<PointToPointGroup> PointToPointBroker::initGroup(
+  const std::string& masterHost,
+  int32_t groupId,
+  int32_t groupSize)
+{
+    if (groups.find(groupId) == groups.end()) {
+        faabric::util::FullLock lock(sharedMutex);
+        if (groups.find(groupId) == groups.end()) {
+            groups.emplace(
+              std::make_pair(groupId,
+                             std::make_shared<PointToPointGroup>(
+                               masterHost, groupId, groupSize)));
+        }
+    }
+
+    {
+        faabric::util::SharedLock lock(sharedMutex);
+        return groups.at(groupId);
+    }
+}
+
+bool PointToPointBroker::groupExists(int32_t groupId)
+{
+    faabric::util::SharedLock lock(sharedMutex);
+    return groups.find(groupId) != groups.end();
+}
 void PointToPointBroker::clear()
 {
     faabric::util::SharedLock lock(brokerMutex);
 
     groupIdIdxsMap.clear();
     mappings.clear();
+
+    groups.clear();
 
     groupMappingMutexes.clear();
     groupMappingsFlags.clear();

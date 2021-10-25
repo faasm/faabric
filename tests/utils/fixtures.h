@@ -3,7 +3,6 @@
 #include <sys/mman.h>
 
 #include <faabric/redis/Redis.h>
-#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
@@ -312,18 +311,5 @@ class PointToPointClientServerFixture
   protected:
     faabric::transport::PointToPointClient cli;
     faabric::transport::PointToPointServer server;
-};
-
-class DistributedCoordinationTestFixture
-{
-  public:
-    DistributedCoordinationTestFixture()
-      : distCoord(faabric::scheduler::getDistributedCoordinator())
-    {}
-
-    ~DistributedCoordinationTestFixture() { distCoord.clear(); }
-
-  protected:
-    faabric::scheduler::DistributedCoordinator& distCoord;
 };
 }

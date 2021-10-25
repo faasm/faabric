@@ -247,4 +247,57 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         t.join();
     }
 }
+
+TEST_CASE_METHOD(PointToPointClientServerFixture,
+                 "Test distributed lock/ unlock",
+                 "[ptp][sync]")
+{
+    int groupId = 123;
+    int groupSize = 2;
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+
+    msg.set_groupsize(groupSize);
+    msg.set_groupid(groupId);
+
+    faabric::util::SchedulingDecision decision(msg.appid(), groupId);
+    decision.addMessage(thisHost, msg);
+
+    broker.setUpLocalMappingsFromSchedulingDecision(decision);
+
+    bool recursive = false;
+    int nCalls = 1;
+
+    SECTION("Recursive")
+    {
+        recursive = true;
+        nCalls = 10;
+    }
+
+    SECTION("Non-recursive")
+    {
+        recursive = false;
+        nCalls = 1;
+    }
+
+    auto group = broker.getGroup(groupId);
+    REQUIRE(group->getLockOwner(recursive) == -1);
+
+    for (int i = 0; i < nCalls; i++) {
+        cli.coordinationLock(msg.groupid(), msg.appindex(), recursive);
+        broker.recvMessage(groupId, 0, msg.appindex());
+    }
+
+    REQUIRE(group->getLockOwner(recursive) == msg.appindex());
+
+    for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
+        cli.coordinationUnlock(msg.groupid(), msg.appindex(), recursive);
+        server.awaitRequestLatch();
+    }
+
+    REQUIRE(group->getLockOwner(recursive) == -1);
+}
 }

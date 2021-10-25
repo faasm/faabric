@@ -7,8 +7,6 @@ enum FunctionCalls
     ExecuteFunctions = 1,
     Flush = 2,
     Unregister = 3,
-    GetResources = 4,
-    GroupLock = 5,
-    GroupUnlock = 6,
+    GetResources = 4
 };
 }

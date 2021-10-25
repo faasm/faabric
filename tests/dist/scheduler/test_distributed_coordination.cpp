@@ -5,7 +5,6 @@
 #include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/logging.h>
 
@@ -33,7 +32,7 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Call the function
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    std::vector<std::string> executedHosts = sch.callFunctions(req);
+    std::vector<std::string> executedHosts = sch.callFunctions(req).hosts;
     REQUIRE(expectedHosts == executedHosts);
 
     // Get result

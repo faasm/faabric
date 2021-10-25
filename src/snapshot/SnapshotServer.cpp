@@ -1,6 +1,5 @@
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/State.h>
@@ -19,7 +18,7 @@ SnapshotServer::SnapshotServer()
       SNAPSHOT_SYNC_PORT,
       SNAPSHOT_INPROC_LABEL,
       faabric::util::getSystemConfig().snapshotServerThreads)
-  , distCoord(faabric::scheduler::getDistributedCoordinator())
+  , broker(faabric::transport::getPointToPointBroker())
 {}
 
 void SnapshotServer::doAsyncRecv(int header,

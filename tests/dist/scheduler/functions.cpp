@@ -7,8 +7,8 @@
 #include <sys/mman.h>
 
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -273,8 +273,8 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
     SPDLOG_DEBUG("barrier-worker {} waiting on barrier (size {})",
                  appIdx,
                  msg.groupsize());
-    faabric::scheduler::getDistributedCoordinator()
-      .getCoordinationGroup(msg.groupid())
+    faabric::transport::getPointToPointBroker()
+      .getGroup(msg.groupid())
       ->barrier(msg.appindex());
 
     // Check that all other values have been set
