@@ -107,7 +107,7 @@ set(ZSTD_LZ4_SUPPORT OFF CACHE INTERNAL "")
 
 FetchContent_Declare(zstd_ext
     GIT_REPOSITORY "https://github.com/facebook/zstd"
-    GIT_TAG "v1.4.9"
+    GIT_TAG "v1.5.0"
     SOURCE_SUBDIR "build/cmake"
 )
 
