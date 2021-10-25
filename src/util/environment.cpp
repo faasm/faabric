@@ -1,6 +1,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
 
+#include <stdexcept>
 #include <thread>
 
 namespace faabric::util {
