@@ -42,6 +42,7 @@ TEST_CASE("Test building scheduling decisions", "[util]")
     REQUIRE(decision.hosts == expectedHosts);
     REQUIRE(decision.appIdxs == expectedAppIdxs);
 }
+
 TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
           "[util]")
 {
