@@ -121,10 +121,6 @@ void FunctionCallServer::recvCoordinationLock(const uint8_t* buffer,
                  msg.groupidx(),
                  msg.recursive());
 
-    // Set up point-to-point mapping back to the host
-    faabric::transport::getPointToPointBroker().setHostForReceiver(
-      msg.groupid(), msg.groupidx(), msg.fromhost());
-
     distCoord.getCoordinationGroup(msg.groupid())
       ->lock(msg.groupidx(), msg.recursive());
 }

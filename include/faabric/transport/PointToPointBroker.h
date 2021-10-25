@@ -16,7 +16,7 @@ class PointToPointBroker
   public:
     PointToPointBroker();
 
-    std::string getHostForReceiver(int appId, int recvIdx);
+    std::string getHostForReceiver(int groupId, int recvIdx);
 
     std::set<std::string> setUpLocalMappingsFromSchedulingDecision(
       const faabric::util::SchedulingDecision& decision);
@@ -24,17 +24,17 @@ class PointToPointBroker
     void setAndSendMappingsFromSchedulingDecision(
       const faabric::util::SchedulingDecision& decision);
 
-    void waitForMappingsOnThisHost(int appId);
+    void waitForMappingsOnThisHost(int groupId);
 
-    std::set<int> getIdxsRegisteredForApp(int appId);
+    std::set<int> getIdxsRegisteredForGroup(int groupId);
 
-    void sendMessage(int appId,
+    void sendMessage(int groupId,
                      int sendIdx,
                      int recvIdx,
                      const uint8_t* buffer,
                      size_t bufferSize);
 
-    std::vector<uint8_t> recvMessage(int appId, int sendIdx, int recvIdx);
+    std::vector<uint8_t> recvMessage(int groupId, int sendIdx, int recvIdx);
 
     void clear();
 
@@ -43,12 +43,12 @@ class PointToPointBroker
   private:
     std::shared_mutex brokerMutex;
 
-    std::unordered_map<int, std::set<int>> appIdxs;
+    std::unordered_map<int, std::set<int>> groupIdIdxsMap;
     std::unordered_map<std::string, std::string> mappings;
 
-    std::unordered_map<int, bool> appMappingsFlags;
-    std::unordered_map<int, std::mutex> appMappingMutexes;
-    std::unordered_map<int, std::condition_variable> appMappingCvs;
+    std::unordered_map<int, bool> groupMappingsFlags;
+    std::unordered_map<int, std::mutex> groupMappingMutexes;
+    std::unordered_map<int, std::condition_variable> groupMappingCvs;
 
     std::shared_ptr<PointToPointClient> getClient(const std::string& host);
 

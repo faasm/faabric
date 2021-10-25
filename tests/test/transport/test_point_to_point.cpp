@@ -17,24 +17,6 @@ using namespace faabric::util;
 
 namespace tests {
 
-class PointToPointClientServerFixture
-  : public PointToPointTestFixture
-  , SchedulerTestFixture
-{
-  public:
-    PointToPointClientServerFixture()
-      : cli(LOCALHOST)
-    {
-        server.start();
-    }
-
-    ~PointToPointClientServerFixture() { server.stop(); }
-
-  protected:
-    faabric::transport::PointToPointClient cli;
-    faabric::transport::PointToPointServer server;
-};
-
 TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test sending point-to-point mappings from client",
                  "[transport][ptp]")
@@ -49,14 +31,14 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     std::string hostA = "host-a";
     std::string hostB = "host-b";
 
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdA).empty());
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdB).empty());
+    REQUIRE(broker.getIdxsRegisteredForGroup(appIdA).empty());
+    REQUIRE(broker.getIdxsRegisteredForGroup(appIdB).empty());
 
     faabric::PointToPointMappings mappingsA;
-    mappingsA.set_appid(appIdA);
+    mappingsA.set_groupid(appIdA);
 
     faabric::PointToPointMappings mappingsB;
-    mappingsB.set_appid(appIdB);
+    mappingsB.set_groupid(appIdB);
 
     auto* mappingA1 = mappingsA.add_mappings();
     mappingA1->set_recvidx(idxA1);
@@ -73,8 +55,8 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     cli.sendMappings(mappingsA);
     cli.sendMappings(mappingsB);
 
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdA).size() == 2);
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdB).size() == 1);
+    REQUIRE(broker.getIdxsRegisteredForGroup(appIdA).size() == 2);
+    REQUIRE(broker.getIdxsRegisteredForGroup(appIdB).size() == 1);
 
     REQUIRE(broker.getHostForReceiver(appIdA, idxA1) == hostA);
     REQUIRE(broker.getHostForReceiver(appIdA, idxA2) == hostB);

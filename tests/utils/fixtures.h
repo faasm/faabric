@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/DistributedCoordinator.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
@@ -19,7 +20,6 @@
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
-#include "faabric/scheduler/DistributedCoordinator.h"
 
 namespace tests {
 class RedisTestFixture

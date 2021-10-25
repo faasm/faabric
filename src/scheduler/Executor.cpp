@@ -1,3 +1,4 @@
+#include "faabric/transport/PointToPointBroker.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>

@@ -225,8 +225,11 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
 
             // Set app index and group data
             m.set_appindex(i);
+
             m.set_groupid(123);
+            m.set_groupindex(i);
             m.set_groupsize(nChainedFuncs);
+
             m.set_inputdata(msg.inputdata());
 
             // Set up state for result
@@ -237,7 +240,9 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
 
         // Make request and wait for results
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        std::vector<std::string> executedHosts = sch.callFunctions(chainReq);
+        std::vector<std::string> executedHosts =
+          sch.callFunctions(chainReq).hosts;
+
         bool success = true;
         for (const auto& m : chainReq->messages()) {
             faabric::Message result = sch.getFunctionResult(m.id(), 10000);

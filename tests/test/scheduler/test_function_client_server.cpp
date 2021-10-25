@@ -30,6 +30,7 @@ class ClientServerFixture
   , public StateTestFixture
   , public PointToPointTestFixture
   , public DistributedCoordinationTestFixture
+  , public ConfTestFixture
 {
   protected:
     FunctionCallServer server;
@@ -56,6 +57,11 @@ class ClientServerFixture
     {
         msg.set_groupsize(groupSize);
         msg.set_groupid(groupId);
+
+        faabric::util::SchedulingDecision decision(msg.appid(), groupId);
+        decision.addMessage(conf.endpointHost, msg);
+
+        broker.setUpLocalMappingsFromSchedulingDecision(decision);
 
         distCoord.initGroup(msg);
 
@@ -275,14 +281,10 @@ TEST_CASE_METHOD(ClientServerFixture,
                  "Test distributed lock/ unlock",
                  "[scheduler][sync]")
 {
+    int groupSize = 2;
+
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     setUpCoordinationGroup(msg);
-
-    // Set up ptp mapping
-    for (int i = 0; i < groupSize; i++) {
-        broker.setHostForReceiver(
-          groupId, i, faabric::util::getSystemConfig().endpointHost);
-    }
 
     bool recursive = false;
     int nCalls = 1;

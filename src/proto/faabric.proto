@@ -159,24 +159,25 @@ message Message {
 
     // Function groups
     int32 groupId = 27;
-    int32 groupSize = 28;
+    int32 groupIndex = 28;
+    int32 groupSize = 29;
 
     // MPI
-    bool isMpi = 29;
-    int32 mpiWorldId = 30;
-    int32 mpiRank = 31;
-    int32 mpiWorldSize = 32;
+    bool isMpi = 30;
+    int32 mpiWorldId = 31;
+    int32 mpiRank = 32;
+    int32 mpiWorldSize = 33;
 
-    string cmdline = 33;
+    string cmdline = 34;
 
     // SGX
-    bool isSgx = 34;
+    bool isSgx = 35;
 
-    string sgxSid = 35;
-    string sgxNonce = 36;
-    string sgxTag = 37;
-    bytes sgxPolicy = 38;
-    bytes sgxResult = 39;
+    string sgxSid = 36;
+    string sgxNonce = 37;
+    string sgxTag = 38;
+    bytes sgxPolicy = 39;
+    bytes sgxResult = 40;
 }
 
 // ---------------------------------------------
@@ -235,7 +236,7 @@ message StateAppendedResponse {
 // ---------------------------------------------
 
 message PointToPointMessage {
-    int32 appId = 1;
+    int32 groupId = 1;
     int32 sendIdx = 2;
     int32 recvIdx = 3;
 
@@ -243,7 +244,7 @@ message PointToPointMessage {
 }
 
 message PointToPointMappings {
-    int32 appId = 1;
+    int32 groupId = 1;
 
     message PointToPointMapping {
         string host = 1;

@@ -28,29 +28,29 @@ thread_local std::unordered_map<std::string,
                                 std::shared_ptr<PointToPointClient>>
   clients;
 
-std::string getPointToPointKey(int appId, int sendIdx, int recvIdx)
+std::string getPointToPointKey(int groupId, int sendIdx, int recvIdx)
 {
-    return fmt::format("{}-{}-{}", appId, sendIdx, recvIdx);
+    return fmt::format("{}-{}-{}", groupId, sendIdx, recvIdx);
 }
 
-std::string getPointToPointKey(int appId, int recvIdx)
+std::string getPointToPointKey(int groupId, int recvIdx)
 {
-    return fmt::format("{}-{}", appId, recvIdx);
+    return fmt::format("{}-{}", groupId, recvIdx);
 }
 
 PointToPointBroker::PointToPointBroker()
   : sch(faabric::scheduler::getScheduler())
 {}
 
-std::string PointToPointBroker::getHostForReceiver(int appId, int recvIdx)
+std::string PointToPointBroker::getHostForReceiver(int groupId, int recvIdx)
 {
     faabric::util::SharedLock lock(brokerMutex);
 
-    std::string key = getPointToPointKey(appId, recvIdx);
+    std::string key = getPointToPointKey(groupId, recvIdx);
 
     if (mappings.find(key) == mappings.end()) {
         SPDLOG_ERROR(
-          "No point-to-point mapping for app {} idx {}", appId, recvIdx);
+          "No point-to-point mapping for group {} idx {}", groupId, recvIdx);
         throw std::runtime_error("No point-to-point mapping found");
     }
 
@@ -61,7 +61,7 @@ std::set<std::string>
 PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
   const faabric::util::SchedulingDecision& decision)
 {
-    int appId = decision.appId;
+    int groupId = decision.groupId;
     std::set<std::string> hosts;
 
     {
@@ -69,19 +69,19 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
 
         // Set up the mappings
         for (int i = 0; i < decision.nFunctions; i++) {
-            int recvIdx = decision.appIdxs.at(i);
+            int recvIdx = decision.groupIdxs.at(i);
             const std::string& host = decision.hosts.at(i);
 
             SPDLOG_DEBUG("Setting point-to-point mapping {}:{} to {}",
-                         appId,
+                         groupId,
                          recvIdx,
                          host);
 
-            // Record this index for this app
-            appIdxs[appId].insert(recvIdx);
+            // Record this index for this group
+            groupIdIdxsMap[groupId].insert(recvIdx);
 
             // Add host mapping
-            std::string key = getPointToPointKey(appId, recvIdx);
+            std::string key = getPointToPointKey(groupId, recvIdx);
             mappings[key] = host;
 
             // If it's not this host, add to set of returned hosts
@@ -92,14 +92,14 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
     }
 
     {
-        // Lock this app
-        std::unique_lock<std::mutex> lock(appMappingMutexes[appId]);
+        // Lock this group
+        std::unique_lock<std::mutex> lock(groupMappingMutexes[groupId]);
 
-        // Enable the app
-        appMappingsFlags[appId] = true;
+        // Enable the group
+        groupMappingsFlags[groupId] = true;
 
         // Notify waiters
-        appMappingCvs[appId].notify_all();
+        groupMappingCvs[groupId].notify_all();
     }
 
     return hosts;
@@ -108,7 +108,7 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
 void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
   const faabric::util::SchedulingDecision& decision)
 {
-    int appId = decision.appId;
+    int groupId = decision.groupId;
 
     // Set up locally
     std::set<std::string> otherHosts =
@@ -117,20 +117,20 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     // Send out to other hosts
     for (const auto& host : otherHosts) {
         faabric::PointToPointMappings msg;
-        msg.set_appid(appId);
+        msg.set_groupid(groupId);
 
-        std::set<int>& indexes = appIdxs[appId];
+        std::set<int>& indexes = groupIdIdxsMap[groupId];
 
         for (int i = 0; i < decision.nFunctions; i++) {
             auto* mapping = msg.add_mappings();
             mapping->set_host(decision.hosts.at(i));
             mapping->set_messageid(decision.messageIds.at(i));
-            mapping->set_recvidx(decision.appIdxs.at(i));
+            mapping->set_recvidx(decision.groupIdxs.at(i));
         }
 
         SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",
                      indexes.size(),
-                     appId,
+                     groupId,
                      host);
 
         auto cli = getClient(host);
@@ -138,45 +138,46 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     }
 }
 
-void PointToPointBroker::waitForMappingsOnThisHost(int appId)
+void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
 {
     // Check if it's been enabled
-    if (!appMappingsFlags[appId]) {
+    if (!groupMappingsFlags[groupId]) {
         // Lock this app
-        std::unique_lock<std::mutex> lock(appMappingMutexes[appId]);
+        std::unique_lock<std::mutex> lock(groupMappingMutexes[groupId]);
 
         // Wait for app to be enabled
         auto timePoint = std::chrono::system_clock::now() +
                          std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
 
-        if (!appMappingCvs[appId].wait_until(lock, timePoint, [this, appId] {
-                return appMappingsFlags[appId];
-            })) {
+        if (!groupMappingCvs[groupId].wait_until(
+              lock, timePoint, [this, groupId] {
+                  return groupMappingsFlags[groupId];
+              })) {
 
-            SPDLOG_ERROR("Timed out waiting for app mappings {}", appId);
+            SPDLOG_ERROR("Timed out waiting for app mappings {}", groupId);
             throw std::runtime_error("Timed out waiting for app mappings");
         }
     }
 }
 
-std::set<int> PointToPointBroker::getIdxsRegisteredForApp(int appId)
+std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)
 {
     faabric::util::SharedLock lock(brokerMutex);
-    return appIdxs[appId];
+    return groupIdIdxsMap[groupId];
 }
 
-void PointToPointBroker::sendMessage(int appId,
+void PointToPointBroker::sendMessage(int groupid,
                                      int sendIdx,
                                      int recvIdx,
                                      const uint8_t* buffer,
                                      size_t bufferSize)
 {
-    waitForMappingsOnThisHost(appId);
+    waitForMappingsOnThisHost(groupid);
 
-    std::string host = getHostForReceiver(appId, recvIdx);
+    std::string host = getHostForReceiver(groupid, recvIdx);
 
     if (host == faabric::util::getSystemConfig().endpointHost) {
-        std::string label = getPointToPointKey(appId, sendIdx, recvIdx);
+        std::string label = getPointToPointKey(groupid, sendIdx, recvIdx);
 
         // Note - this map is thread-local so no locking required
         if (sendEndpoints.find(label) == sendEndpoints.end()) {
@@ -188,7 +189,7 @@ void PointToPointBroker::sendMessage(int appId,
         }
 
         SPDLOG_TRACE("Local point-to-point message {}:{}:{} to {}",
-                     appId,
+                     groupid,
                      sendIdx,
                      recvIdx,
                      sendEndpoints[label]->getAddress());
@@ -198,13 +199,13 @@ void PointToPointBroker::sendMessage(int appId,
     } else {
         auto cli = getClient(host);
         faabric::PointToPointMessage msg;
-        msg.set_appid(appId);
+        msg.set_groupid(groupid);
         msg.set_sendidx(sendIdx);
         msg.set_recvidx(recvIdx);
         msg.set_data(buffer, bufferSize);
 
         SPDLOG_TRACE("Remote point-to-point message {}:{}:{} to {}",
-                     appId,
+                     groupid,
                      sendIdx,
                      recvIdx,
                      host);
@@ -213,11 +214,11 @@ void PointToPointBroker::sendMessage(int appId,
     }
 }
 
-std::vector<uint8_t> PointToPointBroker::recvMessage(int appId,
+std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
                                                      int sendIdx,
                                                      int recvIdx)
 {
-    std::string label = getPointToPointKey(appId, sendIdx, recvIdx);
+    std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
     // Note: this map is thread-local so no locking required
     if (recvEndpoints.find(label) == recvEndpoints.end()) {
@@ -252,12 +253,12 @@ void PointToPointBroker::clear()
 {
     faabric::util::SharedLock lock(brokerMutex);
 
-    appIdxs.clear();
+    groupIdIdxsMap.clear();
     mappings.clear();
 
-    appMappingMutexes.clear();
-    appMappingsFlags.clear();
-    appMappingCvs.clear();
+    groupMappingMutexes.clear();
+    groupMappingsFlags.clear();
+    groupMappingCvs.clear();
 }
 
 void PointToPointBroker::resetThreadLocalCache()
