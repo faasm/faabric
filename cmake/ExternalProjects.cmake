@@ -2,95 +2,97 @@ include(FindGit)
 find_package(Git)
 include (ExternalProject)
 include (FetchContent)
+find_package (Threads REQUIRED)
 
-# Protobuf
-set(PROTOBUF_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libprotobuf.so)
-ExternalProject_Add(protobuf_ext
-    GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
-    GIT_TAG "v3.16.0"
-    SOURCE_SUBDIR "cmake"
-    CMAKE_CACHE_ARGS "-DCMAKE_BUILD_TYPE:STRING=Release"
-        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-        "-Dprotobuf_BUILD_TESTS:BOOL=OFF"
-        "-Dprotobuf_BUILD_SHARED_LIBS:BOOL=ON"
-    BUILD_BYPRODUCTS ${PROTOBUF_LIBRARY}
-)
-ExternalProject_Get_Property(protobuf_ext SOURCE_DIR)
-set(PROTOBUF_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/include)
-set(PROTOBUF_PROTOC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/protoc)
-add_library(protobuf_imported SHARED IMPORTED)
-add_dependencies(protobuf_imported protobuf_ext)
-set_target_properties(protobuf_imported
-    PROPERTIES IMPORTED_LOCATION ${PROTOBUF_LIBRARY}
+# Find conan-generated package descriptions
+list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_BINARY_DIR})
+list(PREPEND CMAKE_PREFIX_PATH ${CMAKE_CURRENT_BINARY_DIR})
+
+if(NOT EXISTS "${CMAKE_CURRENT_BINARY_DIR}/conan.cmake")
+  message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+  file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.16.1/conan.cmake"
+                "${CMAKE_CURRENT_BINARY_DIR}/conan.cmake"
+                EXPECTED_HASH SHA256=396e16d0f5eabdc6a14afddbcfff62a54a7ee75c6da23f32f7a31bc85db23484
+                TLS_VERIFY ON)
+endif()
+
+include(${CMAKE_CURRENT_BINARY_DIR}/conan.cmake)
+
+conan_check(VERSION 1.41.0 REQUIRED)
+
+conan_cmake_configure(
+    REQUIRES
+        boost/1.77.0
+        catch2/2.13.7
+        cppcodec/0.2
+        cpprestsdk/2.10.18
+        cppzmq/4.8.1
+        flatbuffers/2.0.0
+        hiredis/1.0.2
+        protobuf/3.17.1
+        rapidjson/cci.20200410
+        spdlog/1.9.2
+        zeromq/4.3.4
+    GENERATORS
+        cmake_find_package
+        cmake_paths
+    OPTIONS
+        flatbuffers:options_from_context=False
+        flatbuffers:flatc=True
+        flatbuffers:flatbuffers=True
+        boost:error_code_header_only=True
+        boost:system_no_deprecated=True
+        boost:filesystem_no_deprecated=True
+        boost:zlib=False
+        boost:bzip2=False
+        boost:lzma=False
+        boost:zstd=False
+        boost:without_locale=True
+        boost:without_log=True
+        boost:without_mpi=True
+        boost:without_python=True
+        boost:without_test=True
+        boost:without_wave=True
+        cpprestsdk:with_websockets=False
+        zeromq:encryption=None
 )
 
-# FlatBuffers
-set(FLATBUFFERS_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libflatbuffers.so)
-ExternalProject_Add(flatbuffers_ext
-    GIT_REPOSITORY https://github.com/google/flatbuffers.git
-    GIT_TAG "v2.0.0"
-    CMAKE_CACHE_ARGS "-DCMAKE_BUILD_TYPE:STRING=Release"
-        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-        "-DFLATBUFFERS_BUILD_SHAREDLIB:BOOL=ON"
-        "-DFLATBUFFERS_BUILD_TESTS:BOOL=OFF"
-    BUILD_BYPRODUCTS ${FLATBUFFERS_LIBRARY}
-)
-ExternalProject_Get_Property(flatbuffers_ext SOURCE_DIR)
-set(FLATBUFFERS_INCLUDE_DIRS ${SOURCE_DIR}/include)
-set(FLATBUFFERS_FLATC_EXECUTABLE ${CMAKE_INSTALL_PREFIX}/bin/flatc)
-add_library(flatbuffers_imported SHARED IMPORTED)
-add_dependencies(flatbuffers_imported flatbuffers_ext)
-set_target_properties(flatbuffers_imported
-    PROPERTIES IMPORTED_LOCATION ${FLATBUFFERS_LIBRARY}
+conan_cmake_autodetect(FAABRIC_CONAN_SETTINGS)
+
+conan_cmake_install(PATH_OR_REFERENCE .
+                    BUILD outdated
+                    REMOTE conancenter
+                    PROFILE_HOST ${CMAKE_CURRENT_LIST_DIR}/../conan-profile.txt
+                    PROFILE_BUILD ${CMAKE_CURRENT_LIST_DIR}/../conan-profile.txt
+                    SETTINGS ${FAABRIC_CONAN_SETTINGS}
 )
 
-# Pistache
-set(PISTACHE_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libpistache.so)
-ExternalProject_Add(pistache_ext
+include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
+
+find_package(Boost 1.77.0 REQUIRED)
+find_package(Catch2 REQUIRED)
+find_package(Flatbuffers REQUIRED)
+find_package(Protobuf REQUIRED)
+find_package(RapidJSON REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(ZeroMQ REQUIRED)
+find_package(cppcodec REQUIRED)
+find_package(cpprestsdk REQUIRED)
+find_package(cppzmq REQUIRED)
+find_package(fmt REQUIRED)
+find_package(hiredis REQUIRED)
+find_package(spdlog REQUIRED)
+
+# Pistache - Conan version is out of date and doesn't support clang
+FetchContent_Declare(pistache_ext
     GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"
-    GIT_TAG "2ef937c434810858e05d446e97acbdd6cc1a5a36"
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-    BUILD_BYPRODUCTS ${PISTACHE_LIBRARY}
-)
-ExternalProject_Get_Property(pistache_ext SOURCE_DIR)
-set(PISTACHE_INCLUDE_DIR ${SOURCE_DIR}/include)
-add_library(pistache_imported SHARED IMPORTED)
-add_dependencies(pistache_imported pistache_ext)
-set_target_properties(pistache_imported
-    PROPERTIES IMPORTED_LOCATION ${PISTACHE_LIBRARY}
+    GIT_TAG "ff9db0d9439a4411b24541d97a937968f384a4d3"
 )
 
-# RapidJSON
-ExternalProject_Add(rapidjson_ext
-    GIT_REPOSITORY "https://github.com/Tencent/rapidjson"
-    GIT_TAG "2ce91b823c8b4504b9c40f99abf00917641cef6c"
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-        "-DRAPIDJSON_BUILD_DOC:BOOL=OFF"
-        "-DRAPIDJSON_BUILD_EXAMPLES:BOOL=OFF"
-        "-DRAPIDJSON_BUILD_TESTS:BOOL=OFF"
-)
-ExternalProject_Get_Property(rapidjson_ext SOURCE_DIR)
-set(RAPIDJSON_INCLUDE_DIR ${SOURCE_DIR}/include)
+FetchContent_MakeAvailable(pistache_ext)
+add_library(pistache::pistache ALIAS pistache_static)
 
-# spdlog
-ExternalProject_Add(spdlog_ext
-    GIT_REPOSITORY "https://github.com/gabime/spdlog"
-    GIT_TAG "v1.8.0"
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-)
-ExternalProject_Get_Property(spdlog_ext SOURCE_DIR)
-set(SPDLOG_INCLUDE_DIR ${SOURCE_DIR}/include)
-
-# cppcodec (for base64)
-ExternalProject_Add(cppcodec_ext
-    GIT_REPOSITORY "https://github.com/tplgy/cppcodec"
-    GIT_TAG "v0.2"
-    CMAKE_ARGS "-DBUILD_TESTING=OFF"
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-)
-ExternalProject_Get_Property(cppcodec_ext SOURCE_DIR)
-set(CPPCODEC_INCLUDE_DIR ${SOURCE_DIR})
-
+# zstd (Conan version not customizable enough)
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
 set(ZSTD_BUILD_PROGRAMS OFF CACHE INTERNAL "")
@@ -116,45 +118,28 @@ FetchContent_MakeAvailable(zstd_ext)
 target_include_directories(libzstd_static INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
 add_library(zstd::libzstd_static ALIAS libzstd_static)
 
-# ZeroMQ
-set(ZEROMQ_LIBRARY ${CMAKE_INSTALL_PREFIX}/lib/libzmq.so)
-ExternalProject_Add(libzeromq_ext
-    GIT_REPOSITORY "https://github.com/zeromq/libzmq.git"
-    GIT_TAG "v4.3.4"
-    CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-        "-DCMAKE_BUILD_TESTS:BOOL=OFF"
-    BUILD_BYPRODUCTS ${ZEROMQ_LIBRARY}
+# Group all external dependencies into a convenient virtual CMake library
+add_library(faabric_common_dependencies INTERFACE)
+target_include_directories(faabric_common_dependencies INTERFACE
+    ${FAABRIC_INCLUDE_DIR}
 )
-ExternalProject_Get_Property(libzeromq_ext SOURCE_DIR)
-set(LIBZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
-ExternalProject_Add(cppzeromq_ext
-    GIT_REPOSITORY "https://github.com/zeromq/cppzmq.git"
-    GIT_TAG "v4.7.1"
-    CMAKE_CACHE_ARGS "-DCPPZMQ_BUILD_TESTS:BOOL=OFF"
-        "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
+target_link_libraries(faabric_common_dependencies INTERFACE
+    Boost::Boost
+    Boost::filesystem
+    Boost::system
+    cppcodec::cppcodec
+    cpprestsdk::cpprestsdk
+    cppzmq::cppzmq
+    flatbuffers::flatbuffers
+    hiredis::hiredis
+    pistache::pistache
+    protobuf::libprotobuf
+    RapidJSON::RapidJSON
+    spdlog::spdlog
+    Threads::Threads
+    zstd::libzstd_static
 )
-add_dependencies(cppzeromq_ext libzeromq_ext)
-ExternalProject_Get_Property(cppzeromq_ext SOURCE_DIR)
-set(CPPZEROMQ_INCLUDE_DIR ${SOURCE_DIR})
-set(ZEROMQ_INCLUDE_DIR ${LIBZEROMQ_INCLUDE_DIR} ${CPPZEROMQ_INCLUDE_DIR})
-add_library(zeromq_imported SHARED IMPORTED)
-add_dependencies(zeromq_imported cppzeromq_ext)
-set_target_properties(zeromq_imported
-    PROPERTIES IMPORTED_LOCATION ${ZEROMQ_LIBRARY}
+target_compile_definitions(faabric_common_dependencies INTERFACE
+    FMT_DEPRECATED= # Suppress warnings about use of deprecated api by spdlog
 )
-
-
-if(FAABRIC_BUILD_TESTS)
-    # Catch (tests)
-    set(CATCH_INSTALL_DOCS OFF CACHE INTERNAL "")
-    set(CATCH_INSTALL_EXTRAS OFF CACHE INTERNAL "")
-
-    ExternalProject_Add(catch_ext
-        GIT_REPOSITORY "https://github.com/catchorg/Catch2"
-        GIT_TAG "v2.13.2"
-        CMAKE_CACHE_ARGS "-DCMAKE_INSTALL_PREFIX:STRING=${CMAKE_INSTALL_PREFIX}"
-    )
-    ExternalProject_Get_Property(catch_ext SOURCE_DIR)
-    include_directories(${CMAKE_INSTALL_PREFIX}/include/catch2)
-endif()
-
+add_library(faabric::common_dependencies ALIAS faabric_common_dependencies)
