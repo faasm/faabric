@@ -1,13 +1,20 @@
-cmake_minimum_required(VERSION 3.14.0)
+cmake_minimum_required(VERSION 3.21.0)
 project(faabric)
 
 option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
 option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
 
+# Enable colorized compiler output
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    add_compile_options(-fdiagnostics-color=always)
+elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    add_compile_options(-fcolor-diagnostics)
+endif()
+
 # Top-level CMake config
 set(CMAKE_CXX_FLAGS "-Wall")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -26,37 +33,25 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include(cmake/ExternalProjects.cmake)
 
 # Library funcs
-function(faabric_lib lib_name lib_deps)
-    # "Normal" library used for linking internally
-    add_library(${lib_name} ${lib_deps})
-    target_include_directories(${lib_name}
-        PUBLIC ${FAABRIC_INCLUDE_DIR}
-        PUBLIC ${PISTACHE_INCLUDE_DIR}
-        PUBLIC ${SPDLOG_INCLUDE_DIR}
-        PUBLIC ${RAPIDJSON_INCLUDE_DIR}
-        PUBLIC ${CPPCODEC_INCLUDE_DIR}
-        PUBLIC ${ZEROMQ_INCLUDE_DIR}
-        PUBLIC ${PROTOBUF_INCLUDE_DIR}
-        )
+function(faabric_lib lib_name)
+    # Shared dependencies between the object and normal library
+    add_library(${lib_name}_deps INTERFACE)
+    target_link_libraries(${lib_name}_deps INTERFACE faabric::common_dependencies)
 
     # Object library for bundling everything together (should have the same
     # include dirs and dependencies as the normal library)
-    add_library(${lib_name}_obj OBJECT ${lib_deps})
-    target_include_directories(${lib_name}_obj
-        PUBLIC ${FAABRIC_INCLUDE_DIR}
-        PUBLIC ${PISTACHE_INCLUDE_DIR}
-        PUBLIC ${SPDLOG_INCLUDE_DIR}
-        PUBLIC ${RAPIDJSON_INCLUDE_DIR}
-        PUBLIC ${CPPCODEC_INCLUDE_DIR}
-        PUBLIC ${ZEROMQ_INCLUDE_DIR}
-        PUBLIC ${PROTOBUF_INCLUDE_DIR}
-        )
+    add_library(${lib_name}_obj OBJECT ${ARGN})
+    target_link_libraries(${lib_name}_obj PUBLIC ${lib_name}_deps)
+    add_library(faabric::${lib_name}_obj ALIAS ${lib_name}_obj)
 
-    target_link_libraries(${lib_name}_obj ${lib_name})
+    # "Normal" library used for linking internally
+    add_library(${lib_name} ${ARGN})
+    target_link_libraries(${lib_name} PUBLIC ${lib_name}_deps)
+    add_library(faabric::${lib_name} ALIAS ${lib_name})
 
     if(BUILD_SHARED_LIBS)
-        target_compile_options(${lib_name} PRIVATE "-fPIC")
-        target_compile_options(${lib_name}_obj PRIVATE "-fPIC")
+        set_property(TARGET ${lib_name} PROPERTY POSITION_INDEPENDENT_CODE ON)
+        set_property(TARGET ${lib_name}_obj PROPERTY POSITION_INDEPENDENT_CODE ON)
     endif()
 
     # Ensure library generates readable stack traces
@@ -99,24 +94,21 @@ add_library(faabric
     $<TARGET_OBJECTS:transport_obj>
     $<TARGET_OBJECTS:util_obj>
 )
-
-add_dependencies(faabric pistache_ext spdlog_ext)
+add_library(faabric::faabric ALIAS faabric)
 
 target_link_libraries(faabric PUBLIC
-    faabricmpi
-    hiredis
-    boost_system
-    boost_filesystem
-    zstd::libzstd_static
-    ${PISTACHE_LIBRARY}
-    ${PROTOBUF_LIBRARY}
-    ${ZEROMQ_LIBRARY}
-    )
+    faabric::faabricmpi
+    faabric::common_dependencies
+)
 
 target_include_directories(faabric PUBLIC
     ${FAABRIC_INCLUDE_DIR}
     ${CMAKE_INSTALL_PREFIX}/include
 )
+
+# Ensure faabric generates readable stack traces
+target_compile_options(faabric PUBLIC -fno-omit-frame-pointer)
+target_link_options(faabric PUBLIC -Wl,--export-dynamic)
 
 # Tests - only include in static builds _and_ when requested
 if(BUILD_SHARED_LIBS)
@@ -124,8 +116,9 @@ if(BUILD_SHARED_LIBS)
 elseif(FAABRIC_BUILD_TESTS)
     add_subdirectory(tests/dist)
     add_subdirectory(tests/test)
-    add_subdirectory(tests/utils)
 endif()
+# Utils are used by faasm tests
+add_subdirectory(tests/utils)
 
 # Install headers
 install(

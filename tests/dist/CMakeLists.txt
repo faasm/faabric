@@ -1,10 +1,5 @@
 file(GLOB_RECURSE TEST_FILES ${CMAKE_CURRENT_LIST_DIR} test_*.cpp)
 
-include_directories(
-    ${CMAKE_CURRENT_LIST_DIR}
-    ${CMAKE_CURRENT_LIST_DIR}/../utils
-)
-
 # Shared
 add_library(faabric_dist_tests_lib
     init.h
@@ -15,7 +10,8 @@ add_library(faabric_dist_tests_lib
     transport/functions.cpp
     )
 
-target_link_libraries(faabric_dist_tests_lib faabric_test_utils)
+target_link_libraries(faabric_dist_tests_lib PUBLIC faabric::test_utils)
+target_include_directories(faabric_dist_tests_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Tests
 add_executable(
@@ -24,7 +20,7 @@ add_executable(
     ${TEST_FILES}
 )
 
-target_link_libraries(faabric_dist_tests faabric_dist_tests_lib)
+target_link_libraries(faabric_dist_tests PRIVATE faabric_dist_tests_lib)
 
 add_test(NAME faabric_dist_tests COMMAND "tests/dist/faabric_dist_tests")
 
@@ -34,5 +30,4 @@ add_executable(
     server.cpp
 )
 
-target_link_libraries(faabric_dist_test_server faabric_dist_tests_lib)
-
+target_link_libraries(faabric_dist_test_server PRIVATE faabric_dist_tests_lib)
