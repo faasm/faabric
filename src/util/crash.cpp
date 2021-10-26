@@ -1,6 +1,7 @@
 #include <faabric/util/crash.h>
 #include <faabric/util/logging.h>
 
+#include <array>
 #include <execinfo.h>
 #include <signal.h>
 #include <stdio.h>
