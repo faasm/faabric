@@ -83,6 +83,8 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
     faabric::util::SchedulingDecision decision =
       faabric::util::SchedulingDecision::fromPointToPointMappings(msg);
 
+    SPDLOG_DEBUG("Receiving {} point-to-point mappings", decision.nFunctions);
+
     reg.setUpLocalMappingsFromSchedulingDecision(decision);
 
     return std::make_unique<faabric::EmptyResponse>();

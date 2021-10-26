@@ -1,4 +1,3 @@
-#include "faabric/transport/PointToPointBroker.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -6,6 +5,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
