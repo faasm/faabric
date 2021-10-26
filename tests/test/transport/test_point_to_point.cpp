@@ -114,23 +114,23 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     // Make sure we send the message before a receiver is available to check
     // async handling
-    broker.sendMessage(appId, idxA, idxB, sentDataA.data(), sentDataA.size());
+    broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
 
-    std::thread t([appId, idxA, idxB, &receivedDataA, &sentDataB] {
+    std::thread t([groupId, idxA, idxB, &receivedDataA, &sentDataB] {
         PointToPointBroker& broker = getPointToPointBroker();
 
         // Receive the first message
-        receivedDataA = broker.recvMessage(appId, idxA, idxB);
+        receivedDataA = broker.recvMessage(groupId, idxA, idxB);
 
         // Send a message back
         broker.sendMessage(
-          appId, idxB, idxA, sentDataB.data(), sentDataB.size());
+          groupId, idxB, idxA, sentDataB.data(), sentDataB.size());
 
         broker.resetThreadLocalCache();
     });
 
     // Receive the message sent back
-    receivedDataB = broker.recvMessage(appId, idxB, idxA);
+    receivedDataB = broker.recvMessage(groupId, idxB, idxA);
 
     if (t.joinable()) {
         t.join();
@@ -163,8 +163,10 @@ TEST_CASE_METHOD(
 
         m.set_appid(appId);
         m.set_groupid(groupId);
-        m.set_appidx(i);
-        m.set_groupidx(i + 2);
+
+        // Deliberately don't share app and group idxs
+        m.set_appidx(i + 10);
+        m.set_groupidx(i);
     }
 
     faabric::Message& msgA = req->mutable_messages()->at(0);
@@ -186,12 +188,12 @@ TEST_CASE_METHOD(
     broker.setAndSendMappingsFromSchedulingDecision(decision);
 
     // Check locally
-    REQUIRE(broker.getHostForReceiver(appId, msgA.groupidx()) == hostB);
-    REQUIRE(broker.getHostForReceiver(appId, msgB.groupidx()) == hostA);
-    REQUIRE(broker.getHostForReceiver(appId, msgC.groupidx()) == hostC);
-    REQUIRE(broker.getHostForReceiver(appId, msgD.groupidx()) == hostB);
-    REQUIRE(broker.getHostForReceiver(appId, msgE.groupidx()) == hostB);
-    REQUIRE(broker.getHostForReceiver(appId, msgF.groupidx()) == hostC);
+    REQUIRE(broker.getHostForReceiver(groupId, msgA.groupidx()) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupId, msgB.groupidx()) == hostA);
+    REQUIRE(broker.getHostForReceiver(groupId, msgC.groupidx()) == hostC);
+    REQUIRE(broker.getHostForReceiver(groupId, msgD.groupidx()) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupId, msgE.groupidx()) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupId, msgF.groupidx()) == hostC);
 
     // Check the mappings have been sent out to the relevant hosts
     auto actualSent = getSentMappings();
@@ -264,7 +266,11 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     std::atomic<int> sharedInt = 5;
 
     faabric::util::SchedulingDecision decision(appId, groupId);
+
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    msg.set_appid(appId);
+    msg.set_groupid(groupId);
+
     decision.addMessage(faabric::util::getSystemConfig().endpointHost, msg);
 
     // Background thread that will eventually enable the app and change the
@@ -276,7 +282,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         sharedInt.fetch_add(100);
     });
 
-    broker.waitForMappingsOnThisHost(appId);
+    broker.waitForMappingsOnThisHost(groupId);
 
     // The sum won't have happened yet if this thread hasn't been forced to wait
     REQUIRE(sharedInt == 105);
@@ -293,21 +299,33 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test distributed lock/ unlock",
                  "[ptp]")
 {
-    int groupId = 123;
+    int appId = 999;
+    int groupId = 888;
     int groupSize = 2;
+    int groupIdx = 1;
 
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
+    // Set up mappings
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-
+    msg.set_appid(appId);
     msg.set_groupsize(groupSize);
     msg.set_groupid(groupId);
+    msg.set_groupidx(groupIdx);
 
-    faabric::util::SchedulingDecision decision(msg.appid(), groupId);
+    faabric::Message rootMsg = faabric::util::messageFactory("foo", "bar");
+    rootMsg.set_appid(appId);
+    rootMsg.set_groupsize(groupSize);
+    rootMsg.set_groupid(groupId);
+    rootMsg.set_groupidx(0);
+
+    faabric::util::SchedulingDecision decision(appId, groupId);
     decision.addMessage(thisHost, msg);
+    decision.addMessage(thisHost, rootMsg);
 
     broker.setUpLocalMappingsFromSchedulingDecision(decision);
 
+    // Do both recursive and non-recursive
     bool recursive = false;
     int nCalls = 1;
 
@@ -327,15 +345,15 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(group->getLockOwner(recursive) == -1);
 
     for (int i = 0; i < nCalls; i++) {
-        cli.groupLock(msg.groupid(), msg.appidx(), recursive);
-        broker.recvMessage(groupId, 0, msg.appidx());
+        cli.groupLock(appId, groupId, groupIdx, recursive);
+        broker.recvMessage(groupId, 0, groupIdx);
     }
 
-    REQUIRE(group->getLockOwner(recursive) == msg.appidx());
+    REQUIRE(group->getLockOwner(recursive) == groupIdx);
 
     for (int i = 0; i < nCalls; i++) {
         server.setRequestLatch();
-        cli.groupUnlock(msg.groupid(), msg.appidx(), recursive);
+        cli.groupUnlock(appId, groupId, groupIdx, recursive);
         server.awaitRequestLatch();
     }
 

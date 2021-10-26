@@ -37,6 +37,17 @@ class SnapshotClientServerFixture
     }
 
     ~SnapshotClientServerFixture() { server.stop(); }
+
+    void setUpFunctionGroup(int appId, int groupId)
+    {
+        faabric::util::SchedulingDecision decision(appId, groupId);
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msg.set_appid(appId);
+        msg.set_groupid(groupId);
+
+        decision.addMessage(LOCALHOST, msg);
+        broker.setUpLocalMappingsFromSchedulingDecision(decision);
+    }
 };
 
 TEST_CASE_METHOD(ConfTestFixture,
@@ -73,11 +84,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     snapA.data = dataA.data();
     snapB.data = dataB.data();
 
-    // One request with no group, another with a group we must initialise
+    // One request with no group
+    int appId = 111;
     int groupIdA = 0;
     int groupIdB = 123;
 
-    // TODO - set up group
+    setUpFunctionGroup(appId, groupIdB);
 
     // Send the message
     cli.pushSnapshot(snapKeyA, groupIdA, snapA);
@@ -118,10 +130,11 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
     // One request with no group, another with a group we must initialise
+    int appId = 111;
     int groupIdA = 0;
     int groupIdB = 234;
 
-    // TODO - set up group
+    setUpFunctionGroup(appId, groupIdB);
 
     // Set up a snapshot
     std::string snapKey = std::to_string(faabric::util::generateGid());

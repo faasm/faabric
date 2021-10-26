@@ -37,6 +37,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Double check app id
     int appId = req->messages().at(0).appid();
     REQUIRE(appId > 0);
+    int groupId = 123;
 
     faabric::transport::PointToPointBroker& broker =
       faabric::transport::getPointToPointBroker();
@@ -47,7 +48,7 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Set up individual messages
     // Note that this thread is acting as app index 0
-    faabric::util::SchedulingDecision expectedDecision(appId);
+    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
 

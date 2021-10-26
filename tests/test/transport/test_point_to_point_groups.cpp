@@ -105,6 +105,10 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
     SECTION("Lock")
     {
         op = PointToPointCall::LOCK_GROUP;
+
+        // Prepare response
+        broker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
+
         group->lock(groupIdx, false);
     }
 
@@ -112,6 +116,10 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
     {
         op = PointToPointCall::LOCK_GROUP_RECURSIVE;
         recursive = true;
+
+        // Prepare response
+        broker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
+
         group->lock(groupIdx, recursive);
     }
 

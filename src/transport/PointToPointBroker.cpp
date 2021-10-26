@@ -122,6 +122,8 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
 
 void PointToPointGroup::masterLock(int groupIdx, bool recursive)
 {
+    SPDLOG_TRACE("Master lock {}:{}", groupId, groupIdx);
+
     bool success = false;
     {
         faabric::util::UniqueLock lock(mx);

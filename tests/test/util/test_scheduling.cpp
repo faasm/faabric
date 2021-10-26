@@ -49,6 +49,7 @@ TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
           "[util]")
 {
     int appId = 123;
+    int groupId = 345;
 
     int appIdxA = 2;
     int groupIdxA = 22;
@@ -66,7 +67,8 @@ TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
     std::vector<std::string> expectedHosts = { hostA, hostB };
 
     faabric::PointToPointMappings mappings;
-    mappings.set_groupid(appId);
+    mappings.set_appid(appId);
+    mappings.set_groupid(groupId);
 
     auto* mappingA = mappings.add_mappings();
     mappingA->set_host(hostA);
