@@ -114,7 +114,7 @@ int handleFakeDiffsThreadedFunction(
 
         for (int i = 0; i < nThreads; i++) {
             auto& m = req->mutable_messages()->at(i);
-            m.set_appindex(i);
+            m.set_appidx(i);
             m.set_inputdata(std::string("thread_" + std::to_string(i)));
             m.set_snapshotkey(snapshotKey);
 

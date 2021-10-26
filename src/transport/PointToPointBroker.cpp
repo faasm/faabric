@@ -357,8 +357,6 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
 void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
   const faabric::util::SchedulingDecision& decision)
 {
-    int groupId = decision.groupId;
-
     // Set up locally
     std::set<std::string> otherHosts =
       setUpLocalMappingsFromSchedulingDecision(decision);
@@ -366,9 +364,10 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     // Send out to other hosts
     for (const auto& host : otherHosts) {
         faabric::PointToPointMappings msg;
-        msg.set_groupid(groupId);
+        msg.set_appid(decision.appId);
+        msg.set_groupid(decision.groupId);
 
-        std::set<int>& indexes = groupIdIdxsMap[groupId];
+        std::set<int>& indexes = groupIdIdxsMap[decision.groupId];
 
         for (int i = 0; i < decision.nFunctions; i++) {
             auto* mapping = msg.add_mappings();
@@ -380,7 +379,7 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
 
         SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",
                      indexes.size(),
-                     groupId,
+                     decision.groupId,
                      host);
 
         auto cli = getClient(host);
@@ -392,7 +391,7 @@ void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
 {
     // Check if it's been enabled
     if (!groupMappingsFlags[groupId]) {
-        // Lock this app
+        // Lock this group
         std::unique_lock<std::mutex> lock(groupMappingMutexes[groupId]);
 
         // Wait for app to be enabled
@@ -404,8 +403,8 @@ void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
                   return groupMappingsFlags[groupId];
               })) {
 
-            SPDLOG_ERROR("Timed out waiting for app mappings {}", groupId);
-            throw std::runtime_error("Timed out waiting for app mappings");
+            SPDLOG_ERROR("Timed out waiting for group mappings {}", groupId);
+            throw std::runtime_error("Timed out waiting for group mappings");
         }
     }
 }

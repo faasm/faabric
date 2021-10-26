@@ -105,6 +105,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     decision.addMessage(LOCALHOST, msgA);
     decision.addMessage(LOCALHOST, msgB);
 
+    // Set up the mappings
     broker.setAndSendMappingsFromSchedulingDecision(decision);
 
     std::vector<uint8_t> sentDataA = { 0, 1, 2, 3 };
@@ -223,6 +224,9 @@ TEST_CASE_METHOD(
     for (int i = 0; i < 3; i++) {
         REQUIRE(actualSent.at(i).first == expectedHosts.at(i));
         faabric::PointToPointMappings actual = actualSent.at(i).second;
+
+        REQUIRE(actual.appid() == appId);
+        REQUIRE(actual.groupid() == groupId);
 
         std::set<std::int32_t> appIdxsA;
         std::set<std::int32_t> appIdxsB;

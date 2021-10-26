@@ -1,3 +1,4 @@
+#include "faabric/transport/PointToPointBroker.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -45,6 +46,7 @@ Scheduler& getScheduler()
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
+  , broker(faabric::transport::getPointToPointBroker())
 {
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
@@ -225,7 +227,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // Set up scheduling decision
     SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
 
-    // TODO - more granular locking, this is incredibly conservative
+    // TODO - more granular locking, this is conservative
     faabric::util::FullLock lock(mx);
 
     // If we're not the master host, we need to forward the request back to the
@@ -438,6 +440,11 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
                 e->executeTasks({ i }, req);
             }
         }
+    }
+
+    // Send out point-to-point mappings if necessary
+    if (firstMsg.groupid() > 0) {
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
     // Records for tests

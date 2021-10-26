@@ -21,10 +21,13 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::set<std::string> expectedAvailable = { getMasterIP(), getWorkerIP() };
     REQUIRE(actualAvailable == expectedAvailable);
 
+    int appId = 222;
+    int groupId = 333;
+
     // Set up this host's resources
     // Make sure some functions execute remotely, some locally
     int nLocalSlots = 1;
-    int nFuncs = 3;
+    int nFuncs = 4;
 
     faabric::HostResources res;
     res.set_slots(nLocalSlots);
@@ -34,25 +37,20 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("ptp", "simple", nFuncs);
 
-    // Double check app id
-    int appId = req->messages().at(0).appid();
-    REQUIRE(appId > 0);
-    int groupId = 123;
-
-    faabric::transport::PointToPointBroker& broker =
-      faabric::transport::getPointToPointBroker();
-
-    std::vector<std::string> expectedHosts = { getMasterIP(),
-                                               getWorkerIP(),
-                                               getWorkerIP() };
+    // Prepare expected decision
+    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
+    std::vector<std::string> expectedHosts = {
+        getMasterIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
+    };
 
     // Set up individual messages
-    // Note that this thread is acting as app index 0
-    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
 
-        msg.set_appidx(i + 1);
+        msg.set_appid(appId);
+        msg.set_appidx(i);
+        msg.set_groupid(groupId);
+        msg.set_groupidx(i);
 
         // Add to expected decision
         expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
@@ -61,9 +59,6 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Call the functions
     faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
     checkSchedulingDecisionEquality(actualDecision, expectedDecision);
-
-    // Set up point-to-point mappings
-    broker.setAndSendMappingsFromSchedulingDecision(actualDecision);
 
     // Check functions executed successfully
     for (int i = 0; i < nFuncs; i++) {
@@ -102,7 +97,5 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Get result
     faabric::Message result = sch.getFunctionResult(m.id(), 10000);
     REQUIRE(result.returnvalue() == 0);
-
-    // Check state written by all chained funcs
 }
 }
