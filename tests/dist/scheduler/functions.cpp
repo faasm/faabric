@@ -185,7 +185,7 @@ int handleFakeDiffsThreadedFunction(
         }
 
     } else {
-        int idx = msg.appindex();
+        int idx = msg.appidx();
         uint32_t offset = 2 * idx * faabric::util::HOST_PAGE_SIZE + 10;
 
         // Modify the executor's memory

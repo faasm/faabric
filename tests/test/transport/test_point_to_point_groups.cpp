@@ -52,8 +52,8 @@ class PointToPointGroupFixture
             auto& msg = req->mutable_messages()->at(i);
             msg.set_appid(appId);
             msg.set_groupid(groupId);
-            msg.set_appindex(i);
-            msg.set_groupindex(i);
+            msg.set_appidx(i);
+            msg.set_groupidx(i);
 
             decision.addMessage(thisHost, msg);
         }
@@ -82,15 +82,15 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
     faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
     msgA.set_appid(appId);
     msgA.set_groupid(groupId);
-    msgA.set_appindex(0);
-    msgA.set_groupindex(0);
+    msgA.set_appidx(0);
+    msgA.set_groupidx(0);
     decision.addMessage(otherHost, msgA);
 
     faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
     msgB.set_appid(appId);
     msgB.set_groupid(groupId);
-    msgB.set_appindex(groupIdx);
-    msgB.set_groupindex(groupIdx);
+    msgB.set_appidx(groupIdx);
+    msgB.set_groupidx(groupIdx);
     decision.addMessage(thisHost, msgB);
 
     broker.setUpLocalMappingsFromSchedulingDecision(decision);

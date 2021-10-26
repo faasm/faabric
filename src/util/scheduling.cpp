@@ -2,10 +2,6 @@
 
 namespace faabric::util {
 
-SchedulingDecision::SchedulingDecision(uint32_t appIdIn)
-  : SchedulingDecision(appIdIn, 0)
-{}
-
 SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
   : appId(appIdIn)
   , groupId(groupIdIn)
@@ -14,14 +10,7 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
 void SchedulingDecision::addMessage(const std::string& host,
                                     const faabric::Message& msg)
 {
-    addMessage(host, msg.id(), msg.appindex());
-}
-
-void SchedulingDecision::addMessage(const std::string& host,
-                                    int32_t messageId,
-                                    int32_t appIdx)
-{
-    addMessage(host, messageId, appId, 0);
+    addMessage(host, msg.id(), msg.appidx(), msg.groupidx());
 }
 
 void SchedulingDecision::addMessage(const std::string& host,
@@ -43,7 +32,7 @@ SchedulingDecision SchedulingDecision::fromPointToPointMappings(
     SchedulingDecision decision(mappings.appid(), mappings.groupid());
 
     for (const auto& m : mappings.mappings()) {
-        decision.addMessage(m.host(), m.messageid(), m.recvidx());
+        decision.addMessage(m.host(), m.messageid(), m.appidx(), m.groupidx());
     }
 
     return decision;

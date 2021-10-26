@@ -51,7 +51,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
 
-        msg.set_appindex(i + 1);
+        msg.set_appidx(i + 1);
 
         // Add to expected decision
         expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));

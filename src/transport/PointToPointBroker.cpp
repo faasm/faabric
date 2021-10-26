@@ -311,19 +311,20 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
 
         // Set up the mappings
         for (int i = 0; i < decision.nFunctions; i++) {
-            int recvIdx = decision.groupIdxs.at(i);
+            int groupIdx = decision.groupIdxs.at(i);
             const std::string& host = decision.hosts.at(i);
 
-            SPDLOG_DEBUG("Setting point-to-point mapping {}:{} to {}",
+            SPDLOG_DEBUG("Setting point-to-point mapping {}:{}:{} to {}",
+                         decision.appId,
                          groupId,
-                         recvIdx,
+                         groupIdx,
                          host);
 
             // Record this index for this group
-            groupIdIdxsMap[groupId].insert(recvIdx);
+            groupIdIdxsMap[groupId].insert(groupIdx);
 
             // Add host mapping
-            std::string key = getPointToPointKey(groupId, recvIdx);
+            std::string key = getPointToPointKey(groupId, groupIdx);
             mappings[key] = host;
 
             // If it's not this host, add to set of returned hosts
@@ -371,7 +372,8 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
             auto* mapping = msg.add_mappings();
             mapping->set_host(decision.hosts.at(i));
             mapping->set_messageid(decision.messageIds.at(i));
-            mapping->set_recvidx(decision.groupIdxs.at(i));
+            mapping->set_appidx(decision.appIdxs.at(i));
+            mapping->set_groupidx(decision.groupIdxs.at(i));
         }
 
         SPDLOG_DEBUG("Sending {} point-to-point mappings for {} to {}",

@@ -257,15 +257,16 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     reqOne->set_subtype(expectedSubType);
     reqOne->set_contextdata(expectedContextData);
 
-    faabric::util::SchedulingDecision expectedDecisionOne(
-      reqOne->messages().at(0).appid());
+    const faabric::Message firstMsg = reqOne->messages().at(0);
+    faabric::util::SchedulingDecision expectedDecisionOne(firstMsg.appid(),
+                                                          firstMsg.groupid());
     for (int i = 0; i < nCallsOne; i++) {
         // Set snapshot key
         faabric::Message& msg = reqOne->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
 
         // Set app index
-        msg.set_appindex(i);
+        msg.set_appidx(i);
 
         // Expect this host to handle up to its number of cores
         bool isThisHost = i < thisCores;
@@ -336,8 +337,9 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     // Now schedule a second batch and check they're all sent to the other host
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
       faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
-    faabric::util::SchedulingDecision expectedDecisionTwo(
-      reqTwo->messages().at(0).appid());
+    const faabric::Message& firstMsg2 = reqTwo->messages().at(0);
+    faabric::util::SchedulingDecision expectedDecisionTwo(firstMsg2.appid(),
+                                                          firstMsg2.groupid());
     for (int i = 0; i < nCallsTwo; i++) {
         faabric::Message& msg = reqTwo->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
@@ -434,8 +436,9 @@ TEST_CASE_METHOD(SlowExecutorFixture,
       faabric::util::batchExecFactory("foo", "bar", nCalls);
     req->set_type(execMode);
 
-    faabric::util::SchedulingDecision expectedDecision(
-      req->messages().at(0).appid());
+    const faabric::Message firstMsg = req->messages().at(0);
+    faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
+                                                       firstMsg.groupid());
     for (int i = 0; i < nCalls; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
@@ -460,7 +463,6 @@ TEST_CASE_METHOD(SlowExecutorFixture,
         expectedExecutors = expectedLocalCalls;
     }
 
-    faabric::Message firstMsg = req->messages().at(0);
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == expectedExecutors);
 }
 

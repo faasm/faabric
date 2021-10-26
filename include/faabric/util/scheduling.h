@@ -14,8 +14,6 @@ class SchedulingDecision
     static SchedulingDecision fromPointToPointMappings(
       faabric::PointToPointMappings& mappings);
 
-    SchedulingDecision(uint32_t appIdIn);
-
     SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn);
 
     uint32_t appId = 0;

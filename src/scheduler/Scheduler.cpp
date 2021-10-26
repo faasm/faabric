@@ -223,7 +223,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     }
 
     // Set up scheduling decision
-    SchedulingDecision decision(firstMsg.appid());
+    SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
 
     // TODO - more granular locking, this is incredibly conservative
     faabric::util::FullLock lock(mx);

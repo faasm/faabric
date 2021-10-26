@@ -98,7 +98,7 @@ message MpiHostsToRanksMessage {
 message Message {
     int32 id = 1;
     int32 appId = 2;
-    int32 appIndex = 3;
+    int32 appIdx = 3;
     string masterHost = 4;
 
     enum MessageType {
@@ -139,7 +139,7 @@ message Message {
 
     // Function groups
     int32 groupId = 27;
-    int32 groupIndex = 28;
+    int32 groupIdx = 28;
     int32 groupSize = 29;
 
     // MPI
@@ -230,7 +230,8 @@ message PointToPointMappings {
     message PointToPointMapping {
         string host = 1;
         int32 messageId = 2;
-        int32 recvIdx = 3;
+        int32 appIdx = 3;
+        int32 groupIdx = 4;
     }
 
     repeated PointToPointMapping mappings = 3;

@@ -81,7 +81,7 @@ int doDistributedBarrier(faabric::Message& msg, bool isWorker)
             m.set_appindex(i);
 
             m.set_groupid(123);
-            m.set_groupindex(i);
+            m.set_groupidx(i);
             m.set_groupsize(nChainedFuncs);
 
             m.set_inputdata(msg.inputdata());

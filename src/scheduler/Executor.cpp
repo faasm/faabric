@@ -159,14 +159,14 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         int threadPoolIdx;
         if (isThreads) {
             assert(threadPoolSize > 1);
-            threadPoolIdx = (msg.appindex() % (threadPoolSize - 1)) + 1;
+            threadPoolIdx = (msg.appidx() % (threadPoolSize - 1)) + 1;
         } else {
-            threadPoolIdx = msg.appindex() % threadPoolSize;
+            threadPoolIdx = msg.appidx() % threadPoolSize;
         }
 
         // Enqueue the task
         SPDLOG_TRACE(
-          "Assigning app index {} to thread {}", msg.appindex(), threadPoolIdx);
+          "Assigning app index {} to thread {}", msg.appidx(), threadPoolIdx);
         threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(
           msgIdx, req, batchCounter, needsSnapshotPush, skipReset));
 
