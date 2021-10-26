@@ -38,8 +38,8 @@ def cmake(ctx, clean=False, shared=False, build="Debug"):
         "-DCMAKE_INSTALL_PREFIX={}".format(FAABRIC_INSTALL_PREFIX),
         "-DCMAKE_BUILD_TYPE={}".format(build),
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
-        "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
-        "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
+        "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
+        "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
         PROJ_ROOT,
     ]
 
