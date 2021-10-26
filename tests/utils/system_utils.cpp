@@ -1,5 +1,5 @@
 #include "DummyExecutorFactory.h"
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>

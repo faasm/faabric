@@ -1,6 +1,6 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include <sys/mman.h>
 

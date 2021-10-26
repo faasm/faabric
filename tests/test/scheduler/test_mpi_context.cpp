@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/Scheduler.h>
