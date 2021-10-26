@@ -11,11 +11,9 @@ RUN add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
 RUN apt-get update
 
 RUN apt install -y \
-    ansible \
     autoconf \
     automake \
     build-essential \
-    cgroup-tools \
     clang-10 \
     clang-13 \
     clang-format-10 \
@@ -25,18 +23,15 @@ RUN apt install -y \
     clang-tools-13 \
     cmake \
     g++-11 \
-    gdb \
     git \
-    iproute2 \
-    iptables \
     kitware-archive-keyring \
     libboost-filesystem-dev \
     libc++-13-dev \
     libc++abi-13-dev \
-    libcgroup-dev \
     libcurl4-openssl-dev \
     libhiredis-dev \
     libpython3-dev \
+    libssl-dev \
     libstdc++-11-dev \
     libtool \
     libunwind-13-dev \
@@ -51,9 +46,7 @@ RUN apt install -y \
     python3-venv \
     redis-tools \
     sudo \
-    unzip \
-    wget \
-    zsh
+    unzip
 
 RUN curl -s -L -o /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/latest/download/conan-ubuntu-64.deb && sudo dpkg -i /tmp/conan-latest.deb && rm -f /tmp/conan-latest.deb
 
