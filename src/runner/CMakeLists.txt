@@ -1,8 +1,4 @@
-set(LIB_FILES
-        "${FAABRIC_INCLUDE_DIR}/faabric/runner/FaabricMain.h"
-        FaabricMain.cpp
-        )
 
-faabric_lib(runner "${LIB_FILES}")
+faabric_lib(runner FaabricMain.cpp)
 
-target_link_libraries(runner scheduler util endpoint)
+target_link_libraries(runner PRIVATE faabric::scheduler faabric::util faabric::endpoint)

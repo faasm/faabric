@@ -34,8 +34,8 @@ def build(ctx, clean=False):
             "-DCMAKE_BUILD_TYPE=Release",
             "-DCMAKE_CXX_FLAGS=-I{}".format(INCLUDE_DIR),
             "-DCMAKE_EXE_LINKER_FLAGS=-L{}".format(LIB_DIR),
-            "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-10",
-            "-DCMAKE_C_COMPILER=/usr/bin/clang-10",
+            "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
+            "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
             EXAMPLES_DIR,
         ]
     )

@@ -19,11 +19,8 @@ set(LIB_FILES
         ${MPI_NATIVE_HEADERS}
     )
 
-if(BUILD_SHARED_LIBS)
-    add_library(faabricmpi_native SHARED ${LIB_FILES})
-else()
-    add_library(faabricmpi_native STATIC ${LIB_FILES})
-endif()
+add_library(faabricmpi_native ${LIB_FILES})
+add_library(faabric::faabricmpi_native ALIAS faabricmpi_native)
 
 set_target_properties(faabricmpi_native
     PROPERTIES PUBLIC_HEADER "${MPI_NATIVE_HEADERS}"
@@ -34,12 +31,9 @@ target_include_directories(faabricmpi_native
     )
 
 set(FAABRIC_LIB_DIR "/build/faabric/install/lib")
-target_link_libraries(faabricmpi_native 
-    faabric
-    faabricmpi
-    ${FAABRIC_LIB_DIR}/libpistache.so
-    ${FAABRIC_LIB_DIR}/libprotobuf.so
-    ${FAABRIC_LIB_DIR}/libzmq.so
+target_link_libraries(faabricmpi_native PUBLIC
+    faabric::faabric
+    faabric::faabricmpi
 )
 
 install(TARGETS faabricmpi_native
