@@ -581,8 +581,10 @@ void MpiWorld::send(int sendRank,
     }
 
     // In non-release builds, track that we have sent this message
-    faabric::util::tracing::getCallRecords().addRecord(thisMsgId,
-        faabric::util::tracing::RecordType::MpiPerRankMessageCount, recvRank);
+    faabric::util::tracing::getCallRecords().addRecord(
+      thisMsgId,
+      faabric::util::tracing::RecordType::MpiPerRankMessageCount,
+      recvRank);
 }
 
 void MpiWorld::recv(int sendRank,

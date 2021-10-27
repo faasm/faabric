@@ -11,8 +11,8 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
-#include <faabric/util/tracing.h>
 #include <faabric/util/timing.h>
+#include <faabric/util/tracing.h>
 
 #define POOL_SHUTDOWN -1
 

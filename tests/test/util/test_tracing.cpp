@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include "faabric_utils.h"
 
@@ -23,10 +23,17 @@ TEST_CASE_METHOD(MpiTestFixture,
     std::vector<int> messageData = { 0, 1, 2 };
     auto buffer = new int[messageData.size()];
 
-    world.send(
-      rankA1, rankA2, BYTES(messageData.data()), MPI_INT, messageData.size());
-    world.recv(
-      rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
+    int numToSend = 10;
+
+    for (int i = 0; i < numToSend; i++) {
+        world.send(rankA1,
+                   rankA2,
+                   BYTES(messageData.data()),
+                   MPI_INT,
+                   messageData.size());
+        world.recv(
+          rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
+    }
 
     // Stop recording and check we have only recorded one message
     faabric::util::tracing::getCallRecords().stopRecording(msg);
@@ -35,7 +42,7 @@ TEST_CASE_METHOD(MpiTestFixture,
     REQUIRE(msg.records().mpimsgcount().ranks_size() == worldSize);
     for (int i = 0; i < worldSize; i++) {
         if (i == rankA2) {
-            REQUIRE(msg.records().mpimsgcount().nummessages(i) == 1);
+            REQUIRE(msg.records().mpimsgcount().nummessages(i) == numToSend);
         } else {
             REQUIRE(msg.records().mpimsgcount().nummessages(i) == 0);
         }

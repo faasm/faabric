@@ -6,8 +6,10 @@ void CallRecords::startRecording(const faabric::Message& msg)
 {
 #ifndef NDEBUG
     if (linkedMsg != nullptr && linkedMsg->id() != msg.id()) {
-        SPDLOG_ERROR("CallRecords already linked to a different message: (linked: {} != provided: {})",
-                     linkedMsg->id(), msg.id());
+        SPDLOG_ERROR("Error starting recording, records not linked to the right"
+                     " message: (linked: {} != provided: {})",
+                     linkedMsg->id(),
+                     msg.id());
         throw std::runtime_error("CallRecords linked to a different message");
     } else if (linkedMsg == nullptr) {
         linkedMsg = std::make_shared<faabric::Message>(msg);
@@ -21,8 +23,10 @@ void CallRecords::stopRecording(faabric::Message& msg)
 {
 #ifndef NDEBUG
     if (linkedMsg == nullptr || linkedMsg->id() != msg.id()) {
-        SPDLOG_ERROR("CallRecords not linked to the right message: (linked: {} != provided: {})",
-                     linkedMsg->id(), msg.id());
+        SPDLOG_ERROR("Error stopping recording, records not linked to the right"
+                     " message: (linked: {} != provided: {})",
+                     linkedMsg->id(),
+                     msg.id());
         throw std::runtime_error("CallRecords linked to a different message");
     }
 
@@ -72,14 +76,17 @@ void CallRecords::addRecord(int msgId, RecordType recordType, int idToIncrement)
 #ifndef NDEBUG
     // Check message id
     if (linkedMsg == nullptr || linkedMsg->id() != msgId) {
-        SPDLOG_ERROR("CallRecords not linked to the right message: (linked: {} != provided: {})",
-                     linkedMsg->id(), msgId);
+        SPDLOG_ERROR("CallRecords not linked to the right message: (linked: {} "
+                     "!= provided: {})",
+                     linkedMsg->id(),
+                     msgId);
         throw std::runtime_error("CallRecords linked to a different message");
     }
 
     // Add the record to the list of on going records if it is not there
     bool mustInit = false;
-    auto it = std::find(onGoingRecordings.begin(), onGoingRecordings.end(), recordType);
+    auto it =
+      std::find(onGoingRecordings.begin(), onGoingRecordings.end(), recordType);
     if (it == onGoingRecordings.end()) {
         onGoingRecordings.push_back(recordType);
         mustInit = true;
@@ -106,7 +113,6 @@ void CallRecords::addRecord(int msgId, RecordType recordType, int idToIncrement)
     ;
 #endif
 }
-
 
 CallRecords& getCallRecords()
 {

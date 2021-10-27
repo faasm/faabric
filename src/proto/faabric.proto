@@ -96,7 +96,7 @@ message MpiHostsToRanksMessage {
 }
 
 // ---------------------------------------------
-// PROFILING
+// TRACING
 // ---------------------------------------------
 
 message MpiPerRankMessageCount {
