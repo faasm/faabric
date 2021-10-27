@@ -275,9 +275,9 @@ int PointToPointGroup::getLockOwner(bool recursive)
         }
 
         return NO_LOCK_OWNER_IDX;
-    } else {
-        return lockOwnerIdx;
     }
+
+    return lockOwnerIdx;
 }
 
 PointToPointBroker::PointToPointBroker()
@@ -394,9 +394,11 @@ void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
 {
     // Check if it's been enabled
     if (!groupMappingsFlags[groupId]) {
+
         // Lock this group
         faabric::util::UniqueLock lock(groupMappingMutexes[groupId]);
 
+        // Check again
         if (!groupMappingsFlags[groupId]) {
             // Wait for app to be enabled
             auto timePoint = std::chrono::system_clock::now() +
@@ -519,7 +521,7 @@ void PointToPointBroker::resetThreadLocalCache()
 
 PointToPointBroker& getPointToPointBroker()
 {
-    static PointToPointBroker reg;
-    return reg;
+    static PointToPointBroker broker;
+    return broker;
 }
 }

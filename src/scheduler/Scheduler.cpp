@@ -442,8 +442,9 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         }
     }
 
-    // Send out point-to-point mappings if necessary
-    if (firstMsg.groupid() > 0) {
+    // Send out point-to-point mappings if necessary (unless being forced to
+    // execute locally, in which case they will be transmitted from the master)
+    if (!forceLocal && (firstMsg.groupid() > 0)) {
         broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
