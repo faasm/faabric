@@ -316,7 +316,7 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
             int groupIdx = decision.groupIdxs.at(i);
             const std::string& host = decision.hosts.at(i);
 
-            SPDLOG_DEBUG("Setting point-to-point mapping {}:{}:{} to {}",
+            SPDLOG_DEBUG("Setting point-to-point mapping {}:{}:{} on {}",
                          decision.appId,
                          groupId,
                          groupIdx,
@@ -342,7 +342,10 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
 
     {
         // Lock this group
-        std::unique_lock<std::mutex> lock(groupMappingMutexes[groupId]);
+        faabric::util::UniqueLock lock(groupMappingMutexes[groupId]);
+
+        SPDLOG_TRACE(
+          "Enabling point-to-point mapping for {}:{}", decision.appId, groupId);
 
         // Enable the group
         groupMappingsFlags[groupId] = true;
@@ -392,19 +395,25 @@ void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
     // Check if it's been enabled
     if (!groupMappingsFlags[groupId]) {
         // Lock this group
-        std::unique_lock<std::mutex> lock(groupMappingMutexes[groupId]);
+        faabric::util::UniqueLock lock(groupMappingMutexes[groupId]);
 
-        // Wait for app to be enabled
-        auto timePoint = std::chrono::system_clock::now() +
-                         std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
+        if (!groupMappingsFlags[groupId]) {
+            // Wait for app to be enabled
+            auto timePoint = std::chrono::system_clock::now() +
+                             std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
 
-        if (!groupMappingCvs[groupId].wait_until(
-              lock, timePoint, [this, groupId] {
-                  return groupMappingsFlags[groupId];
-              })) {
+            if (!groupMappingCvs[groupId].wait_until(
+                  lock, timePoint, [this, groupId] {
+                      return groupMappingsFlags[groupId];
+                  })) {
 
-            SPDLOG_ERROR("Timed out waiting for group mappings {}", groupId);
-            throw std::runtime_error("Timed out waiting for group mappings");
+                SPDLOG_ERROR("Timed out waiting for group mappings {}",
+                             groupId);
+                throw std::runtime_error(
+                  "Timed out waiting for group mappings");
+            }
+
+            SPDLOG_TRACE("Point-to-point mappings for {} ready", groupId);
         }
     }
 }

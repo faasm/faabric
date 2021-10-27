@@ -30,6 +30,10 @@ int main()
         faabric::runner::FaabricMain m(fac);
         m.startBackground();
 
+        SPDLOG_INFO("\n-------------------------------------");
+        SPDLOG_INFO("Dist test server initialised");
+        SPDLOG_INFO("-------------------------------------\n");
+
         // Note, endpoint will block until killed
         SPDLOG_INFO("Starting HTTP endpoint on worker");
         faabric::endpoint::FaabricEndpoint endpoint;

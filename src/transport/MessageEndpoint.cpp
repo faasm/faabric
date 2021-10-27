@@ -288,7 +288,7 @@ std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
       try {
           auto res = socket.recv(msg);
           if (!res.has_value()) {
-              SPDLOG_TRACE("Timed out receiving message with no size");
+              SPDLOG_TRACE("Timed out receiving message without fixed size");
               return std::nullopt;
           }
       } catch (zmq::error_t& e) {
