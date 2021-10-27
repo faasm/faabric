@@ -155,10 +155,13 @@ int handleDistributedBarrierWorker(
     // Check that all other values have been set
     for (int i = 0; i < nChainedFuncs; i++) {
         auto idxKv = state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
+        idxKv->pull();
+
         uint8_t* idxRawValue = idxKv->get();
         int actualIdxValue = *(int*)idxRawValue;
         if (actualIdxValue != i) {
-            SPDLOG_ERROR("barrier-worker check failed on host {}. {} = {}",
+            SPDLOG_ERROR("barrier-worker {} check failed on host {}. {} = {}",
+                         groupIdx,
                          faabric::util::getSystemConfig().endpointHost,
                          stateKeys.at(i),
                          actualIdxValue);
