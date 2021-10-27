@@ -4,7 +4,6 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/MpiWorld.h>
-#include <faabric/util/logging.h> // DELETE MEE
 #include <faabric/util/macros.h>
 #include <faabric/util/tracing.h>
 
@@ -13,6 +12,9 @@ TEST_CASE_METHOD(MpiTestFixture,
                  "Test tracing the number of MPI messages",
                  "[util][tracing]")
 {
+    // Disable test mode to test tracing
+    faabric::util::setTestMode(false);
+
     faabric::util::tracing::getCallRecords().startRecording(msg);
 
     // Send one message
@@ -47,5 +49,7 @@ TEST_CASE_METHOD(MpiTestFixture,
             REQUIRE(msg.records().mpimsgcount().nummessages(i) == 0);
         }
     }
+
+    faabric::util::setTestMode(true);
 }
 }

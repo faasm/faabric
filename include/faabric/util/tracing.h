@@ -25,6 +25,10 @@ class CallRecords
 
     std::list<RecordType> onGoingRecordings;
 
+    void checkMessageLinked(int msgId);
+
+    void checkMessageNotLinked();
+
     void loadRecordsToMessage(faabric::CallRecords& callRecords,
                               const RecordType& recordType);
 

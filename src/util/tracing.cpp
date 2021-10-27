@@ -1,19 +1,20 @@
 #include <faabric/util/logging.h>
+#include <faabric/util/testing.h>
 #include <faabric/util/tracing.h>
 
 namespace faabric::util::tracing {
 void CallRecords::startRecording(const faabric::Message& msg)
 {
 #ifndef NDEBUG
-    if (linkedMsg != nullptr && linkedMsg->id() != msg.id()) {
-        SPDLOG_ERROR("Error starting recording, records not linked to the right"
-                     " message: (linked: {} != provided: {})",
-                     linkedMsg->id(),
-                     msg.id());
-        throw std::runtime_error("CallRecords linked to a different message");
-    } else if (linkedMsg == nullptr) {
-        linkedMsg = std::make_shared<faabric::Message>(msg);
+    // In the tests there's not a thread to message mapping as we sometimes
+    // spawn extra threads to mock work. Thus, we skip this check here.
+    if (faabric::util::isTestMode()) {
+        return;
     }
+
+    checkMessageNotLinked();
+
+    linkedMsg = std::make_shared<faabric::Message>(msg);
 #else
     ;
 #endif
@@ -22,13 +23,13 @@ void CallRecords::startRecording(const faabric::Message& msg)
 void CallRecords::stopRecording(faabric::Message& msg)
 {
 #ifndef NDEBUG
-    if (linkedMsg == nullptr || linkedMsg->id() != msg.id()) {
-        SPDLOG_ERROR("Error stopping recording, records not linked to the right"
-                     " message: (linked: {} != provided: {})",
-                     linkedMsg->id(),
-                     msg.id());
-        throw std::runtime_error("CallRecords linked to a different message");
+    // In the tests there's not a thread to message mapping as we sometimes
+    // spawn extra threads to mock work. Thus, we skip this check here.
+    if (faabric::util::isTestMode()) {
+        return;
     }
+
+    checkMessageLinked(msg.id());
 
     linkedMsg = nullptr;
 
@@ -43,6 +44,28 @@ void CallRecords::stopRecording(faabric::Message& msg)
 #else
     ;
 #endif
+}
+
+void CallRecords::checkMessageLinked(int msgId)
+{
+    if (linkedMsg == nullptr || linkedMsg->id() != msgId) {
+        SPDLOG_ERROR("Error during recording, records not linked to the right"
+                     " message: (linked: {} != provided: {})",
+                     linkedMsg == nullptr ? "nullptr"
+                                          : std::to_string(linkedMsg->id()),
+                     msgId);
+        throw std::runtime_error("CallRecords linked to a different message");
+    }
+}
+
+void CallRecords::checkMessageNotLinked()
+{
+    if (linkedMsg != nullptr) {
+        SPDLOG_ERROR("Error starting recording, record already linked to"
+                     "another message: {}",
+                     linkedMsg->id());
+        throw std::runtime_error("CallRecords linked to a different message");
+    }
 }
 
 void CallRecords::loadRecordsToMessage(faabric::CallRecords& callRecords,
@@ -74,14 +97,11 @@ void CallRecords::loadRecordsToMessage(faabric::CallRecords& callRecords,
 void CallRecords::addRecord(int msgId, RecordType recordType, int idToIncrement)
 {
 #ifndef NDEBUG
-    // Check message id
-    if (linkedMsg == nullptr || linkedMsg->id() != msgId) {
-        SPDLOG_ERROR("CallRecords not linked to the right message: (linked: {} "
-                     "!= provided: {})",
-                     linkedMsg->id(),
-                     msgId);
-        throw std::runtime_error("CallRecords linked to a different message");
+    if (faabric::util::isTestMode()) {
+        return;
     }
+
+    checkMessageLinked(msgId);
 
     // Add the record to the list of on going records if it is not there
     bool mustInit = false;
