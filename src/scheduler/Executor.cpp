@@ -11,6 +11,7 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/tracing.h>
 #include <faabric/util/timing.h>
 
 #define POOL_SHUTDOWN -1
@@ -226,6 +227,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      msg.id(),
                      isThreads);
 
+        // Start recording calls in non-release builds
+        faabric::util::tracing::getCallRecords().startRecording(msg);
+
         int32_t returnValue;
         try {
             returnValue =
@@ -241,6 +245,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Set the return value
         msg.set_returnvalue(returnValue);
+
+        // Stop recording calls
+        faabric::util::tracing::getCallRecords().stopRecording(msg);
 
         // Decrement the task count
         int oldTaskCount = task.batchCounter->fetch_sub(1);

@@ -21,6 +21,7 @@ faabric_lib(util
     snapshot.cpp
     state.cpp
     string_tools.cpp
+    tracing.cpp
     timing.cpp
     testing.cpp
 )

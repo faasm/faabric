@@ -95,6 +95,19 @@ message MpiHostsToRanksMessage {
     repeated int32 basePorts = 2;
 }
 
+// ---------------------------------------------
+// PROFILING
+// ---------------------------------------------
+
+message MpiPerRankMessageCount {
+    repeated int32 ranks = 1;
+    repeated int32 numMessages = 2;
+}
+
+message CallRecords {
+    MpiPerRankMessageCount mpiMsgCount = 1;
+}
+
 message Message {
     int32 id = 1;
     int32 appId = 2;

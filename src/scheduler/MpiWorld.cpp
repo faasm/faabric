@@ -6,6 +6,7 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
+#include <faabric/util/tracing.h>
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
 // per-rank data structures
@@ -32,6 +33,9 @@ static thread_local std::unordered_map<
   std::string,
   std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
   ranksSendEndpoints;
+
+// Id of the message that created this thread-local instance
+static thread_local int thisMsgId;
 
 // This is used for mocking in tests
 static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
@@ -177,6 +181,7 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
     id = newId;
     user = call.user();
     function = call.function();
+    thisMsgId = call.id();
 
     size = newSize;
 
@@ -245,6 +250,7 @@ void MpiWorld::destroy()
     SPDLOG_TRACE("Destroying MPI world {}", id);
 
     // Note that all ranks will call this function.
+    thisMsgId = 0;
 
     // We must force the destructors for all message endpoints to run here
     // rather than at the end of their global thread-local lifespan. If we
@@ -292,6 +298,7 @@ void MpiWorld::initialiseFromMsg(const faabric::Message& msg)
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
+    thisMsgId = msg.id();
 
     // Block until we receive
     faabric::MpiHostsToRanksMessage hostRankMsg = recvMpiHostRankMsg();
@@ -572,6 +579,10 @@ void MpiWorld::send(int sendRank,
         SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
         sendRemoteMpiMessage(sendRank, recvRank, m);
     }
+
+    // In non-release builds, track that we have sent this message
+    faabric::util::tracing::getCallRecords().addRecord(thisMsgId,
+        faabric::util::tracing::RecordType::MpiPerRankMessageCount, recvRank);
 }
 
 void MpiWorld::recv(int sendRank,
