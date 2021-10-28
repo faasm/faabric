@@ -1,8 +1,6 @@
 #include <catch2/catch.hpp>
 
 #include "DummyExecutorFactory.h"
-#include "faabric/transport/PointToPointBroker.h"
-#include "faabric/transport/PointToPointClient.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -13,6 +11,8 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
