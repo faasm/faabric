@@ -249,7 +249,7 @@ class Scheduler
     ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
 
     // ---- Point-to-point ----
-    faabric::transport::PointToPointBroker &broker;
+    faabric::transport::PointToPointBroker& broker;
 };
 
 }

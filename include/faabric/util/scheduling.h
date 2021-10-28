@@ -34,9 +34,7 @@ class SchedulingDecision
 
     void addMessage(const std::string& host, const faabric::Message& msg);
 
-    void addMessage(const std::string& host,
-                    int32_t messageId,
-                    int32_t appIdx);
+    void addMessage(const std::string& host, int32_t messageId, int32_t appIdx);
 
     void addMessage(const std::string& host,
                     int32_t messageId,

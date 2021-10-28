@@ -16,7 +16,7 @@
         throw std::runtime_error("Distributed coordination timeout");          \
     }
 
-#define MAPPING_TIMEOUT_MS 10000
+#define MAPPING_TIMEOUT_MS 20000
 
 namespace faabric::transport {
 
@@ -235,8 +235,7 @@ void PointToPointGroup::notifyLocked(int groupIdx)
 
 void PointToPointGroup::barrier(int groupIdx)
 {
-    // TODO implement a more efficient barrier implementation to avoid load
-    // on the master
+    // TODO more efficient barrier implementation to avoid load on the master
     if (groupIdx == 0) {
         // Receive from all
         for (int i = 1; i < groupSize; i++) {
@@ -252,6 +251,9 @@ void PointToPointGroup::barrier(int groupIdx)
         // Do the send
         std::vector<uint8_t> data(1, 0);
         ptpBroker.sendMessage(groupId, groupIdx, 0, data.data(), data.size());
+
+        // Await the response
+        ptpBroker.recvMessage(groupId, 0, groupIdx);
     }
 }
 

@@ -123,12 +123,12 @@ int handleDistributedBarrierWorker(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-    int nChainedFuncs = std::stoi(msg.inputdata());
+    int groupIdx = msg.groupidx();
 
-    std::vector<std::string> stateKeys = getStateKeys(nChainedFuncs);
+    std::vector<std::string> stateKeys = getStateKeys(msg.groupsize());
     faabric::state::State& state = state::getGlobalState();
 
-    int groupIdx = msg.groupidx();
+    std::string stateKey = stateKeys.at(groupIdx);
 
     // Sleep for some time
     int waitMs = 500 * groupIdx;
@@ -136,9 +136,7 @@ int handleDistributedBarrierWorker(
     SLEEP_MS(waitMs);
 
     // Write result for this thread
-    SPDLOG_DEBUG("barrier-worker {} writing result", groupIdx);
-    std::string stateKey = "barrier-test-" + std::to_string(groupIdx);
-
+    SPDLOG_DEBUG("barrier-worker {} writing result to {}", groupIdx, stateKey);
     std::shared_ptr<faabric::state::StateKeyValue> kv =
       state.getKV(msg.user(), stateKey, sizeof(int32_t));
     kv->set(BYTES(&groupIdx));
@@ -153,7 +151,7 @@ int handleDistributedBarrierWorker(
       ->barrier(msg.groupidx());
 
     // Check that all other values have been set
-    for (int i = 0; i < nChainedFuncs; i++) {
+    for (int i = 0; i < msg.groupsize(); i++) {
         auto idxKv = state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
         idxKv->pull();
 

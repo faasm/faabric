@@ -1,10 +1,10 @@
 #pragma once
 
-#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotApi.h>
 #include <faabric/transport/MessageEndpointServer.h>
+#include <faabric/transport/PointToPointBroker.h>
 
 namespace faabric::snapshot {
 class SnapshotServer final : public faabric::transport::MessageEndpointServer
