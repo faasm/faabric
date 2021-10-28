@@ -402,7 +402,7 @@ void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
 
         // Check again
         if (!groupMappingsFlags[groupId]) {
-            // Wait for app to be enabled
+            // Wait for group to be enabled
             auto timePoint = std::chrono::system_clock::now() +
                              std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
 

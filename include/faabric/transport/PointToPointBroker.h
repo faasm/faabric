@@ -4,6 +4,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/scheduling.h>
 
+#include <condition_variable>
 #include <queue>
 #include <set>
 #include <shared_mutex>

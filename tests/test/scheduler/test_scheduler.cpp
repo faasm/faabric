@@ -1,7 +1,10 @@
 #include <catch2/catch.hpp>
 
 #include "DummyExecutorFactory.h"
+#include "faabric/transport/PointToPointBroker.h"
+#include "faabric/transport/PointToPointClient.h"
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
@@ -77,6 +80,7 @@ class DummyExecutorFixture
   : public RedisTestFixture
   , public SchedulerTestFixture
   , public ConfTestFixture
+  , public PointToPointTestFixture
 {
   public:
     DummyExecutorFixture()
@@ -829,5 +833,90 @@ TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
 
     // Check executor count is still the same
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 2);
+}
+
+TEST_CASE_METHOD(DummyExecutorFixture,
+                 "Test point-to-point mappings sent from scheduler",
+                 "[scheduler]")
+{
+    faabric::util::setMockMode(true);
+
+    std::string thisHost = conf.endpointHost;
+    std::string otherHost = "foobar";
+
+    sch.addHostToGlobalSet(otherHost);
+
+    // Set resources for this host
+    int nSlotsThisHost = 2;
+    faabric::HostResources resourcesThisHost;
+    resourcesThisHost.set_slots(nSlotsThisHost);
+    sch.setThisHostResources(resourcesThisHost);
+
+    // Set resources for other host
+    int nSlotsOther = 5;
+    faabric::HostResources resourcesOtherHost;
+    resourcesOtherHost.set_slots(nSlotsOther);
+    faabric::scheduler::queueResourceResponse(otherHost, resourcesOtherHost);
+
+    // Set up request
+    auto req = faabric::util::batchExecFactory("foo", "bar", 4);
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+
+    int appId = firstMsg.appid();
+    int groupId = 0;
+    bool forceLocal = false;
+    bool expectMappingsSent = false;
+
+    SECTION("No group ID")
+    {
+        SECTION("Force local") { forceLocal = true; }
+
+        SECTION("No force local") {}
+    }
+
+    SECTION("With group ID")
+    {
+        groupId = 123;
+        SECTION("Force local") { forceLocal = true; }
+
+        SECTION("No force local") { expectMappingsSent = true; }
+    }
+
+    for (int i = 0; i < req->messages().size(); i++) {
+        faabric::Message& m = req->mutable_messages()->at(i);
+        m.set_groupid(groupId);
+        m.set_groupidx(i);
+    }
+
+    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
+    expectedDecision.addMessage(thisHost, req->messages().at(0));
+    expectedDecision.addMessage(thisHost, req->messages().at(1));
+    expectedDecision.addMessage(otherHost, req->messages().at(2));
+    expectedDecision.addMessage(otherHost, req->messages().at(3));
+
+    // Schedule and check decision
+    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    checkSchedulingDecisionEquality(expectedDecision, actualDecision);
+
+    // Check mappings set up locally or not
+    faabric::transport::PointToPointBroker& broker =
+      faabric::transport::getPointToPointBroker();
+    std::set<int> registeredIdxs = broker.getIdxsRegisteredForGroup(groupId);
+    if (expectMappingsSent) {
+        REQUIRE(registeredIdxs.size() == 4);
+    } else {
+        REQUIRE(registeredIdxs.empty());
+    }
+
+    // Check mappings sent or not
+    std::vector<std::pair<std::string, faabric::PointToPointMappings>>
+      sentMappings = faabric::transport::getSentMappings();
+
+    if (expectMappingsSent) {
+        REQUIRE(sentMappings.size() == 1);
+        REQUIRE(sentMappings.at(0).first == otherHost);
+    } else {
+        REQUIRE(sentMappings.empty());
+    }
 }
 }
