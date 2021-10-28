@@ -7,6 +7,7 @@ faabric_lib(util
     crash.cpp
     delta.cpp
     environment.cpp
+    exec_graph.cpp
     files.cpp
     func.cpp
     gids.cpp
@@ -21,7 +22,6 @@ faabric_lib(util
     snapshot.cpp
     state.cpp
     string_tools.cpp
-    tracing.cpp
     timing.cpp
     testing.cpp
 )

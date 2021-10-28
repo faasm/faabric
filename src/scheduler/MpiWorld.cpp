@@ -1,12 +1,12 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
-#include <faabric/util/tracing.h>
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
 // per-rank data structures
@@ -581,10 +581,10 @@ void MpiWorld::send(int sendRank,
     }
 
     // In non-release builds, track that we have sent this message
-    faabric::util::tracing::getCallRecords().addRecord(
+    faabric::util::getExecGraphDetail().incrementCounter(
       thisMsgId,
-      faabric::util::tracing::RecordType::MpiPerRankMessageCount,
-      recvRank);
+      faabric::util::ExecGraphDetail::mpiMsgCountPrefix +
+        std::to_string(recvRank));
 }
 
 void MpiWorld::recv(int sendRank,
