@@ -15,6 +15,8 @@ void ExecGraphDetail::startRecording(const faabric::Message& msg)
 
     linkedMsg = std::make_shared<faabric::Message>(msg);
 
+    // If message flag is not set, no-op the increment functions for minimal
+    // overhead
     if (!msg.recordexecgraph()) {
         doAddDetail =
           [](const int, const std::string&, const std::string&) -> void { ; };

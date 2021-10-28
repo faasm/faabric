@@ -227,7 +227,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      msg.id(),
                      isThreads);
 
-        // Start recording calls in non-release builds
+        // Start recording calls
         faabric::util::getExecGraphDetail().startRecording(msg);
 
         int32_t returnValue;

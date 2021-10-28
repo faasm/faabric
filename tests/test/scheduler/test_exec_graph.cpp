@@ -219,7 +219,7 @@ TEST_CASE_METHOD(MpiTestFixture,
           rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
     }
 
-    // Stop recording and check we have only recorded one message
+    // Stop recording and check we have recorded no message
     faabric::util::getExecGraphDetail().stopRecording(msg);
     REQUIRE(msg.execgraphdetails_size() == 0);
 
