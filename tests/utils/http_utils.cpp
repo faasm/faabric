@@ -24,7 +24,7 @@ std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
                                                   int port,
                                                   const std::string& body)
 {
-    Http::Client client;
+    Http::Experimental::Client client;
     client.init();
 
     std::string fullUrl = fmt::format("{}:{}", host, port);

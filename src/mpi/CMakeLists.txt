@@ -13,13 +13,11 @@ set(PUBLIC_HEADERS
         ${FAABRIC_INCLUDE_DIR}/faabric/mpi/mpi.h
     )
 
-if(BUILD_SHARED_LIBS)
-    add_library(faabricmpi SHARED mpi.cpp ${PUBLIC_HEADERS})
-else()
-    add_library(faabricmpi STATIC mpi.cpp ${PUBLIC_HEADERS})
-endif()
 
-set_target_properties(faabricmpi 
+add_library(faabricmpi mpi.cpp ${PUBLIC_HEADERS})
+add_library(faabric::faabricmpi ALIAS faabricmpi)
+
+set_target_properties(faabricmpi
     PROPERTIES PUBLIC_HEADER "${PUBLIC_HEADERS}"
     )
 

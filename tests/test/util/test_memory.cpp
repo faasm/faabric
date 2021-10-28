@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <sys/mman.h>

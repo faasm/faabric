@@ -1,6 +1,6 @@
 #include "faabric/util/bytes.h"
 #include "faabric/util/config.h"
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include <faabric/util/files.h>
 

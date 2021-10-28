@@ -1,6 +1,6 @@
 #define CATCH_CONFIG_RUNNER
 
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include "DistTestExecutor.h"
 #include "faabric_utils.h"

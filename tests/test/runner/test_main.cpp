@@ -1,5 +1,5 @@
 #include "faabric_utils.h"
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/runner/FaabricMain.h>

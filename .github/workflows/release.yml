@@ -34,6 +34,7 @@ jobs:
           build-args: FAABRIC_VERSION=${{ env.TAG_VERSION }}
 
   build-mpi-native:
+    needs: build-faabric
     runs-on: ubuntu-latest
     steps:
       - name: "Get the code"

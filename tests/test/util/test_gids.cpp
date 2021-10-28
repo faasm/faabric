@@ -1,4 +1,4 @@
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>

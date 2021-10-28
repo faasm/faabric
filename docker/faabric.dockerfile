@@ -1,12 +1,10 @@
-FROM faasm/faabric-base:0.1.0
+FROM faasm/faabric-base:0.2.0
 ARG FAABRIC_VERSION
 
 # faabic-base image is not re-built often, so tag may be behind
 
 # Flag to say we're in a container
 ENV FAABRIC_DOCKER="on"
-
-RUN apt-get update
 
 # Put the code in place
 WORKDIR /code

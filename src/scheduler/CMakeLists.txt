@@ -1,19 +1,19 @@
-file(GLOB HEADERS "${FAABRIC_INCLUDE_DIR}/faabric/scheduler/*.h")
+faabric_lib(scheduler
+    ExecGraph.cpp
+    ExecutorFactory.cpp
+    Executor.cpp
+    FunctionCallClient.cpp
+    FunctionCallServer.cpp
+    MpiContext.cpp
+    MpiMessageBuffer.cpp
+    MpiWorld.cpp
+    MpiWorldRegistry.cpp
+    Scheduler.cpp
+)
 
-set(LIB_FILES
-        ExecutorFactory.cpp
-        Executor.cpp
-        ExecGraph.cpp
-        FunctionCallClient.cpp
-        FunctionCallServer.cpp
-        MpiContext.cpp
-        MpiMessageBuffer.cpp
-        MpiWorldRegistry.cpp
-        MpiWorld.cpp
-        Scheduler.cpp
-        ${HEADERS}
-        )
-
-faabric_lib(scheduler "${LIB_FILES}")
-
-target_link_libraries(scheduler snapshot state faabricmpi redis)
+target_link_libraries(scheduler PRIVATE
+    faabric::snapshot
+    faabric::state
+    faabric::faabricmpi
+    faabric::redis
+)

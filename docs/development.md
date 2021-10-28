@@ -125,8 +125,12 @@ docker-compose stop
 ## Releasing
 
 Create a new branch, then find and replace the current version with the relevant
-bumped version. Currently it's held in `VERSION`, `.env`,
-`mpi-native/mpi-native.env` and the Github Actions configuration.
+bumped version. It should appear in:
+
+- `VERSION`
+- `.env`
+- `.github/workflows/tests.yml`.
+- `mpi-native/mpi-native.env`
 
 Once done, commit and push, then run:
 
