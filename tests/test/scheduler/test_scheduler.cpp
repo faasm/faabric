@@ -853,9 +853,9 @@ TEST_CASE_METHOD(DummyExecutorFixture,
     sch.setThisHostResources(resourcesThisHost);
 
     // Set resources for other host
-    int nSlotsOther = 5;
+    int nSlotsOtherHost = 5;
     faabric::HostResources resourcesOtherHost;
-    resourcesOtherHost.set_slots(nSlotsOther);
+    resourcesOtherHost.set_slots(nSlotsOtherHost);
     faabric::scheduler::queueResourceResponse(otherHost, resourcesOtherHost);
 
     // Set up request
@@ -869,33 +869,58 @@ TEST_CASE_METHOD(DummyExecutorFixture,
 
     SECTION("No group ID")
     {
-        SECTION("Force local") { forceLocal = true; }
+        groupId = 0;
 
-        SECTION("No force local") {}
+        SECTION("Force local")
+        {
+            forceLocal = true;
+            expectMappingsSent = false;
+        }
+
+        SECTION("No force local")
+        {
+            forceLocal = false;
+            expectMappingsSent = false;
+        }
     }
 
     SECTION("With group ID")
     {
         groupId = 123;
-        SECTION("Force local") { forceLocal = true; }
 
-        SECTION("No force local") { expectMappingsSent = true; }
+        SECTION("Force local")
+        {
+            forceLocal = true;
+            expectMappingsSent = false;
+        }
+
+        SECTION("No force local")
+        {
+            forceLocal = false;
+            expectMappingsSent = true;
+        }
     }
+
+    std::vector<std::string> expectedHosts = {
+        thisHost, thisHost, otherHost, otherHost
+    };
+    if (forceLocal) {
+        expectedHosts = { thisHost, thisHost, thisHost, thisHost };
+    }
+
+    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
 
     for (int i = 0; i < req->messages().size(); i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
         m.set_groupid(groupId);
         m.set_groupidx(i);
+
+        expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
     }
 
-    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
-    expectedDecision.addMessage(thisHost, req->messages().at(0));
-    expectedDecision.addMessage(thisHost, req->messages().at(1));
-    expectedDecision.addMessage(otherHost, req->messages().at(2));
-    expectedDecision.addMessage(otherHost, req->messages().at(3));
-
     // Schedule and check decision
-    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    faabric::util::SchedulingDecision actualDecision =
+      sch.callFunctions(req, forceLocal);
     checkSchedulingDecisionEquality(expectedDecision, actualDecision);
 
     // Check mappings set up locally or not
