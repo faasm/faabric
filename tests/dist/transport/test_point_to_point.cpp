@@ -69,9 +69,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     }
 }
 
-TEST_CASE_METHOD(DistTestsFixture,
-                 "Test distributed barrier coordination",
-                 "[ptp]")
+TEST_CASE_METHOD(DistTestsFixture, "Test distributed coordination", "[ptp]")
 {
     // Set up this host's resources, force execution across hosts
     int nChainedFuncs = 4;
@@ -81,9 +79,14 @@ TEST_CASE_METHOD(DistTestsFixture,
     res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);
 
+    std::string function;
+    SECTION("Barrier") { function = "barrier"; }
+
+    SECTION("Notify") { function = "notify"; }
+
     // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("ptp", "barrier", 1);
+      faabric::util::batchExecFactory("ptp", function, 1);
 
     // Set number of chained funcs
     faabric::Message& m = req->mutable_messages()->at(0);

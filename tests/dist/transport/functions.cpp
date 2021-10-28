@@ -7,6 +7,7 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/string_tools.h>
 
 using namespace faabric::util;
 
@@ -56,15 +57,135 @@ int handlePointToPointFunction(
     return 0;
 }
 
-std::vector<std::string> getStateKeys(int nChainedFuncs)
+class DistributedCoordinationTestRunner
 {
-    std::vector<std::string> stateKeys;
-    for (int i = 0; i < nChainedFuncs; i++) {
-        stateKeys.emplace_back("barrier-test-" + std::to_string(i));
+  public:
+    DistributedCoordinationTestRunner(faabric::Message& msgIn,
+                                      const std::string& statePrefixIn,
+                                      int nChainedIn)
+      : msg(msgIn)
+      , statePrefix(statePrefixIn)
+      , nChained(nChainedIn)
+      , state(state::getGlobalState())
+    {
+        for (int i = 0; i < nChained; i++) {
+            stateKeys.emplace_back(statePrefix + std::to_string(i));
+        }
     }
 
-    return stateKeys;
-}
+    std::vector<std::string> getStateKeys() { return stateKeys; }
+
+    std::vector<std::string> setUpStateKeys()
+    {
+        for (int i = 0; i < nChained; i++) {
+            int initialValue = -1;
+            state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t))
+              ->set(BYTES(&initialValue));
+        }
+
+        return stateKeys;
+    }
+
+    void writeResultForIndex()
+    {
+        int idx = msg.groupidx();
+
+        faabric::state::State& state = state::getGlobalState();
+        std::string stateKey = stateKeys.at(idx);
+        SPDLOG_DEBUG("{}/{} {} writing result to {}",
+                     msg.user(),
+                     msg.function(),
+                     idx,
+                     stateKey);
+
+        std::shared_ptr<faabric::state::StateKeyValue> kv =
+          state.getKV(msg.user(), stateKey, sizeof(int32_t));
+        kv->set(BYTES(&idx));
+        kv->pushFull();
+    }
+
+    int callChainedFunc(const std::string& func)
+    {
+        // Set up chained messages
+        auto chainReq =
+          faabric::util::batchExecFactory(msg.user(), func, nChained);
+
+        for (int i = 0; i < nChained; i++) {
+            auto& m = chainReq->mutable_messages()->at(i);
+
+            // Set app index and group data
+            m.set_appid(msg.appid());
+            m.set_appidx(i);
+
+            m.set_groupid(groupId);
+            m.set_groupidx(i);
+            m.set_groupsize(nChained);
+
+            m.set_inputdata(msg.inputdata());
+        }
+
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        sch.callFunctions(chainReq);
+
+        bool success = true;
+        for (const auto& m : chainReq->messages()) {
+            faabric::Message result = sch.getFunctionResult(m.id(), 10000);
+            if (result.returnvalue() != 0) {
+                SPDLOG_ERROR("Distributed coordination check call failed: {}",
+                             m.id());
+
+                success = false;
+            }
+        }
+
+        return success ? 0 : 1;
+    }
+
+    int checkResults(std::vector<int> expectedResults)
+    {
+        std::vector<int> actualResults(expectedResults.size(), 0);
+
+        // Load all results
+        for (int i = 0; i < expectedResults.size(); i++) {
+            auto idxKv =
+              state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
+            idxKv->pull();
+
+            uint8_t* idxRawValue = idxKv->get();
+            int actualIdxValue = *(int*)idxRawValue;
+            actualResults.at(i) = actualIdxValue;
+        }
+
+        // Check them
+        if (actualResults != expectedResults) {
+            SPDLOG_ERROR("{}/{} {} check failed on host {} ({} != {})",
+                         msg.user(),
+                         msg.function(),
+                         msg.groupidx(),
+                         faabric::util::getSystemConfig().endpointHost,
+                         faabric::util::vectorToString<int>(expectedResults),
+                         faabric::util::vectorToString<int>(actualResults));
+            return 1;
+        }
+
+        SPDLOG_DEBUG("{} results for {}/{} ok",
+                     expectedResults.size(),
+                     msg.user(),
+                     msg.function());
+
+        return 0;
+    }
+
+  private:
+    faabric::Message& msg;
+    const std::string statePrefix;
+    int nChained = 0;
+    faabric::state::State& state;
+
+    std::vector<std::string> stateKeys;
+
+    int groupId = 123;
+};
 
 int handleDistributedBarrier(faabric::scheduler::Executor* exec,
                              int threadPoolIdx,
@@ -74,46 +195,13 @@ int handleDistributedBarrier(faabric::scheduler::Executor* exec,
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
     int nChainedFuncs = std::stoi(msg.inputdata());
 
-    std::vector<std::string> stateKeys = getStateKeys(nChainedFuncs);
-    faabric::state::State& state = state::getGlobalState();
+    DistributedCoordinationTestRunner runner(
+      msg, "barrier-test-", nChainedFuncs);
 
-    // Set up chained messages
-    auto chainReq = faabric::util::batchExecFactory(
-      msg.user(), "barrier-worker", nChainedFuncs);
-
-    for (int i = 0; i < nChainedFuncs; i++) {
-        auto& m = chainReq->mutable_messages()->at(i);
-
-        // Set app index and group data
-        m.set_appid(msg.appid());
-        m.set_appidx(i);
-
-        m.set_groupid(123);
-        m.set_groupidx(i);
-        m.set_groupsize(nChainedFuncs);
-
-        m.set_inputdata(msg.inputdata());
-
-        // Set up state for result
-        int initialValue = 0;
-        state.getKV(m.user(), stateKeys.at(i), sizeof(int32_t))
-          ->set(BYTES(&initialValue));
-    }
+    runner.setUpStateKeys();
 
     // Make request and wait for results
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(chainReq);
-
-    bool success = true;
-    for (const auto& m : chainReq->messages()) {
-        faabric::Message result = sch.getFunctionResult(m.id(), 10000);
-        if (result.returnvalue() != 0) {
-            SPDLOG_ERROR("Distributed barrier check call failed: {}", m.id());
-            success = false;
-        }
-    }
-
-    return success ? 0 : 1;
+    return runner.callChainedFunc("barrier-worker");
 }
 
 int handleDistributedBarrierWorker(
@@ -123,24 +211,18 @@ int handleDistributedBarrierWorker(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-    int groupIdx = msg.groupidx();
 
-    std::vector<std::string> stateKeys = getStateKeys(msg.groupsize());
-    faabric::state::State& state = state::getGlobalState();
-
-    std::string stateKey = stateKeys.at(groupIdx);
+    DistributedCoordinationTestRunner runner(
+      msg, "barrier-test-", msg.groupsize());
 
     // Sleep for some time
+    int groupIdx = msg.groupidx();
     int waitMs = 500 * groupIdx;
     SPDLOG_DEBUG("barrier-worker {} sleeping for {}ms", groupIdx, waitMs);
     SLEEP_MS(waitMs);
 
     // Write result for this thread
-    SPDLOG_DEBUG("barrier-worker {} writing result to {}", groupIdx, stateKey);
-    std::shared_ptr<faabric::state::StateKeyValue> kv =
-      state.getKV(msg.user(), stateKey, sizeof(int32_t));
-    kv->set(BYTES(&groupIdx));
-    kv->pushFull();
+    runner.writeResultForIndex();
 
     // Wait on a barrier
     SPDLOG_DEBUG("barrier-worker {} waiting on barrier (size {})",
@@ -150,24 +232,83 @@ int handleDistributedBarrierWorker(
     faabric::transport::PointToPointGroup::getGroup(msg.groupid())
       ->barrier(msg.groupidx());
 
-    // Check that all other values have been set
+    // At this point all workers should have completed (i.e. everyone has had to
+    // wait on the barrier)
+    std::vector<int> expectedResults;
     for (int i = 0; i < msg.groupsize(); i++) {
-        auto idxKv = state.getKV(msg.user(), stateKeys.at(i), sizeof(int32_t));
-        idxKv->pull();
+        expectedResults.push_back(i);
+    }
+    return runner.checkResults(expectedResults);
+}
 
-        uint8_t* idxRawValue = idxKv->get();
-        int actualIdxValue = *(int*)idxRawValue;
-        if (actualIdxValue != i) {
-            SPDLOG_ERROR("barrier-worker {} check failed on host {}. {} = {}",
-                         groupIdx,
-                         faabric::util::getSystemConfig().endpointHost,
-                         stateKeys.at(i),
-                         actualIdxValue);
-            return 1;
+int handleDistributedNotify(faabric::scheduler::Executor* exec,
+                            int threadPoolIdx,
+                            int msgIdx,
+                            std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+    int nChainedFuncs = std::stoi(msg.inputdata());
+
+    DistributedCoordinationTestRunner runner(
+      msg, "notify-test-", nChainedFuncs);
+
+    runner.setUpStateKeys();
+
+    // Make request and wait for results
+    return runner.callChainedFunc("notify-worker");
+}
+
+int handleDistributedNotifyWorker(
+  faabric::scheduler::Executor* exec,
+  int threadPoolIdx,
+  int msgIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
+    DistributedCoordinationTestRunner runner(
+      msg, "notify-test-", msg.groupsize());
+
+    // Sleep for some time
+    int groupIdx = msg.groupidx();
+    int waitMs = 1000 * groupIdx;
+    SPDLOG_DEBUG("notify-worker {} sleeping for {}ms", groupIdx, waitMs);
+    SLEEP_MS(waitMs);
+
+    int returnValue = 0;
+    std::vector<int> expectedResults;
+    if (msg.groupidx() == 0) {
+        // Master should wait until it's been notified
+        faabric::transport::PointToPointGroup::getGroup(msg.groupid())
+          ->notify(msg.groupidx());
+
+        // Write result
+        runner.writeResultForIndex();
+
+        // Check that all other workers have finished
+        for (int i = 0; i < msg.groupsize(); i++) {
+            expectedResults.push_back(i);
         }
+        returnValue = runner.checkResults(expectedResults);
+
+    } else {
+        // Write the result for this worker
+        runner.writeResultForIndex();
+
+        // Check results before notifying
+        expectedResults = std::vector<int>(msg.groupsize(), -1);
+        for (int i = 1; i <= msg.groupidx(); i++) {
+            expectedResults.at(i) = i;
+        }
+
+        returnValue = runner.checkResults(expectedResults);
+
+        // Notify
+        faabric::transport::PointToPointGroup::getGroup(msg.groupid())
+          ->notify(msg.groupidx());
     }
 
-    return 0;
+    return returnValue;
 }
 
 void registerTransportTestFunctions()
@@ -180,5 +321,10 @@ void registerTransportTestFunctions()
 
     registerDistTestExecutorCallback(
       "ptp", "barrier-worker", handleDistributedBarrierWorker);
+
+    registerDistTestExecutorCallback("ptp", "notify", handleDistributedNotify);
+
+    registerDistTestExecutorCallback(
+      "ptp", "notify-worker", handleDistributedNotifyWorker);
 }
 }
