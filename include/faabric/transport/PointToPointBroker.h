@@ -15,6 +15,8 @@
 
 #define DEFAULT_DISTRIBUTED_TIMEOUT_MS 30000
 
+#define POINT_TO_POINT_MASTER_IDX 0
+
 namespace faabric::transport {
 
 class PointToPointBroker;

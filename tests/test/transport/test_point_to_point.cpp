@@ -301,7 +301,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
 TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test distributed lock/ unlock",
-                 "[ptp]")
+                 "[transport][ptp]")
 {
     int appId = 999;
     int groupId = 888;
@@ -321,7 +321,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     rootMsg.set_appid(appId);
     rootMsg.set_groupsize(groupSize);
     rootMsg.set_groupid(groupId);
-    rootMsg.set_groupidx(0);
+    rootMsg.set_groupidx(POINT_TO_POINT_MASTER_IDX);
 
     faabric::util::SchedulingDecision decision(appId, groupId);
     decision.addMessage(thisHost, msg);
@@ -350,7 +350,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     for (int i = 0; i < nCalls; i++) {
         cli.groupLock(appId, groupId, groupIdx, recursive);
-        broker.recvMessage(groupId, 0, groupIdx);
+        broker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
     }
 
     REQUIRE(group->getLockOwner(recursive) == groupIdx);

@@ -83,7 +83,7 @@ void PointToPointClient::makeCoordinationRequest(
     req.set_appid(appId);
     req.set_groupid(groupId);
     req.set_sendidx(groupIdx);
-    req.set_recvidx(0);
+    req.set_recvidx(POINT_TO_POINT_MASTER_IDX);
 
     switch (call) {
         case (faabric::transport::PointToPointCall::LOCK_GROUP): {

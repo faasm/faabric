@@ -49,7 +49,7 @@ static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
         SPDLOG_TRACE("Created new point-to-point client {}", host);
     }
 
-    return clients[host];
+    return clients.at(host);
 }
 
 std::string getPointToPointKey(int groupId, int sendIdx, int recvIdx)
@@ -100,7 +100,8 @@ PointToPointGroup::PointToPointGroup(int appIdIn,
 
 void PointToPointGroup::lock(int groupIdx, bool recursive)
 {
-    std::string host = ptpBroker.getHostForReceiver(groupId, 0);
+    std::string host =
+      ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
 
     if (host == conf.endpointHost) {
         masterLock(groupIdx, recursive);
@@ -109,14 +110,18 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
         faabric::PointToPointMessage msg;
         msg.set_groupid(groupId);
         msg.set_sendidx(groupIdx);
-        msg.set_recvidx(0);
+        msg.set_recvidx(POINT_TO_POINT_MASTER_IDX);
 
-        SPDLOG_TRACE("Remote lock {}:{}:0 to {}", groupId, groupIdx, host);
+        SPDLOG_TRACE("Remote lock {}:{}:{} to {}",
+                     groupId,
+                     groupIdx,
+                     POINT_TO_POINT_MASTER_IDX,
+                     host);
 
         cli->groupLock(appId, groupId, groupIdx, recursive);
 
         // Await ptp response
-        ptpBroker.recvMessage(groupId, 0, groupIdx);
+        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
     }
 }
 
@@ -177,7 +182,8 @@ bool PointToPointGroup::localTryLock()
 
 void PointToPointGroup::unlock(int groupIdx, bool recursive)
 {
-    std::string host = ptpBroker.getHostForReceiver(groupId, 0);
+    std::string host =
+      ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
 
     if (host == conf.endpointHost) {
         masterUnlock(groupIdx, recursive);
@@ -186,9 +192,13 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
         faabric::PointToPointMessage msg;
         msg.set_groupid(groupId);
         msg.set_sendidx(groupIdx);
-        msg.set_recvidx(0);
+        msg.set_recvidx(POINT_TO_POINT_MASTER_IDX);
 
-        SPDLOG_TRACE("Remote lock {}:{}:0 to {}", groupId, groupIdx, host);
+        SPDLOG_TRACE("Remote lock {}:{}:{} to {}",
+                     groupId,
+                     groupIdx,
+                     POINT_TO_POINT_MASTER_IDX,
+                     host);
 
         cli->groupUnlock(appId, groupId, groupIdx, recursive);
     }
@@ -230,42 +240,52 @@ void PointToPointGroup::notifyLocked(int groupIdx)
 {
     std::vector<uint8_t> data(1, 0);
 
-    ptpBroker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
+    ptpBroker.sendMessage(
+      groupId, POINT_TO_POINT_MASTER_IDX, groupIdx, data.data(), data.size());
 }
 
 void PointToPointGroup::barrier(int groupIdx)
 {
     // TODO more efficient barrier implementation to avoid load on the master
-    if (groupIdx == 0) {
+    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
         // Receive from all
         for (int i = 1; i < groupSize; i++) {
-            ptpBroker.recvMessage(groupId, i, 0);
+            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MASTER_IDX);
         }
 
         // Reply to all
         std::vector<uint8_t> data(1, 0);
         for (int i = 1; i < groupSize; i++) {
-            ptpBroker.sendMessage(groupId, 0, i, data.data(), data.size());
+            ptpBroker.sendMessage(
+              groupId, POINT_TO_POINT_MASTER_IDX, i, data.data(), data.size());
         }
     } else {
         // Do the send
         std::vector<uint8_t> data(1, 0);
-        ptpBroker.sendMessage(groupId, groupIdx, 0, data.data(), data.size());
+        ptpBroker.sendMessage(groupId,
+                              groupIdx,
+                              POINT_TO_POINT_MASTER_IDX,
+                              data.data(),
+                              data.size());
 
         // Await the response
-        ptpBroker.recvMessage(groupId, 0, groupIdx);
+        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
     }
 }
 
 void PointToPointGroup::notify(int groupIdx)
 {
-    if (groupIdx == 0) {
+    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
         for (int i = 1; i < groupSize; i++) {
-            ptpBroker.recvMessage(groupId, i, 0);
+            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MASTER_IDX);
         }
     } else {
         std::vector<uint8_t> data(1, 0);
-        ptpBroker.sendMessage(groupId, groupIdx, 0, data.data(), data.size());
+        ptpBroker.sendMessage(groupId,
+                              groupIdx,
+                              POINT_TO_POINT_MASTER_IDX,
+                              data.data(),
+                              data.size());
     }
 }
 

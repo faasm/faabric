@@ -15,7 +15,7 @@ namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture,
                  "Test point-to-point messaging on multiple hosts",
-                 "[ptp]")
+                 "[ptp][transport]")
 {
     std::set<std::string> actualAvailable = sch.getAvailableHosts();
     std::set<std::string> expectedAvailable = { getMasterIP(), getWorkerIP() };
@@ -69,7 +69,9 @@ TEST_CASE_METHOD(DistTestsFixture,
     }
 }
 
-TEST_CASE_METHOD(DistTestsFixture, "Test distributed coordination", "[ptp]")
+TEST_CASE_METHOD(DistTestsFixture,
+                 "Test distributed coordination",
+                 "[ptp][transport]")
 {
     // Set up this host's resources, force execution across hosts
     int nChainedFuncs = 4;

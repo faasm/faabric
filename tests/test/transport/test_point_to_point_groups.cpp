@@ -69,7 +69,9 @@ class PointToPointGroupFixture
     std::shared_ptr<faabric::BatchExecuteRequest> req = nullptr;
 };
 
-TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
+TEST_CASE_METHOD(PointToPointGroupFixture,
+                 "Test lock requests",
+                 "[ptp][transport]")
 {
     std::string otherHost = "other";
 
@@ -107,7 +109,11 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
         op = PointToPointCall::LOCK_GROUP;
 
         // Prepare response
-        broker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
+        broker.sendMessage(groupId,
+                           POINT_TO_POINT_MASTER_IDX,
+                           groupIdx,
+                           data.data(),
+                           data.size());
 
         group->lock(groupIdx, false);
     }
@@ -118,7 +124,11 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
         recursive = true;
 
         // Prepare response
-        broker.sendMessage(groupId, 0, groupIdx, data.data(), data.size());
+        broker.sendMessage(groupId,
+                           POINT_TO_POINT_MASTER_IDX,
+                           groupIdx,
+                           data.data(),
+                           data.size());
 
         group->lock(groupIdx, recursive);
     }
@@ -150,17 +160,18 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test lock requests", "[ptp]")
     REQUIRE(req.appid() == appId);
     REQUIRE(req.groupid() == groupId);
     REQUIRE(req.sendidx() == groupIdx);
-    REQUIRE(req.recvidx() == 0);
+    REQUIRE(req.recvidx() == POINT_TO_POINT_MASTER_IDX);
 }
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
                  "Test local locking and unlocking",
-                 "[ptp]")
+                 "[ptp][transport]")
 {
     std::atomic<int> sharedInt = 0;
     int appId = 123;
     int groupId = 234;
 
+    // Arbitrary group size, local locks don't care
     auto group = setUpGroup(appId, groupId, 3);
 
     group->localLock();
@@ -192,7 +203,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
                  "Test distributed coordination barrier",
-                 "[ptp]")
+                 "[ptp][transport]")
 {
     int nThreads = 5;
     int appId = 123;
@@ -224,7 +235,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     }
 
     for (int i = 0; i < nSums; i++) {
-        group->barrier(0);
+        group->barrier(POINT_TO_POINT_MASTER_IDX);
         REQUIRE(sharedSums.at(i).load() == (i + 1) * (nThreads - 1));
     }
 
@@ -236,7 +247,9 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     }
 }
 
-TEST_CASE_METHOD(PointToPointGroupFixture, "Test local try lock", "[ptp]")
+TEST_CASE_METHOD(PointToPointGroupFixture,
+                 "Test local try lock",
+                 "[ptp][transport]")
 {
     // Set up one group
     int nThreads = 5;
@@ -280,7 +293,9 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test local try lock", "[ptp]")
     otherGroup->localUnlock();
 }
 
-TEST_CASE_METHOD(PointToPointGroupFixture, "Test notify and await", "[ptp]")
+TEST_CASE_METHOD(PointToPointGroupFixture,
+                 "Test notify and await",
+                 "[ptp][transport]")
 {
     int nThreads = 4;
     int actual[4] = { 0, 0, 0, 0 };
@@ -303,7 +318,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture, "Test notify and await", "[ptp]")
 
     // Master thread to await, should only go through once all threads have
     // finished
-    group->notify(0);
+    group->notify(POINT_TO_POINT_MASTER_IDX);
 
     for (int i = 0; i < nThreads; i++) {
         REQUIRE(actual[i] == i);
