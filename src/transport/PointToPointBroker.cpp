@@ -44,12 +44,14 @@ static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
 {
     // Note - this map is thread-local so no locking required
     if (clients.find(host) == clients.end()) {
-        clients[host] = std::make_shared<PointToPointClient>(host);
+        clients.insert(
+          std::pair<std::string, std::shared_ptr<PointToPointClient>>(
+            host, std::make_shared<PointToPointClient>(host)));
 
         SPDLOG_TRACE("Created new point-to-point client {}", host);
     }
 
-    return clients[host];
+    return clients.at(host);
 }
 
 std::string getPointToPointKey(int groupId, int sendIdx, int recvIdx)
@@ -135,10 +137,10 @@ void PointToPointGroup::masterLock(int groupIdx, bool recursive)
         if (recursive) {
             bool isFree = recursiveLockOwners.empty();
 
-            bool getLockOwnerByMe =
+            bool lockOwnedByThisIdx =
               !isFree && (recursiveLockOwners.top() == groupIdx);
 
-            if (isFree || getLockOwnerByMe) {
+            if (isFree || lockOwnedByThisIdx) {
                 // Recursive and either free, or already locked by this idx
                 SPDLOG_TRACE("Group idx {} recursively locked {} ({})",
                              groupIdx,
@@ -152,7 +154,7 @@ void PointToPointGroup::masterLock(int groupIdx, bool recursive)
                              groupId,
                              lockWaiters.size());
             }
-        } else if (!recursive && lockOwnerIdx == NO_LOCK_OWNER_IDX) {
+        } else if (lockOwnerIdx == NO_LOCK_OWNER_IDX) {
             // Non-recursive and free
             SPDLOG_TRACE("Group idx {} locked {}", groupIdx, groupId);
             lockOwnerIdx = groupIdx;

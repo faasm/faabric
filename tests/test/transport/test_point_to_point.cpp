@@ -335,8 +335,9 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     SECTION("Recursive")
     {
+        // Make sure we have enough calls here to flush out any issues
         recursive = true;
-        nCalls = 10;
+        nCalls = 1000;
     }
 
     SECTION("Non-recursive")
@@ -349,7 +350,10 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(group->getLockOwner(recursive) == -1);
 
     for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
         cli.groupLock(appId, groupId, groupIdx, recursive);
+        server.awaitRequestLatch();
+
         broker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
     }
 
