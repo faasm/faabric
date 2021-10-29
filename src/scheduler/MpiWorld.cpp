@@ -35,7 +35,7 @@ static thread_local std::unordered_map<
   ranksSendEndpoints;
 
 // Id of the message that created this thread-local instance
-static thread_local faabric::Message* thisMsg = nullptr;
+static thread_local faabric::Message* thisRankMsg = nullptr;
 
 // This is used for mocking in tests
 static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
@@ -181,7 +181,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     id = newId;
     user = call.user();
     function = call.function();
-    thisMsg = &call;
+    thisRankMsg = &call;
 
     size = newSize;
 
@@ -199,7 +199,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
         // Log chained functions to generate execution graphs
-        if (thisMsg != nullptr && thisMsg->recordexecgraph()) {
+        if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
             sch.logChainedFunction(call.id(), msg.id());
         }
     }
@@ -299,7 +299,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
-    thisMsg = &msg;
+    thisRankMsg = &msg;
 
     // Block until we receive
     faabric::MpiHostsToRanksMessage hostRankMsg = recvMpiHostRankMsg();
@@ -582,9 +582,9 @@ void MpiWorld::send(int sendRank,
     }
 
     // If the message is set and recording on, track we have sent this message
-    if (thisMsg != nullptr && thisMsg->recordexecgraph()) {
+    if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
         faabric::util::exec_graph::incrementCounter(
-          *thisMsg,
+          *thisRankMsg,
           faabric::util::exec_graph::mpiMsgCountPrefix +
             std::to_string(recvRank));
     }
