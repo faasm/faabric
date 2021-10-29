@@ -7,6 +7,10 @@ void addDetail(faabric::Message& msg,
                const std::string& key,
                const std::string& value)
 {
+    if (!msg.recordexecgraph()) {
+        return;
+    }
+
     auto& stringMap = *msg.mutable_execgraphdetails();
 
     stringMap[key] = value;
@@ -16,6 +20,10 @@ void incrementCounter(faabric::Message& msg,
                       const std::string& key,
                       const int valueToIncrement)
 {
+    if (!msg.recordexecgraph()) {
+        return;
+    }
+
     auto& stringMap = *msg.mutable_intexecgraphdetails();
 
     stringMap[key] += valueToIncrement;
