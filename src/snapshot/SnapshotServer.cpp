@@ -3,6 +3,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
@@ -18,6 +19,7 @@ SnapshotServer::SnapshotServer()
       SNAPSHOT_SYNC_PORT,
       SNAPSHOT_INPROC_LABEL,
       faabric::util::getSystemConfig().snapshotServerThreads)
+  , broker(faabric::transport::getPointToPointBroker())
 {}
 
 void SnapshotServer::doAsyncRecv(int header,
@@ -69,9 +71,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
         throw std::runtime_error("Received snapshot with zero size");
     }
 
-    SPDLOG_DEBUG("Receiving shapshot {} (size {})",
+    SPDLOG_DEBUG("Receiving snapshot {} (size {}, lock {})",
                  r->key()->c_str(),
-                 r->contents()->size());
+                 r->contents()->size(),
+                 r->groupid());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
@@ -79,6 +82,12 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // Set up the snapshot
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
+
+    // Lock the function group if necessary
+    if (r->groupid() > 0) {
+        faabric::transport::PointToPointGroup::getGroup(r->groupid())
+          ->localLock();
+    }
 
     // TODO - avoid this copy by changing server superclass to allow subclasses
     // to provide a buffer to receive data.
@@ -89,6 +98,12 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     std::memcpy(data.data, r->contents()->Data(), data.size);
 
     reg.takeSnapshot(r->key()->str(), data, true);
+
+    // Unlock the application
+    if (r->groupid() > 0) {
+        faabric::transport::PointToPointGroup::getGroup(r->groupid())
+          ->localUnlock();
+    }
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -120,6 +135,12 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
+
+    // Lock the function group
+    if (r->groupid() > 0) {
+        faabric::transport::PointToPointGroup::getGroup(r->groupid())
+          ->localLock();
+    }
 
     // Apply diffs to snapshot
     for (const auto* r : *r->chunks()) {
@@ -179,6 +200,12 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                 throw std::runtime_error("Unsupported merge data type");
             }
         }
+    }
+
+    // Unlock
+    if (r->groupid() > 0) {
+        faabric::transport::PointToPointGroup::getGroup(r->groupid())
+          ->localUnlock();
     }
 
     // Send response

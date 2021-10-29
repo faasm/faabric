@@ -1,5 +1,8 @@
 #include <catch2/catch.hpp>
 
+#include "faabric_utils.h"
+#include "fixtures.h"
+
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
 
@@ -16,7 +19,6 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
-#include <faabric_utils.h>
 
 using namespace faabric::scheduler;
 
@@ -25,11 +27,17 @@ class ClientServerFixture
   : public RedisTestFixture
   , public SchedulerTestFixture
   , public StateTestFixture
+  , public PointToPointTestFixture
+  , public ConfTestFixture
 {
   protected:
     FunctionCallServer server;
     FunctionCallClient cli;
+
     std::shared_ptr<DummyExecutorFactory> executorFactory;
+
+    int groupId = 123;
+    int groupSize = 2;
 
   public:
     ClientServerFixture()

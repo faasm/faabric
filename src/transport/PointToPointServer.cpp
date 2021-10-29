@@ -28,11 +28,27 @@ void PointToPointServer::doAsyncRecv(int header,
             PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
 
             // Send the message locally to the downstream socket
-            reg.sendMessage(msg.appid(),
+            reg.sendMessage(msg.groupid(),
                             msg.sendidx(),
                             msg.recvidx(),
                             BYTES_CONST(msg.data().c_str()),
                             msg.data().size());
+            break;
+        }
+        case faabric::transport::PointToPointCall::LOCK_GROUP: {
+            recvGroupLock(buffer, bufferSize, false);
+            break;
+        }
+        case faabric::transport::PointToPointCall::LOCK_GROUP_RECURSIVE: {
+            recvGroupLock(buffer, bufferSize, true);
+            break;
+        }
+        case faabric::transport::PointToPointCall::UNLOCK_GROUP: {
+            recvGroupUnlock(buffer, bufferSize, false);
+            break;
+        }
+        case faabric::transport::PointToPointCall::UNLOCK_GROUP_RECURSIVE: {
+            recvGroupUnlock(buffer, bufferSize, true);
             break;
         }
         default: {
@@ -67,9 +83,39 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
     faabric::util::SchedulingDecision decision =
       faabric::util::SchedulingDecision::fromPointToPointMappings(msg);
 
+    SPDLOG_DEBUG("Receiving {} point-to-point mappings", decision.nFunctions);
+
     reg.setUpLocalMappingsFromSchedulingDecision(decision);
 
     return std::make_unique<faabric::EmptyResponse>();
+}
+
+void PointToPointServer::recvGroupLock(const uint8_t* buffer,
+                                       size_t bufferSize,
+                                       bool recursive)
+{
+    PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
+    SPDLOG_TRACE("Receiving lock on {} for idx {} (recursive {})",
+                 msg.groupid(),
+                 msg.sendidx(),
+                 recursive);
+
+    PointToPointGroup::getGroup(msg.groupid())->lock(msg.sendidx(), recursive);
+}
+
+void PointToPointServer::recvGroupUnlock(const uint8_t* buffer,
+                                         size_t bufferSize,
+                                         bool recursive)
+{
+    PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
+
+    SPDLOG_TRACE("Receiving unlock on {} for idx {} (recursive {})",
+                 msg.groupid(),
+                 msg.sendidx(),
+                 recursive);
+
+    PointToPointGroup::getGroup(msg.groupid())
+      ->unlock(msg.sendidx(), recursive);
 }
 
 void PointToPointServer::onWorkerStop()
@@ -77,5 +123,4 @@ void PointToPointServer::onWorkerStop()
     // Clear any thread-local cached sockets
     reg.resetThreadLocalCache();
 }
-
 }

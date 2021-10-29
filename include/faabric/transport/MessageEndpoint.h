@@ -13,9 +13,10 @@
 #define ANY_HOST "0.0.0.0"
 
 // These timeouts should be long enough to permit sending and receiving large
-// messages, but short enough not to hang around when something has gone wrong.
-#define DEFAULT_RECV_TIMEOUT_MS 20000
-#define DEFAULT_SEND_TIMEOUT_MS 20000
+// messages, note that they also determine the period on which endpoints will
+// re-poll.
+#define DEFAULT_RECV_TIMEOUT_MS 60000
+#define DEFAULT_SEND_TIMEOUT_MS 60000
 
 // How long undelivered messages will hang around when the socket is closed,
 // which also determines how long the context will hang for when closing if

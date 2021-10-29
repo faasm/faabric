@@ -256,7 +256,10 @@ std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
           auto res = socket.recv(zmq::buffer(msg.udata(), msg.size()));
 
           if (!res.has_value()) {
-              SPDLOG_TRACE("Timed out receiving message of size {}", size);
+              SPDLOG_TRACE("Did not receive message size {} within {}ms on {}",
+                           size,
+                           timeoutMs,
+                           address);
               return std::nullopt;
           }
 
@@ -288,7 +291,9 @@ std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
       try {
           auto res = socket.recv(msg);
           if (!res.has_value()) {
-              SPDLOG_TRACE("Timed out receiving message with no size");
+              SPDLOG_TRACE("Did not receive message within {}ms on {}",
+                           timeoutMs,
+                           address);
               return std::nullopt;
           }
       } catch (zmq::error_t& e) {

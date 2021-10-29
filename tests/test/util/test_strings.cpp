@@ -58,4 +58,17 @@ TEST_CASE("Test string is int", "[util]")
     REQUIRE(!stringIsInt("abcd"));
     REQUIRE(!stringIsInt("12a33"));
 }
+
+TEST_CASE("Test vector to string for ints", "[util]")
+{
+    std::vector<int> vec = { -1, 1, -2, 3 };
+    REQUIRE(faabric::util::vectorToString<int>(vec) == "[-1, 1, -2, 3]");
+}
+
+TEST_CASE("Test vector to string for strings", "[util]")
+{
+    std::vector<std::string> vec = { "foo", "blah", "baz" };
+    REQUIRE(faabric::util::vectorToString<std::string>(vec) ==
+            "[foo, blah, baz]");
+}
 }

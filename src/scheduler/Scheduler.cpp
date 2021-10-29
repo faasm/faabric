@@ -5,6 +5,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
@@ -45,6 +46,7 @@ Scheduler& getScheduler()
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
+  , broker(faabric::transport::getPointToPointBroker())
 {
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
@@ -223,9 +225,9 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     }
 
     // Set up scheduling decision
-    SchedulingDecision decision(firstMsg.appid());
+    SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
 
-    // TODO - more granular locking, this is incredibly conservative
+    // TODO - more granular locking, this is conservative
     faabric::util::FullLock lock(mx);
 
     // If we're not the master host, we need to forward the request back to the
@@ -286,7 +288,8 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
                                      funcStr,
                                      h);
                         SnapshotClient& c = getSnapshotClient(h);
-                        c.pushSnapshotDiffs(snapshotKey, snapshotDiffs);
+                        c.pushSnapshotDiffs(
+                          snapshotKey, firstMsg.groupid(), snapshotDiffs);
                     }
                 }
 
@@ -439,6 +442,12 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         }
     }
 
+    // Send out point-to-point mappings if necessary (unless being forced to
+    // execute locally, in which case they will be transmitted from the master)
+    if (!forceLocal && (firstMsg.groupid() > 0)) {
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
+    }
+
     // Records for tests
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
@@ -546,7 +555,7 @@ int Scheduler::scheduleFunctionsOnHost(
     std::string snapshotKey = firstMsg.snapshotkey();
     if (snapshot != nullptr && !snapshotKey.empty()) {
         SnapshotClient& c = getSnapshotClient(host);
-        c.pushSnapshot(snapshotKey, *snapshot);
+        c.pushSnapshot(snapshotKey, firstMsg.groupid(), *snapshot);
     }
 
     getFunctionCallClient(host).executeFunctions(hostRequest);
@@ -746,7 +755,7 @@ void Scheduler::pushSnapshotDiffs(
 
     if (!isMaster && !diffs.empty()) {
         SnapshotClient& c = getSnapshotClient(msg.masterhost());
-        c.pushSnapshotDiffs(msg.snapshotkey(), diffs);
+        c.pushSnapshotDiffs(msg.snapshotkey(), msg.groupid(), diffs);
     }
 }
 

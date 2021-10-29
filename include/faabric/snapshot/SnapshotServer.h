@@ -4,6 +4,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotApi.h>
 #include <faabric/transport/MessageEndpointServer.h>
+#include <faabric/transport/PointToPointBroker.h>
 
 namespace faabric::snapshot {
 class SnapshotServer final : public faabric::transport::MessageEndpointServer
@@ -30,5 +31,8 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
     void recvDeleteSnapshot(const uint8_t* buffer, size_t bufferSize);
 
     void recvThreadResult(const uint8_t* buffer, size_t bufferSize);
+
+  private:
+    faabric::transport::PointToPointBroker& broker;
 };
 }

@@ -1,5 +1,6 @@
-#include "faabric_utils.h"
 #include <catch2/catch.hpp>
+
+#include "faabric_utils.h"
 
 #include <sys/mman.h>
 
@@ -126,7 +127,7 @@ class TestExecutor final : public Executor
             for (int i = 0; i < chainedReq->messages_size(); i++) {
                 faabric::Message& m = chainedReq->mutable_messages()->at(i);
                 m.set_snapshotkey(snapKey);
-                m.set_appindex(i + 1);
+                m.set_appidx(i + 1);
             }
 
             // Call the threads
@@ -349,7 +350,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_snapshotkey(snapshotKey);
-        msg.set_appindex(i);
+        msg.set_appidx(i);
 
         messageIds.emplace_back(req->messages().at(i).id());
     }
@@ -723,7 +724,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_snapshotkey(snapshotKey);
         msg.set_masterhost(otherHost);
-        msg.set_appindex(i);
+        msg.set_appidx(i);
 
         messageIds.emplace_back(msg.id());
     }

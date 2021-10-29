@@ -17,68 +17,63 @@ using namespace faabric::util;
 
 namespace tests {
 
-class PointToPointClientServerFixture
-  : public PointToPointTestFixture
-  , SchedulerTestFixture
-{
-  public:
-    PointToPointClientServerFixture()
-      : cli(LOCALHOST)
-    {
-        server.start();
-    }
-
-    ~PointToPointClientServerFixture() { server.stop(); }
-
-  protected:
-    faabric::transport::PointToPointClient cli;
-    faabric::transport::PointToPointServer server;
-};
-
 TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "Test sending point-to-point mappings from client",
                  "[transport][ptp]")
 {
     int appIdA = 123;
+    int groupIdA = 321;
     int appIdB = 345;
+    int groupIdB = 543;
 
-    int idxA1 = 1;
-    int idxA2 = 2;
-    int idxB1 = 1;
+    // Deliberately overlap these indexes to check that the app and group IDs
+    // matter
+    int appIdxA1 = 1;
+    int appIdxA2 = 2;
+    int appIdxB1 = 1;
+
+    int groupIdxA1 = 3;
+    int groupIdxA2 = 4;
+    int groupIdxB1 = 3;
 
     std::string hostA = "host-a";
     std::string hostB = "host-b";
 
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdA).empty());
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdB).empty());
+    REQUIRE(broker.getIdxsRegisteredForGroup(appIdA).empty());
+    REQUIRE(broker.getIdxsRegisteredForGroup(appIdB).empty());
 
     faabric::PointToPointMappings mappingsA;
     mappingsA.set_appid(appIdA);
+    mappingsA.set_groupid(groupIdA);
 
     faabric::PointToPointMappings mappingsB;
     mappingsB.set_appid(appIdB);
+    mappingsB.set_groupid(groupIdB);
 
     auto* mappingA1 = mappingsA.add_mappings();
-    mappingA1->set_recvidx(idxA1);
+    mappingA1->set_appidx(appIdxA1);
+    mappingA1->set_groupidx(groupIdxA1);
     mappingA1->set_host(hostA);
 
     auto* mappingA2 = mappingsA.add_mappings();
-    mappingA2->set_recvidx(idxA2);
+    mappingA2->set_appidx(appIdxA2);
+    mappingA2->set_groupidx(groupIdxA2);
     mappingA2->set_host(hostB);
 
     auto* mappingB1 = mappingsB.add_mappings();
-    mappingB1->set_recvidx(idxB1);
+    mappingB1->set_appidx(appIdxB1);
+    mappingB1->set_groupidx(groupIdxB1);
     mappingB1->set_host(hostA);
 
     cli.sendMappings(mappingsA);
     cli.sendMappings(mappingsB);
 
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdA).size() == 2);
-    REQUIRE(broker.getIdxsRegisteredForApp(appIdB).size() == 1);
+    REQUIRE(broker.getIdxsRegisteredForGroup(groupIdA).size() == 2);
+    REQUIRE(broker.getIdxsRegisteredForGroup(groupIdB).size() == 1);
 
-    REQUIRE(broker.getHostForReceiver(appIdA, idxA1) == hostA);
-    REQUIRE(broker.getHostForReceiver(appIdA, idxA2) == hostB);
-    REQUIRE(broker.getHostForReceiver(appIdB, idxB1) == hostA);
+    REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA1) == hostA);
+    REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA2) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupIdB, groupIdxB1) == hostA);
 }
 
 TEST_CASE_METHOD(PointToPointClientServerFixture,
@@ -86,6 +81,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "[transport][ptp]")
 {
     int appId = 123;
+    int groupId = 345;
     int idxA = 5;
     int idxB = 10;
 
@@ -94,19 +90,22 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     conf.endpointHost = LOCALHOST;
 
     // Register both indexes on this host
-    faabric::util::SchedulingDecision decision(appId);
+    faabric::util::SchedulingDecision decision(appId, groupId);
 
     faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
     msgA.set_appid(appId);
-    msgA.set_appindex(idxA);
+    msgA.set_groupid(groupId);
+    msgA.set_groupidx(idxA);
 
     faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
     msgB.set_appid(appId);
-    msgB.set_appindex(idxB);
+    msgB.set_groupid(groupId);
+    msgB.set_groupidx(idxB);
 
     decision.addMessage(LOCALHOST, msgA);
     decision.addMessage(LOCALHOST, msgB);
 
+    // Set up the mappings
     broker.setAndSendMappingsFromSchedulingDecision(decision);
 
     std::vector<uint8_t> sentDataA = { 0, 1, 2, 3 };
@@ -116,23 +115,23 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     // Make sure we send the message before a receiver is available to check
     // async handling
-    broker.sendMessage(appId, idxA, idxB, sentDataA.data(), sentDataA.size());
+    broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
 
-    std::thread t([appId, idxA, idxB, &receivedDataA, &sentDataB] {
+    std::thread t([groupId, idxA, idxB, &receivedDataA, &sentDataB] {
         PointToPointBroker& broker = getPointToPointBroker();
 
         // Receive the first message
-        receivedDataA = broker.recvMessage(appId, idxA, idxB);
+        receivedDataA = broker.recvMessage(groupId, idxA, idxB);
 
         // Send a message back
         broker.sendMessage(
-          appId, idxB, idxA, sentDataB.data(), sentDataB.size());
+          groupId, idxB, idxA, sentDataB.data(), sentDataB.size());
 
         broker.resetThreadLocalCache();
     });
 
     // Receive the message sent back
-    receivedDataB = broker.recvMessage(appId, idxB, idxA);
+    receivedDataB = broker.recvMessage(groupId, idxB, idxA);
 
     if (t.joinable()) {
         t.join();
@@ -151,6 +150,9 @@ TEST_CASE_METHOD(
 {
     faabric::util::setMockMode(true);
 
+    int appId = 111;
+    int groupId = 222;
+
     std::string hostA = "hostA";
     std::string hostB = "hostB";
     std::string hostC = "hostC";
@@ -158,7 +160,14 @@ TEST_CASE_METHOD(
     int nMessages = 6;
     auto req = batchExecFactory("foo", "bar", nMessages);
     for (int i = 0; i < nMessages; i++) {
-        req->mutable_messages()->at(i).set_appindex(i);
+        faabric::Message& m = req->mutable_messages()->at(i);
+
+        m.set_appid(appId);
+        m.set_groupid(groupId);
+
+        // Deliberately don't share app and group idxs
+        m.set_appidx(i + 10);
+        m.set_groupidx(i);
     }
 
     faabric::Message& msgA = req->mutable_messages()->at(0);
@@ -168,8 +177,7 @@ TEST_CASE_METHOD(
     faabric::Message& msgE = req->mutable_messages()->at(4);
     faabric::Message& msgF = req->mutable_messages()->at(5);
 
-    int appId = msgA.appid();
-    SchedulingDecision decision(appId);
+    SchedulingDecision decision(appId, groupId);
     decision.addMessage(hostB, msgA);
     decision.addMessage(hostA, msgB);
     decision.addMessage(hostC, msgC);
@@ -181,12 +189,12 @@ TEST_CASE_METHOD(
     broker.setAndSendMappingsFromSchedulingDecision(decision);
 
     // Check locally
-    REQUIRE(broker.getHostForReceiver(appId, msgA.appindex()) == hostB);
-    REQUIRE(broker.getHostForReceiver(appId, msgB.appindex()) == hostA);
-    REQUIRE(broker.getHostForReceiver(appId, msgC.appindex()) == hostC);
-    REQUIRE(broker.getHostForReceiver(appId, msgD.appindex()) == hostB);
-    REQUIRE(broker.getHostForReceiver(appId, msgE.appindex()) == hostB);
-    REQUIRE(broker.getHostForReceiver(appId, msgF.appindex()) == hostC);
+    REQUIRE(broker.getHostForReceiver(groupId, msgA.groupidx()) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupId, msgB.groupidx()) == hostA);
+    REQUIRE(broker.getHostForReceiver(groupId, msgC.groupidx()) == hostC);
+    REQUIRE(broker.getHostForReceiver(groupId, msgD.groupidx()) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupId, msgE.groupidx()) == hostB);
+    REQUIRE(broker.getHostForReceiver(groupId, msgF.groupidx()) == hostC);
 
     // Check the mappings have been sent out to the relevant hosts
     auto actualSent = getSentMappings();
@@ -200,36 +208,56 @@ TEST_CASE_METHOD(
                 -> bool { return a.first < b.first; });
 
     std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
-    std::set<int> expectedHostAIdxs = { msgB.appindex() };
-    std::set<int> expectedHostBIdxs = { msgA.appindex(),
-                                        msgD.appindex(),
-                                        msgE.appindex() };
-    std::set<int> expectedHostCIdxs = { msgC.appindex(), msgF.appindex() };
+    std::set<int> expectedAppIdxsA = { msgB.appidx() };
+    std::set<int> expectedAppIdxsB = { msgA.appidx(),
+                                       msgD.appidx(),
+                                       msgE.appidx() };
+    std::set<int> expectedAppIdxsC = { msgC.appidx(), msgF.appidx() };
+
+    std::set<int> expectedGroupIdxsA = { msgB.groupidx() };
+    std::set<int> expectedGroupIdxsB = { msgA.groupidx(),
+                                         msgD.groupidx(),
+                                         msgE.groupidx() };
+    std::set<int> expectedGroupIdxsC = { msgC.groupidx(), msgF.groupidx() };
 
     // Check all mappings are the same
     for (int i = 0; i < 3; i++) {
         REQUIRE(actualSent.at(i).first == expectedHosts.at(i));
         faabric::PointToPointMappings actual = actualSent.at(i).second;
 
-        std::set<std::int32_t> hostAIdxs;
-        std::set<std::int32_t> hostBIdxs;
-        std::set<std::int32_t> hostCIdxs;
+        REQUIRE(actual.appid() == appId);
+        REQUIRE(actual.groupid() == groupId);
+
+        std::set<std::int32_t> appIdxsA;
+        std::set<std::int32_t> appIdxsB;
+        std::set<std::int32_t> appIdxsC;
+
+        std::set<std::int32_t> groupIdxsA;
+        std::set<std::int32_t> groupIdxsB;
+        std::set<std::int32_t> groupIdxsC;
 
         for (const auto& m : actual.mappings()) {
             if (m.host() == hostA) {
-                hostAIdxs.insert(m.recvidx());
+                appIdxsA.insert(m.appidx());
+                groupIdxsA.insert(m.groupidx());
             } else if (m.host() == hostB) {
-                hostBIdxs.insert(m.recvidx());
+                appIdxsB.insert(m.appidx());
+                groupIdxsB.insert(m.groupidx());
             } else if (m.host() == hostC) {
-                hostCIdxs.insert(m.recvidx());
+                appIdxsC.insert(m.appidx());
+                groupIdxsC.insert(m.groupidx());
             } else {
                 FAIL();
             }
         }
 
-        REQUIRE(hostAIdxs == expectedHostAIdxs);
-        REQUIRE(hostBIdxs == expectedHostBIdxs);
-        REQUIRE(hostCIdxs == expectedHostCIdxs);
+        REQUIRE(appIdxsA == expectedAppIdxsA);
+        REQUIRE(appIdxsB == expectedAppIdxsB);
+        REQUIRE(appIdxsC == expectedAppIdxsC);
+
+        REQUIRE(groupIdxsA == expectedGroupIdxsA);
+        REQUIRE(groupIdxsB == expectedGroupIdxsB);
+        REQUIRE(groupIdxsC == expectedGroupIdxsC);
     }
 }
 
@@ -238,10 +266,15 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
                  "[transport][ptp]")
 {
     int appId = 123;
+    int groupId = 345;
     std::atomic<int> sharedInt = 5;
 
-    faabric::util::SchedulingDecision decision(appId);
+    faabric::util::SchedulingDecision decision(appId, groupId);
+
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    msg.set_appid(appId);
+    msg.set_groupid(groupId);
+
     decision.addMessage(faabric::util::getSystemConfig().endpointHost, msg);
 
     // Background thread that will eventually enable the app and change the
@@ -253,16 +286,85 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         sharedInt.fetch_add(100);
     });
 
-    broker.waitForMappingsOnThisHost(appId);
+    broker.waitForMappingsOnThisHost(groupId);
 
     // The sum won't have happened yet if this thread hasn't been forced to wait
     REQUIRE(sharedInt == 105);
 
     // Call again and check it doesn't block
-    broker.waitForMappingsOnThisHost(appId);
+    broker.waitForMappingsOnThisHost(groupId);
 
     if (t.joinable()) {
         t.join();
     }
+}
+
+TEST_CASE_METHOD(PointToPointClientServerFixture,
+                 "Test distributed lock/ unlock",
+                 "[transport][ptp]")
+{
+    int appId = 999;
+    int groupId = 888;
+    int groupSize = 2;
+    int groupIdx = 1;
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    // Set up mappings
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    msg.set_appid(appId);
+    msg.set_groupsize(groupSize);
+    msg.set_groupid(groupId);
+    msg.set_groupidx(groupIdx);
+
+    faabric::Message rootMsg = faabric::util::messageFactory("foo", "bar");
+    rootMsg.set_appid(appId);
+    rootMsg.set_groupsize(groupSize);
+    rootMsg.set_groupid(groupId);
+    rootMsg.set_groupidx(POINT_TO_POINT_MASTER_IDX);
+
+    faabric::util::SchedulingDecision decision(appId, groupId);
+    decision.addMessage(thisHost, msg);
+    decision.addMessage(thisHost, rootMsg);
+
+    broker.setUpLocalMappingsFromSchedulingDecision(decision);
+
+    // Do both recursive and non-recursive
+    bool recursive = false;
+    int nCalls = 1;
+
+    SECTION("Recursive")
+    {
+        // Make sure we have enough calls here to flush out any issues
+        recursive = true;
+        nCalls = 1000;
+    }
+
+    SECTION("Non-recursive")
+    {
+        recursive = false;
+        nCalls = 1;
+    }
+
+    auto group = PointToPointGroup::getGroup(groupId);
+    REQUIRE(group->getLockOwner(recursive) == -1);
+
+    for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
+        cli.groupLock(appId, groupId, groupIdx, recursive);
+        server.awaitRequestLatch();
+
+        broker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+    }
+
+    REQUIRE(group->getLockOwner(recursive) == groupIdx);
+
+    for (int i = 0; i < nCalls; i++) {
+        server.setRequestLatch();
+        cli.groupUnlock(appId, groupId, groupIdx, recursive);
+        server.awaitRequestLatch();
+    }
+
+    REQUIRE(group->getLockOwner(recursive) == -1);
 }
 }

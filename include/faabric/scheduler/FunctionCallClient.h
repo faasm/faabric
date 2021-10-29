@@ -38,14 +38,11 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
   public:
     explicit FunctionCallClient(const std::string& hostIn);
 
-    /* Function call client external API */
-
     void sendFlush();
 
     faabric::HostResources getResources();
 
-    void executeFunctions(
-      const std::shared_ptr<faabric::BatchExecuteRequest> req);
+    void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void unregister(faabric::UnregisterRequest& req);
 

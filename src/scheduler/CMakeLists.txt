@@ -1,15 +1,14 @@
-
 faabric_lib(scheduler
+    ExecGraph.cpp
     ExecutorFactory.cpp
     Executor.cpp
-    ExecGraph.cpp
     FunctionCallClient.cpp
     FunctionCallServer.cpp
-    Scheduler.cpp
     MpiContext.cpp
     MpiMessageBuffer.cpp
-    MpiWorldRegistry.cpp
     MpiWorld.cpp
+    MpiWorldRegistry.cpp
+    Scheduler.cpp
 )
 
 target_link_libraries(scheduler PRIVATE

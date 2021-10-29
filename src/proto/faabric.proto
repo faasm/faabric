@@ -57,6 +57,10 @@ message FunctionStatusResponse {
     FunctionStatus status = 1;
 }
 
+// ---------------------------------------------
+// MPI
+// ---------------------------------------------
+
 message MPIMessage {
     enum MPIMessageType {
         NORMAL = 0;
@@ -94,7 +98,7 @@ message MpiHostsToRanksMessage {
 message Message {
     int32 id = 1;
     int32 appId = 2;
-    int32 appIndex = 3;
+    int32 appIdx = 3;
     string masterHost = 4;
 
     enum MessageType {
@@ -133,21 +137,27 @@ message Message {
     string pythonFunction = 25;
     string pythonEntry = 26;
 
-    bool isMpi = 27;
-    int32 mpiWorldId = 28;
-    int32 mpiRank = 29;
-    int32 mpiWorldSize = 30;
+    // Function groups
+    int32 groupId = 27;
+    int32 groupIdx = 28;
+    int32 groupSize = 29;
 
-    string cmdline = 31;
+    // MPI
+    bool isMpi = 30;
+    int32 mpiWorldId = 31;
+    int32 mpiRank = 32;
+    int32 mpiWorldSize = 33;
+
+    string cmdline = 34;
 
     // SGX
-    bool isSgx = 32;
+    bool isSgx = 35;
 
-    string sgxSid = 33;
-    string sgxNonce = 34;
-    string sgxTag = 35;
-    bytes sgxPolicy = 36;
-    bytes sgxResult = 37;
+    string sgxSid = 36;
+    string sgxNonce = 37;
+    string sgxTag = 38;
+    bytes sgxPolicy = 39;
+    bytes sgxResult = 40;
 }
 
 // ---------------------------------------------
@@ -207,20 +217,22 @@ message StateAppendedResponse {
 
 message PointToPointMessage {
     int32 appId = 1;
-    int32 sendIdx = 2;
-    int32 recvIdx = 3;
-
-    bytes data = 4;
+    int32 groupId = 2;
+    int32 sendIdx = 3;
+    int32 recvIdx = 4;
+    bytes data = 5;
 }
 
 message PointToPointMappings {
     int32 appId = 1;
+    int32 groupId = 2;
 
     message PointToPointMapping {
         string host = 1;
         int32 messageId = 2;
-        int32 recvIdx = 3;
+        int32 appIdx = 3;
+        int32 groupIdx = 4;
     }
 
-    repeated PointToPointMapping mappings = 2;
+    repeated PointToPointMapping mappings = 3;
 }

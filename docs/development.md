@@ -91,10 +91,14 @@ inv dev.cc faabric_dist_tests
 inv dev.cc faabric_dist_test_server
 ```
 
-In another terminal, start the server:
+In another terminal, (re)start the server:
 
 ```bash
+# Start
 ./dist-tests/dev_server.sh
+
+# Restart
+./dist-tests/dev_server.sh restart
 ```
 
 Back in the CLI, you can then run the tests:

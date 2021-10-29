@@ -10,7 +10,8 @@ namespace faabric::scheduler {
 // -----------------------------------
 // Mocking
 // -----------------------------------
-std::mutex mockMutex;
+
+static std::mutex mockMutex;
 
 static std::vector<std::pair<std::string, faabric::Message>> functionCalls;
 

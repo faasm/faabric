@@ -25,5 +25,13 @@ class PointToPointServer final : public MessageEndpointServer
     std::unique_ptr<google::protobuf::Message> doRecvMappings(
       const uint8_t* buffer,
       size_t bufferSize);
+
+    void recvGroupLock(const uint8_t* buffer,
+                       size_t bufferSize,
+                       bool recursive);
+
+    void recvGroupUnlock(const uint8_t* buffer,
+                         size_t bufferSize,
+                         bool recursive);
 };
 }

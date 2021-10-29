@@ -2,6 +2,7 @@
 
 #include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
@@ -10,6 +11,8 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/transport/PointToPointBroker.h>
+#include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
@@ -77,6 +80,7 @@ class DummyExecutorFixture
   : public RedisTestFixture
   , public SchedulerTestFixture
   , public ConfTestFixture
+  , public PointToPointTestFixture
 {
   public:
     DummyExecutorFixture()
@@ -257,15 +261,16 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     reqOne->set_subtype(expectedSubType);
     reqOne->set_contextdata(expectedContextData);
 
-    faabric::util::SchedulingDecision expectedDecisionOne(
-      reqOne->messages().at(0).appid());
+    const faabric::Message firstMsg = reqOne->messages().at(0);
+    faabric::util::SchedulingDecision expectedDecisionOne(firstMsg.appid(),
+                                                          firstMsg.groupid());
     for (int i = 0; i < nCallsOne; i++) {
         // Set snapshot key
         faabric::Message& msg = reqOne->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
 
         // Set app index
-        msg.set_appindex(i);
+        msg.set_appidx(i);
 
         // Expect this host to handle up to its number of cores
         bool isThisHost = i < thisCores;
@@ -336,8 +341,9 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     // Now schedule a second batch and check they're all sent to the other host
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
       faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
-    faabric::util::SchedulingDecision expectedDecisionTwo(
-      reqTwo->messages().at(0).appid());
+    const faabric::Message& firstMsg2 = reqTwo->messages().at(0);
+    faabric::util::SchedulingDecision expectedDecisionTwo(firstMsg2.appid(),
+                                                          firstMsg2.groupid());
     for (int i = 0; i < nCallsTwo; i++) {
         faabric::Message& msg = reqTwo->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
@@ -434,8 +440,9 @@ TEST_CASE_METHOD(SlowExecutorFixture,
       faabric::util::batchExecFactory("foo", "bar", nCalls);
     req->set_type(execMode);
 
-    faabric::util::SchedulingDecision expectedDecision(
-      req->messages().at(0).appid());
+    const faabric::Message firstMsg = req->messages().at(0);
+    faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
+                                                       firstMsg.groupid());
     for (int i = 0; i < nCalls; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_snapshotkey(expectedSnapshot);
@@ -460,7 +467,6 @@ TEST_CASE_METHOD(SlowExecutorFixture,
         expectedExecutors = expectedLocalCalls;
     }
 
-    faabric::Message firstMsg = req->messages().at(0);
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == expectedExecutors);
 }
 
@@ -827,5 +833,115 @@ TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
 
     // Check executor count is still the same
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 2);
+}
+
+TEST_CASE_METHOD(DummyExecutorFixture,
+                 "Test point-to-point mappings sent from scheduler",
+                 "[scheduler]")
+{
+    faabric::util::setMockMode(true);
+
+    std::string thisHost = conf.endpointHost;
+    std::string otherHost = "foobar";
+
+    sch.addHostToGlobalSet(otherHost);
+
+    // Set resources for this host
+    int nSlotsThisHost = 2;
+    faabric::HostResources resourcesThisHost;
+    resourcesThisHost.set_slots(nSlotsThisHost);
+    sch.setThisHostResources(resourcesThisHost);
+
+    // Set resources for other host
+    int nSlotsOtherHost = 5;
+    faabric::HostResources resourcesOtherHost;
+    resourcesOtherHost.set_slots(nSlotsOtherHost);
+    faabric::scheduler::queueResourceResponse(otherHost, resourcesOtherHost);
+
+    // Set up request
+    auto req = faabric::util::batchExecFactory("foo", "bar", 4);
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+
+    int appId = firstMsg.appid();
+    int groupId = 0;
+    bool forceLocal = false;
+    bool expectMappingsSent = false;
+
+    SECTION("No group ID")
+    {
+        groupId = 0;
+
+        SECTION("Force local")
+        {
+            forceLocal = true;
+            expectMappingsSent = false;
+        }
+
+        SECTION("No force local")
+        {
+            forceLocal = false;
+            expectMappingsSent = false;
+        }
+    }
+
+    SECTION("With group ID")
+    {
+        groupId = 123;
+
+        SECTION("Force local")
+        {
+            forceLocal = true;
+            expectMappingsSent = false;
+        }
+
+        SECTION("No force local")
+        {
+            forceLocal = false;
+            expectMappingsSent = true;
+        }
+    }
+
+    std::vector<std::string> expectedHosts = {
+        thisHost, thisHost, otherHost, otherHost
+    };
+    if (forceLocal) {
+        expectedHosts = { thisHost, thisHost, thisHost, thisHost };
+    }
+
+    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
+
+    for (int i = 0; i < req->messages().size(); i++) {
+        faabric::Message& m = req->mutable_messages()->at(i);
+        m.set_groupid(groupId);
+        m.set_groupidx(i);
+
+        expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
+    }
+
+    // Schedule and check decision
+    faabric::util::SchedulingDecision actualDecision =
+      sch.callFunctions(req, forceLocal);
+    checkSchedulingDecisionEquality(expectedDecision, actualDecision);
+
+    // Check mappings set up locally or not
+    faabric::transport::PointToPointBroker& broker =
+      faabric::transport::getPointToPointBroker();
+    std::set<int> registeredIdxs = broker.getIdxsRegisteredForGroup(groupId);
+    if (expectMappingsSent) {
+        REQUIRE(registeredIdxs.size() == 4);
+    } else {
+        REQUIRE(registeredIdxs.empty());
+    }
+
+    // Check mappings sent or not
+    std::vector<std::pair<std::string, faabric::PointToPointMappings>>
+      sentMappings = faabric::transport::getSentMappings();
+
+    if (expectMappingsSent) {
+        REQUIRE(sentMappings.size() == 1);
+        REQUIRE(sentMappings.at(0).first == otherHost);
+    } else {
+        REQUIRE(sentMappings.empty());
+    }
 }
 }

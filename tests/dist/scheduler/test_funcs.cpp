@@ -1,6 +1,6 @@
-#include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
+#include "faabric_utils.h"
 #include "fixtures.h"
 #include "init.h"
 
@@ -32,8 +32,9 @@ TEST_CASE_METHOD(DistTestsFixture,
       faabric::util::batchExecFactory("funcs", "simple", nFuncs);
 
     // Set up the expectation
-    faabric::util::SchedulingDecision expectedDecision(
-      req->messages().at(0).appid());
+    const faabric::Message firstMsg = req->messages().at(0);
+    faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
+                                                       firstMsg.groupid());
     expectedDecision.addMessage(thisHost, req->messages().at(0));
     expectedDecision.addMessage(thisHost, req->messages().at(1));
     expectedDecision.addMessage(otherHost, req->messages().at(2));

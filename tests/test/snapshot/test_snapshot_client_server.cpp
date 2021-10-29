@@ -1,6 +1,7 @@
+#include <catch2/catch.hpp>
+
 #include "faabric_utils.h"
 #include "fixtures.h"
-#include <catch2/catch.hpp>
 
 #include <sys/mman.h>
 
@@ -22,6 +23,7 @@ class SnapshotClientServerFixture
   : public SchedulerTestFixture
   , public RedisTestFixture
   , public SnapshotTestFixture
+  , public PointToPointTestFixture
 {
   protected:
     faabric::snapshot::SnapshotServer server;
@@ -35,6 +37,17 @@ class SnapshotClientServerFixture
     }
 
     ~SnapshotClientServerFixture() { server.stop(); }
+
+    void setUpFunctionGroup(int appId, int groupId)
+    {
+        faabric::util::SchedulingDecision decision(appId, groupId);
+        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        msg.set_appid(appId);
+        msg.set_groupid(groupId);
+
+        decision.addMessage(LOCALHOST, msg);
+        broker.setUpLocalMappingsFromSchedulingDecision(decision);
+    }
 };
 
 TEST_CASE_METHOD(ConfTestFixture,
@@ -71,9 +84,16 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     snapA.data = dataA.data();
     snapB.data = dataB.data();
 
+    // One request with no group
+    int appId = 111;
+    int groupIdA = 0;
+    int groupIdB = 123;
+
+    setUpFunctionGroup(appId, groupIdB);
+
     // Send the message
-    cli.pushSnapshot(snapKeyA, snapA);
-    cli.pushSnapshot(snapKeyB, snapB);
+    cli.pushSnapshot(snapKeyA, groupIdA, snapA);
+    cli.pushSnapshot(snapKeyB, groupIdB, snapB);
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
@@ -107,6 +127,15 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "Test push snapshot diffs",
                  "[snapshot]")
 {
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    // One request with no group, another with a group we must initialise
+    int appId = 111;
+    int groupIdA = 0;
+    int groupIdB = 234;
+
+    setUpFunctionGroup(appId, groupIdB);
+
     // Set up a snapshot
     std::string snapKey = std::to_string(faabric::util::generateGid());
     faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, true);
@@ -123,12 +152,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     faabric::util::SnapshotDiff diffA2(
       2 * faabric::util::HOST_PAGE_SIZE, diffDataA2.data(), diffDataA2.size());
     diffsA = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, diffsA);
+    cli.pushSnapshotDiffs(snapKey, groupIdA, diffsA);
 
     faabric::util::SnapshotDiff diffB(
       3 * faabric::util::HOST_PAGE_SIZE, diffDataB.data(), diffDataB.size());
     diffsB = { diffB };
-    cli.pushSnapshotDiffs(snapKey, diffsB);
+    cli.pushSnapshotDiffs(snapKey, groupIdB, diffsB);
 
     // Check changes have been applied
     checkDiffsApplied(snap.data, diffsA);
@@ -178,7 +207,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     diffA2.dataType = faabric::util::SnapshotDataType::Int;
 
     diffs = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, diffs);
+    cli.pushSnapshotDiffs(snapKey, 0, diffs);
 
     // Check diffs have been applied according to the merge operations
     REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
@@ -290,7 +319,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     diff.dataType = dataType;
 
     std::vector<faabric::util::SnapshotDiff> diffs = { diff };
-    cli.pushSnapshotDiffs(snapKey, diffs);
+    cli.pushSnapshotDiffs(snapKey, 0, diffs);
 
     // Check data is as expected
     std::vector<uint8_t> actualData(snap.data + offset,

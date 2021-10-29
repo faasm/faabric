@@ -7,7 +7,6 @@ enum FunctionCalls
     ExecuteFunctions = 1,
     Flush = 2,
     Unregister = 3,
-    GetResources = 4,
-    SetThreadResult = 5,
+    GetResources = 4
 };
 }

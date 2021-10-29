@@ -8,6 +8,7 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
@@ -113,7 +114,7 @@ int handleFakeDiffsThreadedFunction(
 
         for (int i = 0; i < nThreads; i++) {
             auto& m = req->mutable_messages()->at(i);
-            m.set_appindex(i);
+            m.set_appidx(i);
             m.set_inputdata(std::string("thread_" + std::to_string(i)));
             m.set_snapshotkey(snapshotKey);
 
@@ -184,7 +185,7 @@ int handleFakeDiffsThreadedFunction(
         }
 
     } else {
-        int idx = msg.appindex();
+        int idx = msg.appidx();
         uint32_t offset = 2 * idx * faabric::util::HOST_PAGE_SIZE + 10;
 
         // Modify the executor's memory
