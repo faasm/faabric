@@ -61,6 +61,7 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     REQUIRE(msg.timestamp() > 0);
 
     std::string jsonString = faabric::util::messageToJson(msg);
+    SPDLOG_INFO("{}", jsonString);
 
     faabric::Message actual = faabric::util::jsonToMessage(jsonString);
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <catch2/catch.hpp>
+
 #include "fixtures.h"
 
 #include <faabric/scheduler/ExecGraph.h>
@@ -62,6 +64,20 @@ using namespace faabric;
 
 namespace tests {
 void cleanFaabric();
+
+template<class T>
+void checkMessageMapEquality(T mapA, T mapB)
+{
+    REQUIRE(mapA.size() == mapB.size());
+    auto itA = mapA.begin();
+    auto itB = mapB.begin();
+    while (itA != mapA.end() && itB != mapB.end()) {
+        REQUIRE(itA->first == itB->first);
+        REQUIRE(itA->second == itB->second);
+        itA++;
+        itB++;
+    }
+}
 
 void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);

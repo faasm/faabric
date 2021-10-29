@@ -8,6 +8,8 @@
 
 #include <cppcodec/base64_rfc4648.hpp>
 
+#include <sstream>
+
 using namespace rapidjson;
 
 namespace faabric::util {
@@ -187,24 +189,35 @@ std::string messageToJson(const faabric::Message& msg)
         d.AddMember("record_exec_graph", msg.recordexecgraph(), a);
 
         if (msg.execgraphdetails_size() > 0) {
-            std::string out = "";
+            std::stringstream ss;
             const auto& map = msg.execgraphdetails();
-            for (const auto& it : map) {
-                out = fmt::format("{},{}:{}", out, it.first, it.second);
+            auto it = map.begin();
+            while (it != map.end()) {
+                ss << fmt::format("{}:{}", it->first, it->second);
+                ++it;
+                if (it != map.end()) {
+                    ss << ",";
+                }
             }
 
+            std::string out = ss.str();
             d.AddMember(
               "exec_graph_detail", Value(out.c_str(), out.size()).Move(), a);
         }
 
         if (msg.intexecgraphdetails_size() > 0) {
-            std::string out = "";
+            std::stringstream ss;
             const auto& map = msg.intexecgraphdetails();
-            for (const auto& it : map) {
-                out = fmt::format(
-                  "{},{}:{}", out, it.first, std::to_string(it.second));
+            auto it = map.begin();
+            while (it != map.end()) {
+                ss << fmt::format("{}:{}", it->first, it->second);
+                ++it;
+                if (it != map.end()) {
+                    ss << ",";
+                }
             }
 
+            std::string out = ss.str();
             d.AddMember("int_exec_graph_detail",
                         Value(out.c_str(), out.size()).Move(),
                         a);
@@ -294,6 +307,54 @@ std::string getStringFromJson(Document& doc,
     return std::string(valuePtr, valuePtr + it->value.GetStringLength());
 }
 
+std::map<std::string, std::string> getStringStringMapFromJson(
+  Document& doc,
+  const std::string& key)
+{
+    std::map<std::string, std::string> map;
+
+    Value::MemberIterator it = doc.FindMember(key.c_str());
+    if (it == doc.MemberEnd()) {
+        return map;
+    }
+
+    const char* valuePtr = it->value.GetString();
+    std::stringstream ss(
+      std::string(valuePtr, valuePtr + it->value.GetStringLength()));
+    std::string keyVal;
+    while (std::getline(ss, keyVal, ',')) {
+        auto pos = keyVal.find(":");
+        std::string key = keyVal.substr(0, pos);
+        map[key] = keyVal.erase(0, pos + sizeof(char));
+    }
+
+    return map;
+}
+
+std::map<std::string, int> getStringIntMapFromJson(Document& doc,
+                                                   const std::string& key)
+{
+    std::map<std::string, int> map;
+
+    Value::MemberIterator it = doc.FindMember(key.c_str());
+    if (it == doc.MemberEnd()) {
+        return map;
+    }
+
+    const char* valuePtr = it->value.GetString();
+    std::stringstream ss(
+      std::string(valuePtr, valuePtr + it->value.GetStringLength()));
+    std::string keyVal;
+    while (std::getline(ss, keyVal, ',')) {
+        auto pos = keyVal.find(":");
+        std::string key = keyVal.substr(0, pos);
+        int val = std::stoi(keyVal.erase(0, pos + sizeof(char)));
+        map[key] = val;
+    }
+
+    return map;
+}
+
 faabric::Message jsonToMessage(const std::string& jsonIn)
 {
     PROF_START(jsonDecode)
@@ -351,6 +412,28 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_sgxtag(getStringFromJson(d, "sgxtag", ""));
     msg.set_sgxpolicy(getStringFromJson(d, "sgxpolicy", ""));
     msg.set_sgxresult(getStringFromJson(d, "sgxresult", ""));
+
+    msg.set_recordexecgraph(getBoolFromJson(d, "record_exec_graph", false));
+
+    // By default, clear the map
+    msg.clear_execgraphdetails();
+    // Fill keypairs if found
+    auto& msgStrMap = *msg.mutable_execgraphdetails();
+    std::map<std::string, std::string> strMap =
+      getStringStringMapFromJson(d, "exec_graph_detail");
+    for (auto& it : strMap) {
+        msgStrMap[it.first] = it.second;
+    }
+
+    // By default, clear the map
+    msg.clear_intexecgraphdetails();
+    // Fill keypairs if found
+    auto& msgIntMap = *msg.mutable_intexecgraphdetails();
+    std::map<std::string, int> intMap =
+      getStringIntMapFromJson(d, "int_exec_graph_detail");
+    for (auto& it : intMap) {
+        msgIntMap[it.first] = it.second;
+    }
 
     PROF_END(jsonDecode)
 
