@@ -243,7 +243,7 @@ void MessageEndpointServer::start()
 
     // Unfortunately we can't know precisely when the proxies have started,
     // hence have to add a sleep.
-    SLEEP_MS(500);
+    SLEEP_MS(1000);
 }
 
 void MessageEndpointServer::stop()
