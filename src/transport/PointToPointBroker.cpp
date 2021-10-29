@@ -49,7 +49,7 @@ static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
         SPDLOG_TRACE("Created new point-to-point client {}", host);
     }
 
-    return clients.at(host);
+    return clients[host];
 }
 
 std::string getPointToPointKey(int groupId, int sendIdx, int recvIdx)
