@@ -98,6 +98,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
         messages.at(rank).set_mpiworldid(worldId);
         messages.at(rank).set_mpirank(rank);
         messages.at(rank).set_mpiworldsize(worldSize);
+        messages.at(rank).set_recordexecgraph(true);
     }
 
     world.create(msg, worldId, worldSize);

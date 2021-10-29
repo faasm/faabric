@@ -201,6 +201,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         // Log chained functions to generate execution graphs
         if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
             sch.logChainedFunction(call.id(), msg.id());
+            msg.set_recordexecgraph(true);
         }
     }
 
