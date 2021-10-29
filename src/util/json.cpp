@@ -183,6 +183,34 @@ std::string messageToJson(const faabric::Message& msg)
           a);
     }
 
+    if (msg.recordexecgraph()) {
+        d.AddMember("record_exec_graph", msg.recordexecgraph(), a);
+
+        if (msg.execgraphdetails_size() > 0) {
+            std::string out = "";
+            const auto& map = msg.execgraphdetails();
+            for (const auto& it : map) {
+                out = fmt::format("{},{}:{}", out, it.first, it.second);
+            }
+
+            d.AddMember(
+              "exec_graph_detail", Value(out.c_str(), out.size()).Move(), a);
+        }
+
+        if (msg.intexecgraphdetails_size() > 0) {
+            std::string out = "";
+            const auto& map = msg.intexecgraphdetails();
+            for (const auto& it : map) {
+                out = fmt::format(
+                  "{},{}:{}", out, it.first, std::to_string(it.second));
+            }
+
+            d.AddMember("int_exec_graph_detail",
+                        Value(out.c_str(), out.size()).Move(),
+                        a);
+        }
+    }
+
     StringBuffer sb;
     Writer<StringBuffer> writer(sb);
     d.Accept(writer);
