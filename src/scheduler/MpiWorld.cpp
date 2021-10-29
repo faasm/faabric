@@ -199,7 +199,9 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
         // Log chained functions to generate execution graphs
-        sch.logChainedFunction(call.id(), msg.id());
+        if (thisMsg != nullptr && thisMsg->recordexecgraph()) {
+            sch.logChainedFunction(call.id(), msg.id());
+        }
     }
 
     std::vector<std::string> executedAt;

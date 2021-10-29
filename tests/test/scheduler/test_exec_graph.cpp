@@ -178,8 +178,6 @@ TEST_CASE("Test exec graph details", "[util][exec-graph]")
     REQUIRE(msg.execgraphdetails().at(expectedKey) == expectedStringValue);
 }
 
-// TODO - test we can only get exec graph if msg set
-
 TEST_CASE_METHOD(MpiTestFixture,
                  "Test tracing the number of MPI messages",
                  "[util][exec-graph]")
