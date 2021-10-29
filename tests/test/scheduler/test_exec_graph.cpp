@@ -144,15 +144,47 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     checkExecGraphEquality(expected, actual);
 }
 
+TEST_CASE("Test exec graph details", "[util][exec-graph]")
+{
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    std::string expectedKey = "foo";
+    std::string expectedStringValue = "bar";
+    int expectedIntValue = 1;
+
+    // By default, recording is disabled
+    REQUIRE(msg.recordexecgraph() == false);
+
+    // If we add a recording while disabled, nothing changes
+    faabric::util::exec_graph::incrementCounter(
+      msg, expectedKey, expectedIntValue);
+    faabric::util::exec_graph::addDetail(msg, expectedKey, expectedStringValue);
+    REQUIRE(msg.intexecgraphdetails_size() == 0);
+    REQUIRE(msg.execgraphdetails_size() == 0);
+
+    // We can turn it on
+    msg.set_recordexecgraph(true);
+
+    // We can add records either to a string or to an int map
+    faabric::util::exec_graph::incrementCounter(
+      msg, expectedKey, expectedIntValue);
+    faabric::util::exec_graph::addDetail(msg, expectedKey, expectedStringValue);
+
+    // Both change the behaviour of the underlying message
+    REQUIRE(msg.intexecgraphdetails_size() == 1);
+    REQUIRE(msg.execgraphdetails_size() == 1);
+    REQUIRE(msg.intexecgraphdetails().count(expectedKey) == 1);
+    REQUIRE(msg.intexecgraphdetails().at(expectedKey) == expectedIntValue);
+    REQUIRE(msg.execgraphdetails().count(expectedKey) == 1);
+    REQUIRE(msg.execgraphdetails().at(expectedKey) == expectedStringValue);
+}
+
+// TODO - test we can only get exec graph if msg set
+
 TEST_CASE_METHOD(MpiTestFixture,
                  "Test tracing the number of MPI messages",
                  "[util][exec-graph]")
 {
-    // Disable test mode and set message flag to true
-    faabric::util::setTestMode(false);
     msg.set_recordexecgraph(true);
-
-    faabric::util::getExecGraphDetail().startRecording(msg);
 
     // Send one message
     int rankA1 = 0;
@@ -164,8 +196,7 @@ TEST_CASE_METHOD(MpiTestFixture,
 
     int numToSend = 10;
     std::string expectedKey =
-      faabric::util::ExecGraphDetail::mpiMsgCountPrefix +
-      std::to_string(rankA2);
+      faabric::util::exec_graph::mpiMsgCountPrefix + std::to_string(rankA2);
 
     for (int i = 0; i < numToSend; i++) {
         world.send(rankA1,
@@ -177,13 +208,10 @@ TEST_CASE_METHOD(MpiTestFixture,
           rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
     }
 
-    // Stop recording and check we have only recorded one message
-    faabric::util::getExecGraphDetail().stopRecording(msg);
-    REQUIRE(msg.execgraphdetails_size() == 1);
-    REQUIRE(msg.execgraphdetails(0).key() == expectedKey);
-    REQUIRE(msg.execgraphdetails(0).value() == std::to_string(numToSend));
-
-    faabric::util::setTestMode(true);
+    REQUIRE(msg.intexecgraphdetails_size() == 1);
+    REQUIRE(msg.execgraphdetails_size() == 0);
+    REQUIRE(msg.intexecgraphdetails().count(expectedKey) == 1);
+    REQUIRE(msg.intexecgraphdetails().at(expectedKey) == numToSend);
 }
 
 TEST_CASE_METHOD(MpiTestFixture,
@@ -191,10 +219,7 @@ TEST_CASE_METHOD(MpiTestFixture,
                  "[util][exec-graph]")
 {
     // Disable test mode and set message flag to true
-    faabric::util::setTestMode(false);
     msg.set_recordexecgraph(false);
-
-    faabric::util::getExecGraphDetail().startRecording(msg);
 
     // Send one message
     int rankA1 = 0;
@@ -206,8 +231,7 @@ TEST_CASE_METHOD(MpiTestFixture,
 
     int numToSend = 10;
     std::string expectedKey =
-      faabric::util::ExecGraphDetail::mpiMsgCountPrefix +
-      std::to_string(rankA2);
+      faabric::util::exec_graph::mpiMsgCountPrefix + std::to_string(rankA2);
 
     for (int i = 0; i < numToSend; i++) {
         world.send(rankA1,
@@ -220,9 +244,7 @@ TEST_CASE_METHOD(MpiTestFixture,
     }
 
     // Stop recording and check we have recorded no message
-    faabric::util::getExecGraphDetail().stopRecording(msg);
+    REQUIRE(msg.intexecgraphdetails_size() == 0);
     REQUIRE(msg.execgraphdetails_size() == 0);
-
-    faabric::util::setTestMode(true);
 }
 }

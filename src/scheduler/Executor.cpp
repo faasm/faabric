@@ -227,9 +227,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      msg.id(),
                      isThreads);
 
-        // Start recording calls
-        faabric::util::getExecGraphDetail().startRecording(msg);
-
         int32_t returnValue;
         try {
             returnValue =
@@ -245,9 +242,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Set the return value
         msg.set_returnvalue(returnValue);
-
-        // Stop recording calls
-        faabric::util::getExecGraphDetail().stopRecording(msg);
 
         // Decrement the task count
         int oldTaskCount = task.batchCounter->fetch_sub(1);

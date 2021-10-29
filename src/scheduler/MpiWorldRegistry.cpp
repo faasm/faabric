@@ -10,7 +10,7 @@ MpiWorldRegistry& getMpiWorldRegistry()
     return r;
 }
 
-scheduler::MpiWorld& MpiWorldRegistry::createWorld(const faabric::Message& msg,
+scheduler::MpiWorld& MpiWorldRegistry::createWorld(faabric::Message& msg,
                                                    int worldId,
                                                    std::string hostOverride)
 {
@@ -37,7 +37,7 @@ scheduler::MpiWorld& MpiWorldRegistry::createWorld(const faabric::Message& msg,
     return worldMap[worldId];
 }
 
-MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(const faabric::Message& msg)
+MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(faabric::Message& msg)
 {
     // Create world locally if not exists
     int worldId = msg.mpiworldid();

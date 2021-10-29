@@ -95,11 +95,6 @@ message MpiHostsToRanksMessage {
     repeated int32 basePorts = 2;
 }
 
-message ExecGraphDetail {
-    string key = 1;
-    string value = 2;
-}
-
 message Message {
     int32 id = 1;
     int32 appId = 2;
@@ -163,6 +158,11 @@ message Message {
     string sgxTag = 38;
     bytes sgxPolicy = 39;
     bytes sgxResult = 40;
+
+    // Exec-graph utils
+    bool recordExecGraph = 41;
+    map<string, int32> intExecGraphDetails = 42;
+    map<string, string> execGraphDetails = 43;
 }
 
 // ---------------------------------------------

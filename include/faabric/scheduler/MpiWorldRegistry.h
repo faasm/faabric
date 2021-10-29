@@ -8,11 +8,11 @@ class MpiWorldRegistry
   public:
     MpiWorldRegistry() = default;
 
-    scheduler::MpiWorld& createWorld(const faabric::Message& msg,
+    scheduler::MpiWorld& createWorld(faabric::Message& msg,
                                      int worldId,
                                      std::string hostOverride = "");
 
-    scheduler::MpiWorld& getOrInitialiseWorld(const faabric::Message& msg);
+    scheduler::MpiWorld& getOrInitialiseWorld(faabric::Message& msg);
 
     scheduler::MpiWorld& getWorld(int worldId);
 

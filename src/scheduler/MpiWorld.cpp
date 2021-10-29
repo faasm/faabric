@@ -35,7 +35,7 @@ static thread_local std::unordered_map<
   ranksSendEndpoints;
 
 // Id of the message that created this thread-local instance
-static thread_local int thisMsgId;
+static thread_local faabric::Message* thisMsg = nullptr;
 
 // This is used for mocking in tests
 static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
@@ -176,12 +176,12 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     return unackedMessageBuffers[index];
 }
 
-void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
+void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 {
     id = newId;
     user = call.user();
     function = call.function();
-    thisMsgId = call.id();
+    thisMsg = &call;
 
     size = newSize;
 
@@ -249,9 +249,6 @@ void MpiWorld::destroy()
 {
     SPDLOG_TRACE("Destroying MPI world {}", id);
 
-    // Note that all ranks will call this function.
-    thisMsgId = 0;
-
     // We must force the destructors for all message endpoints to run here
     // rather than at the end of their global thread-local lifespan. If we
     // don't, the ZMQ shutdown can hang.
@@ -292,13 +289,13 @@ void MpiWorld::destroy()
     }
 }
 
-void MpiWorld::initialiseFromMsg(const faabric::Message& msg)
+void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 {
     id = msg.mpiworldid();
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
-    thisMsgId = msg.id();
+    thisMsg = &msg;
 
     // Block until we receive
     faabric::MpiHostsToRanksMessage hostRankMsg = recvMpiHostRankMsg();
@@ -580,11 +577,13 @@ void MpiWorld::send(int sendRank,
         sendRemoteMpiMessage(sendRank, recvRank, m);
     }
 
-    // In non-release builds, track that we have sent this message
-    faabric::util::getExecGraphDetail().incrementCounter(
-      thisMsgId,
-      faabric::util::ExecGraphDetail::mpiMsgCountPrefix +
-        std::to_string(recvRank));
+    // If the message is set and recording on, track we have sent this message
+    if (thisMsg != nullptr && thisMsg->recordexecgraph()) {
+        faabric::util::exec_graph::incrementCounter(
+          *thisMsg,
+          faabric::util::exec_graph::mpiMsgCountPrefix +
+            std::to_string(recvRank));
+    }
 }
 
 void MpiWorld::recv(int sendRank,
