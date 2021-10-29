@@ -13,7 +13,7 @@
 using namespace scheduler;
 
 namespace tests {
-TEST_CASE("Test execution graph", "[scheduler]")
+TEST_CASE("Test execution graph", "[scheduler][exec-graph]")
 {
     faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
     faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
@@ -74,10 +74,11 @@ TEST_CASE("Test execution graph", "[scheduler]")
 
 TEST_CASE_METHOD(MpiBaseTestFixture,
                  "Test MPI execution graph",
-                 "[mpi][scheduler]")
+                 "[mpi][scheduler][exec-graph]")
 {
     faabric::scheduler::MpiWorld world;
     msg.set_ismpi(true);
+    msg.set_recordexecgraph(true);
 
     // Update the result for the master message
     sch.setFunctionResult(msg);
