@@ -17,6 +17,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXE_LINKER_FLAGS "-fuse-ld=lld")
 
 # Compile comamnds for clang tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -50,6 +51,7 @@ function(faabric_lib lib_name)
     add_library(faabric::${lib_name} ALIAS ${lib_name})
 
     if(BUILD_SHARED_LIBS)
+        target_link_options(${lib_name} PRIVATE "-fuse-ld=lld")
         set_property(TARGET ${lib_name} PROPERTY POSITION_INDEPENDENT_CODE ON)
         set_property(TARGET ${lib_name}_obj PROPERTY POSITION_INDEPENDENT_CODE ON)
     endif()
@@ -95,6 +97,10 @@ add_library(faabric
     $<TARGET_OBJECTS:util_obj>
 )
 add_library(faabric::faabric ALIAS faabric)
+
+if(BUILD_SHARED_LIBS)
+    target_link_options(faabric PRIVATE "-fuse-ld=lld")
+endif()
 
 target_link_libraries(faabric PUBLIC
     faabric::faabricmpi
