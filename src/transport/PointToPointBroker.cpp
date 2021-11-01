@@ -390,19 +390,10 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
           decision.appId, groupId, decision.nFunctions);
     }
 
-    {
-        // Lock this group
-        faabric::util::UniqueLock lock(groupMappingMutexes[groupId]);
+    SPDLOG_TRACE(
+      "Enabling point-to-point mapping for {}:{}", decision.appId, groupId);
 
-        SPDLOG_TRACE(
-          "Enabling point-to-point mapping for {}:{}", decision.appId, groupId);
-
-        // Enable the group
-        groupMappingsFlags[groupId] = true;
-
-        // Notify waiters
-        groupMappingCvs[groupId].notify_all();
-    }
+    getGroupFlag(groupId).setFlag(true);
 
     return hosts;
 }
@@ -440,33 +431,27 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     }
 }
 
+faabric::util::FlagWaiter& PointToPointBroker::getGroupFlag(int groupId)
+{
+    if (groupFlags.find(groupId) == groupFlags.end()) {
+        faabric::util::FullLock lock(brokerMutex);
+        if (groupFlags.find(groupId) == groupFlags.end()) {
+            return groupFlags[groupId];
+        }
+    }
+
+    {
+        faabric::util::SharedLock lock(brokerMutex);
+        return groupFlags.at(groupId);
+    }
+}
+
 void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
 {
+    faabric::util::FlagWaiter &waiter = getGroupFlag(groupId);
     // Check if it's been enabled
-    if (!groupMappingsFlags[groupId]) {
-
-        // Lock this group
-        faabric::util::UniqueLock lock(groupMappingMutexes[groupId]);
-
-        // Check again
-        if (!groupMappingsFlags[groupId]) {
-            // Wait for group to be enabled
-            auto timePoint = std::chrono::system_clock::now() +
-                             std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
-
-            if (!groupMappingCvs[groupId].wait_until(
-                  lock, timePoint, [this, groupId] {
-                      return groupMappingsFlags[groupId];
-                  })) {
-
-                SPDLOG_ERROR("Timed out waiting for group mappings {}",
-                             groupId);
-                throw std::runtime_error(
-                  "Timed out waiting for group mappings");
-            }
-
-            SPDLOG_TRACE("Point-to-point mappings for {} ready", groupId);
-        }
+    if (!waiter.getValue()) {
+        waiter.waitOnFlag();
     }
 }
 
@@ -564,9 +549,7 @@ void PointToPointBroker::clearGroup(int groupId)
 
     PointToPointGroup::clearGroup(groupId);
 
-    groupMappingMutexes.erase(groupId);
-    groupMappingsFlags.erase(groupId);
-    groupMappingCvs.erase(groupId);
+    groupFlags.erase(groupId);
 }
 
 void PointToPointBroker::clear()
@@ -578,9 +561,7 @@ void PointToPointBroker::clear()
 
     PointToPointGroup::clear();
 
-    groupMappingMutexes.clear();
-    groupMappingsFlags.clear();
-    groupMappingCvs.clear();
+    groupFlags.clear();
 }
 
 void PointToPointBroker::resetThreadLocalCache()

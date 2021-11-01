@@ -2,6 +2,7 @@
 
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/config.h>
+#include <faabric/util/map.h>
 #include <faabric/util/scheduling.h>
 
 #include <condition_variable>
@@ -117,16 +118,16 @@ class PointToPointBroker
     void resetThreadLocalCache();
 
   private:
+    faabric::util::SystemConfig& conf;
+
     std::shared_mutex brokerMutex;
 
     std::unordered_map<int, std::set<int>> groupIdIdxsMap;
     std::unordered_map<std::string, std::string> mappings;
 
-    std::unordered_map<int, bool> groupMappingsFlags;
-    std::unordered_map<int, std::mutex> groupMappingMutexes;
-    std::unordered_map<int, std::condition_variable> groupMappingCvs;
+    std::unordered_map<int, faabric::util::FlagWaiter> groupFlags;
 
-    faabric::util::SystemConfig& conf;
+    faabric::util::FlagWaiter& getGroupFlag(int groupId);
 };
 
 PointToPointBroker& getPointToPointBroker();
