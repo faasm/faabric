@@ -30,6 +30,8 @@ class PointToPointGroup
 
     static void addGroup(int appId, int groupId, int groupSize);
 
+    static void addGroupIfNotExists(int appId, int groupId, int groupSize);
+
     static void clear();
 
     PointToPointGroup(int appId, int groupIdIn, int groupSizeIn);
@@ -77,10 +79,6 @@ class PointToPointGroup
     std::queue<int> lockWaiters;
 
     void notifyLocked(int groupIdx);
-
-    void masterLock(int groupIdx, bool recursive);
-
-    void masterUnlock(int groupIdx, bool recursive);
 };
 
 class PointToPointBroker
