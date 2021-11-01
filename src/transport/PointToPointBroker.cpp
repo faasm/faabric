@@ -76,6 +76,14 @@ std::shared_ptr<PointToPointGroup> PointToPointGroup::getGroup(int groupId)
     return groups.at(groupId);
 }
 
+std::shared_ptr<PointToPointGroup> PointToPointGroup::getOrAwaitGroup(
+  int groupId)
+{
+    getPointToPointBroker().waitForMappingsOnThisHost(groupId);
+
+    return getGroup(groupId);
+}
+
 bool PointToPointGroup::groupExists(int groupId)
 {
     faabric::util::SharedLock lock(groupsMutex);
@@ -102,6 +110,11 @@ void PointToPointGroup::addGroupIfNotExists(int appId,
     }
 
     addGroup(appId, groupId, groupSize);
+}
+
+void PointToPointGroup::clearGroup(int groupId)
+{
+    groups.erase(groupId);
 }
 
 void PointToPointGroup::clear()
@@ -531,6 +544,29 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
 
     // TODO - possible to avoid this copy?
     return messageData.dataCopy();
+}
+
+void PointToPointBroker::clearGroup(int groupId)
+{
+    SPDLOG_TRACE("Clearing point-to-point group {}", groupId);
+
+    faabric::util::SharedLock lock(brokerMutex);
+
+    std::set<int> idxs = getIdxsRegisteredForGroup(groupId);
+    for (auto idxA : idxs) {
+        for (auto idxB : idxs) {
+            std::string label = getPointToPointKey(groupId, idxA, idxB);
+            mappings.erase(label);
+        }
+    }
+
+    groupIdIdxsMap.erase(groupId);
+
+    PointToPointGroup::clearGroup(groupId);
+
+    groupMappingMutexes.erase(groupId);
+    groupMappingsFlags.erase(groupId);
+    groupMappingCvs.erase(groupId);
 }
 
 void PointToPointBroker::clear()

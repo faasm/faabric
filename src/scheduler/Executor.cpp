@@ -2,6 +2,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -253,6 +254,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      threadPoolIdx,
                      oldTaskCount - 1);
 
+        // If this messages was part of a point-to-point group, we must make
+        // sure its thread-local state is cleared to allow sockets to be
+        // destructed.
+        if (msg.groupid() > 0) {
+            faabric::transport::getPointToPointBroker().resetThreadLocalCache();
+        }
+
         // Handle snapshot diffs _before_ we reset the executor
         if (isLastInBatch && task.needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
@@ -281,6 +289,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
                              faabric::util::funcToString(msg, true));
             } else {
                 reset(msg);
+            }
+
+            // We need to remove the point-to-point group associated with this
+            // message completely.
+            if (msg.groupid() > 0) {
+                faabric::transport::getPointToPointBroker().clearGroup(
+                  msg.groupid());
             }
 
             releaseClaim();

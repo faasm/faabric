@@ -26,11 +26,15 @@ class PointToPointGroup
   public:
     static std::shared_ptr<PointToPointGroup> getGroup(int groupId);
 
+    static std::shared_ptr<PointToPointGroup> getOrAwaitGroup(int groupId);
+
     static bool groupExists(int groupId);
 
     static void addGroup(int appId, int groupId, int groupSize);
 
     static void addGroupIfNotExists(int appId, int groupId, int groupSize);
+
+    static void clearGroup(int groupId);
 
     static void clear();
 
@@ -105,6 +109,8 @@ class PointToPointBroker
                      size_t bufferSize);
 
     std::vector<uint8_t> recvMessage(int groupId, int sendIdx, int recvIdx);
+
+    void clearGroup(int groupId);
 
     void clear();
 
