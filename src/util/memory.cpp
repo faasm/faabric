@@ -82,6 +82,8 @@ AlignedChunk getPageAlignedChunk(long offset, long length)
 
 void resetDirtyTracking()
 {
+    SPDLOG_DEBUG("Resetting dirty tracking");
+
     FILE* fd = fopen(CLEAR_REFS, "w");
     if (fd == nullptr) {
         SPDLOG_ERROR("Could not open clear_refs ({})", strerror(errno));

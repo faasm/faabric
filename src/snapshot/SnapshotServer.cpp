@@ -71,10 +71,9 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
         throw std::runtime_error("Received snapshot with zero size");
     }
 
-    SPDLOG_DEBUG("Receiving snapshot {} (size {}, lock {})",
+    SPDLOG_DEBUG("Receiving snapshot {} (size {})",
                  r->key()->c_str(),
-                 r->contents()->size(),
-                 r->groupid());
+                 r->contents()->size());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
@@ -82,12 +81,6 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // Set up the snapshot
     faabric::util::SnapshotData data;
     data.size = r->contents()->size();
-
-    // Lock the function group if necessary
-    if (r->groupid() > 0) {
-        faabric::transport::PointToPointGroup::getGroup(r->groupid())
-          ->localLock();
-    }
 
     // TODO - avoid this copy by changing server superclass to allow subclasses
     // to provide a buffer to receive data.
@@ -98,12 +91,6 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     std::memcpy(data.data, r->contents()->Data(), data.size);
 
     reg.takeSnapshot(r->key()->str(), data, true);
-
-    // Unlock the application
-    if (r->groupid() > 0) {
-        faabric::transport::PointToPointGroup::getGroup(r->groupid())
-          ->localUnlock();
-    }
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -127,6 +114,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 {
     const SnapshotDiffPushRequest* r =
       flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
+    int groupId = r->groupid();
 
     SPDLOG_DEBUG(
       "Applying {} diffs to snapshot {}", r->chunks()->size(), r->key()->str());
@@ -136,8 +124,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       faabric::snapshot::getSnapshotRegistry();
     faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
 
-    // Lock the function group
-    if (r->groupid() > 0) {
+    // Lock the function group if it exists
+    if (groupId > 0 &&
+        faabric::transport::PointToPointGroup::groupExists(groupId)) {
         faabric::transport::PointToPointGroup::getGroup(r->groupid())
           ->localLock();
     }
@@ -202,8 +191,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
         }
     }
 
-    // Unlock
-    if (r->groupid() > 0) {
+    // Unlock group if exists
+    if (groupId > 0 &&
+        faabric::transport::PointToPointGroup::groupExists(groupId)) {
         faabric::transport::PointToPointGroup::getGroup(r->groupid())
           ->localUnlock();
     }
