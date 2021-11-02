@@ -448,11 +448,10 @@ faabric::util::FlagWaiter& PointToPointBroker::getGroupFlag(int groupId)
 
 void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
 {
-    faabric::util::FlagWaiter &waiter = getGroupFlag(groupId);
+    faabric::util::FlagWaiter& waiter = getGroupFlag(groupId);
+
     // Check if it's been enabled
-    if (!waiter.getValue()) {
-        waiter.waitOnFlag();
-    }
+    waiter.waitOnFlag();
 }
 
 std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)

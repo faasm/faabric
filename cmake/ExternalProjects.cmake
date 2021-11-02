@@ -29,6 +29,7 @@ conan_cmake_configure(
         cppzmq/4.8.1
         flatbuffers/2.0.0
         hiredis/1.0.2
+        libcds/2.3.3
         parallel-hashmap/1.33
         protobuf/3.17.1
         rapidjson/cci.20200410
@@ -82,6 +83,7 @@ find_package(cpprestsdk REQUIRED)
 find_package(cppzmq REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
+find_package(LibCDS REQUIRED)
 find_package(phmap REQUIRED)
 find_package(spdlog REQUIRED)
 
@@ -122,9 +124,11 @@ add_library(zstd::libzstd_static ALIAS libzstd_static)
 
 # Group all external dependencies into a convenient virtual CMake library
 add_library(faabric_common_dependencies INTERFACE)
+
 target_include_directories(faabric_common_dependencies INTERFACE
     ${FAABRIC_INCLUDE_DIR}
 )
+
 target_link_libraries(faabric_common_dependencies INTERFACE
     Boost::Boost
     Boost::filesystem
@@ -134,6 +138,7 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     cppzmq::cppzmq
     flatbuffers::flatbuffers
     hiredis::hiredis
+    LibCDS::LibCDS
     phmap::phmap
     pistache::pistache
     protobuf::libprotobuf
@@ -142,7 +147,9 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     Threads::Threads
     zstd::libzstd_static
 )
+
 target_compile_definitions(faabric_common_dependencies INTERFACE
     FMT_DEPRECATED= # Suppress warnings about use of deprecated api by spdlog
 )
+
 add_library(faabric::common_dependencies ALIAS faabric_common_dependencies)

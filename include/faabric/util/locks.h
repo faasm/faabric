@@ -7,6 +7,8 @@
 #include <mutex>
 #include <shared_mutex>
 
+#define DEFAULT_FLAG_WAIT_MS 10000
+
 namespace faabric::util {
 typedef std::unique_lock<std::mutex> UniqueLock;
 typedef std::unique_lock<std::shared_mutex> FullLock;
@@ -15,6 +17,10 @@ typedef std::shared_lock<std::shared_mutex> SharedLock;
 class FlagWaiter
 {
   public:
+    FlagWaiter(int timeoutMsIn = DEFAULT_FLAG_WAIT_MS)
+      : timeoutMs(timeoutMsIn)
+    {}
+
     void waitOnFlag()
     {
         // Check
@@ -24,7 +30,7 @@ class FlagWaiter
 
         // Wait for group to be enabled
         UniqueLock lock(flagMx);
-        if (!cv.wait_for(lock, std::chrono::milliseconds(10000), [this] {
+        if (!cv.wait_for(lock, std::chrono::milliseconds(timeoutMs), [this] {
                 return flag.load();
             })) {
 
@@ -33,11 +39,16 @@ class FlagWaiter
         }
     }
 
-    void setFlag(bool value) { flag.store(value); }
-
-    bool getValue() { return flag.load(); }
+    void setFlag(bool value)
+    {
+        UniqueLock lock(flagMx);
+        flag.store(value);
+        cv.notify_all();
+    }
 
   private:
+    int timeoutMs;
+
     std::mutex flagMx;
     std::condition_variable cv;
     std::atomic<bool> flag;
