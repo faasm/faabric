@@ -156,41 +156,42 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // original function call will cause a reset
     bool skipReset = isMaster && isThreads;
 
-    // Iterate through and invoke tasks
-    // Rules for thread pool scheduling:
-    // - Keep index zero free if on master, as this is likely to be the
-    //   main thread which is blocking on others
-    // - If part of a messaging group, give the 0th idx its own thread, as
-    //   it's likely to block waiting for the others
-    if (isThreads && isMaster) {
-        availablePoolThreads.erase(0);
-    }
-
-    bool isInPtpGroup = firstMsg.groupid() > 0;
-
-    std::set<int>::iterator it = availablePoolThreads.begin();
+    // Iterate through and invoke tasks. By default, we allocate tasks
+    // one-to-one with thread pool threads. Only once the pool is exhausted do
+    // we start overallocating.
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
-        int threadPoolIdx = -1;
 
-        if (isInPtpGroup && msg.groupidx() == 0) {
-            // If zeroth in a group, need to reserve a thread pool idx
-            threadPoolIdx = *availablePoolThreads.begin();
-            availablePoolThreads.erase(threadPoolIdx);
-            it = availablePoolThreads.begin();
-        } else {
-            if (it == availablePoolThreads.end()) {
-                // Reset iterator to start
-                it = availablePoolThreads.begin();
+        int threadPoolIdx = -1;
+        if (availablePoolThreads.empty()) {
+            // Here all threads are still executing, so we have to overload.
+            // If any tasks are blocking we risk a deadlock, and can no longer
+            // guarantee the application will finish.
+            // In general if we're on the master host and this is a thread, we
+            // should avoid the zeroth and first pool threads as they are likely
+            // to be the main thread and the zeroth in the communication group,
+            // so will be blocking.
+            if (isThreads && isMaster) {
+                assert(threadPoolSize > 2);
+                threadPoolIdx = (msg.appidx() % (threadPoolSize - 2)) + 2;
+            } else {
+                threadPoolIdx = msg.appidx() % threadPoolSize;
             }
 
-            threadPoolIdx = *it;
-            it++;
+            SPDLOG_WARN("Overloaded app index {} to thread {}",
+                        msg.appidx(),
+                        threadPoolIdx);
+        } else {
+            // Take next from those that are available
+            threadPoolIdx = *availablePoolThreads.begin();
+            availablePoolThreads.erase(threadPoolIdx);
+
+            SPDLOG_TRACE("Assigned app index {} to thread {}",
+                         msg.appidx(),
+                         threadPoolIdx);
         }
 
         // Enqueue the task
-        SPDLOG_TRACE(
-          "Assigning app index {} to thread {}", msg.appidx(), threadPoolIdx);
         threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(
           msgIdx, req, batchCounter, needsSnapshotPush, skipReset));
 
@@ -207,6 +208,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
     auto& sch = faabric::scheduler::getScheduler();
+    faabric::transport::PointToPointBroker& broker =
+      faabric::transport::getPointToPointBroker();
     const auto& conf = faabric::util::getSystemConfig();
 
     bool selfShutdown = false;
@@ -296,6 +299,17 @@ void Executor::threadPoolThread(int threadPoolIdx)
             faabric::util::resetDirtyTracking();
         }
 
+        // In all threads if we've finished with a ptp group, we need to tidy up
+        // to ensure all sockets can be destructed
+        if (msg.groupid() > 0) {
+            broker.resetThreadLocalCache(true);
+
+            // Remove the group from this host if last in batch
+            if (isLastInBatch) {
+                broker.clearGroup(msg.groupid());
+            }
+        }
+
         // If this batch is finished, reset the executor and release its claim.
         // Note that we have to release the claim _after_ resetting, otherwise
         // the executor won't be ready for reuse.
@@ -307,21 +321,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 reset(msg);
             }
 
-            // We need to remove the point-to-point group associated with this
-            // message completely.
-            if (msg.groupid() > 0) {
-                faabric::transport::PointToPointBroker& broker =
-                  faabric::transport::getPointToPointBroker();
-
-                broker.clearGroup(msg.groupid());
-
-                broker.resetThreadLocalCache();
-            }
-
             releaseClaim();
         }
 
-        // Make sure this thread index is available for scheduling
+        // Return this thread index to the pool available for scheduling
         {
             faabric::util::UniqueLock lock(threadsMutex);
             availablePoolThreads.insert(threadPoolIdx);
@@ -374,8 +377,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
     }
 
     // We have to clean up TLS here as this should be the last use of the
-    // scheduler from this thread
+    // scheduler and point-to-point broker from this thread
     sch.resetThreadLocalCache();
+    broker.resetThreadLocalCache();
 }
 
 bool Executor::tryClaim()
