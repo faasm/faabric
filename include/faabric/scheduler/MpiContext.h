@@ -9,9 +9,9 @@ class MpiContext
   public:
     MpiContext();
 
-    int createWorld(const faabric::Message& msg);
+    int createWorld(faabric::Message& msg);
 
-    void joinWorld(const faabric::Message& msg);
+    void joinWorld(faabric::Message& msg);
 
     bool getIsMpi();
 

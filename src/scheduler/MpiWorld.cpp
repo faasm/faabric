@@ -1,6 +1,7 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
@@ -32,6 +33,9 @@ static thread_local std::unordered_map<
   std::string,
   std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
   ranksSendEndpoints;
+
+// Id of the message that created this thread-local instance
+static thread_local faabric::Message* thisRankMsg = nullptr;
 
 // This is used for mocking in tests
 static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
@@ -172,11 +176,12 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     return unackedMessageBuffers[index];
 }
 
-void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
+void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 {
     id = newId;
     user = call.user();
     function = call.function();
+    thisRankMsg = &call;
 
     size = newSize;
 
@@ -194,7 +199,10 @@ void MpiWorld::create(const faabric::Message& call, int newId, int newSize)
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
         // Log chained functions to generate execution graphs
-        sch.logChainedFunction(call.id(), msg.id());
+        if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
+            sch.logChainedFunction(call.id(), msg.id());
+            msg.set_recordexecgraph(true);
+        }
     }
 
     std::vector<std::string> executedAt;
@@ -286,12 +294,13 @@ void MpiWorld::destroy()
     }
 }
 
-void MpiWorld::initialiseFromMsg(const faabric::Message& msg)
+void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 {
     id = msg.mpiworldid();
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
+    thisRankMsg = &msg;
 
     // Block until we receive
     faabric::MpiHostsToRanksMessage hostRankMsg = recvMpiHostRankMsg();
@@ -571,6 +580,14 @@ void MpiWorld::send(int sendRank,
     } else {
         SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
         sendRemoteMpiMessage(sendRank, recvRank, m);
+    }
+
+    // If the message is set and recording on, track we have sent this message
+    if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
+        faabric::util::exec_graph::incrementCounter(
+          *thisRankMsg,
+          faabric::util::exec_graph::mpiMsgCountPrefix +
+            std::to_string(recvRank));
     }
 }
 

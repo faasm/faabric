@@ -4,6 +4,8 @@
 
 #include <faabric/util/json.h>
 
+#include <faabric/util/logging.h>
+
 using namespace faabric::util;
 
 namespace tests {
@@ -38,6 +40,12 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     msg.set_sgxtag("test tag string");
     msg.set_sgxpolicy("test policy string");
     msg.set_sgxresult("test result string");
+
+    msg.set_recordexecgraph(true);
+    auto& map = *msg.mutable_execgraphdetails();
+    map["foo"] = "bar";
+    auto& intMap = *msg.mutable_intexecgraphdetails();
+    intMap["foo"] = 0;
 
     SECTION("Dodgy characters") { msg.set_inputdata("[0], %$ 2233 9"); }
 

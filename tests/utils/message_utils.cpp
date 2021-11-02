@@ -47,5 +47,10 @@ void checkMessageEquality(const faabric::Message& msgA,
     REQUIRE(msgA.sgxtag() == msgB.sgxtag());
     REQUIRE(msgA.sgxpolicy() == msgB.sgxpolicy());
     REQUIRE(msgA.sgxresult() == msgB.sgxresult());
+
+    REQUIRE(msgA.recordexecgraph() == msgB.recordexecgraph());
+    checkMessageMapEquality(msgA.execgraphdetails(), msgB.execgraphdetails());
+    checkMessageMapEquality(msgA.intexecgraphdetails(),
+                            msgB.intexecgraphdetails());
 }
 }

@@ -7,6 +7,7 @@ faabric_lib(util
     crash.cpp
     delta.cpp
     environment.cpp
+    exec_graph.cpp
     files.cpp
     func.cpp
     gids.cpp

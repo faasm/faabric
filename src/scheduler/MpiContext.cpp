@@ -11,7 +11,7 @@ MpiContext::MpiContext()
   , worldId(-1)
 {}
 
-int MpiContext::createWorld(const faabric::Message& msg)
+int MpiContext::createWorld(faabric::Message& msg)
 {
 
     if (msg.mpirank() > 0) {
@@ -38,7 +38,7 @@ int MpiContext::createWorld(const faabric::Message& msg)
     return worldId;
 }
 
-void MpiContext::joinWorld(const faabric::Message& msg)
+void MpiContext::joinWorld(faabric::Message& msg)
 {
     if (!msg.ismpi()) {
         // Not an MPI call

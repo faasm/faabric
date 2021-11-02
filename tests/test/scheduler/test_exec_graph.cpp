@@ -7,12 +7,13 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/exec_graph.h>
 #include <faabric/util/macros.h>
 
 using namespace scheduler;
 
 namespace tests {
-TEST_CASE("Test execution graph", "[scheduler]")
+TEST_CASE("Test execution graph", "[scheduler][exec-graph]")
 {
     faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
     faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
@@ -73,10 +74,11 @@ TEST_CASE("Test execution graph", "[scheduler]")
 
 TEST_CASE_METHOD(MpiBaseTestFixture,
                  "Test MPI execution graph",
-                 "[mpi][scheduler]")
+                 "[mpi][scheduler][exec-graph]")
 {
     faabric::scheduler::MpiWorld world;
     msg.set_ismpi(true);
+    msg.set_recordexecgraph(true);
 
     // Update the result for the master message
     sch.setFunctionResult(msg);
@@ -96,6 +98,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
         messages.at(rank).set_mpiworldid(worldId);
         messages.at(rank).set_mpirank(rank);
         messages.at(rank).set_mpiworldsize(worldSize);
+        messages.at(rank).set_recordexecgraph(true);
     }
 
     world.create(msg, worldId, worldSize);
@@ -141,5 +144,39 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     REQUIRE(countExecGraphNodes(expected) == worldSize);
 
     checkExecGraphEquality(expected, actual);
+}
+
+TEST_CASE("Test exec graph details", "[util][exec-graph]")
+{
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    std::string expectedKey = "foo";
+    std::string expectedStringValue = "bar";
+    int expectedIntValue = 1;
+
+    // By default, recording is disabled
+    REQUIRE(msg.recordexecgraph() == false);
+
+    // If we add a recording while disabled, nothing changes
+    faabric::util::exec_graph::incrementCounter(
+      msg, expectedKey, expectedIntValue);
+    faabric::util::exec_graph::addDetail(msg, expectedKey, expectedStringValue);
+    REQUIRE(msg.intexecgraphdetails_size() == 0);
+    REQUIRE(msg.execgraphdetails_size() == 0);
+
+    // We can turn it on
+    msg.set_recordexecgraph(true);
+
+    // We can add records either to a string or to an int map
+    faabric::util::exec_graph::incrementCounter(
+      msg, expectedKey, expectedIntValue);
+    faabric::util::exec_graph::addDetail(msg, expectedKey, expectedStringValue);
+
+    // Both change the behaviour of the underlying message
+    REQUIRE(msg.intexecgraphdetails_size() == 1);
+    REQUIRE(msg.execgraphdetails_size() == 1);
+    REQUIRE(msg.intexecgraphdetails().count(expectedKey) == 1);
+    REQUIRE(msg.intexecgraphdetails().at(expectedKey) == expectedIntValue);
+    REQUIRE(msg.execgraphdetails().count(expectedKey) == 1);
+    REQUIRE(msg.execgraphdetails().at(expectedKey) == expectedStringValue);
 }
 }

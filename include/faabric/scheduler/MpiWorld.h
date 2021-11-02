@@ -21,11 +21,11 @@ class MpiWorld
   public:
     MpiWorld();
 
-    void create(const faabric::Message& call, int newId, int newSize);
+    void create(faabric::Message& call, int newId, int newSize);
 
     void broadcastHostsToRanks();
 
-    void initialiseFromMsg(const faabric::Message& msg);
+    void initialiseFromMsg(faabric::Message& msg);
 
     std::string getHostForRank(int rank);
 
