@@ -569,14 +569,14 @@ void PointToPointBroker::clear()
     groupFlags.clear();
 }
 
-void PointToPointBroker::resetThreadLocalCache(bool soft)
+void PointToPointBroker::resetThreadLocalCache(bool hard)
 {
     SPDLOG_TRACE("Resetting point-to-point thread-local cache");
 
     sendEndpoints.clear();
     recvEndpoints.clear();
 
-    if (!soft) {
+    if (hard) {
         clients.clear();
     }
 }

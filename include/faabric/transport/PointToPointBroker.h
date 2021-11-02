@@ -2,7 +2,7 @@
 
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/config.h>
-#include <faabric/util/map.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/scheduling.h>
 
 #include <condition_variable>
@@ -115,7 +115,7 @@ class PointToPointBroker
 
     void clear();
 
-    void resetThreadLocalCache(bool soft=false);
+    void resetThreadLocalCache(bool hard = true);
 
   private:
     faabric::util::SystemConfig& conf;

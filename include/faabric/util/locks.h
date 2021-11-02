@@ -17,34 +17,11 @@ typedef std::shared_lock<std::shared_mutex> SharedLock;
 class FlagWaiter
 {
   public:
-    FlagWaiter(int timeoutMsIn = DEFAULT_FLAG_WAIT_MS)
-      : timeoutMs(timeoutMsIn)
-    {}
+    FlagWaiter(int timeoutMsIn = DEFAULT_FLAG_WAIT_MS);
 
-    void waitOnFlag()
-    {
-        // Check
-        if (flag.load()) {
-            return;
-        }
+    void waitOnFlag();
 
-        // Wait for group to be enabled
-        UniqueLock lock(flagMx);
-        if (!cv.wait_for(lock, std::chrono::milliseconds(timeoutMs), [this] {
-                return flag.load();
-            })) {
-
-            SPDLOG_ERROR("Timed out waiting for flag");
-            throw std::runtime_error("Timed out waiting for flag");
-        }
-    }
-
-    void setFlag(bool value)
-    {
-        UniqueLock lock(flagMx);
-        flag.store(value);
-        cv.notify_all();
-    }
+    void setFlag(bool value);
 
   private:
     int timeoutMs;
