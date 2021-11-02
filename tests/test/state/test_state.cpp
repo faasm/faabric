@@ -114,6 +114,12 @@ class StateServerTestFixture
         std::vector<uint8_t> actual(values.size(), 0);
         setDummyData(values);
 
+        // Get, with optional pull
+        int nMessages = 1;
+        if (doPull) {
+            nMessages = 2;
+        }
+
         // Initial pull
         const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
         localKv->pull();
