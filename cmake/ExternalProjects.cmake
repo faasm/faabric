@@ -29,6 +29,8 @@ conan_cmake_configure(
         cppzmq/4.8.1
         flatbuffers/2.0.0
         hiredis/1.0.2
+        libcds/2.3.3
+        parallel-hashmap/1.33
         protobuf/3.17.1
         rapidjson/cci.20200410
         spdlog/1.9.2
@@ -72,6 +74,7 @@ include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 find_package(Boost 1.77.0 REQUIRED)
 find_package(Catch2 REQUIRED)
 find_package(Flatbuffers REQUIRED)
+find_package(LibCDS REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(RapidJSON REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -81,6 +84,7 @@ find_package(cpprestsdk REQUIRED)
 find_package(cppzmq REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
+find_package(phmap REQUIRED)
 find_package(spdlog REQUIRED)
 
 # Pistache - Conan version is out of date and doesn't support clang
@@ -132,6 +136,8 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     cppzmq::cppzmq
     flatbuffers::flatbuffers
     hiredis::hiredis
+    LibCDS::LibCDS
+    phmap::phmap
     pistache::pistache
     protobuf::libprotobuf
     RapidJSON::RapidJSON
