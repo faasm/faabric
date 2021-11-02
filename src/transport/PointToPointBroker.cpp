@@ -305,10 +305,16 @@ void PointToPointGroup::notify(int groupIdx)
 {
     if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
         for (int i = 1; i < groupSize; i++) {
+            SPDLOG_TRACE(
+              "Master group {} waiting for notify from index {}", groupId, i);
+
             ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MASTER_IDX);
+
+            SPDLOG_TRACE("Master group {} notified by index {}", groupId, i);
         }
     } else {
         std::vector<uint8_t> data(1, 0);
+        SPDLOG_TRACE("Notifying group {} from index {}", groupId, groupIdx);
         ptpBroker.sendMessage(groupId,
                               groupIdx,
                               POINT_TO_POINT_MASTER_IDX,

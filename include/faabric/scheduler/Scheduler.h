@@ -88,6 +88,7 @@ class Executor
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<std::shared_ptr<std::thread>> deadThreads;
+    std::set<int> availablePoolThreads;
 
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 

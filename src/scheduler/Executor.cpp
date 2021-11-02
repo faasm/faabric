@@ -45,6 +45,11 @@ Executor::Executor(faabric::Message& msg)
     // Set an ID for this Executor
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
     SPDLOG_DEBUG("Starting executor {}", id);
+
+    // Mark all thread pool threads as available
+    for (int i = 0; i < threadPoolSize; i++) {
+        availablePoolThreads.insert(i);
+    }
 }
 
 Executor::~Executor() {}
@@ -152,17 +157,35 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     bool skipReset = isMaster && isThreads;
 
     // Iterate through and invoke tasks
+    // Rules for thread pool scheduling:
+    // - Keep index zero free if on master, as this is likely to be the
+    //   main thread which is blocking on others
+    // - If part of a messaging group, give the 0th idx its own thread, as
+    //   it's likely to block waiting for the others
+    if (isThreads && isMaster) {
+        availablePoolThreads.erase(0);
+    }
+
+    bool isInPtpGroup = firstMsg.groupid() > 0;
+
+    std::set<int>::iterator it = availablePoolThreads.begin();
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
+        int threadPoolIdx = -1;
 
-        // If executing threads, we must always keep thread pool index zero
-        // free, as this may be executing the function that spawned them
-        int threadPoolIdx;
-        if (isThreads) {
-            assert(threadPoolSize > 1);
-            threadPoolIdx = (msg.appidx() % (threadPoolSize - 1)) + 1;
+        if (isInPtpGroup && msg.groupidx() == 0) {
+            // If zeroth in a group, need to reserve a thread pool idx
+            threadPoolIdx = *availablePoolThreads.begin();
+            availablePoolThreads.erase(threadPoolIdx);
+            it = availablePoolThreads.begin();
         } else {
-            threadPoolIdx = msg.appidx() % threadPoolSize;
+            if (it == availablePoolThreads.end()) {
+                // Reset iterator to start
+                it = availablePoolThreads.begin();
+            }
+
+            threadPoolIdx = *it;
+            it++;
         }
 
         // Enqueue the task
@@ -254,13 +277,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      threadPoolIdx,
                      oldTaskCount - 1);
 
-        // If this messages was part of a point-to-point group, we must make
-        // sure its thread-local state is cleared to allow sockets to be
-        // destructed.
-        if (msg.groupid() > 0) {
-            faabric::transport::getPointToPointBroker().resetThreadLocalCache();
-        }
-
         // Handle snapshot diffs _before_ we reset the executor
         if (isLastInBatch && task.needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
@@ -294,11 +310,21 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // We need to remove the point-to-point group associated with this
             // message completely.
             if (msg.groupid() > 0) {
-                faabric::transport::getPointToPointBroker().clearGroup(
-                  msg.groupid());
+                faabric::transport::PointToPointBroker& broker =
+                  faabric::transport::getPointToPointBroker();
+
+                broker.clearGroup(msg.groupid());
+
+                broker.resetThreadLocalCache();
             }
 
             releaseClaim();
+        }
+
+        // Make sure this thread index is available for scheduling
+        {
+            faabric::util::UniqueLock lock(threadsMutex);
+            availablePoolThreads.insert(threadPoolIdx);
         }
 
         // Vacate the slot occupied by this task. This must be done after
