@@ -131,7 +131,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
           ->localLock();
     }
 
-    // Apply diffs to snapshot
+    // Iterate through the chunks passed in the request
     for (const auto* r : *r->chunks()) {
         uint8_t* dest = snap.data + r->offset();
         switch (r->dataType()) {

@@ -37,6 +37,57 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
 std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                                                        size_t updatedSize)
 {
+    for (auto& m : mergeRegions) {
+        SPDLOG_TRACE("{} {} merge region at {} {}-{}",
+                     snapshotDataTypeStr(m.second.dataType),
+                     snapshotMergeOpStr(m.second.operation),
+                     m.first,
+                     m.second.offset,
+                     m.second.offset + m.second.length);
+    }
+
+    std::vector<SnapshotDiff> diffs;
+    if (_isCustomMerge) {
+        diffs = getCustomDiffs(updated, updatedSize);
+    } else {
+        diffs = getStandardDiffs(updated, updatedSize);
+    }
+
+    return diffs;
+}
+
+std::vector<SnapshotDiff> SnapshotData::getCustomDiffs(const uint8_t* updated,
+                                                       size_t updatedSize)
+{
+    SPDLOG_TRACE("Doing custom diff with {} merge regions",
+                 mergeRegions.size());
+
+    // Here we ignore all diffs except for those specified in merge regions
+    std::vector<SnapshotDiff> diffs;
+    for (auto& mergePair : mergeRegions) {
+        // Get the diff for this merge region
+        SnapshotMergeRegion region = mergePair.second;
+        SnapshotDiff diff = region.toDiff(data, updated);
+
+        if (diff.noChange) {
+            SPDLOG_TRACE("No diff for {} {} merge region at {} {}-{}",
+                         snapshotDataTypeStr(mergePair.second.dataType),
+                         snapshotMergeOpStr(mergePair.second.operation),
+                         mergePair.first,
+                         mergePair.second.offset,
+                         mergePair.second.offset + mergePair.second.length);
+            continue;
+        }
+
+        diffs.push_back(diff);
+    }
+
+    return diffs;
+}
+
+std::vector<SnapshotDiff> SnapshotData::getStandardDiffs(const uint8_t* updated,
+                                                         size_t updatedSize)
+{
     // Work out which pages have changed
     size_t nThisPages = getRequiredHostPages(size);
     std::vector<int> dirtyPageNumbers =
@@ -46,15 +97,6 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                  nThisPages,
                  dirtyPageNumbers.size(),
                  mergeRegions.size());
-
-    for (auto& m : mergeRegions) {
-        SPDLOG_TRACE("{} {} merge region at {} {}-{}",
-                     snapshotDataTypeStr(m.second.dataType),
-                     snapshotMergeOpStr(m.second.operation),
-                     m.first,
-                     m.second.offset,
-                     m.second.offset + m.second.length);
-    }
 
     // Get iterator over merge regions
     std::map<uint32_t, SnapshotMergeRegion>::iterator mergeIt =
@@ -130,91 +172,9 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                     diffInProgress = false;
                 }
 
+                // Get the diff for this merge region
                 SnapshotMergeRegion region = mergeIt->second;
-
-                // Set up the diff
-                const uint8_t* updatedValue = updated + region.offset;
-                const uint8_t* originalValue = data + region.offset;
-
-                SnapshotDiff diff(region.offset, updatedValue, region.length);
-                diff.dataType = region.dataType;
-                diff.operation = region.operation;
-
-                // Modify diff data for certain operations
-                switch (region.dataType) {
-                    case (SnapshotDataType::Int): {
-                        int originalInt =
-                          *(reinterpret_cast<const int*>(originalValue));
-                        int updatedInt =
-                          *(reinterpret_cast<const int*>(updatedValue));
-
-                        switch (region.operation) {
-                            case (SnapshotMergeOperation::Sum): {
-                                // Sums must send the value to be _added_, and
-                                // not the final result
-                                updatedInt -= originalInt;
-                                break;
-                            }
-                            case (SnapshotMergeOperation::Subtract): {
-                                // Subtractions must send the value to be
-                                // subtracted, not the result
-                                updatedInt = originalInt - updatedInt;
-                                break;
-                            }
-                            case (SnapshotMergeOperation::Product): {
-                                // Products must send the value to be
-                                // multiplied, not the result
-                                updatedInt /= originalInt;
-                                break;
-                            }
-                            case (SnapshotMergeOperation::Max):
-                            case (SnapshotMergeOperation::Min):
-                                // Min and max don't need to change
-                                break;
-                            default: {
-                                SPDLOG_ERROR(
-                                  "Unhandled integer merge operation: {}",
-                                  region.operation);
-                                throw std::runtime_error(
-                                  "Unhandled integer merge operation");
-                            }
-                        }
-
-                        // TODO - somehow avoid casting away the const here?
-                        // Modify the memory in-place here
-                        std::memcpy((uint8_t*)updatedValue,
-                                    BYTES(&updatedInt),
-                                    sizeof(int32_t));
-
-                        break;
-                    }
-                    case (SnapshotDataType::Raw): {
-                        switch (region.operation) {
-                            case (SnapshotMergeOperation::Ignore): {
-                                break;
-                            }
-                            case (SnapshotMergeOperation::Overwrite): {
-                                // Default behaviour
-                                break;
-                            }
-                            default: {
-                                SPDLOG_ERROR(
-                                  "Unhandled raw merge operation: {}",
-                                  region.operation);
-                                throw std::runtime_error(
-                                  "Unhandled raw merge operation");
-                            }
-                        }
-
-                        break;
-                    }
-                    default: {
-                        SPDLOG_ERROR("Merge region for unhandled data type: {}",
-                                     region.dataType);
-                        throw std::runtime_error(
-                          "Merge region for unhandled data type");
-                    }
-                }
+                SnapshotDiff diff = region.toDiff(data, updated);
 
                 SPDLOG_TRACE("Diff at {} falls in {} {} merge region {}-{}",
                              pageOffset + b,
@@ -314,9 +274,20 @@ void SnapshotData::addMergeRegion(uint32_t offset,
                                 .length = length,
                                 .dataType = dataType,
                                 .operation = operation };
+
     // Locking as this may be called in bursts by multiple threads
     faabric::util::UniqueLock lock(snapMx);
     mergeRegions[offset] = region;
+}
+
+void SnapshotData::setIsCustomMerge(bool value)
+{
+    _isCustomMerge = value;
+}
+
+bool SnapshotData::isCustomMerge()
+{
+    return _isCustomMerge;
 }
 
 std::string snapshotDataTypeStr(SnapshotDataType dt)
