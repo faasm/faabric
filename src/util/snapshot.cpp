@@ -38,8 +38,8 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                                                        size_t updatedSize)
 {
     std::vector<SnapshotDiff> diffs;
-    SPDLOG_DEBUG("No merge regions set, thus no diffs");
     if (mergeRegions.empty()) {
+        SPDLOG_DEBUG("No merge regions set, thus no diffs");
         return diffs;
     }
 
