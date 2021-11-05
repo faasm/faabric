@@ -299,6 +299,11 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
               getUnregisteredHosts(funcStr);
 
             for (const auto& h : unregisteredHosts) {
+                // Skip if this host
+                if (h == thisHost) {
+                    continue;
+                }
+
                 // Work out resources on this host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
