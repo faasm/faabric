@@ -117,6 +117,7 @@ void Scheduler::reset()
     availableHostsCache.clear();
     registeredHosts.clear();
     threadResults.clear();
+    pushedSnapshotsMap.clear();
 
     // Records
     recordedMessagesAll.clear();
@@ -268,40 +269,39 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
             hosts.push_back(thisHost);
         }
 
-        // If some are left, we need to distribute
-        int offset = nLocally;
-        if (offset < nMessages) {
-            // Schedule first to already registered hosts
+        // If some are left, we need to distribute.
+        // First try and do so on already registered hosts.
+        int remainder = nMessages - nLocally;
+        if (remainder > 0) {
             std::set<std::string>& thisRegisteredHosts =
               registeredHosts[funcStr];
 
             for (const auto& h : thisRegisteredHosts) {
-                int remainder = nMessages - offset;
-
                 // Work out resources on this host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
-
                 int nOnThisHost = std::min(available, remainder);
-                offset += nOnThisHost;
-                if (offset >= nMessages) {
+
+                for (int i = 0; i < nOnThisHost; i++) {
+                    hosts.push_back(h);
+                }
+
+                remainder -= nOnThisHost;
+                if (remainder <= 0) {
                     break;
                 }
             }
         }
 
-        // Now schedule to unregistered hosts if there are some left
-        if (offset < nMessages) {
+        // Now schedule to unregistered hosts if there are messages left
+        if (remainder > 0) {
             std::vector<std::string> unregisteredHosts =
               getUnregisteredHosts(funcStr);
 
             for (const auto& h : unregisteredHosts) {
-                int remainder = nMessages - offset;
-
                 // Work out resources on this host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
-
                 int nOnThisHost = std::min(available, remainder);
 
                 // Register the host if it's exected a function
@@ -310,32 +310,40 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
                     registeredHosts[funcStr].insert(h);
                 }
 
-                offset += nOnThisHost;
-                if (offset >= nMessages) {
+                for (int i = 0; i < nOnThisHost; i++) {
+                    hosts.push_back(h);
+                }
+
+                remainder -= nOnThisHost;
+                if (remainder <= 0) {
                     break;
                 }
             }
         }
 
         // At this point there's no more capacity in the system, so we
-        // just need to execute locally
-        if (offset < nMessages) {
-            SPDLOG_DEBUG("Overloading {}/{} {} locally",
-                         nMessages - offset,
-                         nMessages,
-                         funcStr);
+        // just need to overload locally
+        if (remainder > 0) {
+            SPDLOG_DEBUG(
+              "Overloading {}/{} {} locally", remainder, nMessages, funcStr);
 
-            for (; offset < nMessages; offset++) {
+            for (int i = 0; i < remainder; i++) {
                 hosts.push_back(thisHost);
             }
         }
-
-        // Sanity check
-        assert(offset == nMessages);
     }
 
     // Sanity check
     assert(hosts.size() == nMessages);
+
+    // Set up decision
+    for (int i = 0; i < hosts.size(); i++) {
+        decision.addMessage(hosts.at(i), req->messages().at(i));
+    }
+
+    // -------------------------------------------
+    // THREADS
+    // -------------------------------------------
 
     // Register thread results if necessary
     if (isThreads) {
@@ -344,13 +352,8 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         }
     }
 
-    // Set up decision
-    for (int i = 0; i < hosts.size(); i++) {
-        decision.addMessage(hosts.at(i), req->messages().at(i));
-    }
-
     // -------------------------------------------
-    // POINT-TO-POINT
+    // POINT-TO-POINT MESSAGING
     // -------------------------------------------
 
     // Send out point-to-point mappings if necessary (unless being forced to
@@ -397,10 +400,18 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // EXECTUION
     // -------------------------------------------
 
+    // NOTE: we want to schedule things on this host _last_, otherwise functions
+    // may start executing before all messages have been dispatched, thus
+    // slowing the remaining scheduling.
+    // TODO - clearner way to do this?
     std::set<std::string> uniqueHosts(hosts.begin(), hosts.end());
+    uniqueHosts.erase(thisHost);
+    std::vector<std::string> orderedHosts(uniqueHosts.begin(),
+                                          uniqueHosts.end());
+    orderedHosts.push_back(thisHost);
 
     // Iterate through unique hosts
-    for (const std::string& host : uniqueHosts) {
+    for (const std::string& host : orderedHosts) {
         // Work out which indexes are scheduled on this host
         std::vector<int> thisHostIdxs;
         for (int i = 0; i < hosts.size(); i++) {
@@ -415,6 +426,18 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
             // -------------------------------------------
             // For threads we only need one executor, for anything else we want
             // one Executor per function in flight.
+
+            if (thisHostIdxs.empty()) {
+                SPDLOG_DEBUG("Not scheduling any calls to {} out of {} locally",
+                             funcStr,
+                             nMessages);
+                continue;
+            }
+
+            SPDLOG_DEBUG("Scheduling {}/{} calls to {} locally",
+                         thisHostIdxs.size(),
+                         nMessages,
+                         funcStr);
 
             // Update slots
             this->thisHostUsedSlots.fetch_add(thisHostIdxs.size(),
@@ -466,6 +489,12 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
             // REMOTE EXECTUION
             // -------------------------------------------
 
+            SPDLOG_DEBUG("Scheduling {}/{} calls to {} on {}",
+                         thisHostIdxs.size(),
+                         nMessages,
+                         funcStr,
+                         host);
+
             // Set up new request
             std::shared_ptr<faabric::BatchExecuteRequest> hostRequest =
               faabric::util::batchExecFactory();
@@ -482,6 +511,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
                 decision.addMessage(host, req->messages().at(msgIdx));
             }
 
+            // Dispatch the calls
             getFunctionCallClient(host).executeFunctions(hostRequest);
         }
     }
@@ -544,32 +574,6 @@ void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
         SnapshotClient& c = getSnapshotClient(host);
         c.deleteSnapshot(snapshotKey);
     }
-}
-
-int Scheduler::scheduleFunctionsOnHost(
-  const std::string& host,
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  std::vector<std::string> hosts,
-  int offset,
-  faabric::util::SnapshotData* snapshot)
-{
-    const faabric::Message& firstMsg = req->messages().at(0);
-    std::string funcStr = faabric::util::funcToString(firstMsg, false);
-
-    int nMessages = req->messages_size();
-    int remainder = nMessages - offset;
-
-    // Work out how many we can put on the host
-    faabric::HostResources r = getHostResources(host);
-    int available = r.slots() - r.usedslots();
-
-    // Drop out if none available
-    if (available <= 0) {
-        SPDLOG_DEBUG("Not scheduling {} on {}, no resources", funcStr, host);
-        return 0;
-    }
-
-    return nOnThisHost;
 }
 
 void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
