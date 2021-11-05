@@ -81,8 +81,6 @@ class Executor
     uint32_t threadPoolSize = 0;
 
   private:
-    std::string lastSnapshot;
-
     std::atomic<bool> claimed = false;
 
     std::mutex threadsMutex;

@@ -88,8 +88,6 @@ void Executor::finish()
     // Reset variables
     boundMessage.Clear();
 
-    lastSnapshot = "";
-
     claimed = false;
 
     threadPoolThreads.clear();
@@ -113,8 +111,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     faabric::util::UniqueLock lock(threadsMutex);
 
     // Restore if necessary. If we're executing threads on the master host we
-    // assume we don't need to restore, but for everything else we do. If we've
-    // already restored from this snapshot, we don't do so again.
+    // assume we don't need to restore, but for everything else we do.
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string snapshotKey = firstMsg.snapshotkey();
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -122,21 +119,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     bool isSnapshot = !snapshotKey.empty();
-    bool alreadyRestored = snapshotKey == lastSnapshot;
 
-    if (isSnapshot && !alreadyRestored) {
-        if ((!isMaster && isThreads) || !isThreads) {
-            SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
-            lastSnapshot = snapshotKey;
-            restore(firstMsg);
-        } else {
-            SPDLOG_DEBUG("Skipping snapshot restore on master {} [{}]",
-                         funcStr,
-                         snapshotKey);
-        }
-    } else if (isSnapshot) {
-        SPDLOG_DEBUG(
-          "Skipping already restored snapshot {} [{}]", funcStr, snapshotKey);
+    if (isSnapshot && !isMaster) {
+        SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
+        restore(firstMsg);
     }
 
     // Reset dirty page tracking if we're executing threads.
