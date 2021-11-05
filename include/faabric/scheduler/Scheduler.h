@@ -205,6 +205,8 @@ class Scheduler
                        std::promise<std::unique_ptr<faabric::Message>>>
       localResults;
 
+    std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
+
     std::mutex localResultsMutex;
 
     // ---- Clients ----
@@ -233,13 +235,6 @@ class Scheduler
 
     std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
                                                   bool noCache = false);
-
-    int scheduleFunctionsOnHost(
-      const std::string& host,
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& decision,
-      int offset,
-      faabric::util::SnapshotData* snapshot);
 
     // ---- Accounting and debugging ----
     std::vector<faabric::Message> recordedMessagesAll;

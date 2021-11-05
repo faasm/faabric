@@ -205,6 +205,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
           ->localUnlock();
     }
 
+    // Reset dirty tracking having applied diffs
+    SPDLOG_DEBUG("Resetting dirty page tracking having applied diffs");
+
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
 }
