@@ -53,13 +53,6 @@ class SnapshotDiff
         data = dataIn;
         size = sizeIn;
     }
-
-    SnapshotDiff(uint32_t offsetIn, const uint8_t* dataIn, size_t sizeIn)
-    {
-        offset = offsetIn;
-        data = dataIn;
-        size = sizeIn;
-    }
 };
 
 class SnapshotMergeRegion
@@ -92,9 +85,8 @@ class SnapshotData
     void addMergeRegion(uint32_t offset,
                         size_t length,
                         SnapshotDataType dataType,
-                        SnapshotMergeOperation operation);
-
-    void addMergeRegion(SnapshotMergeRegion& region);
+                        SnapshotMergeOperation operation,
+                        bool overwrite = false);
 
   private:
     // Note - we care about the order of this map, as we iterate through it

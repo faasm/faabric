@@ -132,18 +132,25 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     }
 
     // Iterate through the chunks passed in the request
-    for (const auto* r : *r->chunks()) {
-        uint8_t* dest = snap.data + r->offset();
-        switch (r->dataType()) {
+    for (const auto* chunk : *r->chunks()) {
+        uint8_t* dest = snap.data + chunk->offset();
+
+        SPDLOG_TRACE("Applying snapshot diff to {} at {}-{}",
+                     r->key()->str(),
+                     chunk->offset(),
+                     chunk->offset() + chunk->data()->size());
+
+        switch (chunk->dataType()) {
             case (faabric::util::SnapshotDataType::Raw): {
-                switch (r->mergeOp()) {
+                switch (chunk->mergeOp()) {
                     case (faabric::util::SnapshotMergeOperation::Overwrite): {
-                        std::memcpy(dest, r->data()->data(), r->data()->size());
+                        std::memcpy(
+                          dest, chunk->data()->data(), chunk->data()->size());
                         break;
                     }
                     default: {
                         SPDLOG_ERROR("Unsupported raw merge operation: {}",
-                                     r->mergeOp());
+                                     chunk->mergeOp());
                         throw std::runtime_error(
                           "Unsupported raw merge operation");
                     }
@@ -152,9 +159,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
             }
             case (faabric::util::SnapshotDataType::Int): {
                 const auto* value =
-                  reinterpret_cast<const int32_t*>(r->data()->data());
+                  reinterpret_cast<const int32_t*>(chunk->data()->data());
                 auto* destValue = reinterpret_cast<int32_t*>(dest);
-                switch (r->mergeOp()) {
+                switch (chunk->mergeOp()) {
                     case (faabric::util::SnapshotMergeOperation::Sum): {
                         *destValue += *value;
                         break;
@@ -177,7 +184,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                     }
                     default: {
                         SPDLOG_ERROR("Unsupported int merge operation: {}",
-                                     r->mergeOp());
+                                     chunk->mergeOp());
                         throw std::runtime_error(
                           "Unsupported int merge operation");
                     }
@@ -185,7 +192,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                 break;
             }
             default: {
-                SPDLOG_ERROR("Unsupported data type: {}", r->dataType());
+                SPDLOG_ERROR("Unsupported data type: {}", chunk->dataType());
                 throw std::runtime_error("Unsupported merge data type");
             }
         }

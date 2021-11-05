@@ -26,7 +26,11 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
     std::vector<SnapshotDiff> diffs;
     for (int i : dirtyPageNumbers) {
         uint32_t offset = i * HOST_PAGE_SIZE;
-        diffs.emplace_back(offset, data + offset, HOST_PAGE_SIZE);
+        diffs.emplace_back(SnapshotDataType::Raw,
+                           SnapshotMergeOperation::Overwrite,
+                           offset,
+                           data + offset,
+                           HOST_PAGE_SIZE);
     }
 
     SPDLOG_DEBUG("Snapshot has {}/{} dirty pages", diffs.size(), nPages);
@@ -41,6 +45,14 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
     if (mergeRegions.empty()) {
         SPDLOG_DEBUG("No merge regions set, thus no diffs");
         return diffs;
+    }
+
+    for (const auto& mr : mergeRegions) {
+        SPDLOG_TRACE("Merge region {} {} at {}-{}",
+                     snapshotDataTypeStr(mr.second.dataType),
+                     snapshotMergeOpStr(mr.second.operation),
+                     mr.second.offset,
+                     mr.second.offset + mr.second.length);
     }
 
     // Work out which pages have changed (these will be sorted)
@@ -82,8 +94,8 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
         // TODO - make this more efficient by passing in dirty pages to merge
         // regions
         while (mergeIt != mergeRegions.end() &&
-               ((mergeIt->second.offset > pageStart) &&
-                (mergeIt->second.offset + mergeIt->second.length) < pageEnd)) {
+               (mergeIt->second.offset > pageStart &&
+                mergeIt->second.offset < pageEnd)) {
 
             SPDLOG_TRACE("Overlap with {} {} merge region at {}-{}",
                          snapshotDataTypeStr(mergeIt->second.dataType),
@@ -102,20 +114,39 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
 void SnapshotData::addMergeRegion(uint32_t offset,
                                   size_t length,
                                   SnapshotDataType dataType,
-                                  SnapshotMergeOperation operation)
+                                  SnapshotMergeOperation operation,
+                                  bool overwrite)
 {
     SnapshotMergeRegion region{ .offset = offset,
                                 .length = length,
                                 .dataType = dataType,
                                 .operation = operation };
 
-    addMergeRegion(region);
-}
-
-void SnapshotData::addMergeRegion(SnapshotMergeRegion& region)
-{
     // Locking as this may be called in bursts by multiple threads
     faabric::util::UniqueLock lock(snapMx);
+
+    if (mergeRegions.find(region.offset) != mergeRegions.end()) {
+        if (!overwrite) {
+            SPDLOG_ERROR("Attempting to overwrite existing merge region at {} "
+                         "with {} {} at {}-{}",
+                         region.offset,
+                         snapshotDataTypeStr(dataType),
+                         snapshotMergeOpStr(operation),
+                         region.offset,
+                         region.offset + length);
+
+            throw std::runtime_error("Not able to overwrite merge region");
+        }
+
+        SPDLOG_TRACE(
+          "Overwriting existing merge region at {} with {} {} at {}-{}",
+          region.offset,
+          snapshotDataTypeStr(dataType),
+          snapshotMergeOpStr(operation),
+          region.offset,
+          region.offset + length);
+    }
+
     mergeRegions[region.offset] = region;
 }
 
@@ -190,10 +221,8 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             }
 
             // Add the diff
-            SnapshotDiff diff(offset, updatedValue, length);
-            diff.dataType = dataType;
-            diff.operation = operation;
-            diffs.emplace_back(diff);
+            diffs.emplace_back(
+              dataType, operation, offset, updatedValue, length);
 
             SPDLOG_TRACE("Adding {} {} diff at {}-{}",
                          snapshotDataTypeStr(dataType),
@@ -248,9 +277,8 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                     // have changed
                     bool diffInProgress = false;
                     int diffStart = 0;
-                    for (int b = 0; b < length; b++) {
-                        bool isDirtyByte =
-                          *(original + offset) != *(updated + offset);
+                    for (int b = offset; b < offset + length; b++) {
+                        bool isDirtyByte = *(original + b) != *(updated + b);
 
                         if (isDirtyByte && !diffInProgress) {
                             // Diff starts here if it's different and diff
@@ -260,15 +288,19 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                         } else if (!isDirtyByte && diffInProgress) {
                             // Diff ends if it's not different and diff is
                             // in progress
+                            int diffLength = b - diffStart;
                             SPDLOG_TRACE("Adding {} {} diff at {}-{}",
                                          snapshotDataTypeStr(dataType),
                                          snapshotMergeOpStr(operation),
-                                         offset,
-                                         offset + length);
+                                         offset + diffStart,
+                                         offset + diffStart + diffLength);
 
                             diffInProgress = false;
-                            diffs.emplace_back(
-                              diffStart, updated + diffStart, b - diffStart);
+                            diffs.emplace_back(dataType,
+                                               operation,
+                                               diffStart,
+                                               updated + diffStart,
+                                               diffLength);
                         }
                     }
 
@@ -281,10 +313,13 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                      offset,
                                      offset + length);
 
-                        diffs.emplace_back(diffStart,
+                        diffs.emplace_back(dataType,
+                                           operation,
+                                           diffStart,
                                            updated + diffStart,
                                            (length + 1) - diffStart);
                     }
+                    break;
                 }
                 default: {
                     SPDLOG_ERROR("Unhandled raw merge operation: {}",
