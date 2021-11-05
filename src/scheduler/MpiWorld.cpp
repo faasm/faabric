@@ -300,7 +300,6 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
-    thisRankMsg = &msg;
 
     // Block until we receive
     faabric::MpiHostsToRanksMessage hostRankMsg = recvMpiHostRankMsg();
@@ -322,6 +321,11 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
 
     // Initialise the memory queues for message reception
     initLocalQueues();
+}
+
+void MpiWorld::setMsgForRank(faabric::Message& msg)
+{
+    thisRankMsg = &msg;
 }
 
 std::string MpiWorld::getHostForRank(int rank)
