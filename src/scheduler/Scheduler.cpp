@@ -1,3 +1,4 @@
+#include "faabric/util/locks.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -210,10 +211,6 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   bool forceLocal)
 {
-    // Extract properties of the request
-    int nMessages = req->messages_size();
-    bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-
     // Note, we assume all the messages are for the same function and have the
     // same master host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
@@ -225,25 +222,24 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         throw std::runtime_error("Message with no master host");
     }
 
-    // TODO - more granular locking, this is conservative
-    faabric::util::FullLock lock(mx);
-
     // If we're not the master host, we need to forward the request back to the
     // master host. This will only happen if a nested batch execution happens.
     SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
     if (!forceLocal && masterHost != thisHost) {
-        SPDLOG_DEBUG(
-          "Forwarding {} {} back to master {}", nMessages, funcStr, masterHost);
+        SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
 
         getFunctionCallClient(masterHost).executeFunctions(req);
         decision.returnHost = masterHost;
         return decision;
     }
 
+    faabric::util::FullLock lock(mx);
+
     // -------------------------------------------
-    // HOST DECISIONS
+    // DECISION BUILDING
     // -------------------------------------------
     std::vector<std::string> hosts;
+    int nMessages = req->messages_size();
     if (forceLocal) {
         // We're forced to execute locally here so we do all the messages
         for (int i = 0; i < nMessages; i++) {
@@ -346,9 +342,53 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         decision.addMessage(hosts.at(i), req->messages().at(i));
     }
 
+    // Pass decision as hint
+    return doCallFunctions(req, decision, lock);
+}
+
+faabric::util::SchedulingDecision Scheduler::callFunctions(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::util::SchedulingDecision& hint)
+{
+    faabric::util::FullLock lock(mx);
+    return doCallFunctions(req, hint, lock);
+}
+
+faabric::util::SchedulingDecision Scheduler::doCallFunctions(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::util::SchedulingDecision& decision,
+  faabric::util::FullLock& lock)
+{
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+    std::string funcStr = faabric::util::funcToString(firstMsg, false);
+    int nMessages = req->messages_size();
+
+    // NOTE: we want to schedule things on this host _last_, otherwise functions
+    // may start executing before all messages have been dispatched, thus
+    // slowing the remaining scheduling.
+    // Therefore we want to create a list of unique hosts, with this host last.
+    std::vector<std::string> orderedHosts;
+    {
+        std::set<std::string> uniqueHosts(decision.hosts.begin(),
+                                          decision.hosts.end());
+        bool hasFunctionsOnThisHost = uniqueHosts.contains(thisHost);
+
+        if (hasFunctionsOnThisHost) {
+            uniqueHosts.erase(thisHost);
+        }
+
+        std::vector<std::string> orderedHosts(uniqueHosts.begin(),
+                                              uniqueHosts.end());
+
+        if (hasFunctionsOnThisHost) {
+            orderedHosts.push_back(thisHost);
+        }
+    }
+
     // -------------------------------------------
     // THREADS
     // -------------------------------------------
+    bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
 
     // Register thread results if necessary
     if (isThreads) {
@@ -364,7 +404,9 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // Send out point-to-point mappings if necessary (unless being forced to
     // execute locally, in which case they will be transmitted from the
     // master)
-    if (!forceLocal && (firstMsg.groupid() > 0)) {
+    bool isOnlyThisHost =
+      orderedHosts.size() == 1 && orderedHosts.front() == thisHost;
+    if (!isOnlyThisHost && (firstMsg.groupid() > 0)) {
         broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
@@ -405,22 +447,12 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // EXECTUION
     // -------------------------------------------
 
-    // NOTE: we want to schedule things on this host _last_, otherwise functions
-    // may start executing before all messages have been dispatched, thus
-    // slowing the remaining scheduling.
-    // TODO - clearner way to do this?
-    std::set<std::string> uniqueHosts(hosts.begin(), hosts.end());
-    uniqueHosts.erase(thisHost);
-    std::vector<std::string> orderedHosts(uniqueHosts.begin(),
-                                          uniqueHosts.end());
-    orderedHosts.push_back(thisHost);
-
     // Iterate through unique hosts
     for (const std::string& host : orderedHosts) {
         // Work out which indexes are scheduled on this host
         std::vector<int> thisHostIdxs;
-        for (int i = 0; i < hosts.size(); i++) {
-            if (hosts.at(i) == host) {
+        for (int i = 0; i < decision.hosts.size(); i++) {
+            if (decision.hosts.at(i) == host) {
                 thisHostIdxs.push_back(i);
             }
         }

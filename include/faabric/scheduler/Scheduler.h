@@ -104,6 +104,10 @@ class Scheduler
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       bool forceLocal = false);
 
+    faabric::util::SchedulingDecision callFunctions(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision& hint);
+
     void reset();
 
     void resetThreadLocalCache();
@@ -226,6 +230,11 @@ class Scheduler
     std::set<std::string> availableHostsCache;
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
+
+    faabric::util::SchedulingDecision doCallFunctions(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision& decision,
+      faabric::util::FullLock& lock);
 
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,
