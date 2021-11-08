@@ -540,7 +540,7 @@ void PointToPointBroker::clearGroup(int groupId)
 {
     SPDLOG_TRACE("Clearing point-to-point group {}", groupId);
 
-    faabric::util::SharedLock lock(brokerMutex);
+    faabric::util::FullLock lock(brokerMutex);
 
     std::set<int> idxs = getIdxsRegisteredForGroup(groupId);
     for (auto idxA : idxs) {
@@ -559,7 +559,7 @@ void PointToPointBroker::clearGroup(int groupId)
 
 void PointToPointBroker::clear()
 {
-    faabric::util::SharedLock lock(brokerMutex);
+    faabric::util::FullLock lock(brokerMutex);
 
     groupIdIdxsMap.clear();
     mappings.clear();
@@ -569,16 +569,12 @@ void PointToPointBroker::clear()
     groupFlags.clear();
 }
 
-void PointToPointBroker::resetThreadLocalCache(bool hard)
+void PointToPointBroker::resetThreadLocalCache()
 {
     SPDLOG_TRACE("Resetting point-to-point thread-local cache");
-
     sendEndpoints.clear();
     recvEndpoints.clear();
-
-    if (hard) {
-        clients.clear();
-    }
+    clients.clear();
 }
 
 PointToPointBroker& getPointToPointBroker()

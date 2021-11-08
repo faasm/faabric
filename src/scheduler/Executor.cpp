@@ -285,17 +285,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             faabric::util::resetDirtyTracking();
         }
 
-        // In all threads if we've finished with a ptp group, we need to tidy up
-        // to ensure all sockets can be destructed
-        if (msg.groupid() > 0) {
-            // broker.resetThreadLocalCache(false);
-
-            // Remove the group from this host if last in batch
-            // if (isLastInBatch) {
-            //     broker.clearGroup(msg.groupid());
-            // }
-        }
-
         // If this batch is finished, reset the executor and release its claim.
         // Note that we have to release the claim _after_ resetting, otherwise
         // the executor won't be ready for reuse.

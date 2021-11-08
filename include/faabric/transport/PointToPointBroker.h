@@ -115,7 +115,7 @@ class PointToPointBroker
 
     void clear();
 
-    void resetThreadLocalCache(bool hard = true);
+    void resetThreadLocalCache();
 
   private:
     faabric::util::SystemConfig& conf;
