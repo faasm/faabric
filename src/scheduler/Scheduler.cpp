@@ -1,4 +1,3 @@
-#include "faabric/util/locks.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -9,11 +8,13 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/random.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
+#include <faabric/util/string_tools.h>
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
 
@@ -307,7 +308,6 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
-                    SPDLOG_DEBUG("Registering {} for {}", h, funcStr);
                     registeredHosts[funcStr].insert(h);
                 }
 
@@ -377,8 +377,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             uniqueHosts.erase(thisHost);
         }
 
-        std::vector<std::string> orderedHosts(uniqueHosts.begin(),
-                                              uniqueHosts.end());
+        orderedHosts = std::vector(uniqueHosts.begin(), uniqueHosts.end());
 
         if (hasFunctionsOnThisHost) {
             orderedHosts.push_back(thisHost);
