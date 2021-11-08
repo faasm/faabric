@@ -288,12 +288,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // In all threads if we've finished with a ptp group, we need to tidy up
         // to ensure all sockets can be destructed
         if (msg.groupid() > 0) {
-            broker.resetThreadLocalCache(false);
+            // broker.resetThreadLocalCache(false);
 
             // Remove the group from this host if last in batch
-            if (isLastInBatch) {
-                broker.clearGroup(msg.groupid());
-            }
+            // if (isLastInBatch) {
+            //     broker.clearGroup(msg.groupid());
+            // }
         }
 
         // If this batch is finished, reset the executor and release its claim.

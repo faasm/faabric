@@ -342,6 +342,17 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         decision.addMessage(hosts.at(i), req->messages().at(i));
     }
 
+    // -------------------------------------------
+    // POINT-TO-POINT MESSAGING
+    // -------------------------------------------
+
+    // Send out point-to-point mappings if necessary (unless being forced to
+    // execute locally, in which case they will be transmitted from the
+    // master)
+    if (!forceLocal && (firstMsg.groupid() > 0)) {
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
+    }
+
     // Pass decision as hint
     return doCallFunctions(req, decision, lock);
 }
@@ -362,6 +373,15 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
+
+    if (decision.hosts.size() != nMessages) {
+        SPDLOG_ERROR(
+          "Passed decision for {} with {} messages, but request has {}",
+          funcStr,
+          decision.hosts.size(),
+          nMessages);
+        throw std::runtime_error("Invalid scheduler hint for messages");
+    }
 
     // NOTE: we want to schedule things on this host _last_, otherwise functions
     // may start executing before all messages have been dispatched, thus
@@ -394,19 +414,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         for (const auto& m : req->messages()) {
             registerThread(m.id());
         }
-    }
-
-    // -------------------------------------------
-    // POINT-TO-POINT MESSAGING
-    // -------------------------------------------
-
-    // Send out point-to-point mappings if necessary (unless being forced to
-    // execute locally, in which case they will be transmitted from the
-    // master)
-    bool isOnlyThisHost =
-      orderedHosts.size() == 1 && orderedHosts.front() == thisHost;
-    if (!isOnlyThisHost && (firstMsg.groupid() > 0)) {
-        broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
     // -------------------------------------------
@@ -446,7 +453,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // EXECTUION
     // -------------------------------------------
 
-    // Iterate through unique hosts
+    // Iterate through unique hosts and dispatch messages
     for (const std::string& host : orderedHosts) {
         // Work out which indexes are scheduled on this host
         std::vector<int> thisHostIdxs;
@@ -544,7 +551,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 auto* newMsg = hostRequest->add_messages();
                 *newMsg = req->messages().at(msgIdx);
                 newMsg->set_executeslocally(false);
-                decision.addMessage(host, req->messages().at(msgIdx));
             }
 
             // Dispatch the calls
