@@ -66,7 +66,7 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Detailed test snapshot merge regions with ints",
-                 "[util]")
+                 "[snapshot][util]")
 {
     std::string snapKey = "foobar123";
     int snapPages = 5;
@@ -177,7 +177,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test edge-cases of snapshot merge regions",
-                 "[util]")
+                 "[snapshot][util]")
 {
     // Region edge cases:
     // - start
@@ -286,7 +286,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test snapshot merge regions",
-                 "[util]")
+                 "[snapshot][util]")
 {
     std::string snapKey = "foobar123";
     int snapPages = 5;
@@ -435,7 +435,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test invalid snapshot merges",
-                 "[util]")
+                 "[snapshot][util]")
 {
     std::string snapKey = "foobar123";
     int snapPages = 3;
@@ -500,7 +500,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     deallocatePages(snap.data, snapPages);
 }
 
-TEST_CASE_METHOD(SnapshotMergeTestFixture, "Test cross-page ignores", "[util]")
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test cross-page ignores",
+                 "[snapshot][util]")
 {
     int snapPages = 6;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
@@ -593,7 +595,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture, "Test cross-page ignores", "[util]")
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test fine-grained byte-wise diffs",
-                 "[util]")
+                 "[snapshot][util]")
 {
     int snapPages = 3;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
@@ -648,7 +650,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test mix of applicable and non-applicable merge regions",
-                 "[util]")
+                 "[snapshot][util]")
 {
     int snapPages = 6;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;

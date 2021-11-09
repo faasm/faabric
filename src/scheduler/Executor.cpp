@@ -134,8 +134,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 
     // Set up shared counter for this batch of tasks
-    auto batchCounter =
-      std::make_shared<std::atomic<int>>(msgIdxs.size());
+    auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
 
     // Work out if we should skip the reset after this batch. This only needs to
     // happen when we're executing threads on the master host, in which case the
