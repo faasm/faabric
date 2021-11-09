@@ -20,7 +20,6 @@ enum SnapshotDataType
 enum SnapshotMergeOperation
 {
     Overwrite,
-    Ignore,
     Sum,
     Product,
     Subtract,

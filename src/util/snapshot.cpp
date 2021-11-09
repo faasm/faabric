@@ -177,9 +177,6 @@ std::string snapshotDataTypeStr(SnapshotDataType dt)
 std::string snapshotMergeOpStr(SnapshotMergeOperation op)
 {
     switch (op) {
-        case (SnapshotMergeOperation::Ignore): {
-            return "Ignore";
-        }
         case (SnapshotMergeOperation::Max): {
             return "Max";
         }
@@ -209,11 +206,6 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                    const uint8_t* original,
                                    const uint8_t* updated)
 {
-    // Skip an ignore
-    if (operation == SnapshotMergeOperation::Ignore) {
-        return;
-    }
-
     SPDLOG_TRACE("Checking for {} {} merge region at {}-{}",
                  snapshotDataTypeStr(dataType),
                  snapshotMergeOpStr(operation),
