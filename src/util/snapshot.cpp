@@ -92,9 +92,9 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
         // For each merge region that overlaps this dirty page, get it to add
         // its diffs, and move onto the next one
         // TODO - make this more efficient by passing in dirty pages to merge
-        // regions
+        // regions so that they avoid unnecessary work if they're large.
         while (mergeIt != mergeRegions.end() &&
-               (mergeIt->second.offset > pageStart &&
+               (mergeIt->second.offset >= pageStart &&
                 mergeIt->second.offset < pageEnd)) {
 
             SPDLOG_TRACE("Overlap with {} {} merge region at {}-{}",

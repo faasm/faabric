@@ -92,12 +92,6 @@ class SnapshotData
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
-
-    std::vector<SnapshotDiff> getCustomDiffs(const uint8_t* updated,
-                                             size_t updatedSize);
-
-    std::vector<SnapshotDiff> getStandardDiffs(const uint8_t* updated,
-                                               size_t updatedSize);
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);

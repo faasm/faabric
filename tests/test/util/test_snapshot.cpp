@@ -562,10 +562,26 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture, "Test cross-page ignores", "[util]")
     sharedMem[ignoreOffsetB + ignoreLengthB - 1] = (uint8_t)1;
 
     std::vector<SnapshotDiff> expectedDiffs = {
-        { offsetA, dataA.data(), dataA.size() },
-        { offsetB, dataB.data(), dataB.size() },
-        { offsetC, dataC.data(), dataC.size() },
-        { offsetD, dataD.data(), dataD.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetA,
+          dataA.data(),
+          dataA.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetB,
+          dataB.data(),
+          dataB.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetC,
+          dataC.data(),
+          dataC.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetD,
+          dataD.data(),
+          dataD.size() },
     };
 
     // Check number of diffs
@@ -601,10 +617,26 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::memcpy(sharedMem + offsetD, dataD.data(), dataD.size());
 
     std::vector<SnapshotDiff> expectedDiffs = {
-        { offsetA, dataA.data(), dataA.size() },
-        { offsetB, dataB.data(), dataB.size() },
-        { offsetC, dataC.data(), dataC.size() },
-        { offsetD, dataD.data(), dataD.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetA,
+          dataA.data(),
+          dataA.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetB,
+          dataB.data(),
+          dataB.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetC,
+          dataC.data(),
+          dataC.size() },
+        { SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          offsetD,
+          dataD.data(),
+          dataD.size() },
     };
 
     // Check number of diffs

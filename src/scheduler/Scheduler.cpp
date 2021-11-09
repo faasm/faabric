@@ -515,6 +515,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 // Non-threads require one executor per task
                 for (auto i : thisHostIdxs) {
                     faabric::Message& localMsg = req->mutable_messages()->at(i);
+
                     if (localMsg.executeslocally()) {
                         faabric::util::UniqueLock resultsLock(
                           localResultsMutex);
@@ -523,6 +524,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                             std::promise<
                               std::unique_ptr<faabric::Message>>() });
                     }
+
                     std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
                     e->executeTasks({ i }, req);
                 }
@@ -762,10 +764,12 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     if (msg.executeslocally()) {
         faabric::util::UniqueLock resultsLock(localResultsMutex);
+
         auto it = localResults.find(msg.id());
         if (it != localResults.end()) {
             it->second.set_value(std::make_unique<faabric::Message>(msg));
         }
+
         // Sync messages can't have their results read twice, so skip
         // redis
         if (!msg.isasync()) {

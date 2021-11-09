@@ -135,7 +135,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     // Set up shared counter for this batch of tasks
     auto batchCounter =
-      std::make_shared<std::atomic<int>>(req->messages_size());
+      std::make_shared<std::atomic<int>>(msgIdxs.size());
 
     // Work out if we should skip the reset after this batch. This only needs to
     // happen when we're executing threads on the master host, in which case the
@@ -144,7 +144,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted do
-    // we start overallocating.
+    // we start overloading
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
 

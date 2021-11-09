@@ -19,6 +19,7 @@
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
+using namespace faabric::util;
 
 namespace tests {
 
@@ -203,13 +204,30 @@ class TestExecutor final : public Executor
         if (msg.function() == "snap-check") {
             // Modify a page of the dummy memory
             uint8_t pageIdx = threadPoolIdx;
-            SPDLOG_DEBUG("TestExecutor modifying page {} of memory", pageIdx);
-            uint8_t* offsetPtr =
-              dummyMemory + (pageIdx * faabric::util::HOST_PAGE_SIZE);
 
-            std::vector<uint8_t> data = { pageIdx,
-                                          (uint8_t)(pageIdx + 1),
-                                          (uint8_t)(pageIdx + 2) };
+            faabric::util::SnapshotData& snapData =
+              faabric::snapshot::getSnapshotRegistry().getSnapshot(
+                msg.snapshotkey());
+
+            // Avoid writing a zero here as the memory is already zeroed hence
+            // it's not a change
+            std::vector<uint8_t> data = { (uint8_t)(pageIdx + 1),
+                                          (uint8_t)(pageIdx + 2),
+                                          (uint8_t)(pageIdx + 3) };
+
+            // Set up a merge region that should catch the diff
+            size_t offset = (pageIdx * faabric::util::HOST_PAGE_SIZE);
+            snapData.addMergeRegion(offset,
+                                    data.size() + 10,
+                                    SnapshotDataType::Raw,
+                                    SnapshotMergeOperation::Overwrite);
+
+            SPDLOG_DEBUG("TestExecutor modifying page {} of memory ({}-{})",
+                         pageIdx,
+                         offset,
+                         offset + data.size());
+
+            uint8_t* offsetPtr = dummyMemory + offset;
             std::memcpy(offsetPtr, data.data(), data.size());
         }
 
@@ -718,7 +736,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::util::setMockMode(true);
     std::string otherHost = "other";
 
-    // Set up a load of messages executing with a different master host
+    // Set up some messages executing with a different master host
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
@@ -750,13 +768,11 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < diffList.size(); i++) {
         // Check offset and data (according to logic defined in the dummy
         // executor)
-        uint8_t pageIndex = i + 1;
-        REQUIRE(diffList.at(i).offset ==
-                pageIndex * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(diffList.at(i).offset == i * faabric::util::HOST_PAGE_SIZE);
 
-        std::vector<uint8_t> expected = { pageIndex,
-                                          (uint8_t)(pageIndex + 1),
-                                          (uint8_t)(pageIndex + 2) };
+        std::vector<uint8_t> expected = { (uint8_t)(i + 1),
+                                          (uint8_t)(i + 2),
+                                          (uint8_t)(i + 3) };
 
         std::vector<uint8_t> actual(diffList.at(i).data,
                                     diffList.at(i).data + 3);
