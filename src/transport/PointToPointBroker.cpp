@@ -134,24 +134,25 @@ PointToPointGroup::PointToPointGroup(int appIdIn,
 
 void PointToPointGroup::lock(int groupIdx, bool recursive)
 {
-    std::string host =
+    std::string masterHost =
       ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
+    std::string lockerHost = ptpBroker.getHostForReceiver(groupId, groupIdx);
 
-    if (host == conf.endpointHost) {
+    bool masterIsLocal = masterHost == conf.endpointHost;
+    bool lockerIsLocal = lockerHost == conf.endpointHost;
+
+    // If we're on the master, we need to try and acquire the lock, otherwise we
+    // send a remote request
+    if (masterIsLocal) {
         bool acquiredLock = false;
         {
             faabric::util::UniqueLock lock(mx);
-            if (recursive) {
-                bool isFree = recursiveLockOwners.empty();
 
-                bool lockOwnedByThisIdx =
-                  !isFree && (recursiveLockOwners.top() == groupIdx);
-
-                if (isFree || lockOwnedByThisIdx) {
-                    // Recursive and either free, or already locked by this idx
-                    recursiveLockOwners.push(groupIdx);
-                    acquiredLock = true;
-                }
+            if (recursive && (recursiveLockOwners.empty() ||
+                              recursiveLockOwners.top() == groupIdx)) {
+                // Recursive and either free, or already locked by this idx
+                recursiveLockOwners.push(groupIdx);
+                acquiredLock = true;
             } else if (lockOwnerIdx == NO_LOCK_OWNER_IDX) {
                 // Non-recursive and free
                 lockOwnerIdx = groupIdx;
@@ -159,25 +160,52 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
             }
         }
 
-        if (acquiredLock) {
-            SPDLOG_TRACE("Group idx {}, locked {} (recursive {})",
+        if (acquiredLock && lockerIsLocal) {
+            // Nothing to do now
+            SPDLOG_TRACE("Group idx {} ({}), locally locked {} (recursive {})",
                          groupIdx,
+                         lockerHost,
                          groupId,
                          recursive);
 
+        } else if (acquiredLock) {
+            SPDLOG_TRACE("Group idx {} ({}), remotely locked {} (recursive {})",
+                         groupIdx,
+                         lockerHost,
+                         groupId,
+                         recursive);
+
+            // Notify remote locker that they've acquired the lock
             notifyLocked(groupIdx);
         } else {
-            SPDLOG_TRACE(
-              "Group idx {}, lock {} already locked({} waiters, recursive {})",
-              groupIdx,
-              groupId,
-              lockWaiters.size(),
-              recursive);
-
+            // Need to wait to get the lock
             lockWaiters.push(groupIdx);
+
+            // Wait here if local, otherwise the remote end will pick up the
+            // message
+            if (lockerIsLocal) {
+                SPDLOG_TRACE(
+                  "Group idx {} ({}), locally awaiting lock {} (recursive {})",
+                  groupIdx,
+                  lockerHost,
+                  groupId,
+                  recursive);
+
+                ptpBroker.recvMessage(
+                  groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+            } else {
+                // Notify remote locker that they've acquired the lock
+                SPDLOG_TRACE(
+                  "Group idx {} ({}), remotely awaiting lock {} (recursive {})",
+                  groupIdx,
+                  lockerHost,
+                  groupId,
+                  masterHost,
+                  recursive);
+            }
         }
     } else {
-        auto cli = getClient(host);
+        auto cli = getClient(masterHost);
         faabric::PointToPointMessage msg;
         msg.set_groupid(groupId);
         msg.set_sendidx(groupIdx);
@@ -187,13 +215,14 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
                      groupId,
                      groupIdx,
                      POINT_TO_POINT_MASTER_IDX,
-                     host);
+                     masterHost);
 
+        // Send the remote request and await the message saying it's been
+        // acquired
         cli->groupLock(appId, groupId, groupIdx, recursive);
-    }
 
-    // Await ptp response
-    ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+    }
 }
 
 void PointToPointGroup::localLock()
