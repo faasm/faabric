@@ -29,10 +29,10 @@ void PointToPointServer::doAsyncRecv(int header,
 
             // Send the message locally to the downstream socket
             broker.sendMessage(msg.groupid(),
-                            msg.sendidx(),
-                            msg.recvidx(),
-                            BYTES_CONST(msg.data().c_str()),
-                            msg.data().size());
+                               msg.sendidx(),
+                               msg.recvidx(),
+                               BYTES_CONST(msg.data().c_str()),
+                               msg.data().size());
             break;
         }
         case faabric::transport::PointToPointCall::LOCK_GROUP: {
