@@ -184,6 +184,10 @@ class MpiWorld
 
     std::vector<bool> getInitedUMB();
 
+    /* Profiling */
+
+    void setMsgForRank(faabric::Message& msg);
+
   private:
     int id = -1;
     int size = -1;

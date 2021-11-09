@@ -218,9 +218,11 @@ std::string messageToJson(const faabric::Message& msg)
             }
 
             std::string out = ss.str();
-            d.AddMember("int_exec_graph_detail",
-                        Value(out.c_str(), out.size()).Move(),
-                        a);
+
+            // Need to create a value (instead of move) as the string's scope
+            // is smaller than the document's one
+            Value value = Value(out.c_str(), out.size(), a);
+            d.AddMember("int_exec_graph_detail", value, a);
         }
     }
 
