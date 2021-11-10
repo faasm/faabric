@@ -14,6 +14,7 @@
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/snapshot.h>
 
 namespace tests {
 
@@ -60,20 +61,31 @@ int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
 {
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
-    faabric::util::SnapshotData snap = exec->snapshot();
-
     std::string msgInput = msg.inputdata();
     std::string snapshotKey = msg.snapshotkey();
 
-    // Modify the executor's memory
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+
+    faabric::util::SnapshotData& originalSnap = reg.getSnapshot(snapshotKey);
+    faabric::util::SnapshotData updatedSnap = exec->snapshot();
+
+    // Add a single merge region to catch both diffs
+    int offsetA = 10;
+    int offsetB = 100;
     std::vector<uint8_t> inputBytes = faabric::util::stringToBytes(msgInput);
+
+    originalSnap.addMergeRegion(
+      0,
+      offsetB + inputBytes.size() + 10,
+      faabric::util::SnapshotDataType::Raw,
+      faabric::util::SnapshotMergeOperation::Overwrite);
+
+    // Modify the executor's memory
     std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
-
-    uint32_t offsetA = 10;
-    uint32_t offsetB = 100;
-
-    std::memcpy(snap.data + offsetA, keyBytes.data(), keyBytes.size());
-    std::memcpy(snap.data + offsetB, inputBytes.data(), inputBytes.size());
+    std::memcpy(updatedSnap.data + offsetA, keyBytes.data(), keyBytes.size());
+    std::memcpy(
+      updatedSnap.data + offsetB, inputBytes.data(), inputBytes.size());
 
     return 123;
 }
@@ -88,6 +100,9 @@ int handleFakeDiffsThreadedFunction(
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
     std::string snapshotKey = "fake-diffs-threaded-snap";
     std::string msgInput = msg.inputdata();
+
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
 
     // This function creates a snapshot, then spawns some child threads that
     // will modify the shared memory. It then awaits the results and checks that
@@ -104,8 +119,6 @@ int handleFakeDiffsThreadedFunction(
         snap.data = snapMemory;
         snap.size = snapSize;
 
-        faabric::snapshot::SnapshotRegistry& reg =
-          faabric::snapshot::getSnapshotRegistry();
         reg.takeSnapshot(snapshotKey, snap);
 
         auto req =
@@ -121,7 +134,7 @@ int handleFakeDiffsThreadedFunction(
             // Make a small modification to a page that will also be edited by
             // the child thread to make sure it's not overwritten
             std::vector<uint8_t> localChange(3, i);
-            uint32_t offset = 2 * i * faabric::util::HOST_PAGE_SIZE;
+            int offset = 2 * i * faabric::util::HOST_PAGE_SIZE;
             std::memcpy(
               snapMemory + offset, localChange.data(), localChange.size());
         }
@@ -157,7 +170,7 @@ int handleFakeDiffsThreadedFunction(
         for (int i = 0; i < nThreads; i++) {
             // Check local modifications
             std::vector<uint8_t> expectedLocal(3, i);
-            uint32_t localOffset = 2 * i * faabric::util::HOST_PAGE_SIZE;
+            int localOffset = 2 * i * faabric::util::HOST_PAGE_SIZE;
             std::vector<uint8_t> actualLocal(snapMemory + localOffset,
                                              snapMemory + localOffset +
                                                expectedLocal.size());
@@ -168,7 +181,7 @@ int handleFakeDiffsThreadedFunction(
             }
 
             // Check remote modifications
-            uint32_t offset = 2 * i * faabric::util::HOST_PAGE_SIZE + 10;
+            int offset = 2 * i * faabric::util::HOST_PAGE_SIZE + 10;
             std::string expectedData("thread_" + std::to_string(i));
             auto* charPtr = reinterpret_cast<char*>(snapMemory + offset);
             std::string actual(charPtr);
@@ -185,15 +198,33 @@ int handleFakeDiffsThreadedFunction(
         }
 
     } else {
+        // This is the code that will be executed by the remote threads.
+        // Add a merge region to catch the modification
         int idx = msg.appidx();
-        uint32_t offset = 2 * idx * faabric::util::HOST_PAGE_SIZE + 10;
 
-        // Modify the executor's memory
+        int regionOffset = 2 * idx * faabric::util::HOST_PAGE_SIZE;
+        int changeOffset = regionOffset + 10;
+
+        // Get the input data
         std::vector<uint8_t> inputBytes =
           faabric::util::stringToBytes(msgInput);
 
-        faabric::util::SnapshotData snap = exec->snapshot();
-        std::memcpy(snap.data + offset, inputBytes.data(), inputBytes.size());
+        faabric::util::SnapshotData& originalSnap =
+          reg.getSnapshot(snapshotKey);
+        faabric::util::SnapshotData updatedSnap = exec->snapshot();
+
+        // Make sure it's captured by the region
+        int regionLength = 20 + inputBytes.size();
+        originalSnap.addMergeRegion(
+          regionOffset,
+          regionLength,
+          faabric::util::SnapshotDataType::Raw,
+          faabric::util::SnapshotMergeOperation::Overwrite);
+
+        // Now modify the memory
+        std::memcpy(updatedSnap.data + changeOffset,
+                    inputBytes.data(),
+                    inputBytes.size());
 
         return 0;
     }

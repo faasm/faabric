@@ -153,6 +153,12 @@ void SnapshotData::addMergeRegion(uint32_t offset,
           snapshotMergeOpStr(operation),
           region.offset,
           region.offset + length);
+    } else {
+        SPDLOG_DEBUG("Adding new {} {} merge region at {}-{}",
+                     snapshotDataTypeStr(dataType),
+                     snapshotMergeOpStr(operation),
+                     region.offset,
+                     region.offset + length);
     }
 
     mergeRegions[region.offset] = region;

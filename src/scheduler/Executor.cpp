@@ -163,9 +163,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                 threadPoolIdx = msg.appidx() % threadPoolSize;
             }
 
-            SPDLOG_WARN("Overloaded app index {} to thread {}",
-                        msg.appidx(),
-                        threadPoolIdx);
+            SPDLOG_DEBUG("Overloaded app index {} to thread {}",
+                         msg.appidx(),
+                         threadPoolIdx);
         } else {
             // Take next from those that are available
             threadPoolIdx = *availablePoolThreads.begin();
@@ -273,6 +273,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
             faabric::util::SnapshotData snapshotPreExecution =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(
                 msg.snapshotkey());
+
+            SPDLOG_TRACE("Diffing pre and post execution snapshots for {}",
+                         msg.snapshotkey());
 
             std::vector<faabric::util::SnapshotDiff> diffs =
               snapshotPreExecution.getChangeDiffs(snapshotPostExecution.data,
