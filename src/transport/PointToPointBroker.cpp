@@ -114,11 +114,15 @@ void PointToPointGroup::addGroupIfNotExists(int appId,
 
 void PointToPointGroup::clearGroup(int groupId)
 {
+    faabric::util::FullLock lock(groupsMutex);
+
     groups.erase(groupId);
 }
 
 void PointToPointGroup::clear()
 {
+    faabric::util::FullLock lock(groupsMutex);
+
     groups.clear();
 }
 

@@ -215,7 +215,6 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // Note, we assume all the messages are for the same function and have the
     // same master host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string funcStr = faabric::util::funcToString(firstMsg, false);
     std::string masterHost = firstMsg.masterhost();
     if (masterHost.empty()) {
         std::string funcStrWithId = faabric::util::funcToString(firstMsg, true);
@@ -225,22 +224,40 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     // If we're not the master host, we need to forward the request back to the
     // master host. This will only happen if a nested batch execution happens.
-    SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
     if (!forceLocal && masterHost != thisHost) {
+        std::string funcStr = faabric::util::funcToString(firstMsg, false);
         SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
 
         getFunctionCallClient(masterHost).executeFunctions(req);
+        SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
         decision.returnHost = masterHost;
         return decision;
     }
 
     faabric::util::FullLock lock(mx);
 
-    // -------------------------------------------
-    // DECISION BUILDING
-    // -------------------------------------------
-    std::vector<std::string> hosts;
+    SchedulingDecision decision = makeSchedulingDecision(req, forceLocal);
+
+    // Send out point-to-point mappings if necessary (unless being forced to
+    // execute locally, in which case they will be transmitted from the
+    // master)
+    if (!forceLocal && (firstMsg.groupid() > 0)) {
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
+    }
+
+    // Pass decision as hint
+    return doCallFunctions(req, decision, lock);
+}
+
+faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  bool forceLocal)
+{
     int nMessages = req->messages_size();
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+    std::string funcStr = faabric::util::funcToString(firstMsg, false);
+
+    std::vector<std::string> hosts;
     if (forceLocal) {
         // We're forced to execute locally here so we do all the messages
         for (int i = 0; i < nMessages; i++) {
@@ -338,23 +355,12 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     assert(hosts.size() == nMessages);
 
     // Set up decision
+    SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
     for (int i = 0; i < hosts.size(); i++) {
         decision.addMessage(hosts.at(i), req->messages().at(i));
     }
 
-    // -------------------------------------------
-    // POINT-TO-POINT MESSAGING
-    // -------------------------------------------
-
-    // Send out point-to-point mappings if necessary (unless being forced to
-    // execute locally, in which case they will be transmitted from the
-    // master)
-    if (!forceLocal && (firstMsg.groupid() > 0)) {
-        broker.setAndSendMappingsFromSchedulingDecision(decision);
-    }
-
-    // Pass decision as hint
-    return doCallFunctions(req, decision, lock);
+    return decision;
 }
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(

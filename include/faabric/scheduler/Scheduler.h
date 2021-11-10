@@ -231,6 +231,10 @@ class Scheduler
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
+    faabric::util::SchedulingDecision makeSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      bool forceLocal);
+
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingDecision& decision,
