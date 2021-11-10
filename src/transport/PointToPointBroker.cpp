@@ -157,7 +157,7 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
                 // Recursive and either free, or already locked by this idx
                 recursiveLockOwners.push(groupIdx);
                 acquiredLock = true;
-            } else if (lockOwnerIdx == NO_LOCK_OWNER_IDX) {
+            } else if (!recursive && (lockOwnerIdx == NO_LOCK_OWNER_IDX)) {
                 // Non-recursive and free
                 lockOwnerIdx = groupIdx;
                 acquiredLock = true;

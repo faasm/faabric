@@ -164,41 +164,85 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 }
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
-                 "Test local locking and unlocking",
+                 "Test locking and unlocking",
                  "[ptp][transport]")
 {
-    std::atomic<int> sharedInt = 0;
     int appId = 123;
     int groupId = 234;
 
-    // Arbitrary group size, local locks don't care
-    auto group = setUpGroup(appId, groupId, 3);
+    int nThreads = 4;
+    int nLoops = 50;
 
-    group->localLock();
+    auto group = setUpGroup(appId, groupId, nThreads);
 
-    std::thread tA([&group, &sharedInt] {
-        group->localLock();
+    std::atomic<bool> success = true;
 
-        assert(sharedInt == 99);
-        sharedInt = 88;
+    int criticalVar = 1;
 
-        group->localUnlock();
-    });
+    bool useLocal = false;
+    bool recursive = false;
+    SECTION("Local-only") { useLocal = true; }
 
-    // Main thread sleep for a while, make sure the other can't run and update
-    // the counter
-    SLEEP_MS(1000);
-
-    REQUIRE(sharedInt == 0);
-    sharedInt.store(99);
-
-    group->localUnlock();
-
-    if (tA.joinable()) {
-        tA.join();
+    SECTION("Distributed version non-recursive")
+    {
+        useLocal = false;
+        recursive = false;
     }
 
-    REQUIRE(sharedInt == 88);
+    SECTION("Distributed version recursive")
+    {
+        useLocal = false;
+        recursive = true;
+    }
+
+    // Create high contention on the critical var that will be detected if
+    // locking isn't working.
+    std::vector<std::thread> threads;
+    for (int i = 0; i < nThreads; i++) {
+        threads.emplace_back(
+          [useLocal, recursive, i, nLoops, &group, &criticalVar, &success] {
+              if (useLocal) {
+                  group->localLock();
+              } else {
+                  group->lock(i, recursive);
+              }
+
+              // Check that while in this critical section, no changes from
+              // other threads are visible
+
+              criticalVar = 2;
+              for (int j = 0; j < nLoops; j++) {
+                  // Set the var
+                  criticalVar = i;
+
+                  // Sleep a bit
+                  int sleepTimeMs = std::rand() % 30;
+                  SLEEP_MS(sleepTimeMs);
+
+                  // Check the var is unchanged by others
+                  if (criticalVar != i) {
+                      SPDLOG_ERROR("Inner loop testing locking got {} != {}",
+                                   criticalVar,
+                                   i);
+                      success = false;
+                  }
+              }
+
+              if (useLocal) {
+                  group->localUnlock();
+              } else {
+                  group->unlock(i, recursive);
+              }
+          });
+    }
+
+    for (auto& t : threads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+
+    REQUIRE(success);
 }
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
