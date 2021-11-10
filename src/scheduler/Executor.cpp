@@ -157,7 +157,16 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
             // to be the main thread and the zeroth in the communication group,
             // so will be blocking.
             if (isThreads && isMaster) {
-                assert(threadPoolSize > 2);
+                if (threadPoolSize <= 2) {
+                    SPDLOG_ERROR(
+                      "Insufficient pool threads ({}) to overload {} idx {}",
+                      availablePoolThreads.size(),
+                      funcStr,
+                      msg.appidx());
+
+                    throw std::runtime_error("Insufficient pool threads");
+                }
+
                 threadPoolIdx = (msg.appidx() % (threadPoolSize - 2)) + 2;
             } else {
                 threadPoolIdx = msg.appidx() % threadPoolSize;

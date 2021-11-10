@@ -806,6 +806,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 {
     faabric::util::setMockMode(true);
 
+    conf.overrideCpuCount = 4;
+
     std::string hostOverride = conf.endpointHost;
     int nMessages = 1;
     faabric::BatchExecuteRequest::BatchExecuteType requestType =
@@ -846,8 +848,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // As we're faking a non-master execution results will be sent back to
     // the fake master so we can't wait on them, thus have to sleep
-    SLEEP_MS(1000);
-
-    REQUIRE(resetCount == expectedResets);
+    REQUIRE_RETRY({}, resetCount == expectedResets);
 }
 }
