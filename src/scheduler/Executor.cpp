@@ -160,7 +160,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                 if (threadPoolSize <= 2) {
                     SPDLOG_ERROR(
                       "Insufficient pool threads ({}) to overload {} idx {}",
-                      availablePoolThreads.size(),
+                      threadPoolSize,
                       funcStr,
                       msg.appidx());
 
