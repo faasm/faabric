@@ -15,8 +15,37 @@ void checkSnapshotDiff(int offset,
                        SnapshotDiff& actual)
 {
     REQUIRE(offset == actual.offset);
+    REQUIRE(actual.size > 0);
+    REQUIRE(actual.data != nullptr);
+
     std::vector<uint8_t> actualData(actual.data, actual.data + actual.size);
     REQUIRE(data == actualData);
+}
+
+TEST_CASE_METHOD(SnapshotTestFixture,
+                 "Test no snapshot diffs if no merge regions",
+                 "[snapshot]")
+{
+    std::string snapKey = "foobar123";
+    int snapPages = 5;
+    SnapshotData snap = takeSnapshot(snapKey, snapPages, true);
+
+    int sharedMemPages = 8;
+    size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
+    uint8_t* sharedMem = allocatePages(sharedMemPages);
+
+    reg.mapSnapshot(snapKey, sharedMem);
+
+    // Make various changes
+    sharedMem[0] = 1;
+    sharedMem[2 * HOST_PAGE_SIZE] = 1;
+    sharedMem[3 * HOST_PAGE_SIZE + 10] = 1;
+    sharedMem[8 * HOST_PAGE_SIZE - 20] = 1;
+
+    // Check there are no diffs
+    std::vector<SnapshotDiff> changeDiffs =
+      snap.getChangeDiffs(sharedMem, sharedMemSize);
+    REQUIRE(changeDiffs.empty());
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
@@ -37,28 +66,69 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
 
-    // Set up some chunks of data to write into the memory
+    // Single change, single merge region
     std::vector<uint8_t> dataA = { 1, 2, 3, 4 };
-    std::vector<uint8_t> dataB = { 4, 5, 6 };
-    std::vector<uint8_t> dataC = { 7, 6, 5, 4, 3 };
-    std::vector<uint8_t> dataD = { 1, 1, 1, 1 };
-
-    // Set up some offsets, both on and over page boundaries
     int offsetA = HOST_PAGE_SIZE;
-    int offsetB = HOST_PAGE_SIZE + 20;
-    int offsetC = 2 * HOST_PAGE_SIZE - 2;
-    int offsetD = 3 * HOST_PAGE_SIZE - dataD.size();
-
-    // Write the data
     std::memcpy(sharedMem + offsetA, dataA.data(), dataA.size());
-    std::memcpy(sharedMem + offsetB, dataB.data(), dataB.size());
+
+    snap.addMergeRegion(offsetA,
+                        dataA.size(),
+                        SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite);
+
+    // NOTE - deliberately add merge regions out of order
+    // Diff starting in merge region and overlapping the end
+    std::vector<uint8_t> dataC = { 7, 6, 5, 4, 3, 2, 1 };
+    std::vector<uint8_t> expectedDataC = { 7, 6, 5, 4, 3 };
+    int offsetC = 2 * HOST_PAGE_SIZE;
     std::memcpy(sharedMem + offsetC, dataC.data(), dataC.size());
+
+    int regionOffsetC = offsetC - 3;
+    snap.addMergeRegion(regionOffsetC,
+                        dataC.size(),
+                        SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite);
+
+    // Two changes in single merge region
+    std::vector<uint8_t> dataB1 = { 4, 5, 6 };
+    std::vector<uint8_t> dataB2 = { 7, 6, 5 };
+    int offsetB1 = HOST_PAGE_SIZE + 10;
+    int offsetB2 = HOST_PAGE_SIZE + 16;
+    std::memcpy(sharedMem + offsetB1, dataB1.data(), dataB1.size());
+    std::memcpy(sharedMem + offsetB2, dataB2.data(), dataB2.size());
+
+    snap.addMergeRegion(offsetB1,
+                        (offsetB2 - offsetB1) + dataB2.size() + 10,
+                        SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite);
+
+    // Merge region within a change
+    std::vector<uint8_t> dataD = { 1, 1, 2, 2, 3, 3, 4 };
+    std::vector<uint8_t> expectedDataD = { 2, 2, 3, 3 };
+    int offsetD = 3 * HOST_PAGE_SIZE - dataD.size();
     std::memcpy(sharedMem + offsetD, dataD.data(), dataD.size());
 
-    // Write the data to the region that exceeds the size of the original
-    std::vector<uint8_t> dataExtra(
-      (sharedMemPages - snapPages) * HOST_PAGE_SIZE, 5);
-    std::memcpy(sharedMem + snapSize, dataExtra.data(), dataExtra.size());
+    int regionOffsetD = offsetD + 2;
+    int regionSizeD = dataD.size() - 4;
+    snap.addMergeRegion(regionOffsetD,
+                        regionSizeD,
+                        SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite);
+
+    // Write some data to the region that exceeds the size of the original, then
+    // add a merge region larger than it. Anything outside the original snapshot
+    // should be marked as changed.
+    std::vector<uint8_t> dataExtra = { 2, 2, 2 };
+    std::vector<uint8_t> expectedDataExtra = { 0, 0, 2, 2, 2, 0, 0, 0 };
+    int extraOffset = snapSize + HOST_PAGE_SIZE + 10;
+    std::memcpy(sharedMem + extraOffset, dataExtra.data(), dataExtra.size());
+
+    int extraRegionOffset = extraOffset - 2;
+    int extraRegionSize = dataExtra.size() + 4;
+    snap.addMergeRegion(extraRegionOffset,
+                        extraRegionSize,
+                        SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite);
 
     // Include an offset which doesn't change the data, but will register a
     // dirty page
@@ -73,25 +143,20 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // Check shared memory does have dirty pages (including the non-change)
     std::vector<int> sharedDirtyPages =
       getDirtyPageNumbers(sharedMem, sharedMemPages);
-    std::vector<int> expected = { 1, 2, 3, 5, 6, 7 };
+    std::vector<int> expected = { 1, 2, 3, 6 };
     REQUIRE(sharedDirtyPages == expected);
 
-    // Check change diffs note that diffs across page boundaries will be split
-    // into two
+    // Check we have the right number of diffs
     std::vector<SnapshotDiff> changeDiffs =
       snap.getChangeDiffs(sharedMem, sharedMemSize);
+
     REQUIRE(changeDiffs.size() == 6);
 
-    // One chunk will be split over 2 pages
-    std::vector<uint8_t> dataCPart1 = { 7, 6 };
-    std::vector<uint8_t> dataCPart2 = { 5, 4, 3 };
-    int offsetC2 = 2 * HOST_PAGE_SIZE;
-
     checkSnapshotDiff(offsetA, dataA, changeDiffs.at(0));
-    checkSnapshotDiff(offsetB, dataB, changeDiffs.at(1));
-    checkSnapshotDiff(offsetC, dataCPart1, changeDiffs.at(2));
-    checkSnapshotDiff(offsetC2, dataCPart2, changeDiffs.at(3));
-    checkSnapshotDiff(offsetD, dataD, changeDiffs.at(4));
-    checkSnapshotDiff(snapSize, dataExtra, changeDiffs.at(5));
+    checkSnapshotDiff(offsetB1, dataB1, changeDiffs.at(1));
+    checkSnapshotDiff(offsetB2, dataB2, changeDiffs.at(2));
+    checkSnapshotDiff(offsetC, expectedDataC, changeDiffs.at(3));
+    checkSnapshotDiff(regionOffsetD, expectedDataD, changeDiffs.at(4));
+    checkSnapshotDiff(extraRegionOffset, expectedDataExtra, changeDiffs.at(5));
 }
 }

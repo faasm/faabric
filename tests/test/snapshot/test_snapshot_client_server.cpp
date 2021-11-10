@@ -17,6 +17,8 @@
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 
+using namespace faabric::util;
+
 namespace tests {
 
 class SnapshotClientServerFixture
@@ -40,8 +42,8 @@ class SnapshotClientServerFixture
 
     void setUpFunctionGroup(int appId, int groupId)
     {
-        faabric::util::SchedulingDecision decision(appId, groupId);
-        faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+        SchedulingDecision decision(appId, groupId);
+        faabric::Message msg = messageFactory("foo", "bar");
         msg.set_appid(appId);
         msg.set_groupid(groupId);
 
@@ -71,8 +73,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Prepare some snapshot data
     std::string snapKeyA = "foo";
     std::string snapKeyB = "bar";
-    faabric::util::SnapshotData snapA;
-    faabric::util::SnapshotData snapB;
+    SnapshotData snapA;
+    SnapshotData snapB;
     size_t snapSizeA = 1024;
     size_t snapSizeB = 500;
     snapA.size = snapSizeA;
@@ -97,8 +99,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
-    const faabric::util::SnapshotData& actualA = reg.getSnapshot(snapKeyA);
-    const faabric::util::SnapshotData& actualB = reg.getSnapshot(snapKeyB);
+    const SnapshotData& actualA = reg.getSnapshot(snapKeyA);
+    const SnapshotData& actualB = reg.getSnapshot(snapKeyB);
 
     REQUIRE(actualA.size == snapA.size);
     REQUIRE(actualB.size == snapB.size);
@@ -110,8 +112,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(actualDataB == dataB);
 }
 
-void checkDiffsApplied(const uint8_t* snapBase,
-                       std::vector<faabric::util::SnapshotDiff> diffs)
+void checkDiffsApplied(const uint8_t* snapBase, std::vector<SnapshotDiff> diffs)
 {
     for (const auto& d : diffs) {
         std::vector<uint8_t> actual(snapBase + d.offset,
@@ -127,7 +128,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "Test push snapshot diffs",
                  "[snapshot]")
 {
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    std::string thisHost = getSystemConfig().endpointHost;
 
     // One request with no group, another with a group we must initialise
     int appId = 111;
@@ -137,25 +138,37 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     setUpFunctionGroup(appId, groupIdB);
 
     // Set up a snapshot
-    std::string snapKey = std::to_string(faabric::util::generateGid());
-    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, true);
+    std::string snapKey = std::to_string(generateGid());
+    SnapshotData snap = takeSnapshot(snapKey, 5, true);
 
     // Set up some diffs
     std::vector<uint8_t> diffDataA1 = { 0, 1, 2, 3 };
     std::vector<uint8_t> diffDataA2 = { 4, 5, 6 };
     std::vector<uint8_t> diffDataB = { 7, 7, 8, 8, 8 };
 
-    std::vector<faabric::util::SnapshotDiff> diffsA;
-    std::vector<faabric::util::SnapshotDiff> diffsB;
+    std::vector<SnapshotDiff> diffsA;
+    std::vector<SnapshotDiff> diffsB;
 
-    faabric::util::SnapshotDiff diffA1(5, diffDataA1.data(), diffDataA1.size());
-    faabric::util::SnapshotDiff diffA2(
-      2 * faabric::util::HOST_PAGE_SIZE, diffDataA2.data(), diffDataA2.size());
+    SnapshotDiff diffA1(SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite,
+                        5,
+                        diffDataA1.data(),
+                        diffDataA1.size());
+
+    SnapshotDiff diffA2(SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite,
+                        2 * HOST_PAGE_SIZE,
+                        diffDataA2.data(),
+                        diffDataA2.size());
+
     diffsA = { diffA1, diffA2 };
     cli.pushSnapshotDiffs(snapKey, groupIdA, diffsA);
 
-    faabric::util::SnapshotDiff diffB(
-      3 * faabric::util::HOST_PAGE_SIZE, diffDataB.data(), diffDataB.size());
+    SnapshotDiff diffB(SnapshotDataType::Raw,
+                       SnapshotMergeOperation::Overwrite,
+                       3 * HOST_PAGE_SIZE,
+                       diffDataB.data(),
+                       diffDataB.size());
     diffsB = { diffB };
     cli.pushSnapshotDiffs(snapKey, groupIdB, diffsB);
 
@@ -171,12 +184,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "[snapshot]")
 {
     // Set up a snapshot
-    std::string snapKey = std::to_string(faabric::util::generateGid());
-    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, false);
+    std::string snapKey = std::to_string(generateGid());
+    SnapshotData snap = takeSnapshot(snapKey, 5, false);
 
     // Set up a couple of ints in the snapshot
     int offsetA1 = 5;
-    int offsetA2 = 2 * faabric::util::HOST_PAGE_SIZE;
+    int offsetA2 = 2 * HOST_PAGE_SIZE;
     int baseA1 = 25;
     int baseA2 = 60;
 
@@ -189,22 +202,26 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int diffIntA1 = 123;
     int diffIntA2 = 345;
 
-    std::vector<uint8_t> intDataA1 =
-      faabric::util::valueToBytes<int>(diffIntA1);
-    std::vector<uint8_t> intDataA2 =
-      faabric::util::valueToBytes<int>(diffIntA2);
+    std::vector<uint8_t> intDataA1 = valueToBytes<int>(diffIntA1);
+    std::vector<uint8_t> intDataA2 = valueToBytes<int>(diffIntA2);
 
-    std::vector<faabric::util::SnapshotDiff> diffs;
+    std::vector<SnapshotDiff> diffs;
 
-    faabric::util::SnapshotDiff diffA1(
-      offsetA1, intDataA1.data(), intDataA1.size());
-    diffA1.operation = faabric::util::SnapshotMergeOperation::Sum;
-    diffA1.dataType = faabric::util::SnapshotDataType::Int;
+    SnapshotDiff diffA1(SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite,
+                        offsetA1,
+                        intDataA1.data(),
+                        intDataA1.size());
+    diffA1.operation = SnapshotMergeOperation::Sum;
+    diffA1.dataType = SnapshotDataType::Int;
 
-    faabric::util::SnapshotDiff diffA2(
-      offsetA2, intDataA2.data(), intDataA2.size());
-    diffA2.operation = faabric::util::SnapshotMergeOperation::Sum;
-    diffA2.dataType = faabric::util::SnapshotDataType::Int;
+    SnapshotDiff diffA2(SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite,
+                        offsetA2,
+                        intDataA2.data(),
+                        intDataA2.size());
+    diffA2.operation = SnapshotMergeOperation::Sum;
+    diffA2.dataType = SnapshotDataType::Int;
 
     diffs = { diffA1, diffA2 };
     cli.pushSnapshotDiffs(snapKey, 0, diffs);
@@ -221,22 +238,20 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                  "[snapshot]")
 {
     // Set up a snapshot
-    std::string snapKey = std::to_string(faabric::util::generateGid());
-    faabric::util::SnapshotData snap = takeSnapshot(snapKey, 5, false);
+    std::string snapKey = std::to_string(generateGid());
+    SnapshotData snap = takeSnapshot(snapKey, 5, false);
 
     int offset = 5;
     std::vector<uint8_t> originalData;
     std::vector<uint8_t> diffData;
     std::vector<uint8_t> expectedData;
 
-    faabric::util::SnapshotMergeOperation operation =
-      faabric::util::SnapshotMergeOperation::Overwrite;
-    faabric::util::SnapshotDataType dataType =
-      faabric::util::SnapshotDataType::Raw;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
+    SnapshotDataType dataType = SnapshotDataType::Raw;
 
     SECTION("Integer")
     {
-        dataType = faabric::util::SnapshotDataType::Int;
+        dataType = SnapshotDataType::Int;
         int original = 0;
         int diff = 0;
         int expected = 0;
@@ -247,7 +262,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
             diff = 10;
             expected = 110;
 
-            operation = faabric::util::SnapshotMergeOperation::Sum;
+            operation = SnapshotMergeOperation::Sum;
         }
 
         SECTION("Subtract")
@@ -256,7 +271,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
             diff = 10;
             expected = 90;
 
-            operation = faabric::util::SnapshotMergeOperation::Subtract;
+            operation = SnapshotMergeOperation::Subtract;
         }
 
         SECTION("Product")
@@ -265,7 +280,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
             diff = 20;
             expected = 200;
 
-            operation = faabric::util::SnapshotMergeOperation::Product;
+            operation = SnapshotMergeOperation::Product;
         }
 
         SECTION("Min")
@@ -284,7 +299,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                 expected = 10;
             }
 
-            operation = faabric::util::SnapshotMergeOperation::Min;
+            operation = SnapshotMergeOperation::Min;
         }
 
         SECTION("Max")
@@ -303,22 +318,26 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                 expected = 20;
             }
 
-            operation = faabric::util::SnapshotMergeOperation::Max;
+            operation = SnapshotMergeOperation::Max;
         }
 
-        originalData = faabric::util::valueToBytes<int>(original);
-        diffData = faabric::util::valueToBytes<int>(diff);
-        expectedData = faabric::util::valueToBytes<int>(expected);
+        originalData = valueToBytes<int>(original);
+        diffData = valueToBytes<int>(diff);
+        expectedData = valueToBytes<int>(expected);
     }
 
     // Put original data in place
     std::memcpy(snap.data + offset, originalData.data(), originalData.size());
 
-    faabric::util::SnapshotDiff diff(offset, diffData.data(), diffData.size());
+    SnapshotDiff diff(SnapshotDataType::Raw,
+                      SnapshotMergeOperation::Overwrite,
+                      offset,
+                      diffData.data(),
+                      diffData.size());
     diff.operation = operation;
     diff.dataType = dataType;
 
-    std::vector<faabric::util::SnapshotDiff> diffs = { diff };
+    std::vector<SnapshotDiff> diffs = { diff };
     cli.pushSnapshotDiffs(snapKey, 0, diffs);
 
     // Check data is as expected

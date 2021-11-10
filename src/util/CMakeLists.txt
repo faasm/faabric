@@ -13,6 +13,7 @@ faabric_lib(util
     gids.cpp
     json.cpp
     latch.cpp
+    locks.cpp
     logging.cpp
     memory.cpp
     network.cpp

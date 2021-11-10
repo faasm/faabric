@@ -22,6 +22,8 @@ namespace faabric::transport {
 
 static std::unordered_map<int, std::shared_ptr<PointToPointGroup>> groups;
 
+static std::shared_mutex groupsMutex;
+
 // NOTE: Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be
 // closed before the global context. However, in this case it's worth it
 // to cache the sockets across messages, as otherwise we'd be creating and
@@ -74,19 +76,53 @@ std::shared_ptr<PointToPointGroup> PointToPointGroup::getGroup(int groupId)
     return groups.at(groupId);
 }
 
+std::shared_ptr<PointToPointGroup> PointToPointGroup::getOrAwaitGroup(
+  int groupId)
+{
+    getPointToPointBroker().waitForMappingsOnThisHost(groupId);
+
+    return getGroup(groupId);
+}
+
 bool PointToPointGroup::groupExists(int groupId)
 {
+    faabric::util::SharedLock lock(groupsMutex);
     return groups.find(groupId) != groups.end();
 }
 
 void PointToPointGroup::addGroup(int appId, int groupId, int groupSize)
 {
-    groups.emplace(std::make_pair(
-      groupId, std::make_shared<PointToPointGroup>(appId, groupId, groupSize)));
+    faabric::util::FullLock lock(groupsMutex);
+
+    if (groups.find(groupId) == groups.end()) {
+        groups.emplace(std::make_pair(
+          groupId,
+          std::make_shared<PointToPointGroup>(appId, groupId, groupSize)));
+    }
+}
+
+void PointToPointGroup::addGroupIfNotExists(int appId,
+                                            int groupId,
+                                            int groupSize)
+{
+    if (groupExists(groupId)) {
+        return;
+    }
+
+    addGroup(appId, groupId, groupSize);
+}
+
+void PointToPointGroup::clearGroup(int groupId)
+{
+    faabric::util::FullLock lock(groupsMutex);
+
+    groups.erase(groupId);
 }
 
 void PointToPointGroup::clear()
 {
+    faabric::util::FullLock lock(groupsMutex);
+
     groups.clear();
 }
 
@@ -102,13 +138,78 @@ PointToPointGroup::PointToPointGroup(int appIdIn,
 
 void PointToPointGroup::lock(int groupIdx, bool recursive)
 {
-    std::string host =
+    std::string masterHost =
       ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
+    std::string lockerHost = ptpBroker.getHostForReceiver(groupId, groupIdx);
 
-    if (host == conf.endpointHost) {
-        masterLock(groupIdx, recursive);
+    bool masterIsLocal = masterHost == conf.endpointHost;
+    bool lockerIsLocal = lockerHost == conf.endpointHost;
+
+    // If we're on the master, we need to try and acquire the lock, otherwise we
+    // send a remote request
+    if (masterIsLocal) {
+        bool acquiredLock = false;
+        {
+            faabric::util::UniqueLock lock(mx);
+
+            if (recursive && (recursiveLockOwners.empty() ||
+                              recursiveLockOwners.top() == groupIdx)) {
+                // Recursive and either free, or already locked by this idx
+                recursiveLockOwners.push(groupIdx);
+                acquiredLock = true;
+            } else if (!recursive && (lockOwnerIdx == NO_LOCK_OWNER_IDX)) {
+                // Non-recursive and free
+                lockOwnerIdx = groupIdx;
+                acquiredLock = true;
+            }
+        }
+
+        if (acquiredLock && lockerIsLocal) {
+            // Nothing to do now
+            SPDLOG_TRACE("Group idx {} ({}), locally locked {} (recursive {})",
+                         groupIdx,
+                         lockerHost,
+                         groupId,
+                         recursive);
+
+        } else if (acquiredLock) {
+            SPDLOG_TRACE("Group idx {} ({}), remotely locked {} (recursive {})",
+                         groupIdx,
+                         lockerHost,
+                         groupId,
+                         recursive);
+
+            // Notify remote locker that they've acquired the lock
+            notifyLocked(groupIdx);
+        } else {
+            // Need to wait to get the lock
+            lockWaiters.push(groupIdx);
+
+            // Wait here if local, otherwise the remote end will pick up the
+            // message
+            if (lockerIsLocal) {
+                SPDLOG_TRACE(
+                  "Group idx {} ({}), locally awaiting lock {} (recursive {})",
+                  groupIdx,
+                  lockerHost,
+                  groupId,
+                  recursive);
+
+                ptpBroker.recvMessage(
+                  groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+            } else {
+                // Notify remote locker that they've acquired the lock
+                SPDLOG_TRACE(
+                  "Group idx {} ({}), remotely awaiting lock {} (recursive {})",
+                  groupIdx,
+                  lockerHost,
+                  groupId,
+                  masterHost,
+                  recursive);
+            }
+        }
     } else {
-        auto cli = getClient(host);
+        auto cli = getClient(masterHost);
         faabric::PointToPointMessage msg;
         msg.set_groupid(groupId);
         msg.set_sendidx(groupIdx);
@@ -118,56 +219,13 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
                      groupId,
                      groupIdx,
                      POINT_TO_POINT_MASTER_IDX,
-                     host);
+                     masterHost);
 
+        // Send the remote request and await the message saying it's been
+        // acquired
         cli->groupLock(appId, groupId, groupIdx, recursive);
 
-        // Await ptp response
         ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
-    }
-}
-
-void PointToPointGroup::masterLock(int groupIdx, bool recursive)
-{
-    SPDLOG_TRACE("Master lock {}:{}", groupId, groupIdx);
-
-    bool success = false;
-    {
-        faabric::util::UniqueLock lock(mx);
-        if (recursive) {
-            bool isFree = recursiveLockOwners.empty();
-
-            bool lockOwnedByThisIdx =
-              !isFree && (recursiveLockOwners.top() == groupIdx);
-
-            if (isFree || lockOwnedByThisIdx) {
-                // Recursive and either free, or already locked by this idx
-                SPDLOG_TRACE("Group idx {} recursively locked {} ({})",
-                             groupIdx,
-                             groupId,
-                             lockWaiters.size());
-                recursiveLockOwners.push(groupIdx);
-                success = true;
-            } else {
-                SPDLOG_TRACE("Group idx {} unable to recursively lock {} ({})",
-                             groupIdx,
-                             groupId,
-                             lockWaiters.size());
-            }
-        } else if (lockOwnerIdx == NO_LOCK_OWNER_IDX) {
-            // Non-recursive and free
-            SPDLOG_TRACE("Group idx {} locked {}", groupIdx, groupId);
-            lockOwnerIdx = groupIdx;
-            success = true;
-        } else {
-            // Unable to lock, wait in queue
-            SPDLOG_TRACE("Group idx {} unable to lock {}", groupIdx, groupId);
-            lockWaiters.push(groupIdx);
-        }
-    }
-
-    if (success) {
-        notifyLocked(groupIdx);
     }
 }
 
@@ -188,7 +246,35 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
       ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
 
     if (host == conf.endpointHost) {
-        masterUnlock(groupIdx, recursive);
+        SPDLOG_TRACE("Group idx {} unlocking {} ({} waiters, recursive {})",
+                     groupIdx,
+                     groupId,
+                     lockWaiters.size(),
+                     recursive);
+
+        faabric::util::UniqueLock lock(mx);
+
+        if (recursive) {
+            recursiveLockOwners.pop();
+
+            if (!recursiveLockOwners.empty()) {
+                return;
+            }
+
+            if (!lockWaiters.empty()) {
+                recursiveLockOwners.push(lockWaiters.front());
+                notifyLocked(lockWaiters.front());
+                lockWaiters.pop();
+            }
+        } else {
+            lockOwnerIdx = NO_LOCK_OWNER_IDX;
+
+            if (!lockWaiters.empty()) {
+                lockOwnerIdx = lockWaiters.front();
+                notifyLocked(lockWaiters.front());
+                lockWaiters.pop();
+            }
+        }
     } else {
         auto cli = getClient(host);
         faabric::PointToPointMessage msg;
@@ -196,40 +282,13 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
         msg.set_sendidx(groupIdx);
         msg.set_recvidx(POINT_TO_POINT_MASTER_IDX);
 
-        SPDLOG_TRACE("Remote lock {}:{}:{} to {}",
+        SPDLOG_TRACE("Remote unlock {}:{}:{} to {}",
                      groupId,
                      groupIdx,
                      POINT_TO_POINT_MASTER_IDX,
                      host);
 
         cli->groupUnlock(appId, groupId, groupIdx, recursive);
-    }
-}
-
-void PointToPointGroup::masterUnlock(int groupIdx, bool recursive)
-{
-    faabric::util::UniqueLock lock(mx);
-
-    if (recursive) {
-        recursiveLockOwners.pop();
-
-        if (!recursiveLockOwners.empty()) {
-            return;
-        }
-
-        if (!lockWaiters.empty()) {
-            recursiveLockOwners.push(lockWaiters.front());
-            notifyLocked(lockWaiters.front());
-            lockWaiters.pop();
-        }
-    } else {
-        lockOwnerIdx = NO_LOCK_OWNER_IDX;
-
-        if (!lockWaiters.empty()) {
-            lockOwnerIdx = lockWaiters.front();
-            notifyLocked(lockWaiters.front());
-            lockWaiters.pop();
-        }
     }
 }
 
@@ -279,10 +338,16 @@ void PointToPointGroup::notify(int groupIdx)
 {
     if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
         for (int i = 1; i < groupSize; i++) {
+            SPDLOG_TRACE(
+              "Master group {} waiting for notify from index {}", groupId, i);
+
             ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MASTER_IDX);
+
+            SPDLOG_TRACE("Master group {} notified by index {}", groupId, i);
         }
     } else {
         std::vector<uint8_t> data(1, 0);
+        SPDLOG_TRACE("Notifying group {} from index {}", groupId, groupIdx);
         ptpBroker.sendMessage(groupId,
                               groupIdx,
                               POINT_TO_POINT_MASTER_IDX,
@@ -364,19 +429,10 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
           decision.appId, groupId, decision.nFunctions);
     }
 
-    {
-        // Lock this group
-        faabric::util::UniqueLock lock(groupMappingMutexes[groupId]);
+    SPDLOG_TRACE(
+      "Enabling point-to-point mapping for {}:{}", decision.appId, groupId);
 
-        SPDLOG_TRACE(
-          "Enabling point-to-point mapping for {}:{}", decision.appId, groupId);
-
-        // Enable the group
-        groupMappingsFlags[groupId] = true;
-
-        // Notify waiters
-        groupMappingCvs[groupId].notify_all();
-    }
+    getGroupFlag(groupId).setFlag(true);
 
     return hosts;
 }
@@ -414,34 +470,27 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     }
 }
 
-void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
+faabric::util::FlagWaiter& PointToPointBroker::getGroupFlag(int groupId)
 {
-    // Check if it's been enabled
-    if (!groupMappingsFlags[groupId]) {
-
-        // Lock this group
-        faabric::util::UniqueLock lock(groupMappingMutexes[groupId]);
-
-        // Check again
-        if (!groupMappingsFlags[groupId]) {
-            // Wait for group to be enabled
-            auto timePoint = std::chrono::system_clock::now() +
-                             std::chrono::milliseconds(MAPPING_TIMEOUT_MS);
-
-            if (!groupMappingCvs[groupId].wait_until(
-                  lock, timePoint, [this, groupId] {
-                      return groupMappingsFlags[groupId];
-                  })) {
-
-                SPDLOG_ERROR("Timed out waiting for group mappings {}",
-                             groupId);
-                throw std::runtime_error(
-                  "Timed out waiting for group mappings");
-            }
-
-            SPDLOG_TRACE("Point-to-point mappings for {} ready", groupId);
+    if (groupFlags.find(groupId) == groupFlags.end()) {
+        faabric::util::FullLock lock(brokerMutex);
+        if (groupFlags.find(groupId) == groupFlags.end()) {
+            return groupFlags[groupId];
         }
     }
+
+    {
+        faabric::util::SharedLock lock(brokerMutex);
+        return groupFlags.at(groupId);
+    }
+}
+
+void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
+{
+    faabric::util::FlagWaiter& waiter = getGroupFlag(groupId);
+
+    // Check if it's been enabled
+    waiter.waitOnFlag();
 }
 
 std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)
@@ -520,24 +569,42 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
     return messageData.dataCopy();
 }
 
+void PointToPointBroker::clearGroup(int groupId)
+{
+    SPDLOG_TRACE("Clearing point-to-point group {}", groupId);
+
+    faabric::util::FullLock lock(brokerMutex);
+
+    std::set<int> idxs = getIdxsRegisteredForGroup(groupId);
+    for (auto idxA : idxs) {
+        for (auto idxB : idxs) {
+            std::string label = getPointToPointKey(groupId, idxA, idxB);
+            mappings.erase(label);
+        }
+    }
+
+    groupIdIdxsMap.erase(groupId);
+
+    PointToPointGroup::clearGroup(groupId);
+
+    groupFlags.erase(groupId);
+}
+
 void PointToPointBroker::clear()
 {
-    faabric::util::SharedLock lock(brokerMutex);
+    faabric::util::FullLock lock(brokerMutex);
 
     groupIdIdxsMap.clear();
     mappings.clear();
 
     PointToPointGroup::clear();
 
-    groupMappingMutexes.clear();
-    groupMappingsFlags.clear();
-    groupMappingCvs.clear();
+    groupFlags.clear();
 }
 
 void PointToPointBroker::resetThreadLocalCache()
 {
     SPDLOG_TRACE("Resetting point-to-point thread-local cache");
-
     sendEndpoints.clear();
     recvEndpoints.clear();
     clients.clear();

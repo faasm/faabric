@@ -353,8 +353,6 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         server.setRequestLatch();
         cli.groupLock(appId, groupId, groupIdx, recursive);
         server.awaitRequestLatch();
-
-        broker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
     }
 
     REQUIRE(group->getLockOwner(recursive) == groupIdx);

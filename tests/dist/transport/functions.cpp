@@ -1,6 +1,10 @@
 #include <catch2/catch.hpp>
 
 #include "DistTestExecutor.h"
+#include "faabric/scheduler/Scheduler.h"
+#include "faabric/util/func.h"
+#include "faabric/util/gids.h"
+#include "faabric/util/scheduling.h"
 #include "faabric_utils.h"
 #include "init.h"
 
@@ -9,6 +13,7 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/string_tools.h>
 
+using namespace faabric::transport;
 using namespace faabric::util;
 
 namespace tests {
@@ -52,6 +57,94 @@ int handlePointToPointFunction(
                      formatByteArrayToIntString(actualRecvData),
                      formatByteArrayToIntString(expectedRecvData));
         return 1;
+    }
+
+    return 0;
+}
+
+int handleDistributedLock(faabric::scheduler::Executor* exec,
+                          int threadPoolIdx,
+                          int msgIdx,
+                          std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    // We need sufficient concurrency here to show up bugs every time
+    int nWorkers = 10;
+    int nLoops = 30;
+
+    std::string sharedStateKey = "dist-lock-test";
+
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
+    faabric::state::State& state = state::getGlobalState();
+    std::shared_ptr<faabric::state::StateKeyValue> stateKv =
+      state.getKV(msg.user(), sharedStateKey, sizeof(int32_t));
+
+    if (msg.function() == "lock") {
+        int initialValue = 0;
+        int groupId = faabric::util::generateGid();
+
+        stateKv->set(BYTES(&initialValue));
+
+        std::shared_ptr<faabric::BatchExecuteRequest> nestedReq =
+          faabric::util::batchExecFactory("ptp", "lock-worker", nWorkers);
+        for (int i = 0; i < nWorkers; i++) {
+            faabric::Message& m = nestedReq->mutable_messages()->at(i);
+            m.set_groupid(groupId);
+            m.set_groupidx(i);
+        }
+
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        faabric::util::SchedulingDecision decision =
+          sch.callFunctions(nestedReq);
+
+        // Await results
+        bool success = true;
+        for (int msgId : decision.messageIds) {
+            faabric::Message res = sch.getFunctionResult(msgId, 30000);
+            if (res.returnvalue() != 0) {
+                success = false;
+            }
+        }
+
+        int finalValue = *(int*)stateKv->get();
+        int expectedValue = nWorkers * nLoops;
+        if (finalValue != expectedValue) {
+            SPDLOG_ERROR("Distributed lock test failed: {} != {}",
+                         finalValue,
+                         expectedValue);
+            success = false;
+        } else {
+            SPDLOG_ERROR("Distributed lock succeeded, result {}", finalValue);
+        }
+
+        return success ? 0 : 1;
+    }
+
+    // Here we want to do something that will mess up if the locking isn't
+    // working properly, so we perform incremental updates to a bit of shared
+    // state using a global lock in a tight loop.
+    std::shared_ptr<PointToPointGroup> group =
+      faabric::transport::PointToPointGroup::getGroup(msg.groupid());
+
+    for (int i = 0; i < nLoops; i++) {
+        // Get the lock
+        group->lock(msg.groupidx(), false);
+
+        // Pull the value
+        stateKv->pull();
+        int* originalValue = (int*)stateKv->get();
+
+        // Short sleep
+        int sleepTimeMs = std::rand() % 50;
+        SLEEP_MS(sleepTimeMs);
+
+        // Increment and push
+        int newValue = *originalValue + 1;
+        stateKv->set(BYTES(&newValue));
+        stateKv->pushFull();
+
+        // Unlock
+        group->unlock(msg.groupidx(), false);
     }
 
     return 0;
@@ -321,6 +414,11 @@ void registerTransportTestFunctions()
 
     registerDistTestExecutorCallback(
       "ptp", "barrier-worker", handleDistributedBarrierWorker);
+
+    registerDistTestExecutorCallback("ptp", "lock", handleDistributedLock);
+
+    registerDistTestExecutorCallback(
+      "ptp", "lock-worker", handleDistributedLock);
 
     registerDistTestExecutorCallback("ptp", "notify", handleDistributedNotify);
 

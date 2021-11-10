@@ -2,6 +2,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -45,6 +46,11 @@ Executor::Executor(faabric::Message& msg)
     // Set an ID for this Executor
     id = conf.endpointHost + "_" + std::to_string(faabric::util::generateGid());
     SPDLOG_DEBUG("Starting executor {}", id);
+
+    // Mark all thread pool threads as available
+    for (int i = 0; i < threadPoolSize; i++) {
+        availablePoolThreads.insert(i);
+    }
 }
 
 Executor::~Executor() {}
@@ -83,8 +89,6 @@ void Executor::finish()
     // Reset variables
     boundMessage.Clear();
 
-    lastSnapshot = "";
-
     claimed = false;
 
     threadPoolThreads.clear();
@@ -108,8 +112,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     faabric::util::UniqueLock lock(threadsMutex);
 
     // Restore if necessary. If we're executing threads on the master host we
-    // assume we don't need to restore, but for everything else we do. If we've
-    // already restored from this snapshot, we don't do so again.
+    // assume we don't need to restore, but for everything else we do.
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string snapshotKey = firstMsg.snapshotkey();
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -117,21 +120,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     bool isSnapshot = !snapshotKey.empty();
-    bool alreadyRestored = snapshotKey == lastSnapshot;
 
-    if (isSnapshot && !alreadyRestored) {
-        if ((!isMaster && isThreads) || !isThreads) {
-            SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
-            lastSnapshot = snapshotKey;
-            restore(firstMsg);
-        } else {
-            SPDLOG_DEBUG("Skipping snapshot restore on master {} [{}]",
-                         funcStr,
-                         snapshotKey);
-        }
-    } else if (isSnapshot) {
-        SPDLOG_DEBUG(
-          "Skipping already restored snapshot {} [{}]", funcStr, snapshotKey);
+    if (isSnapshot && !isMaster) {
+        SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
+        restore(firstMsg);
     }
 
     // Reset dirty page tracking if we're executing threads.
@@ -143,31 +135,58 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 
     // Set up shared counter for this batch of tasks
-    auto batchCounter =
-      std::make_shared<std::atomic<int>>(req->messages_size());
+    auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
 
     // Work out if we should skip the reset after this batch. This only needs to
     // happen when we're executing threads on the master host, in which case the
     // original function call will cause a reset
     bool skipReset = isMaster && isThreads;
 
-    // Iterate through and invoke tasks
+    // Iterate through and invoke tasks. By default, we allocate tasks
+    // one-to-one with thread pool threads. Only once the pool is exhausted do
+    // we start overloading
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
 
-        // If executing threads, we must always keep thread pool index zero
-        // free, as this may be executing the function that spawned them
-        int threadPoolIdx;
-        if (isThreads) {
-            assert(threadPoolSize > 1);
-            threadPoolIdx = (msg.appidx() % (threadPoolSize - 1)) + 1;
+        int threadPoolIdx = -1;
+        if (availablePoolThreads.empty()) {
+            // Here all threads are still executing, so we have to overload.
+            // If any tasks are blocking we risk a deadlock, and can no longer
+            // guarantee the application will finish.
+            // In general if we're on the master host and this is a thread, we
+            // should avoid the zeroth and first pool threads as they are likely
+            // to be the main thread and the zeroth in the communication group,
+            // so will be blocking.
+            if (isThreads && isMaster) {
+                if (threadPoolSize <= 2) {
+                    SPDLOG_ERROR(
+                      "Insufficient pool threads ({}) to overload {} idx {}",
+                      threadPoolSize,
+                      funcStr,
+                      msg.appidx());
+
+                    throw std::runtime_error("Insufficient pool threads");
+                }
+
+                threadPoolIdx = (msg.appidx() % (threadPoolSize - 2)) + 2;
+            } else {
+                threadPoolIdx = msg.appidx() % threadPoolSize;
+            }
+
+            SPDLOG_DEBUG("Overloaded app index {} to thread {}",
+                         msg.appidx(),
+                         threadPoolIdx);
         } else {
-            threadPoolIdx = msg.appidx() % threadPoolSize;
+            // Take next from those that are available
+            threadPoolIdx = *availablePoolThreads.begin();
+            availablePoolThreads.erase(threadPoolIdx);
+
+            SPDLOG_TRACE("Assigned app index {} to thread {}",
+                         msg.appidx(),
+                         threadPoolIdx);
         }
 
         // Enqueue the task
-        SPDLOG_TRACE(
-          "Assigning app index {} to thread {}", msg.appidx(), threadPoolIdx);
         threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(
           msgIdx, req, batchCounter, needsSnapshotPush, skipReset));
 
@@ -184,6 +203,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
     auto& sch = faabric::scheduler::getScheduler();
+    faabric::transport::PointToPointBroker& broker =
+      faabric::transport::getPointToPointBroker();
     const auto& conf = faabric::util::getSystemConfig();
 
     bool selfShutdown = false;
@@ -263,6 +284,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
               faabric::snapshot::getSnapshotRegistry().getSnapshot(
                 msg.snapshotkey());
 
+            SPDLOG_TRACE("Diffing pre and post execution snapshots for {}",
+                         msg.snapshotkey());
+
             std::vector<faabric::util::SnapshotDiff> diffs =
               snapshotPreExecution.getChangeDiffs(snapshotPostExecution.data,
                                                   snapshotPostExecution.size);
@@ -285,6 +309,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
             }
 
             releaseClaim();
+        }
+
+        // Return this thread index to the pool available for scheduling
+        {
+            faabric::util::UniqueLock lock(threadsMutex);
+            availablePoolThreads.insert(threadPoolIdx);
         }
 
         // Vacate the slot occupied by this task. This must be done after
@@ -334,8 +364,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
     }
 
     // We have to clean up TLS here as this should be the last use of the
-    // scheduler from this thread
+    // scheduler and point-to-point broker from this thread
     sch.resetThreadLocalCache();
+    broker.resetThreadLocalCache();
 }
 
 bool Executor::tryClaim()

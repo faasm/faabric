@@ -19,6 +19,7 @@
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
+using namespace faabric::util;
 
 namespace tests {
 
@@ -203,13 +204,30 @@ class TestExecutor final : public Executor
         if (msg.function() == "snap-check") {
             // Modify a page of the dummy memory
             uint8_t pageIdx = threadPoolIdx;
-            SPDLOG_DEBUG("TestExecutor modifying page {} of memory", pageIdx);
-            uint8_t* offsetPtr =
-              dummyMemory + (pageIdx * faabric::util::HOST_PAGE_SIZE);
 
-            std::vector<uint8_t> data = { pageIdx,
-                                          (uint8_t)(pageIdx + 1),
-                                          (uint8_t)(pageIdx + 2) };
+            faabric::util::SnapshotData& snapData =
+              faabric::snapshot::getSnapshotRegistry().getSnapshot(
+                msg.snapshotkey());
+
+            // Avoid writing a zero here as the memory is already zeroed hence
+            // it's not a change
+            std::vector<uint8_t> data = { (uint8_t)(pageIdx + 1),
+                                          (uint8_t)(pageIdx + 2),
+                                          (uint8_t)(pageIdx + 3) };
+
+            // Set up a merge region that should catch the diff
+            size_t offset = (pageIdx * faabric::util::HOST_PAGE_SIZE);
+            snapData.addMergeRegion(offset,
+                                    data.size() + 10,
+                                    SnapshotDataType::Raw,
+                                    SnapshotMergeOperation::Overwrite);
+
+            SPDLOG_DEBUG("TestExecutor modifying page {} of memory ({}-{})",
+                         pageIdx,
+                         offset,
+                         offset + data.size());
+
+            uint8_t* offsetPtr = dummyMemory + offset;
             std::memcpy(offsetPtr, data.data(), data.size());
         }
 
@@ -431,94 +449,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test executing remote chained threads",
-                 "[executor]")
-{
-    faabric::util::setMockMode(true);
-
-    std::string thisHost = conf.endpointHost;
-
-    // Add other host to available hosts
-    std::string otherHost = "other";
-    sch.addHostToGlobalSet(otherHost);
-
-    // Make sure we have only enough resources to execute the initial function
-    faabric::HostResources res;
-    res.set_slots(1);
-    sch.setThisHostResources(res);
-
-    // Set up other host to have some resources
-    faabric::HostResources resOther;
-    resOther.set_slots(20);
-    faabric::scheduler::queueResourceResponse(otherHost, resOther);
-
-    // Background thread to execute main function and await results
-    int nThreads = 8;
-    auto latch = faabric::util::Latch::create(2);
-    std::thread t([&latch, nThreads] {
-        std::shared_ptr<BatchExecuteRequest> req =
-          faabric::util::batchExecFactory("dummy", "thread-check", 1);
-        faabric::Message& msg = req->mutable_messages()->at(0);
-        msg.set_inputdata(std::to_string(nThreads));
-
-        auto& sch = faabric::scheduler::getScheduler();
-        sch.callFunctions(req, false);
-
-        latch->wait();
-
-        faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
-        assert(res.returnvalue() == 0);
-    });
-
-    // Wait for the remote thread request to have been submitted
-    auto reqs = faabric::scheduler::getBatchRequests();
-    REQUIRE_RETRY(reqs = faabric::scheduler::getBatchRequests(),
-                  reqs.size() == 1);
-    std::string actualHost = reqs.at(0).first;
-    REQUIRE(actualHost == otherHost);
-
-    std::shared_ptr<faabric::BatchExecuteRequest> distReq = reqs.at(0).second;
-    REQUIRE(distReq->messages().size() == nThreads);
-    faabric::Message firstMsg = distReq->messages().at(0);
-
-    // Check restore hasn't been called (as we're the master)
-    REQUIRE(restoreCount == 0);
-
-    // Check the snapshot has been pushed to the other host
-    auto snapPushes = faabric::snapshot::getSnapshotPushes();
-    REQUIRE(snapPushes.size() == 1);
-    REQUIRE(snapPushes.at(0).first == otherHost);
-
-    // Now execute request on this host as if we were on the other host
-    conf.endpointHost = otherHost;
-    sch.callFunctions(distReq, true);
-
-    // Check restore has been called as we're no longer master
-    REQUIRE(restoreCount == 1);
-
-    // Wait for the results
-    auto results = faabric::snapshot::getThreadResults();
-    REQUIRE_RETRY(results = faabric::snapshot::getThreadResults(),
-                  results.size() == nThreads);
-
-    // Reset the host config for this host
-    conf.endpointHost = thisHost;
-
-    // Process the thread results
-    for (auto& r : results) {
-        REQUIRE(r.first == thisHost);
-        auto args = r.second;
-        sch.setThreadResultLocally(args.first, args.second);
-    }
-
-    // Rejoin the background thread
-    latch->wait();
-    if (t.joinable()) {
-        t.join();
-    }
-}
-
-TEST_CASE_METHOD(TestExecutorFixture,
                  "Test thread results returned on non-master",
                  "[executor]")
 {
@@ -718,7 +648,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::util::setMockMode(true);
     std::string otherHost = "other";
 
-    // Set up a load of messages executing with a different master host
+    // Set up some messages executing with a different master host
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
@@ -750,13 +680,11 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < diffList.size(); i++) {
         // Check offset and data (according to logic defined in the dummy
         // executor)
-        uint8_t pageIndex = i + 1;
-        REQUIRE(diffList.at(i).offset ==
-                pageIndex * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(diffList.at(i).offset == i * faabric::util::HOST_PAGE_SIZE);
 
-        std::vector<uint8_t> expected = { pageIndex,
-                                          (uint8_t)(pageIndex + 1),
-                                          (uint8_t)(pageIndex + 2) };
+        std::vector<uint8_t> expected = { (uint8_t)(i + 1),
+                                          (uint8_t)(i + 2),
+                                          (uint8_t)(i + 3) };
 
         std::vector<uint8_t> actual(diffList.at(i).data,
                                     diffList.at(i).data + 3);
@@ -878,6 +806,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 {
     faabric::util::setMockMode(true);
 
+    conf.overrideCpuCount = 4;
+
     std::string hostOverride = conf.endpointHost;
     int nMessages = 1;
     faabric::BatchExecuteRequest::BatchExecuteType requestType =
@@ -918,8 +848,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // As we're faking a non-master execution results will be sent back to
     // the fake master so we can't wait on them, thus have to sleep
-    SLEEP_MS(1000);
-
-    REQUIRE(resetCount == expectedResets);
+    REQUIRE_RETRY({}, resetCount == expectedResets);
 }
 }

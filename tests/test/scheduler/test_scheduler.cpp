@@ -191,6 +191,10 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     int32_t expectedSubType;
     std::string expectedContextData;
 
+    int thisCores = 5;
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    conf.overrideCpuCount = thisCores;
+
     SECTION("Threads")
     {
         execMode = faabric::BatchExecuteRequest::THREADS;
@@ -232,7 +236,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     // Mock everything
     faabric::util::setMockMode(true);
 
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    std::string thisHost = conf.endpointHost;
 
     // Set up another host
     std::string otherHost = "beta";
@@ -240,7 +244,6 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
     int nCallsOne = 10;
     int nCallsTwo = 5;
-    int thisCores = 5;
     int otherCores = 11;
     int nCallsOffloadedOne = nCallsOne - thisCores;
 
@@ -390,6 +393,9 @@ TEST_CASE_METHOD(SlowExecutorFixture,
                  "Test overloaded scheduler",
                  "[scheduler]")
 {
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    conf.overrideCpuCount = 5;
+
     faabric::util::setMockMode(true);
 
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
@@ -811,28 +817,36 @@ TEST_CASE_METHOD(SlowExecutorFixture,
 
 TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
 {
-    faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
-    faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
-    faabric::Message msgC = faabric::util::messageFactory("foo", "bar");
-    faabric::Message msgD = faabric::util::messageFactory("foo", "bar");
+    std::shared_ptr<faabric::BatchExecuteRequest> reqA =
+      faabric::util::batchExecFactory("foo", "bar", 2);
+    std::shared_ptr<faabric::BatchExecuteRequest> reqB =
+      faabric::util::batchExecFactory("foo", "bar", 2);
+
+    faabric::Message& msgA = reqA->mutable_messages()->at(0);
+    faabric::Message& msgB = reqB->mutable_messages()->at(0);
 
     // Execute a couple of functions
-    sch.callFunction(msgA);
-    sch.callFunction(msgB);
-    sch.getFunctionResult(msgA.id(), SHORT_TEST_TIMEOUT_MS);
-    sch.getFunctionResult(msgB.id(), SHORT_TEST_TIMEOUT_MS);
+    sch.callFunctions(reqA);
+    for (const auto& m : reqA->messages()) {
+        faabric::Message res =
+          sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+        REQUIRE(res.returnvalue() == 0);
+    }
 
     // Check executor count
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 2);
 
-    // Submit a couple more functions
-    sch.callFunction(msgC);
-    sch.callFunction(msgD);
-    sch.getFunctionResult(msgC.id(), SHORT_TEST_TIMEOUT_MS);
-    sch.getFunctionResult(msgD.id(), SHORT_TEST_TIMEOUT_MS);
+    // Execute a couple more functions
+    sch.callFunctions(reqB);
+    for (const auto& m : reqB->messages()) {
+        faabric::Message res =
+          sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+        REQUIRE(res.returnvalue() == 0);
+    }
 
     // Check executor count is still the same
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 2);
+    REQUIRE(sch.getFunctionExecutorCount(msgB) == 2);
 }
 
 TEST_CASE_METHOD(DummyExecutorFixture,

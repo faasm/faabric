@@ -81,13 +81,12 @@ class Executor
     uint32_t threadPoolSize = 0;
 
   private:
-    std::string lastSnapshot;
-
     std::atomic<bool> claimed = false;
 
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<std::shared_ptr<std::thread>> deadThreads;
+    std::set<int> availablePoolThreads;
 
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
@@ -104,6 +103,10 @@ class Scheduler
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       bool forceLocal = false);
+
+    faabric::util::SchedulingDecision callFunctions(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision& hint);
 
     void reset();
 
@@ -204,6 +207,8 @@ class Scheduler
                        std::promise<std::unique_ptr<faabric::Message>>>
       localResults;
 
+    std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
+
     std::mutex localResultsMutex;
 
     // ---- Clients ----
@@ -226,19 +231,21 @@ class Scheduler
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
+    faabric::util::SchedulingDecision makeSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      bool forceLocal);
+
+    faabric::util::SchedulingDecision doCallFunctions(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision& decision,
+      faabric::util::FullLock& lock);
+
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,
       faabric::util::FullLock& schedulerLock);
 
     std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
                                                   bool noCache = false);
-
-    int scheduleFunctionsOnHost(
-      const std::string& host,
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& decision,
-      int offset,
-      faabric::util::SnapshotData* snapshot);
 
     // ---- Accounting and debugging ----
     std::vector<faabric::Message> recordedMessagesAll;
