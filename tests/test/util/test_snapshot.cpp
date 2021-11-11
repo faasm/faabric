@@ -71,13 +71,13 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::string snapKey = "foobar123";
     int snapPages = 5;
 
-    int originalValueA = 100;
-    int finalValueA = 150;
-    int sumValueA = 50;
+    int originalValueA = 123456;
+    int finalValueA = 150000;
+    int sumValueA = 26544;
 
-    int originalValueB = 300;
-    int finalValueB = 425;
-    int sumValueB = 125;
+    int originalValueB = 300000;
+    int finalValueB = 650123;
+    int sumValueB = 350123;
 
     faabric::util::SnapshotData snap;
     snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
@@ -175,28 +175,30 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // - adjacent
     // - finish
 
+    // Note here that we want to make sure we're checking larger integers to
+    // exercise a change in all bytes of the integer.
     std::string snapKey = "foobar123";
     int snapPages = 5;
     int snapSize = snapPages * faabric::util::HOST_PAGE_SIZE;
 
-    int originalA = 50;
-    int finalA = 25;
-    int subA = 25;
+    int originalA = 5000000;
+    int finalA = 2500001;
+    int subA = 2499999;
     uint32_t offsetA = 0;
 
-    int originalB = 100;
-    int finalB = 200;
-    int sumB = 100;
+    int originalB = 10;
+    int finalB = 20000000;
+    int sumB = 19999990;
     uint32_t offsetB = HOST_PAGE_SIZE + (2 * sizeof(int32_t));
 
-    int originalC = 200;
-    int finalC = 150;
-    int subC = 50;
+    int originalC = 999999999;
+    int finalC = 1;
+    int subC = 999999998;
     uint32_t offsetC = offsetB + sizeof(int32_t);
 
-    int originalD = 100;
-    int finalD = 150;
-    int sumD = 50;
+    int originalD = 100000000;
+    int finalD = 100000001;
+    int sumD = 1;
     uint32_t offsetD = snapSize - sizeof(int32_t);
 
     faabric::util::SnapshotData snap;
@@ -296,7 +298,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
       faabric::util::SnapshotDataType::Raw;
     faabric::util::SnapshotMergeOperation operation =
       faabric::util::SnapshotMergeOperation::Overwrite;
+
     size_t dataLength = 0;
+    size_t regionLength = 0;
 
     SECTION("Integer")
     {
@@ -306,6 +310,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
         dataType = faabric::util::SnapshotDataType::Int;
         dataLength = sizeof(int32_t);
+        regionLength = sizeof(int32_t);
 
         SECTION("Integer sum")
         {
@@ -368,6 +373,13 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
         SECTION("Overwrite")
         {
+            regionLength = dataLength;
+            operation = faabric::util::SnapshotMergeOperation::Overwrite;
+        }
+
+        SECTION("Overwrite unspecified length")
+        {
+            regionLength = 0;
             operation = faabric::util::SnapshotMergeOperation::Overwrite;
         }
     }
@@ -603,6 +615,43 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::vector<SnapshotDiff> actualDiffs =
       snap.getChangeDiffs(sharedMem, sharedMemSize);
+
+    checkDiffs(actualDiffs, expectedDiffs);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test overwrite region to end of memory",
+                 "[snapshot][util]")
+{
+    int snapPages = 6;
+    size_t snapSize = snapPages * HOST_PAGE_SIZE;
+    uint8_t* sharedMem = setUpSnapshot(snapPages);
+
+    int sharedMemPages = 10;
+    size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
+
+    // Make an edit somewhere in the extended memory, outside the original
+    // snapshot
+    uint32_t diffOffset = 8 * HOST_PAGE_SIZE;
+    std::vector<uint8_t> diffData(8, 2);
+    *(sharedMem + diffOffset) = 2;
+
+    // Add a merge region above the original snapshot size
+    snap.addMergeRegion(snapSize,
+                        0,
+                        faabric::util::SnapshotDataType::Raw,
+                        faabric::util::SnapshotMergeOperation::Overwrite);
+
+    std::vector<SnapshotDiff> actualDiffs =
+      snap.getChangeDiffs(sharedMem, sharedMemSize);
+
+    std::vector<SnapshotDiff> expectedDiffs = {
+        { faabric::util::SnapshotDataType::Raw,
+          faabric::util::SnapshotMergeOperation::Overwrite,
+          diffOffset,
+          diffData.data(),
+          diffData.size() },
+    };
 
     checkDiffs(actualDiffs, expectedDiffs);
 }

@@ -64,7 +64,8 @@ class SnapshotMergeRegion
 
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   const uint8_t* original,
-                  const uint8_t* updated);
+                  const uint8_t* updated,
+                  size_t updatedSize);
 };
 
 class SnapshotData
