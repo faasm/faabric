@@ -79,7 +79,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // NOTE - deliberately add merge regions out of order
     // Diff starting in merge region and overlapping the end
     std::vector<uint8_t> dataC = { 7, 6, 5, 4, 3, 2, 1 };
-    std::vector<uint8_t> expectedDataC = { 7, 6, 5, 4, 3 };
+    std::vector<uint8_t> expectedDataC = { 7, 6, 5, 4 };
     int offsetC = 2 * HOST_PAGE_SIZE;
     std::memcpy(sharedMem + offsetC, dataC.data(), dataC.size());
 
@@ -104,7 +104,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
 
     // Merge region within a change
     std::vector<uint8_t> dataD = { 1, 1, 2, 2, 3, 3, 4 };
-    std::vector<uint8_t> expectedDataD = { 2, 2, 3, 3 };
+    std::vector<uint8_t> expectedDataD = { 2, 2, 3 };
     int offsetD = 3 * HOST_PAGE_SIZE - dataD.size();
     std::memcpy(sharedMem + offsetD, dataD.data(), dataD.size());
 
@@ -119,7 +119,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // add a merge region larger than it. Anything outside the original snapshot
     // should be marked as changed.
     std::vector<uint8_t> dataExtra = { 2, 2, 2 };
-    std::vector<uint8_t> expectedDataExtra = { 0, 0, 2, 2, 2, 0, 0, 0 };
+    std::vector<uint8_t> expectedDataExtra = { 0, 0, 2, 2, 2, 0, 0 };
     int extraOffset = snapSize + HOST_PAGE_SIZE + 10;
     std::memcpy(sharedMem + extraOffset, dataExtra.data(), dataExtra.size());
 

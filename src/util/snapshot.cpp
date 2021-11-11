@@ -51,6 +51,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
     size_t nThisPages = getRequiredHostPages(updatedSize);
     std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
       getDirtyRegions(updated, nThisPages);
+    SPDLOG_TRACE("Found {} dirty regions", dirtyRegions.size());
 
     // Iterate through merge regions, see which ones overlap with dirty memory
     // regions, and add corresponding diffs
@@ -64,16 +65,13 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
                      mr.offset + mr.length);
 
         for (auto& dirtyRegion : dirtyRegions) {
-            // If we're outside the range of the original snapshot, we need
-            // to pass a nullptr
-            uint8_t* original = data;
-            if (mr.offset > size) {
-                original = nullptr;
-            }
-
             // Add the diffs
-            mr.addDiffs(
-              diffs, original, updated, dirtyRegion.first, dirtyRegion.second);
+            mr.addDiffs(diffs,
+                        data,
+                        size,
+                        updated,
+                        dirtyRegion.first,
+                        dirtyRegion.second);
         }
     }
 
@@ -171,28 +169,25 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
 
 void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                    const uint8_t* original,
+                                   uint32_t originalSize,
                                    const uint8_t* updated,
                                    uint32_t dirtyRegionStart,
                                    uint32_t dirtyRegionEnd)
 {
     // If the region has zero length, it signifies that it goes to the
-    // end of the memory, so if the dirty region starts after the merge
-    // region offset, we want to check it.
+    // end of the memory, so we go all the way to the end of the dirty region.
     // For all other regions, we just check if the dirty range is within the
-    // merge region
-    bool isInRange =
-      (length == 0 && dirtyRegionStart > offset) ||
-      ((dirtyRegionEnd > offset) && (dirtyRegionStart < offset + length));
+    // merge region.
+    bool isInRange = (dirtyRegionEnd > offset) &&
+                     ((length == 0) || (dirtyRegionStart < offset + length));
 
     if (!isInRange) {
         return;
     }
 
-    SPDLOG_TRACE("Checking for {} {} merge region {}-{} in dirty region {}-{}",
+    SPDLOG_TRACE("Checking for {} {} merge region in dirty region {}-{}",
                  snapshotDataTypeStr(dataType),
                  snapshotMergeOpStr(operation),
-                 offset,
-                 offset + length,
                  dirtyRegionStart,
                  dirtyRegionEnd);
 
@@ -202,7 +197,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             const uint8_t* updatedValue = updated + offset;
             int updatedInt = *(reinterpret_cast<const int*>(updatedValue));
 
-            if (original == nullptr) {
+            if (originalSize < offset) {
                 throw std::runtime_error(
                   "Do not support int operations outside original snapshot");
             }
@@ -276,32 +271,25 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         case (SnapshotDataType::Raw): {
             switch (operation) {
                 case (SnapshotMergeOperation::Overwrite): {
-
                     // Work out bounds of region we're checking
                     uint32_t checkStart =
                       std::max<uint32_t>(dirtyRegionStart, offset);
 
                     uint32_t checkEnd;
                     if (length == 0) {
-                        // If length of this merge region is zero, go to the end
-                        // of the dirty region
                         checkEnd = dirtyRegionEnd;
                     } else {
                         checkEnd =
                           std::min<uint32_t>(dirtyRegionEnd, offset + length);
                     }
 
-                    // Add diffs only for the bytes that have changed
                     bool diffInProgress = false;
                     int diffStart = 0;
                     for (int b = checkStart; b <= checkEnd; b++) {
-                        bool isDirtyByte = false;
-
-                        if (original == nullptr) {
-                            isDirtyByte = true;
-                        } else {
-                            isDirtyByte = *(original + b) != *(updated + b);
-                        }
+                        // If this byte is outside the original region, we can't
+                        // compare (i.e. always dirty)
+                        bool isDirtyByte = (b > originalSize) ||
+                                           (*(original + b) != *(updated + b));
 
                         if (isDirtyByte && !diffInProgress) {
                             // Diff starts here if it's different and diff
@@ -330,7 +318,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                     // If we've reached the end of this region with a diff
                     // in progress, we need to close it off
                     if (diffInProgress) {
-                        int finalDiffLength = checkEnd - diffStart + 1;
+                        int finalDiffLength = checkEnd - diffStart;
                         SPDLOG_TRACE(
                           "Adding {} {} diff at {}-{} (end of region)",
                           snapshotDataTypeStr(dataType),
