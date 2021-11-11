@@ -216,25 +216,18 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                 case (SnapshotMergeOperation::Sum): {
                     // Sums must send the value to be _added_, and
                     // not the final result
-                    SPDLOG_TRACE("Sum merge {} -= {}", updatedInt, originalInt);
                     updatedInt -= originalInt;
                     break;
                 }
                 case (SnapshotMergeOperation::Subtract): {
                     // Subtractions must send the value to be
                     // subtracted, not the result
-                    SPDLOG_TRACE("Subtract merge {} = {} - {}",
-                                 updatedInt,
-                                 originalInt,
-                                 updatedInt);
                     updatedInt = originalInt - updatedInt;
                     break;
                 }
                 case (SnapshotMergeOperation::Product): {
                     // Products must send the value to be
                     // multiplied, not the result
-                    SPDLOG_TRACE(
-                      "Product merge {} /= {}", updatedInt, originalInt);
                     updatedInt /= originalInt;
                     break;
                 }
