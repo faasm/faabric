@@ -23,7 +23,7 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
     int snapPages;
     faabric::util::SnapshotData snap;
 
-    uint8_t* setUpSnapshot(int snapPages)
+    uint8_t* setUpSnapshot(int snapPages, int sharedMemPages)
     {
         snapKey = "foobar123";
         snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
@@ -33,7 +33,7 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
         reg.takeSnapshot(snapKey, snap, true);
 
         // Map the snapshot
-        uint8_t* sharedMem = allocatePages(snapPages);
+        uint8_t* sharedMem = allocatePages(sharedMemPages);
         reg.mapSnapshot(snapKey, sharedMem);
 
         // Reset dirty tracking
@@ -400,7 +400,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     faabric::util::resetDirtyTracking();
 
     // Set up the merge region
-    snap.addMergeRegion(offset, dataLength, dataType, operation);
+    snap.addMergeRegion(offset, regionLength, dataType, operation);
 
     // Modify the value
     std::memcpy(sharedMem + offset, updatedData.data(), updatedData.size());
@@ -495,7 +495,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 {
     int snapPages = 3;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = setUpSnapshot(snapPages);
+    uint8_t* sharedMem = setUpSnapshot(snapPages, snapPages);
 
     // Add some tightly-packed changes
     uint32_t offsetA = 0;
@@ -556,7 +556,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 {
     int snapPages = 6;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = setUpSnapshot(snapPages);
+    uint8_t* sharedMem = setUpSnapshot(snapPages, snapPages);
 
     // Add a couple of merge regions on each page, which should be skipped as
     // they won't overlap any changes
@@ -625,10 +625,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 {
     int snapPages = 6;
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = setUpSnapshot(snapPages);
-
     int sharedMemPages = 10;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
+
+    uint8_t* sharedMem = setUpSnapshot(snapPages, sharedMemPages);
 
     // Make an edit somewhere in the extended memory, outside the original
     // snapshot
