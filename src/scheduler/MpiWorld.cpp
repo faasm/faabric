@@ -592,6 +592,15 @@ void MpiWorld::send(int sendRank,
           *thisRankMsg,
           faabric::util::exec_graph::mpiMsgCountPrefix +
             std::to_string(recvRank));
+
+        // Work out the message type breakdown
+        faabric::util::exec_graph::incrementCounter(
+          *thisRankMsg,
+          fmt::format("{}-{}-{}",
+                      faabric::util::exec_graph::mpiMsgTypeCountPrefix,
+                      std::to_string(messageType),
+                      std::to_string(recvRank))
+        );
     }
 }
 

@@ -16,4 +16,6 @@ void incrementCounter(faabric::Message& msg,
                       const int valueToIncrement = 1);
 
 static inline std::string const mpiMsgCountPrefix = "mpi-msgcount-torank-";
+
+static inline std::string const mpiMsgTypeCountPrefix = "mpi-msgtype-torank";
 }
