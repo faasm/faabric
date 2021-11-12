@@ -23,7 +23,7 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
     int snapPages;
     faabric::util::SnapshotData snap;
 
-    uint8_t* setUpSnapshot(int snapPages)
+    uint8_t* setUpSnapshot(int snapPages, int sharedMemPages)
     {
         snapKey = "foobar123";
         snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
@@ -33,7 +33,7 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
         reg.takeSnapshot(snapKey, snap, true);
 
         // Map the snapshot
-        uint8_t* sharedMem = allocatePages(snapPages);
+        uint8_t* sharedMem = allocatePages(sharedMemPages);
         reg.mapSnapshot(snapKey, sharedMem);
 
         // Reset dirty tracking
@@ -71,13 +71,13 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::string snapKey = "foobar123";
     int snapPages = 5;
 
-    int originalValueA = 100;
-    int finalValueA = 150;
-    int sumValueA = 50;
+    int originalValueA = 123456;
+    int finalValueA = 150000;
+    int sumValueA = 26544;
 
-    int originalValueB = 300;
-    int finalValueB = 425;
-    int sumValueB = 125;
+    int originalValueB = 300000;
+    int finalValueB = 650123;
+    int sumValueB = 350123;
 
     faabric::util::SnapshotData snap;
     snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
@@ -175,28 +175,30 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // - adjacent
     // - finish
 
+    // Note here that we want to make sure we're checking larger integers to
+    // exercise a change in all bytes of the integer.
     std::string snapKey = "foobar123";
     int snapPages = 5;
     int snapSize = snapPages * faabric::util::HOST_PAGE_SIZE;
 
-    int originalA = 50;
-    int finalA = 25;
-    int subA = 25;
+    int originalA = 5000000;
+    int finalA = 2500001;
+    int subA = 2499999;
     uint32_t offsetA = 0;
 
-    int originalB = 100;
-    int finalB = 200;
-    int sumB = 100;
+    int originalB = 10;
+    int finalB = 20000000;
+    int sumB = 19999990;
     uint32_t offsetB = HOST_PAGE_SIZE + (2 * sizeof(int32_t));
 
-    int originalC = 200;
-    int finalC = 150;
-    int subC = 50;
+    int originalC = 999999999;
+    int finalC = 1;
+    int subC = 999999998;
     uint32_t offsetC = offsetB + sizeof(int32_t);
 
-    int originalD = 100;
-    int finalD = 150;
-    int sumD = 50;
+    int originalD = 100000000;
+    int finalD = 100000001;
+    int sumD = 1;
     uint32_t offsetD = snapSize - sizeof(int32_t);
 
     faabric::util::SnapshotData snap;
@@ -296,7 +298,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
       faabric::util::SnapshotDataType::Raw;
     faabric::util::SnapshotMergeOperation operation =
       faabric::util::SnapshotMergeOperation::Overwrite;
+
     size_t dataLength = 0;
+    size_t regionLength = 0;
 
     SECTION("Integer")
     {
@@ -306,6 +310,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
         dataType = faabric::util::SnapshotDataType::Int;
         dataLength = sizeof(int32_t);
+        regionLength = sizeof(int32_t);
 
         SECTION("Integer sum")
         {
@@ -368,6 +373,13 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
         SECTION("Overwrite")
         {
+            regionLength = dataLength;
+            operation = faabric::util::SnapshotMergeOperation::Overwrite;
+        }
+
+        SECTION("Overwrite unspecified length")
+        {
+            regionLength = 0;
             operation = faabric::util::SnapshotMergeOperation::Overwrite;
         }
     }
@@ -388,7 +400,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     faabric::util::resetDirtyTracking();
 
     // Set up the merge region
-    snap.addMergeRegion(offset, dataLength, dataType, operation);
+    snap.addMergeRegion(offset, regionLength, dataType, operation);
 
     // Modify the value
     std::memcpy(sharedMem + offset, updatedData.data(), updatedData.size());
@@ -483,7 +495,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 {
     int snapPages = 3;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = setUpSnapshot(snapPages);
+    uint8_t* sharedMem = setUpSnapshot(snapPages, snapPages);
 
     // Add some tightly-packed changes
     uint32_t offsetA = 0;
@@ -544,7 +556,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 {
     int snapPages = 6;
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = setUpSnapshot(snapPages);
+    uint8_t* sharedMem = setUpSnapshot(snapPages, snapPages);
 
     // Add a couple of merge regions on each page, which should be skipped as
     // they won't overlap any changes
@@ -603,6 +615,44 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::vector<SnapshotDiff> actualDiffs =
       snap.getChangeDiffs(sharedMem, sharedMemSize);
+
+    checkDiffs(actualDiffs, expectedDiffs);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test overwrite region to end of memory",
+                 "[snapshot][util]")
+{
+    int snapPages = 6;
+    int sharedMemPages = 10;
+    size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
+
+    uint8_t* sharedMem = setUpSnapshot(snapPages, sharedMemPages);
+
+    // Make an edit somewhere in the extended memory, outside the original
+    // snapshot
+    uint32_t diffPageStart = 8 * HOST_PAGE_SIZE;
+    uint32_t diffOffset = diffPageStart + 100;
+    std::vector<uint8_t> diffData(120, 2);
+    std::memcpy(sharedMem + diffOffset, diffData.data(), diffData.size());
+
+    // Add a merge region from near end of original snapshot upwards
+    snap.addMergeRegion(snap.size - 120,
+                        0,
+                        faabric::util::SnapshotDataType::Raw,
+                        faabric::util::SnapshotMergeOperation::Overwrite);
+
+    std::vector<SnapshotDiff> actualDiffs =
+      snap.getChangeDiffs(sharedMem, sharedMemSize);
+
+    // Make sure the whole page containing the diff is included
+    std::vector<SnapshotDiff> expectedDiffs = {
+        { faabric::util::SnapshotDataType::Raw,
+          faabric::util::SnapshotMergeOperation::Overwrite,
+          diffPageStart,
+          sharedMem + diffPageStart,
+          (size_t)HOST_PAGE_SIZE },
+    };
 
     checkDiffs(actualDiffs, expectedDiffs);
 }

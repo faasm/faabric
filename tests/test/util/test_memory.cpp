@@ -303,4 +303,53 @@ TEST_CASE("Test dirty page checking", "[util]")
 
     munmap(sharedMemory, memSize);
 }
+
+TEST_CASE("Test dirty region checking", "[util]")
+{
+    int nPages = 15;
+    size_t memSize = HOST_PAGE_SIZE * nPages;
+    auto* sharedMemory = (uint8_t*)mmap(
+      nullptr, memSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    if (sharedMemory == nullptr) {
+        FAIL("Could not provision memory");
+    }
+
+    resetDirtyTracking();
+
+    std::vector<std::pair<uint32_t, uint32_t>> actual =
+      faabric::util::getDirtyRegions(sharedMemory, nPages);
+    REQUIRE(actual.empty());
+
+    // Dirty some pages, some adjacent
+    uint8_t* pageZero = sharedMemory;
+    uint8_t* pageOne = pageZero + HOST_PAGE_SIZE;
+    uint8_t* pageThree = pageZero + (3 * HOST_PAGE_SIZE);
+    uint8_t* pageFour = pageZero + (4 * HOST_PAGE_SIZE);
+    uint8_t* pageSeven = pageZero + (7 * HOST_PAGE_SIZE);
+    uint8_t* pageNine = pageZero + (9 * HOST_PAGE_SIZE);
+
+    // Set some byte within each page
+    pageZero[1] = 1;
+    pageOne[11] = 1;
+    pageThree[33] = 1;
+    pageFour[44] = 1;
+    pageSeven[77] = 1;
+    pageNine[99] = 1;
+
+    // Expect adjacent regions to be merged
+    std::vector<std::pair<uint32_t, uint32_t>> expected = {
+        { 0, 2 * HOST_PAGE_SIZE },
+        { 3 * HOST_PAGE_SIZE, 5 * HOST_PAGE_SIZE },
+        { 7 * HOST_PAGE_SIZE, 8 * HOST_PAGE_SIZE },
+        { 9 * HOST_PAGE_SIZE, 10 * HOST_PAGE_SIZE },
+    };
+
+    actual = faabric::util::getDirtyRegions(sharedMemory, nPages);
+    REQUIRE(actual.size() == expected.size());
+    for (int i = 0; i < actual.size(); i++) {
+        REQUIRE(actual.at(i).first == expected.at(i).first);
+        REQUIRE(actual.at(i).second == expected.at(i).second);
+    }
+}
 }

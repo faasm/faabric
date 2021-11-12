@@ -151,4 +151,29 @@ std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages)
 
     return pageNumbers;
 }
+
+std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
+                                                           int nPages)
+{
+    std::vector<int> dirtyPages = getDirtyPageNumbers(ptr, nPages);
+
+    // Add a new region for each page, unless the one before it was also dirty,
+    // in which case we merge them
+    std::vector<std::pair<uint32_t, uint32_t>> regions;
+    for (int p = 0; p < dirtyPages.size(); p++) {
+        int thisPageNum = dirtyPages.at(p);
+        uint32_t thisPageStart = thisPageNum * HOST_PAGE_SIZE;
+        uint32_t thisPageEnd = thisPageStart + HOST_PAGE_SIZE;
+
+        if (p > 0 && dirtyPages.at(p - 1) == thisPageNum - 1) {
+            // Previous page was also dirty, just update last region
+            regions.back().second = thisPageEnd;
+        } else {
+            // Previous page wasn't dirty, add new region
+            regions.emplace_back(thisPageStart, thisPageEnd);
+        }
+    }
+
+    return regions;
+}
 }
