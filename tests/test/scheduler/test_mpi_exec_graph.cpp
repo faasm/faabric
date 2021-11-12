@@ -23,8 +23,7 @@ TEST_CASE_METHOD(MpiTestFixture,
     auto buffer = new int[messageData.size()];
 
     int numToSend = 10;
-    std::string expectedKey =
-      faabric::util::exec_graph::mpiMsgCountPrefix + std::to_string(rankA2);
+    std::string expectedKey = MPI_MSG_COUNT_PREFIX + std::to_string(rankA2);
 
     for (int i = 0; i < numToSend; i++) {
         world.send(rankA1,
@@ -36,6 +35,8 @@ TEST_CASE_METHOD(MpiTestFixture,
           rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
     }
 
+    REQUIRE(msg.intexecgraphdetails_size() == NUM_MPI_EXEC_GRAPH_DETAILS);
+    REQUIRE(msg.execgraphdetails_size() == 0);
     REQUIRE(msg.intexecgraphdetails().count(expectedKey) == 1);
     REQUIRE(msg.intexecgraphdetails().at(expectedKey) == numToSend);
 }
@@ -56,8 +57,7 @@ TEST_CASE_METHOD(MpiTestFixture,
     auto buffer = new int[messageData.size()];
 
     int numToSend = 10;
-    std::string expectedKey =
-      faabric::util::exec_graph::mpiMsgCountPrefix + std::to_string(rankA2);
+    std::string expectedKey = MPI_MSG_COUNT_PREFIX + std::to_string(rankA2);
 
     for (int i = 0; i < numToSend; i++) {
         world.send(rankA1,
@@ -121,8 +121,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
         otherWorldThread.join();
     }
 
-    std::string expectedKey =
-      faabric::util::exec_graph::mpiMsgCountPrefix + std::to_string(rank);
+    std::string expectedKey = MPI_MSG_COUNT_PREFIX + std::to_string(rank);
     REQUIRE(otherMsg.mpirank() == otherRank);
     REQUIRE(otherMsg.intexecgraphdetails().count(expectedKey) == 1);
     REQUIRE(otherMsg.intexecgraphdetails().at(expectedKey) == 1);
@@ -147,11 +146,10 @@ TEST_CASE_METHOD(MpiTestFixture,
 
     SECTION("Normal send")
     {
-        expectedKey =
-          fmt::format("{}-{}-{}",
-                      faabric::util::exec_graph::mpiMsgTypeCountPrefix,
-                      faabric::MPIMessage::NORMAL,
-                      std::to_string(rankA2));
+        expectedKey = fmt::format("{}-{}-{}",
+                                  MPI_MSGTYPE_COUNT_PREFIX,
+                                  faabric::MPIMessage::NORMAL,
+                                  std::to_string(rankA2));
         msgCount = 1;
 
         world.send(rankA1,
@@ -167,11 +165,10 @@ TEST_CASE_METHOD(MpiTestFixture,
     {
         std::vector<int> data(2, 0);
 
-        expectedKey =
-          fmt::format("{}-{}-{}",
-                      faabric::util::exec_graph::mpiMsgTypeCountPrefix,
-                      faabric::MPIMessage::REDUCE,
-                      std::to_string(rankA2));
+        expectedKey = fmt::format("{}-{}-{}",
+                                  MPI_MSGTYPE_COUNT_PREFIX,
+                                  faabric::MPIMessage::REDUCE,
+                                  std::to_string(rankA2));
         msgCount = worldSize - 1;
 
         // Reduce expects to receive a message from all other ranks
@@ -191,6 +188,8 @@ TEST_CASE_METHOD(MpiTestFixture,
                      MPI_SUM);
     }
 
+    REQUIRE(msg.intexecgraphdetails_size() == NUM_MPI_EXEC_GRAPH_DETAILS);
+    REQUIRE(msg.execgraphdetails_size() == 0);
     REQUIRE(msg.intexecgraphdetails().count(expectedKey) == 1);
     REQUIRE(msg.intexecgraphdetails().at(expectedKey) == msgCount);
 }
