@@ -590,8 +590,15 @@ void MpiWorld::send(int sendRank,
     if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
         faabric::util::exec_graph::incrementCounter(
           *thisRankMsg,
-          faabric::util::exec_graph::mpiMsgCountPrefix +
-            std::to_string(recvRank));
+          fmt::format("{}-{}", MPI_MSG_COUNT_PREFIX, std::to_string(recvRank)));
+
+        // Work out the message type breakdown
+        faabric::util::exec_graph::incrementCounter(
+          *thisRankMsg,
+          fmt::format("{}-{}-{}",
+                      MPI_MSGTYPE_COUNT_PREFIX,
+                      std::to_string(messageType),
+                      std::to_string(recvRank)));
     }
 }
 
