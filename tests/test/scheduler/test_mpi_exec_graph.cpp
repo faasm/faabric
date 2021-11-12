@@ -23,7 +23,8 @@ TEST_CASE_METHOD(MpiTestFixture,
     auto buffer = new int[messageData.size()];
 
     int numToSend = 10;
-    std::string expectedKey = MPI_MSG_COUNT_PREFIX + std::to_string(rankA2);
+    std::string expectedKey =
+      fmt::format("{}-{}", MPI_MSG_COUNT_PREFIX, std::to_string(rankA2));
 
     for (int i = 0; i < numToSend; i++) {
         world.send(rankA1,
@@ -57,7 +58,8 @@ TEST_CASE_METHOD(MpiTestFixture,
     auto buffer = new int[messageData.size()];
 
     int numToSend = 10;
-    std::string expectedKey = MPI_MSG_COUNT_PREFIX + std::to_string(rankA2);
+    std::string expectedKey =
+      fmt::format("{}-{}", MPI_MSG_COUNT_PREFIX, std::to_string(rankA2));
 
     for (int i = 0; i < numToSend; i++) {
         world.send(rankA1,
@@ -121,7 +123,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
         otherWorldThread.join();
     }
 
-    std::string expectedKey = MPI_MSG_COUNT_PREFIX + std::to_string(rank);
+    std::string expectedKey =
+      fmt::format("{}-{}", MPI_MSG_COUNT_PREFIX, std::to_string(rank));
     REQUIRE(otherMsg.mpirank() == otherRank);
     REQUIRE(otherMsg.intexecgraphdetails().count(expectedKey) == 1);
     REQUIRE(otherMsg.intexecgraphdetails().at(expectedKey) == 1);

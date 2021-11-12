@@ -16,7 +16,7 @@
 // message breakdown by type in the execution graph. Remember to increase the
 // counter if you add another one
 #define NUM_MPI_EXEC_GRAPH_DETAILS 2
-#define MPI_MSG_COUNT_PREFIX "mpi-msgcount-torank-"
+#define MPI_MSG_COUNT_PREFIX "mpi-msgcount-torank"
 #define MPI_MSGTYPE_COUNT_PREFIX "mpi-msgtype-torank"
 
 namespace faabric::scheduler {
