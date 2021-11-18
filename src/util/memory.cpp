@@ -183,7 +183,7 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 
 uint8_t* allocateSharedMemory(size_t size)
 {
-    if(size < HOST_PAGE_SIZE) {
+    if (size < HOST_PAGE_SIZE) {
         SPDLOG_WARN("Allocating less than a page of memory");
     }
 
@@ -295,7 +295,7 @@ int writeMemoryToFd(uint8_t* source, size_t size, const std::string& fdLabel)
 
 void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* data)
 {
-    if(newSize == oldSize) {
+    if (newSize == oldSize) {
         return;
     }
 

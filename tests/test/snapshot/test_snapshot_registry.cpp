@@ -57,9 +57,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     reg.takeSnapshot(keyB, snapB, false);
     reg.takeSnapshot(keyC, snapC);
 
-    SnapshotData &actualA = reg.getSnapshot(keyA);
-    SnapshotData &actualB = reg.getSnapshot(keyB);
-    SnapshotData &actualC = reg.getSnapshot(keyC);
+    SnapshotData& actualA = reg.getSnapshot(keyA);
+    SnapshotData& actualB = reg.getSnapshot(keyB);
+    SnapshotData& actualC = reg.getSnapshot(keyC);
 
     REQUIRE(actualA.size == snapA.size);
     REQUIRE(actualB.size == snapB.size);

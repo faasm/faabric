@@ -36,15 +36,16 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
     d.mapToMemory(target);
 }
 
-void SnapshotRegistry::takeSnapshotIfNotExists(const std::string& key,
-                                               faabric::util::SnapshotData &data,
-                                               bool locallyRestorable)
+void SnapshotRegistry::takeSnapshotIfNotExists(
+  const std::string& key,
+  faabric::util::SnapshotData& data,
+  bool locallyRestorable)
 {
     doTakeSnapshot(key, data, locallyRestorable, false);
 }
 
 void SnapshotRegistry::takeSnapshot(const std::string& key,
-                                    faabric::util::SnapshotData &data,
+                                    faabric::util::SnapshotData& data,
                                     bool locallyRestorable)
 {
     doTakeSnapshot(key, data, locallyRestorable, true);
@@ -96,7 +97,7 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
 }
 
 void SnapshotRegistry::changeSnapshotSize(const std::string& key,
-                                            size_t newSize)
+                                          size_t newSize)
 {
     faabric::util::UniqueLock lock(snapshotsMx);
 
