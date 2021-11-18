@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include "faabric/util/memory.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -137,53 +138,76 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     setUpFunctionGroup(appId, groupIdB);
 
-    // Set up a snapshot
+    // Set up a snapshot that's got enough memory to expand into
     std::string snapKey = std::to_string(generateGid());
-    size_t snapSize = 5 * HOST_PAGE_SIZE;
+    size_t initialSnapSize = 5 * HOST_PAGE_SIZE;
+    size_t expandedSnapSize = 10 * HOST_PAGE_SIZE;
+
     faabric::util::SnapshotData snap;
+    snap.size = initialSnapSize;
+    snap.data = faabric::util::allocateVirtualMemory(expandedSnapSize);
+    faabric::util::claimVirtualMemory(snap.data, initialSnapSize);
 
-    uint8_t* data = faabric::util::allocateSharedMemory(snapSize);
-    snap.size = snapSize;
-    snap.data = data;
-
+    // Set up the snapshot
     reg.takeSnapshot(snapKey, snap, true);
 
-    // Set up some diffs
+    // Set up some diffs for the initial request
+    uint32_t offsetA1 = 5;
+    uint32_t offsetA2 = 2 * HOST_PAGE_SIZE;
     std::vector<uint8_t> diffDataA1 = { 0, 1, 2, 3 };
     std::vector<uint8_t> diffDataA2 = { 4, 5, 6 };
-    std::vector<uint8_t> diffDataB = { 7, 7, 8, 8, 8 };
-
-    std::vector<SnapshotDiff> diffsA;
-    std::vector<SnapshotDiff> diffsB;
 
     SnapshotDiff diffA1(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
-                        5,
+                        offsetA1,
                         diffDataA1.data(),
                         diffDataA1.size());
 
     SnapshotDiff diffA2(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
-                        2 * HOST_PAGE_SIZE,
+                        offsetA2,
                         diffDataA2.data(),
                         diffDataA2.size());
 
-    diffsA = { diffA1, diffA2 };
+    std::vector<SnapshotDiff> diffsA = { diffA1, diffA2 };
     cli.pushSnapshotDiffs(snapKey, groupIdA, diffsA);
 
-    SnapshotDiff diffB(SnapshotDataType::Raw,
-                       SnapshotMergeOperation::Overwrite,
-                       3 * HOST_PAGE_SIZE,
-                       diffDataB.data(),
-                       diffDataB.size());
-    diffsB = { diffB };
+    // Submit some more diffs, some larger than the original snapshot (to check
+    // it gets extended)
+    uint32_t offsetB1 = 3 * HOST_PAGE_SIZE;
+    uint32_t offsetB2 = initialSnapSize + 10;
+    uint32_t offsetB3 = initialSnapSize + (3 * HOST_PAGE_SIZE);
+
+    std::vector<uint8_t> diffDataB1 = { 7, 7, 8, 8, 8 };
+    std::vector<uint8_t> diffDataB2 = { 5, 5, 5, 5 };
+    std::vector<uint8_t> diffDataB3 = { 1, 1, 2, 2, 3, 3, 4, 4 };
+
+    SnapshotDiff diffB1(SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite,
+                        offsetB1,
+                        diffDataB1.data(),
+                        diffDataB1.size());
+
+    SnapshotDiff diffB2(SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite,
+                        offsetB2,
+                        diffDataB2.data(),
+                        diffDataB2.size());
+
+    SnapshotDiff diffB3(SnapshotDataType::Raw,
+                        SnapshotMergeOperation::Overwrite,
+                        offsetB3,
+                        diffDataB3.data(),
+                        diffDataB3.size());
+
+    std::vector<SnapshotDiff> diffsB = { diffB1, diffB2, diffB3 };
     cli.pushSnapshotDiffs(snapKey, groupIdB, diffsB);
 
     // Check changes have been applied
     checkDiffsApplied(snap.data, diffsA);
     checkDiffsApplied(snap.data, diffsB);
 
-    deallocatePages(snap.data, 5);
+    deallocateMemory(snap.data, expandedSnapSize);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,

@@ -145,7 +145,8 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     }
 
     if (maxSize > snap.size) {
-        SPDLOG_DEBUG("Diffs are beyond size of original snapshot ({} > {})",
+        SPDLOG_DEBUG("Expanding snapshot {} to accommodate diffs ({} > {})",
+                     r->key()->str(),
                      maxSize,
                      snap.size);
 

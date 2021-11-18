@@ -159,7 +159,7 @@ void SnapshotData::mapToMemory(uint8_t* target)
 {
     if (fd == 0) {
         std::string msg = "Attempting to map memory of non-restorable snapshot";
-        SPLDOG_ERROR(msg);
+        SPDLOG_ERROR(msg);
         throw std::runtime_error(msg);
     }
 
@@ -176,7 +176,7 @@ void SnapshotData::updateFd()
 {
     if (fd == 0) {
         std::string msg = "Attempting to update fd of non-restorable snapshot";
-        SPLDOG_ERROR(msg);
+        SPDLOG_ERROR(msg);
         throw std::runtime_error(msg);
     }
 
