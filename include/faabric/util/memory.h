@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <unistd.h>
 #include <vector>
 
@@ -53,4 +54,7 @@ void claimVirtualMemory(uint8_t* start, size_t size);
 
 void mapMemory(uint8_t* target, size_t size, int fd);
 
+int writeMemoryToFd(uint8_t* source, size_t size, const std::string& fdLabel);
+
+void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* newData);
 }

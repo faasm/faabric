@@ -36,7 +36,8 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
 
     void pushSnapshot(const std::string& key,
                       int32_t groupId,
-                      const faabric::util::SnapshotData& data);
+                      const faabric::util::SnapshotData& data,
+                      size_t maxSize = 0);
 
     void pushSnapshotDiffs(std::string snapshotKey,
                            int32_t groupId,

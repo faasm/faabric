@@ -96,9 +96,11 @@ class SnapshotData
 
     void clearMergeRegions();
 
-    void setSnapshotSize(size_t newSize);
+    size_t setSnapshotSize(size_t newSize);
 
-    void writeToFd();
+    void updateFd(size_t oldSize);
+
+    void writeToFd(const std::string& fdLabel);
 
   private:
     // Note - we care about the order of this map, as we iterate through it

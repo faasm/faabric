@@ -74,7 +74,7 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
 
     // Write to fd to be locally restorable
     if (locallyRestorable) {
-        data.writeToFd();
+        data.writeToFd(key);
         SPDLOG_DEBUG("Wrote snapshot {} to fd {}", key, data.fd);
     }
 
@@ -94,13 +94,15 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
     snapshotMap.erase(key);
 }
 
-void SnapshotRegistry::changeSnapshotSize(const std::string& key,
+size_t SnapshotRegistry::changeSnapshotSize(const std::string& key,
                                           size_t newSize)
 {
     faabric::util::UniqueLock lock(snapshotsMx);
 
     faabric::util::SnapshotData& d = getSnapshot(key);
-    d.setSnapshotSize(newSize);
+    size_t oldSize = d.setSnapshotSize(newSize);
+
+    return oldSize;
 }
 
 size_t SnapshotRegistry::getSnapshotCount()

@@ -233,8 +233,58 @@ void mapMemory(uint8_t* target, size_t size, int fd)
 
     if (mmapRes == MAP_FAILED) {
         SPDLOG_ERROR(
-          "mmapping snapshot failed: {} ({})", errno, ::strerror(errno));
-        throw std::runtime_error("mmapping snapshot failed");
+          "mapping memory failed: {} ({})", errno, ::strerror(errno));
+        throw std::runtime_error("mmapping memory failed");
+    }
+}
+
+int writeMemoryToFd(uint8_t* source, size_t size, const std::string& fdLabel)
+{
+    int fd = ::memfd_create(fdLabel.c_str(), 0);
+    if (fd == -1) {
+        SPDLOG_ERROR("Failed to create file descriptor: {}", strerror(errno));
+        throw std::runtime_error("Failed to create file descriptor");
+    }
+
+    // Make the fd big enough
+    int ferror = ::ftruncate(fd, size);
+    if (ferror != 0) {
+        SPDLOG_ERROR("ftruncate call failed with error {}", ferror);
+        throw std::runtime_error("Failed writing memory to fd (ftruncate)");
+    }
+
+    // Write the data
+    ssize_t werror = ::write(fd, source, size);
+    if (werror == -1) {
+        SPDLOG_ERROR("Write call failed with error {}", werror);
+        throw std::runtime_error("Failed writing memory to fd (write)");
+    }
+
+    return fd;
+}
+
+void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* newData)
+{
+    // Extend the fd
+    int ferror = ::ftruncate(fd, newSize);
+    if (ferror != 0) {
+        SPDLOG_ERROR("Extending with ftruncate failed with error {}", ferror);
+        throw std::runtime_error("Failed appending data to fd (ftruncate)");
+    }
+
+    // Skip to the end of the old data
+    int seekRes = ::lseek(fd, oldSize, SEEK_SET);
+    if (seekRes == -1) {
+        SPDLOG_ERROR("lseek call failed with error {}", strerror(errno));
+        throw std::runtime_error("Failed appending data to fd");
+    }
+
+    // Write the data
+    size_t newDataSize = newSize - oldSize;
+    ssize_t werror = ::write(fd, newData, newDataSize);
+    if (werror == -1) {
+        SPDLOG_ERROR("Appending with write failed with error {}", werror);
+        throw std::runtime_error("Failed appending memory to fd (write)");
     }
 }
 }

@@ -134,34 +134,29 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     mergeRegions[region.offset] = region;
 }
 
-void SnapshotData::setSnapshotSize(size_t newSize)
+size_t SnapshotData::setSnapshotSize(size_t newSize)
 {
     // Try to allocate more memory on top of existing data. Will throw an
     // exception if not possible
-    size_t change = newSize - size;
+    size_t oldSize = size;
+    size_t change = newSize - oldSize;
 
     claimVirtualMemory(data, change);
 
     size = newSize;
+
+    return oldSize;
 }
 
-void SnapshotData::writeToFd(const std::string& key)
+void SnapshotData::writeToFd(const std::string& fdLabel)
 {
-    fd = ::memfd_create(key.c_str(), 0);
+    fd = writeMemoryToFd(data, size, fdLabel);
+}
 
-    // Make the fd big enough
-    int ferror = ::ftruncate(fd, size);
-    if (ferror != 0) {
-        SPDLOG_ERROR("ftruncate call failed with error {}", ferror);
-        throw std::runtime_error("Failed writing memory to fd (ftruncate)");
-    }
-
-    // Write the data
-    ssize_t werror = ::write(fd, data, size);
-    if (werror == -1) {
-        SPDLOG_ERROR("Write call failed with error {}", werror);
-        throw std::runtime_error("Failed writing memory to fd (write)");
-    }
+void SnapshotData::updateFd(size_t oldSize)
+{
+    size_t offset = size - oldSize;
+    faabric::util::appendDataToFd(fd, oldSize, size, data + offset);
 }
 
 void SnapshotData::clearMergeRegions()
