@@ -41,8 +41,6 @@ class SnapshotRegistry
 
     std::mutex snapshotsMx;
 
-    int writeSnapshotToFd(const std::string& key);
-
     void doTakeSnapshot(const std::string& key,
                         faabric::util::SnapshotData data,
                         bool locallyRestorable,

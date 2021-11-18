@@ -81,6 +81,8 @@ class SnapshotData
 
     SnapshotData() = default;
 
+    ~SnapshotData();
+
     std::vector<SnapshotDiff> getDirtyRegions();
 
     std::vector<SnapshotDiff> getChangeDiffs(const uint8_t* updated,
@@ -95,6 +97,8 @@ class SnapshotData
     void clearMergeRegions();
 
     void setSnapshotSize(size_t newSize);
+
+    void writeToFd();
 
   private:
     // Note - we care about the order of this map, as we iterate through it

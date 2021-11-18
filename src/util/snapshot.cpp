@@ -10,6 +10,16 @@ namespace faabric::util {
 // class, but it can't be copy-constructed.
 static std::mutex snapMx;
 
+SnapshotData::~SnapshotData()
+{
+    // Note - the data referenced by the SnapshotData object is not owned by the
+    // snapshot registry so we don't delete it here. We only remove the file
+    // descriptor used for mapping memory
+    if (fd > 0) {
+        ::close(fd);
+    }
+}
+
 std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
 {
     if (data == nullptr || size == 0) {
@@ -124,9 +134,34 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     mergeRegions[region.offset] = region;
 }
 
-void SnapshotData::setSnapshotSize(size_t newSize) {
-    // TODO - try to allocate more memory on top of existing data, if that
-    // fails, throw an exception
+void SnapshotData::setSnapshotSize(size_t newSize)
+{
+    // Try to allocate more memory on top of existing data. Will throw an
+    // exception if not possible
+    size_t change = newSize - size;
+
+    claimVirtualMemory(data, change);
+
+    size = newSize;
+}
+
+void SnapshotData::writeToFd(const std::string& key)
+{
+    fd = ::memfd_create(key.c_str(), 0);
+
+    // Make the fd big enough
+    int ferror = ::ftruncate(fd, size);
+    if (ferror != 0) {
+        SPDLOG_ERROR("ftruncate call failed with error {}", ferror);
+        throw std::runtime_error("Failed writing memory to fd (ftruncate)");
+    }
+
+    // Write the data
+    ssize_t werror = ::write(fd, data, size);
+    if (werror == -1) {
+        SPDLOG_ERROR("Write call failed with error {}", werror);
+        throw std::runtime_error("Failed writing memory to fd (write)");
+    }
 }
 
 void SnapshotData::clearMergeRegions()

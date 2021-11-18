@@ -8,9 +8,8 @@
 #include <faabric/transport/macros.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
-
-#include <sys/mman.h>
 
 namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
@@ -82,12 +81,18 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     faabric::util::SnapshotData snap;
     snap.size = r->contents()->size();
 
-    // TODO - provision up to max size of snapshot if provided here.
+    if (r->maxSize() > 0) {
+        // Allocate virtual memory big enough for the max size if provided
+        snap.data = faabric::util::allocateVirtualMemory(r->maxSize());
 
-    // TODO - avoid this copy?
-    snap.data = (uint8_t*)mmap(
-      nullptr, snap.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        // Claim just the snapshot region
+        faabric::util::claimVirtualMemory(snap.data, snap.size);
+    } else {
+        // Normal provisioning of just snapshot region
+        snap.data = faabric::util::allocateStandardMemory(snap.size);
+    }
 
+    // TODO - somehow avoid this copy?
     std::memcpy(snap.data, r->contents()->Data(), snap.size);
 
     // TODO - avoid a further copy in here when setting up fd

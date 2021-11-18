@@ -176,4 +176,65 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 
     return regions;
 }
+
+// -------------------------
+// Allocation
+// -------------------------
+
+uint8_t* allocateStandardMemory(size_t size)
+{
+    void* mmapRes =
+      ::mmap(nullptr, size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    if (mmapRes == nullptr) {
+        SPDLOG_ERROR("Failed allocating memory: {}", strerror(errno));
+        throw std::runtime_error("Failed allocating memory");
+    }
+
+    return (uint8_t*)mmapRes;
+}
+
+uint8_t* allocateVirtualMemory(size_t size)
+{
+    void* mmapRes = (uint8_t*)::mmap(
+      nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    if (mmapRes == nullptr) {
+        SPDLOG_ERROR("Failed allocating virtual memory: {}", strerror(errno));
+        throw std::runtime_error("Failed allocating virtual memory");
+    }
+
+    return (uint8_t*)mmapRes;
+}
+
+void claimVirtualMemory(uint8_t* start, size_t size)
+{
+    int protectRes = ::mprotect(start, size, PROT_WRITE);
+    if (protectRes != 0) {
+        SPDLOG_ERROR("Failed claiming virtual memory: {}", strerror(errno));
+        throw std::runtime_error("Failed claiming virtual memory");
+    }
+}
+
+void mapMemory(uint8_t* target, size_t size, int fd)
+{
+    if (!faabric::util::isPageAligned((void*)target)) {
+        SPDLOG_ERROR("Mapping memory to non page-aligned address");
+        throw std::runtime_error("Mapping memory to non page-aligned address");
+    }
+
+    if (fd == 0) {
+        SPDLOG_ERROR("Attempting to map to zero fd");
+        throw std::runtime_error("Attempting to map to zero fd");
+    }
+
+    void* mmapRes =
+      ::mmap(target, size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
+
+    if (mmapRes == MAP_FAILED) {
+        SPDLOG_ERROR(
+          "mmapping snapshot failed: {} ({})", errno, ::strerror(errno));
+        throw std::runtime_error("mmapping snapshot failed");
+    }
+}
 }

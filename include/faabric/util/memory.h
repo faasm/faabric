@@ -41,4 +41,16 @@ std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
 
 std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
                                                            int nPages);
+// -------------------------
+// Allocation
+// -------------------------
+
+uint8_t* allocateStandardMemory(size_t size);
+
+uint8_t* allocateVirtualMemory(size_t size);
+
+void claimVirtualMemory(uint8_t* start, size_t size);
+
+void mapMemory(uint8_t* target, size_t size, int fd);
+
 }
