@@ -279,9 +279,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Handle snapshot diffs _before_ we reset the executor
         if (isLastInBatch && task.needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
-            faabric::util::SnapshotData snapshotPostExecution = snapshot();
+            faabric::util::SnapshotData& snapshotPostExecution = snapshot();
 
-            faabric::util::SnapshotData snapshotPreExecution =
+            faabric::util::SnapshotData& snapshotPreExecution =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(
                 msg.snapshotkey());
 
@@ -401,11 +401,10 @@ void Executor::postFinish() {}
 
 void Executor::reset(faabric::Message& msg) {}
 
-faabric::util::SnapshotData Executor::snapshot()
+faabric::util::SnapshotData& Executor::snapshot()
 {
     SPDLOG_WARN("Executor has not implemented snapshot method");
-    faabric::util::SnapshotData d;
-    return d;
+    return _snapshot;
 }
 
 void Executor::restore(faabric::Message& msg)

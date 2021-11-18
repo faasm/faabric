@@ -1,5 +1,6 @@
-#include "faabric_utils.h"
 #include <catch2/catch.hpp>
+
+#include "faabric_utils.h"
 
 #include <sys/mman.h>
 
@@ -25,15 +26,19 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(!reg.snapshotExists(keyB));
     REQUIRE(!reg.snapshotExists(keyC));
 
-    SnapshotData snapA = takeSnapshot(keyA, 1, true);
-    SnapshotData snapB = takeSnapshot(keyB, 2, false);
+    SnapshotData snapA;
+    SnapshotData snapB;
+    SnapshotData snapC;
+
+    setUpSnapshot(snapA, keyA, 1, true);
+    setUpSnapshot(snapB, keyB, 2, false);
 
     REQUIRE(reg.snapshotExists(keyA));
     REQUIRE(reg.snapshotExists(keyB));
     REQUIRE(!reg.snapshotExists(keyC));
     REQUIRE(reg.getSnapshotCount() == 2);
 
-    SnapshotData snapC = takeSnapshot(keyC, 3, true);
+    setUpSnapshot(snapC, keyC, 3, true);
 
     REQUIRE(reg.snapshotExists(keyA));
     REQUIRE(reg.snapshotExists(keyB));
@@ -52,9 +57,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     reg.takeSnapshot(keyB, snapB, false);
     reg.takeSnapshot(keyC, snapC);
 
-    SnapshotData actualA = reg.getSnapshot(keyA);
-    SnapshotData actualB = reg.getSnapshot(keyB);
-    SnapshotData actualC = reg.getSnapshot(keyC);
+    SnapshotData &actualA = reg.getSnapshot(keyA);
+    SnapshotData &actualB = reg.getSnapshot(keyB);
+    SnapshotData &actualC = reg.getSnapshot(keyC);
 
     REQUIRE(actualA.size == snapA.size);
     REQUIRE(actualB.size == snapB.size);
@@ -65,14 +70,14 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(actualB.data == snapB.data);
     REQUIRE(actualC.data == snapC.data);
 
-    REQUIRE(actualA.fd > 0);
-    REQUIRE(actualB.fd == 0);
-    REQUIRE(actualC.fd > 0);
+    REQUIRE(actualA.isRestorable());
+    REQUIRE(!actualB.isRestorable());
+    REQUIRE(actualC.isRestorable());
 
     // Create regions onto which we will map the snapshots
-    uint8_t* actualDataA = allocatePages(1);
-    uint8_t* actualDataB = allocatePages(2);
-    uint8_t* actualDataC = allocatePages(3);
+    uint8_t* actualDataA = allocateSharedMemory(1 * HOST_PAGE_SIZE);
+    uint8_t* actualDataB = allocateSharedMemory(2 * HOST_PAGE_SIZE);
+    uint8_t* actualDataC = allocateSharedMemory(3 * HOST_PAGE_SIZE);
 
     // Check those that are mappable are mapped
     reg.mapSnapshot(keyA, actualDataA);
@@ -126,7 +131,8 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(!reg.snapshotExists(keyB));
 
     // Take one of the snapshots
-    SnapshotData snapBefore = takeSnapshot(keyA, 1, true);
+    SnapshotData snapBefore;
+    setUpSnapshot(snapBefore, keyA, 1, true);
 
     REQUIRE(reg.snapshotExists(keyA));
     REQUIRE(!reg.snapshotExists(keyB));

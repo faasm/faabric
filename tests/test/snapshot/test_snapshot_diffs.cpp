@@ -28,11 +28,17 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 {
     std::string snapKey = "foobar123";
     int snapPages = 5;
-    SnapshotData snap = takeSnapshot(snapKey, snapPages, true);
+
+    SnapshotData snap;
+    uint8_t* data = faabric::util::allocateSharedMemory(snapPages);
+    snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
+    snap.data = data;
+
+    reg.takeSnapshot(snapKey, snap, true);
 
     int sharedMemPages = 8;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = allocatePages(sharedMemPages);
+    uint8_t* sharedMem = allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
 
     reg.mapSnapshot(snapKey, sharedMem);
 
@@ -53,12 +59,18 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     std::string snapKey = "foobar123";
     int snapPages = 5;
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
-    SnapshotData snap = takeSnapshot(snapKey, snapPages, true);
+
+    SnapshotData snap;
+    uint8_t* data = faabric::util::allocateSharedMemory(snapPages);
+    snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
+    snap.data = data;
+
+    reg.takeSnapshot(snapKey, snap, true);
 
     // Make shared memory larger than original snapshot
     int sharedMemPages = 8;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = allocatePages(sharedMemPages);
+    uint8_t* sharedMem = allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
 
     // Map the snapshot to the start of the memory
     reg.mapSnapshot(snapKey, sharedMem);

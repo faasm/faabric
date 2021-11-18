@@ -12,7 +12,7 @@ namespace faabric::snapshot {
 // Mocking
 // -----------------------------------
 
-std::vector<std::pair<std::string, faabric::util::SnapshotData>>
+std::vector<std::pair<std::string, faabric::util::SnapshotData>>&
 getSnapshotPushes();
 
 std::vector<std::pair<std::string, std::vector<faabric::util::SnapshotDiff>>>

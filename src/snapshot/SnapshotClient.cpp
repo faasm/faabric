@@ -26,7 +26,7 @@ static std::vector<std::pair<std::string, std::string>> snapshotDeletes;
 static std::vector<std::pair<std::string, std::pair<uint32_t, int>>>
   threadResults;
 
-std::vector<std::pair<std::string, faabric::util::SnapshotData>>
+std::vector<std::pair<std::string, faabric::util::SnapshotData>>&
 getSnapshotPushes()
 {
     return snapshotPushes;
@@ -80,6 +80,7 @@ void SnapshotClient::pushSnapshot(const std::string& key,
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
+
         snapshotPushes.emplace_back(host, data);
     } else {
         // Set up the main request

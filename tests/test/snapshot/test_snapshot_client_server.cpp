@@ -139,7 +139,14 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     // Set up a snapshot
     std::string snapKey = std::to_string(generateGid());
-    SnapshotData snap = takeSnapshot(snapKey, 5, true);
+    size_t snapSize = 5 * HOST_PAGE_SIZE;
+    faabric::util::SnapshotData snap;
+
+    uint8_t* data = faabric::util::allocateSharedMemory(snapSize);
+    snap.size = snapSize;
+    snap.data = data;
+
+    reg.takeSnapshot(snapKey, snap, true);
 
     // Set up some diffs
     std::vector<uint8_t> diffDataA1 = { 0, 1, 2, 3 };
@@ -185,7 +192,14 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 {
     // Set up a snapshot
     std::string snapKey = std::to_string(generateGid());
-    SnapshotData snap = takeSnapshot(snapKey, 5, false);
+    int snapSize = 5 * HOST_PAGE_SIZE;
+
+    faabric::util::SnapshotData snap;
+    uint8_t* data = faabric::util::allocateSharedMemory(snapSize);
+    snap.size = snapSize;
+    snap.data = data;
+
+    reg.takeSnapshot(snapKey, snap, true);
 
     // Set up a couple of ints in the snapshot
     int offsetA1 = 5;
@@ -239,7 +253,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 {
     // Set up a snapshot
     std::string snapKey = std::to_string(generateGid());
-    SnapshotData snap = takeSnapshot(snapKey, 5, false);
+    SnapshotData snap;
+    setUpSnapshot(snap, snapKey, 5, false);
 
     int offset = 5;
     std::vector<uint8_t> originalData;

@@ -10,14 +10,27 @@ namespace faabric::util {
 // class, but it can't be copy-constructed.
 static std::mutex snapMx;
 
+SnapshotData::SnapshotData(const SnapshotData& other)
+{
+    size = other.size;
+    data = other.data;
+    fd = 0;
+}
+
 SnapshotData::~SnapshotData()
 {
     // Note - the data referenced by the SnapshotData object is not owned by the
     // snapshot registry so we don't delete it here. We only remove the file
     // descriptor used for mapping memory
     if (fd > 0) {
+        SPDLOG_TRACE("Closing fd {}", fd);
         ::close(fd);
     }
+}
+
+bool SnapshotData::isRestorable()
+{
+    return fd > 0;
 }
 
 std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
@@ -148,6 +161,11 @@ size_t SnapshotData::setSnapshotSize(size_t newSize)
     return oldSize;
 }
 
+void SnapshotData::mapToMemory(uint8_t* target)
+{
+    faabric::util::mapMemory(target, size, fd);
+}
+
 void SnapshotData::writeToFd(const std::string& fdLabel)
 {
     fd = writeMemoryToFd(data, size, fdLabel);
@@ -157,6 +175,11 @@ void SnapshotData::updateFd(size_t oldSize)
 {
     size_t offset = size - oldSize;
     faabric::util::appendDataToFd(fd, oldSize, size, data + offset);
+}
+
+std::map<uint32_t, SnapshotMergeRegion> SnapshotData::getMergeRegions()
+{
+    return mergeRegions;
 }
 
 void SnapshotData::clearMergeRegions()

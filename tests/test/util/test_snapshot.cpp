@@ -27,13 +27,14 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
     {
         snapKey = "foobar123";
         snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
-        snap.data = allocatePages(snapPages);
+        snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
         // Take the snapshot
         reg.takeSnapshot(snapKey, snap, true);
 
         // Map the snapshot
-        uint8_t* sharedMem = allocatePages(sharedMemPages);
+        uint8_t* sharedMem =
+          allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
         reg.mapSnapshot(snapKey, sharedMem);
 
         // Reset dirty tracking
@@ -65,6 +66,68 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
 };
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test clear merge regions",
+                 "[snapshot][util]")
+{
+    faabric::util::SnapshotData snap;
+    snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
+    snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+
+    int nRegions = 10;
+    for (int i = 0; i < nRegions; i++) {
+        snap.addMergeRegion(
+          i, sizeof(int), SnapshotDataType::Int, SnapshotMergeOperation::Sum);
+    }
+
+    REQUIRE(snap.getMergeRegions().size() == nRegions);
+
+    snap.clearMergeRegions();
+
+    REQUIRE(snap.getMergeRegions().empty());
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test mapping snapshot memory",
+                 "[snapshot][util]")
+{
+    // Set up the snapshot
+    snapPages = 10;
+    snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
+    snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+
+    // Put some data into the snapshot
+    std::vector<uint8_t> dataA(100, 2);
+    std::vector<uint8_t> dataB(300, 4);
+
+    std::memcpy(snap.data + (2 * HOST_PAGE_SIZE), dataA.data(), dataA.size());
+    std::memcpy(
+      snap.data + (5 * HOST_PAGE_SIZE) + 2, dataB.data(), dataB.size());
+
+    // Record the snap memory
+    std::vector<uint8_t> actualSnapMem(snap.data, snap.data + snap.size);
+
+    // Make it restorable
+    REQUIRE(!snap.isRestorable());
+    snap.writeToFd("snap-map-test");
+    REQUIRE(snap.isRestorable());
+
+    // Set up shared memory
+    int sharedMemPages = 20;
+    uint8_t* sharedMem = allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
+
+    // Check it's zeroed
+    std::vector<uint8_t> expectedInitial(snap.size, 0);
+    std::vector<uint8_t> actualSharedMemBefore(sharedMem,
+                                               sharedMem + snap.size);
+    REQUIRE(actualSharedMemBefore == expectedInitial);
+
+    // Map the snapshot and check again
+    snap.mapToMemory(sharedMem);
+    std::vector<uint8_t> actualSharedMemAfter(sharedMem, sharedMem + snap.size);
+    REQUIRE(actualSharedMemAfter == actualSnapMem);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Detailed test snapshot merge regions with ints",
                  "[snapshot][util]")
 {
@@ -81,7 +144,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     faabric::util::SnapshotData snap;
     snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
-    snap.data = allocatePages(snapPages);
+    snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     // Set up some integers in the snapshot
     int intAOffset = HOST_PAGE_SIZE + (10 * sizeof(int32_t));
@@ -98,7 +161,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = allocatePages(snapPages);
+    uint8_t* sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     reg.mapSnapshot(snapKey, sharedMem);
 
@@ -203,7 +266,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     faabric::util::SnapshotData snap;
     snap.size = snapSize;
-    snap.data = allocatePages(snapPages);
+    snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     // Set up original values
     *(int*)(snap.data + offsetA) = originalA;
@@ -216,7 +279,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = allocatePages(snapPages);
+    uint8_t* sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     reg.mapSnapshot(snapKey, sharedMem);
 
@@ -288,7 +351,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     faabric::util::SnapshotData snap;
     snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
-    snap.data = allocatePages(snapPages);
+    snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     std::vector<uint8_t> originalData;
     std::vector<uint8_t> updatedData;
@@ -392,7 +455,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = allocatePages(snapPages);
+    uint8_t* sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     reg.mapSnapshot(snapKey, sharedMem);
 
@@ -432,7 +495,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     faabric::util::SnapshotData snap;
     snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
-    snap.data = allocatePages(snapPages);
+    snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     faabric::util::SnapshotDataType dataType =
       faabric::util::SnapshotDataType::Raw;
@@ -463,7 +526,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    uint8_t* sharedMem = allocatePages(snapPages);
+    uint8_t* sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
     reg.mapSnapshot(snapKey, sharedMem);
 
     // Reset dirty tracking
@@ -631,7 +694,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Make an edit somewhere in the extended memory, outside the original
     // snapshot
-    uint32_t diffPageStart = 8 * HOST_PAGE_SIZE;
+    uint32_t diffPageStart = (snapPages + 2) * HOST_PAGE_SIZE;
     uint32_t diffOffset = diffPageStart + 100;
     std::vector<uint8_t> diffData(120, 2);
     std::memcpy(sharedMem + diffOffset, diffData.data(), diffData.size());

@@ -113,40 +113,23 @@ class SnapshotTestFixture
         reg.clear();
     }
 
-    uint8_t* allocatePages(int nPages)
+    void setUpSnapshot(faabric::util::SnapshotData& snap,
+                       const std::string& snapKey,
+                       int nPages,
+                       bool locallyRestorable)
     {
-        return (uint8_t*)mmap(nullptr,
-                              nPages * faabric::util::HOST_PAGE_SIZE,
-                              PROT_WRITE,
-                              MAP_SHARED | MAP_ANONYMOUS,
-                              -1,
-                              0);
-    }
-
-    void deallocatePages(uint8_t* base, int nPages)
-    {
-        munmap(base, nPages * faabric::util::HOST_PAGE_SIZE);
-    }
-
-    faabric::util::SnapshotData takeSnapshot(const std::string& snapKey,
-                                             int nPages,
-                                             bool locallyRestorable)
-    {
-        faabric::util::SnapshotData snap;
-        uint8_t* data = allocatePages(nPages);
-
-        snap.size = nPages * faabric::util::HOST_PAGE_SIZE;
+        size_t snapSize = nPages * faabric::util::HOST_PAGE_SIZE;
+        uint8_t* data = faabric::util::allocateSharedMemory(snapSize);
+        snap.size = snapSize;
         snap.data = data;
 
         reg.takeSnapshot(snapKey, snap, locallyRestorable);
-
-        return snap;
     }
 
     void removeSnapshot(const std::string& key, int nPages)
     {
-        faabric::util::SnapshotData snap = reg.getSnapshot(key);
-        deallocatePages(snap.data, nPages);
+        faabric::util::SnapshotData& snap = reg.getSnapshot(key);
+        faabric::util::deallocatePages(snap.data, nPages);
         reg.deleteSnapshot(key);
     }
 

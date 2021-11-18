@@ -434,7 +434,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     if (!snapshotKey.empty()) {
         for (const auto& host : getFunctionRegisteredHosts(firstMsg)) {
             SnapshotClient& c = getSnapshotClient(host);
-            faabric::util::SnapshotData snapshotData =
+            faabric::util::SnapshotData& snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
             // See if we've already pushed this snapshot to the given host,

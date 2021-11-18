@@ -72,12 +72,11 @@ class TestExecutor final : public Executor
         reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
     }
 
-    faabric::util::SnapshotData snapshot() override
+    faabric::util::SnapshotData& snapshot() override
     {
-        faabric::util::SnapshotData snap;
-        snap.data = dummyMemory;
-        snap.size = dummyMemorySize;
-        return snap;
+        _snapshot.data = dummyMemory;
+        _snapshot.size = dummyMemorySize;
+        return _snapshot;
     }
 
     int32_t executeTask(
@@ -275,7 +274,8 @@ class TestExecutorFixture
           std::make_shared<TestExecutorFactory>();
         setExecutorFactory(fac);
 
-        setUpDummySnapshot();
+        setUpSnapshot(dummySnap, snapshotKey, snapshotNPages, true);
+        faabric::util::resetDirtyTracking();
 
         restoreCount = 0;
         resetCount = 0;
@@ -288,6 +288,7 @@ class TestExecutorFixture
     uint8_t* snapshotData = nullptr;
     int snapshotNPages = 10;
     size_t snapshotSize = snapshotNPages * faabric::util::HOST_PAGE_SIZE;
+    faabric::util::SnapshotData dummySnap;
 
     std::vector<std::string> executeWithTestExecutor(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -297,13 +298,6 @@ class TestExecutorFixture
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
         return sch.callFunctions(req, forceLocal).hosts;
-    }
-
-  private:
-    void setUpDummySnapshot()
-    {
-        takeSnapshot(snapshotKey, snapshotNPages, true);
-        faabric::util::resetDirtyTracking();
     }
 };
 

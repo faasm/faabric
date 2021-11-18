@@ -69,7 +69,7 @@ class Executor
 
     void releaseClaim();
 
-    virtual faabric::util::SnapshotData snapshot();
+    virtual faabric::util::SnapshotData& snapshot();
 
   protected:
     virtual void restore(faabric::Message& msg);
@@ -79,6 +79,8 @@ class Executor
     faabric::Message boundMessage;
 
     uint32_t threadPoolSize = 0;
+
+    faabric::util::SnapshotData _snapshot;
 
   private:
     std::atomic<bool> claimed = false;

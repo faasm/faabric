@@ -181,7 +181,24 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // Allocation
 // -------------------------
 
-uint8_t* allocateStandardMemory(size_t size)
+uint8_t* allocateSharedMemory(size_t size)
+{
+    if(size < HOST_PAGE_SIZE) {
+        SPDLOG_WARN("Allocating less than a page of memory");
+    }
+
+    void* mmapRes =
+      ::mmap(nullptr, size, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    if (mmapRes == nullptr) {
+        SPDLOG_ERROR("Failed allocating memory: {}", strerror(errno));
+        throw std::runtime_error("Failed allocating memory");
+    }
+
+    return (uint8_t*)mmapRes;
+}
+
+uint8_t* allocatePrivateMemory(size_t size)
 {
     void* mmapRes =
       ::mmap(nullptr, size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -207,7 +224,13 @@ uint8_t* allocateVirtualMemory(size_t size)
     return (uint8_t*)mmapRes;
 }
 
-void deallocateMemory(uint8_t* memory, size_t size) {
+void deallocatePages(uint8_t* memory, int nPages)
+{
+    deallocateMemory(memory, nPages * HOST_PAGE_SIZE);
+}
+
+void deallocateMemory(uint8_t* memory, size_t size)
+{
     ::munmap(memory, size);
 }
 
@@ -232,12 +255,15 @@ void mapMemory(uint8_t* target, size_t size, int fd)
         throw std::runtime_error("Attempting to map to zero fd");
     }
 
+    // Make mmap call to do the mapping
     void* mmapRes =
       ::mmap(target, size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
 
     if (mmapRes == MAP_FAILED) {
-        SPDLOG_ERROR(
-          "mapping memory failed: {} ({})", errno, ::strerror(errno));
+        SPDLOG_ERROR("mapping memory to fd {} failed: {} ({})",
+                     fd,
+                     errno,
+                     ::strerror(errno));
         throw std::runtime_error("mmapping memory failed");
     }
 }

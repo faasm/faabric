@@ -89,7 +89,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
         faabric::util::claimVirtualMemory(snap.data, snap.size);
     } else {
         // Normal provisioning of just snapshot region
-        snap.data = faabric::util::allocateStandardMemory(snap.size);
+        snap.data = faabric::util::allocatePrivateMemory(snap.size);
     }
 
     // TODO - somehow avoid this copy?

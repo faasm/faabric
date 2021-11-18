@@ -77,11 +77,16 @@ class SnapshotData
   public:
     uint8_t* data = nullptr;
     size_t size = 0;
-    int fd = 0;
 
     SnapshotData() = default;
 
+    SnapshotData(const SnapshotData&);
+
+    SnapshotData& operator=(const SnapshotData&) = delete;
+
     ~SnapshotData();
+
+    bool isRestorable();
 
     std::vector<SnapshotDiff> getDirtyRegions();
 
@@ -102,7 +107,13 @@ class SnapshotData
 
     void writeToFd(const std::string& fdLabel);
 
+    void mapToMemory(uint8_t* target);
+
+    std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
+
   private:
+    int fd = 0;
+
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;

@@ -32,26 +32,26 @@ bool SnapshotRegistry::snapshotExists(const std::string& key)
 
 void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
-    faabric::util::SnapshotData d = getSnapshot(key);
-    faabric::util::mapMemory(target, d.size, d.fd);
+    faabric::util::SnapshotData& d = getSnapshot(key);
+    d.mapToMemory(target);
 }
 
 void SnapshotRegistry::takeSnapshotIfNotExists(const std::string& key,
-                                               faabric::util::SnapshotData data,
+                                               faabric::util::SnapshotData &data,
                                                bool locallyRestorable)
 {
     doTakeSnapshot(key, data, locallyRestorable, false);
 }
 
 void SnapshotRegistry::takeSnapshot(const std::string& key,
-                                    faabric::util::SnapshotData data,
+                                    faabric::util::SnapshotData &data,
                                     bool locallyRestorable)
 {
     doTakeSnapshot(key, data, locallyRestorable, true);
 }
 
 void SnapshotRegistry::doTakeSnapshot(const std::string& key,
-                                      faabric::util::SnapshotData data,
+                                      const faabric::util::SnapshotData& data,
                                       bool locallyRestorable,
                                       bool overwrite)
 {
@@ -72,15 +72,16 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
                  data.size,
                  locallyRestorable);
 
-    // Write to fd to be locally restorable
-    if (locallyRestorable) {
-        data.writeToFd(key);
-        SPDLOG_DEBUG("Wrote snapshot {} to fd {}", key, data.fd);
-    }
-
     // Note - we only preserve the snapshot in the in-memory file, and do not
     // take ownership for the original data referenced in SnapshotData
-    snapshotMap[key] = data;
+    faabric::util::SnapshotData& recordedData = snapshotMap[key];
+    recordedData.size = data.size;
+    recordedData.data = data.data;
+
+    // Write to fd to be locally restorable
+    if (locallyRestorable) {
+        recordedData.writeToFd(key);
+    }
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)
@@ -95,7 +96,7 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
 }
 
 size_t SnapshotRegistry::changeSnapshotSize(const std::string& key,
-                                          size_t newSize)
+                                            size_t newSize)
 {
     faabric::util::UniqueLock lock(snapshotsMx);
 

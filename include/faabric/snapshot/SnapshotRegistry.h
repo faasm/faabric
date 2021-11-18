@@ -21,16 +21,16 @@ class SnapshotRegistry
     void mapSnapshot(const std::string& key, uint8_t* target);
 
     void takeSnapshot(const std::string& key,
-                      faabric::util::SnapshotData data,
+                      faabric::util::SnapshotData& data,
                       bool locallyRestorable = true);
 
     void takeSnapshotIfNotExists(const std::string& key,
-                                 faabric::util::SnapshotData data,
+                                 faabric::util::SnapshotData& data,
                                  bool locallyRestorable = true);
 
     void deleteSnapshot(const std::string& key);
 
-    size_t changeSnapshotSize(const std::string &key, size_t newSize);
+    size_t changeSnapshotSize(const std::string& key, size_t newSize);
 
     size_t getSnapshotCount();
 
@@ -42,7 +42,7 @@ class SnapshotRegistry
     std::mutex snapshotsMx;
 
     void doTakeSnapshot(const std::string& key,
-                        faabric::util::SnapshotData data,
+                        const faabric::util::SnapshotData& data,
                         bool locallyRestorable,
                         bool overwrite);
 };

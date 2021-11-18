@@ -403,7 +403,7 @@ TEST_CASE("Test mapping memory", "[util]")
     int fd = writeMemoryToFd(vMem, chunk.size(), "foobar");
 
     // Map some new memory to this fd
-    uint8_t* memA = allocateStandardMemory(chunk.size());
+    uint8_t* memA = allocatePrivateMemory(chunk.size());
     mapMemory(memA, chunk.size(), fd);
 
     std::vector<uint8_t> memAData(memA, memA + chunk.size());
@@ -419,7 +419,7 @@ TEST_CASE("Test mapping memory", "[util]")
       fd, chunk.size(), chunk.size() + chunkB.size(), vMem + chunk.size());
 
     // Map a region to both chunks
-    uint8_t* memB = allocateStandardMemory(chunk.size() + chunkB.size());
+    uint8_t* memB = allocatePrivateMemory(chunk.size() + chunkB.size());
     mapMemory(memB, chunk.size() + chunkB.size(), fd);
 
     // Check region now contains both bits of data
