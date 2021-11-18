@@ -46,6 +46,8 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // Allocation
 // -------------------------
 
+void deallocateMemory(uint8_t* memory, size_t size);
+
 uint8_t* allocateStandardMemory(size_t size);
 
 uint8_t* allocateVirtualMemory(size_t size);

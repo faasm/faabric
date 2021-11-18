@@ -207,6 +207,10 @@ uint8_t* allocateVirtualMemory(size_t size)
     return (uint8_t*)mmapRes;
 }
 
+void deallocateMemory(uint8_t* memory, size_t size) {
+    ::munmap(memory, size);
+}
+
 void claimVirtualMemory(uint8_t* start, size_t size)
 {
     int protectRes = ::mprotect(start, size, PROT_WRITE);
