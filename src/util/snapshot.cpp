@@ -157,6 +157,12 @@ void SnapshotData::setSnapshotSize(size_t newSize)
 
 void SnapshotData::mapToMemory(uint8_t* target)
 {
+    if (fd == 0) {
+        std::string msg = "Attempting to map memory of non-restorable snapshot";
+        SPLDOG_ERROR(msg);
+        throw std::runtime_error(msg);
+    }
+
     faabric::util::mapMemory(target, size, fd);
 }
 
@@ -168,6 +174,12 @@ void SnapshotData::writeToFd(const std::string& fdLabel)
 
 void SnapshotData::updateFd()
 {
+    if (fd == 0) {
+        std::string msg = "Attempting to update fd of non-restorable snapshot";
+        SPLDOG_ERROR(msg);
+        throw std::runtime_error(msg);
+    }
+
     faabric::util::appendDataToFd(fd, fdSize, size, data);
     fdSize = size;
 }
