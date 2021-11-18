@@ -795,7 +795,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test reset not called on master threads",
+                 "Test reset not called on threads",
                  "[executor]")
 {
     faabric::util::setMockMode(true);
@@ -814,6 +814,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         hostOverride = "foobar";
         nMessages = 3;
         requestType = faabric::BatchExecuteRequest::THREADS;
+        expectedResets = 0;
     }
 
     SECTION("Master threads")

@@ -128,6 +128,68 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test growing snapshots",
+                 "[snapshot][util]")
+{
+    // Set up the snapshot
+    int originalPages = 10;
+    size_t originalSize = originalPages * HOST_PAGE_SIZE;
+    int expandedPages = 20;
+    size_t expandedSize = expandedPages * HOST_PAGE_SIZE;
+
+    // Set up virtual memory large enough to be extended
+    snap.data = allocateVirtualMemory(expandedSize);
+
+    // Set up original size and memory
+    snap.size = originalSize;
+    claimVirtualMemory(snap.data, snap.size);
+
+    // Put some data into the snapshot
+    std::vector<uint8_t> dataA(100, 2);
+    std::vector<uint8_t> dataB(300, 4);
+
+    std::memcpy(snap.data + (2 * HOST_PAGE_SIZE), dataA.data(), dataA.size());
+    std::memcpy(
+      snap.data + (5 * HOST_PAGE_SIZE) + 2, dataB.data(), dataB.size());
+
+    std::vector<uint8_t> originalData(snap.data, snap.data + originalSize);
+
+    // Make it restorable
+    std::string fdLabel = "snap-map-test";
+    REQUIRE(!snap.isRestorable());
+    snap.writeToFd(fdLabel);
+    REQUIRE(snap.isRestorable());
+
+    // Map to some other region of memory large enough for the extended version
+    uint8_t* sharedMem = allocatePrivateMemory(expandedSize);
+    snap.mapToMemory(sharedMem);
+
+    // Extend the original snapshot
+    snap.setSnapshotSize(expandedSize);
+    REQUIRE(snap.size == expandedSize);
+
+    // Add some data to the extended region
+    std::vector<uint8_t> dataC(300, 5);
+    std::memcpy(snap.data + ((originalPages + 3) * HOST_PAGE_SIZE),
+                dataC.data(),
+                dataC.size());
+
+    std::vector<uint8_t> expandedData(snap.data, snap.data + expandedSize);
+
+    // Append to the file descriptor
+    snap.updateFd();
+
+    // Remap to same memory
+    snap.mapToMemory(sharedMem);
+
+    // Check mapped region matches
+    std::vector<uint8_t> actualSharedMem(sharedMem, sharedMem + expandedSize);
+
+    REQUIRE(actualSharedMem.size() == expandedData.size());
+    REQUIRE(actualSharedMem == expandedData);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Detailed test snapshot merge regions with ints",
                  "[snapshot][util]")
 {

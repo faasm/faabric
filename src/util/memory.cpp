@@ -293,8 +293,12 @@ int writeMemoryToFd(uint8_t* source, size_t size, const std::string& fdLabel)
     return fd;
 }
 
-void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* newData)
+void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* data)
 {
+    if(newSize == oldSize) {
+        return;
+    }
+
     // Extend the fd
     int ferror = ::ftruncate(fd, newSize);
     if (ferror != 0) {
@@ -310,8 +314,9 @@ void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* newData)
     }
 
     // Write the data
+    uint8_t* newDataStart = data + oldSize;
     size_t newDataSize = newSize - oldSize;
-    ssize_t werror = ::write(fd, newData, newDataSize);
+    ssize_t werror = ::write(fd, newDataStart, newDataSize);
     if (werror == -1) {
         SPDLOG_ERROR("Appending with write failed with error {}", werror);
         throw std::runtime_error("Failed appending memory to fd (write)");

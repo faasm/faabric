@@ -415,8 +415,7 @@ TEST_CASE("Test mapping memory", "[util]")
     std::memcpy(vMem + chunk.size(), chunkB.data(), chunkB.size());
 
     // Append the data to the fd
-    appendDataToFd(
-      fd, chunk.size(), chunk.size() + chunkB.size(), vMem + chunk.size());
+    appendDataToFd(fd, chunk.size(), chunk.size() + chunkB.size(), vMem);
 
     // Map a region to both chunks
     uint8_t* memB = allocatePrivateMemory(chunk.size() + chunkB.size());

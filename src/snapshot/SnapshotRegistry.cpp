@@ -95,15 +95,13 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
     snapshotMap.erase(key);
 }
 
-size_t SnapshotRegistry::changeSnapshotSize(const std::string& key,
+void SnapshotRegistry::changeSnapshotSize(const std::string& key,
                                             size_t newSize)
 {
     faabric::util::UniqueLock lock(snapshotsMx);
 
     faabric::util::SnapshotData& d = getSnapshot(key);
-    size_t oldSize = d.setSnapshotSize(newSize);
-
-    return oldSize;
+    d.setSnapshotSize(newSize);
 }
 
 size_t SnapshotRegistry::getSnapshotCount()

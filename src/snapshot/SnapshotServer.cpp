@@ -144,13 +144,12 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
           std::max<uint32_t>(chunk->offset() + chunk->data()->size(), maxSize);
     }
 
-    size_t oldSize = 0;
     if (maxSize > snap.size) {
         SPDLOG_DEBUG("Diffs are beyond size of original snapshot ({} > {})",
                      maxSize,
                      snap.size);
 
-        oldSize = reg.changeSnapshotSize(r->key()->str(), maxSize);
+        reg.changeSnapshotSize(r->key()->str(), maxSize);
     }
 
     // Iterate through the chunks passed in the request
@@ -222,7 +221,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Update snapshot
     if (maxSize > snap.size) {
-        snap.updateFd(oldSize);
+        snap.updateFd();
     }
 
     // Unlock group if exists

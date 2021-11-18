@@ -147,18 +147,12 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     mergeRegions[region.offset] = region;
 }
 
-size_t SnapshotData::setSnapshotSize(size_t newSize)
+void SnapshotData::setSnapshotSize(size_t newSize)
 {
     // Try to allocate more memory on top of existing data. Will throw an
     // exception if not possible
-    size_t oldSize = size;
-    size_t change = newSize - oldSize;
-
-    claimVirtualMemory(data, change);
-
+    claimVirtualMemory(data, newSize);
     size = newSize;
-
-    return oldSize;
 }
 
 void SnapshotData::mapToMemory(uint8_t* target)
@@ -169,12 +163,13 @@ void SnapshotData::mapToMemory(uint8_t* target)
 void SnapshotData::writeToFd(const std::string& fdLabel)
 {
     fd = writeMemoryToFd(data, size, fdLabel);
+    fdSize = size;
 }
 
-void SnapshotData::updateFd(size_t oldSize)
+void SnapshotData::updateFd()
 {
-    size_t offset = size - oldSize;
-    faabric::util::appendDataToFd(fd, oldSize, size, data + offset);
+    faabric::util::appendDataToFd(fd, fdSize, size, data);
+    fdSize = size;
 }
 
 std::map<uint32_t, SnapshotMergeRegion> SnapshotData::getMergeRegions()
