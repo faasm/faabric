@@ -9,6 +9,8 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
+#define FOUR_GB (size_t)(1024L * 1024L * 1024L * 4L)
+
 namespace faabric::util {
 
 enum SnapshotDataType
@@ -73,13 +75,13 @@ class SnapshotMergeRegion
 class SnapshotData
 {
   public:
-    size_t size = 0;
     uint8_t* data = nullptr;
+    size_t size = 0;
     int fd = 0;
 
     SnapshotData() = default;
 
-    std::vector<SnapshotDiff> getDirtyPages();
+    std::vector<SnapshotDiff> getDirtyRegions();
 
     std::vector<SnapshotDiff> getChangeDiffs(const uint8_t* updated,
                                              size_t updatedSize);
@@ -89,6 +91,10 @@ class SnapshotData
                         SnapshotDataType dataType,
                         SnapshotMergeOperation operation,
                         bool overwrite = false);
+
+    void clearMergeRegions();
+
+    void setSnapshotSize(size_t newSize);
 
   private:
     // Note - we care about the order of this map, as we iterate through it

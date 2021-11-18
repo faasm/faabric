@@ -1,6 +1,7 @@
 table SnapshotPushRequest {
   key:string;
   groupid:int;
+  maxSize:ulong;
   contents:[ubyte];
 }
 

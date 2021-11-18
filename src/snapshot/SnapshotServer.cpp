@@ -79,18 +79,19 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
       faabric::snapshot::getSnapshotRegistry();
 
     // Set up the snapshot
-    faabric::util::SnapshotData data;
-    data.size = r->contents()->size();
+    faabric::util::SnapshotData snap;
+    snap.size = r->contents()->size();
 
-    // TODO - avoid this copy by changing server superclass to allow subclasses
-    // to provide a buffer to receive data.
-    // TODO - work out snapshot ownership here, how do we know when to delete
-    // this data?
-    data.data = (uint8_t*)mmap(
-      nullptr, data.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    std::memcpy(data.data, r->contents()->Data(), data.size);
+    // TODO - provision up to max size of snapshot if provided here.
 
-    reg.takeSnapshot(r->key()->str(), data, true);
+    // TODO - avoid this copy?
+    snap.data = (uint8_t*)mmap(
+      nullptr, snap.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    std::memcpy(snap.data, r->contents()->Data(), snap.size);
+
+    // TODO - avoid a further copy in here when setting up fd
+    reg.takeSnapshot(r->key()->str(), snap, true);
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -129,6 +130,21 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
         faabric::transport::PointToPointGroup::groupExists(groupId)) {
         faabric::transport::PointToPointGroup::getGroup(r->groupid())
           ->localLock();
+    }
+
+    // Work out max size of the snapshot and extend if necessary
+    uint32_t maxSize = 0;
+    for (const auto* chunk : *r->chunks()) {
+        maxSize =
+          std::max<uint32_t>(chunk->offset() + chunk->data()->size(), maxSize);
+    }
+
+    if (maxSize > snap.size) {
+        SPDLOG_DEBUG("Diffs are beyond size of original snapshot ({} > {})",
+                     maxSize,
+                     snap.size);
+
+        reg.changeSnapshotSize(r->key()->str(), maxSize);
     }
 
     // Iterate through the chunks passed in the request
@@ -206,7 +222,8 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     }
 
     // Reset dirty tracking having applied diffs
-    SPDLOG_DEBUG("Resetting dirty page tracking having applied diffs");
+    SPDLOG_DEBUG("Resetting dirty page tracking having applied diffs to {}",
+                 r->key()->str());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();

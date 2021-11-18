@@ -140,7 +140,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Work out if we should skip the reset after this batch. This only needs to
     // happen when we're executing threads on the master host, in which case the
     // original function call will cause a reset
-    bool skipReset = isMaster && isThreads;
+    // bool skipReset = isMaster && isThreads;
+    bool skipReset = isThreads;
 
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted do
@@ -295,6 +296,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Reset dirty page tracking now that we've pushed the diffs
             faabric::util::resetDirtyTracking();
+
+            // Clear any merge regions
+            SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
+            snapshotPreExecution.clearMergeRegions();
         }
 
         // If this batch is finished, reset the executor and release its claim.

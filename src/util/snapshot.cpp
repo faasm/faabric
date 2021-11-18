@@ -10,27 +10,28 @@ namespace faabric::util {
 // class, but it can't be copy-constructed.
 static std::mutex snapMx;
 
-std::vector<SnapshotDiff> SnapshotData::getDirtyPages()
+std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
 {
     if (data == nullptr || size == 0) {
         std::vector<SnapshotDiff> empty;
         return empty;
     }
 
-    // Get dirty pages
+    // Get dirty regions
     int nPages = getRequiredHostPages(size);
     std::vector<int> dirtyPageNumbers = getDirtyPageNumbers(data, nPages);
 
+    std::vector<std::pair<uint32_t, uint32_t>> regions =
+      faabric::util::getDirtyRegions(data, nPages);
+
     // Convert to snapshot diffs
-    // TODO - reduce number of diffs by merging adjacent dirty pages
     std::vector<SnapshotDiff> diffs;
-    for (int i : dirtyPageNumbers) {
-        uint32_t offset = i * HOST_PAGE_SIZE;
+    for (auto& p : regions) {
         diffs.emplace_back(SnapshotDataType::Raw,
                            SnapshotMergeOperation::Overwrite,
-                           offset,
-                           data + offset,
-                           HOST_PAGE_SIZE);
+                           p.first,
+                           data + p.first,
+                           (p.second - p.first));
     }
 
     SPDLOG_DEBUG("Snapshot has {}/{} dirty pages", diffs.size(), nPages);
@@ -50,7 +51,7 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
     // Work out which regions of memory have changed
     size_t nThisPages = getRequiredHostPages(updatedSize);
     std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-      getDirtyRegions(updated, nThisPages);
+      faabric::util::getDirtyRegions(updated, nThisPages);
     SPDLOG_TRACE("Found {} dirty regions", dirtyRegions.size());
 
     // Iterate through merge regions, see which ones overlap with dirty memory
@@ -121,6 +122,16 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     }
 
     mergeRegions[region.offset] = region;
+}
+
+void SnapshotData::setSnapshotSize(size_t newSize) {
+    // TODO - try to allocate more memory on top of existing data, if that
+    // fails, throw an exception
+}
+
+void SnapshotData::clearMergeRegions()
+{
+    mergeRegions.clear();
 }
 
 std::string snapshotDataTypeStr(SnapshotDataType dt)

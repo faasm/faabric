@@ -138,7 +138,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
       sharedMem + offsetNoChange, dataNoChange.data(), dataNoChange.size());
 
     // Check original has no dirty pages
-    REQUIRE(snap.getDirtyPages().empty());
+    REQUIRE(snap.getDirtyRegions().empty());
 
     // Check shared memory does have dirty pages (including the non-change)
     std::vector<int> sharedDirtyPages =

@@ -30,6 +30,8 @@ class SnapshotRegistry
 
     void deleteSnapshot(const std::string& key);
 
+    void changeSnapshotSize(const std::string &key, size_t newSize);
+
     size_t getSnapshotCount();
 
     void clear();

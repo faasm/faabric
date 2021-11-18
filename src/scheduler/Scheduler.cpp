@@ -441,7 +441,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             // if so, just push the diffs
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snapshotData.getDirtyPages();
+                  snapshotData.getDirtyRegions();
                 c.pushSnapshotDiffs(
                   snapshotKey, firstMsg.groupid(), snapshotDiffs);
             } else {
@@ -452,11 +452,11 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     }
 
     // Now reset the dirty page tracking just before we start executing
-    SPDLOG_DEBUG("Resetting dirty tracking after pushing diffs {}", funcStr);
+    SPDLOG_DEBUG("Resetting dirty tracking before executing {}", funcStr);
     faabric::util::resetDirtyTracking();
 
     // -------------------------------------------
-    // EXECTUION
+    // EXECUTION
     // -------------------------------------------
 
     // Iterate through unique hosts and dispatch messages

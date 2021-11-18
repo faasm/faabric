@@ -757,7 +757,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Check that we're not registering any dirty pages on the snapshot
     faabric::util::SnapshotData& snap = reg.getSnapshot(snapshotKey);
-    REQUIRE(snap.getDirtyPages().empty());
+    REQUIRE(snap.getDirtyRegions().empty());
 
     // Now reset snapshot pushes of all kinds
     faabric::snapshot::clearMockSnapshotRequests();
@@ -766,7 +766,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     snap.data[0] = 9;
     snap.data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-      snap.getDirtyPages();
+      snap.getDirtyRegions();
     REQUIRE(expectedDiffs.size() == 2);
 
     // Set up another function

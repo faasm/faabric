@@ -122,6 +122,18 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
     snapshotMap.erase(key);
 }
 
+void SnapshotRegistry::changeSnapshotSize(const std::string& key,
+                                          size_t newSize)
+{
+    faabric::util::UniqueLock lock(snapshotsMx);
+
+    faabric::util::SnapshotData &d = getSnapshot(key);
+    d.setSnapshotSize(newSize);
+
+    // TODO - change file descriptor size and write new data? Completely remap
+    // to a new file descriptor?
+}
+
 size_t SnapshotRegistry::getSnapshotCount()
 {
     faabric::util::UniqueLock lock(snapshotsMx);
