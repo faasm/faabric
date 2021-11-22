@@ -72,7 +72,7 @@ TEST_CASE("Test execution graph", "[scheduler][exec-graph]")
     checkExecGraphEquality(expected, actual);
 }
 
-TEST_CASE("Test execution graph node count", "[scheduler][exec-graph]")
+TEST_CASE("Test get unique hosts from exec graph", "[scheduler][exec-graph]")
 {
     faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
     faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
@@ -82,13 +82,16 @@ TEST_CASE("Test execution graph node count", "[scheduler][exec-graph]")
     msgB1.set_executedhost("bar");
     msgB2.set_executedhost("baz");
 
-    ExecGraphNode nodeB2 = { .msg = msgB2 };
     ExecGraphNode nodeB1 = { .msg = msgB1 };
-    ExecGraphNode nodeA = { .msg = msgA, .children = { nodeB1, nodeB2 } };
+    ExecGraphNode nodeB2 = { .msg = msgB2 };
+    ExecGraphNode nodeB3 = { .msg = msgB2 };
+    ExecGraphNode nodeA = { .msg = msgA,
+                            .children = { nodeB1, nodeB2, nodeB3 } };
 
     ExecGraph graph{ .rootNode = nodeA };
+    std::set<std::string> expected = { "bar", "baz", "foo" };
     auto hosts = faabric::scheduler::getExecGraphHosts(graph);
-    REQUIRE(hosts.size() == 3);
+    REQUIRE(hosts == expected);
 }
 
 TEST_CASE_METHOD(MpiBaseTestFixture,

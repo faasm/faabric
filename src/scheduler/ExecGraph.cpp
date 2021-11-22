@@ -30,11 +30,9 @@ std::set<std::string> getExecGraphHostsForNode(const ExecGraphNode& node)
     std::set<std::string> hostsForNode;
     hostsForNode.insert(node.msg.executedhost());
 
-    if (!node.children.empty()) {
-        for (auto c : node.children) {
-            std::set<std::string> nodeHost = getExecGraphHostsForNode(c);
-            hostsForNode.insert(nodeHost.begin(), nodeHost.end());
-        }
+    for (auto c : node.children) {
+        std::set<std::string> nodeHost = getExecGraphHostsForNode(c);
+        hostsForNode.insert(nodeHost.begin(), nodeHost.end());
     }
 
     return hostsForNode;
@@ -42,9 +40,7 @@ std::set<std::string> getExecGraphHostsForNode(const ExecGraphNode& node)
 
 std::set<std::string> getExecGraphHosts(const ExecGraph& graph)
 {
-    ExecGraphNode rootNode = graph.rootNode;
-    std::set<std::string> hosts = getExecGraphHostsForNode(rootNode);
-    return hosts;
+    return getExecGraphHostsForNode(graph.rootNode);
 }
 
 // ----------------------------------------
