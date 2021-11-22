@@ -25,6 +25,28 @@ int countExecGraphNodes(const ExecGraph& graph)
     return count;
 }
 
+std::set<std::string> countExecGraphHostsForNode(const ExecGraphNode& node)
+{
+    std::set<std::string> hostsForNode;
+    hostsForNode.insert(node.msg.executedhost());
+
+    if (!node.children.empty()) {
+        for (auto c : node.children) {
+            std::set<std::string> nodeHost = countExecGraphHostsForNode(c);
+            hostsForNode.insert(nodeHost.begin(), nodeHost.end());
+        }
+    }
+
+    return hostsForNode;
+}
+
+std::set<std::string> countExecGraphHosts(const ExecGraph& graph)
+{
+    ExecGraphNode rootNode = graph.rootNode;
+    std::set<std::string> hosts = countExecGraphHostsForNode(rootNode);
+    return hosts;
+}
+
 // ----------------------------------------
 // TODO - do this with RapidJson and not sstream
 // ----------------------------------------

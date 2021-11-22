@@ -72,6 +72,25 @@ TEST_CASE("Test execution graph", "[scheduler][exec-graph]")
     checkExecGraphEquality(expected, actual);
 }
 
+TEST_CASE("Test execution graph node count", "[scheduler][exec-graph]")
+{
+    faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
+    faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
+    faabric::Message msgB2 = faabric::util::messageFactory("demo", "echo");
+
+    msgA.set_executedhost("foo");
+    msgB1.set_executedhost("bar");
+    msgB2.set_executedhost("baz");
+
+    ExecGraphNode nodeB2 = { .msg = msgB2 };
+    ExecGraphNode nodeB1 = { .msg = msgB1 };
+    ExecGraphNode nodeA = { .msg = msgA, .children = { nodeB1, nodeB2 } };
+
+    ExecGraph graph{ .rootNode = nodeA };
+    auto hosts = faabric::scheduler::countExecGraphHosts(graph);
+    REQUIRE(hosts.size() == 3);
+}
+
 TEST_CASE_METHOD(MpiBaseTestFixture,
                  "Test MPI execution graph",
                  "[mpi][scheduler][exec-graph]")
