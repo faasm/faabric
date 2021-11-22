@@ -87,7 +87,7 @@ TEST_CASE("Test execution graph node count", "[scheduler][exec-graph]")
     ExecGraphNode nodeA = { .msg = msgA, .children = { nodeB1, nodeB2 } };
 
     ExecGraph graph{ .rootNode = nodeA };
-    auto hosts = faabric::scheduler::countExecGraphHosts(graph);
+    auto hosts = faabric::scheduler::getExecGraphHosts(graph);
     REQUIRE(hosts.size() == 3);
 }
 

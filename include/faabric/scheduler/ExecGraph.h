@@ -20,7 +20,7 @@ struct ExecGraph
 
 int countExecGraphNodes(const ExecGraph& graph);
 
-std::set<std::string> countExecGraphHosts(const ExecGraph& graph);
+std::set<std::string> getExecGraphHosts(const ExecGraph& graph);
 
 std::string execNodeToJson(const ExecGraphNode& node);
 

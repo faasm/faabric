@@ -25,14 +25,14 @@ int countExecGraphNodes(const ExecGraph& graph)
     return count;
 }
 
-std::set<std::string> countExecGraphHostsForNode(const ExecGraphNode& node)
+std::set<std::string> getExecGraphHostsForNode(const ExecGraphNode& node)
 {
     std::set<std::string> hostsForNode;
     hostsForNode.insert(node.msg.executedhost());
 
     if (!node.children.empty()) {
         for (auto c : node.children) {
-            std::set<std::string> nodeHost = countExecGraphHostsForNode(c);
+            std::set<std::string> nodeHost = getExecGraphHostsForNode(c);
             hostsForNode.insert(nodeHost.begin(), nodeHost.end());
         }
     }
@@ -40,10 +40,10 @@ std::set<std::string> countExecGraphHostsForNode(const ExecGraphNode& node)
     return hostsForNode;
 }
 
-std::set<std::string> countExecGraphHosts(const ExecGraph& graph)
+std::set<std::string> getExecGraphHosts(const ExecGraph& graph)
 {
     ExecGraphNode rootNode = graph.rootNode;
-    std::set<std::string> hosts = countExecGraphHostsForNode(rootNode);
+    std::set<std::string> hosts = getExecGraphHostsForNode(rootNode);
     return hosts;
 }
 
