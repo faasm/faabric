@@ -61,14 +61,15 @@ void Executor::finish()
 
     // Shut down thread pools and wait
     for (int i = 0; i < threadPoolThreads.size(); i++) {
-        if (threadPoolThreads.at(i) == nullptr) {
-            continue;
-        }
-
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
         threadTaskQueues[i].enqueue(
           ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false, false));
+
+        // If already killed, move to the next thread
+        if (threadPoolThreads.at(i) == nullptr) {
+            continue;
+        }
 
         // Await the thread
         if (threadPoolThreads.at(i)->joinable()) {
