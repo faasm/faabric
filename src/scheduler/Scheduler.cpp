@@ -210,7 +210,8 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  bool forceLocal)
+  bool forceLocal,
+  faabric::util::SchedulingTopologyHint topologyHint)
 {
     // Note, we assume all the messages are for the same function and have the
     // same master host
@@ -236,7 +237,8 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     faabric::util::FullLock lock(mx);
 
-    SchedulingDecision decision = makeSchedulingDecision(req, forceLocal);
+    SchedulingDecision decision =
+      makeSchedulingDecision(req, forceLocal, topologyHint);
 
     // Send out point-to-point mappings if necessary (unless being forced to
     // execute locally, in which case they will be transmitted from the
@@ -249,9 +251,22 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     return doCallFunctions(req, decision, lock);
 }
 
+faabric::util::SchedulingDecision Scheduler::publicMakeSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  bool forceLocal,
+  faabric::util::SchedulingTopologyHint topologyHint)
+{
+    if (!faabric::util::isTestMode()) {
+        throw std::runtime_error("This function must only be called in tests");
+    }
+
+    return makeSchedulingDecision(req, forceLocal, topologyHint);
+}
+
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  bool forceLocal)
+  bool forceLocal,
+  faabric::util::SchedulingTopologyHint topologyHint)
 {
     int nMessages = req->messages_size();
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
@@ -296,8 +311,20 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 int available = r.slots() - r.usedslots();
                 int nOnThisHost = std::min(available, remainder);
 
-                for (int i = 0; i < nOnThisHost; i++) {
-                    hosts.push_back(h);
+                // Under the pairs topology hint, we never allocate a single
+                // non-master request (id != 0) to a host without other
+                // requests of the batch
+                bool stickToPreviousHost =
+                  (topologyHint ==
+                     faabric::util::SchedulingTopologyHint::PAIRS &&
+                   nOnThisHost == 1 && hosts.size() > 0);
+
+                if (stickToPreviousHost) {
+                    hosts.push_back(hosts.back());
+                } else {
+                    for (int i = 0; i < nOnThisHost; i++) {
+                        hosts.push_back(h);
+                    }
                 }
 
                 remainder -= nOnThisHost;
@@ -323,13 +350,22 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 int available = r.slots() - r.usedslots();
                 int nOnThisHost = std::min(available, remainder);
 
-                // Register the host if it's exected a function
-                if (nOnThisHost > 0) {
-                    registeredHosts[funcStr].insert(h);
-                }
+                bool stickToPreviousHost =
+                  (topologyHint ==
+                     faabric::util::SchedulingTopologyHint::PAIRS &&
+                   nOnThisHost == 1 && hosts.size() > 0);
 
-                for (int i = 0; i < nOnThisHost; i++) {
-                    hosts.push_back(h);
+                if (stickToPreviousHost) {
+                    hosts.push_back(hosts.back());
+                } else {
+                    // Register the host if it's exected a function
+                    if (nOnThisHost > 0) {
+                        registeredHosts[funcStr].insert(h);
+                    }
+
+                    for (int i = 0; i < nOnThisHost; i++) {
+                        hosts.push_back(h);
+                    }
                 }
 
                 remainder -= nOnThisHost;

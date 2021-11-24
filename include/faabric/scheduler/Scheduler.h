@@ -102,7 +102,9 @@ class Scheduler
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      bool forceLocal = false);
+      bool forceLocal = false,
+      faabric::util::SchedulingTopologyHint =
+        faabric::util::SchedulingTopologyHint::NORMAL);
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -177,6 +179,11 @@ class Scheduler
 
     void clearRecordedMessages();
 
+    faabric::util::SchedulingDecision publicMakeSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      bool forceLocal,
+      faabric::util::SchedulingTopologyHint topologyHint);
+
     // ----------------------------------
     // Exec graph
     // ----------------------------------
@@ -233,7 +240,8 @@ class Scheduler
 
     faabric::util::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      bool forceLocal);
+      bool forceLocal,
+      faabric::util::SchedulingTopologyHint topologyHint);
 
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
