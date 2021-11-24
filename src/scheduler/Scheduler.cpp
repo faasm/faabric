@@ -298,20 +298,16 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 int available = r.slots() - r.usedslots();
                 int nOnThisHost = std::min(available, remainder);
 
-                // Under the pairs topology hint, we never allocate a single
-                // non-master request (id != 0) to a host without other
-                // requests of the batch
-                bool stickToPreviousHost =
-                  (topologyHint ==
-                     faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
-                   nOnThisHost == 1 && hosts.size() > 0);
+                // Under the NEVER_ALONE topology hint, we never choose a host
+                // unless we can schedule at least two requests in it.
+                if (topologyHint ==
+                      faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
+                    nOnThisHost < 2) {
+                    continue;
+                }
 
-                if (stickToPreviousHost) {
-                    hosts.push_back(hosts.back());
-                } else {
-                    for (int i = 0; i < nOnThisHost; i++) {
-                        hosts.push_back(h);
-                    }
+                for (int i = 0; i < nOnThisHost; i++) {
+                    hosts.push_back(h);
                 }
 
                 remainder -= nOnThisHost;
@@ -337,22 +333,19 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 int available = r.slots() - r.usedslots();
                 int nOnThisHost = std::min(available, remainder);
 
-                bool stickToPreviousHost =
-                  (topologyHint ==
-                     faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
-                   nOnThisHost == 1 && hosts.size() > 0);
+                if (topologyHint ==
+                      faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
+                    nOnThisHost < 2) {
+                    continue;
+                }
 
-                if (stickToPreviousHost) {
-                    hosts.push_back(hosts.back());
-                } else {
-                    // Register the host if it's exected a function
-                    if (nOnThisHost > 0) {
-                        registeredHosts[funcStr].insert(h);
-                    }
+                // Register the host if it's exected a function
+                if (nOnThisHost > 0) {
+                    registeredHosts[funcStr].insert(h);
+                }
 
-                    for (int i = 0; i < nOnThisHost; i++) {
-                        hosts.push_back(h);
-                    }
+                for (int i = 0; i < nOnThisHost; i++) {
+                    hosts.push_back(h);
                 }
 
                 remainder -= nOnThisHost;
@@ -365,11 +358,24 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         // At this point there's no more capacity in the system, so we
         // just need to overload locally
         if (remainder > 0) {
-            SPDLOG_DEBUG(
-              "Overloading {}/{} {} locally", remainder, nMessages, funcStr);
+            std::string overloadedHost = thisHost;
+
+            if (topologyHint ==
+                  faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
+                hosts.size() > 0) {
+                overloadedHost = hosts.back();
+            }
+
+            SPDLOG_DEBUG("Overloading {}/{} {} {}",
+                         remainder,
+                         nMessages,
+                         funcStr,
+                         overloadedHost == thisHost
+                           ? "locally"
+                           : "to host " + overloadedHost);
 
             for (int i = 0; i < remainder; i++) {
-                hosts.push_back(thisHost);
+                hosts.push_back(overloadedHost);
             }
         }
     }

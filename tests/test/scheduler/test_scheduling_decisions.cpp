@@ -204,6 +204,34 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 }
 
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
+                 "Test scheduling decision skips fully occupied worker hosts",
+                 "[scheduler]")
+{
+    SchedulingConfig config = {
+        .hosts = { masterHost, "hostA", "hostB" },
+        .slots = { 2, 0, 2 },
+        .numReqs = 4,
+        .topologyHint = faabric::util::SchedulingTopologyHint::NORMAL,
+        .expectedHosts = { masterHost, masterHost, "hostB", "hostB" },
+    };
+
+    auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+
+    SECTION("No topology hint")
+    {
+        config.topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+    }
+
+    SECTION("Never alone topology hint")
+    {
+        config.topologyHint =
+          faabric::util::SchedulingTopologyHint::NEVER_ALONE;
+    }
+
+    testActualSchedulingDecision(req, config);
+}
+
+TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test scheduling decision with many requests",
                  "[scheduler]")
 {
@@ -240,6 +268,28 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         };
     }
 
+    SECTION("Decreasing to one and increasing slot distribution")
+    {
+        config.slots = { 2, 2, 1, 2 };
+
+        SECTION("No topology hint")
+        {
+            config.topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+            config.expectedHosts = {
+                masterHost, masterHost, "hostA", "hostA",
+                "hostB",    "hostC",    "hostC", masterHost
+            };
+        }
+
+        SECTION("Never alone topology hint")
+        {
+            config.topologyHint =
+              faabric::util::SchedulingTopologyHint::NEVER_ALONE;
+            config.expectedHosts = { masterHost, masterHost, "hostA", "hostA",
+                                     "hostC",    "hostC",    "hostC", "hostC" };
+        }
+    }
+
     testActualSchedulingDecision(req, config);
 }
 
@@ -263,14 +313,6 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
     }
 
-    SECTION("Test hint does not apply for master requests")
-    {
-        config.slots = { 0, 1 };
-        config.numReqs = 1;
-        config.expectedHosts = { "hostA" };
-        req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
-    }
-
     SECTION("Test with hint we may overload remote hosts")
     {
         config.hosts = { masterHost, "hostA", "hostB" };
@@ -282,13 +324,14 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
     }
 
-    SECTION("Test with hint we still overload master if running out of slots")
+    SECTION(
+      "Test with hint we still overload correctly if running out of slots")
     {
         config.hosts = { masterHost, "hostA" };
         config.numReqs = 5;
         config.slots = { 2, 2 };
         config.expectedHosts = {
-            masterHost, masterHost, "hostA", "hostA", masterHost
+            masterHost, masterHost, "hostA", "hostA", "hostA"
         };
         req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
     }
