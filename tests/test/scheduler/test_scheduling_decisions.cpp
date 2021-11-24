@@ -259,7 +259,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .slots = { 1, 1 },
         .numReqs = 2,
         .forceLocal = false,
-        .topologyHint = faabric::util::SchedulingTopologyHint::PAIRS,
+        .topologyHint = faabric::util::SchedulingTopologyHint::NEVER_ALONE,
         .expectedHosts = { masterHost, "hostA" },
     };
 

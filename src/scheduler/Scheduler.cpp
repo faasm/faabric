@@ -304,7 +304,7 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 // requests of the batch
                 bool stickToPreviousHost =
                   (topologyHint ==
-                     faabric::util::SchedulingTopologyHint::PAIRS &&
+                     faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
                    nOnThisHost == 1 && hosts.size() > 0);
 
                 if (stickToPreviousHost) {
@@ -340,7 +340,7 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
 
                 bool stickToPreviousHost =
                   (topologyHint ==
-                     faabric::util::SchedulingTopologyHint::PAIRS &&
+                     faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
                    nOnThisHost == 1 && hosts.size() > 0);
 
                 if (stickToPreviousHost) {

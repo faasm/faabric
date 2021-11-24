@@ -46,11 +46,12 @@ class SchedulingDecision
 // requests in a batch.
 //  - NORMAL: bin-packs requests to slots in hosts starting from the master
 //            host, and overloadds the master if it runs out of resources.
-//  - PAIRS: never allocates a single (non-master) request to a host without
-//           other requests of the batch.
+//  - NEVER_ALONE: never allocates a single (non-master) request to a host
+//  without
+//                 other requests of the batch.
 enum SchedulingTopologyHint
 {
     NORMAL,
-    PAIRS
+    NEVER_ALONE
 };
 }
