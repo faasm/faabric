@@ -321,6 +321,14 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         req = batchExecFactory("foo", "bar", config.numReqs);
     }
 
+    SECTION("Test hint does not apply for master requests")
+    {
+        config.slots = { 0, 1 };
+        config.numReqs = 1;
+        config.expectedHosts = { "hostA" };
+        req = batchExecFactory("foo", "bar", config.numReqs);
+    }
+
     SECTION("Test with hint we may overload remote hosts")
     {
         config.hosts = { masterHost, "hostA", "hostB" };
@@ -340,6 +348,27 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         config.expectedHosts = {
             masterHost, masterHost, "hostA", "hostA", masterHost
         };
+        req = batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    SECTION("Test hint with uneven slot distribution")
+    {
+        config.hosts = { masterHost, "hostA" };
+        config.numReqs = 5;
+        config.slots = { 2, 3 };
+        config.expectedHosts = {
+            masterHost, masterHost, "hostA", "hostA", "hostA"
+        };
+        req = batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    SECTION("Test hint with uneven slot distribution and overload")
+    {
+        config.hosts = { masterHost, "hostA", "hostB" };
+        config.numReqs = 6;
+        config.slots = { 2, 3, 1 };
+        config.expectedHosts = { masterHost, masterHost, "hostA",
+                                 "hostA",    "hostA",    "hostA" };
         req = batchExecFactory("foo", "bar", config.numReqs);
     }
 
