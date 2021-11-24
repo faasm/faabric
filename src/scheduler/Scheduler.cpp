@@ -251,18 +251,6 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     return doCallFunctions(req, decision, lock);
 }
 
-faabric::util::SchedulingDecision Scheduler::publicMakeSchedulingDecision(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  bool forceLocal,
-  faabric::util::SchedulingTopologyHint topologyHint)
-{
-    if (!faabric::util::isTestMode()) {
-        throw std::runtime_error("This function must only be called in tests");
-    }
-
-    return makeSchedulingDecision(req, forceLocal, topologyHint);
-}
-
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   bool forceLocal,

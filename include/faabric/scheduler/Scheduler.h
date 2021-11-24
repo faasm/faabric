@@ -179,11 +179,6 @@ class Scheduler
 
     void clearRecordedMessages();
 
-    faabric::util::SchedulingDecision publicMakeSchedulingDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      bool forceLocal,
-      faabric::util::SchedulingTopologyHint topologyHint);
-
     // ----------------------------------
     // Exec graph
     // ----------------------------------

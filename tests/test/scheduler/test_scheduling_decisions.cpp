@@ -11,7 +11,14 @@ namespace tests {
 class SchedulingDecisionTestFixture : public SchedulerTestFixture
 {
   public:
-    SchedulingDecisionTestFixture() { faabric::util::setMockMode(true); }
+    SchedulingDecisionTestFixture()
+    {
+        faabric::util::setMockMode(true);
+
+        std::shared_ptr<TestExecutorFactory> fac =
+          std::make_shared<TestExecutorFactory>();
+        setExecutorFactory(fac);
+    }
 
     ~SchedulingDecisionTestFixture() { faabric::util::setMockMode(false); }
 
@@ -63,25 +70,32 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       const SchedulingConfig& config)
     {
-        auto& sch = getScheduler();
         faabric::util::SchedulingDecision actualDecision(appId, groupId);
 
         // Set resources for all hosts
         setHostResources(config.hosts, config.slots);
 
-        // The first time we request the scheduling decision, we will follow the
+        // The first time we run the batch request, we will follow the
         // unregistered hosts path
-        actualDecision = sch.publicMakeSchedulingDecision(
-          req, config.forceLocal, config.topologyHint);
+        actualDecision =
+          sch.callFunctions(req, config.forceLocal, config.topologyHint);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
 
+        // We wait for the execution to finish and the scheduler to vacate
+        // the slots. We can't wait on the function result, as sometimes
+        // functions won't be executed at all (e.g. master running out of
+        // resources).
+        SLEEP_MS(100);
+
         // Set resources again to reset the used slots
+        auto reqCopy =
+          faabric::util::batchExecFactory("foo", "baz", req->messages_size());
         setHostResources(config.hosts, config.slots);
 
-        // The second time we request the scheduling decision, we will follow
+        // The second time we run the batch request, we will follow
         // the registered hosts path
-        actualDecision = sch.publicMakeSchedulingDecision(
-          req, config.forceLocal, config.topologyHint);
+        actualDecision =
+          sch.callFunctions(reqCopy, config.forceLocal, config.topologyHint);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
     }
 };
