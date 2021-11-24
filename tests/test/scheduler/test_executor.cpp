@@ -334,15 +334,16 @@ TEST_CASE_METHOD(TestExecutorFixture,
                  "Test executing function repeatedly and flushing",
                  "[executor]")
 {
-    std::shared_ptr<BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("dummy", "simple", 1);
-    uint32_t msgId = req->messages().at(0).id();
-    std::vector<std::string> actualHosts;
+    // Set the bound timeout to something short so the test runs fast
+    conf.boundTimeout = 100;
 
     int numRepeats = 20;
     for (int i = 0; i < numRepeats; i++) {
-        std::vector<std::string> actualHosts =
-          executeWithTestExecutor(req, false);
+        std::shared_ptr<BatchExecuteRequest> req =
+          faabric::util::batchExecFactory("dummy", "simple", 1);
+        uint32_t msgId = req->messages().at(0).id();
+
+        executeWithTestExecutor(req, false);
         faabric::Message result =
           sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
         std::string expected =
