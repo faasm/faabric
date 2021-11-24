@@ -64,6 +64,29 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
         }
     }
 
+    void checkRecordedBatchMessages(
+      faabric::util::SchedulingDecision actualDecision,
+      const SchedulingConfig& config)
+    {
+        auto batchMessages = faabric::scheduler::getBatchRequests();
+
+        // First, turn our expected list of hosts to a map with frequency count
+        // and exclude the master host as no message is sent
+        std::map<std::string, int> expectedHostCount;
+        for (const auto& h : config.expectedHosts) {
+            if (h != masterHost) {
+                ++expectedHostCount[h];
+            }
+        }
+
+        // Then check that the count matches the size of the batch sent
+        for (const auto& hostReqPair : batchMessages) {
+            REQUIRE(expectedHostCount.contains(hostReqPair.first));
+            REQUIRE(expectedHostCount.at(hostReqPair.first) ==
+                    hostReqPair.second->messages_size());
+        }
+    }
+
     // We test the scheduling decision twice: the first one will follow the
     // unregistered hosts path, the second one the registerd hosts one.
     void testActualSchedulingDecision(
@@ -80,6 +103,7 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
         actualDecision =
           sch.callFunctions(req, config.forceLocal, config.topologyHint);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
+        checkRecordedBatchMessages(actualDecision, config);
 
         // We wait for the execution to finish and the scheduler to vacate
         // the slots. We can't wait on the function result, as sometimes
@@ -97,6 +121,7 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
         actualDecision =
           sch.callFunctions(reqCopy, config.forceLocal, config.topologyHint);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
+        checkRecordedBatchMessages(actualDecision, config);
     }
 };
 
