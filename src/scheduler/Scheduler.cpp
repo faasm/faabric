@@ -210,7 +210,6 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  bool forceLocal,
   faabric::util::SchedulingTopologyHint topologyHint)
 {
     // Note, we assume all the messages are for the same function and have the
@@ -225,7 +224,8 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     // If we're not the master host, we need to forward the request back to the
     // master host. This will only happen if a nested batch execution happens.
-    if (!forceLocal && masterHost != thisHost) {
+    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
+        masterHost != thisHost) {
         std::string funcStr = faabric::util::funcToString(firstMsg, false);
         SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
 
@@ -237,13 +237,13 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     faabric::util::FullLock lock(mx);
 
-    SchedulingDecision decision =
-      makeSchedulingDecision(req, forceLocal, topologyHint);
+    SchedulingDecision decision = makeSchedulingDecision(req, topologyHint);
 
     // Send out point-to-point mappings if necessary (unless being forced to
     // execute locally, in which case they will be transmitted from the
     // master)
-    if (!forceLocal && (firstMsg.groupid() > 0)) {
+    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
+        (firstMsg.groupid() > 0)) {
         broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
@@ -253,7 +253,6 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  bool forceLocal,
   faabric::util::SchedulingTopologyHint topologyHint)
 {
     int nMessages = req->messages_size();
@@ -261,7 +260,7 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
     std::vector<std::string> hosts;
-    if (forceLocal) {
+    if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
         for (int i = 0; i < nMessages; i++) {
             hosts.push_back(thisHost);
@@ -660,7 +659,11 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
     req->set_type(req->FUNCTIONS);
 
     // Make the call
-    callFunctions(req, forceLocal);
+    if (forceLocal) {
+        callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
+    } else {
+        callFunctions(req);
+    }
 }
 
 void Scheduler::clearRecordedMessages()

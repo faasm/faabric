@@ -52,6 +52,7 @@ class SchedulingDecision
 enum SchedulingTopologyHint
 {
     NORMAL,
+    FORCE_LOCAL,
     NEVER_ALONE
 };
 }

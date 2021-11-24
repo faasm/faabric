@@ -281,8 +281,14 @@ class TestExecutorFixture
     {
         conf.overrideCpuCount = 10;
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
+        faabric::util::SchedulingTopologyHint topologyHint =
+          faabric::util::SchedulingTopologyHint::NORMAL;
 
-        return sch.callFunctions(req, forceLocal).hosts;
+        if (forceLocal) {
+            topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+        }
+
+        return sch.callFunctions(req, topologyHint).hosts;
     }
 
   private:
@@ -544,9 +550,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
     // Execute all the functions
-    sch.callFunctions(reqA, false);
-    sch.callFunctions(reqB, false);
-    sch.callFunctions(reqC, false);
+    sch.callFunctions(reqA);
+    sch.callFunctions(reqB);
+    sch.callFunctions(reqC);
 
     faabric::Message resA1 =
       sch.getFunctionResult(reqA->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
@@ -830,7 +836,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Call functions and force to execute locally
-    sch.callFunctions(req, true);
+    sch.callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
 
     // As we're faking a non-master execution results will be sent back to
     // the fake master so we can't wait on them, thus have to sleep
