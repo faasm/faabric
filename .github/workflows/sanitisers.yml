@@ -1,0 +1,194 @@
+name: Nightly Checks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  address-sanitiser:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Build with thread sanitising
+      - name: "Build tests with leak sanitising"
+        run: inv dev.sanitise Address
+      # --- Tests ---
+      - name: "Run tests with leak sanitising on"
+        run: ./bin/faabric_tests > /dev/null 2> ./addsan.out
+        working-directory: /build/faabric/static
+      - name: "DELETE ME"
+        run: cat ./addsan.out
+      # --- Compare with expected output
+      - name: "Compare with expected output"
+        run: diff ./addsan.out ./tests/sanitise/expected_addsan.out
+
+  thread-sanitiser:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Build with thread sanitising
+      - name: "Build tests with thread sanitising"
+        run: inv dev.sanitise Thread
+      # --- Tests ---
+      - name: "Run tests with thread sanitising on and print stderr"
+        run: ./bin/faabric_tests > /dev/null 2> ./threadsan.out
+        working-directory: /build/faabric/static
+      - name: "DELETE ME"
+        run: cat ./threadsan.out
+      # --- Compare with expected output
+      - name: "Compare with expected output"
+        run: diff ./threadsan.out ./tests/sanitise/expected_threadsan.out
+
+  undefined-sanitiser:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Build with thread sanitising
+      - name: "Build tests with undefined sanitising"
+        run: inv dev.sanitise Undefined
+      # --- Tests ---
+      - name: "Run tests with undefined sanitising on"
+        run: ./bin/faabric_tests > /dev/null 2> ./ubsan.out
+        working-directory: /build/faabric/static
+      - name: "DELETE ME"
+        run: cat ./ubsan.out
+      # --- Compare with expected output
+      - name: "Compare with expected output"
+        run: diff ./ubsan.out ./tests/sanitise/expected_ubsan.out
+
+  leak-sanitiser:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Build with thread sanitising
+      - name: "Build tests with leak sanitising"
+        run: inv dev.sanitise Leak
+      # --- Tests ---
+      - name: "Run tests with leak sanitising on"
+        run: ./bin/faabric_tests > /dev/null 2> ./leaksan.out
+        working-directory: /build/faabric/static
+      - name: "DELETE ME"
+        run: cat ./leaksan.out
+      # --- Compare with expected output
+      - name: "Compare with expected output"
+        run: diff ./leaksan.out ./tests/sanitise/expected_leaksan.out
+
+  memory-sanitiser:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Build with thread sanitising
+      - name: "Build tests with leak sanitising"
+        run: inv dev.sanitise Memory
+      # --- Tests ---
+      - name: "Run tests with leak sanitising on"
+        run: ./bin/faabric_tests > /dev/null 2> ./memsan.out
+        working-directory: /build/faabric/static
+      - name: "DELETE ME"
+        run: cat ./memsan.out
+      # --- Compare with expected output
+      - name: "Compare with expected output"
+        run: diff ./memsan.out ./tests/sanitise/expected_memsan.out

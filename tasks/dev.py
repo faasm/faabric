@@ -14,7 +14,7 @@ from invoke import task
 
 
 @task
-def cmake(ctx, clean=False, shared=False, build="Debug"):
+def cmake(ctx, clean=False, shared=False, build="Debug", sanitise_mode="None"):
     """
     Configures the build
     """
@@ -40,6 +40,7 @@ def cmake(ctx, clean=False, shared=False, build="Debug"):
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
         "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
+        "-DFAABRIC_USE_SANITISER={}".format(sanitise_mode),
         PROJ_ROOT,
     ]
 
@@ -78,3 +79,19 @@ def install(ctx, target, shared=False):
         cwd=build_dir,
         shell=True,
     )
+
+
+@task
+def sanitise(ctx, mode, shared=False):
+    """
+    Build the tests with different sanitisers
+    """
+    mode_list = ["Address", "Thread", "Undefined", "Leak", "Memory"]
+    if mode not in mode_list:
+        print("Unrecognised sanitiser mode: {}".format(mode))
+        print("Sanitisier mode must be one in {}".format(mode_list))
+        return
+
+    cmake(ctx, clean=True, shared=shared, build="Debug", sanitise_mode=mode)
+
+    cc(ctx, "faabric_tests", shared=shared)
