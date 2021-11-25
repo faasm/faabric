@@ -1012,7 +1012,29 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
 
     // Get the result for this message
     std::string statusKey = faabric::util::statusKeyFromMessageId(messageId);
+
+    // We want to make sure the message bytes have been populated by the time
+    // we get them from Redis. For the time being, we retry a number of times
+    // and fail if we don't succeed.
     std::vector<uint8_t> messageBytes = redis.get(statusKey);
+    int maxNumRetries = 3;
+    int numRetries = 0;
+    while (messageBytes.empty() && numRetries < maxNumRetries) {
+        SPDLOG_WARN(
+          "Retry GET message for ExecGraph node with id {} (Retry {}/{})",
+          messageId,
+          numRetries + 1,
+          maxNumRetries);
+        SLEEP_MS(500);
+        messageBytes = redis.get(statusKey);
+    }
+    if (messageBytes.empty()) {
+        SPDLOG_ERROR("Can't GET message from redis (id: {}, key: {})",
+                     messageId,
+                     statusKey);
+        throw std::runtime_error("Message for exec graph not in Redis");
+    }
+
     faabric::Message result;
     result.ParseFromArray(messageBytes.data(), (int)messageBytes.size());
 
