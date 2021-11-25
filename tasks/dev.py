@@ -82,7 +82,7 @@ def install(ctx, target, shared=False):
 
 
 @task
-def sanitise(ctx, mode, clean=True, shared=False):
+def sanitise(ctx, mode, noclean=False, shared=False):
     """
     Build the tests with different sanitisers
     """
@@ -92,6 +92,12 @@ def sanitise(ctx, mode, clean=True, shared=False):
         print("Sanitisier mode must be one in {}".format(mode_list))
         return
 
-    cmake(ctx, clean=clean, shared=shared, build="Debug", sanitise_mode=mode)
+    cmake(
+        ctx,
+        clean=(not noclean),
+        shared=shared,
+        build="Debug",
+        sanitise_mode=mode,
+    )
 
     cc(ctx, "faabric_tests", shared=shared)

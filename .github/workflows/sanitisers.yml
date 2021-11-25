@@ -74,7 +74,7 @@ jobs:
           name: cmake-cache
           path: /build/faabric
       - name: "Build tests with address sanitising"
-        run: inv dev.sanitise Address --clean=False
+        run: inv dev.sanitise Address --noclean
       - name: "Run tests with address sanitising on and print to stderr to file"
         run: ./bin/faabric_tests > /dev/null
         working-directory: /build/faabric/static
@@ -113,7 +113,7 @@ jobs:
           name: cmake-cache
           path: /build/faabric
       - name: "Build tests with thread sanitising"
-        run: inv dev.sanitise Thread --clean=False
+        run: inv dev.sanitise Thread --noclean
       # --- Tests ---
       - name: "Run tests with thread sanitising on and print stderr to file"
         run: ./bin/faabric_tests > /dev/null
@@ -153,7 +153,7 @@ jobs:
           name: cmake-cache
           path: /build/faabric
       - name: "Build tests with undefined sanitising"
-        run: inv dev.sanitise Undefined --clean=False
+        run: inv dev.sanitise Undefined --noclean
       # --- Tests ---
       - name: "Run tests with undefined sanitising on and print stderr to file"
         run: ./bin/faabric_tests > /dev/null
@@ -193,7 +193,7 @@ jobs:
           name: cmake-cache
           path: /build/faabric
       - name: "Build tests with leak sanitising"
-        run: inv dev.sanitise Leak --clean=False
+        run: inv dev.sanitise Leak --noclean
       # --- Tests ---
       - name: "Run tests with leak sanitising on and print stderr to file"
         run: ./bin/faabric_tests > /dev/null
