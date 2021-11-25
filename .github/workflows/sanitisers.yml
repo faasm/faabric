@@ -1,11 +1,6 @@
 name: Sanitiser Checks
 
-on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
-    types: [opened, synchronize, reopened, ready_for_review]
+on: workflow_dispatch
 
 jobs:
   conan-cache:
