@@ -1,6 +1,12 @@
 name: Sanitiser Checks
 
-on: workflow_dispatch
+# on: workflow_dispatch
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
   conan-cache:
@@ -30,6 +36,11 @@ jobs:
       # --- Build dependencies
       - name: "Build dependencies to be shared by all sanitiser runs"
         run: inv dev.cmake -b Debug
+      - name: "Upload built CMake dependencies"
+        uses: actions/upload-artifact@v2
+        with:
+          name: cmake-cache
+          path: /build/faabric
 
   address-sanitiser:
     if: github.event.pull_request.draft == false
@@ -57,6 +68,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
+      - name: "Download CMake dependencies"
+        uses: actions/download-artifact@v2
+        with:
+          name: cmake-cache
+          path: /build/faabric
       - name: "Build tests with address sanitising"
         run: inv dev.sanitise Address --clean=False
       - name: "Run tests with address sanitising on and print to stderr to file"
@@ -91,6 +107,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
+      - name: "Download CMake dependencies"
+        uses: actions/download-artifact@v2
+        with:
+          name: cmake-cache
+          path: /build/faabric
       - name: "Build tests with thread sanitising"
         run: inv dev.sanitise Thread --clean=False
       # --- Tests ---
@@ -126,6 +147,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
+      - name: "Download CMake dependencies"
+        uses: actions/download-artifact@v2
+        with:
+          name: cmake-cache
+          path: /build/faabric
       - name: "Build tests with undefined sanitising"
         run: inv dev.sanitise Undefined --clean=False
       # --- Tests ---
@@ -161,6 +187,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
+      - name: "Download CMake dependencies"
+        uses: actions/download-artifact@v2
+        with:
+          name: cmake-cache
+          path: /build/faabric
       - name: "Build tests with leak sanitising"
         run: inv dev.sanitise Leak --clean=False
       # --- Tests ---
