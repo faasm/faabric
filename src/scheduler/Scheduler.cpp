@@ -360,9 +360,11 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         if (remainder > 0) {
             std::string overloadedHost = thisHost;
 
+            // Under the NEVER_ALONE scheduling topology hint we want to
+            // overload the last host we assigned requests to.
             if (topologyHint ==
                   faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
-                hosts.size() > 0) {
+                !hosts.empty()) {
                 overloadedHost = hosts.back();
             }
 

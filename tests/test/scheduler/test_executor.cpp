@@ -33,7 +33,7 @@ TestExecutor::TestExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 
-TestExecutor::~TestExecutor() {}
+TestExecutor::~TestExecutor() = default;
 
 void TestExecutor::postFinish()
 {
