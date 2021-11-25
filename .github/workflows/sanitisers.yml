@@ -8,7 +8,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  address-sanitiser:
+  conan-cache:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     env:
@@ -32,21 +32,47 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
+      # --- Build dependencies
+      - name: "Build dependencies to be shared by all sanitiser runs"
+        run: inv dev.cmake -b Debug
+
+  address-sanitiser:
+    if: github.event.pull_request.draft == false
+    needs: [conan-cache]
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
       # --- Build with thread sanitising
-      - name: "Build tests with leak sanitising"
-        run: inv dev.sanitise Address
-      # --- Tests ---
+      - name: "Build tests with address sanitising"
+        run: inv dev.sanitise Address --clean=False
       - name: "Run tests with address sanitising on and print to stderr to file"
-        run: ./bin/faabric_tests > /dev/null # 2> ./addsan.log
+        run: ./bin/faabric_tests > /dev/null
         working-directory: /build/faabric/static
-        #       - name: "DELETE ME"
-        #         run: cat ./addsan.log
-        #       # --- Compare with expected output
-        #       - name: "Compare with expected output"
-        #         run: diff ./addsan.log ./tests/sanitise/expected_addsan.log
+        env:
+          ADSAN_OPTIONS: "verbosity=1:halt_on_error=1"
 
   thread-sanitiser:
     if: github.event.pull_request.draft == false
+    needs: [conan-cache]
     runs-on: ubuntu-latest
     env:
       HOST_TYPE: ci
@@ -71,20 +97,17 @@ jobs:
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
       - name: "Build tests with thread sanitising"
-        run: inv dev.sanitise Thread
+        run: inv dev.sanitise Thread --clean=False
       # --- Tests ---
       - name: "Run tests with thread sanitising on and print stderr to file"
-        run: ./bin/faabric_tests > /dev/null #2> ./threadsan.log
+        run: ./bin/faabric_tests > /dev/null
         working-directory: /build/faabric/static
-        #       - name: "DELETE ME"
-        #         run: cat ./threadsan.log
-        #         working-directory: /build/faabric/static
-        #       # --- Compare with expected output
-        #       - name: "Compare with expected output"
-        #         run: diff ./threadsan.log ./tests/sanitise/expected_threadsan.log
+        env:
+          TSAN_OPTIONS: "verbosity=1:halt_on_error=1"
 
   undefined-sanitiser:
     if: github.event.pull_request.draft == false
+    needs: [conan-cache]
     runs-on: ubuntu-latest
     env:
       HOST_TYPE: ci
@@ -109,19 +132,17 @@ jobs:
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
       - name: "Build tests with undefined sanitising"
-        run: inv dev.sanitise Undefined
+        run: inv dev.sanitise Undefined --clean=False
       # --- Tests ---
       - name: "Run tests with undefined sanitising on and print stderr to file"
-        run: ./bin/faabric_tests > /dev/null # 2> ./ubsan.log
+        run: ./bin/faabric_tests > /dev/null
         working-directory: /build/faabric/static
-        #       - name: "DELETE ME"
-        #         run: cat ./ubsan.log
-        #       # --- Compare with expected output
-        #       - name: "Compare with expected output"
-        #         run: diff ./ubsan.log ./tests/sanitise/expected_ubsan.log
+        env:
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
 
   leak-sanitiser:
     if: github.event.pull_request.draft == false
+    needs: [conan-cache]
     runs-on: ubuntu-latest
     env:
       HOST_TYPE: ci
@@ -146,50 +167,8 @@ jobs:
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
       - name: "Build tests with leak sanitising"
-        run: inv dev.sanitise Leak
+        run: inv dev.sanitise Leak --clean=False
       # --- Tests ---
       - name: "Run tests with leak sanitising on and print stderr to file"
-        run: ./bin/faabric_tests > /dev/null # 2> ./leaksan.log
+        run: ./bin/faabric_tests > /dev/null
         working-directory: /build/faabric/static
-        #       - name: "DELETE ME"
-        #         run: cat ./leaksan.log
-        #       # --- Compare with expected output
-        #       - name: "Compare with expected output"
-        #         run: diff ./leaksan.log ./tests/sanitise/expected_leaksan.log
-
-  memory-sanitiser:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    env:
-      HOST_TYPE: ci
-      REDIS_QUEUE_HOST: redis
-      REDIS_STATE_HOST: redis
-    container:
-      image: faasm/faabric:0.2.2
-    defaults:
-      run:
-        working-directory: /code/faabric
-    services:
-      redis:
-        image: redis
-    steps:
-      # --- Code update ---
-      - name: "Fetch ref"
-        run: git fetch origin ${GITHUB_REF}:ci-branch
-      - name: "Check out branch"
-        run: git checkout --force ci-branch
-      # --- Set-up ---
-      - name: "Ping redis"
-        run: redis-cli -h redis ping
-      # --- Build with thread sanitising
-      - name: "Build tests with memory sanitising"
-        run: inv dev.sanitise Memory
-      # --- Tests ---
-      - name: "Run tests with memory sanitising on and print stderr to file"
-        run: ./bin/faabric_tests > /dev/null # 2> ./memsan.log
-        working-directory: /build/faabric/static
-        #       - name: "DELETE ME"
-        #         run: cat ./memsan.log
-        #       # --- Compare with expected output
-        #       - name: "Compare with expected output"
-        #         run: diff ./memsan.log ./tests/sanitise/expected_memsan.log
