@@ -182,8 +182,11 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
             // Notify remote locker that they've acquired the lock
             notifyLocked(groupIdx);
         } else {
-            // Need to wait to get the lock
-            lockWaiters.push(groupIdx);
+            {
+                faabric::util::UniqueLock lock(mx);
+                // Need to wait to get the lock
+                lockWaiters.push(groupIdx);
+            }
 
             // Wait here if local, otherwise the remote end will pick up the
             // message
@@ -246,13 +249,13 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
       ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
 
     if (host == conf.endpointHost) {
+        faabric::util::UniqueLock lock(mx);
+
         SPDLOG_TRACE("Group idx {} unlocking {} ({} waiters, recursive {})",
                      groupIdx,
                      groupId,
                      lockWaiters.size(),
                      recursive);
-
-        faabric::util::UniqueLock lock(mx);
 
         if (recursive) {
             recursiveLockOwners.pop();
