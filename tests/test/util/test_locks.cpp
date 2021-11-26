@@ -13,8 +13,8 @@ TEST_CASE("Test wait flag", "[util]")
 {
     int nThreads = 10;
 
-    FlagWaiter flagA;
-    FlagWaiter flagB;
+    auto flagA = std::make_shared<FlagWaiter>();
+    auto flagB = std::make_shared<FlagWaiter>();
 
     std::shared_ptr<Latch> latchA1 = Latch::create(nThreads + 1);
     std::shared_ptr<Latch> latchB1 = Latch::create(nThreads + 1);
@@ -36,14 +36,14 @@ TEST_CASE("Test wait flag", "[util]")
 
         threadsA.emplace_back([&flagA, &resultsA, &latchA1, &latchA2, i] {
             latchA1->wait();
-            flagA.waitOnFlag();
+            flagA->waitOnFlag();
             resultsA[i] = i;
             latchA2->wait();
         });
 
         threadsB.emplace_back([&flagB, &resultsB, &latchB1, &latchB2, i] {
             latchB1->wait();
-            flagB.waitOnFlag();
+            flagB->waitOnFlag();
             resultsB[i] = i;
             latchB2->wait();
         });
@@ -56,13 +56,13 @@ TEST_CASE("Test wait flag", "[util]")
     REQUIRE(resultsB == expectedUnset);
 
     // Set one flag, await latch and check
-    flagA.setFlag(true);
+    flagA->setFlag(true);
     latchA2->wait();
     REQUIRE(resultsA == expectedSet);
     REQUIRE(resultsB == expectedUnset);
 
     // Set other flag, await latch and check
-    flagB.setFlag(true);
+    flagB->setFlag(true);
     latchB2->wait();
     REQUIRE(resultsA == expectedSet);
     REQUIRE(resultsB == expectedSet);

@@ -432,7 +432,7 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
     SPDLOG_TRACE(
       "Enabling point-to-point mapping for {}:{}", decision.appId, groupId);
 
-    getGroupFlag(groupId).setFlag(true);
+    getGroupFlag(groupId)->setFlag(true);
 
     return hosts;
 }
@@ -470,27 +470,29 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     }
 }
 
-faabric::util::FlagWaiter& PointToPointBroker::getGroupFlag(int groupId)
+std::shared_ptr<faabric::util::FlagWaiter> PointToPointBroker::getGroupFlag(
+  int groupId)
 {
+    faabric::util::SharedLock lock(brokerMutex);
     if (groupFlags.find(groupId) == groupFlags.end()) {
+        lock.unlock();
         faabric::util::FullLock lock(brokerMutex);
         if (groupFlags.find(groupId) == groupFlags.end()) {
-            return groupFlags[groupId];
+            return groupFlags
+              .emplace(groupId, std::make_shared<faabric::util::FlagWaiter>())
+              .first->second;
         }
     }
 
-    {
-        faabric::util::SharedLock lock(brokerMutex);
-        return groupFlags.at(groupId);
-    }
+    return groupFlags.at(groupId);
 }
 
 void PointToPointBroker::waitForMappingsOnThisHost(int groupId)
 {
-    faabric::util::FlagWaiter& waiter = getGroupFlag(groupId);
+    auto waiter = getGroupFlag(groupId);
 
     // Check if it's been enabled
-    waiter.waitOnFlag();
+    waiter->waitOnFlag();
 }
 
 std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)
