@@ -1,0 +1,4 @@
+# TSan detects a race on pistache shutdown
+race:*Pistache*
+race:close
+race:socket

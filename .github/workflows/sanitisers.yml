@@ -134,7 +134,7 @@ jobs:
         run: ./bin/faabric_tests > /dev/null
         working-directory: /build/faabric/static
         env:
-          TSAN_OPTIONS: "verbosity=1:halt_on_error=1"
+          TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt"
 
   undefined-sanitiser:
     if: github.event.pull_request.draft == false
