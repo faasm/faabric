@@ -123,7 +123,8 @@ class Scheduler
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
     std::set<std::string> getFunctionRegisteredHosts(
-      const faabric::Message& msg);
+      const faabric::Message& msg,
+      bool acquireLock = true);
 
     void broadcastFlush();
 

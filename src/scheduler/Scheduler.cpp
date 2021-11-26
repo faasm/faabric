@@ -149,19 +149,26 @@ void Scheduler::shutdown()
 
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 {
+    faabric::util::SharedLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return executors[funcStr].size();
 }
 
 int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
 {
+    faabric::util::SharedLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return (int)registeredHosts[funcStr].size();
 }
 
 std::set<std::string> Scheduler::getFunctionRegisteredHosts(
-  const faabric::Message& msg)
+  const faabric::Message& msg,
+  bool acquireLock)
 {
+    faabric::util::SharedLock lock;
+    if (acquireLock) {
+        lock = faabric::util::SharedLock(mx);
+    }
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return registeredHosts[funcStr];
 }
@@ -169,6 +176,7 @@ std::set<std::string> Scheduler::getFunctionRegisteredHosts(
 void Scheduler::removeRegisteredHost(const std::string& host,
                                      const faabric::Message& msg)
 {
+    faabric::util::FullLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     registeredHosts[funcStr].erase(host);
 }
@@ -476,7 +484,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // diffs.
     std::string snapshotKey = firstMsg.snapshotkey();
     if (!snapshotKey.empty()) {
-        for (const auto& host : getFunctionRegisteredHosts(firstMsg)) {
+        for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
             faabric::util::SnapshotData snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
@@ -697,6 +705,7 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
 
 void Scheduler::clearRecordedMessages()
 {
+    faabric::util::FullLock lock(mx);
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
@@ -704,11 +713,13 @@ void Scheduler::clearRecordedMessages()
 
 std::vector<faabric::Message> Scheduler::getRecordedMessagesAll()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesAll;
 }
 
 std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesLocal;
 }
 
@@ -736,6 +747,7 @@ SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
 std::vector<std::pair<std::string, faabric::Message>>
 Scheduler::getRecordedMessagesShared()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesShared;
 }
 
@@ -783,11 +795,13 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(
 
 std::string Scheduler::getThisHost()
 {
+    faabric::util::SharedLock lock(mx);
     return thisHost;
 }
 
 void Scheduler::broadcastFlush()
 {
+    faabric::util::FullLock lock(mx);
     // Get all hosts
     std::set<std::string> allHosts = getAvailableHosts();
 
@@ -799,6 +813,7 @@ void Scheduler::broadcastFlush()
         getFunctionCallClient(otherHost).sendFlush();
     }
 
+    lock.unlock();
     flushLocally();
 }
 
