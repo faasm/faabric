@@ -212,20 +212,14 @@ int MPI_Bcast(void* buffer,
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
 
     int rank = executingContext.getRank();
-    if (rank == root) {
-        SPDLOG_DEBUG(fmt::format("MPI_Bcast {} -> all", rank));
-        world.broadcast(
-          rank, (uint8_t*)buffer, datatype, count, faabric::MPIMessage::NORMAL);
-    } else {
-        SPDLOG_DEBUG(fmt::format("MPI_Bcast {} <- {}", rank, root));
-        world.recv(root,
-                   rank,
-                   (uint8_t*)buffer,
-                   datatype,
-                   count,
-                   nullptr,
-                   faabric::MPIMessage::NORMAL);
-    }
+    SPDLOG_DEBUG(fmt::format("MPI_Bcast {} -> all", rank));
+    world.broadcast(root,
+                    rank,
+                    (uint8_t*)buffer,
+                    datatype,
+                    count,
+                    faabric::MPIMessage::BROADCAST);
+
     return MPI_SUCCESS;
 }
 
