@@ -170,7 +170,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                           messageData2.size(),
                           MPI_STATUS_IGNORE);
           std::vector<int> actual(buffer, buffer + messageData2.size());
-          REQUIRE(actual == messageData2);
+          assert(actual == messageData2);
 
           testLatch->wait();
 
