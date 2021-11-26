@@ -188,7 +188,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     SnapshotData snap = takeSnapshot(snapKey, 5, false);
 
     // Set up a couple of ints in the snapshot
-    int offsetA1 = 5;
+    int offsetA1 = 8;
     int offsetA2 = 2 * HOST_PAGE_SIZE;
     int baseA1 = 25;
     int baseA2 = 60;
@@ -241,7 +241,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::string snapKey = std::to_string(generateGid());
     SnapshotData snap = takeSnapshot(snapKey, 5, false);
 
-    int offset = 5;
+    int offset = 8;
     std::vector<uint8_t> originalData;
     std::vector<uint8_t> diffData;
     std::vector<uint8_t> expectedData;
