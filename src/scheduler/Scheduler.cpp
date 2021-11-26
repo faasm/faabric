@@ -90,22 +90,34 @@ void Scheduler::resetThreadLocalCache()
 
 void Scheduler::reset()
 {
-    faabric::util::FullLock lock(mx);
     SPDLOG_DEBUG("Resetting scheduler");
 
     resetThreadLocalCache();
 
     // Shut down all Executors
-    for (auto& p : executors) {
+    // Executor shutdown takes a lock itself, so "finish" executors without the
+    // lock.
+    decltype(executors) executorsList;
+    decltype(deadExecutors) deadExecutorsList;
+    {
+        faabric::util::FullLock lock(mx);
+        executorsList = executors;
+    }
+    for (auto& p : executorsList) {
         for (auto& e : p.second) {
             e->finish();
         }
     }
-
+    executorsList.clear();
+    {
+        faabric::util::FullLock lock(mx);
+        deadExecutorsList = deadExecutors;
+    }
     for (auto& e : deadExecutors) {
         e->finish();
     }
-
+    deadExecutorsList.clear();
+    faabric::util::FullLock lock(mx);
     executors.clear();
     deadExecutors.clear();
 

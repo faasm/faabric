@@ -66,14 +66,18 @@ void Executor::finish()
         threadTaskQueues[i].enqueue(
           ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false, false));
 
+        faabric::util::UniqueLock threadsLock(threadsMutex);
+        // copy shared_ptr to avoid racing
+        auto thread = threadPoolThreads.at(i);
         // If already killed, move to the next thread
-        if (threadPoolThreads.at(i) == nullptr) {
+        if (thread == nullptr) {
             continue;
         }
 
         // Await the thread
-        if (threadPoolThreads.at(i)->joinable()) {
-            threadPoolThreads.at(i)->join();
+        if (thread->joinable()) {
+            threadsLock.unlock();
+            thread->join();
         }
     }
 
@@ -94,6 +98,7 @@ void Executor::finish()
 
     threadPoolThreads.clear();
     threadTaskQueues.clear();
+    deadThreads.clear();
 }
 
 void Executor::executeTasks(std::vector<int> msgIdxs,
@@ -342,19 +347,22 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Note - we have to keep a record of dead threads so we can join them
         // all when the executor shuts down
-        std::shared_ptr<std::thread> thisThread =
-          threadPoolThreads.at(threadPoolIdx);
-        deadThreads.emplace_back(thisThread);
-
-        // Set this thread to nullptr
-        threadPoolThreads.at(threadPoolIdx) = nullptr;
-
-        // See if any threads are still running
         bool isFinished = true;
-        for (auto t : threadPoolThreads) {
-            if (t != nullptr) {
-                isFinished = false;
-                break;
+        {
+            faabric::util::UniqueLock threadsLock(threadsMutex);
+            std::shared_ptr<std::thread> thisThread =
+              threadPoolThreads.at(threadPoolIdx);
+            deadThreads.emplace_back(thisThread);
+
+            // Set this thread to nullptr
+            threadPoolThreads.at(threadPoolIdx) = nullptr;
+
+            // See if any threads are still running
+            for (auto t : threadPoolThreads) {
+                if (t != nullptr) {
+                    isFinished = false;
+                    break;
+                }
             }
         }
 
