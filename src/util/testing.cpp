@@ -1,25 +1,27 @@
 #include <faabric/util/testing.h>
 
+#include <atomic>
+
 namespace faabric::util {
-static bool testMode = false;
-static bool mockMode = false;
+static std::atomic_bool testMode = false;
+static std::atomic_bool mockMode = false;
 
 void setTestMode(bool val)
 {
-    testMode = val;
+    testMode.store(val, std::memory_order_release);
 }
 
 bool isTestMode()
 {
-    return testMode;
+    return testMode.load(std::memory_order_acquire);
 }
 void setMockMode(bool val)
 {
-    mockMode = val;
+    mockMode.store(val, std::memory_order_release);
 }
 
 bool isMockMode()
 {
-    return mockMode;
+    return mockMode.load(std::memory_order_acquire);
 }
 }
