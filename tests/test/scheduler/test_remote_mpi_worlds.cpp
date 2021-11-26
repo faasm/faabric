@@ -202,59 +202,6 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     thisWorld.destroy();
 }
 
-/*
-TEST_CASE_METHOD(RemoteMpiTestFixture, "Test barrier across hosts", "[mpi]")
-{
-    // Register two ranks (one on each host)
-    setWorldSizes(4, 2, 2);
-    int rankA = 0;
-    int rankA2 = 1;
-    int rankB = 2;
-    int rankB2 = 3;
-    std::vector<int> sendData = { 0, 1, 2 };
-    std::vector<int> recvData = { -1, -1, -1 };
-
-    // Init worlds
-    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    faabric::util::setMockMode(false);
-
-    thisWorld.broadcastHostsToRanks();
-
-    std::thread otherWorldThread([this, rankA, rankB, rankB2, &sendData,
-&recvData] { otherWorld.initialiseFromMsg(msg);
-
-        otherWorld.send(
-          rankB, rankA, BYTES(sendData.data()), MPI_INT, sendData.size());
-
-        // Barrier on all ranks
-        otherWorld.barrier(rankB);
-        otherWorld.barrier(rankB2);
-        assert(sendData == recvData);
-        otherWorld.destroy();
-    });
-
-    // Receive the message for the given rank
-    thisWorld.recv(rankB,
-                   rankA,
-                   BYTES(recvData.data()),
-                   MPI_INT,
-                   recvData.size(),
-                   MPI_STATUS_IGNORE);
-    REQUIRE(recvData == sendData);
-
-    // Call barrier to synchronise remote host
-    thisWorld.barrier(rankA);
-    thisWorld.barrier(rankA2);
-
-    // Clean up
-    if (otherWorldThread.joinable()) {
-        otherWorldThread.join();
-    }
-
-    thisWorld.destroy();
-}
-*/
-
 TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "Test sending many messages across host",
                  "[mpi]")
