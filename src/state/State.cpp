@@ -173,6 +173,7 @@ std::shared_ptr<StateKeyValue> State::doGetKV(const std::string& user,
 
 size_t State::getKVCount()
 {
+    faabric::util::SharedLock lock(mapMutex);
     return kvMap.size();
 }
 
