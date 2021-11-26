@@ -24,7 +24,8 @@ unsigned int generateGid()
         }
     }
 
-    unsigned int intHash = gidKeyHash.load(std::memory_order_relaxed) % INT32_MAX;
+    unsigned int intHash =
+      gidKeyHash.load(std::memory_order_relaxed) % INT32_MAX;
     unsigned int result = intHash + counter.fetch_add(1);
     if (result) {
         return result;

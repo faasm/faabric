@@ -22,7 +22,8 @@ SnapshotServer::SnapshotServer()
   , broker(faabric::transport::getPointToPointBroker())
 {}
 
-size_t SnapshotServer::diffsApplied() const {
+size_t SnapshotServer::diffsApplied() const
+{
     return diffsAppliedCounter.load(std::memory_order_acquire);
 }
 

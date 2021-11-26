@@ -125,7 +125,8 @@ class PointToPointBroker
     std::unordered_map<int, std::set<int>> groupIdIdxsMap;
     std::unordered_map<std::string, std::string> mappings;
 
-    std::unordered_map<int, std::shared_ptr<faabric::util::FlagWaiter>> groupFlags;
+    std::unordered_map<int, std::shared_ptr<faabric::util::FlagWaiter>>
+      groupFlags;
 
     std::shared_ptr<faabric::util::FlagWaiter> getGroupFlag(int groupId);
 };

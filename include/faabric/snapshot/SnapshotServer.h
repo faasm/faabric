@@ -14,7 +14,8 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
   public:
     SnapshotServer();
 
-    // Returns how many diffs have been applied since started, useful for testing
+    // Returns how many diffs have been applied since started, useful for
+    // testing
     size_t diffsApplied() const;
 
   protected:
