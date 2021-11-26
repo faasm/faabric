@@ -263,11 +263,13 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::thread otherWorldThread([this, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
-        // Broadcast a message
+        // Broadcast a message from the root first
         otherWorld.broadcast(otherHostRankB,
+                             otherHostRankB,
                              BYTES(messageData.data()),
                              MPI_INT,
-                             messageData.size());
+                             messageData.size(),
+                             faabric::MPIMessage::BROADCAST);
 
         // Check the broadcast is received on this host by the other ranks
         for (int rank : otherWorldRanks) {
@@ -276,8 +278,12 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
             }
 
             std::vector<int> actual(3, -1);
-            otherWorld.recv(
-              otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            otherWorld.broadcast(otherHostRankB,
+                                 rank,
+                                 BYTES(actual.data()),
+                                 MPI_INT,
+                                 3,
+                                 faabric::MPIMessage::BROADCAST);
             assert(actual == messageData);
         }
 
@@ -286,11 +292,27 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         otherWorld.destroy();
     });
 
+    std::vector<int> actual(3, -1);
+    // First run the broadcast from the local master (rank = 0)
+    thisWorld.broadcast(otherHostRankB,
+                        0,
+                        BYTES(actual.data()),
+                        MPI_INT,
+                        3,
+                        faabric::MPIMessage::BROADCAST);
+
     // Check the ranks on this host receive the broadcast
     for (int rank : thisWorldRanks) {
-        std::vector<int> actual(3, -1);
-        thisWorld.recv(
-          otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+        if (rank == 0) {
+            continue;
+        }
+
+        thisWorld.broadcast(otherHostRankB,
+                            rank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            3,
+                            faabric::MPIMessage::BROADCAST);
         REQUIRE(actual == messageData);
     }
 

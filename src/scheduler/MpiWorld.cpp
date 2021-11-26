@@ -223,6 +223,14 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     rankHosts = executedAt;
     basePorts = initLocalBasePorts(executedAt);
 
+    // Record which ranks are local to this world, and query for all masters
+    localRanks = getLocalRanks();
+    localMaster = getLocalMaster();
+    // Given that we are initialising the whole MpiWorld here, the local master
+    // should also be the global master, i.e. rank 0
+    assert(localMaster == 0);
+    remoteMasters = getRemoteMasters();
+
     // Initialise the memory queues for message reception
     initLocalQueues();
 }
@@ -322,6 +330,11 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     basePorts = { hostRankMsg.baseports().begin(),
                   hostRankMsg.baseports().end() };
 
+    // Record which ranks are local to this world, and query for all masters
+    localRanks = getLocalRanks();
+    localMaster = getLocalMaster();
+    remoteMasters = getRemoteMasters();
+
     // Initialise the memory queues for message reception
     initLocalQueues();
 }
@@ -342,6 +355,53 @@ std::string MpiWorld::getHostForRank(int rank)
     }
 
     return host;
+}
+
+std::vector<int> MpiWorld::getLocalRanks()
+{
+    return getRanksForHost(thisHost);
+}
+
+std::vector<int> MpiWorld::getRanksForHost(const std::string& host)
+{
+    assert(rankHosts.size() == size);
+
+    std::vector<int> ranksForHost;
+    for (int i = 0; i < rankHosts.size(); i++) {
+        if (rankHosts.at(i) == host) {
+            ranksForHost.push_back(i);
+        }
+    }
+
+    return ranksForHost;
+}
+
+int MpiWorld::getLocalMaster()
+{
+    return getMasterForHost(thisHost);
+}
+
+std::vector<int> MpiWorld::getRemoteMasters()
+{
+    std::set<std::string> targetHosts(rankHosts.begin(), rankHosts.end());
+    targetHosts.erase(thisHost);
+
+    std::vector<int> remoteMasters;
+    for (const std::string& host : targetHosts) {
+        remoteMasters.push_back(getMasterForHost(host));
+    }
+
+    return remoteMasters;
+}
+
+// The local master for an MPI world is defined as the lowest rank assigned to
+// this host
+int MpiWorld::getMasterForHost(const std::string& host)
+{
+    std::vector<int> ranks = getRanksForHost(host);
+    assert(!ranks.empty());
+
+    return *std::min_element(ranks.begin(), ranks.end());
 }
 
 // Returns a pair (sendPort, recvPort)
@@ -699,21 +759,56 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
 }
 
 void MpiWorld::broadcast(int sendRank,
-                         const uint8_t* buffer,
+                         int thisRank,
+                         uint8_t* buffer,
                          faabric_datatype_t* dataType,
                          int count,
                          faabric::MPIMessage::MPIMessageType messageType)
 {
     SPDLOG_TRACE("MPI - bcast {} -> all", sendRank);
 
-    for (int r = 0; r < size; r++) {
-        // Skip this rank (it's doing the broadcasting)
-        if (r == sendRank) {
-            continue;
+    if (thisRank == sendRank) {
+        // The sendRank (originator of the broadcast) sends a message to all
+        // local ranks in the broadcast, and all remote leaders in the broadcast
+        for (const int localRecvRank : localRanks) {
+            if (localRecvRank == sendRank) {
+                continue;
+            }
+
+            send(sendRank, localRecvRank, buffer, dataType, count, messageType);
         }
 
-        // Send to the other ranks
-        send(sendRank, r, buffer, dataType, count, messageType);
+        for (const int remoteRecvRank : remoteMasters) {
+            send(
+              sendRank, remoteRecvRank, buffer, dataType, count, messageType);
+        }
+    } else if (thisRank == localMaster) {
+        // If we are the local master, but the broadcast originated in this
+        // host, we just receive
+        recv(sendRank, thisRank, buffer, dataType, count, nullptr, messageType);
+
+        // If we are the local master, and the broadcast originated in a
+        // remote host, we wait for a message from the root, and distribute
+        // to all our local ranks
+        if (getHostForRank(sendRank) != thisHost) {
+            for (const int localRecvRank : localRanks) {
+                send(thisRank,
+                     localRecvRank,
+                     buffer,
+                     dataType,
+                     count,
+                     messageType);
+            }
+        }
+    } else {
+        // If we are not a local master, we receive from either our local master
+        // if the broadcast originated in a remote host, or the broadcast
+        // originator itself
+        int sendingRank =
+          getHostForRank(sendRank) == thisHost ? sendRank : localMaster;
+
+        recv(
+          sendingRank, thisRank, buffer, dataType, count, nullptr, messageType);
     }
 }
 
@@ -874,23 +969,14 @@ void MpiWorld::allGather(int rank,
     // Note that sendCount and recvCount here are per-rank, so we need to work
     // out the full buffer size
     int fullCount = recvCount * size;
-    if (rank == root) {
-        // Broadcast the result
-        broadcast(root,
-                  recvBuffer,
-                  recvType,
-                  fullCount,
-                  faabric::MPIMessage::ALLGATHER);
-    } else {
-        // Await the broadcast from the master
-        recv(root,
-             rank,
-             recvBuffer,
-             recvType,
-             fullCount,
-             nullptr,
-             faabric::MPIMessage::ALLGATHER);
-    }
+
+    // Do a broadcast with a hard-coded root
+    broadcast(root,
+              rank,
+              recvBuffer,
+              recvType,
+              fullCount,
+              faabric::MPIMessage::ALLGATHER);
 }
 
 void MpiWorld::awaitAsyncRequest(int requestId)
@@ -1006,26 +1092,12 @@ void MpiWorld::allReduce(int rank,
                          faabric_op_t* operation)
 {
     // Rank 0 coordinates the allreduce operation
-    if (rank == 0) {
-        // Run the standard reduce
-        reduce(0, 0, sendBuffer, recvBuffer, datatype, count, operation);
+    // First, all ranks reduce to rank 0
+    reduce(rank, 0, sendBuffer, recvBuffer, datatype, count, operation);
 
-        // Broadcast the result
-        broadcast(
-          0, recvBuffer, datatype, count, faabric::MPIMessage::ALLREDUCE);
-    } else {
-        // Run the standard reduce
-        reduce(rank, 0, sendBuffer, recvBuffer, datatype, count, operation);
-
-        // Await the broadcast from the master
-        recv(0,
-             rank,
-             recvBuffer,
-             datatype,
-             count,
-             nullptr,
-             faabric::MPIMessage::ALLREDUCE);
-    }
+    // Second, 0 broadcasts the result to all ranks
+    broadcast(
+      0, rank, recvBuffer, datatype, count, faabric::MPIMessage::ALLREDUCE);
 }
 
 void MpiWorld::op_reduce(faabric_op_t* operation,
@@ -1244,8 +1316,9 @@ void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 
 void MpiWorld::barrier(int thisRank)
 {
+    // Rank 0 coordinates the barrier operation
     if (thisRank == 0) {
-        // This is the root, hence just does the waiting
+        // This is the root, hence waits for all ranks to get to the barrier
         SPDLOG_TRACE("MPI - barrier init {}", thisRank);
 
         // Await messages from all others
@@ -1255,25 +1328,17 @@ void MpiWorld::barrier(int thisRank)
               r, 0, nullptr, MPI_INT, 0, &s, faabric::MPIMessage::BARRIER_JOIN);
             SPDLOG_TRACE("MPI - recv barrier join {}", s.MPI_SOURCE);
         }
-
-        // Broadcast that the barrier is done
-        broadcast(0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
     } else {
         // Tell the root that we're waiting
         SPDLOG_TRACE("MPI - barrier join {}", thisRank);
         send(
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
-
-        // Receive a message saying the barrier is done
-        recv(0,
-             thisRank,
-             nullptr,
-             MPI_INT,
-             0,
-             nullptr,
-             faabric::MPIMessage::BARRIER_DONE);
-        SPDLOG_TRACE("MPI - barrier done {}", thisRank);
     }
+
+    // Rank 0 broadcasts that the barrier is done (the others block here)
+    broadcast(
+      0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
+    SPDLOG_TRACE("MPI - barrier done {}", thisRank);
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,

@@ -77,7 +77,8 @@ class MpiWorld
                 faabric::MPIMessage::NORMAL);
 
     void broadcast(int sendRank,
-                   const uint8_t* buffer,
+                   int thisRank,
+                   uint8_t* buffer,
                    faabric_datatype_t* dataType,
                    int count,
                    faabric::MPIMessage::MPIMessageType messageType =
@@ -214,6 +215,16 @@ class MpiWorld
     // Track at which host each rank lives
     std::vector<std::string> rankHosts;
     int getIndexForRanks(int sendRank, int recvRank);
+    std::vector<int> getRanksForHost(const std::string& host);
+
+    // Track ranks that are local to this world, and master ranks
+    std::vector<int> localRanks;
+    std::vector<int> getLocalRanks();
+    int localMaster;
+    int getLocalMaster();
+    int getMasterForHost(const std::string& host);
+    std::vector<int> remoteMasters;
+    std::vector<int> getRemoteMasters();
 
     // In-memory queues for local messaging
     std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
