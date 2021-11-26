@@ -33,14 +33,19 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+        shell: bash
+      - uses: actions/cache@v2
+        with:
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
       # --- Build dependencies
       - name: "Build dependencies to be shared by all sanitiser runs"
         run: inv dev.cmake -b Debug
-      - name: "Upload built Conan dependencies"
-        uses: actions/upload-artifact@v2
-        with:
-          name: conan-cache
-          path: '~/.conan'
 
   address-sanitiser:
     if: github.event.pull_request.draft == false
@@ -67,12 +72,17 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      # --- Build with thread sanitising
-      - name: "Download Conan dependencies"
-        uses: actions/download-artifact@v2
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+        shell: bash
+      - uses: actions/cache@v2
         with:
-          name: conan-cache
-          path: /root/.conan
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+      # --- Build with thread sanitising
       - name: "Build tests with address sanitising"
         run: inv dev.sanitise Address --noclean
       - name: "Run tests with address sanitising on and print to stderr to file"
@@ -106,12 +116,17 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      # --- Build with thread sanitising
-      - name: "Download Conan dependencies"
-        uses: actions/download-artifact@v2
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+        shell: bash
+      - uses: actions/cache@v2
         with:
-          name: conan-cache
-          path: /root/.conan
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+      # --- Build with thread sanitising
       - name: "Build tests with thread sanitising"
         run: inv dev.sanitise Thread --noclean
       # --- Tests ---
@@ -146,12 +161,17 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      # --- Build with thread sanitising
-      - name: "Download Conan dependencies"
-        uses: actions/download-artifact@v2
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+        shell: bash
+      - uses: actions/cache@v2
         with:
-          name: conan-cache
-          path: /root/.conan
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+      # --- Build with thread sanitising
       - name: "Build tests with undefined sanitising"
         run: inv dev.sanitise Undefined --noclean
       # --- Tests ---
@@ -186,12 +206,17 @@ jobs:
       # --- Set-up ---
       - name: "Ping redis"
         run: redis-cli -h redis ping
-      # --- Build with thread sanitising
-      - name: "Download Conan dependencies"
-        uses: actions/download-artifact@v2
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+        shell: bash
+      - uses: actions/cache@v2
         with:
-          name: conan-cache
-          path: /root/.conan
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+      # --- Build with thread sanitising
       - name: "Build tests with leak sanitising"
         run: inv dev.sanitise Leak --noclean
       # --- Tests ---
