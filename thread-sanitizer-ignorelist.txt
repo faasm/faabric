@@ -2,3 +2,5 @@
 race:*Pistache*
 race:close
 race:socket
+# Ignore ZeroMQ races
+race:zmq::*
