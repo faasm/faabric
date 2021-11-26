@@ -4,3 +4,5 @@ race:close
 race:socket
 # Ignore ZeroMQ races
 race:zmq::*
+# Config only changes in tests, and in places where being slightly racy doesn't matter
+race:faabric::util::SystemConfig::*
