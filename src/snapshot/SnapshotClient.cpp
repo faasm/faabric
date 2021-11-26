@@ -29,27 +29,32 @@ static std::vector<std::pair<std::string, std::pair<uint32_t, int>>>
 std::vector<std::pair<std::string, faabric::util::SnapshotData>>
 getSnapshotPushes()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return snapshotPushes;
 }
 
 std::vector<std::pair<std::string, std::vector<faabric::util::SnapshotDiff>>>
 getSnapshotDiffPushes()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return snapshotDiffPushes;
 }
 
 std::vector<std::pair<std::string, std::string>> getSnapshotDeletes()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return snapshotDeletes;
 }
 
 std::vector<std::pair<std::string, std::pair<uint32_t, int>>> getThreadResults()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return threadResults;
 }
 
 void clearMockSnapshotRequests()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     snapshotPushes.clear();
     snapshotDiffPushes.clear();
     snapshotDeletes.clear();
