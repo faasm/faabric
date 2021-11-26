@@ -783,13 +783,12 @@ void MpiWorld::broadcast(int sendRank,
               sendRank, remoteRecvRank, buffer, dataType, count, messageType);
         }
     } else if (thisRank == localMaster) {
-        // If we are the local master, but the broadcast originated in this
-        // host, we just receive
+        // If we are the local master, first we receive the message sent by
+        // the originator of the broadcast
         recv(sendRank, thisRank, buffer, dataType, count, nullptr, messageType);
 
-        // If we are the local master, and the broadcast originated in a
-        // remote host, we wait for a message from the root, and distribute
-        // to all our local ranks
+        // If the broadcast originated locally, we are done. If not, we now
+        // distribute to all our local ranks
         if (getHostForRank(sendRank) != thisHost) {
             for (const int localRecvRank : localRanks) {
                 send(thisRank,
@@ -801,9 +800,9 @@ void MpiWorld::broadcast(int sendRank,
             }
         }
     } else {
-        // If we are not a local master, we receive from either our local master
-        // if the broadcast originated in a remote host, or the broadcast
-        // originator itself
+        // If we are neither the originator nor a local master, we receive from
+        // either our local master if the broadcast originated in a remote host,
+        // or the broadcast originator itself if we are on the same host
         int sendingRank =
           getHostForRank(sendRank) == thisHost ? sendRank : localMaster;
 
