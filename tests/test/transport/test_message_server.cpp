@@ -177,6 +177,8 @@ TEST_CASE("Test sending response to client", "[transport]")
     server.stop();
 }
 
+// This test hangs ThreadSanitizer
+#if !(defined(__has_feature) && __has_feature(thread_sanitizer))
 TEST_CASE("Test multiple clients talking to one server", "[transport]")
 {
     EchoServer server;
@@ -215,6 +217,7 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
 
     server.stop();
 }
+#endif
 
 TEST_CASE("Test client timeout on requests to valid server", "[transport]")
 {
