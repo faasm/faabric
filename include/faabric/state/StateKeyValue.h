@@ -142,8 +142,8 @@ class StateKeyValue
     // Flags for tracking allocation and initial pull
     std::atomic<bool> fullyAllocated = false;
     std::atomic<bool> fullyPulled = false;
-    void* pulledMask = nullptr;
-    void* dirtyMask = nullptr;
+    std::unique_ptr<uint8_t[]> pulledMask = nullptr;
+    std::unique_ptr<uint8_t[]> dirtyMask = nullptr;
     bool isDirty = false;
 
     void zeroDirtyMask();
