@@ -983,13 +983,16 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
 
 faabric::HostResources Scheduler::getThisHostResources()
 {
-    thisHostResources.set_usedslots(
+    faabric::util::SharedLock lock(mx);
+    faabric::HostResources hostResources = thisHostResources;
+    hostResources.set_usedslots(
       this->thisHostUsedSlots.load(std::memory_order_acquire));
-    return thisHostResources;
+    return hostResources;
 }
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
+    faabric::util::FullLock lock(mx);
     thisHostResources = res;
     this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
 }
