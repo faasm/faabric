@@ -90,6 +90,7 @@ void Scheduler::resetThreadLocalCache()
 
 void Scheduler::reset()
 {
+    faabric::util::FullLock lock(mx);
     SPDLOG_DEBUG("Resetting scheduler");
 
     resetThreadLocalCache();
