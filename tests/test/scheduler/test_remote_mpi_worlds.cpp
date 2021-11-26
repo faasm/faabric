@@ -349,7 +349,6 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            BYTES(actual.data()),
                            MPI_INT,
                            nPerRank);
-        // assert(actual == std::vector<int>({ 4, 5, 6, 7 }));
         assert(actual == expected.at(2));
 
         otherWorld.scatter(otherHostRankB,
@@ -360,7 +359,6 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            BYTES(actual.data()),
                            MPI_INT,
                            nPerRank);
-        // assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
         assert(actual == expected.at(1));
 
         testLatch->wait();
