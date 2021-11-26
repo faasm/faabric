@@ -22,6 +22,10 @@ SnapshotServer::SnapshotServer()
   , broker(faabric::transport::getPointToPointBroker())
 {}
 
+size_t SnapshotServer::diffsApplied() const {
+    return diffsAppliedCounter.load(std::memory_order_acquire);
+}
+
 void SnapshotServer::doAsyncRecv(int header,
                                  const uint8_t* buffer,
                                  size_t bufferSize)
@@ -196,6 +200,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                 throw std::runtime_error("Unsupported merge data type");
             }
         }
+        // make changes visible to other threads
+        std::atomic_thread_fence(std::memory_order_release);
+        this->diffsAppliedCounter.fetch_add(1, std::memory_order_acq_rel);
     }
 
     // Unlock group if exists
