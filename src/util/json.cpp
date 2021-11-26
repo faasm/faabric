@@ -201,8 +201,10 @@ std::string messageToJson(const faabric::Message& msg)
             }
 
             std::string out = ss.str();
+            // As out is a temporary, pass the allocator to Value() to make a
+            // copy
             d.AddMember(
-              "exec_graph_detail", Value(out.c_str(), out.size()).Move(), a);
+              "exec_graph_detail", Value(out.c_str(), out.size(), a).Move(), a);
         }
 
         if (msg.intexecgraphdetails_size() > 0) {
@@ -218,11 +220,11 @@ std::string messageToJson(const faabric::Message& msg)
             }
 
             std::string out = ss.str();
-
-            // Need to create a value (instead of move) as the string's scope
-            // is smaller than the document's one
-            Value value = Value(out.c_str(), out.size(), a);
-            d.AddMember("int_exec_graph_detail", value, a);
+            // As out is a temporary, pass the allocator to Value() to make a
+            // copy
+            d.AddMember("int_exec_graph_detail",
+                        Value(out.c_str(), out.size(), a).Move(),
+                        a);
         }
     }
 
