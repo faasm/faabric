@@ -79,7 +79,7 @@ jobs:
         run: ./bin/faabric_tests > /dev/null
         working-directory: /build/faabric/static
         env:
-          ADSAN_OPTIONS: "verbosity=1:halt_on_error=1"
+          ASAN_OPTIONS: "verbosity=1:halt_on_error=1"
 
   thread-sanitiser:
     if: github.event.pull_request.draft == false
