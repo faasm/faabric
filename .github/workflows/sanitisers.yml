@@ -36,11 +36,11 @@ jobs:
       # --- Build dependencies
       - name: "Build dependencies to be shared by all sanitiser runs"
         run: inv dev.cmake -b Debug
-      - name: "Upload built CMake dependencies"
+      - name: "Upload built Conan dependencies"
         uses: actions/upload-artifact@v2
         with:
-          name: cmake-cache
-          path: /build/faabric
+          name: conan-cache
+          path: '~/.conan'
 
   address-sanitiser:
     if: github.event.pull_request.draft == false
@@ -68,11 +68,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
-      - name: "Download CMake dependencies"
+      - name: "Download Conan dependencies"
         uses: actions/download-artifact@v2
         with:
-          name: cmake-cache
-          path: /build/faabric
+          name: conan-cache
+          path: /root/.conan
       - name: "Build tests with address sanitising"
         run: inv dev.sanitise Address --noclean
       - name: "Run tests with address sanitising on and print to stderr to file"
@@ -107,11 +107,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
-      - name: "Download CMake dependencies"
+      - name: "Download Conan dependencies"
         uses: actions/download-artifact@v2
         with:
-          name: cmake-cache
-          path: /build/faabric
+          name: conan-cache
+          path: /root/.conan
       - name: "Build tests with thread sanitising"
         run: inv dev.sanitise Thread --noclean
       # --- Tests ---
@@ -147,11 +147,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
-      - name: "Download CMake dependencies"
+      - name: "Download Conan dependencies"
         uses: actions/download-artifact@v2
         with:
-          name: cmake-cache
-          path: /build/faabric
+          name: conan-cache
+          path: /root/.conan
       - name: "Build tests with undefined sanitising"
         run: inv dev.sanitise Undefined --noclean
       # --- Tests ---
@@ -187,11 +187,11 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       # --- Build with thread sanitising
-      - name: "Download CMake dependencies"
+      - name: "Download Conan dependencies"
         uses: actions/download-artifact@v2
         with:
-          name: cmake-cache
-          path: /build/faabric
+          name: conan-cache
+          path: /root/.conan
       - name: "Build tests with leak sanitising"
         run: inv dev.sanitise Leak --noclean
       # --- Tests ---
