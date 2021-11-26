@@ -69,7 +69,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test cartesian communicator", "[mpi]")
     int worldSize;
     int maxDims = 3;
     std::vector<int> dims(maxDims);
-    std::vector<int> periods(2, 1);
+    std::vector<int> periods(maxDims, 1);
     std::vector<std::vector<int>> expectedShift;
     std::vector<std::vector<int>> expectedCoords;
 
