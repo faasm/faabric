@@ -490,6 +490,14 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // EXECTUION
     // -------------------------------------------
 
+    // Records for tests - copy messages before execution to avoid racing on msg
+    size_t recordedMessagesOffset = recordedMessagesAll.size();
+    if (faabric::util::isTestMode()) {
+        for (int i = 0; i < nMessages; i++) {
+            recordedMessagesAll.emplace_back(req->messages().at(i));
+        }
+    }
+
     // Iterate through unique hosts and dispatch messages
     for (const std::string& host : orderedHosts) {
         // Work out which indexes are scheduled on this host
@@ -601,12 +609,12 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
             std::string executedHost = decision.hosts.at(i);
-            faabric::Message msg = req->messages().at(i);
+            const faabric::Message& msg =
+              recordedMessagesAll.at(recordedMessagesOffset + i);
 
             // Log results if in test mode
-            recordedMessagesAll.push_back(msg);
             if (executedHost.empty() || executedHost == thisHost) {
-                recordedMessagesLocal.push_back(msg);
+                recordedMessagesLocal.emplace_back(msg);
             } else {
                 recordedMessagesShared.emplace_back(executedHost, msg);
             }
