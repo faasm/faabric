@@ -120,7 +120,8 @@ class TestExecutor final : public Executor
             faabric::snapshot::SnapshotRegistry& reg =
               faabric::snapshot::getSnapshotRegistry();
             faabric::util::SnapshotData snap;
-            snap.data = new uint8_t[10];
+            auto snapDataAllocation = std::make_unique<uint8_t[]>(10);
+            snap.data = snapDataAllocation.get();
             snap.size = 10;
 
             reg.takeSnapshot(snapKey, snap);
@@ -150,7 +151,6 @@ class TestExecutor final : public Executor
             }
 
             // Delete the snapshot
-            delete[] snap.data;
             reg.deleteSnapshot(snapKey);
 
             SPDLOG_TRACE("TestExecutor got {} thread results",

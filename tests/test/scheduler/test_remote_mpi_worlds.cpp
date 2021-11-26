@@ -107,7 +107,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 
         // Receive the message for the given rank
         MPI_Status status{};
-        auto buffer = new int[messageData.size()];
+        auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+        auto buffer = bufferAllocation.get();
         otherWorld.recv(
           rankA, rankB, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
@@ -160,7 +161,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                           messageData.size());
 
           // Now recv
-          auto buffer = new int[messageData2.size()];
+          auto bufferAllocation = std::make_unique<int[]>(messageData2.size());
+          auto buffer = bufferAllocation.get();
           otherWorld.recv(rankA,
                           rankB,
                           BYTES(buffer),
@@ -177,7 +179,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 
     // Receive the message for the given rank
     MPI_Status status{};
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
     thisWorld.recv(
       rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
     std::vector<int> actual(buffer, buffer + messageData.size());
@@ -745,7 +748,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           otherWorld.initialiseFromMsg(msg);
 
           // Recv once
-          auto buffer = new int[messageData.size()];
+          auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+          auto buffer = bufferAllocation.get();
           otherWorld.recv(rankA,
                           rankB,
                           BYTES(buffer),
@@ -756,7 +760,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           assert(actual == messageData);
 
           // Recv a second time
-          auto buffer2 = new int[messageData2.size()];
+          auto buffer2Allocation = std::make_unique<int[]>(messageData2.size());
+          auto buffer2 = buffer2Allocation.get();
           otherWorld.recv(rankA,
                           rankB,
                           BYTES(buffer2),
@@ -798,7 +803,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(endpointCheck == expectedEndpoints);
 
     // Finally recv a messge, the same endpoint should be used again
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
     thisWorld.recv(rankB,
                    rankA,
                    BYTES(buffer),
@@ -871,7 +877,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
                                        false, true,  false, false };
 
     // Irecv a messge from one rank, another UMB should be created
-    auto buffer1 = new int[messageData.size()];
+    auto buffer1Allocation = std::make_unique<int[]>(messageData.size());
+    auto buffer1 = buffer1Allocation.get();
     int recvId1 = thisWorld.irecv(otherWorldRank1,
                                   thisWorldRank,
                                   BYTES(buffer1),
@@ -883,7 +890,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
     REQUIRE(umbCheck == expectedUmb1);
 
     // Irecv a messge from another rank, another UMB should be created
-    auto buffer2 = new int[messageData.size()];
+    auto buffer2Allocation = std::make_unique<int[]>(messageData.size());
+    auto buffer2 = buffer2Allocation.get();
     int recvId2 = thisWorld.irecv(otherWorldRank2,
                                   thisWorldRank,
                                   BYTES(buffer2),

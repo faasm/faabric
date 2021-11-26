@@ -147,20 +147,22 @@ std::shared_ptr<StateKeyValue> State::doGetKV(const std::string& user,
     std::string stateMode = faabric::util::getSystemConfig().stateMode;
     if (stateMode == "redis") {
         if (sizeless) {
-            auto kv = new RedisStateKeyValue(user, key);
-            kvMap.emplace(lookupKey, kv);
+            auto kv = std::make_shared<RedisStateKeyValue>(user, key);
+            kvMap.emplace(lookupKey, std::move(kv));
         } else {
-            auto kv = new RedisStateKeyValue(user, key, size);
-            kvMap.emplace(lookupKey, kv);
+            auto kv = std::make_shared<RedisStateKeyValue>(user, key, size);
+            kvMap.emplace(lookupKey, std::move(kv));
         }
     } else if (stateMode == "inmemory") {
         // NOTE - passing IP here is crucial for testing
         if (sizeless) {
-            auto kv = new InMemoryStateKeyValue(user, key, thisIP);
-            kvMap.emplace(lookupKey, kv);
+            auto kv =
+              std::make_shared<InMemoryStateKeyValue>(user, key, thisIP);
+            kvMap.emplace(lookupKey, std::move(kv));
         } else {
-            auto kv = new InMemoryStateKeyValue(user, key, size, thisIP);
-            kvMap.emplace(lookupKey, kv);
+            auto kv =
+              std::make_shared<InMemoryStateKeyValue>(user, key, size, thisIP);
+            kvMap.emplace(lookupKey, std::move(kv));
         }
     } else {
         throw std::runtime_error("Unrecognised state mode: " + stateMode);

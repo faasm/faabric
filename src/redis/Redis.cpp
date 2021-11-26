@@ -721,10 +721,10 @@ std::vector<uint8_t> Redis::dequeueBytes(const std::string& queueName,
     return replyBytes;
 }
 
-void Redis::dequeueBytes(const std::string& queueName,
-                         uint8_t* buffer,
-                         size_t bufferLen,
-                         int timeoutMs)
+size_t Redis::dequeueBytes(const std::string& queueName,
+                           uint8_t* buffer,
+                           size_t bufferLen,
+                           int timeoutMs)
 {
     bool isBlocking = timeoutMs > 0;
     auto replyOwned = this->dequeueBase(queueName, timeoutMs);
@@ -735,9 +735,9 @@ void Redis::dequeueBytes(const std::string& queueName,
     }
 
     auto resultBytes = (uint8_t*)reply->str;
-    int resultLen = reply->len;
+    size_t resultLen = reply->len;
 
-    if (resultLen > (int)bufferLen) {
+    if (resultLen > bufferLen) {
         throw std::runtime_error(
           "Buffer not long enough for dequeue result (buffer=" +
           std::to_string(bufferLen) + " len=" + std::to_string(resultLen) +
@@ -745,6 +745,7 @@ void Redis::dequeueBytes(const std::string& queueName,
     }
 
     memcpy(buffer, resultBytes, resultLen);
+    return resultLen;
 }
 
 void Redis::publishSchedulerResult(const std::string& key,

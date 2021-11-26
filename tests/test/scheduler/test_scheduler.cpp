@@ -226,9 +226,11 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
+    std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
         snapshot.size = 1234;
-        snapshot.data = new uint8_t[snapshot.size];
+        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
+        snapshot.data = snapshotDataAllocation.get();
 
         snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
     }
@@ -420,9 +422,11 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
+    std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
         snapshot.size = 1234;
-        snapshot.data = new uint8_t[snapshot.size];
+        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
+        snapshot.data = snapshotDataAllocation.get();
         snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
     }
 

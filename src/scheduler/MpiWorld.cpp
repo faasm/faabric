@@ -966,24 +966,23 @@ void MpiWorld::reduce(int sendRank,
             memcpy(recvBuffer, sendBuffer, bufferSize);
         }
 
-        uint8_t* rankData = new uint8_t[bufferSize];
+        auto rankData = std::make_unique<uint8_t[]>(bufferSize);
         for (int r = 0; r < size; r++) {
             // Work out the data for this rank
-            memset(rankData, 0, bufferSize);
+            memset(rankData.get(), 0, bufferSize);
             if (r != recvRank) {
                 recv(r,
                      recvRank,
-                     rankData,
+                     rankData.get(),
                      datatype,
                      count,
                      nullptr,
                      faabric::MPIMessage::REDUCE);
 
-                op_reduce(operation, datatype, count, rankData, recvBuffer);
+                op_reduce(
+                  operation, datatype, count, rankData.get(), recvBuffer);
             }
         }
-
-        delete[] rankData;
 
     } else {
         // Do the sending
@@ -1152,17 +1151,16 @@ void MpiWorld::scan(int rank,
 
     if (rank > 0) {
         // Receive the current accumulated value
-        auto currentAcc = new uint8_t[bufferSize];
+        auto currentAcc = std::make_unique<uint8_t[]>(bufferSize);
         recv(rank - 1,
              rank,
-             currentAcc,
+             currentAcc.get(),
              datatype,
              count,
              nullptr,
              faabric::MPIMessage::SCAN);
         // Reduce with our own value
-        op_reduce(operation, datatype, count, currentAcc, recvBuffer);
-        delete[] currentAcc;
+        op_reduce(operation, datatype, count, currentAcc.get(), recvBuffer);
     }
 
     // If not the last process, send to the next one
