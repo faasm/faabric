@@ -18,13 +18,13 @@ enum InMemoryStateKeyStatus
 class AppendedInMemoryState
 {
   public:
-    AppendedInMemoryState(size_t lengthIn, uint8_t* dataIn)
+    AppendedInMemoryState(size_t lengthIn, std::unique_ptr<uint8_t[]>&& dataIn)
       : length(lengthIn)
-      , data(dataIn)
+      , data(std::move(dataIn))
     {}
 
     size_t length;
-    std::unique_ptr<uint8_t> data;
+    std::unique_ptr<uint8_t[]> data;
 };
 
 class InMemoryStateKeyValue final : public StateKeyValue
