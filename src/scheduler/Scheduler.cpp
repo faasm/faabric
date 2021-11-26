@@ -21,6 +21,8 @@
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
+#define GET_EXEC_GRAPH_SLEEP_MS 500
+#define MAX_GET_EXEC_GRAPH_RETRIES 3
 
 using namespace faabric::util;
 using namespace faabric::snapshot;
@@ -1017,16 +1019,16 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
     // we get them from Redis. For the time being, we retry a number of times
     // and fail if we don't succeed.
     std::vector<uint8_t> messageBytes = redis.get(statusKey);
-    int maxNumRetries = 3;
     int numRetries = 0;
-    while (messageBytes.empty() && numRetries < maxNumRetries) {
+    while (messageBytes.empty() && numRetries < MAX_GET_EXEC_GRAPH_RETRIES) {
         SPDLOG_WARN(
           "Retry GET message for ExecGraph node with id {} (Retry {}/{})",
           messageId,
           numRetries + 1,
-          maxNumRetries);
-        SLEEP_MS(500);
+          MAX_GET_EXEC_GRAPH_RETRIES);
+        SLEEP_MS(GET_EXEC_GRAPH_SLEEP_MS);
         messageBytes = redis.get(statusKey);
+        ++numRetries;
     }
     if (messageBytes.empty()) {
         SPDLOG_ERROR("Can't GET message from redis (id: {}, key: {})",

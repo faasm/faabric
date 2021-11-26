@@ -72,6 +72,15 @@ TEST_CASE("Test execution graph", "[scheduler][exec-graph]")
     checkExecGraphEquality(expected, actual);
 }
 
+TEST_CASE("Test can't get exec graph if results are not published",
+          "[scheduler][exec-graph]")
+{
+    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
+
+    REQUIRE_THROWS(
+      faabric::scheduler::getScheduler().getFunctionExecGraph(msg.id()));
+}
+
 TEST_CASE("Test get unique hosts from exec graph", "[scheduler][exec-graph]")
 {
     faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
