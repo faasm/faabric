@@ -45,6 +45,9 @@ MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(faabric::Message& msg)
         faabric::util::FullLock lock(registryMutex);
         if (worldMap.find(worldId) == worldMap.end()) {
             MpiWorld& world = worldMap[worldId];
+            SPDLOG_DEBUG("Initialising world (id: {}) from msg on rank: {}",
+                         msg.mpiworldid(),
+                         msg.mpirank());
             world.initialiseFromMsg(msg);
         }
     }

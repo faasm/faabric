@@ -45,7 +45,7 @@ int MPI_Init(int* argc, char*** argv)
 
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
-    SPDLOG_DEBUG("Initialised world for rank: {}", thisRank);
+    SPDLOG_DEBUG("Initialised world (id: {}) for rank: {}", call->mpiworldid(), thisRank);
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
     world.barrier(thisRank);

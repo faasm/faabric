@@ -45,6 +45,11 @@ void MpiContext::joinWorld(faabric::Message& msg)
         return;
     }
 
+    if (msg.mpirank() <= 0) {
+        SPDLOG_ERROR("Trying to join world on rank: {}", msg.mpirank());
+        throw std::runtime_error("Joining MPI world from wrong rank");
+    }
+
     isMpi = true;
     worldId = msg.mpiworldid();
     rank = msg.mpirank();
