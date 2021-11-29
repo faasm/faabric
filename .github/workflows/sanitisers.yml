@@ -41,7 +41,10 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
       # --- Build dependencies
       - name: "Build dependencies to be shared by all sanitiser runs"
         run: inv dev.cmake -b Debug
@@ -80,7 +83,10 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with address sanitising"
         run: inv dev.sanitise Address --noclean
@@ -124,7 +130,10 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with thread sanitising"
         run: inv dev.sanitise Thread --noclean
@@ -169,7 +178,10 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with undefined sanitising"
         run: inv dev.sanitise Undefined --noclean
@@ -214,7 +226,10 @@ jobs:
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with leak sanitising"
         run: inv dev.sanitise Leak --noclean
