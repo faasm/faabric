@@ -130,7 +130,6 @@ bumped version. It should appear in:
 - `VERSION`
 - `.env`
 - `.github/workflows/tests.yml`.
-- `mpi-native/mpi-native.env`
 
 Once done, commit and push, then run:
 
