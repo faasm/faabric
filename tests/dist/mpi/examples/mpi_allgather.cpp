@@ -1,7 +1,7 @@
 #include <faabric/mpi/mpi.h>
 #include <stdio.h>
 
-namespace tests {
+namespace tests::mpi {
 
 int allGather()
 {

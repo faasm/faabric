@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-namespace tests {
+namespace tests::mpi {
 
 int allReduce()
 {

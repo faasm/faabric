@@ -7,9 +7,11 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/util/logging.h>
 
+using namespace tests::mpi;
+
 namespace tests {
 
-faabric::Message* executingCall;
+faabric::Message* tests::mpi::executingCall;
 
 int handleMpiAllGather(faabric::scheduler::Executor* exec,
                        int threadPoolIdx,
@@ -95,6 +97,174 @@ int handleMpiChecks(faabric::scheduler::Executor* exec,
     return returnValue;
 }
 
+int handleMpiGather(faabric::scheduler::Executor* exec,
+                    int threadPoolIdx,
+                    int msgIdx,
+                    std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = gather();
+
+    return returnValue;
+}
+
+int handleMpiHelloWorld(faabric::scheduler::Executor* exec,
+                        int threadPoolIdx,
+                        int msgIdx,
+                        std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = helloWorld();
+
+    return returnValue;
+}
+
+int handleMpiISendRecv(faabric::scheduler::Executor* exec,
+                       int threadPoolIdx,
+                       int msgIdx,
+                       std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = iSendRecv();
+
+    return returnValue;
+}
+
+int handleMpiOneSided(faabric::scheduler::Executor* exec,
+                      int threadPoolIdx,
+                      int msgIdx,
+                      std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = oneSided();
+
+    return returnValue;
+}
+
+int handleMpiOrder(faabric::scheduler::Executor* exec,
+                   int threadPoolIdx,
+                   int msgIdx,
+                   std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = order();
+
+    return returnValue;
+}
+
+int handleMpiProbe(faabric::scheduler::Executor* exec,
+                   int threadPoolIdx,
+                   int msgIdx,
+                   std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = probe();
+
+    return returnValue;
+}
+
+int handleMpiReduce(faabric::scheduler::Executor* exec,
+                    int threadPoolIdx,
+                    int msgIdx,
+                    std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = reduce();
+
+    return returnValue;
+}
+
+int handleMpiScan(faabric::scheduler::Executor* exec,
+                  int threadPoolIdx,
+                  int msgIdx,
+                  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = scan();
+
+    return returnValue;
+}
+
+int handleMpiScatter(faabric::scheduler::Executor* exec,
+                     int threadPoolIdx,
+                     int msgIdx,
+                     std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = scatter();
+
+    return returnValue;
+}
+
+int handleMpiSend(faabric::scheduler::Executor* exec,
+                  int threadPoolIdx,
+                  int msgIdx,
+                  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = send();
+
+    return returnValue;
+}
+
+int handleMpiSendRecv(faabric::scheduler::Executor* exec,
+                      int threadPoolIdx,
+                      int msgIdx,
+                      std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = sendRecv();
+
+    return returnValue;
+}
+
+int handleMpiStatus(faabric::scheduler::Executor* exec,
+                    int threadPoolIdx,
+                    int msgIdx,
+                    std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = status();
+
+    return returnValue;
+}
+
+int handleMpiTypeSize(faabric::scheduler::Executor* exec,
+                      int threadPoolIdx,
+                      int msgIdx,
+                      std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = typeSize();
+
+    return returnValue;
+}
+
+int handleMpiWinCreate(faabric::scheduler::Executor* exec,
+                       int threadPoolIdx,
+                       int msgIdx,
+                       std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    int returnValue = winCreate();
+
+    return returnValue;
+}
+
 void registerMpiTestFunctions()
 {
     registerDistTestExecutorCallback("mpi", "allgather", handleMpiAllGather);
@@ -104,5 +274,19 @@ void registerMpiTestFunctions()
     registerDistTestExecutorCallback("mpi", "cart-create", handleMpiCartCreate);
     registerDistTestExecutorCallback("mpi", "cartesian", handleMpiCartesian);
     registerDistTestExecutorCallback("mpi", "checks", handleMpiChecks);
+    registerDistTestExecutorCallback("mpi", "gather", handleMpiGather);
+    registerDistTestExecutorCallback("mpi", "hello-world", handleMpiHelloWorld);
+    registerDistTestExecutorCallback("mpi", "isendrecv", handleMpiISendRecv);
+    registerDistTestExecutorCallback("mpi", "onesided", handleMpiOneSided);
+    registerDistTestExecutorCallback("mpi", "order", handleMpiOrder);
+    registerDistTestExecutorCallback("mpi", "probe", handleMpiProbe);
+    registerDistTestExecutorCallback("mpi", "reduce", handleMpiReduce);
+    registerDistTestExecutorCallback("mpi", "scan", handleMpiScan);
+    registerDistTestExecutorCallback("mpi", "scatter", handleMpiScatter);
+    registerDistTestExecutorCallback("mpi", "send", handleMpiSend);
+    registerDistTestExecutorCallback("mpi", "sendrecv", handleMpiSendRecv);
+    registerDistTestExecutorCallback("mpi", "status", handleMpiStatus);
+    registerDistTestExecutorCallback("mpi", "typesize", handleMpiTypeSize);
+    registerDistTestExecutorCallback("mpi", "win-create", handleMpiWinCreate);
 }
 }

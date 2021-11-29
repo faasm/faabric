@@ -1,13 +1,6 @@
 #include <faabric/mpi/mpi.h>
 #include <stdio.h>
 
-#include <faabric/mpi-native/MpiExecutor.h>
-
-int main(int argc, char** argv)
-{
-    return faabric::mpi_native::mpiNativeMain(argc, argv);
-}
-
 bool checkTypeSize(MPI_Datatype dt, int expected, const char* name)
 {
     int actual;
@@ -23,8 +16,9 @@ bool checkTypeSize(MPI_Datatype dt, int expected, const char* name)
     }
 }
 
-namespace faabric::mpi_native {
-int mpiFunc()
+namespace tests::mpi {
+
+int typeSize()
 {
     MPI_Init(NULL, NULL);
 

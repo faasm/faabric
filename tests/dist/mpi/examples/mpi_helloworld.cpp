@@ -1,13 +1,9 @@
-#include <faabric/mpi-native/MpiExecutor.h>
 #include <faabric/mpi/mpi.h>
+#include <faabric/util/logging.h>
 
-int main(int argc, char** argv)
-{
-    return faabric::mpi_native::mpiNativeMain(argc, argv);
-}
+namespace tests::mpi {
 
-namespace faabric::mpi_native {
-int mpiFunc()
+int helloWorld()
 {
     SPDLOG_INFO("Hello world from Faabric MPI Main!");
 

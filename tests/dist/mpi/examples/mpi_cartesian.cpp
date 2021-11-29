@@ -3,7 +3,7 @@
 #include <faabric/util/compare.h>
 #include <stdio.h>
 
-namespace tests {
+namespace tests::mpi {
 
 int cartesian()
 {

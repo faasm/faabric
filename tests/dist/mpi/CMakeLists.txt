@@ -15,6 +15,20 @@ set(ALL_MPI_EXAMPLES
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_cart_create.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_cartesian.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_checks.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_gather.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_helloworld.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_isendrecv.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_onesided.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_order.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_probe.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_reduce.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_scan.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_scatter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_send.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_sendrecv.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_status.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_typesize.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_wincreate.cpp
 )
 
 set(MPI_DIST_TEST_SOURCES

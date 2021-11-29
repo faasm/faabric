@@ -91,4 +91,172 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[mpi]")
 
     checkAllocationAndResult(req);
 }
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("gather", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI hello world", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("hello-world", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI async. send recv", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("isendrecv", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI one sided comms.", "[.]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("onesided", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI order", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("order", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI probe", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("probe", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI reduce", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("reduce", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI scan", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("scan", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI scatter", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("scatter", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI send", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("send", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI send-recv", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("sendrecv", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI status", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("status", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI types sizes", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("typesize", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI window creation", "[.]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("win-create", worldSize);
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
 }

@@ -10,11 +10,11 @@ static thread_local faabric::scheduler::MpiContext executingContext;
 
 faabric::Message* getExecutingCall()
 {
-    if (tests::executingCall == nullptr) {
-        SPDLOG_ERROR("Null-pointing executing call!");
+    if (tests::mpi::executingCall == nullptr) {
+        SPDLOG_ERROR("Null-pointing executing call in MPI native");
         throw std::runtime_error("Executing call not set");
     }
-    return tests::executingCall;
+    return tests::mpi::executingCall;
 }
 
 faabric::scheduler::MpiWorld& getExecutingWorld()
