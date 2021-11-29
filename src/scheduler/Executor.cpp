@@ -67,7 +67,7 @@ void Executor::finish()
           ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false, false));
 
         faabric::util::UniqueLock threadsLock(threadsMutex);
-        // copy shared_ptr to avoid racing
+        // Copy shared_ptr to avoid racing
         auto thread = threadPoolThreads.at(i);
         // If already killed, move to the next thread
         if (thread == nullptr) {

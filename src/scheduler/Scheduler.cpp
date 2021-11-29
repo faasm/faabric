@@ -117,6 +117,7 @@ void Scheduler::reset()
         e->finish();
     }
     deadExecutorsList.clear();
+
     faabric::util::FullLock lock(mx);
     executors.clear();
     deadExecutors.clear();

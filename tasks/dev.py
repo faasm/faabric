@@ -89,8 +89,7 @@ def sanitise(ctx, mode, noclean=False, shared=False):
     mode_list = ["Address", "Thread", "Undefined", "Leak", "Memory"]
     if mode not in mode_list:
         print("Unrecognised sanitiser mode: {}".format(mode))
-        print("Sanitisier mode must be one in {}".format(mode_list))
-        return
+        raise RuntimeError("Sanitisier mode must be one in {}".format(mode_list))
 
     cmake(
         ctx,

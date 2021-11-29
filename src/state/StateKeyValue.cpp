@@ -222,7 +222,7 @@ void StateKeyValue::flagDirty()
 void StateKeyValue::zeroDirtyMask()
 {
     checkSizeConfigured();
-    memset(dirtyMask.get(), 0, valueSize);
+    ::memset(dirtyMask.get(), 0, valueSize);
 }
 
 void StateKeyValue::flagChunkDirty(long offset, long len)
@@ -236,7 +236,7 @@ void StateKeyValue::flagChunkDirty(long offset, long len)
 void StateKeyValue::markDirtyChunk(long offset, long len)
 {
     isDirty |= true;
-    memset(dirtyMask.get() + offset, ONES_BITMASK, len);
+    ::memset(dirtyMask.get() + offset, ONES_BITMASK, len);
 }
 
 size_t StateKeyValue::size() const
@@ -504,7 +504,7 @@ void StateKeyValue::doPullChunk(bool lazy, long offset, size_t length)
     pullChunkFromRemote(offset, length);
 
     // Mark the chunk as pulled
-    memset(pulledMask.get() + offset, ONES_BITMASK, length);
+    ::memset(pulledMask.get() + offset, ONES_BITMASK, length);
 }
 
 void StateKeyValue::doPushPartial(const uint8_t* dirtyMaskBytes)
@@ -528,7 +528,7 @@ void StateKeyValue::doPushPartial(const uint8_t* dirtyMaskBytes)
     const std::vector<StateChunk>& chunks = getDirtyChunks(dirtyMaskBytes);
 
     // Zero the mask now that we're finished with it
-    memset((void*)dirtyMaskBytes, 0, valueSize);
+    ::memset((void*)dirtyMaskBytes, 0, valueSize);
 
     // Push
     pushPartialToRemote(chunks);

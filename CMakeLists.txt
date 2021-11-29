@@ -33,6 +33,8 @@ elseif (FAABRIC_USE_SANITISER STREQUAL "Leak")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=leak")
 elseif (FAABRIC_USE_SANITISER STREQUAL "Memory")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory")
+elseif (NOT ((FAABRIC_USE_SANITISER STREQUAL "None") OR (NOT FAABRIC_USE_SANITISER)))
+    message(FATAL_ERROR "Invalid FAABRIC_USE_SANITISER setting: ${FAABRIC_USE_SANITISER}")
 endif()
 
 # Global include dir

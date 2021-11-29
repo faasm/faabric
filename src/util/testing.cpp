@@ -3,8 +3,8 @@
 #include <atomic>
 
 namespace faabric::util {
-static std::atomic_bool testMode = false;
-static std::atomic_bool mockMode = false;
+static std::atomic<bool> testMode = false;
+static std::atomic<bool> mockMode = false;
 
 void setTestMode(bool val)
 {
