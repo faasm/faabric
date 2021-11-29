@@ -20,9 +20,7 @@ int handleMpiAllGather(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = allGather();
-
-    return returnValue;
+    return allGather();
 }
 
 int handleMpiAllReduce(faabric::scheduler::Executor* exec,
@@ -32,9 +30,7 @@ int handleMpiAllReduce(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = allReduce();
-
-    return returnValue;
+    return allReduce();
 }
 
 int handleMpiAllToAll(faabric::scheduler::Executor* exec,
@@ -44,9 +40,7 @@ int handleMpiAllToAll(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = allToAll();
-
-    return returnValue;
+    return allToAll();
 }
 
 int handleMpiBcast(faabric::scheduler::Executor* exec,
@@ -56,9 +50,7 @@ int handleMpiBcast(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = broadcast();
-
-    return returnValue;
+    return broadcast();
 }
 
 int handleMpiCartCreate(faabric::scheduler::Executor* exec,
@@ -68,9 +60,7 @@ int handleMpiCartCreate(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = cartCreate();
-
-    return returnValue;
+    return cartCreate();
 }
 
 int handleMpiCartesian(faabric::scheduler::Executor* exec,
@@ -80,9 +70,7 @@ int handleMpiCartesian(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = cartesian();
-
-    return returnValue;
+    return cartesian();
 }
 
 int handleMpiChecks(faabric::scheduler::Executor* exec,
@@ -92,9 +80,7 @@ int handleMpiChecks(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = checks();
-
-    return returnValue;
+    return checks();
 }
 
 int handleMpiGather(faabric::scheduler::Executor* exec,
@@ -104,9 +90,7 @@ int handleMpiGather(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = gather();
-
-    return returnValue;
+    return gather();
 }
 
 int handleMpiHelloWorld(faabric::scheduler::Executor* exec,
@@ -116,9 +100,7 @@ int handleMpiHelloWorld(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = helloWorld();
-
-    return returnValue;
+    return helloWorld();
 }
 
 int handleMpiISendRecv(faabric::scheduler::Executor* exec,
@@ -128,9 +110,7 @@ int handleMpiISendRecv(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = iSendRecv();
-
-    return returnValue;
+    return iSendRecv();
 }
 
 int handleMpiOneSided(faabric::scheduler::Executor* exec,
@@ -140,9 +120,7 @@ int handleMpiOneSided(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = oneSided();
-
-    return returnValue;
+    return oneSided();
 }
 
 int handleMpiOrder(faabric::scheduler::Executor* exec,
@@ -152,9 +130,7 @@ int handleMpiOrder(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = order();
-
-    return returnValue;
+    return order();
 }
 
 int handleMpiProbe(faabric::scheduler::Executor* exec,
@@ -164,9 +140,7 @@ int handleMpiProbe(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = probe();
-
-    return returnValue;
+    return probe();
 }
 
 int handleMpiReduce(faabric::scheduler::Executor* exec,
@@ -176,9 +150,7 @@ int handleMpiReduce(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = reduce();
-
-    return returnValue;
+    return reduce();
 }
 
 int handleMpiScan(faabric::scheduler::Executor* exec,
@@ -188,9 +160,7 @@ int handleMpiScan(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = scan();
-
-    return returnValue;
+    return scan();
 }
 
 int handleMpiScatter(faabric::scheduler::Executor* exec,
@@ -200,9 +170,7 @@ int handleMpiScatter(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = scatter();
-
-    return returnValue;
+    return scatter();
 }
 
 int handleMpiSend(faabric::scheduler::Executor* exec,
@@ -212,9 +180,7 @@ int handleMpiSend(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = send();
-
-    return returnValue;
+    return send();
 }
 
 int handleMpiSendRecv(faabric::scheduler::Executor* exec,
@@ -224,9 +190,7 @@ int handleMpiSendRecv(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = sendRecv();
-
-    return returnValue;
+    return sendRecv();
 }
 
 int handleMpiStatus(faabric::scheduler::Executor* exec,
@@ -236,9 +200,7 @@ int handleMpiStatus(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = status();
-
-    return returnValue;
+    return status();
 }
 
 int handleMpiTypeSize(faabric::scheduler::Executor* exec,
@@ -248,9 +210,7 @@ int handleMpiTypeSize(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = typeSize();
-
-    return returnValue;
+    return typeSize();
 }
 
 int handleMpiWinCreate(faabric::scheduler::Executor* exec,
@@ -260,9 +220,7 @@ int handleMpiWinCreate(faabric::scheduler::Executor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    int returnValue = winCreate();
-
-    return returnValue;
+    return winCreate();
 }
 
 void registerMpiTestFunctions()

@@ -16,7 +16,7 @@ docker-compose \
     run \
     --rm \
     cli \
-    /build/faabric/static/bin/faabric_dist_tests
+    /build/faabric/static/bin/faabric_dist_tests --abort
 
 RETURN_VAL=$?
 

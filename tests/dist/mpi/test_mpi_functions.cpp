@@ -8,7 +8,7 @@
 
 namespace tests {
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all gather", "[mpi]")
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all gather", "[.]")
 {
     // Set up this host's resources
     setLocalSlots(nLocalSlots);

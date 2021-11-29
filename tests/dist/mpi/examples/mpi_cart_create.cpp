@@ -16,7 +16,6 @@ int cartCreate()
     // Prepare arguments
     int ndims = 2;
     int sideLength = static_cast<int>(std::floor(std::sqrt(worldSize)));
-    int nprocs = sideLength * sideLength;
     int dims[2] = { sideLength, sideLength };
     int periods[2] = { 0, 0 };
     int reorder = 0;

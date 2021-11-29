@@ -95,10 +95,9 @@ class MpiDistTestsFixture : public DistTestsFixture
         // Note - here we assume that MPI functions DON'T use the `NEVER_ALONE`
         // scheduling topology hint. TODO change when #184 is merged in
         std::vector<std::string> expecedHosts;
-        // The distributed server is hardocded to have four slots
+        // The distributed server is hardcoded to have four slots
         int remoteSlots = 4;
         std::string remoteIp = getWorkerIP();
-        int localSlots = nLocalSlots;
         std::string localIp = getMasterIP();
         // First, allocate locally as much as we can
         for (int i = 0; i < nLocalSlots; i++) {
@@ -106,13 +105,13 @@ class MpiDistTestsFixture : public DistTestsFixture
         }
         // Second, allocate remotely as much as we can
         int alocateRemotely =
-          std::min<int>(worldSize - localSlots, remoteSlots);
+          std::min<int>(worldSize - nLocalSlots, remoteSlots);
         for (int i = 0; i < alocateRemotely; i++) {
             expecedHosts.push_back(remoteIp);
         }
         // Lastly, overload the master with all the ranks we haven't been able
         // to allocate anywhere
-        int overloadMaster = worldSize - localSlots - alocateRemotely;
+        int overloadMaster = worldSize - nLocalSlots - alocateRemotely;
         for (int i = 0; i < overloadMaster; i++) {
             expecedHosts.push_back(localIp);
         }
