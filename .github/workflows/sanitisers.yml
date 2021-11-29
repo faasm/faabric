@@ -38,10 +38,15 @@ jobs:
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
         shell: bash
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
           restore-keys: |
             ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
             ${{ runner.os }}-
@@ -80,10 +85,15 @@ jobs:
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
         shell: bash
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
           restore-keys: |
             ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
             ${{ runner.os }}-
@@ -127,10 +137,15 @@ jobs:
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
         shell: bash
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
           restore-keys: |
             ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
             ${{ runner.os }}-
@@ -175,10 +190,15 @@ jobs:
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
         shell: bash
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
           restore-keys: |
             ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
             ${{ runner.os }}-
@@ -223,10 +243,15 @@ jobs:
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
         shell: bash
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ hashFiles('/code/faabric/cmake/ExternalProjects.cmake') }}
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
           restore-keys: |
             ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
             ${{ runner.os }}-
