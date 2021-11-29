@@ -1,15 +1,9 @@
 #include <faabric/mpi/mpi.h>
 #include <stdio.h>
 
-#include <faabric/mpi-native/MpiExecutor.h>
+namespace tests {
 
-int main(int argc, char** argv)
-{
-    return faabric::mpi_native::mpiNativeMain(argc, argv);
-}
-
-namespace faabric::mpi_native {
-int mpiFunc()
+int allGather()
 {
     MPI_Init(NULL, NULL);
 

@@ -8,6 +8,7 @@ void initDistTests()
 {
     SPDLOG_INFO("Registering distributed test server functions");
 
+    tests::registerMpiTestFunctions();
     tests::registerSchedulerTestFunctions();
     tests::registerTransportTestFunctions();
 }

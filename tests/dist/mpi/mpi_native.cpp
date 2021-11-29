@@ -1,16 +1,20 @@
-#include <faabric/mpi-native/MpiExecutor.h>
+#include "mpi_native.h"
+
 #include <faabric/mpi/mpi.h>
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorld.h>
+#include <faabric/util/config.h>
 #include <faabric/util/logging.h>
-
-using namespace faabric::mpi_native;
 
 static thread_local faabric::scheduler::MpiContext executingContext;
 
 faabric::Message* getExecutingCall()
 {
-    return faabric::mpi_native::executingCall;
+    if (tests::executingCall == nullptr) {
+        SPDLOG_ERROR("Null-pointing executing call!");
+        throw std::runtime_error("Executing call not set");
+    }
+    return tests::executingCall;
 }
 
 faabric::scheduler::MpiWorld& getExecutingWorld()
@@ -41,7 +45,7 @@ int MPI_Init(int* argc, char*** argv)
 
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
-    SPDLOG_DEBUG("MPI - MPI_Init");
+    SPDLOG_DEBUG("Initialised world for rank: {}", thisRank);
 
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
     world.barrier(thisRank);

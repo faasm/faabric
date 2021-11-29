@@ -22,6 +22,8 @@ int countExecGraphNodes(const ExecGraph& graph);
 
 std::set<std::string> getExecGraphHosts(const ExecGraph& graph);
 
+std::vector<std::string> getMpiRankHostsFromExecGraph(const ExecGraph& graph);
+
 std::string execNodeToJson(const ExecGraphNode& node);
 
 std::string execGraphToJson(const ExecGraph& graph);
