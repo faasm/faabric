@@ -8,7 +8,7 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 
-#define INTER_MPI_TEST_SLEEP 750
+#define INTER_MPI_TEST_SLEEP 1500
 
 namespace tests {
 class DistTestsFixture
@@ -78,8 +78,7 @@ class MpiDistTestsFixture : public DistTestsFixture
     }
 
     std::shared_ptr<faabric::BatchExecuteRequest> setRequest(
-      const std::string& function,
-      int worldSize)
+      const std::string& function)
     {
         auto req = faabric::util::batchExecFactory("mpi", function, 1);
         faabric::Message& msg = req->mutable_messages()->at(0);
