@@ -54,7 +54,7 @@ class MpiDistTestsFixture : public DistTestsFixture
     MpiDistTestsFixture()
     {
         // Flush before each execution to ensure a clean start
-        // sch.broadcastFlush();
+        sch.broadcastFlush();
         SLEEP_MS(INTER_MPI_TEST_SLEEP);
     }
 
@@ -128,7 +128,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         faabric::Message result = sch.getFunctionResult(msg.id(), 1000);
         REQUIRE(result.returnvalue() == 0);
         // TODO - remove this sleep when #181 is merged and rebased
-        SLEEP_MS(500);
+        SLEEP_MS(1000);
         auto execGraph = sch.getFunctionExecGraph(msg.id());
         checkSchedulingFromExecGraph(execGraph);
     }

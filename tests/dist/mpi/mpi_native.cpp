@@ -31,13 +31,24 @@ static void notImplemented(const std::string& funcName)
     throw std::runtime_error(funcName + " not implemented.");
 }
 
+int terminateMpi()
+{
+    // Destroy the MPI world
+    getExecutingWorld().destroy();
+
+    return MPI_SUCCESS;
+}
+
+
 int MPI_Init(int* argc, char*** argv)
 {
     faabric::Message* call = getExecutingCall();
 
     if (call->mpirank() <= 0) {
         SPDLOG_DEBUG("MPI - MPI_Init (create)");
-        executingContext.createWorld(*call);
+
+        int worldId = executingContext.createWorld(*call);
+        call->set_mpiworldid(worldId);
     } else {
         SPDLOG_DEBUG("MPI - MPI_Init (join)");
         executingContext.joinWorld(*call);
@@ -46,9 +57,6 @@ int MPI_Init(int* argc, char*** argv)
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
     SPDLOG_DEBUG("Initialised world (id: {}) for rank: {}", call->mpiworldid(), thisRank);
-
-    faabric::scheduler::MpiWorld& world = getExecutingWorld();
-    world.barrier(thisRank);
 
     return MPI_SUCCESS;
 }
@@ -74,7 +82,7 @@ int MPI_Finalize()
 {
     SPDLOG_DEBUG("MPI - MPI_Finalize");
 
-    return MPI_SUCCESS;
+    return terminateMpi();
 }
 
 int MPI_Get_version(int* version, int* subversion)
@@ -172,7 +180,7 @@ int MPI_Abort(MPI_Comm comm, int errorcode)
 {
     SPDLOG_DEBUG("MPI - MPI_Abort");
 
-    return MPI_SUCCESS;
+    return terminateMpi();
 }
 
 int MPI_Get_count(const MPI_Status* status, MPI_Datatype datatype, int* count)
@@ -463,7 +471,8 @@ int MPI_Cart_shift(MPI_Comm comm,
 {
     SPDLOG_DEBUG("MPI - MPI_Cart_shift");
 
-    rank_source = rank_dest;
+    getExecutingWorld().shiftCartesianCoords(
+      executingContext.getRank(), direction, disp, rank_source, rank_dest);
 
     return MPI_SUCCESS;
 }
