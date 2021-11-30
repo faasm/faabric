@@ -208,7 +208,10 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     std::vector<std::string> executedAt;
     if (size > 1) {
         // Send the init messages (note that message i corresponds to rank i+1)
-        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+        // By default, we use the NEVER_ALONE policy for MPI executions to
+        // minimise cross-host messaging
+        faabric::util::SchedulingDecision decision = sch.callFunctions(
+          req, faabric::util::SchedulingTopologyHint::NEVER_ALONE);
         executedAt = decision.hosts;
     }
     assert(executedAt.size() == size - 1);
