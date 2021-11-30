@@ -34,7 +34,7 @@ void SystemConfig::initialise()
     // Scheduling
     noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
     overrideCpuCount = this->getSystemConfIntParam("OVERRIDE_CPU_COUNT", "0");
-    useTopologyHints = getEnvVar("USE_TOPOLOGY_HINTS", "off");
+    useTopologyHints = getEnvVar("USE_TOPOLOGY_HINTS", "on");
 
     // Worker-related timeouts (all in seconds)
     globalMessageTimeout =
