@@ -101,7 +101,7 @@ jobs:
       - name: "Build tests with address sanitising"
         run: inv dev.sanitise Address --noclean
       - name: "Run tests with address sanitising on and print to stderr to file"
-        run: ./bin/faabric_tests > /dev/null
+        run: ./bin/faabric_tests
         working-directory: /build/faabric/static
         env:
           ASAN_OPTIONS: "verbosity=1:halt_on_error=1"
@@ -154,7 +154,7 @@ jobs:
         run: inv dev.sanitise Thread --noclean
       # --- Tests ---
       - name: "Run tests with thread sanitising on and print stderr to file"
-        run: ./bin/faabric_tests > /dev/null
+        run: ./bin/faabric_tests
         working-directory: /build/faabric/static
         env:
           TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt:history_size=7"
@@ -207,7 +207,7 @@ jobs:
         run: inv dev.sanitise Undefined --noclean
       # --- Tests ---
       - name: "Run tests with undefined sanitising on and print stderr to file"
-        run: ./bin/faabric_tests > /dev/null
+        run: ./bin/faabric_tests
         working-directory: /build/faabric/static
         env:
           UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
@@ -260,5 +260,5 @@ jobs:
         run: inv dev.sanitise Leak --noclean
       # --- Tests ---
       - name: "Run tests with leak sanitising on and print stderr to file"
-        run: ./bin/faabric_tests > /dev/null
+        run: ./bin/faabric_tests
         working-directory: /build/faabric/static
