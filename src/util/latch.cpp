@@ -16,6 +16,8 @@ Latch::Latch(int countIn, int timeoutMsIn)
 
 void Latch::wait()
 {
+    // Keep the this shared_ptr alive to prevent heap-use-after-free
+    std::shared_ptr<Latch> _keepMeAlive = shared_from_this();
     UniqueLock lock(mx);
 
     waiters++;

@@ -665,11 +665,11 @@ void checkDequeueBytes(Redis& redis,
                        const std::vector<uint8_t> expected)
 {
     unsigned long bufferLen = expected.size();
-    auto buffer = new uint8_t[bufferLen];
+    auto buffer = std::vector<uint8_t>(bufferLen, 0);
 
-    redis.dequeueBytes(queueName, buffer, bufferLen);
+    size_t len = redis.dequeueBytes(queueName, buffer.data(), buffer.size());
 
-    std::vector<uint8_t> actual(buffer, buffer + bufferLen);
+    std::vector<uint8_t> actual(buffer.cbegin(), buffer.cbegin() + len);
     REQUIRE(actual == expected);
 }
 

@@ -33,11 +33,13 @@ static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return functionCalls;
 }
 
 std::vector<std::pair<std::string, faabric::EmptyRequest>> getFlushCalls()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return flushCalls;
 }
 
@@ -45,27 +47,32 @@ std::vector<
   std::pair<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>>
 getBatchRequests()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return batchMessages;
 }
 
 std::vector<std::pair<std::string, faabric::EmptyRequest>> getResourceRequests()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return resourceRequests;
 }
 
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     return unregisterRequests;
 }
 
 void queueResourceResponse(const std::string& host, faabric::HostResources& res)
 {
+    faabric::util::UniqueLock lock(mockMutex);
     queuedResourceResponses[host].enqueue(res);
 }
 
 void clearMockRequests()
 {
+    faabric::util::UniqueLock lock(mockMutex);
     functionCalls.clear();
     batchMessages.clear();
     resourceRequests.clear();

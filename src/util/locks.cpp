@@ -8,6 +8,8 @@ FlagWaiter::FlagWaiter(int timeoutMsIn)
 
 void FlagWaiter::waitOnFlag()
 {
+    // Keep the this shared_ptr alive to prevent heap-use-after-free
+    std::shared_ptr<FlagWaiter> _keepMeAlive = shared_from_this();
     // Check
     if (flag.load()) {
         return;
@@ -26,6 +28,8 @@ void FlagWaiter::waitOnFlag()
 
 void FlagWaiter::setFlag(bool value)
 {
+    // Keep the this shared_ptr alive to prevent heap-use-after-free
+    std::shared_ptr<FlagWaiter> _keepMeAlive = shared_from_this();
     UniqueLock lock(flagMx);
     flag.store(value);
     cv.notify_all();

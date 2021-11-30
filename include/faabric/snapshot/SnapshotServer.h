@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotApi.h>
@@ -11,6 +13,10 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
 {
   public:
     SnapshotServer();
+
+    // Returns how many diffs have been applied since started, useful for
+    // testing
+    size_t diffsApplied() const;
 
   protected:
     void doAsyncRecv(int header,
@@ -34,5 +40,6 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
 
   private:
     faabric::transport::PointToPointBroker& broker;
+    std::atomic_size_t diffsAppliedCounter;
 };
 }

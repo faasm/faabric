@@ -43,11 +43,11 @@ void StateKeyValue::configureSize()
     sharedMemSize = nHostPages * HOST_PAGE_SIZE;
     sharedMemory = nullptr;
 
-    dirtyMask = new uint8_t[valueSize];
+    dirtyMask = std::make_unique<uint8_t[]>(valueSize);
     zeroDirtyMask();
 
-    pulledMask = new uint8_t[valueSize];
-    ::memset(pulledMask, 0, valueSize);
+    pulledMask = std::make_unique<uint8_t[]>(valueSize);
+    ::memset(pulledMask.get(), 0, valueSize);
 }
 
 void StateKeyValue::checkSizeConfigured()
@@ -73,7 +73,7 @@ bool StateKeyValue::isChunkPulled(long offset, size_t length)
     }
 
     // TODO - more efficient way of checking this
-    auto pulledMaskBytes = BYTES(pulledMask);
+    auto pulledMaskBytes = pulledMask.get();
     for (size_t i = 0; i < length; i++) {
         if (pulledMaskBytes[offset + i] == 0) {
             return false;
@@ -222,7 +222,7 @@ void StateKeyValue::flagDirty()
 void StateKeyValue::zeroDirtyMask()
 {
     checkSizeConfigured();
-    memset(dirtyMask, 0, valueSize);
+    ::memset(dirtyMask.get(), 0, valueSize);
 }
 
 void StateKeyValue::flagChunkDirty(long offset, long len)
@@ -236,7 +236,7 @@ void StateKeyValue::flagChunkDirty(long offset, long len)
 void StateKeyValue::markDirtyChunk(long offset, long len)
 {
     isDirty |= true;
-    memset(BYTES(dirtyMask) + offset, ONES_BITMASK, len);
+    ::memset(dirtyMask.get() + offset, ONES_BITMASK, len);
 }
 
 size_t StateKeyValue::size() const
@@ -410,7 +410,7 @@ void StateKeyValue::pushPartial()
 {
     checkSizeConfigured();
 
-    auto dirtyMaskBytes = BYTES(dirtyMask);
+    auto dirtyMaskBytes = dirtyMask.get();
     doPushPartial(dirtyMaskBytes);
 }
 
@@ -504,7 +504,7 @@ void StateKeyValue::doPullChunk(bool lazy, long offset, size_t length)
     pullChunkFromRemote(offset, length);
 
     // Mark the chunk as pulled
-    memset(BYTES(pulledMask) + offset, ONES_BITMASK, length);
+    ::memset(pulledMask.get() + offset, ONES_BITMASK, length);
 }
 
 void StateKeyValue::doPushPartial(const uint8_t* dirtyMaskBytes)
@@ -528,7 +528,7 @@ void StateKeyValue::doPushPartial(const uint8_t* dirtyMaskBytes)
     const std::vector<StateChunk>& chunks = getDirtyChunks(dirtyMaskBytes);
 
     // Zero the mask now that we're finished with it
-    memset((void*)dirtyMaskBytes, 0, valueSize);
+    ::memset((void*)dirtyMaskBytes, 0, valueSize);
 
     // Push
     pushPartialToRemote(chunks);

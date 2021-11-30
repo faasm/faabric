@@ -20,7 +20,8 @@ TEST_CASE_METHOD(MpiTestFixture,
     MPI_Status status{};
 
     std::vector<int> messageData = { 0, 1, 2 };
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
 
     int numToSend = 10;
     std::string expectedKey =
@@ -55,7 +56,8 @@ TEST_CASE_METHOD(MpiTestFixture,
     MPI_Status status{};
 
     std::vector<int> messageData = { 0, 1, 2 };
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
 
     int numToSend = 10;
     std::string expectedKey =
@@ -99,7 +101,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
       faabric::scheduler::getMpiWorldRegistry().createWorld(msg, worldId);
 
     std::vector<int> messageData = { 0, 1, 2 };
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
     std::thread otherWorldThread([&messageData, &otherMsg, rank, otherRank] {
         faabric::scheduler::MpiWorld& otherWorld =
           faabric::scheduler::getMpiWorldRegistry().getOrInitialiseWorld(
@@ -142,7 +145,8 @@ TEST_CASE_METHOD(MpiTestFixture,
     MPI_Status status{};
 
     std::vector<int> messageData = { 0, 1, 2 };
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
 
     std::string expectedKey;
     int msgCount;

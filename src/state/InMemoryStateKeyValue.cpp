@@ -159,11 +159,11 @@ void InMemoryStateKeyValue::appendToRemote(const uint8_t* data, size_t length)
 {
     if (status == InMemoryStateKeyStatus::MASTER) {
         // Create new memory region to hold data
-        auto dataCopy = new uint8_t[length];
-        std::copy(data, data + length, dataCopy);
+        auto dataCopy = std::make_unique<uint8_t[]>(length);
+        std::copy(data, data + length, dataCopy.get());
 
         // Add to list
-        appendedData.emplace_back(length, dataCopy);
+        appendedData.emplace_back(length, std::move(dataCopy));
     } else {
         StateClient cli(user, key, masterIP);
         cli.append(data, length);

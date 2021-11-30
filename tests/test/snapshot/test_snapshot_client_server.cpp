@@ -149,6 +149,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<SnapshotDiff> diffsA;
     std::vector<SnapshotDiff> diffsB;
 
+    size_t originalDiffsApplied = server.diffsApplied();
+
     SnapshotDiff diffA1(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
                         5,
@@ -172,6 +174,10 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     diffsB = { diffB };
     cli.pushSnapshotDiffs(snapKey, groupIdB, diffsB);
 
+    // Ensure the right number of diffs is applied
+    // Also acts as a memory barrier for TSan
+    REQUIRE(server.diffsApplied() == originalDiffsApplied + 3);
+
     // Check changes have been applied
     checkDiffsApplied(snap.data, diffsA);
     checkDiffsApplied(snap.data, diffsB);
@@ -188,7 +194,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     SnapshotData snap = takeSnapshot(snapKey, 5, false);
 
     // Set up a couple of ints in the snapshot
-    int offsetA1 = 5;
+    int offsetA1 = 8;
     int offsetA2 = 2 * HOST_PAGE_SIZE;
     int baseA1 = 25;
     int baseA2 = 60;
@@ -223,8 +229,14 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     diffA2.operation = SnapshotMergeOperation::Sum;
     diffA2.dataType = SnapshotDataType::Int;
 
+    size_t originalDiffsApplied = server.diffsApplied();
+
     diffs = { diffA1, diffA2 };
     cli.pushSnapshotDiffs(snapKey, 0, diffs);
+
+    // Ensure the right number of diffs is applied
+    // Also acts as a memory barrier for TSan
+    REQUIRE(server.diffsApplied() == originalDiffsApplied + 2);
 
     // Check diffs have been applied according to the merge operations
     REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
@@ -241,7 +253,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::string snapKey = std::to_string(generateGid());
     SnapshotData snap = takeSnapshot(snapKey, 5, false);
 
-    int offset = 5;
+    int offset = 8;
     std::vector<uint8_t> originalData;
     std::vector<uint8_t> diffData;
     std::vector<uint8_t> expectedData;
@@ -337,8 +349,14 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     diff.operation = operation;
     diff.dataType = dataType;
 
+    size_t originalDiffsApplied = server.diffsApplied();
+
     std::vector<SnapshotDiff> diffs = { diff };
     cli.pushSnapshotDiffs(snapKey, 0, diffs);
+
+    // Ensure the right number of diffs is applied
+    // Also acts as a memory barrier for TSan
+    REQUIRE(server.diffsApplied() == originalDiffsApplied + 1);
 
     // Check data is as expected
     std::vector<uint8_t> actualData(snap.data + offset,
@@ -367,13 +385,13 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::thread tA([threadIdA, returnValueA] {
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
         int32_t r = sch.awaitThreadResult(threadIdA);
-        REQUIRE(r == returnValueA);
+        assert(r == returnValueA);
     });
 
     std::thread tB([threadIdB, returnValueB] {
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
         int32_t r = sch.awaitThreadResult(threadIdB);
-        REQUIRE(r == returnValueB);
+        assert(r == returnValueB);
     });
 
     if (tA.joinable()) {

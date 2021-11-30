@@ -142,6 +142,8 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     }
 }
 
+// This test hangs ThreadSanitizer
+#if !(defined(__has_feature) && __has_feature(thread_sanitizer))
 TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv many messages from many clients",
                  "[transport]")
@@ -181,6 +183,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         }
     }
 }
+#endif
 
 TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test can't set invalid send/recv timeouts",

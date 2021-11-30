@@ -935,8 +935,8 @@ TEST_CASE_METHOD(
 
     std::vector<uint8_t> actualA(lenA, 0);
     std::vector<uint8_t> expectedA(lenA, 1);
-    std::vector<uint8_t> actualB(lenA, 0);
-    std::vector<uint8_t> expectedB(lenA, 1);
+    std::vector<uint8_t> actualB(lenB, 0);
+    std::vector<uint8_t> expectedB(lenB, 1);
 
     const std::shared_ptr<state::StateKeyValue>& localKv = getLocalKv();
     localKv->getChunk(offsetA, actualA.data(), lenA);

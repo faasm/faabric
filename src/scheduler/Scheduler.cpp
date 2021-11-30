@@ -97,16 +97,30 @@ void Scheduler::reset()
     resetThreadLocalCache();
 
     // Shut down all Executors
-    for (auto& p : executors) {
+    // Executor shutdown takes a lock itself, so "finish" executors without the
+    // lock.
+    decltype(executors) executorsList;
+    decltype(deadExecutors) deadExecutorsList;
+    {
+        faabric::util::FullLock lock(mx);
+        executorsList = executors;
+    }
+    for (auto& p : executorsList) {
         for (auto& e : p.second) {
             e->finish();
         }
     }
-
+    executorsList.clear();
+    {
+        faabric::util::FullLock lock(mx);
+        deadExecutorsList = deadExecutors;
+    }
     for (auto& e : deadExecutors) {
         e->finish();
     }
+    deadExecutorsList.clear();
 
+    faabric::util::FullLock lock(mx);
     executors.clear();
     deadExecutors.clear();
 
@@ -138,19 +152,26 @@ void Scheduler::shutdown()
 
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 {
+    faabric::util::SharedLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return executors[funcStr].size();
 }
 
 int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
 {
+    faabric::util::SharedLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return (int)registeredHosts[funcStr].size();
 }
 
 std::set<std::string> Scheduler::getFunctionRegisteredHosts(
-  const faabric::Message& msg)
+  const faabric::Message& msg,
+  bool acquireLock)
 {
+    faabric::util::SharedLock lock;
+    if (acquireLock) {
+        lock = faabric::util::SharedLock(mx);
+    }
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return registeredHosts[funcStr];
 }
@@ -158,6 +179,7 @@ std::set<std::string> Scheduler::getFunctionRegisteredHosts(
 void Scheduler::removeRegisteredHost(const std::string& host,
                                      const faabric::Message& msg)
 {
+    faabric::util::FullLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     registeredHosts[funcStr].erase(host);
 }
@@ -465,7 +487,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // diffs.
     std::string snapshotKey = firstMsg.snapshotkey();
     if (!snapshotKey.empty()) {
-        for (const auto& host : getFunctionRegisteredHosts(firstMsg)) {
+        for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
             faabric::util::SnapshotData snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
@@ -491,6 +513,14 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // -------------------------------------------
     // EXECTUION
     // -------------------------------------------
+
+    // Records for tests - copy messages before execution to avoid racing on msg
+    size_t recordedMessagesOffset = recordedMessagesAll.size();
+    if (faabric::util::isTestMode()) {
+        for (int i = 0; i < nMessages; i++) {
+            recordedMessagesAll.emplace_back(req->messages().at(i));
+        }
+    }
 
     // Iterate through unique hosts and dispatch messages
     for (const std::string& host : orderedHosts) {
@@ -603,12 +633,12 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
             std::string executedHost = decision.hosts.at(i);
-            faabric::Message msg = req->messages().at(i);
+            const faabric::Message& msg =
+              recordedMessagesAll.at(recordedMessagesOffset + i);
 
             // Log results if in test mode
-            recordedMessagesAll.push_back(msg);
             if (executedHost.empty() || executedHost == thisHost) {
-                recordedMessagesLocal.push_back(msg);
+                recordedMessagesLocal.emplace_back(msg);
             } else {
                 recordedMessagesShared.emplace_back(executedHost, msg);
             }
@@ -678,6 +708,7 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
 
 void Scheduler::clearRecordedMessages()
 {
+    faabric::util::FullLock lock(mx);
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
@@ -685,11 +716,13 @@ void Scheduler::clearRecordedMessages()
 
 std::vector<faabric::Message> Scheduler::getRecordedMessagesAll()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesAll;
 }
 
 std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesLocal;
 }
 
@@ -717,6 +750,7 @@ SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
 std::vector<std::pair<std::string, faabric::Message>>
 Scheduler::getRecordedMessagesShared()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesShared;
 }
 
@@ -764,11 +798,13 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(
 
 std::string Scheduler::getThisHost()
 {
+    faabric::util::SharedLock lock(mx);
     return thisHost;
 }
 
 void Scheduler::broadcastFlush()
 {
+    faabric::util::FullLock lock(mx);
     // Get all hosts
     std::set<std::string> allHosts = getAvailableHosts();
 
@@ -780,6 +816,7 @@ void Scheduler::broadcastFlush()
         getFunctionCallClient(otherHost).sendFlush();
     }
 
+    lock.unlock();
     flushLocally();
 }
 
@@ -949,13 +986,16 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
 
 faabric::HostResources Scheduler::getThisHostResources()
 {
-    thisHostResources.set_usedslots(
+    faabric::util::SharedLock lock(mx);
+    faabric::HostResources hostResources = thisHostResources;
+    hostResources.set_usedslots(
       this->thisHostUsedSlots.load(std::memory_order_acquire));
-    return thisHostResources;
+    return hostResources;
 }
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
+    faabric::util::FullLock lock(mx);
     thisHostResources = res;
     this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
 }

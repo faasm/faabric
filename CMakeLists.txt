@@ -22,6 +22,21 @@ set(CMAKE_EXE_LINKER_FLAGS "-fuse-ld=lld")
 # Compile comamnds for clang tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Set-up use of sanitisers
+if (FAABRIC_USE_SANITISER STREQUAL "Address")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
+elseif (FAABRIC_USE_SANITISER STREQUAL "Thread")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread -fsanitize-ignorelist=${CMAKE_CURRENT_LIST_DIR}/thread-sanitizer-ignorelist.txt")
+elseif (FAABRIC_USE_SANITISER STREQUAL "Undefined")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined")
+elseif (FAABRIC_USE_SANITISER STREQUAL "Leak")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=leak")
+elseif (FAABRIC_USE_SANITISER STREQUAL "Memory")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory")
+elseif (NOT ((FAABRIC_USE_SANITISER STREQUAL "None") OR (NOT FAABRIC_USE_SANITISER)))
+    message(FATAL_ERROR "Invalid FAABRIC_USE_SANITISER setting: ${FAABRIC_USE_SANITISER}")
+endif()
+
 # Global include dir
 set(FAABRIC_INCLUDE_DIR ${CMAKE_CURRENT_LIST_DIR}/include)
 
