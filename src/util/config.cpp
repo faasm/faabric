@@ -34,6 +34,7 @@ void SystemConfig::initialise()
     // Scheduling
     noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
     overrideCpuCount = this->getSystemConfIntParam("OVERRIDE_CPU_COUNT", "0");
+    useTopologyHints = getEnvVar("USE_TOPOLOGY_HINTS", "off");
 
     // Worker-related timeouts (all in seconds)
     globalMessageTimeout =
@@ -100,6 +101,7 @@ void SystemConfig::print()
     SPDLOG_INFO("--- Scheduling ---");
     SPDLOG_INFO("NO_SCHEDULER               {}", noScheduler);
     SPDLOG_INFO("OVERRIDE_CPU_COUNT         {}", overrideCpuCount);
+    SPDLOG_INFO("USE_TOPOLOGY_HINTS         {}", useTopologyHints);
 
     SPDLOG_INFO("--- Timeouts ---");
     SPDLOG_INFO("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
