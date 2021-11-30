@@ -3,6 +3,7 @@
 export PROJ_ROOT=$(dirname $(dirname $(readlink -f $0)))
 pushd ${PROJ_ROOT} >> /dev/null
 
+export CONAN_CACHE_MOUNT_SOURCE=$HOME/.conan/
 RETURN_VAL=0
 
 # Run the test server in the background
