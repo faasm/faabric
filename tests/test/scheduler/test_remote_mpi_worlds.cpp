@@ -918,4 +918,109 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
 
     thisWorld.destroy();
 }
+
+std::set<int> getReceiversFromMessages(
+  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+{
+    std::set<int> retSet;
+    for (const auto& msg : msgs) {
+        retSet.insert(msg->destination());
+    }
+
+    return retSet;
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during broadcast",
+                 "[mpi]")
+{
+    // Register three ranks
+    setWorldSizes(4, 2, 2);
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    // Call broadcast and check sent messages
+    std::set<int> expectedRecvRanks;
+    int expectedNumMsg;
+    int sendRank;
+    int rootRank;
+
+    SECTION("Check from root rank (local), and root is local master")
+    {
+        rootRank = 0;
+        sendRank = rootRank;
+        expectedNumMsg = 2;
+        expectedRecvRanks = { 1, 2 };
+    }
+
+    SECTION("Check from root rank (local), and root is non-local master")
+    {
+        rootRank = 1;
+        sendRank = rootRank;
+        expectedNumMsg = 2;
+        expectedRecvRanks = { 0, 2 };
+    }
+
+    SECTION("Check from local non-root rank, and non-root is local master")
+    {
+        rootRank = 1;
+        sendRank = 0;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    SECTION("Check from local non-root rank, and non-root is non-local-master")
+    {
+        rootRank = 0;
+        sendRank = 1;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    SECTION("Check from remote rank, and remote rank is local master")
+    {
+        rootRank = 0;
+        sendRank = 2;
+        expectedNumMsg = 1;
+        expectedRecvRanks = { 3 };
+    }
+
+    SECTION("Check from remote rank, and remote rank is not local master")
+    {
+        rootRank = 0;
+        sendRank = 3;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    // Check for root
+    std::vector<int> messageData = { 0, 1, 2 };
+    if (sendRank < 2) {
+        thisWorld.broadcast(rootRank,
+                            sendRank,
+                            BYTES(messageData.data()),
+                            MPI_INT,
+                            messageData.size(),
+                            faabric::MPIMessage::BROADCAST);
+    } else {
+        otherWorld.broadcast(rootRank,
+                             sendRank,
+                             BYTES(messageData.data()),
+                             MPI_INT,
+                             messageData.size(),
+                             faabric::MPIMessage::BROADCAST);
+    }
+    auto msgs = getMpiMockedMessages(sendRank);
+    REQUIRE(msgs.size() == expectedNumMsg);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedRecvRanks);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
+    thisWorld.destroy();
+}
 }

@@ -37,10 +37,32 @@ static thread_local std::unordered_map<
 // Id of the message that created this thread-local instance
 static thread_local faabric::Message* thisRankMsg = nullptr;
 
-// This is used for mocking in tests
+namespace faabric::scheduler {
+
+// -----------------------------------
+// Mocking
+// -----------------------------------
+static std::mutex mockMutex;
+
 static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
 
-namespace faabric::scheduler {
+// The identifier in this map is the sending rank. For the receiver's rank
+// we can inspect the MPIMessage object
+static std::map<int, std::vector<std::shared_ptr<faabric::MPIMessage>>>
+  mpiMockedMessages;
+
+std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages()
+{
+    faabric::util::UniqueLock lock(mockMutex);
+    return rankMessages;
+}
+
+std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
+  int sendRank)
+{
+    faabric::util::UniqueLock lock(mockMutex);
+    return mpiMockedMessages[sendRank];
+}
 
 MpiWorld::MpiWorld()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
@@ -303,6 +325,10 @@ void MpiWorld::destroy()
           iSendRequests.size());
         throw std::runtime_error("Destroying world with outstanding requests");
     }
+
+    // Clear structures used for mocking
+    rankMessages.clear();
+    mpiMockedMessages.clear();
 }
 
 void MpiWorld::initialiseFromMsg(faabric::Message& msg)
@@ -640,6 +666,12 @@ void MpiWorld::send(int sendRank,
         m->set_buffer(buffer, dataType->size * count);
     }
 
+    // Mock the message sending in tests
+    if (faabric::util::isMockMode()) {
+        mpiMockedMessages[sendRank].push_back(m);
+        return;
+    }
+
     // Dispatch the message locally or globally
     if (isLocal) {
         SPDLOG_TRACE("MPI - send {} -> {}", sendRank, recvRank);
@@ -675,6 +707,11 @@ void MpiWorld::recv(int sendRank,
 {
     // Sanity-check input parameters
     checkRanksRange(sendRank, recvRank);
+
+    // If mocking the messages, ignore calls to receive that may block
+    if (faabric::util::isMockMode()) {
+        return;
+    }
 
     // Recv message from underlying transport
     std::shared_ptr<faabric::MPIMessage> m =
@@ -758,39 +795,43 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
     awaitAsyncRequest(recvId);
 }
 
-void MpiWorld::broadcast(int sendRank,
+void MpiWorld::broadcast(int rootRank,
                          int thisRank,
                          uint8_t* buffer,
                          faabric_datatype_t* dataType,
                          int count,
                          faabric::MPIMessage::MPIMessageType messageType)
 {
-    SPDLOG_TRACE("MPI - bcast {} -> all", sendRank);
+    SPDLOG_TRACE("MPI - bcast {} -> all", rootRank);
 
-    if (thisRank == sendRank) {
-        // The sendRank (originator of the broadcast) sends a message to all
+    if (thisRank == rootRank) {
+        // The rootRank (originator of the broadcast) sends a message to all
         // local ranks in the broadcast, and all remote leaders in the broadcast
         for (const int localRecvRank : localRanks) {
-            if (localRecvRank == sendRank) {
+            if (localRecvRank == thisRank) {
                 continue;
             }
 
-            send(sendRank, localRecvRank, buffer, dataType, count, messageType);
+            send(thisRank, localRecvRank, buffer, dataType, count, messageType);
         }
 
         for (const int remoteRecvRank : remoteMasters) {
             send(
-              sendRank, remoteRecvRank, buffer, dataType, count, messageType);
+              thisRank, remoteRecvRank, buffer, dataType, count, messageType);
         }
     } else if (thisRank == localMaster) {
         // If we are the local master, first we receive the message sent by
         // the originator of the broadcast
-        recv(sendRank, thisRank, buffer, dataType, count, nullptr, messageType);
+        recv(rootRank, thisRank, buffer, dataType, count, nullptr, messageType);
 
         // If the broadcast originated locally, we are done. If not, we now
         // distribute to all our local ranks
-        if (getHostForRank(sendRank) != thisHost) {
+        if (getHostForRank(rootRank) != thisHost) {
             for (const int localRecvRank : localRanks) {
+                if (localRecvRank == thisRank) {
+                    continue;
+                }
+
                 send(thisRank,
                      localRecvRank,
                      buffer,
@@ -804,7 +845,7 @@ void MpiWorld::broadcast(int sendRank,
         // either our local master if the broadcast originated in a remote host,
         // or the broadcast originator itself if we are on the same host
         int sendingRank =
-          getHostForRank(sendRank) == thisHost ? sendRank : localMaster;
+          getHostForRank(rootRank) == thisHost ? rootRank : localMaster;
 
         recv(
           sendingRank, thisRank, buffer, dataType, count, nullptr, messageType);

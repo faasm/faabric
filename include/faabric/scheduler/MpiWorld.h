@@ -20,6 +20,15 @@
 #define MPI_MSGTYPE_COUNT_PREFIX "mpi-msgtype-torank"
 
 namespace faabric::scheduler {
+
+// -----------------------------------
+// Mocking
+// -----------------------------------
+std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
+
+std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
+  int sendRank);
+
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 
@@ -76,7 +85,7 @@ class MpiWorld
               faabric::MPIMessage::MPIMessageType messageType =
                 faabric::MPIMessage::NORMAL);
 
-    void broadcast(int sendRank,
+    void broadcast(int rootRank,
                    int thisRank,
                    uint8_t* buffer,
                    faabric_datatype_t* dataType,
