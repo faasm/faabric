@@ -1120,8 +1120,11 @@ void MpiWorld::reduce(int thisRank,
                      nullptr,
                      faabric::MPIMessage::REDUCE);
 
+                // Note that we accumulate the reuce operation on the send
+                // buffer, not the receive one, as we later need to send all
+                // the reduced data (including ours) to the root rank
                 op_reduce(
-                  operation, datatype, count, rankData.get(), recvBuffer);
+                  operation, datatype, count, rankData.get(), sendBuffer);
             }
         }
 

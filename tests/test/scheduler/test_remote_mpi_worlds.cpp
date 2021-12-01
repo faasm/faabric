@@ -326,6 +326,93 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
+                 "Test reduce across hosts",
+                 "[mpi]")
+{
+    MpiWorld& thisWorld = setUpThisWorld();
+
+    std::vector<int> messageData = { 0, 1, 2 };
+    int rootRank = 0;
+
+    std::thread otherWorldThread([this, rootRank, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
+
+        // Call reduce from two non-local-master ranks (they just send)
+        otherWorld.reduce(4,
+                          rootRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        // Call reduce from two non-local-master ranks (they just send)
+        otherWorld.reduce(5,
+                          rootRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        // Call reduce from the remote, local-master rank (it receives the two
+        // previous broadcasts and sends to root)
+        // Note that it must be fine to provide a null-pointing recvBuffer
+        otherWorld.reduce(3,
+                          rootRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        // Give the other host time to receive the broadcast
+        testLatch->wait();
+        otherWorld.destroy();
+    });
+
+    // First, reduce from the two non-root local ranks (they just send)
+    thisWorld.reduce(1,
+                     rootRank,
+                     BYTES(messageData.data()),
+                     nullptr,
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    thisWorld.reduce(2,
+                     rootRank,
+                     BYTES(messageData.data()),
+                     nullptr,
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    // Lastly, we reduce from the root rank
+    std::vector<int> actual(messageData.size(), -1);
+    thisWorld.reduce(rootRank,
+                     rootRank,
+                     BYTES(messageData.data()),
+                     BYTES(actual.data()),
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    // The world size is hardcoded in the test fixture
+    int worldSize = 6;
+    std::vector<int> expected = { 0 * worldSize, 1 * worldSize, 2 * worldSize };
+    REQUIRE(actual == expected);
+
+    // Clean up
+    testLatch->wait();
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
+    }
+
+    thisWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                  "Test scatter across hosts",
                  "[mpi]")
 {
