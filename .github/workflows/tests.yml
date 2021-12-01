@@ -67,7 +67,7 @@ jobs:
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
         shell: bash
-      - name: Hash ExternalProjects
+      - name: "Hash ExternalProjects"
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
@@ -97,19 +97,20 @@ jobs:
       - name: "Check out code"
         uses: actions/checkout@v2
         # --- Cache based on Conan version and ExternalProjects cmake source
-      - name: Get Conan version
+      - name: "Get Conan version"
         id: get-conan-version
         run: |
           docker-compose run --rm cli conan --version 2>/tmp/conan-ver-log | tee /tmp/conan-ver
           grep 'Conan version' /tmp/conan-ver || exit 1
+          sudo chown -R $(id -u):$(id -g) ~/.conan
           echo "::set-output name=conan-version::$(grep 'Conan version' /tmp/conan-ver | tr -d '[:alpha:] ')"
         shell: bash
         env:
           CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
-      - name: Get Conan Version - Show Log
+      - name: "Get Conan Version - Show Log"
         if: always()
         run: cat /tmp/conan-ver-log
-      - name: Hash ExternalProjects
+      - name: "Hash ExternalProjects"
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
@@ -149,12 +150,12 @@ jobs:
       - name: "Check out branch"
         run: git checkout --force ci-branch
       # --- Cache based on Conan version and ExternalProjects cmake source
-      - name: Get Conan version
+      - name: "Get Conan version"
         id: get-conan-version
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
         shell: bash
-      - name: Hash ExternalProjects
+      - name: "Hash ExternalProjects"
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
