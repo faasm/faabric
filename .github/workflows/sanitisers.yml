@@ -7,6 +7,10 @@ on:
     branches: [master]
     types: [opened, synchronize, reopened, ready_for_review]
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   conan-cache:
     if: github.event.pull_request.draft == false
@@ -37,12 +41,10 @@ jobs:
         id: get-conan-version
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
-        shell: bash
       - name: Hash ExternalProjects
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
-        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
@@ -84,12 +86,10 @@ jobs:
         id: get-conan-version
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
-        shell: bash
       - name: Hash ExternalProjects
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
-        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
@@ -136,12 +136,10 @@ jobs:
         id: get-conan-version
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
-        shell: bash
       - name: Hash ExternalProjects
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
-        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
@@ -189,12 +187,10 @@ jobs:
         id: get-conan-version
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
-        shell: bash
       - name: Hash ExternalProjects
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
-        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
@@ -242,12 +238,10 @@ jobs:
         id: get-conan-version
         run: |
           echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
-        shell: bash
       - name: Hash ExternalProjects
         id: hash-external
         run: |
           echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
-        shell: bash
       - uses: actions/cache@v2
         with:
           path: '~/.conan'
