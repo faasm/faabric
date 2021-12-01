@@ -284,7 +284,10 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
     // If topology hints are disabled, unset the provided topology hint
-    if (conf.useTopologyHints == "off") {
+    if (conf.noTopologyHints == "on" &&
+        topologyHint != faabric::util::SchedulingTopologyHint::NORMAL) {
+        SPDLOG_WARN("Ignoring topology hint passed to scheduler as hints are "
+                    "disabled in the config");
         topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
     }
 
