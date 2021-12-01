@@ -1053,38 +1053,67 @@ void MpiWorld::awaitAsyncRequest(int requestId)
     umb->deleteMessage(msgIt);
 }
 
-void MpiWorld::reduce(int sendRank,
-                      int recvRank,
+void MpiWorld::reduce(int thisRank,
+                      int rootRank,
                       uint8_t* sendBuffer,
                       uint8_t* recvBuffer,
                       faabric_datatype_t* datatype,
                       int count,
                       faabric_op_t* operation)
 {
-    // If we're the receiver, await inputs
-    if (sendRank == recvRank) {
-        SPDLOG_TRACE("MPI - reduce ({}) all -> {}", operation->id, recvRank);
+    size_t bufferSize = datatype->size * count;
+    auto rankData = std::make_unique<uint8_t[]>(bufferSize);
 
-        size_t bufferSize = datatype->size * count;
+    if (thisRank == rootRank) {
+        // If we're the root of the reduce, await inputs from our local ranks
+        // (besides ourselves) and remote masters
+        SPDLOG_TRACE("MPI - reduce ({}) all -> {}", operation->id, rootRank);
 
-        bool isInPlace = sendBuffer == recvBuffer;
+        // Work out the list of all the ranks we need to wait for
+        std::vector<int> rootRecvRanks = localRanks;
+        rootRecvRanks.erase(
+          std::remove(rootRecvRanks.begin(), rootRecvRanks.end(), thisRank),
+          rootRecvRanks.end());
+        rootRecvRanks.insert(
+          rootRecvRanks.end(), remoteMasters.begin(), remoteMasters.end());
 
         // If not receiving in-place, initialize the receive buffer to the send
         // buffer values. This prevents issues when 0-initializing for operators
         // like the minimum, or product.
         // If we're receiving from ourselves and in-place, our work is
         // already done and the results are written in the recv buffer
+        bool isInPlace = sendBuffer == recvBuffer;
         if (!isInPlace) {
             memcpy(recvBuffer, sendBuffer, bufferSize);
         }
 
-        auto rankData = std::make_unique<uint8_t[]>(bufferSize);
-        for (int r = 0; r < size; r++) {
+        for (const int r : rootRecvRanks) {
             // Work out the data for this rank
             memset(rankData.get(), 0, bufferSize);
-            if (r != recvRank) {
+            recv(r,
+                 thisRank,
+                 rankData.get(),
+                 datatype,
+                 count,
+                 nullptr,
+                 faabric::MPIMessage::REDUCE);
+
+            op_reduce(operation, datatype, count, rankData.get(), recvBuffer);
+        }
+
+    } else if (thisRank == localMaster) {
+        // If we are the local master (but not the root of the reduce) and the
+        // root rank is not local to us, do a reduce with the data of all our
+        // local ranks, and then send the result to the root
+        if (getHostForRank(rootRank) != thisHost) {
+            for (const int r : localRanks) {
+                if (r == thisRank) {
+                    continue;
+                }
+
+                memset(rankData.get(), 0, bufferSize);
                 recv(r,
-                     recvRank,
+                     thisRank,
                      rankData.get(),
                      datatype,
                      count,
@@ -1096,10 +1125,22 @@ void MpiWorld::reduce(int sendRank,
             }
         }
 
+        // Send to the root rank
+        send(thisRank,
+             rootRank,
+             sendBuffer,
+             datatype,
+             count,
+             faabric::MPIMessage::REDUCE);
     } else {
-        // Do the sending
-        send(sendRank,
-             recvRank,
+        // If we are a non-root and non-local-master rank, we send our data
+        // for reduction either to our local master or the root, depending on
+        // whether we are colocated with the root rank or not
+        int realRecvRank =
+          getHostForRank(rootRank) == thisHost ? rootRank : localMaster;
+
+        send(thisRank,
+             realRecvRank,
              sendBuffer,
              datatype,
              count,

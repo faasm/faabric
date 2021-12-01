@@ -151,8 +151,8 @@ class MpiWorld
                    faabric_datatype_t* recvType,
                    int recvCount);
 
-    void reduce(int sendRank,
-                int recvRank,
+    void reduce(int thisRank,
+                int rootRank,
                 uint8_t* sendBuffer,
                 uint8_t* recvBuffer,
                 faabric_datatype_t* datatype,
