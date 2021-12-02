@@ -187,6 +187,37 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 }
 
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
+                 "Test scheduling hints can be disabled through the config",
+                 "[scheduler]")
+{
+    SchedulingConfig config = {
+        .hosts = { masterHost, "hostA" },
+        .slots = { 1, 1 },
+        .numReqs = 2,
+        .topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL,
+        .expectedHosts = { masterHost, "hostA" },
+    };
+
+    auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    auto& faabricConf = faabric::util::getSystemConfig();
+
+    SECTION("Config. variable set")
+    {
+        faabricConf.noTopologyHints = "on";
+        config.expectedHosts = { masterHost, "hostA" };
+    }
+
+    SECTION("Config. variable not set")
+    {
+        config.expectedHosts = { masterHost, masterHost };
+    }
+
+    testActualSchedulingDecision(req, config);
+
+    faabricConf.reset();
+}
+
+TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test master running out of resources",
                  "[scheduler]")
 {

@@ -28,6 +28,7 @@ class SystemConfig
     // Scheduling
     int noScheduler;
     int overrideCpuCount;
+    std::string noTopologyHints;
 
     // Worker-related timeouts
     int globalMessageTimeout;

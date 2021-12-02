@@ -283,6 +283,14 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
+    // If topology hints are disabled, unset the provided topology hint
+    if (conf.noTopologyHints == "on" &&
+        topologyHint != faabric::util::SchedulingTopologyHint::NORMAL) {
+        SPDLOG_WARN("Ignoring topology hint passed to scheduler as hints are "
+                    "disabled in the config");
+        topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+    }
+
     std::vector<std::string> hosts;
     if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
