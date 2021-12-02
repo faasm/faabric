@@ -778,44 +778,44 @@ void MpiWorld::sendRecv(uint8_t* sendBuffer,
     awaitAsyncRequest(recvId);
 }
 
-void MpiWorld::broadcast(int rootRank,
-                         int thisRank,
+void MpiWorld::broadcast(int sendRank,
+                         int recvRank,
                          uint8_t* buffer,
                          faabric_datatype_t* dataType,
                          int count,
                          faabric::MPIMessage::MPIMessageType messageType)
 {
-    SPDLOG_TRACE("MPI - bcast {} -> all", rootRank);
+    SPDLOG_TRACE("MPI - bcast {} -> all", sendRank);
 
-    if (thisRank == rootRank) {
-        // The rootRank (originator of the broadcast) sends a message to all
-        // local ranks in the broadcast, and all remote leaders in the broadcast
+    if (recvRank == sendRank) {
+        // The sending rank sends a message to all local ranks in the broadcast,
+        // and all remote leaders
         for (const int localRecvRank : localRanks) {
-            if (localRecvRank == thisRank) {
+            if (localRecvRank == recvRank) {
                 continue;
             }
 
-            send(thisRank, localRecvRank, buffer, dataType, count, messageType);
+            send(recvRank, localRecvRank, buffer, dataType, count, messageType);
         }
 
         for (const int remoteRecvRank : remoteLeaders) {
             send(
-              thisRank, remoteRecvRank, buffer, dataType, count, messageType);
+              recvRank, remoteRecvRank, buffer, dataType, count, messageType);
         }
-    } else if (thisRank == localLeader) {
-        // If we are the local master, first we receive the message sent by
-        // the originator of the broadcast
-        recv(rootRank, thisRank, buffer, dataType, count, nullptr, messageType);
+    } else if (recvRank == localLeader) {
+        // If we are the local leader, first we receive the message sent by
+        // the sending rank
+        recv(sendRank, recvRank, buffer, dataType, count, nullptr, messageType);
 
         // If the broadcast originated locally, we are done. If not, we now
         // distribute to all our local ranks
-        if (getHostForRank(rootRank) != thisHost) {
+        if (getHostForRank(sendRank) != thisHost) {
             for (const int localRecvRank : localRanks) {
-                if (localRecvRank == thisRank) {
+                if (localRecvRank == recvRank) {
                     continue;
                 }
 
-                send(thisRank,
+                send(recvRank,
                      localRecvRank,
                      buffer,
                      dataType,
@@ -824,14 +824,14 @@ void MpiWorld::broadcast(int rootRank,
             }
         }
     } else {
-        // If we are neither the originator nor a local master, we receive from
-        // either our local master if the broadcast originated in a remote host,
-        // or the broadcast originator itself if we are on the same host
+        // If we are neither the sending rank nor a local leader, we receive
+        // from either our leader master if the broadcast originated in a
+        // different host, or the sending rank itself if we are on the same host
         int sendingRank =
-          getHostForRank(rootRank) == thisHost ? rootRank : localLeader;
+          getHostForRank(sendRank) == thisHost ? sendRank : localLeader;
 
         recv(
-          sendingRank, thisRank, buffer, dataType, count, nullptr, messageType);
+          sendingRank, recvRank, buffer, dataType, count, nullptr, messageType);
     }
 }
 

@@ -922,19 +922,18 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
 std::set<int> getReceiversFromMessages(
   std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
 {
-    std::set<int> retSet;
+    std::set<int> receivers;
     for (const auto& msg : msgs) {
-        retSet.insert(msg->destination());
+        receivers.insert(msg->destination());
     }
 
-    return retSet;
+    return receivers;
 }
 
 TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "Test number of messages sent during broadcast",
                  "[mpi]")
 {
-    // Register three ranks
     setWorldSizes(4, 2, 2);
 
     // Init worlds
@@ -948,74 +947,78 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     std::set<int> expectedRecvRanks;
     int expectedNumMsg;
     int sendRank;
-    int rootRank;
+    int recvRank;
 
-    SECTION("Check from root rank (local), and root is local master")
+    SECTION("Check broadcast from sender and sender is a local leader")
     {
-        rootRank = 0;
-        sendRank = rootRank;
+        recvRank = 0;
+        sendRank = recvRank;
         expectedNumMsg = 2;
         expectedRecvRanks = { 1, 2 };
     }
 
-    SECTION("Check from root rank (local), and root is non-local master")
+    SECTION("Check broadcast from sender but sender is not a local leader")
     {
-        rootRank = 1;
-        sendRank = rootRank;
+        recvRank = 1;
+        sendRank = recvRank;
         expectedNumMsg = 2;
         expectedRecvRanks = { 0, 2 };
     }
 
-    SECTION("Check from local non-root rank, and non-root is local master")
+    SECTION("Check broadcast from a rank that is not the sender, is not a "
+            "leader, but is colocated with the sender")
     {
-        rootRank = 1;
-        sendRank = 0;
-        expectedNumMsg = 0;
-        expectedRecvRanks = {};
-    }
-
-    SECTION("Check from local non-root rank, and non-root is non-local-master")
-    {
-        rootRank = 0;
+        recvRank = 0;
         sendRank = 1;
         expectedNumMsg = 0;
         expectedRecvRanks = {};
     }
 
-    SECTION("Check from remote rank, and remote rank is local master")
+    SECTION("Check broadcast from a rank that is not the sender, is a leader, "
+            "and is colocated with the sender")
     {
-        rootRank = 0;
-        sendRank = 2;
+        recvRank = 1;
+        sendRank = 0;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    SECTION(
+      "Check broadcast from a rank not colocated with sender, but local leader")
+    {
+        recvRank = 2;
+        sendRank = 0;
         expectedNumMsg = 1;
         expectedRecvRanks = { 3 };
     }
 
-    SECTION("Check from remote rank, and remote rank is not local master")
+    SECTION("Check broadcast from a rank not colocated with sender, and not "
+            "local leader")
     {
-        rootRank = 0;
-        sendRank = 3;
+        recvRank = 3;
+        sendRank = 0;
         expectedNumMsg = 0;
         expectedRecvRanks = {};
     }
 
     // Check for root
     std::vector<int> messageData = { 0, 1, 2 };
-    if (sendRank < 2) {
-        thisWorld.broadcast(rootRank,
-                            sendRank,
+    if (recvRank < 2) {
+        thisWorld.broadcast(sendRank,
+                            recvRank,
                             BYTES(messageData.data()),
                             MPI_INT,
                             messageData.size(),
                             faabric::MPIMessage::BROADCAST);
     } else {
-        otherWorld.broadcast(rootRank,
-                             sendRank,
+        otherWorld.broadcast(sendRank,
+                             recvRank,
                              BYTES(messageData.data()),
                              MPI_INT,
                              messageData.size(),
                              faabric::MPIMessage::BROADCAST);
     }
-    auto msgs = getMpiMockedMessages(sendRank);
+    auto msgs = getMpiMockedMessages(recvRank);
     REQUIRE(msgs.size() == expectedNumMsg);
     REQUIRE(getReceiversFromMessages(msgs) == expectedRecvRanks);
 

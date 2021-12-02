@@ -229,6 +229,7 @@ class MpiWorld
     std::vector<int> getRanksForHost(const std::string& host);
 
     // Track ranks that are local to this world, and local/remote leaders
+    // MPITOPTP - this information exists in the broker
     int localLeader;
     std::vector<int> localRanks;
     std::vector<int> remoteLeaders;
