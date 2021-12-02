@@ -245,13 +245,11 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     rankHosts = executedAt;
     basePorts = initLocalBasePorts(executedAt);
 
-    // Record which ranks are local to this world, and query for all masters
-    localRanks = getLocalRanks();
-    localMaster = getLocalMaster();
-    // Given that we are initialising the whole MpiWorld here, the local master
-    // should also be the global master, i.e. rank 0
-    assert(localMaster == 0);
-    remoteMasters = getRemoteMasters();
+    // Record which ranks are local to this world, and query for all leaders
+    initLocalRemoteLeaders();
+    // Given that we are initialising the whole MpiWorld here, the local leader
+    // should also be rank 0
+    assert(localLeader == 0);
 
     // Initialise the memory queues for message reception
     initLocalQueues();
@@ -356,10 +354,8 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     basePorts = { hostRankMsg.baseports().begin(),
                   hostRankMsg.baseports().end() };
 
-    // Record which ranks are local to this world, and query for all masters
-    localRanks = getLocalRanks();
-    localMaster = getLocalMaster();
-    remoteMasters = getRemoteMasters();
+    // Record which ranks are local to this world, and query for all leaders
+    initLocalRemoteLeaders();
 
     // Initialise the memory queues for message reception
     initLocalQueues();
@@ -383,11 +379,6 @@ std::string MpiWorld::getHostForRank(int rank)
     return host;
 }
 
-std::vector<int> MpiWorld::getLocalRanks()
-{
-    return getRanksForHost(thisHost);
-}
-
 std::vector<int> MpiWorld::getRanksForHost(const std::string& host)
 {
     assert(rankHosts.size() == size);
@@ -402,32 +393,24 @@ std::vector<int> MpiWorld::getRanksForHost(const std::string& host)
     return ranksForHost;
 }
 
-int MpiWorld::getLocalMaster()
-{
-    return getMasterForHost(thisHost);
-}
-
-std::vector<int> MpiWorld::getRemoteMasters()
-{
-    std::set<std::string> targetHosts(rankHosts.begin(), rankHosts.end());
-    targetHosts.erase(thisHost);
-
-    std::vector<int> remoteMasters;
-    for (const std::string& host : targetHosts) {
-        remoteMasters.push_back(getMasterForHost(host));
-    }
-
-    return remoteMasters;
-}
-
-// The local master for an MPI world is defined as the lowest rank assigned to
+// The local leader for an MPI world is defined as the lowest rank assigned to
 // this host
-int MpiWorld::getMasterForHost(const std::string& host)
+void MpiWorld::initLocalRemoteLeaders()
 {
-    std::vector<int> ranks = getRanksForHost(host);
-    assert(!ranks.empty());
+    std::set<std::string> uniqueHosts(rankHosts.begin(), rankHosts.end());
 
-    return *std::min_element(ranks.begin(), ranks.end());
+    for (const std::string& host : uniqueHosts) {
+        auto ranksInHost = getRanksForHost(host);
+        // Persist the ranks that are colocated in this host for further use
+        if (host == thisHost) {
+            localRanks = ranksInHost;
+            localLeader =
+              *std::min_element(ranksInHost.begin(), ranksInHost.end());
+        } else {
+            remoteLeaders.push_back(
+              *std::min_element(ranksInHost.begin(), ranksInHost.end()));
+        }
+    }
 }
 
 // Returns a pair (sendPort, recvPort)
@@ -815,11 +798,11 @@ void MpiWorld::broadcast(int rootRank,
             send(thisRank, localRecvRank, buffer, dataType, count, messageType);
         }
 
-        for (const int remoteRecvRank : remoteMasters) {
+        for (const int remoteRecvRank : remoteLeaders) {
             send(
               thisRank, remoteRecvRank, buffer, dataType, count, messageType);
         }
-    } else if (thisRank == localMaster) {
+    } else if (thisRank == localLeader) {
         // If we are the local master, first we receive the message sent by
         // the originator of the broadcast
         recv(rootRank, thisRank, buffer, dataType, count, nullptr, messageType);
@@ -845,7 +828,7 @@ void MpiWorld::broadcast(int rootRank,
         // either our local master if the broadcast originated in a remote host,
         // or the broadcast originator itself if we are on the same host
         int sendingRank =
-          getHostForRank(rootRank) == thisHost ? rootRank : localMaster;
+          getHostForRank(rootRank) == thisHost ? rootRank : localLeader;
 
         recv(
           sendingRank, thisRank, buffer, dataType, count, nullptr, messageType);

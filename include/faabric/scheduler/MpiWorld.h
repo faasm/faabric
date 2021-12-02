@@ -24,6 +24,8 @@ namespace faabric::scheduler {
 // -----------------------------------
 // Mocking
 // -----------------------------------
+// MPITOPTP - mocking at the MPI level won't be needed when using the PTP broker
+// as the broker already has mocking capabilities
 std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
 
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
@@ -226,14 +228,11 @@ class MpiWorld
     int getIndexForRanks(int sendRank, int recvRank);
     std::vector<int> getRanksForHost(const std::string& host);
 
-    // Track ranks that are local to this world, and master ranks
+    // Track ranks that are local to this world, and local/remote leaders
+    int localLeader;
     std::vector<int> localRanks;
-    std::vector<int> getLocalRanks();
-    int localMaster;
-    int getLocalMaster();
-    int getMasterForHost(const std::string& host);
-    std::vector<int> remoteMasters;
-    std::vector<int> getRemoteMasters();
+    std::vector<int> remoteLeaders;
+    void initLocalRemoteLeaders();
 
     // In-memory queues for local messaging
     std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
