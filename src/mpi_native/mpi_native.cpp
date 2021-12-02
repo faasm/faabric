@@ -212,7 +212,7 @@ int MPI_Bcast(void* buffer,
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
 
     int rank = executingContext.getRank();
-    SPDLOG_DEBUG(fmt::format("MPI_Bcast {} -> all", rank));
+    SPDLOG_DEBUG("MPI_Bcast {} -> all", rank);
     world.broadcast(root,
                     rank,
                     (uint8_t*)buffer,
