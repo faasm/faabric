@@ -1061,45 +1061,90 @@ void MpiWorld::reduce(int sendRank,
                       int count,
                       faabric_op_t* operation)
 {
-    // If we're the receiver, await inputs
+    size_t bufferSize = datatype->size * count;
+    auto rankData = std::make_unique<uint8_t[]>(bufferSize);
+
     if (sendRank == recvRank) {
+        // If we're the receiver of the reduce, await inputs from our local
+        // ranks (besides ourselves) and remote leaders
         SPDLOG_TRACE("MPI - reduce ({}) all -> {}", operation->id, recvRank);
 
-        size_t bufferSize = datatype->size * count;
-
-        bool isInPlace = sendBuffer == recvBuffer;
+        // Work out the list of all the ranks we need to wait for
+        std::vector<int> senderRanks = localRanks;
+        senderRanks.erase(
+          std::remove(senderRanks.begin(), senderRanks.end(), sendRank),
+          senderRanks.end());
+        senderRanks.insert(
+          senderRanks.end(), remoteLeaders.begin(), remoteLeaders.end());
 
         // If not receiving in-place, initialize the receive buffer to the send
         // buffer values. This prevents issues when 0-initializing for operators
         // like the minimum, or product.
         // If we're receiving from ourselves and in-place, our work is
         // already done and the results are written in the recv buffer
+        bool isInPlace = sendBuffer == recvBuffer;
         if (!isInPlace) {
             memcpy(recvBuffer, sendBuffer, bufferSize);
         }
 
-        auto rankData = std::make_unique<uint8_t[]>(bufferSize);
-        for (int r = 0; r < size; r++) {
+        for (const int r : senderRanks) {
             // Work out the data for this rank
             memset(rankData.get(), 0, bufferSize);
-            if (r != recvRank) {
+            recv(r,
+                 recvRank,
+                 rankData.get(),
+                 datatype,
+                 count,
+                 nullptr,
+                 faabric::MPIMessage::REDUCE);
+
+            op_reduce(operation, datatype, count, rankData.get(), recvBuffer);
+        }
+
+    } else if (sendRank == localLeader) {
+        // If we are the local leader (but not the receiver of the reduce) and
+        // the receiver is not co-located with us, do a reduce with the data of
+        // all our local ranks, and then send the result to the receiver
+        if (getHostForRank(recvRank) != thisHost) {
+            for (const int r : localRanks) {
+                if (r == sendRank) {
+                    continue;
+                }
+
+                memset(rankData.get(), 0, bufferSize);
                 recv(r,
-                     recvRank,
+                     sendRank,
                      rankData.get(),
                      datatype,
                      count,
                      nullptr,
                      faabric::MPIMessage::REDUCE);
 
+                // Note that we accumulate the reuce operation on the send
+                // buffer, not the receive one, as we later need to send all
+                // the reduced data (including ours) to the root rank
                 op_reduce(
-                  operation, datatype, count, rankData.get(), recvBuffer);
+                  operation, datatype, count, rankData.get(), sendBuffer);
             }
         }
 
-    } else {
-        // Do the sending
+        // Send to the receiver rank
         send(sendRank,
              recvRank,
+             sendBuffer,
+             datatype,
+             count,
+             faabric::MPIMessage::REDUCE);
+    } else {
+        // If we are neither the receiver of the reduce nor a local leader, we
+        // send our data for reduction either to our local leader or the
+        // receiver, depending on whether we are colocated with the receiver or
+        // not
+        int realRecvRank =
+          getHostForRank(recvRank) == thisHost ? recvRank : localLeader;
+
+        send(sendRank,
+             realRecvRank,
              sendBuffer,
              datatype,
              count,

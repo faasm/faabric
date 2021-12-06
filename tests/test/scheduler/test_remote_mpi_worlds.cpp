@@ -326,6 +326,92 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
+                 "Test reduce across hosts",
+                 "[mpi]")
+{
+    MpiWorld& thisWorld = setUpThisWorld();
+
+    std::vector<int> messageData = { 0, 1, 2 };
+    int recvRank = 0;
+
+    std::thread otherWorldThread([this, recvRank, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
+
+        // Call reduce from two non-local-leader ranks (they just send)
+        otherWorld.reduce(4,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        otherWorld.reduce(5,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        // Call reduce from the remote, local-leader rank (it receives the two
+        // previous broadcasts and sends to receiver)
+        // Note that we must support providing a null-pointing recvBuffer
+        otherWorld.reduce(3,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        // Give the other host time to receive the broadcast
+        testLatch->wait();
+        otherWorld.destroy();
+    });
+
+    // First, reduce from the local ranks that don't receive the reduce
+    thisWorld.reduce(1,
+                     recvRank,
+                     BYTES(messageData.data()),
+                     nullptr,
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    thisWorld.reduce(2,
+                     recvRank,
+                     BYTES(messageData.data()),
+                     nullptr,
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    // Lastly, we call reduce from the rank receiving the reduction
+    std::vector<int> actual(messageData.size(), -1);
+    thisWorld.reduce(recvRank,
+                     recvRank,
+                     BYTES(messageData.data()),
+                     BYTES(actual.data()),
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    // The world size is hardcoded in the test fixture
+    int worldSize = 6;
+    std::vector<int> expected = { 0 * worldSize, 1 * worldSize, 2 * worldSize };
+    REQUIRE(actual == expected);
+
+    // Clean up
+    testLatch->wait();
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
+    }
+
+    thisWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                  "Test scatter across hosts",
                  "[mpi]")
 {
@@ -1021,6 +1107,103 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     auto msgs = getMpiMockedMessages(recvRank);
     REQUIRE(msgs.size() == expectedNumMsg);
     REQUIRE(getReceiversFromMessages(msgs) == expectedRecvRanks);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
+    thisWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during reduce",
+                 "[mpi]")
+{
+    setWorldSizes(4, 2, 2);
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    std::set<int> expectedSentMsgRanks;
+    int expectedNumMsgSent;
+    int sendRank;
+    int recvRank;
+
+    SECTION("Call reduce from receiver (local), and receiver is local leader")
+    {
+        recvRank = 0;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+    }
+
+    SECTION(
+      "Call reduce from receiver (local), and receiver is non-local leader")
+    {
+        recvRank = 1;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+    }
+
+    SECTION("Call reduce from non-receiver, colocated with receiver, and local "
+            "leader")
+    {
+        recvRank = 1;
+        sendRank = 0;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+    }
+
+    SECTION("Call reduce from non-receiver, colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 1;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+    }
+
+    SECTION("Call reduce from non-receiver rank, not colocated with receiver, "
+            "but local leader")
+    {
+        recvRank = 0;
+        sendRank = 2;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+    }
+
+    SECTION("Call reduce from non-receiver rank, not colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 3;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { 2 };
+    }
+
+    std::vector<int> messageData = { 0, 1, 2 };
+    std::vector<int> recvData(messageData.size());
+    if (sendRank < 2) {
+        thisWorld.reduce(sendRank,
+                         recvRank,
+                         BYTES(messageData.data()),
+                         BYTES(recvData.data()),
+                         MPI_INT,
+                         messageData.size(),
+                         MPI_SUM);
+    } else {
+        otherWorld.reduce(sendRank,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          BYTES(recvData.data()),
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+    }
+    auto msgs = getMpiMockedMessages(sendRank);
+    REQUIRE(msgs.size() == expectedNumMsgSent);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
 
     faabric::util::setMockMode(false);
     otherWorld.destroy();
