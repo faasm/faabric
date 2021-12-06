@@ -99,14 +99,16 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
-    const SnapshotData& actualA = reg.getSnapshot(snapKeyA);
-    const SnapshotData& actualB = reg.getSnapshot(snapKeyB);
+    const auto actualA = reg.getSnapshot(snapKeyA);
+    const auto actualB = reg.getSnapshot(snapKeyB);
 
-    REQUIRE(actualA.size == snapA.size);
-    REQUIRE(actualB.size == snapB.size);
+    REQUIRE(actualA->size == snapA.size);
+    REQUIRE(actualB->size == snapB.size);
 
-    std::vector<uint8_t> actualDataA(actualA.data, actualA.data + dataA.size());
-    std::vector<uint8_t> actualDataB(actualB.data, actualB.data + dataB.size());
+    std::vector<uint8_t> actualDataA(actualA->data,
+                                     actualA->data + dataA.size());
+    std::vector<uint8_t> actualDataB(actualB->data,
+                                     actualB->data + dataB.size());
 
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);

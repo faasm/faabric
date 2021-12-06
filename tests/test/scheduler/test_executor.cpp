@@ -56,12 +56,12 @@ void TestExecutor::restore(faabric::Message& msg)
     // Initialise the dummy memory and map to snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
-    faabric::util::SnapshotData& snap = reg.getSnapshot(msg.snapshotkey());
+    auto snap = reg.getSnapshot(msg.snapshotkey());
 
     // Note this has to be mmapped to be page-aligned
-    dummyMemorySize = snap.size;
+    dummyMemorySize = snap->size;
     dummyMemory = (uint8_t*)mmap(
-      nullptr, snap.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+      nullptr, snap->size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
 }
@@ -196,9 +196,8 @@ int32_t TestExecutor::executeTask(
         // Modify a page of the dummy memory
         uint8_t pageIdx = threadPoolIdx;
 
-        faabric::util::SnapshotData& snapData =
-          faabric::snapshot::getSnapshotRegistry().getSnapshot(
-            msg.snapshotkey());
+        auto snapData = faabric::snapshot::getSnapshotRegistry().getSnapshot(
+          msg.snapshotkey());
 
         // Avoid writing a zero here as the memory is already zeroed hence
         // it's not a change
@@ -208,10 +207,10 @@ int32_t TestExecutor::executeTask(
 
         // Set up a merge region that should catch the diff
         size_t offset = (pageIdx * faabric::util::HOST_PAGE_SIZE);
-        snapData.addMergeRegion(offset,
-                                data.size() + 10,
-                                SnapshotDataType::Raw,
-                                SnapshotMergeOperation::Overwrite);
+        snapData->addMergeRegion(offset,
+                                 data.size() + 10,
+                                 SnapshotDataType::Raw,
+                                 SnapshotMergeOperation::Overwrite);
 
         SPDLOG_DEBUG("TestExecutor modifying page {} of memory ({}-{})",
                      pageIdx,
@@ -777,17 +776,17 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(faabric::snapshot::getSnapshotDiffPushes().empty());
 
     // Check that we're not registering any dirty pages on the snapshot
-    faabric::util::SnapshotData& snap = reg.getSnapshot(snapshotKey);
-    REQUIRE(snap.getDirtyPages().empty());
+    auto snap = reg.getSnapshot(snapshotKey);
+    REQUIRE(snap->getDirtyPages().empty());
 
     // Now reset snapshot pushes of all kinds
     faabric::snapshot::clearMockSnapshotRequests();
 
     // Make an edit to the snapshot memory and get the expected diffs
-    snap.data[0] = 9;
-    snap.data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
+    snap->data[0] = 9;
+    snap->data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-      snap.getDirtyPages();
+      snap->getDirtyPages();
     REQUIRE(expectedDiffs.size() == 2);
 
     // Set up another function

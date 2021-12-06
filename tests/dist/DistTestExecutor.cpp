@@ -66,12 +66,12 @@ void DistTestExecutor::restore(faabric::Message& msg)
     // Initialise the dummy memory and map to snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
-    faabric::util::SnapshotData& snap = reg.getSnapshot(msg.snapshotkey());
+    auto snap = reg.getSnapshot(msg.snapshotkey());
 
     // Note this has to be mmapped to be page-aligned
     snapshotMemory = (uint8_t*)mmap(
-      nullptr, snap.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    snapshotSize = snap.size;
+      nullptr, snap->size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    snapshotSize = snap->size;
 
     reg.mapSnapshot(msg.snapshotkey(), snapshotMemory);
 }

@@ -127,7 +127,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     // Get the snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
-    faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
+    auto snap = reg.getSnapshot(r->key()->str());
 
     // Lock the function group if it exists
     if (groupId > 0 &&
@@ -138,7 +138,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Iterate through the chunks passed in the request
     for (const auto* chunk : *r->chunks()) {
-        uint8_t* dest = snap.data + chunk->offset();
+        uint8_t* dest = snap->data + chunk->offset();
 
         SPDLOG_TRACE("Applying snapshot diff to {} at {}-{}",
                      r->key()->str(),

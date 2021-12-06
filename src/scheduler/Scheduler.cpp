@@ -497,18 +497,18 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     if (!snapshotKey.empty()) {
         for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
-            faabric::util::SnapshotData snapshotData =
+            auto snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
             // See if we've already pushed this snapshot to the given host,
             // if so, just push the diffs
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snapshotData.getDirtyPages();
+                  snapshotData->getDirtyPages();
                 c.pushSnapshotDiffs(
                   snapshotKey, firstMsg.groupid(), snapshotDiffs);
             } else {
-                c.pushSnapshot(snapshotKey, firstMsg.groupid(), snapshotData);
+                c.pushSnapshot(snapshotKey, firstMsg.groupid(), *snapshotData);
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }

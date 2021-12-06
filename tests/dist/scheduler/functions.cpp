@@ -67,7 +67,7 @@ int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
-    faabric::util::SnapshotData& originalSnap = reg.getSnapshot(snapshotKey);
+    auto originalSnap = reg.getSnapshot(snapshotKey);
     faabric::util::SnapshotData updatedSnap = exec->snapshot();
 
     // Add a single merge region to catch both diffs
@@ -75,7 +75,7 @@ int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
     int offsetB = 100;
     std::vector<uint8_t> inputBytes = faabric::util::stringToBytes(msgInput);
 
-    originalSnap.addMergeRegion(
+    originalSnap->addMergeRegion(
       0,
       offsetB + inputBytes.size() + 10,
       faabric::util::SnapshotDataType::Raw,
@@ -209,13 +209,12 @@ int handleFakeDiffsThreadedFunction(
         std::vector<uint8_t> inputBytes =
           faabric::util::stringToBytes(msgInput);
 
-        faabric::util::SnapshotData& originalSnap =
-          reg.getSnapshot(snapshotKey);
+        auto originalSnap = reg.getSnapshot(snapshotKey);
         faabric::util::SnapshotData updatedSnap = exec->snapshot();
 
         // Make sure it's captured by the region
         int regionLength = 20 + inputBytes.size();
-        originalSnap.addMergeRegion(
+        originalSnap->addMergeRegion(
           regionOffset,
           regionLength,
           faabric::util::SnapshotDataType::Raw,
