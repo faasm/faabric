@@ -15,8 +15,8 @@ namespace tests {
 class SnapshotMergeTestFixture : public SnapshotTestFixture
 {
   public:
-    SnapshotMergeTestFixture() {}
-    ~SnapshotMergeTestFixture() {}
+    SnapshotMergeTestFixture() = default;
+    ~SnapshotMergeTestFixture() = default;
 
   protected:
     std::string snapKey;

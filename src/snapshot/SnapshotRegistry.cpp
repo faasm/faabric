@@ -7,8 +7,6 @@
 #include <sys/mman.h>
 
 namespace faabric::snapshot {
-SnapshotRegistry::SnapshotRegistry() {}
-
 faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
   const std::string& key)
 {

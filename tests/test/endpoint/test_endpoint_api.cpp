@@ -74,7 +74,7 @@ class EndpointApiTestFixture : public SchedulerTestFixture
         setExecutorFactory(executorFactory);
     }
 
-    ~EndpointApiTestFixture() {}
+    ~EndpointApiTestFixture() = default;
 
   protected:
     std::shared_ptr<EndpointApiTestExecutorFactory> executorFactory;

@@ -17,8 +17,6 @@ InMemoryStateRegistry& getInMemoryStateRegistry()
     return reg;
 }
 
-InMemoryStateRegistry::InMemoryStateRegistry() {}
-
 static std::string getMasterKey(const std::string& user, const std::string& key)
 {
     std::string masterKey = MASTER_KEY_PREFIX + user + "_" + key;

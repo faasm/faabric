@@ -16,9 +16,6 @@ Message::Message(int sizeIn)
   , _more(false)
 {}
 
-// Empty message signals shutdown
-Message::Message() {}
-
 char* Message::data()
 {
     return reinterpret_cast<char*>(bytes.data());
