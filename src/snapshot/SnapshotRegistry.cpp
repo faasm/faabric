@@ -96,6 +96,8 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
     // take ownership for the original data referenced in SnapshotData
     snapshotMap[key] = std::make_shared<faabric::util::SnapshotData>(data);
 
+    lock.unlock();
+
     // Write to fd to be locally restorable
     if (locallyRestorable) {
         writeSnapshotToFd(key);
