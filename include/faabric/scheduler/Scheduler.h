@@ -35,9 +35,9 @@ class ExecutorTask
                  bool needsSnapshotPushIn,
                  bool skipResetIn);
 
-    int messageIndex = 0;
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
+    int messageIndex = 0;
     bool needsSnapshotPush = false;
     bool skipReset = false;
 };
