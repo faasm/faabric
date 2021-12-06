@@ -34,8 +34,6 @@ class EndpointApiTestExecutor final : public Executor
     {
         faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
 
-        std::string funcStr = faabric::util::funcToString(msg, true);
-
         int returnVal = 0;
         if (msg.function() == "valid") {
             msg.set_outputdata(
@@ -76,7 +74,7 @@ class EndpointApiTestFixture : public SchedulerTestFixture
         setExecutorFactory(executorFactory);
     }
 
-    ~EndpointApiTestFixture() {}
+    ~EndpointApiTestFixture() = default;
 
   protected:
     std::shared_ptr<EndpointApiTestExecutorFactory> executorFactory;

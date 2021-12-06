@@ -30,11 +30,11 @@ enum SnapshotMergeOperation
 class SnapshotDiff
 {
   public:
+    const uint8_t* data = nullptr;
+    size_t size = 0;
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
     uint32_t offset = 0;
-    size_t size = 0;
-    const uint8_t* data = nullptr;
 
     bool noChange = false;
 

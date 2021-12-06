@@ -12,7 +12,7 @@ namespace faabric::snapshot {
 class SnapshotRegistry
 {
   public:
-    SnapshotRegistry();
+    SnapshotRegistry() = default;
 
     faabric::util::SnapshotData& getSnapshot(const std::string& key);
 

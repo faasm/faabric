@@ -28,7 +28,7 @@ class DistTestsFixture
         faabric::scheduler::setExecutorFactory(fac);
     }
 
-    ~DistTestsFixture() {}
+    ~DistTestsFixture() = default;
 
     std::string getWorkerIP()
     {

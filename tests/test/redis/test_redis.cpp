@@ -76,7 +76,6 @@ TEST_CASE("Basic Redis operations", "[redis]")
     SECTION("Test enqueue/ dequeue bytes")
     {
         // Enqueue some values
-        std::vector<uint8_t> bytesA = faabric::util::stringToBytes(VALUE_A);
         redisQueue.enqueueBytes(QUEUE_NAME, BYTES_A);
         redisQueue.enqueueBytes(QUEUE_NAME, BYTES_B);
         redisQueue.enqueueBytes(QUEUE_NAME, BYTES_C);
@@ -662,7 +661,7 @@ TEST_CASE("Test range set pipeline")
 
 void checkDequeueBytes(Redis& redis,
                        const std::string& queueName,
-                       const std::vector<uint8_t> expected)
+                       const std::vector<uint8_t>& expected)
 {
     unsigned long bufferLen = expected.size();
     auto buffer = std::vector<uint8_t>(bufferLen, 0);

@@ -12,11 +12,12 @@ namespace faabric::transport {
 class Message
 {
   public:
-    Message(const zmq::message_t& msgIn);
+    explicit Message(const zmq::message_t& msgIn);
 
-    Message(int sizeIn);
+    explicit Message(int sizeIn);
 
-    Message();
+    // Empty message signals shutdown
+    Message() = default;
 
     char* data();
 
@@ -31,6 +32,6 @@ class Message
   private:
     std::vector<uint8_t> bytes;
 
-    bool _more;
+    bool _more = false;
 };
 }

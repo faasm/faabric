@@ -35,9 +35,9 @@ class ExecutorTask
                  bool needsSnapshotPushIn,
                  bool skipResetIn);
 
-    int messageIndex = 0;
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
+    int messageIndex = 0;
     bool needsSnapshotPush = false;
     bool skipReset = false;
 };
@@ -49,7 +49,7 @@ class Executor
 
     explicit Executor(faabric::Message& msg);
 
-    virtual ~Executor();
+    virtual ~Executor() = default;
 
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -222,7 +222,7 @@ class Scheduler
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;
-    std::atomic<int32_t> thisHostUsedSlots;
+    std::atomic<int32_t> thisHostUsedSlots = 0;
 
     void updateHostResources();
 
