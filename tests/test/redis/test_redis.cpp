@@ -662,7 +662,7 @@ TEST_CASE("Test range set pipeline")
 
 void checkDequeueBytes(Redis& redis,
                        const std::string& queueName,
-                       const std::vector<uint8_t> expected)
+                       const std::vector<uint8_t>& expected)
 {
     unsigned long bufferLen = expected.size();
     auto buffer = std::vector<uint8_t>(bufferLen, 0);

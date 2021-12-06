@@ -36,7 +36,7 @@ std::string funcToString(const faabric::Message& msg, bool includeId)
 }
 
 std::string funcToString(
-  const std::shared_ptr<faabric::BatchExecuteRequest> req)
+  const std::shared_ptr<faabric::BatchExecuteRequest>& req)
 {
     return funcToString(req->messages(0), false);
 }
