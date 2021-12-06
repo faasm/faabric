@@ -486,8 +486,14 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
     {
         // Broadcast a message from the root
         std::vector<int> messageData = { 0, 1, 2 };
-        world.broadcast(
-          root, BYTES(messageData.data()), MPI_INT, messageData.size());
+
+        // First call from the root, which just sends
+        world.broadcast(root,
+                        root,
+                        BYTES(messageData.data()),
+                        MPI_INT,
+                        messageData.size(),
+                        faabric::MPIMessage::BROADCAST);
 
         // Recv on all non-root ranks
         for (int rank = 0; rank < worldSize; rank++) {
@@ -495,7 +501,12 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
                 continue;
             }
             std::vector<int> actual(3, -1);
-            world.recv(root, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            world.broadcast(root,
+                            rank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            3,
+                            faabric::MPIMessage::BROADCAST);
             REQUIRE(actual == messageData);
         }
     }

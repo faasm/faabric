@@ -263,11 +263,13 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::thread otherWorldThread([this, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
-        // Broadcast a message
+        // Broadcast a message from the root first
         otherWorld.broadcast(otherHostRankB,
+                             otherHostRankB,
                              BYTES(messageData.data()),
                              MPI_INT,
-                             messageData.size());
+                             messageData.size(),
+                             faabric::MPIMessage::BROADCAST);
 
         // Check the broadcast is received on this host by the other ranks
         for (int rank : otherWorldRanks) {
@@ -276,8 +278,12 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
             }
 
             std::vector<int> actual(3, -1);
-            otherWorld.recv(
-              otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            otherWorld.broadcast(otherHostRankB,
+                                 rank,
+                                 BYTES(actual.data()),
+                                 MPI_INT,
+                                 3,
+                                 faabric::MPIMessage::BROADCAST);
             assert(actual == messageData);
         }
 
@@ -286,11 +292,27 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         otherWorld.destroy();
     });
 
+    std::vector<int> actual(3, -1);
+    // First run the broadcast from the local master (rank = 0)
+    thisWorld.broadcast(otherHostRankB,
+                        0,
+                        BYTES(actual.data()),
+                        MPI_INT,
+                        3,
+                        faabric::MPIMessage::BROADCAST);
+
     // Check the ranks on this host receive the broadcast
     for (int rank : thisWorldRanks) {
-        std::vector<int> actual(3, -1);
-        thisWorld.recv(
-          otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+        if (rank == 0) {
+            continue;
+        }
+
+        thisWorld.broadcast(otherHostRankB,
+                            rank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            3,
+                            faabric::MPIMessage::BROADCAST);
         REQUIRE(actual == messageData);
     }
 
@@ -894,6 +916,114 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
         otherWorldThread.join();
     }
 
+    thisWorld.destroy();
+}
+
+std::set<int> getReceiversFromMessages(
+  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+{
+    std::set<int> receivers;
+    for (const auto& msg : msgs) {
+        receivers.insert(msg->destination());
+    }
+
+    return receivers;
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during broadcast",
+                 "[mpi]")
+{
+    setWorldSizes(4, 2, 2);
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    // Call broadcast and check sent messages
+    std::set<int> expectedRecvRanks;
+    int expectedNumMsg;
+    int sendRank;
+    int recvRank;
+
+    SECTION("Check broadcast from sender and sender is a local leader")
+    {
+        recvRank = 0;
+        sendRank = recvRank;
+        expectedNumMsg = 2;
+        expectedRecvRanks = { 1, 2 };
+    }
+
+    SECTION("Check broadcast from sender but sender is not a local leader")
+    {
+        recvRank = 1;
+        sendRank = recvRank;
+        expectedNumMsg = 2;
+        expectedRecvRanks = { 0, 2 };
+    }
+
+    SECTION("Check broadcast from a rank that is not the sender, is not a "
+            "leader, but is colocated with the sender")
+    {
+        recvRank = 0;
+        sendRank = 1;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    SECTION("Check broadcast from a rank that is not the sender, is a leader, "
+            "and is colocated with the sender")
+    {
+        recvRank = 1;
+        sendRank = 0;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    SECTION(
+      "Check broadcast from a rank not colocated with sender, but local leader")
+    {
+        recvRank = 2;
+        sendRank = 0;
+        expectedNumMsg = 1;
+        expectedRecvRanks = { 3 };
+    }
+
+    SECTION("Check broadcast from a rank not colocated with sender, and not "
+            "local leader")
+    {
+        recvRank = 3;
+        sendRank = 0;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    // Check for root
+    std::vector<int> messageData = { 0, 1, 2 };
+    if (recvRank < 2) {
+        thisWorld.broadcast(sendRank,
+                            recvRank,
+                            BYTES(messageData.data()),
+                            MPI_INT,
+                            messageData.size(),
+                            faabric::MPIMessage::BROADCAST);
+    } else {
+        otherWorld.broadcast(sendRank,
+                             recvRank,
+                             BYTES(messageData.data()),
+                             MPI_INT,
+                             messageData.size(),
+                             faabric::MPIMessage::BROADCAST);
+    }
+    auto msgs = getMpiMockedMessages(recvRank);
+    REQUIRE(msgs.size() == expectedNumMsg);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedRecvRanks);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
     thisWorld.destroy();
 }
 }
