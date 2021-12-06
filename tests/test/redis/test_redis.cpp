@@ -76,7 +76,6 @@ TEST_CASE("Basic Redis operations", "[redis]")
     SECTION("Test enqueue/ dequeue bytes")
     {
         // Enqueue some values
-        std::vector<uint8_t> bytesA = faabric::util::stringToBytes(VALUE_A);
         redisQueue.enqueueBytes(QUEUE_NAME, BYTES_A);
         redisQueue.enqueueBytes(QUEUE_NAME, BYTES_B);
         redisQueue.enqueueBytes(QUEUE_NAME, BYTES_C);
