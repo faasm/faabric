@@ -150,16 +150,18 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
     if (masterIsLocal) {
         bool acquiredLock = false;
         {
-            faabric::util::UniqueLock lock(mx);
+            faabric::util::FullLock lock(mx);
 
             if (recursive && (recursiveLockOwners.empty() ||
                               recursiveLockOwners.top() == groupIdx)) {
                 // Recursive and either free, or already locked by this idx
                 recursiveLockOwners.push(groupIdx);
                 acquiredLock = true;
-            } else if (!recursive && (lockOwnerIdx == NO_LOCK_OWNER_IDX)) {
+            } else if (!recursive &&
+                       (lockOwnerIdx.load(std::memory_order_acquire) ==
+                        NO_LOCK_OWNER_IDX)) {
                 // Non-recursive and free
-                lockOwnerIdx = groupIdx;
+                lockOwnerIdx.store(groupIdx, std::memory_order_release);
                 acquiredLock = true;
             }
         }
@@ -183,7 +185,7 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
             notifyLocked(groupIdx);
         } else {
             {
-                faabric::util::UniqueLock lock(mx);
+                faabric::util::FullLock lock(mx);
                 // Need to wait to get the lock
                 lockWaiters.push(groupIdx);
             }
@@ -249,7 +251,7 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
       ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
 
     if (host == conf.endpointHost) {
-        faabric::util::UniqueLock lock(mx);
+        faabric::util::FullLock lock(mx);
 
         SPDLOG_TRACE("Group idx {} unlocking {} ({} waiters, recursive {})",
                      groupIdx,
@@ -270,12 +272,14 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
                 lockWaiters.pop();
             }
         } else {
-            lockOwnerIdx = NO_LOCK_OWNER_IDX;
-
             if (!lockWaiters.empty()) {
-                lockOwnerIdx = lockWaiters.front();
+                lockOwnerIdx.store(lockWaiters.front(),
+                                   std::memory_order_release);
                 notifyLocked(lockWaiters.front());
                 lockWaiters.pop();
+            } else {
+                lockOwnerIdx.store(NO_LOCK_OWNER_IDX,
+                                   std::memory_order_release);
             }
         }
     } else {
@@ -362,6 +366,7 @@ void PointToPointGroup::notify(int groupIdx)
 int PointToPointGroup::getLockOwner(bool recursive)
 {
     if (recursive) {
+        faabric::util::SharedLock lock(mx);
         if (!recursiveLockOwners.empty()) {
             return recursiveLockOwners.top();
         }
@@ -369,7 +374,7 @@ int PointToPointGroup::getLockOwner(bool recursive)
         return NO_LOCK_OWNER_IDX;
     }
 
-    return lockOwnerIdx;
+    return lockOwnerIdx.load(std::memory_order_acquire);
 }
 
 PointToPointBroker::PointToPointBroker()
