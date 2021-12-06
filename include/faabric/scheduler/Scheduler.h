@@ -49,7 +49,7 @@ class Executor
 
     explicit Executor(faabric::Message& msg);
 
-    virtual ~Executor();
+    virtual ~Executor() = default;
 
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);

@@ -24,9 +24,9 @@ ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<std::atomic<int>> batchCounterIn,
                            bool needsSnapshotPushIn,
                            bool skipResetIn)
-  : messageIndex(messageIndexIn)
-  , req(reqIn)
-  , batchCounter(batchCounterIn)
+  : req(std::move(reqIn))
+  , batchCounter(std::move(batchCounterIn))
+  , messageIndex(messageIndexIn)
   , needsSnapshotPush(needsSnapshotPushIn)
   , skipReset(skipResetIn)
 {}
@@ -52,8 +52,6 @@ Executor::Executor(faabric::Message& msg)
         availablePoolThreads.insert(i);
     }
 }
-
-Executor::~Executor() {}
 
 void Executor::finish()
 {
