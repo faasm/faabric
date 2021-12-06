@@ -1053,8 +1053,8 @@ void MpiWorld::awaitAsyncRequest(int requestId)
     umb->deleteMessage(msgIt);
 }
 
-void MpiWorld::reduce(int thisRank,
-                      int rootRank,
+void MpiWorld::reduce(int sendRank,
+                      int recvRank,
                       uint8_t* sendBuffer,
                       uint8_t* recvBuffer,
                       faabric_datatype_t* datatype,
@@ -1064,18 +1064,18 @@ void MpiWorld::reduce(int thisRank,
     size_t bufferSize = datatype->size * count;
     auto rankData = std::make_unique<uint8_t[]>(bufferSize);
 
-    if (thisRank == rootRank) {
-        // If we're the root of the reduce, await inputs from our local ranks
-        // (besides ourselves) and remote masters
-        SPDLOG_TRACE("MPI - reduce ({}) all -> {}", operation->id, rootRank);
+    if (sendRank == recvRank) {
+        // If we're the receiver of the reduce, await inputs from our local
+        // ranks (besides ourselves) and remote leaders
+        SPDLOG_TRACE("MPI - reduce ({}) all -> {}", operation->id, recvRank);
 
         // Work out the list of all the ranks we need to wait for
-        std::vector<int> rootRecvRanks = localRanks;
-        rootRecvRanks.erase(
-          std::remove(rootRecvRanks.begin(), rootRecvRanks.end(), thisRank),
-          rootRecvRanks.end());
-        rootRecvRanks.insert(
-          rootRecvRanks.end(), remoteMasters.begin(), remoteMasters.end());
+        std::vector<int> senderRanks = localRanks;
+        senderRanks.erase(
+          std::remove(senderRanks.begin(), senderRanks.end(), sendRank),
+          senderRanks.end());
+        senderRanks.insert(
+          senderRanks.end(), remoteLeaders.begin(), remoteLeaders.end());
 
         // If not receiving in-place, initialize the receive buffer to the send
         // buffer values. This prevents issues when 0-initializing for operators
@@ -1087,11 +1087,11 @@ void MpiWorld::reduce(int thisRank,
             memcpy(recvBuffer, sendBuffer, bufferSize);
         }
 
-        for (const int r : rootRecvRanks) {
+        for (const int r : senderRanks) {
             // Work out the data for this rank
             memset(rankData.get(), 0, bufferSize);
             recv(r,
-                 thisRank,
+                 recvRank,
                  rankData.get(),
                  datatype,
                  count,
@@ -1101,19 +1101,19 @@ void MpiWorld::reduce(int thisRank,
             op_reduce(operation, datatype, count, rankData.get(), recvBuffer);
         }
 
-    } else if (thisRank == localMaster) {
-        // If we are the local master (but not the root of the reduce) and the
-        // root rank is not local to us, do a reduce with the data of all our
-        // local ranks, and then send the result to the root
-        if (getHostForRank(rootRank) != thisHost) {
+    } else if (sendRank == localLeader) {
+        // If we are the local leader (but not the receiver of the reduce) and
+        // the receiver is not co-located with us, do a reduce with the data of
+        // all our local ranks, and then send the result to the receiver
+        if (getHostForRank(recvRank) != thisHost) {
             for (const int r : localRanks) {
-                if (r == thisRank) {
+                if (r == sendRank) {
                     continue;
                 }
 
                 memset(rankData.get(), 0, bufferSize);
                 recv(r,
-                     thisRank,
+                     sendRank,
                      rankData.get(),
                      datatype,
                      count,
@@ -1128,21 +1128,22 @@ void MpiWorld::reduce(int thisRank,
             }
         }
 
-        // Send to the root rank
-        send(thisRank,
-             rootRank,
+        // Send to the receiver rank
+        send(sendRank,
+             recvRank,
              sendBuffer,
              datatype,
              count,
              faabric::MPIMessage::REDUCE);
     } else {
-        // If we are a non-root and non-local-master rank, we send our data
-        // for reduction either to our local master or the root, depending on
-        // whether we are colocated with the root rank or not
+        // If we are neither the receiver of the reduce nor a local leader, we
+        // send our data for reduction either to our local leader or the
+        // receiver, depending on whether we are colocated with the receiver or
+        // not
         int realRecvRank =
-          getHostForRank(rootRank) == thisHost ? rootRank : localMaster;
+          getHostForRank(recvRank) == thisHost ? recvRank : localLeader;
 
-        send(thisRank,
+        send(sendRank,
              realRecvRank,
              sendBuffer,
              datatype,
