@@ -31,6 +31,6 @@ class Message
   private:
     std::vector<uint8_t> bytes;
 
-    bool _more;
+    bool _more = false;
 };
 }

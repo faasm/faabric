@@ -20,7 +20,6 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
 
   protected:
     std::string snapKey;
-    int snapPages;
     faabric::util::SnapshotData snap;
 
     uint8_t* setUpSnapshot(int snapPages, int sharedMemPages)

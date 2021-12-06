@@ -222,7 +222,7 @@ class Scheduler
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;
-    std::atomic<int32_t> thisHostUsedSlots;
+    std::atomic<int32_t> thisHostUsedSlots = 0;
 
     void updateHostResources();
 

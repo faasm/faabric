@@ -40,6 +40,6 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
 
   private:
     faabric::transport::PointToPointBroker& broker;
-    std::atomic_size_t diffsAppliedCounter;
+    std::atomic_size_t diffsAppliedCounter = 0;
 };
 }

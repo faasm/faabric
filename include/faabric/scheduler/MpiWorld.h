@@ -230,7 +230,7 @@ class MpiWorld
 
     // Track ranks that are local to this world, and local/remote leaders
     // MPITOPTP - this information exists in the broker
-    int localLeader;
+    int localLeader = -1;
     std::vector<int> localRanks;
     std::vector<int> remoteLeaders;
     void initLocalRemoteLeaders();
