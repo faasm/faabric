@@ -281,9 +281,9 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     // shared integer
     std::thread t([this, &decision, &sharedInt] {
         SLEEP_MS(1000);
-        broker.setUpLocalMappingsFromSchedulingDecision(decision);
 
         sharedInt.fetch_add(100);
+        broker.setUpLocalMappingsFromSchedulingDecision(decision);
     });
 
     broker.waitForMappingsOnThisHost(groupId);
