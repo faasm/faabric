@@ -235,9 +235,6 @@ class MpiWorld
     std::vector<int> remoteLeaders;
     void initLocalRemoteLeaders();
 
-    // Variable allReduce leader to distribute load evenly
-    int allReduceLeader = 0;
-
     // In-memory queues for local messaging
     std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
     void initLocalQueues();

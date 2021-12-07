@@ -37,6 +37,9 @@ static thread_local std::unordered_map<
 // Id of the message that created this thread-local instance
 static thread_local faabric::Message* thisRankMsg = nullptr;
 
+// Variable allReduce leader to distribute load evenly
+static thread_local int allReduceLeader = 0;
+
 namespace faabric::scheduler {
 
 // -----------------------------------
@@ -1176,11 +1179,9 @@ void MpiWorld::allReduce(int rank,
               count,
               faabric::MPIMessage::ALLREDUCE);
 
-    // Lastly, the local leader increments the all reduce leader value, so that
-    // the next all reduce is lead by a different rank
-    if (localLeader == rank) {
-        allReduceLeader = (allReduceLeader + 1) % size;
-    }
+    // Lastly, increment the all reduce leader value, so that the next all
+    // reduce is lead by a different rank
+    allReduceLeader = (allReduceLeader + 1) % size;
 }
 
 void MpiWorld::op_reduce(faabric_op_t* operation,
