@@ -1159,13 +1159,28 @@ void MpiWorld::allReduce(int rank,
                          int count,
                          faabric_op_t* operation)
 {
-    // Rank 0 coordinates the allreduce operation
-    // First, all ranks reduce to rank 0
-    reduce(rank, 0, sendBuffer, recvBuffer, datatype, count, operation);
+    // First, all ranks reduce to the all reduce leader
+    reduce(rank,
+           allReduceLeader,
+           sendBuffer,
+           recvBuffer,
+           datatype,
+           count,
+           operation);
 
-    // Second, 0 broadcasts the result to all ranks
-    broadcast(
-      0, rank, recvBuffer, datatype, count, faabric::MPIMessage::ALLREDUCE);
+    // Second, the all reduce leader broadcasts to all ranks the result
+    broadcast(allReduceLeader,
+              rank,
+              recvBuffer,
+              datatype,
+              count,
+              faabric::MPIMessage::ALLREDUCE);
+
+    // Lastly, the local leader increments the all reduce leader value, so that
+    // the next all reduce is lead by a different rank
+    if (localLeader == rank) {
+        allReduceLeader = (allReduceLeader + 1) % size;
+    }
 }
 
 void MpiWorld::op_reduce(faabric_op_t* operation,

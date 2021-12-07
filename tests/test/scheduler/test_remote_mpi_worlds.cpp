@@ -1006,9 +1006,15 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
 }
 
 std::set<int> getReceiversFromMessages(
-  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs,
+  int discard = 0)
 {
     std::set<int> receivers;
+
+    if (discard > 0) {
+        msgs.erase(msgs.begin(), msgs.begin() + discard);
+    }
+
     for (const auto& msg : msgs) {
         receivers.insert(msg->destination());
     }
@@ -1204,6 +1210,148 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     auto msgs = getMpiMockedMessages(sendRank);
     REQUIRE(msgs.size() == expectedNumMsgSent);
     REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
+    thisWorld.destroy();
+}
+
+void doAllReduceAndCheck(MpiWorld& thisWorld,
+                         MpiWorld& otherWorld,
+                         int rank,
+                         int expectedNumMsgSent,
+                         std::set<int> expectedSentMsgRanks,
+                         int& accNumMsgSent)
+{
+    std::vector<int> messageData = { 0, 1, 2 };
+    std::vector<int> recvData(messageData.size());
+    if (rank < 2) {
+        thisWorld.allReduce(rank,
+                            BYTES(messageData.data()),
+                            BYTES(recvData.data()),
+                            MPI_INT,
+                            messageData.size(),
+                            MPI_SUM);
+    } else {
+        otherWorld.allReduce(rank,
+                             BYTES(messageData.data()),
+                             BYTES(recvData.data()),
+                             MPI_INT,
+                             messageData.size(),
+                             MPI_SUM);
+    }
+    auto msgs = getMpiMockedMessages(rank);
+    REQUIRE(msgs.size() == expectedNumMsgSent + accNumMsgSent);
+    // When checking the receivers, discard all the messages from previous
+    // invocations
+    REQUIRE(getReceiversFromMessages(msgs, accNumMsgSent) ==
+            expectedSentMsgRanks);
+    accNumMsgSent += expectedNumMsgSent;
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during all reduce",
+                 "[mpi]")
+{
+    setWorldSizes(4, 2, 2);
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    // Note that we don't use sections in this test as subsequent invocations to
+    // allreduce effectively alter its functionality. We call several times
+    // allReduce from rank 0 and vary the expectation
+
+    std::set<int> expectedSentMsgRanks;
+    int expectedNumMsgSent;
+    int rank = 0;
+    // As we don't destroy the world, the mocked values remain across subsequent
+    // invocations. We keep track of the number of messages sent, to discard
+    // them when checking
+    int accNumMsgSent = 0;
+
+    // The first time we call all reduce, rank 0 is the leader for the operation
+    // During the reduce phase, we send no messages. During the broadcast phase
+    // we sent two messages (one to our local rank, one to remote leader).
+    expectedNumMsgSent = 2;
+    expectedSentMsgRanks = { 1, 2 };
+    doAllReduceAndCheck(thisWorld,
+                        otherWorld,
+                        rank,
+                        expectedNumMsgSent,
+                        expectedSentMsgRanks,
+                        accNumMsgSent);
+
+    // The second time we call all reduce, rank 0 is not the leader for the
+    // all reduce anymore, but it is co-located with it (rank 1) and is a
+    // local leader. During the reduce phase we send one message to the all
+    // reduce leader with the remote data reduced, and during the broadcast we
+    // send no messages.
+    expectedNumMsgSent = 1;
+    expectedSentMsgRanks = { 1 };
+    doAllReduceAndCheck(thisWorld,
+                        otherWorld,
+                        rank,
+                        expectedNumMsgSent,
+                        expectedSentMsgRanks,
+                        accNumMsgSent);
+
+    // The third time we call all reduce, rank 0 is not the leader for the
+    // all reduce, neither it is colocated with it (rank 2), but is the local
+    // leader. During the reduce phase it receives the messages from local,
+    // ranks, and sends the information to the all reduce leader. During the
+    // broadcast phase, it distributes the broadcasted information to its local
+    // ranks.
+    expectedNumMsgSent = 2;
+    expectedSentMsgRanks = { 1, 2 };
+    doAllReduceAndCheck(thisWorld,
+                        otherWorld,
+                        rank,
+                        expectedNumMsgSent,
+                        expectedSentMsgRanks,
+                        accNumMsgSent);
+
+    // The fourth time we call all reduce, the behaviour from rank 0 is the same
+    // as the third time, with the exception that we the all reduce leader
+    // changes.
+    expectedNumMsgSent = 2;
+    expectedSentMsgRanks = { 1, 3 };
+    doAllReduceAndCheck(thisWorld,
+                        otherWorld,
+                        rank,
+                        expectedNumMsgSent,
+                        expectedSentMsgRanks,
+                        accNumMsgSent);
+
+    // The fifth time we call all reduce we complete the loop, and rank 0 is the
+    // all reduce leader again.
+    expectedNumMsgSent = 2;
+    expectedSentMsgRanks = { 1, 2 };
+    doAllReduceAndCheck(thisWorld,
+                        otherWorld,
+                        rank,
+                        expectedNumMsgSent,
+                        expectedSentMsgRanks,
+                        accNumMsgSent);
+
+    // Lastly, we check from a rank in the other world. In particular, we check
+    // from the non-local-leader, not-colocated with the all reduce leader,
+    // remote rank. During the reduce phase, we send our data to our local
+    // leader, and during the broadcast phase we just receive information.
+    int remoteRank = 3;
+    int accNumMsgSentOtherWorld = 0;
+    expectedNumMsgSent = 1;
+    expectedSentMsgRanks = { 2 };
+    doAllReduceAndCheck(thisWorld,
+                        otherWorld,
+                        remoteRank,
+                        expectedNumMsgSent,
+                        expectedSentMsgRanks,
+                        accNumMsgSentOtherWorld);
 
     faabric::util::setMockMode(false);
     otherWorld.destroy();
