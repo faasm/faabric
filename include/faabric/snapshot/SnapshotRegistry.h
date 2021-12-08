@@ -43,7 +43,8 @@ class SnapshotRegistry
 
     std::shared_mutex snapshotsMx;
 
-    int writeSnapshotToFd(const std::string& key);
+    int writeSnapshotToFd(const std::string& key,
+                          faabric::util::SnapshotData& data);
 
     void doTakeSnapshot(const std::string& key,
                         faabric::util::SnapshotData data,

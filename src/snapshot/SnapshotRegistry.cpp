@@ -94,13 +94,13 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
 
     // Note - we only preserve the snapshot in the in-memory file, and do not
     // take ownership for the original data referenced in SnapshotData
-    snapshotMap[key] = std::make_shared<faabric::util::SnapshotData>(data);
-
-    lock.unlock();
+    auto shared_data =
+      std::make_shared<faabric::util::SnapshotData>(std::move(data));
+    snapshotMap[key] = shared_data;
 
     // Write to fd to be locally restorable
     if (locallyRestorable) {
-        writeSnapshotToFd(key);
+        writeSnapshotToFd(key, *shared_data);
     }
 }
 
@@ -119,6 +119,7 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
     // descriptor used for mapping memory
     if (d->fd > 0) {
         ::close(d->fd);
+        d->fd = 0;
     }
 
     snapshotMap.erase(key);
@@ -148,27 +149,27 @@ void SnapshotRegistry::clear()
     snapshotMap.clear();
 }
 
-int SnapshotRegistry::writeSnapshotToFd(const std::string& key)
+int SnapshotRegistry::writeSnapshotToFd(const std::string& key,
+                                        faabric::util::SnapshotData& data)
 {
     int fd = ::memfd_create(key.c_str(), 0);
-    auto snapData = getSnapshot(key);
 
     // Make the fd big enough
-    int ferror = ::ftruncate(fd, snapData->size);
+    int ferror = ::ftruncate(fd, data.size);
     if (ferror) {
         SPDLOG_ERROR("ferror call failed with error {}", ferror);
         throw std::runtime_error("Failed writing memory to fd (ftruncate)");
     }
 
     // Write the data
-    ssize_t werror = ::write(fd, snapData->data, snapData->size);
+    ssize_t werror = ::write(fd, data.data, data.size);
     if (werror == -1) {
         SPDLOG_ERROR("Write call failed with error {}", werror);
         throw std::runtime_error("Failed writing memory to fd (write)");
     }
 
     // Record the fd
-    snapData->fd = fd;
+    data.fd = fd;
 
     SPDLOG_DEBUG("Wrote snapshot {} to fd {}", key, fd);
     return fd;
