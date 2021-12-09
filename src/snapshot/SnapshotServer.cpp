@@ -149,11 +149,11 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
           std::max<uint32_t>(chunk->offset() + chunk->data()->size(), maxSize);
     }
 
-    if (maxSize > snap.size) {
+    if (maxSize > snap->size) {
         SPDLOG_DEBUG("Expanding snapshot {} to accommodate diffs ({} > {})",
                      r->key()->str(),
                      maxSize,
-                     snap.size);
+                     snap->size);
 
         reg.changeSnapshotSize(r->key()->str(), maxSize);
     }
@@ -223,14 +223,15 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                 throw std::runtime_error("Unsupported merge data type");
             }
         }
-        // make changes visible to other threads
+
+        // Make changes visible to other threads
         std::atomic_thread_fence(std::memory_order_release);
         this->diffsAppliedCounter.fetch_add(1, std::memory_order_acq_rel);
     }
 
     // Update snapshot
-    if (maxSize > snap.size) {
-        snap.updateFd();
+    if (maxSize > snap->size) {
+        snap->updateFd();
     }
 
     // Unlock group if exists

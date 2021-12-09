@@ -69,13 +69,16 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "[snapshot][util]")
 {
     faabric::util::SnapshotData snap;
+    int snapPages = 20;
     snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
     snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     int nRegions = 10;
     for (int i = 0; i < nRegions; i++) {
-        snap.addMergeRegion(
-          i, sizeof(int), SnapshotDataType::Int, SnapshotMergeOperation::Sum);
+        snap.addMergeRegion(i * HOST_PAGE_SIZE,
+                            sizeof(int),
+                            SnapshotDataType::Int,
+                            SnapshotMergeOperation::Sum);
     }
 
     REQUIRE(snap.getMergeRegions().size() == nRegions);
@@ -90,7 +93,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "[snapshot][util]")
 {
     // Set up the snapshot
-    snapPages = 10;
+    int snapPages = 10;
     snap.size = snapPages * faabric::util::HOST_PAGE_SIZE;
     snap.data = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 

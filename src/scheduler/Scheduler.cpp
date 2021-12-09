@@ -83,8 +83,7 @@ void Scheduler::addHostToGlobalSet()
 
 void Scheduler::resetThreadLocalCache()
 {
-    auto tid = (pid_t)syscall(SYS_gettid);
-    SPDLOG_DEBUG("Resetting scheduler thread-local cache for thread {}", tid);
+    SPDLOG_DEBUG("Resetting scheduler thread-local cache");
 
     functionCallClients.clear();
     snapshotClients.clear();
@@ -785,9 +784,11 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(
 
     // We have no warm executors available, so scale up
     if (claimed == nullptr) {
-        int nExecutors = thisExecutors.size();
-        SPDLOG_DEBUG(
-          "Scaling {} from {} -> {}", funcStr, nExecutors, nExecutors + 1);
+        SPDLOG_DEBUG("Scaling {} from {} -> {}",
+                     funcStr,
+                     thisExecutors.size(),
+                     thisExecutors.size() + 1);
+
         // Spinning up a new executor can be lengthy, allow other things
         // to run in parallel
         schedulerLock.unlock();

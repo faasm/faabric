@@ -1,6 +1,5 @@
 #include <catch2/catch.hpp>
 
-#include "faabric/util/memory.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -14,6 +13,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/network.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
@@ -159,7 +159,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<uint8_t> diffDataA1 = { 0, 1, 2, 3 };
     std::vector<uint8_t> diffDataA2 = { 4, 5, 6 };
 
-    size_t originalDiffsApplied = server.diffsApplied();
+    REQUIRE(server.diffsApplied() == 0);
 
     SnapshotDiff diffA1(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
@@ -175,6 +175,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     std::vector<SnapshotDiff> diffsA = { diffA1, diffA2 };
     cli.pushSnapshotDiffs(snapKey, groupIdA, diffsA);
+    REQUIRE(server.diffsApplied() == 2);
 
     // Submit some more diffs, some larger than the original snapshot (to check
     // it gets extended)
@@ -209,7 +210,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     // Ensure the right number of diffs is applied
     // Also acts as a memory barrier for TSan
-    REQUIRE(server.diffsApplied() == originalDiffsApplied + 3);
+    REQUIRE(server.diffsApplied() == 5);
 
     // Check changes have been applied
     checkDiffsApplied(snap.data, diffsA);

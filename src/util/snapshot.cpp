@@ -6,10 +6,6 @@
 
 namespace faabric::util {
 
-// TODO - this would be better as an instance variable on the SnapshotData
-// class, but it can't be copy-constructed.
-static std::mutex snapMx;
-
 SnapshotData::SnapshotData(const SnapshotData& other)
 {
     size = other.size;
@@ -25,6 +21,7 @@ SnapshotData::~SnapshotData()
     if (fd > 0) {
         SPDLOG_TRACE("Closing fd {}", fd);
         ::close(fd);
+        fd = 0;
     }
 }
 
@@ -39,6 +36,8 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
         std::vector<SnapshotDiff> empty;
         return empty;
     }
+
+    faabric::util::SharedLock lock(snapMx);
 
     // Get dirty regions
     int nPages = getRequiredHostPages(size);
@@ -70,6 +69,8 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
         SPDLOG_DEBUG("No merge regions set, thus no diffs");
         return diffs;
     }
+
+    faabric::util::SharedLock lock(snapMx);
 
     // Work out which regions of memory have changed
     size_t nThisPages = getRequiredHostPages(updatedSize);
@@ -114,7 +115,7 @@ void SnapshotData::addMergeRegion(uint32_t offset,
                                 .operation = operation };
 
     // Locking as this may be called in bursts by multiple threads
-    faabric::util::UniqueLock lock(snapMx);
+    faabric::util::FullLock lock(snapMx);
 
     if (mergeRegions.find(region.offset) != mergeRegions.end()) {
         if (!overwrite) {
@@ -149,6 +150,8 @@ void SnapshotData::addMergeRegion(uint32_t offset,
 
 void SnapshotData::setSnapshotSize(size_t newSize)
 {
+    faabric::util::FullLock lock(snapMx);
+
     // Try to allocate more memory on top of existing data. Will throw an
     // exception if not possible
     claimVirtualMemory(data, newSize);
@@ -157,6 +160,8 @@ void SnapshotData::setSnapshotSize(size_t newSize)
 
 void SnapshotData::mapToMemory(uint8_t* target)
 {
+    faabric::util::FullLock lock(snapMx);
+
     if (fd == 0) {
         std::string msg = "Attempting to map memory of non-restorable snapshot";
         SPDLOG_ERROR(msg);
@@ -168,12 +173,16 @@ void SnapshotData::mapToMemory(uint8_t* target)
 
 void SnapshotData::writeToFd(const std::string& fdLabel)
 {
+    faabric::util::FullLock lock(snapMx);
+
     fd = writeMemoryToFd(data, size, fdLabel);
     fdSize = size;
 }
 
 void SnapshotData::updateFd()
 {
+    faabric::util::FullLock lock(snapMx);
+
     if (fd == 0) {
         std::string msg = "Attempting to update fd of non-restorable snapshot";
         SPDLOG_ERROR(msg);
@@ -186,11 +195,13 @@ void SnapshotData::updateFd()
 
 std::map<uint32_t, SnapshotMergeRegion> SnapshotData::getMergeRegions()
 {
+    faabric::util::SharedLock lock(snapMx);
     return mergeRegions;
 }
 
 void SnapshotData::clearMergeRegions()
 {
+    faabric::util::FullLock lock(snapMx);
     mergeRegions.clear();
 }
 

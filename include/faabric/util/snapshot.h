@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -114,6 +115,8 @@ class SnapshotData
   private:
     int fd = 0;
     size_t fdSize = 0;
+
+    std::shared_mutex snapMx;
 
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets

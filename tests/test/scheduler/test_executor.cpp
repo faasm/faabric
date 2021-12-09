@@ -66,12 +66,11 @@ void TestExecutor::restore(faabric::Message& msg)
     reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
 }
 
-faabric::util::SnapshotData TestExecutor::snapshot()
+faabric::util::SnapshotData& TestExecutor::snapshot()
 {
-    faabric::util::SnapshotData snap;
-    snap.data = dummyMemory;
-    snap.size = dummyMemorySize;
-    return snap;
+    _snapshot.data = dummyMemory;
+    _snapshot.size = dummyMemorySize;
+    return _snapshot;
 }
 
 int32_t TestExecutor::executeTask(
@@ -779,7 +778,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     snap->data[0] = 9;
     snap->data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-    snap->getDirtyRegions();
+      snap->getDirtyRegions();
 
     REQUIRE(expectedDiffs.size() == 2);
 

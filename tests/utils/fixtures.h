@@ -313,7 +313,7 @@ class TestExecutor final : public faabric::scheduler::Executor
 
     void restore(faabric::Message& msg) override;
 
-    faabric::util::SnapshotData snapshot() override;
+    faabric::util::SnapshotData& snapshot() override;
 
     int32_t executeTask(
       int threadPoolIdx,

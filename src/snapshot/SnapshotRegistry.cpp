@@ -99,8 +99,6 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
 void SnapshotRegistry::changeSnapshotSize(const std::string& key,
                                           size_t newSize)
 {
-    faabric::util::FullLock lock(snapshotsMx);
-
     auto d = getSnapshot(key);
     d->setSnapshotSize(newSize);
 }
