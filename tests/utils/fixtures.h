@@ -145,8 +145,8 @@ class SnapshotTestFixture
 
     void removeSnapshot(const std::string& key, int nPages)
     {
-        faabric::util::SnapshotData snap = reg.getSnapshot(key);
-        deallocatePages(snap.data, nPages);
+        auto snap = reg.getSnapshot(key);
+        deallocatePages(snap->data, nPages);
         reg.deleteSnapshot(key);
     }
 

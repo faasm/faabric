@@ -497,18 +497,18 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     if (!snapshotKey.empty()) {
         for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
-            faabric::util::SnapshotData snapshotData =
+            auto snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
             // See if we've already pushed this snapshot to the given host,
             // if so, just push the diffs
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snapshotData.getDirtyPages();
+                  snapshotData->getDirtyPages();
                 c.pushSnapshotDiffs(
                   snapshotKey, firstMsg.groupid(), snapshotDiffs);
             } else {
-                c.pushSnapshot(snapshotKey, firstMsg.groupid(), snapshotData);
+                c.pushSnapshot(snapshotKey, firstMsg.groupid(), *snapshotData);
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }
@@ -909,18 +909,21 @@ void Scheduler::pushSnapshotDiffs(
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
+    faabric::util::SharedLock lock(mx);
     SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
-    threadResults[msgId].set_value(returnValue);
+    threadResults.at(msgId).set_value(returnValue);
 }
 
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
-    if (threadResults.count(messageId) == 0) {
+    faabric::util::SharedLock lock(mx);
+    auto it = threadResults.find(messageId);
+    if (it == threadResults.end()) {
         SPDLOG_ERROR("Thread {} not registered on this host", messageId);
         throw std::runtime_error("Awaiting unregistered thread");
     }
-
-    return threadResults[messageId].get_future().get();
+    lock.unlock();
+    return it->second.get_future().get();
 }
 
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,

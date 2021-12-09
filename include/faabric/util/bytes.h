@@ -26,6 +26,21 @@ int safeCopyToBuffer(const uint8_t* dataIn,
                      int bufferLen);
 
 template<class T>
+T unalignedRead(const std::byte* bytes)
+{
+    T value;
+    std::copy_n(bytes, sizeof(T), reinterpret_cast<std::byte*>(&value));
+    return value;
+}
+
+template<class T>
+void unalignedWrite(const T& value, std::byte* destination)
+{
+    std::copy_n(
+      reinterpret_cast<const std::byte*>(&value), sizeof(T), destination);
+}
+
+template<class T>
 void appendBytesOf(std::vector<uint8_t>& container, T value)
 {
     uint8_t* start = reinterpret_cast<uint8_t*>(&value);
