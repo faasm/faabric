@@ -99,7 +99,7 @@ jobs:
             ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with address sanitising"
-        run: inv dev.sanitise Address --noclean
+        run: inv dev.sanitise Address faabric_tests --noclean
       - name: "Run tests with address sanitising on and print to stderr to file"
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static
@@ -149,7 +149,7 @@ jobs:
             ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with thread sanitising"
-        run: inv dev.sanitise Thread --noclean
+        run: inv dev.sanitise Thread faabric_tests --noclean
       # --- Tests ---
       - name: "Run tests with thread sanitising on and print stderr to file"
         run: ./bin/faabric_tests
@@ -200,7 +200,7 @@ jobs:
             ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with undefined sanitising"
-        run: inv dev.sanitise Undefined --noclean
+        run: inv dev.sanitise Undefined faabric_tests --noclean
       # --- Tests ---
       - name: "Run tests with undefined sanitising on and print stderr to file"
         run: ./bin/faabric_tests
@@ -251,7 +251,7 @@ jobs:
             ${{ runner.os }}-
       # --- Build with thread sanitising
       - name: "Build tests with leak sanitising"
-        run: inv dev.sanitise Leak --noclean
+        run: inv dev.sanitise Leak faabric_tests --noclean
       # --- Tests ---
       - name: "Run tests with leak sanitising on and print stderr to file"
         run: ./bin/faabric_tests
