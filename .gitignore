@@ -1,5 +1,6 @@
 build/
-
+work/
+conan-cache/
 # Clang
 .clangd
 compile_commands.json

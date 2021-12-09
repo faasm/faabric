@@ -24,9 +24,9 @@ ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<std::atomic<int>> batchCounterIn,
                            bool needsSnapshotPushIn,
                            bool skipResetIn)
-  : messageIndex(messageIndexIn)
-  , req(reqIn)
-  , batchCounter(batchCounterIn)
+  : req(std::move(reqIn))
+  , batchCounter(std::move(batchCounterIn))
+  , messageIndex(messageIndexIn)
   , needsSnapshotPush(needsSnapshotPushIn)
   , skipReset(skipResetIn)
 {}
@@ -53,26 +53,29 @@ Executor::Executor(faabric::Message& msg)
     }
 }
 
-Executor::~Executor() {}
-
 void Executor::finish()
 {
     SPDLOG_DEBUG("Executor {} shutting down", id);
 
     // Shut down thread pools and wait
     for (int i = 0; i < threadPoolThreads.size(); i++) {
-        if (threadPoolThreads.at(i) == nullptr) {
-            continue;
-        }
-
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
         threadTaskQueues[i].enqueue(
           ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false, false));
 
+        faabric::util::UniqueLock threadsLock(threadsMutex);
+        // Copy shared_ptr to avoid racing
+        auto thread = threadPoolThreads.at(i);
+        // If already killed, move to the next thread
+        if (thread == nullptr) {
+            continue;
+        }
+
         // Await the thread
-        if (threadPoolThreads.at(i)->joinable()) {
-            threadPoolThreads.at(i)->join();
+        if (thread->joinable()) {
+            threadsLock.unlock();
+            thread->join();
         }
     }
 
@@ -93,6 +96,7 @@ void Executor::finish()
 
     threadPoolThreads.clear();
     threadTaskQueues.clear();
+    deadThreads.clear();
 }
 
 void Executor::executeTasks(std::vector<int> msgIdxs,
@@ -279,9 +283,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Handle snapshot diffs _before_ we reset the executor
         if (isLastInBatch && task.needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
-            faabric::util::SnapshotData& snapshotPostExecution = snapshot();
+            auto snapshotPostExecution = snapshot();
 
-            faabric::util::SnapshotData& snapshotPreExecution =
+            auto snapshotPreExecution =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(
                 msg.snapshotkey());
 
@@ -289,8 +293,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
                          msg.snapshotkey());
 
             std::vector<faabric::util::SnapshotDiff> diffs =
-              snapshotPreExecution.getChangeDiffs(snapshotPostExecution.data,
-                                                  snapshotPostExecution.size);
+              snapshotPreExecution->getChangeDiffs(snapshotPostExecution.data,
+                                                   snapshotPostExecution.size);
 
             sch.pushSnapshotDiffs(msg, diffs);
 
@@ -299,7 +303,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Clear any merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
-            snapshotPreExecution.clearMergeRegions();
+            snapshotPreExecution->clearMergeRegions();
         }
 
         // If this batch is finished, reset the executor and release its claim.
@@ -346,19 +350,22 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Note - we have to keep a record of dead threads so we can join them
         // all when the executor shuts down
-        std::shared_ptr<std::thread> thisThread =
-          threadPoolThreads.at(threadPoolIdx);
-        deadThreads.emplace_back(thisThread);
-
-        // Set this thread to nullptr
-        threadPoolThreads.at(threadPoolIdx) = nullptr;
-
-        // See if any threads are still running
         bool isFinished = true;
-        for (auto t : threadPoolThreads) {
-            if (t != nullptr) {
-                isFinished = false;
-                break;
+        {
+            faabric::util::UniqueLock threadsLock(threadsMutex);
+            std::shared_ptr<std::thread> thisThread =
+              threadPoolThreads.at(threadPoolIdx);
+            deadThreads.emplace_back(thisThread);
+
+            // Set this thread to nullptr
+            threadPoolThreads.at(threadPoolIdx) = nullptr;
+
+            // See if any threads are still running
+            for (auto t : threadPoolThreads) {
+                if (t != nullptr) {
+                    isFinished = false;
+                    break;
+                }
             }
         }
 

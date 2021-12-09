@@ -226,9 +226,11 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
+    std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
         snapshot.size = 1234;
-        snapshot.data = new uint8_t[snapshot.size];
+        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
+        snapshot.data = snapshotDataAllocation.get();
 
         snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
     }
@@ -420,9 +422,11 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
+    std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
         snapshot.size = 1234;
-        snapshot.data = new uint8_t[snapshot.size];
+        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
+        snapshot.data = snapshotDataAllocation.get();
         snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
     }
 
@@ -932,9 +936,17 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
     }
 
+    // Set topology hint
+    faabric::util::SchedulingTopologyHint topologyHint =
+      faabric::util::SchedulingTopologyHint::NORMAL;
+
+    if (forceLocal) {
+        topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+    }
+
     // Schedule and check decision
     faabric::util::SchedulingDecision actualDecision =
-      sch.callFunctions(req, forceLocal);
+      sch.callFunctions(req, topologyHint);
     checkSchedulingDecisionEquality(expectedDecision, actualDecision);
 
     // Check mappings set up locally or not

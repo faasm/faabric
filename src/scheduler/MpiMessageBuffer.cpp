@@ -16,7 +16,7 @@ int MpiMessageBuffer::size()
 
 void MpiMessageBuffer::addMessage(PendingAsyncMpiMessage msg)
 {
-    pendingMsgs.push_back(msg);
+    pendingMsgs.emplace_back(std::move(msg));
 }
 
 void MpiMessageBuffer::deleteMessage(const MpiMessageIterator& msgIt)

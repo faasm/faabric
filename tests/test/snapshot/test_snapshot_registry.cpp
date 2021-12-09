@@ -57,22 +57,22 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     reg.takeSnapshot(keyB, snapB, false);
     reg.takeSnapshot(keyC, snapC);
 
-    SnapshotData& actualA = reg.getSnapshot(keyA);
-    SnapshotData& actualB = reg.getSnapshot(keyB);
-    SnapshotData& actualC = reg.getSnapshot(keyC);
+    auto actualA = reg.getSnapshot(keyA);
+    auto actualB = reg.getSnapshot(keyB);
+    auto actualC = reg.getSnapshot(keyC);
 
-    REQUIRE(actualA.size == snapA.size);
-    REQUIRE(actualB.size == snapB.size);
-    REQUIRE(actualC.size == snapC.size);
+    REQUIRE(actualA->size == snapA.size);
+    REQUIRE(actualB->size == snapB.size);
+    REQUIRE(actualC->size == snapC.size);
 
     // Pointer equality here is good enough
-    REQUIRE(actualA.data == snapA.data);
-    REQUIRE(actualB.data == snapB.data);
-    REQUIRE(actualC.data == snapC.data);
+    REQUIRE(actualA->data == snapA.data);
+    REQUIRE(actualB->data == snapB.data);
+    REQUIRE(actualC->data == snapC.data);
 
-    REQUIRE(actualA.isRestorable());
-    REQUIRE(!actualB.isRestorable());
-    REQUIRE(actualC.isRestorable());
+    REQUIRE(actualA->isRestorable());
+    REQUIRE(!actualB->isRestorable());
+    REQUIRE(actualC->isRestorable());
 
     // Create regions onto which we will map the snapshots
     uint8_t* actualDataA = allocateSharedMemory(1 * HOST_PAGE_SIZE);
@@ -152,9 +152,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     // Check existing snapshot is not overwritten
     reg.takeSnapshotIfNotExists(keyA, snapUpdateA, true);
-    SnapshotData snapAfterA = reg.getSnapshot(keyA);
-    REQUIRE(snapAfterA.data == snapBefore.data);
-    REQUIRE(snapAfterA.size == snapBefore.size);
+    auto snapAfterA = reg.getSnapshot(keyA);
+    REQUIRE(snapAfterA->data == snapBefore.data);
+    REQUIRE(snapAfterA->size == snapBefore.size);
 
     // Check new snapshot is still created
     reg.takeSnapshotIfNotExists(keyB, snapUpdateB, true);
@@ -163,9 +163,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(reg.snapshotExists(keyB));
     REQUIRE(reg.getSnapshotCount() == 2);
 
-    SnapshotData snapAfterB = reg.getSnapshot(keyB);
-    REQUIRE(snapAfterB.data == otherDataB.data());
-    REQUIRE(snapAfterB.size == otherDataB.size());
+    auto snapAfterB = reg.getSnapshot(keyB);
+    REQUIRE(snapAfterB->data == otherDataB.data());
+    REQUIRE(snapAfterB->size == otherDataB.size());
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,

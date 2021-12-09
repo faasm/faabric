@@ -5,6 +5,7 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/scheduling.h>
 
+#include <atomic>
 #include <condition_variable>
 #include <queue>
 #include <set>
@@ -69,7 +70,7 @@ class PointToPointGroup
     int groupId = 0;
     int groupSize = 0;
 
-    std::mutex mx;
+    std::shared_mutex mx;
 
     // Transport
     faabric::transport::PointToPointBroker& ptpBroker;
@@ -80,7 +81,7 @@ class PointToPointGroup
 
     // Distributed lock
     std::stack<int> recursiveLockOwners;
-    int lockOwnerIdx = -1;
+    std::atomic<int> lockOwnerIdx = -1;
     std::queue<int> lockWaiters;
 
     void notifyLocked(int groupIdx);
@@ -125,9 +126,10 @@ class PointToPointBroker
     std::unordered_map<int, std::set<int>> groupIdIdxsMap;
     std::unordered_map<std::string, std::string> mappings;
 
-    std::unordered_map<int, faabric::util::FlagWaiter> groupFlags;
+    std::unordered_map<int, std::shared_ptr<faabric::util::FlagWaiter>>
+      groupFlags;
 
-    faabric::util::FlagWaiter& getGroupFlag(int groupId);
+    std::shared_ptr<faabric::util::FlagWaiter> getGroupFlag(int groupId);
 };
 
 PointToPointBroker& getPointToPointBroker();

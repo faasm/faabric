@@ -1,9 +1,12 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
+
+#include <set>
 #include <vector>
 
 namespace faabric::scheduler {
+
 struct ExecGraphNode
 {
     faabric::Message msg;
@@ -16,6 +19,8 @@ struct ExecGraph
 };
 
 int countExecGraphNodes(const ExecGraph& graph);
+
+std::set<std::string> getExecGraphHosts(const ExecGraph& graph);
 
 std::string execNodeToJson(const ExecGraphNode& node);
 

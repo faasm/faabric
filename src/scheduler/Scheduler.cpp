@@ -21,6 +21,8 @@
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
+#define GET_EXEC_GRAPH_SLEEP_MS 500
+#define MAX_GET_EXEC_GRAPH_RETRIES 3
 
 using namespace faabric::util;
 using namespace faabric::snapshot;
@@ -95,16 +97,30 @@ void Scheduler::reset()
     resetThreadLocalCache();
 
     // Shut down all Executors
-    for (auto& p : executors) {
+    // Executor shutdown takes a lock itself, so "finish" executors without the
+    // lock.
+    decltype(executors) executorsList;
+    decltype(deadExecutors) deadExecutorsList;
+    {
+        faabric::util::FullLock lock(mx);
+        executorsList = executors;
+    }
+    for (auto& p : executorsList) {
         for (auto& e : p.second) {
             e->finish();
         }
     }
-
+    executorsList.clear();
+    {
+        faabric::util::FullLock lock(mx);
+        deadExecutorsList = deadExecutors;
+    }
     for (auto& e : deadExecutors) {
         e->finish();
     }
+    deadExecutorsList.clear();
 
+    faabric::util::FullLock lock(mx);
     executors.clear();
     deadExecutors.clear();
 
@@ -136,19 +152,26 @@ void Scheduler::shutdown()
 
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 {
+    faabric::util::SharedLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return executors[funcStr].size();
 }
 
 int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
 {
+    faabric::util::SharedLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return (int)registeredHosts[funcStr].size();
 }
 
 std::set<std::string> Scheduler::getFunctionRegisteredHosts(
-  const faabric::Message& msg)
+  const faabric::Message& msg,
+  bool acquireLock)
 {
+    faabric::util::SharedLock lock;
+    if (acquireLock) {
+        lock = faabric::util::SharedLock(mx);
+    }
     const std::string funcStr = faabric::util::funcToString(msg, false);
     return registeredHosts[funcStr];
 }
@@ -156,6 +179,7 @@ std::set<std::string> Scheduler::getFunctionRegisteredHosts(
 void Scheduler::removeRegisteredHost(const std::string& host,
                                      const faabric::Message& msg)
 {
+    faabric::util::FullLock lock(mx);
     const std::string funcStr = faabric::util::funcToString(msg, false);
     registeredHosts[funcStr].erase(host);
 }
@@ -210,7 +234,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  bool forceLocal)
+  faabric::util::SchedulingTopologyHint topologyHint)
 {
     // Note, we assume all the messages are for the same function and have the
     // same master host
@@ -224,7 +248,8 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     // If we're not the master host, we need to forward the request back to the
     // master host. This will only happen if a nested batch execution happens.
-    if (!forceLocal && masterHost != thisHost) {
+    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
+        masterHost != thisHost) {
         std::string funcStr = faabric::util::funcToString(firstMsg, false);
         SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
 
@@ -236,12 +261,13 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     faabric::util::FullLock lock(mx);
 
-    SchedulingDecision decision = makeSchedulingDecision(req, forceLocal);
+    SchedulingDecision decision = makeSchedulingDecision(req, topologyHint);
 
     // Send out point-to-point mappings if necessary (unless being forced to
     // execute locally, in which case they will be transmitted from the
     // master)
-    if (!forceLocal && (firstMsg.groupid() > 0)) {
+    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
+        (firstMsg.groupid() > 0)) {
         broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
@@ -251,14 +277,22 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  bool forceLocal)
+  faabric::util::SchedulingTopologyHint topologyHint)
 {
     int nMessages = req->messages_size();
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
 
+    // If topology hints are disabled, unset the provided topology hint
+    if (conf.noTopologyHints == "on" &&
+        topologyHint != faabric::util::SchedulingTopologyHint::NORMAL) {
+        SPDLOG_WARN("Ignoring topology hint passed to scheduler as hints are "
+                    "disabled in the config");
+        topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+    }
+
     std::vector<std::string> hosts;
-    if (forceLocal) {
+    if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
         for (int i = 0; i < nMessages; i++) {
             hosts.push_back(thisHost);
@@ -296,6 +330,14 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 int available = r.slots() - r.usedslots();
                 int nOnThisHost = std::min(available, remainder);
 
+                // Under the NEVER_ALONE topology hint, we never choose a host
+                // unless we can schedule at least two requests in it.
+                if (topologyHint ==
+                      faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
+                    nOnThisHost < 2) {
+                    continue;
+                }
+
                 for (int i = 0; i < nOnThisHost; i++) {
                     hosts.push_back(h);
                 }
@@ -323,6 +365,12 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 int available = r.slots() - r.usedslots();
                 int nOnThisHost = std::min(available, remainder);
 
+                if (topologyHint ==
+                      faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
+                    nOnThisHost < 2) {
+                    continue;
+                }
+
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
                     registeredHosts[funcStr].insert(h);
@@ -342,11 +390,26 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         // At this point there's no more capacity in the system, so we
         // just need to overload locally
         if (remainder > 0) {
-            SPDLOG_DEBUG(
-              "Overloading {}/{} {} locally", remainder, nMessages, funcStr);
+            std::string overloadedHost = thisHost;
+
+            // Under the NEVER_ALONE scheduling topology hint we want to
+            // overload the last host we assigned requests to.
+            if (topologyHint ==
+                  faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
+                !hosts.empty()) {
+                overloadedHost = hosts.back();
+            }
+
+            SPDLOG_DEBUG("Overloading {}/{} {} {}",
+                         remainder,
+                         nMessages,
+                         funcStr,
+                         overloadedHost == thisHost
+                           ? "locally"
+                           : "to host " + overloadedHost);
 
             for (int i = 0; i < remainder; i++) {
-                hosts.push_back(thisHost);
+                hosts.push_back(overloadedHost);
             }
         }
     }
@@ -432,20 +495,20 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // diffs.
     std::string snapshotKey = firstMsg.snapshotkey();
     if (!snapshotKey.empty()) {
-        for (const auto& host : getFunctionRegisteredHosts(firstMsg)) {
+        for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
-            faabric::util::SnapshotData& snapshotData =
+            auto snapshotData =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
             // See if we've already pushed this snapshot to the given host,
             // if so, just push the diffs
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snapshotData.getDirtyRegions();
+                  snapshotData->getDirtyRegions();
                 c.pushSnapshotDiffs(
                   snapshotKey, firstMsg.groupid(), snapshotDiffs);
             } else {
-                c.pushSnapshot(snapshotKey, firstMsg.groupid(), snapshotData);
+                c.pushSnapshot(snapshotKey, firstMsg.groupid(), *snapshotData);
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }
@@ -458,6 +521,14 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // -------------------------------------------
     // EXECUTION
     // -------------------------------------------
+
+    // Records for tests - copy messages before execution to avoid racing on msg
+    size_t recordedMessagesOffset = recordedMessagesAll.size();
+    if (faabric::util::isTestMode()) {
+        for (int i = 0; i < nMessages; i++) {
+            recordedMessagesAll.emplace_back(req->messages().at(i));
+        }
+    }
 
     // Iterate through unique hosts and dispatch messages
     for (const std::string& host : orderedHosts) {
@@ -570,12 +641,12 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
             std::string executedHost = decision.hosts.at(i);
-            faabric::Message msg = req->messages().at(i);
+            const faabric::Message& msg =
+              recordedMessagesAll.at(recordedMessagesOffset + i);
 
             // Log results if in test mode
-            recordedMessagesAll.push_back(msg);
             if (executedHost.empty() || executedHost == thisHost) {
-                recordedMessagesLocal.push_back(msg);
+                recordedMessagesLocal.emplace_back(msg);
             } else {
                 recordedMessagesShared.emplace_back(executedHost, msg);
             }
@@ -636,11 +707,16 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
     req->set_type(req->FUNCTIONS);
 
     // Make the call
-    callFunctions(req, forceLocal);
+    if (forceLocal) {
+        callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
+    } else {
+        callFunctions(req);
+    }
 }
 
 void Scheduler::clearRecordedMessages()
 {
+    faabric::util::FullLock lock(mx);
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
@@ -648,11 +724,13 @@ void Scheduler::clearRecordedMessages()
 
 std::vector<faabric::Message> Scheduler::getRecordedMessagesAll()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesAll;
 }
 
 std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesLocal;
 }
 
@@ -680,6 +758,7 @@ SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
 std::vector<std::pair<std::string, faabric::Message>>
 Scheduler::getRecordedMessagesShared()
 {
+    faabric::util::SharedLock lock(mx);
     return recordedMessagesShared;
 }
 
@@ -727,11 +806,13 @@ std::shared_ptr<Executor> Scheduler::claimExecutor(
 
 std::string Scheduler::getThisHost()
 {
+    faabric::util::SharedLock lock(mx);
     return thisHost;
 }
 
 void Scheduler::broadcastFlush()
 {
+    faabric::util::FullLock lock(mx);
     // Get all hosts
     std::set<std::string> allHosts = getAvailableHosts();
 
@@ -743,6 +824,7 @@ void Scheduler::broadcastFlush()
         getFunctionCallClient(otherHost).sendFlush();
     }
 
+    lock.unlock();
     flushLocally();
 }
 
@@ -827,18 +909,21 @@ void Scheduler::pushSnapshotDiffs(
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
+    faabric::util::SharedLock lock(mx);
     SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
-    threadResults[msgId].set_value(returnValue);
+    threadResults.at(msgId).set_value(returnValue);
 }
 
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
-    if (threadResults.count(messageId) == 0) {
+    faabric::util::SharedLock lock(mx);
+    auto it = threadResults.find(messageId);
+    if (it == threadResults.end()) {
         SPDLOG_ERROR("Thread {} not registered on this host", messageId);
         throw std::runtime_error("Awaiting unregistered thread");
     }
-
-    return threadResults[messageId].get_future().get();
+    lock.unlock();
+    return it->second.get_future().get();
 }
 
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
@@ -912,13 +997,16 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
 
 faabric::HostResources Scheduler::getThisHostResources()
 {
-    thisHostResources.set_usedslots(
+    faabric::util::SharedLock lock(mx);
+    faabric::HostResources hostResources = thisHostResources;
+    hostResources.set_usedslots(
       this->thisHostUsedSlots.load(std::memory_order_acquire));
-    return thisHostResources;
+    return hostResources;
 }
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
+    faabric::util::FullLock lock(mx);
     thisHostResources = res;
     this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
 }
@@ -977,7 +1065,29 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
 
     // Get the result for this message
     std::string statusKey = faabric::util::statusKeyFromMessageId(messageId);
+
+    // We want to make sure the message bytes have been populated by the time
+    // we get them from Redis. For the time being, we retry a number of times
+    // and fail if we don't succeed.
     std::vector<uint8_t> messageBytes = redis.get(statusKey);
+    int numRetries = 0;
+    while (messageBytes.empty() && numRetries < MAX_GET_EXEC_GRAPH_RETRIES) {
+        SPDLOG_WARN(
+          "Retry GET message for ExecGraph node with id {} (Retry {}/{})",
+          messageId,
+          numRetries + 1,
+          MAX_GET_EXEC_GRAPH_RETRIES);
+        SLEEP_MS(GET_EXEC_GRAPH_SLEEP_MS);
+        messageBytes = redis.get(statusKey);
+        ++numRetries;
+    }
+    if (messageBytes.empty()) {
+        SPDLOG_ERROR("Can't GET message from redis (id: {}, key: {})",
+                     messageId,
+                     statusKey);
+        throw std::runtime_error("Message for exec graph not in Redis");
+    }
+
     faabric::Message result;
     result.ParseFromArray(messageBytes.data(), (int)messageBytes.size());
 

@@ -4,6 +4,7 @@
 #include <faabric/util/exception.h>
 
 #include <hiredis/hiredis.h>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
@@ -63,6 +64,9 @@ redis.call('EXPIRE', status_key, status_expiry)
 return 0
 )---";
 };
+
+using UniqueRedisReply =
+  std::unique_ptr<redisReply, decltype(&freeReplyObject)>;
 
 class Redis
 {
@@ -189,10 +193,10 @@ class Redis
     std::vector<uint8_t> dequeueBytes(const std::string& queueName,
                                       int timeout = DEFAULT_TIMEOUT);
 
-    void dequeueBytes(const std::string& queueName,
-                      uint8_t* buffer,
-                      size_t bufferLen,
-                      int timeout = DEFAULT_TIMEOUT);
+    size_t dequeueBytes(const std::string& queueName,
+                        uint8_t* buffer,
+                        size_t bufferLen,
+                        int timeout = DEFAULT_TIMEOUT);
 
     void dequeueMultiple(const std::string& queueName,
                          uint8_t* buff,
@@ -211,7 +215,7 @@ class Redis
 
     const RedisInstance& instance;
 
-    redisReply* dequeueBase(const std::string& queueName, int timeout);
+    UniqueRedisReply dequeueBase(const std::string& queueName, int timeout);
 };
 
 class RedisNoResponseException : public faabric::util::FaabricException

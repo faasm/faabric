@@ -15,12 +15,11 @@ namespace tests {
 class SnapshotMergeTestFixture : public SnapshotTestFixture
 {
   public:
-    SnapshotMergeTestFixture() {}
-    ~SnapshotMergeTestFixture() {}
+    SnapshotMergeTestFixture() = default;
+    ~SnapshotMergeTestFixture() = default;
 
   protected:
     std::string snapKey;
-    int snapPages;
     faabric::util::SnapshotData snap;
 
     uint8_t* setUpSnapshot(int snapPages, int sharedMemPages)

@@ -21,6 +21,11 @@ SnapshotServer::SnapshotServer()
   , broker(faabric::transport::getPointToPointBroker())
 {}
 
+size_t SnapshotServer::diffsApplied() const
+{
+    return diffsAppliedCounter.load(std::memory_order_acquire);
+}
+
 void SnapshotServer::doAsyncRecv(int header,
                                  const uint8_t* buffer,
                                  size_t bufferSize)
@@ -128,7 +133,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     // Get the snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
-    faabric::util::SnapshotData& snap = reg.getSnapshot(r->key()->str());
+    auto snap = reg.getSnapshot(r->key()->str());
 
     // Lock the function group if it exists
     if (groupId > 0 &&
@@ -155,7 +160,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Iterate through the chunks passed in the request
     for (const auto* chunk : *r->chunks()) {
-        uint8_t* dest = snap.data + chunk->offset();
+        uint8_t* dest = snap->data + chunk->offset();
 
         SPDLOG_TRACE("Applying snapshot diff to {} at {}-{}",
                      r->key()->str(),
@@ -218,6 +223,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                 throw std::runtime_error("Unsupported merge data type");
             }
         }
+        // make changes visible to other threads
+        std::atomic_thread_fence(std::memory_order_release);
+        this->diffsAppliedCounter.fetch_add(1, std::memory_order_acq_rel);
     }
 
     // Update snapshot

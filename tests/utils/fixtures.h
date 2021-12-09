@@ -128,8 +128,8 @@ class SnapshotTestFixture
 
     void removeSnapshot(const std::string& key, int nPages)
     {
-        faabric::util::SnapshotData& snap = reg.getSnapshot(key);
-        faabric::util::deallocatePages(snap.data, nPages);
+        auto snap = reg.getSnapshot(key);
+        faabric::util::deallocatePages(snap->data, nPages);
         reg.deleteSnapshot(key);
     }
 
@@ -294,5 +294,37 @@ class PointToPointClientServerFixture
   protected:
     faabric::transport::PointToPointClient cli;
     faabric::transport::PointToPointServer server;
+};
+
+class TestExecutor final : public faabric::scheduler::Executor
+{
+  public:
+    TestExecutor(faabric::Message& msg);
+
+    ~TestExecutor();
+
+    uint8_t* dummyMemory = nullptr;
+
+    size_t dummyMemorySize = 0;
+
+    void postFinish() override;
+
+    void reset(faabric::Message& msg) override;
+
+    void restore(faabric::Message& msg) override;
+
+    faabric::util::SnapshotData snapshot() override;
+
+    int32_t executeTask(
+      int threadPoolIdx,
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override;
+};
+
+class TestExecutorFactory : public faabric::scheduler::ExecutorFactory
+{
+  protected:
+    std::shared_ptr<faabric::scheduler::Executor> createExecutor(
+      faabric::Message& msg) override;
 };
 }

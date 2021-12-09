@@ -7,11 +7,11 @@
 #include <sys/mman.h>
 
 namespace faabric::snapshot {
-SnapshotRegistry::SnapshotRegistry() {}
-
-faabric::util::SnapshotData& SnapshotRegistry::getSnapshot(
+std::shared_ptr<faabric::util::SnapshotData> SnapshotRegistry::getSnapshot(
   const std::string& key)
 {
+    faabric::util::SharedLock lock(snapshotsMx);
+
     if (key.empty()) {
         SPDLOG_ERROR("Attempting to get snapshot with empty key");
         throw std::runtime_error("Getting snapshot with empty key");
@@ -32,8 +32,8 @@ bool SnapshotRegistry::snapshotExists(const std::string& key)
 
 void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
-    faabric::util::SnapshotData& d = getSnapshot(key);
-    d.mapToMemory(target);
+    auto d = getSnapshot(key);
+    d->mapToMemory(target);
 }
 
 void SnapshotRegistry::takeSnapshotIfNotExists(
@@ -61,7 +61,7 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
         throw std::runtime_error("Taking snapshot size zero");
     }
 
-    faabric::util::UniqueLock lock(snapshotsMx);
+    faabric::util::FullLock lock(snapshotsMx);
 
     if (snapshotExists(key) && !overwrite) {
         SPDLOG_TRACE("Skipping already existing snapshot {}", key);
@@ -75,19 +75,19 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
 
     // Note - we only preserve the snapshot in the in-memory file, and do not
     // take ownership for the original data referenced in SnapshotData
-    faabric::util::SnapshotData& recordedData = snapshotMap[key];
-    recordedData.size = data.size;
-    recordedData.data = data.data;
+    auto sharedData =
+      std::make_shared<faabric::util::SnapshotData>(std::move(data));
+    snapshotMap[key] = sharedData;
 
     // Write to fd to be locally restorable
     if (locallyRestorable) {
-        recordedData.writeToFd(key);
+        sharedData->writeToFd(key);
     }
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)
 {
-    faabric::util::UniqueLock lock(snapshotsMx);
+    faabric::util::FullLock lock(snapshotsMx);
 
     if (snapshotMap.count(key) == 0) {
         return;
@@ -99,15 +99,15 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
 void SnapshotRegistry::changeSnapshotSize(const std::string& key,
                                           size_t newSize)
 {
-    faabric::util::UniqueLock lock(snapshotsMx);
+    faabric::util::FullLock lock(snapshotsMx);
 
-    faabric::util::SnapshotData& d = getSnapshot(key);
-    d.setSnapshotSize(newSize);
+    auto d = getSnapshot(key);
+    d->setSnapshotSize(newSize);
 }
 
 size_t SnapshotRegistry::getSnapshotCount()
 {
-    faabric::util::UniqueLock lock(snapshotsMx);
+    faabric::util::FullLock lock(snapshotsMx);
     return snapshotMap.size();
 }
 
@@ -119,6 +119,7 @@ SnapshotRegistry& getSnapshotRegistry()
 
 void SnapshotRegistry::clear()
 {
+    faabric::util::FullLock lock(snapshotsMx);
     snapshotMap.clear();
 }
 }

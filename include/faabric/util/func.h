@@ -10,7 +10,7 @@ namespace faabric::util {
 std::string funcToString(const faabric::Message& msg, bool includeId);
 
 std::string funcToString(
-  const std::shared_ptr<faabric::BatchExecuteRequest> req);
+  const std::shared_ptr<faabric::BatchExecuteRequest>& req);
 
 unsigned int setMessageId(faabric::Message& msg);
 

@@ -74,6 +74,7 @@ message MPIMessage {
         ALLREDUCE = 8;
         ALLTOALL = 9;
         SENDRECV = 10;
+        BROADCAST = 11;
     };
 
     MPIMessageType messageType = 1;

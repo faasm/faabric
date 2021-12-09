@@ -22,9 +22,7 @@ class RemoteCollectiveTestFixture : public RemoteMpiTestFixture
         thisWorldRanks = { thisHostRankB, thisHostRankA, 0 };
         otherWorldRanks = { otherHostRankB, otherHostRankC, otherHostRankA };
 
-        // Here we rely on the scheduler running out of resources and
-        // overloading this world with ranks 4 and 5
-        setWorldSizes(thisWorldSize, 1, 3);
+        setWorldSizes(thisWorldSize, 3, 3);
     }
 
     MpiWorld& setUpThisWorld()
@@ -48,12 +46,11 @@ class RemoteCollectiveTestFixture : public RemoteMpiTestFixture
   protected:
     int thisWorldSize = 6;
 
-    int otherHostRankA = 1;
-    int otherHostRankB = 2;
-    int otherHostRankC = 3;
-
-    int thisHostRankA = 4;
-    int thisHostRankB = 5;
+    int thisHostRankA = 1;
+    int thisHostRankB = 2;
+    int otherHostRankA = 3;
+    int otherHostRankB = 4;
+    int otherHostRankC = 5;
 
     std::vector<int> otherWorldRanks;
     std::vector<int> thisWorldRanks;
@@ -62,7 +59,7 @@ class RemoteCollectiveTestFixture : public RemoteMpiTestFixture
 TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
 {
     // Allocate two ranks in total, one rank per host
-    setWorldSizes(2, 1, 1);
+    setWorldSizes(4, 2, 2);
 
     MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
@@ -72,8 +69,10 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
     std::thread otherWorldThread([this] {
         otherWorld.initialiseFromMsg(msg);
 
-        REQUIRE(otherWorld.getHostForRank(0) == thisHost);
-        REQUIRE(otherWorld.getHostForRank(1) == otherHost);
+        assert(otherWorld.getHostForRank(0) == thisHost);
+        assert(otherWorld.getHostForRank(1) == thisHost);
+        assert(otherWorld.getHostForRank(2) == otherHost);
+        assert(otherWorld.getHostForRank(3) == otherHost);
 
         otherWorld.destroy();
     });
@@ -83,7 +82,9 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
     }
 
     REQUIRE(thisWorld.getHostForRank(0) == thisHost);
-    REQUIRE(thisWorld.getHostForRank(1) == otherHost);
+    REQUIRE(thisWorld.getHostForRank(1) == thisHost);
+    REQUIRE(thisWorld.getHostForRank(2) == otherHost);
+    REQUIRE(thisWorld.getHostForRank(3) == otherHost);
 
     thisWorld.destroy();
 }
@@ -91,9 +92,9 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
 TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 {
     // Register two ranks (one on each host)
-    setWorldSizes(2, 1, 1);
+    setWorldSizes(4, 2, 2);
     int rankA = 0;
-    int rankB = 1;
+    int rankB = 2;
     std::vector<int> messageData = { 0, 1, 2 };
 
     // Init worlds
@@ -107,7 +108,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 
         // Receive the message for the given rank
         MPI_Status status{};
-        auto buffer = new int[messageData.size()];
+        auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+        auto buffer = bufferAllocation.get();
         otherWorld.recv(
           rankA, rankB, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
@@ -137,9 +139,9 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Register two ranks (one on each host)
-    setWorldSizes(2, 1, 1);
+    setWorldSizes(4, 2, 2);
     int rankA = 0;
-    int rankB = 1;
+    int rankB = 2;
     std::vector<int> messageData = { 0, 1, 2 };
     std::vector<int> messageData2 = { 3, 4, 5 };
 
@@ -160,7 +162,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                           messageData.size());
 
           // Now recv
-          auto buffer = new int[messageData2.size()];
+          auto bufferAllocation = std::make_unique<int[]>(messageData2.size());
+          auto buffer = bufferAllocation.get();
           otherWorld.recv(rankA,
                           rankB,
                           BYTES(buffer),
@@ -168,7 +171,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                           messageData2.size(),
                           MPI_STATUS_IGNORE);
           std::vector<int> actual(buffer, buffer + messageData2.size());
-          REQUIRE(actual == messageData2);
+          assert(actual == messageData2);
 
           testLatch->wait();
 
@@ -177,7 +180,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 
     // Receive the message for the given rank
     MPI_Status status{};
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
     thisWorld.recv(
       rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
     std::vector<int> actual(buffer, buffer + messageData.size());
@@ -201,61 +205,14 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     thisWorld.destroy();
 }
 
-TEST_CASE_METHOD(RemoteMpiTestFixture, "Test barrier across hosts", "[mpi]")
-{
-    // Register two ranks (one on each host)
-    setWorldSizes(2, 1, 1);
-    int rankA = 0;
-    int rankB = 1;
-    std::vector<int> sendData = { 0, 1, 2 };
-    std::vector<int> recvData = { -1, -1, -1 };
-
-    // Init worlds
-    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
-    faabric::util::setMockMode(false);
-
-    thisWorld.broadcastHostsToRanks();
-
-    std::thread otherWorldThread([this, rankA, rankB, &sendData, &recvData] {
-        otherWorld.initialiseFromMsg(msg);
-
-        otherWorld.send(
-          rankB, rankA, BYTES(sendData.data()), MPI_INT, sendData.size());
-
-        // Barrier on this rank
-        otherWorld.barrier(rankB);
-        assert(sendData == recvData);
-        otherWorld.destroy();
-    });
-
-    // Receive the message for the given rank
-    thisWorld.recv(rankB,
-                   rankA,
-                   BYTES(recvData.data()),
-                   MPI_INT,
-                   recvData.size(),
-                   MPI_STATUS_IGNORE);
-    REQUIRE(recvData == sendData);
-
-    // Call barrier to synchronise remote host
-    thisWorld.barrier(rankA);
-
-    // Clean up
-    if (otherWorldThread.joinable()) {
-        otherWorldThread.join();
-    }
-
-    thisWorld.destroy();
-}
-
 TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "Test sending many messages across host",
                  "[mpi]")
 {
     // Register two ranks (one on each host)
-    setWorldSizes(2, 1, 1);
+    setWorldSizes(4, 2, 2);
     int rankA = 0;
-    int rankB = 1;
+    int rankB = 2;
     int numMessages = 1000;
 
     // Init worlds
@@ -306,11 +263,13 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::thread otherWorldThread([this, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
-        // Broadcast a message
+        // Broadcast a message from the root first
         otherWorld.broadcast(otherHostRankB,
+                             otherHostRankB,
                              BYTES(messageData.data()),
                              MPI_INT,
-                             messageData.size());
+                             messageData.size(),
+                             faabric::MPIMessage::BROADCAST);
 
         // Check the broadcast is received on this host by the other ranks
         for (int rank : otherWorldRanks) {
@@ -319,8 +278,12 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
             }
 
             std::vector<int> actual(3, -1);
-            otherWorld.recv(
-              otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            otherWorld.broadcast(otherHostRankB,
+                                 rank,
+                                 BYTES(actual.data()),
+                                 MPI_INT,
+                                 3,
+                                 faabric::MPIMessage::BROADCAST);
             assert(actual == messageData);
         }
 
@@ -329,13 +292,115 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         otherWorld.destroy();
     });
 
+    std::vector<int> actual(3, -1);
+    // First run the broadcast from the local master (rank = 0)
+    thisWorld.broadcast(otherHostRankB,
+                        0,
+                        BYTES(actual.data()),
+                        MPI_INT,
+                        3,
+                        faabric::MPIMessage::BROADCAST);
+
     // Check the ranks on this host receive the broadcast
     for (int rank : thisWorldRanks) {
-        std::vector<int> actual(3, -1);
-        thisWorld.recv(
-          otherHostRankB, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+        if (rank == 0) {
+            continue;
+        }
+
+        thisWorld.broadcast(otherHostRankB,
+                            rank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            3,
+                            faabric::MPIMessage::BROADCAST);
         REQUIRE(actual == messageData);
     }
+
+    // Clean up
+    testLatch->wait();
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
+    }
+
+    thisWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteCollectiveTestFixture,
+                 "Test reduce across hosts",
+                 "[mpi]")
+{
+    MpiWorld& thisWorld = setUpThisWorld();
+
+    std::vector<int> messageData = { 0, 1, 2 };
+    int recvRank = 0;
+
+    std::thread otherWorldThread([this, recvRank, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
+
+        // Call reduce from two non-local-leader ranks (they just send)
+        otherWorld.reduce(4,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        otherWorld.reduce(5,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        // Call reduce from the remote, local-leader rank (it receives the two
+        // previous broadcasts and sends to receiver)
+        // Note that we must support providing a null-pointing recvBuffer
+        otherWorld.reduce(3,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          nullptr,
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+
+        // Give the other host time to receive the broadcast
+        testLatch->wait();
+        otherWorld.destroy();
+    });
+
+    // First, reduce from the local ranks that don't receive the reduce
+    thisWorld.reduce(1,
+                     recvRank,
+                     BYTES(messageData.data()),
+                     nullptr,
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    thisWorld.reduce(2,
+                     recvRank,
+                     BYTES(messageData.data()),
+                     nullptr,
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    // Lastly, we call reduce from the rank receiving the reduction
+    std::vector<int> actual(messageData.size(), -1);
+    thisWorld.reduce(recvRank,
+                     recvRank,
+                     BYTES(messageData.data()),
+                     BYTES(actual.data()),
+                     MPI_INT,
+                     messageData.size(),
+                     MPI_SUM);
+
+    // The world size is hardcoded in the test fixture
+    int worldSize = 6;
+    std::vector<int> expected = { 0 * worldSize, 1 * worldSize, 2 * worldSize };
+    REQUIRE(actual == expected);
 
     // Clean up
     testLatch->wait();
@@ -374,8 +439,17 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            MPI_INT,
                            nPerRank);
 
+        // Build the expectation
+        std::vector<std::vector<int>> expected(otherWorldRanks.size(),
+                                               std::vector<int>(nPerRank));
+        for (int i = 0; i < otherWorldRanks.size(); i++) {
+            for (int j = 0; j < nPerRank; j++) {
+                expected.at(i).at(j) = otherWorldRanks.at(i) * nPerRank + j;
+            }
+        }
+
         // Check for root
-        assert(actual == std::vector<int>({ 8, 9, 10, 11 }));
+        assert(actual == expected.at(0));
 
         // Check the other ranks on this host have received the data
         otherWorld.scatter(otherHostRankB,
@@ -386,7 +460,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            BYTES(actual.data()),
                            MPI_INT,
                            nPerRank);
-        assert(actual == std::vector<int>({ 4, 5, 6, 7 }));
+        assert(actual == expected.at(2));
 
         otherWorld.scatter(otherHostRankB,
                            otherHostRankC,
@@ -396,11 +470,20 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                            BYTES(actual.data()),
                            MPI_INT,
                            nPerRank);
-        assert(actual == std::vector<int>({ 12, 13, 14, 15 }));
+        assert(actual == expected.at(1));
 
         testLatch->wait();
         otherWorld.destroy();
     });
+
+    // Build the expectation
+    std::vector<std::vector<int>> expected(thisWorldRanks.size(),
+                                           std::vector<int>(nPerRank));
+    for (int i = 0; i < thisWorldRanks.size(); i++) {
+        for (int j = 0; j < nPerRank; j++) {
+            expected.at(i).at(j) = thisWorldRanks.at(i) * nPerRank + j;
+        }
+    }
 
     // Check for ranks on this host
     std::vector<int> actual(nPerRank, -1);
@@ -412,7 +495,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                       BYTES(actual.data()),
                       MPI_INT,
                       nPerRank);
-    REQUIRE(actual == std::vector<int>({ 0, 1, 2, 3 }));
+    REQUIRE(actual == expected.at(2));
 
     thisWorld.scatter(otherHostRankB,
                       thisHostRankB,
@@ -422,7 +505,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                       BYTES(actual.data()),
                       MPI_INT,
                       nPerRank);
-    REQUIRE(actual == std::vector<int>({ 20, 21, 22, 23 }));
+    REQUIRE(actual == expected.at(0));
 
     thisWorld.scatter(otherHostRankB,
                       thisHostRankA,
@@ -432,7 +515,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                       BYTES(actual.data()),
                       MPI_INT,
                       nPerRank);
-    REQUIRE(actual == std::vector<int>({ 16, 17, 18, 19 }));
+    REQUIRE(actual == expected.at(1));
 
     // Clean up
     testLatch->wait();
@@ -530,8 +613,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Allocate two ranks in total, one rank per host
-    setWorldSizes(2, 1, 1);
-    int sendRank = 1;
+    setWorldSizes(4, 2, 2);
+    int sendRank = 2;
     int recvRank = 0;
     std::vector<int> messageData = { 0, 1, 2 };
 
@@ -597,8 +680,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Allocate two ranks in total, one rank per host
-    setWorldSizes(2, 1, 1);
-    int sendRank = 1;
+    setWorldSizes(4, 2, 2);
+    int sendRank = 2;
     int recvRank = 0;
 
     // Init world
@@ -729,9 +812,9 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                  "[mpi]")
 {
     // Register two ranks (one on each host)
-    setWorldSizes(2, 1, 1);
+    setWorldSizes(4, 2, 2);
     int rankA = 0;
-    int rankB = 1;
+    int rankB = 2;
     std::vector<int> messageData = { 0, 1, 2 };
     std::vector<int> messageData2 = { 3, 4 };
 
@@ -745,7 +828,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           otherWorld.initialiseFromMsg(msg);
 
           // Recv once
-          auto buffer = new int[messageData.size()];
+          auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+          auto buffer = bufferAllocation.get();
           otherWorld.recv(rankA,
                           rankB,
                           BYTES(buffer),
@@ -756,7 +840,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
           assert(actual == messageData);
 
           // Recv a second time
-          auto buffer2 = new int[messageData2.size()];
+          auto buffer2Allocation = std::make_unique<int[]>(messageData2.size());
+          auto buffer2 = buffer2Allocation.get();
           otherWorld.recv(rankA,
                           rankB,
                           BYTES(buffer2),
@@ -779,7 +864,10 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
       });
 
     std::vector<bool> endpointCheck;
-    std::vector<bool> expectedEndpoints = { false, true, false, false };
+    std::vector<bool> expectedEndpoints = { false, false, true,  false,
+                                            false, false, false, false,
+                                            false, false, false, false,
+                                            false, false, false, false };
 
     // Sending a message initialises the remote endpoint
     thisWorld.send(
@@ -798,7 +886,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     REQUIRE(endpointCheck == expectedEndpoints);
 
     // Finally recv a messge, the same endpoint should be used again
-    auto buffer = new int[messageData.size()];
+    auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+    auto buffer = bufferAllocation.get();
     thisWorld.recv(rankB,
                    rankA,
                    BYTES(buffer),
@@ -871,7 +960,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
                                        false, true,  false, false };
 
     // Irecv a messge from one rank, another UMB should be created
-    auto buffer1 = new int[messageData.size()];
+    auto buffer1Allocation = std::make_unique<int[]>(messageData.size());
+    auto buffer1 = buffer1Allocation.get();
     int recvId1 = thisWorld.irecv(otherWorldRank1,
                                   thisWorldRank,
                                   BYTES(buffer1),
@@ -883,7 +973,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
     REQUIRE(umbCheck == expectedUmb1);
 
     // Irecv a messge from another rank, another UMB should be created
-    auto buffer2 = new int[messageData.size()];
+    auto buffer2Allocation = std::make_unique<int[]>(messageData.size());
+    auto buffer2 = buffer2Allocation.get();
     int recvId2 = thisWorld.irecv(otherWorldRank2,
                                   thisWorldRank,
                                   BYTES(buffer2),
@@ -911,6 +1002,211 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
         otherWorldThread.join();
     }
 
+    thisWorld.destroy();
+}
+
+std::set<int> getReceiversFromMessages(
+  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+{
+    std::set<int> receivers;
+    for (const auto& msg : msgs) {
+        receivers.insert(msg->destination());
+    }
+
+    return receivers;
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during broadcast",
+                 "[mpi]")
+{
+    setWorldSizes(4, 2, 2);
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    // Call broadcast and check sent messages
+    std::set<int> expectedRecvRanks;
+    int expectedNumMsg;
+    int sendRank;
+    int recvRank;
+
+    SECTION("Check broadcast from sender and sender is a local leader")
+    {
+        recvRank = 0;
+        sendRank = recvRank;
+        expectedNumMsg = 2;
+        expectedRecvRanks = { 1, 2 };
+    }
+
+    SECTION("Check broadcast from sender but sender is not a local leader")
+    {
+        recvRank = 1;
+        sendRank = recvRank;
+        expectedNumMsg = 2;
+        expectedRecvRanks = { 0, 2 };
+    }
+
+    SECTION("Check broadcast from a rank that is not the sender, is not a "
+            "leader, but is colocated with the sender")
+    {
+        recvRank = 0;
+        sendRank = 1;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    SECTION("Check broadcast from a rank that is not the sender, is a leader, "
+            "and is colocated with the sender")
+    {
+        recvRank = 1;
+        sendRank = 0;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    SECTION(
+      "Check broadcast from a rank not colocated with sender, but local leader")
+    {
+        recvRank = 2;
+        sendRank = 0;
+        expectedNumMsg = 1;
+        expectedRecvRanks = { 3 };
+    }
+
+    SECTION("Check broadcast from a rank not colocated with sender, and not "
+            "local leader")
+    {
+        recvRank = 3;
+        sendRank = 0;
+        expectedNumMsg = 0;
+        expectedRecvRanks = {};
+    }
+
+    // Check for root
+    std::vector<int> messageData = { 0, 1, 2 };
+    if (recvRank < 2) {
+        thisWorld.broadcast(sendRank,
+                            recvRank,
+                            BYTES(messageData.data()),
+                            MPI_INT,
+                            messageData.size(),
+                            faabric::MPIMessage::BROADCAST);
+    } else {
+        otherWorld.broadcast(sendRank,
+                             recvRank,
+                             BYTES(messageData.data()),
+                             MPI_INT,
+                             messageData.size(),
+                             faabric::MPIMessage::BROADCAST);
+    }
+    auto msgs = getMpiMockedMessages(recvRank);
+    REQUIRE(msgs.size() == expectedNumMsg);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedRecvRanks);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
+    thisWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during reduce",
+                 "[mpi]")
+{
+    setWorldSizes(4, 2, 2);
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    std::set<int> expectedSentMsgRanks;
+    int expectedNumMsgSent;
+    int sendRank;
+    int recvRank;
+
+    SECTION("Call reduce from receiver (local), and receiver is local leader")
+    {
+        recvRank = 0;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+    }
+
+    SECTION(
+      "Call reduce from receiver (local), and receiver is non-local leader")
+    {
+        recvRank = 1;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+    }
+
+    SECTION("Call reduce from non-receiver, colocated with receiver, and local "
+            "leader")
+    {
+        recvRank = 1;
+        sendRank = 0;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+    }
+
+    SECTION("Call reduce from non-receiver, colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 1;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+    }
+
+    SECTION("Call reduce from non-receiver rank, not colocated with receiver, "
+            "but local leader")
+    {
+        recvRank = 0;
+        sendRank = 2;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+    }
+
+    SECTION("Call reduce from non-receiver rank, not colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 3;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { 2 };
+    }
+
+    std::vector<int> messageData = { 0, 1, 2 };
+    std::vector<int> recvData(messageData.size());
+    if (sendRank < 2) {
+        thisWorld.reduce(sendRank,
+                         recvRank,
+                         BYTES(messageData.data()),
+                         BYTES(recvData.data()),
+                         MPI_INT,
+                         messageData.size(),
+                         MPI_SUM);
+    } else {
+        otherWorld.reduce(sendRank,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          BYTES(recvData.data()),
+                          MPI_INT,
+                          messageData.size(),
+                          MPI_SUM);
+    }
+    auto msgs = getMpiMockedMessages(sendRank);
+    REQUIRE(msgs.size() == expectedNumMsgSent);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
     thisWorld.destroy();
 }
 }

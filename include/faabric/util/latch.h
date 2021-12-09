@@ -1,13 +1,14 @@
 #pragma once
 
 #include <condition_variable>
+#include <memory>
 #include <mutex>
 
 namespace faabric::util {
 
 #define DEFAULT_LATCH_TIMEOUT_MS 10000
 
-class Latch
+class Latch : public std::enable_shared_from_this<Latch>
 {
   public:
     // WARNING: this latch must be shared between threads using a shared

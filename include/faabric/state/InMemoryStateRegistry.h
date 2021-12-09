@@ -8,7 +8,7 @@ namespace faabric::state {
 class InMemoryStateRegistry
 {
   public:
-    InMemoryStateRegistry();
+    InMemoryStateRegistry() = default;
 
     std::string getMasterIP(const std::string& user,
                             const std::string& key,

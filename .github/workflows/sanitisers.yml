@@ -1,0 +1,258 @@
+name: Sanitiser Checks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  conan-cache:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+      - uses: actions/cache@v2
+        with:
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
+      # --- Build dependencies
+      - name: "Build dependencies to be shared by all sanitiser runs"
+        run: inv dev.cmake -b Debug
+
+  address-sanitiser:
+    if: github.event.pull_request.draft == false
+    needs: [conan-cache]
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+      - uses: actions/cache@v2
+        with:
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
+      # --- Build with thread sanitising
+      - name: "Build tests with address sanitising"
+        run: inv dev.sanitise Address --noclean
+      - name: "Run tests with address sanitising on and print to stderr to file"
+        run: ./bin/faabric_tests
+        working-directory: /build/faabric/static
+        env:
+          ASAN_OPTIONS: "verbosity=1:halt_on_error=1"
+
+  thread-sanitiser:
+    if: github.event.pull_request.draft == false
+    needs: [conan-cache]
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+      - uses: actions/cache@v2
+        with:
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
+      # --- Build with thread sanitising
+      - name: "Build tests with thread sanitising"
+        run: inv dev.sanitise Thread --noclean
+      # --- Tests ---
+      - name: "Run tests with thread sanitising on and print stderr to file"
+        run: ./bin/faabric_tests
+        working-directory: /build/faabric/static
+        env:
+          TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt:history_size=7"
+
+  undefined-sanitiser:
+    if: github.event.pull_request.draft == false
+    needs: [conan-cache]
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+      - uses: actions/cache@v2
+        with:
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
+      # --- Build with thread sanitising
+      - name: "Build tests with undefined sanitising"
+        run: inv dev.sanitise Undefined --noclean
+      # --- Tests ---
+      - name: "Run tests with undefined sanitising on and print stderr to file"
+        run: ./bin/faabric_tests
+        working-directory: /build/faabric/static
+        env:
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
+
+  leak-sanitiser:
+    if: github.event.pull_request.draft == false
+    needs: [conan-cache]
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm/faabric:0.2.2
+    defaults:
+      run:
+        working-directory: /code/faabric
+    services:
+      redis:
+        image: redis
+    steps:
+      # --- Code update ---
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      # --- Set-up ---
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      # --- Cache based on Conan version and ExternalProjects cmake source
+      - name: Get Conan version
+        id: get-conan-version
+        run: |
+          echo "::set-output name=conan-version::$(conan --version | tr -d '[:alpha:] ')"
+      - name: Hash ExternalProjects
+        id: hash-external
+        run: |
+          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
+      - uses: actions/cache@v2
+        with:
+          path: '~/.conan'
+          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
+            ${{ runner.os }}-
+      # --- Build with thread sanitising
+      - name: "Build tests with leak sanitising"
+        run: inv dev.sanitise Leak --noclean
+      # --- Tests ---
+      - name: "Run tests with leak sanitising on and print stderr to file"
+        run: ./bin/faabric_tests
+        working-directory: /build/faabric/static

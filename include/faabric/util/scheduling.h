@@ -41,4 +41,17 @@ class SchedulingDecision
                     int32_t appIdx,
                     int32_t groupIdx);
 };
+
+// Scheduling topology hints help the scheduler decide which host to assign new
+// requests in a batch.
+//  - NORMAL: bin-packs requests to slots in hosts starting from the master
+//            host, and overloadds the master if it runs out of resources.
+//  - NEVER_ALONE: never allocates a single (non-master) request to a host
+//                 without other requests of the batch.
+enum SchedulingTopologyHint
+{
+    NORMAL,
+    FORCE_LOCAL,
+    NEVER_ALONE
+};
 }

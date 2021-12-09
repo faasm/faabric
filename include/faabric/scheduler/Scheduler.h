@@ -35,9 +35,9 @@ class ExecutorTask
                  bool needsSnapshotPushIn,
                  bool skipResetIn);
 
-    int messageIndex = 0;
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
+    int messageIndex = 0;
     bool needsSnapshotPush = false;
     bool skipReset = false;
 };
@@ -49,7 +49,7 @@ class Executor
 
     explicit Executor(faabric::Message& msg);
 
-    virtual ~Executor();
+    virtual ~Executor() = default;
 
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -104,7 +104,8 @@ class Scheduler
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      bool forceLocal = false);
+      faabric::util::SchedulingTopologyHint =
+        faabric::util::SchedulingTopologyHint::NORMAL);
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -124,7 +125,8 @@ class Scheduler
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
     std::set<std::string> getFunctionRegisteredHosts(
-      const faabric::Message& msg);
+      const faabric::Message& msg,
+      bool acquireLock = true);
 
     void broadcastFlush();
 
@@ -222,7 +224,7 @@ class Scheduler
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;
-    std::atomic<int32_t> thisHostUsedSlots;
+    std::atomic<int32_t> thisHostUsedSlots = 0;
 
     void updateHostResources();
 
@@ -235,7 +237,7 @@ class Scheduler
 
     faabric::util::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      bool forceLocal);
+      faabric::util::SchedulingTopologyHint topologyHint);
 
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,

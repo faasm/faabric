@@ -69,7 +69,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test cartesian communicator", "[mpi]")
     int worldSize;
     int maxDims = 3;
     std::vector<int> dims(maxDims);
-    std::vector<int> periods(2, 1);
+    std::vector<int> periods(maxDims, 1);
     std::vector<std::vector<int>> expectedShift;
     std::vector<std::vector<int>> expectedCoords;
 
@@ -241,7 +241,8 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send and recv on same host", "[mpi]")
     {
         // Receive the message
         MPI_Status status{};
-        auto buffer = new int[messageData.size()];
+        auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+        auto buffer = bufferAllocation.get();
         world.recv(
           rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
@@ -418,7 +419,8 @@ TEST_CASE_METHOD(MpiTestFixture, "Test recv with partial data", "[mpi]")
     // Request to receive more values than were sent
     MPI_Status status{};
     unsigned long requestedSize = actualSize + 5;
-    auto buffer = new int[requestedSize];
+    auto bufferAllocation = std::make_unique<int[]>(requestedSize);
+    auto buffer = bufferAllocation.get();
     world.recv(1, 2, BYTES(buffer), MPI_INT, requestedSize, &status);
 
     // Check status reports only the values that were sent
@@ -453,7 +455,8 @@ TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[mpi]")
     REQUIRE(statusA2.bytesSize == sizeA * sizeof(int));
 
     // Receive the message
-    auto bufferA = new int[sizeA];
+    auto bufferAAllocation = std::make_unique<int[]>(sizeA);
+    auto bufferA = bufferAAllocation.get();
     world.recv(1, 2, BYTES(bufferA), MPI_INT, sizeA * sizeof(int), nullptr);
 
     // Probe the next message
@@ -463,7 +466,8 @@ TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[mpi]")
     REQUIRE(statusB.bytesSize == sizeB * sizeof(int));
 
     // Receive the next message
-    auto bufferB = new int[sizeB];
+    auto bufferBAllocation = std::make_unique<int[]>(sizeB);
+    auto bufferB = bufferBAllocation.get();
     world.recv(1, 2, BYTES(bufferB), MPI_INT, sizeB * sizeof(int), nullptr);
 }
 
@@ -482,8 +486,14 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
     {
         // Broadcast a message from the root
         std::vector<int> messageData = { 0, 1, 2 };
-        world.broadcast(
-          root, BYTES(messageData.data()), MPI_INT, messageData.size());
+
+        // First call from the root, which just sends
+        world.broadcast(root,
+                        root,
+                        BYTES(messageData.data()),
+                        MPI_INT,
+                        messageData.size(),
+                        faabric::MPIMessage::BROADCAST);
 
         // Recv on all non-root ranks
         for (int rank = 0; rank < worldSize; rank++) {
@@ -491,7 +501,12 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
                 continue;
             }
             std::vector<int> actual(3, -1);
-            world.recv(root, rank, BYTES(actual.data()), MPI_INT, 3, nullptr);
+            world.broadcast(root,
+                            rank,
+                            BYTES(actual.data()),
+                            MPI_INT,
+                            3,
+                            faabric::MPIMessage::BROADCAST);
             REQUIRE(actual == messageData);
         }
     }

@@ -96,6 +96,7 @@ void resetDirtyTracking()
     size_t nWritten = fwrite(value, sizeof(char), 1, fd);
     if (nWritten != 1) {
         SPDLOG_ERROR("Failed to write to clear_refs ({})", nWritten);
+        fclose(fd);
         throw std::runtime_error("Failed to write to clear_refs");
     }
 

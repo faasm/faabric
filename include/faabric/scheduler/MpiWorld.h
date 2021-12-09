@@ -12,7 +12,25 @@
 #include <atomic>
 #include <unordered_map>
 
+// Constants for profiling MPI parameters like number of messages sent or
+// message breakdown by type in the execution graph. Remember to increase the
+// counter if you add another one
+#define NUM_MPI_EXEC_GRAPH_DETAILS 2
+#define MPI_MSG_COUNT_PREFIX "mpi-msgcount-torank"
+#define MPI_MSGTYPE_COUNT_PREFIX "mpi-msgtype-torank"
+
 namespace faabric::scheduler {
+
+// -----------------------------------
+// Mocking
+// -----------------------------------
+// MPITOPTP - mocking at the MPI level won't be needed when using the PTP broker
+// as the broker already has mocking capabilities
+std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
+
+std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
+  int sendRank);
+
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 
@@ -69,8 +87,9 @@ class MpiWorld
               faabric::MPIMessage::MPIMessageType messageType =
                 faabric::MPIMessage::NORMAL);
 
-    void broadcast(int sendRank,
-                   const uint8_t* buffer,
+    void broadcast(int rootRank,
+                   int thisRank,
+                   uint8_t* buffer,
                    faabric_datatype_t* dataType,
                    int count,
                    faabric::MPIMessage::MPIMessageType messageType =
@@ -207,6 +226,14 @@ class MpiWorld
     // Track at which host each rank lives
     std::vector<std::string> rankHosts;
     int getIndexForRanks(int sendRank, int recvRank);
+    std::vector<int> getRanksForHost(const std::string& host);
+
+    // Track ranks that are local to this world, and local/remote leaders
+    // MPITOPTP - this information exists in the broker
+    int localLeader = -1;
+    std::vector<int> localRanks;
+    std::vector<int> remoteLeaders;
+    void initLocalRemoteLeaders();
 
     // In-memory queues for local messaging
     std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;

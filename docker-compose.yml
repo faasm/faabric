@@ -11,6 +11,7 @@ services:
       - /usr/bin/docker:/usr/bin/docker
       - ./:/code/faabric
       - ./build:/build/faabric
+      - ${CONAN_CACHE_MOUNT_SOURCE:-./conan-cache/}:/root/.conan
     working_dir: /code/faabric
     stdin_open: true
     tty: true
@@ -27,6 +28,7 @@ services:
     volumes:
       - ./:/code/faabric
       - ./build:/build/faabric
+      - ./conan-cache/:/root/.conan
     working_dir: /build/faabric/static
     environment:
       - LOG_LEVEL=debug

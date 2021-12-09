@@ -1,10 +1,11 @@
 #pragma once
 
-#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/snapshot.h>
 
 namespace faabric::snapshot {
@@ -12,9 +13,10 @@ namespace faabric::snapshot {
 class SnapshotRegistry
 {
   public:
-    SnapshotRegistry();
+    SnapshotRegistry() = default;
 
-    faabric::util::SnapshotData& getSnapshot(const std::string& key);
+    std::shared_ptr<faabric::util::SnapshotData> getSnapshot(
+      const std::string& key);
 
     bool snapshotExists(const std::string& key);
 
@@ -37,9 +39,14 @@ class SnapshotRegistry
     void clear();
 
   private:
-    std::unordered_map<std::string, faabric::util::SnapshotData> snapshotMap;
+    std::unordered_map<std::string,
+                       std::shared_ptr<faabric::util::SnapshotData>>
+      snapshotMap;
 
-    std::mutex snapshotsMx;
+    std::shared_mutex snapshotsMx;
+
+    int writeSnapshotToFd(const std::string& key,
+                          faabric::util::SnapshotData& data);
 
     void doTakeSnapshot(const std::string& key,
                         const faabric::util::SnapshotData& data,

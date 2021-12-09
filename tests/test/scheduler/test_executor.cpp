@@ -29,237 +29,221 @@ namespace tests {
 std::atomic<int> restoreCount = 0;
 std::atomic<int> resetCount = 0;
 
-class TestExecutor final : public Executor
+TestExecutor::TestExecutor(faabric::Message& msg)
+  : Executor(msg)
+{}
+
+TestExecutor::~TestExecutor() = default;
+
+void TestExecutor::postFinish()
 {
-  public:
-    TestExecutor(faabric::Message& msg)
-      : Executor(msg)
-    {}
+    if (dummyMemory != nullptr) {
+        munmap(dummyMemory, dummyMemorySize);
+    }
+}
 
-    ~TestExecutor() {}
+void TestExecutor::reset(faabric::Message& msg)
+{
+    SPDLOG_DEBUG("Resetting TestExecutor");
+    resetCount += 1;
+}
 
-    uint8_t* dummyMemory = nullptr;
-    size_t dummyMemorySize = 0;
+void TestExecutor::restore(faabric::Message& msg)
+{
+    SPDLOG_DEBUG("Restoring TestExecutor");
+    restoreCount += 1;
 
-    void postFinish() override
-    {
-        if (dummyMemory != nullptr) {
-            munmap(dummyMemory, dummyMemorySize);
+    // Initialise the dummy memory and map to snapshot
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+    auto snap = reg.getSnapshot(msg.snapshotkey());
+
+    // Note this has to be mmapped to be page-aligned
+    dummyMemorySize = snap->size;
+    dummyMemory = (uint8_t*)mmap(
+      nullptr, snap->size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+    reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
+}
+
+faabric::util::SnapshotData TestExecutor::snapshot()
+{
+    faabric::util::SnapshotData snap;
+    snap.data = dummyMemory;
+    snap.size = dummyMemorySize;
+    return snap;
+}
+
+int32_t TestExecutor::executeTask(
+  int threadPoolIdx,
+  int msgIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> reqOrig)
+{
+    faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
+    std::string funcStr = faabric::util::funcToString(msg, true);
+
+    bool isThread = reqOrig->type() == faabric::BatchExecuteRequest::THREADS;
+
+    // Check we're being asked to execute the function we've bound to
+    assert(msg.user() == boundMessage.user());
+    assert(msg.function() == boundMessage.function());
+
+    // Custom thread-check function
+    if (msg.function() == "thread-check" && !isThread) {
+        msg.set_outputdata(
+          fmt::format("Threaded function {} executed successfully", msg.id()));
+
+        // Set up the request
+        int nThreads = 5;
+        if (!msg.inputdata().empty()) {
+            nThreads = std::stoi(msg.inputdata());
         }
-    }
 
-    void reset(faabric::Message& msg) override
-    {
-        SPDLOG_DEBUG("Resetting TestExecutor");
-        resetCount += 1;
-    }
+        SPDLOG_DEBUG("TestExecutor spawning {} threads", nThreads);
 
-    void restore(faabric::Message& msg) override
-    {
-        SPDLOG_DEBUG("Restoring TestExecutor");
-        restoreCount += 1;
+        std::shared_ptr<faabric::BatchExecuteRequest> chainedReq =
+          faabric::util::batchExecFactory("dummy", "thread-check", nThreads);
+        chainedReq->set_type(faabric::BatchExecuteRequest::THREADS);
 
-        // Initialise the dummy memory and map to snapshot
+        // Create a dummy snapshot
+        std::string snapKey = funcStr + "-snap";
         faabric::snapshot::SnapshotRegistry& reg =
           faabric::snapshot::getSnapshotRegistry();
-        faabric::util::SnapshotData& snap = reg.getSnapshot(msg.snapshotkey());
+        faabric::util::SnapshotData snap;
+        snap.size = 10;
+        auto snapDataAllocation = std::make_unique<uint8_t[]>(snap.size);
+        snap.data = snapDataAllocation.get();
 
-        // Note this has to be mmapped to be page-aligned
-        dummyMemorySize = snap.size;
-        dummyMemory = (uint8_t*)mmap(
-          nullptr, snap.size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        reg.takeSnapshot(snapKey, snap);
 
-        reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
-    }
+        for (int i = 0; i < chainedReq->messages_size(); i++) {
+            faabric::Message& m = chainedReq->mutable_messages()->at(i);
+            m.set_snapshotkey(snapKey);
+            m.set_appidx(i + 1);
+        }
 
-    faabric::util::SnapshotData& snapshot() override
-    {
-        _snapshot.data = dummyMemory;
-        _snapshot.size = dummyMemorySize;
-        return _snapshot;
-    }
+        // Call the threads
+        Scheduler& sch = getScheduler();
+        sch.callFunctions(chainedReq);
 
-    int32_t executeTask(
-      int threadPoolIdx,
-      int msgIdx,
-      std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override
-    {
+        // Await the results
+        for (const auto& msg : chainedReq->messages()) {
+            uint32_t mid = msg.id();
+            int threadRes = sch.awaitThreadResult(mid);
 
-        faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
-
-        std::string funcStr = faabric::util::funcToString(msg, true);
-
-        bool isThread =
-          reqOrig->type() == faabric::BatchExecuteRequest::THREADS;
-
-        // Check we're being asked to execute the function we've bound to
-        assert(msg.user() == boundMessage.user());
-        assert(msg.function() == boundMessage.function());
-
-        // Custom thread-check function
-        if (msg.function() == "thread-check" && !isThread) {
-            msg.set_outputdata(fmt::format(
-              "Threaded function {} executed successfully", msg.id()));
-
-            // Set up the request
-            int nThreads = 5;
-            if (!msg.inputdata().empty()) {
-                nThreads = std::stoi(msg.inputdata());
+            if (threadRes != mid / 100) {
+                SPDLOG_ERROR("TestExecutor got invalid thread result, {} != {}",
+                             threadRes,
+                             mid / 100);
+                return 1;
             }
-
-            SPDLOG_DEBUG("TestExecutor spawning {} threads", nThreads);
-
-            std::shared_ptr<faabric::BatchExecuteRequest> chainedReq =
-              faabric::util::batchExecFactory(
-                "dummy", "thread-check", nThreads);
-            chainedReq->set_type(faabric::BatchExecuteRequest::THREADS);
-
-            // Create a dummy snapshot
-            std::string snapKey = funcStr + "-snap";
-            faabric::snapshot::SnapshotRegistry& reg =
-              faabric::snapshot::getSnapshotRegistry();
-            faabric::util::SnapshotData snap;
-            snap.data = new uint8_t[10];
-            snap.size = 10;
-
-            reg.takeSnapshot(snapKey, snap);
-
-            for (int i = 0; i < chainedReq->messages_size(); i++) {
-                faabric::Message& m = chainedReq->mutable_messages()->at(i);
-                m.set_snapshotkey(snapKey);
-                m.set_appidx(i + 1);
-            }
-
-            // Call the threads
-            Scheduler& sch = getScheduler();
-            sch.callFunctions(chainedReq);
-
-            // Await the results
-            for (const auto& msg : chainedReq->messages()) {
-                uint32_t mid = msg.id();
-                int threadRes = sch.awaitThreadResult(mid);
-
-                if (threadRes != mid / 100) {
-                    SPDLOG_ERROR(
-                      "TestExecutor got invalid thread result, {} != {}",
-                      threadRes,
-                      mid / 100);
-                    return 1;
-                }
-            }
-
-            // Delete the snapshot
-            delete[] snap.data;
-            reg.deleteSnapshot(snapKey);
-
-            SPDLOG_TRACE("TestExecutor got {} thread results",
-                         chainedReq->messages_size());
-            return 0;
         }
 
-        if (msg.function() == "ret-one") {
-            return 1;
-        }
+        // Delete the snapshot
+        reg.deleteSnapshot(snapKey);
 
-        if (msg.function() == "chain-check-a") {
-            if (msg.inputdata() == "chained") {
-                // Set up output data for the chained call
-                msg.set_outputdata("chain-check-a successful");
-            } else {
-                // Chain this function and another
-                std::shared_ptr<faabric::BatchExecuteRequest> reqThis =
-                  faabric::util::batchExecFactory("dummy", "chain-check-a", 1);
-                reqThis->mutable_messages()->at(0).set_inputdata("chained");
-
-                std::shared_ptr<faabric::BatchExecuteRequest> reqOther =
-                  faabric::util::batchExecFactory("dummy", "chain-check-b", 1);
-
-                Scheduler& sch = getScheduler();
-                sch.callFunctions(reqThis);
-                sch.callFunctions(reqOther);
-
-                for (const auto& m : reqThis->messages()) {
-                    faabric::Message res =
-                      sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
-                    assert(res.outputdata() == "chain-check-a successful");
-                }
-
-                for (const auto& m : reqOther->messages()) {
-                    faabric::Message res =
-                      sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
-                    assert(res.outputdata() == "chain-check-b successful");
-                }
-
-                msg.set_outputdata("All chain checks successful");
-            }
-            return 0;
-        }
-
-        if (msg.function() == "chain-check-b") {
-            msg.set_outputdata("chain-check-b successful");
-            return 0;
-        }
-
-        if (msg.function() == "snap-check") {
-            // Modify a page of the dummy memory
-            uint8_t pageIdx = threadPoolIdx;
-
-            faabric::util::SnapshotData& snapData =
-              faabric::snapshot::getSnapshotRegistry().getSnapshot(
-                msg.snapshotkey());
-
-            // Avoid writing a zero here as the memory is already zeroed hence
-            // it's not a change
-            std::vector<uint8_t> data = { (uint8_t)(pageIdx + 1),
-                                          (uint8_t)(pageIdx + 2),
-                                          (uint8_t)(pageIdx + 3) };
-
-            // Set up a merge region that should catch the diff
-            size_t offset = (pageIdx * faabric::util::HOST_PAGE_SIZE);
-            snapData.addMergeRegion(offset,
-                                    data.size() + 10,
-                                    SnapshotDataType::Raw,
-                                    SnapshotMergeOperation::Overwrite);
-
-            SPDLOG_DEBUG("TestExecutor modifying page {} of memory ({}-{})",
-                         pageIdx,
-                         offset,
-                         offset + data.size());
-
-            uint8_t* offsetPtr = dummyMemory + offset;
-            std::memcpy(offsetPtr, data.data(), data.size());
-        }
-
-        if (msg.function() == "echo") {
-            msg.set_outputdata(msg.inputdata());
-            return 0;
-        }
-
-        if (msg.function() == "error") {
-            throw std::runtime_error("This is a test error");
-        }
-
-        if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
-            SPDLOG_DEBUG("TestExecutor executing simple thread {}", msg.id());
-            return msg.id() / 100;
-        }
-
-        // Default
-        msg.set_outputdata(
-          fmt::format("Simple function {} executed", msg.id()));
-
+        SPDLOG_TRACE("TestExecutor got {} thread results",
+                     chainedReq->messages_size());
         return 0;
     }
-};
 
-class TestExecutorFactory : public ExecutorFactory
-{
-  protected:
-    std::shared_ptr<Executor> createExecutor(faabric::Message& msg) override
-    {
-        return std::make_shared<TestExecutor>(msg);
+    if (msg.function() == "ret-one") {
+        return 1;
     }
-};
+
+    if (msg.function() == "chain-check-a") {
+        if (msg.inputdata() == "chained") {
+            // Set up output data for the chained call
+            msg.set_outputdata("chain-check-a successful");
+        } else {
+            // Chain this function and another
+            std::shared_ptr<faabric::BatchExecuteRequest> reqThis =
+              faabric::util::batchExecFactory("dummy", "chain-check-a", 1);
+            reqThis->mutable_messages()->at(0).set_inputdata("chained");
+
+            std::shared_ptr<faabric::BatchExecuteRequest> reqOther =
+              faabric::util::batchExecFactory("dummy", "chain-check-b", 1);
+
+            Scheduler& sch = getScheduler();
+            sch.callFunctions(reqThis);
+            sch.callFunctions(reqOther);
+
+            for (const auto& m : reqThis->messages()) {
+                faabric::Message res =
+                  sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+                assert(res.outputdata() == "chain-check-a successful");
+            }
+
+            for (const auto& m : reqOther->messages()) {
+                faabric::Message res =
+                  sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+                assert(res.outputdata() == "chain-check-b successful");
+            }
+
+            msg.set_outputdata("All chain checks successful");
+        }
+        return 0;
+    }
+
+    if (msg.function() == "chain-check-b") {
+        msg.set_outputdata("chain-check-b successful");
+        return 0;
+    }
+
+    if (msg.function() == "snap-check") {
+        // Modify a page of the dummy memory
+        uint8_t pageIdx = threadPoolIdx;
+
+        auto snapData = faabric::snapshot::getSnapshotRegistry().getSnapshot(
+          msg.snapshotkey());
+
+        // Avoid writing a zero here as the memory is already zeroed hence
+        // it's not a change
+        std::vector<uint8_t> data = { (uint8_t)(pageIdx + 1),
+                                      (uint8_t)(pageIdx + 2),
+                                      (uint8_t)(pageIdx + 3) };
+
+        // Set up a merge region that should catch the diff
+        size_t offset = (pageIdx * faabric::util::HOST_PAGE_SIZE);
+        snapData->addMergeRegion(offset,
+                                 data.size() + 10,
+                                 SnapshotDataType::Raw,
+                                 SnapshotMergeOperation::Overwrite);
+
+        SPDLOG_DEBUG("TestExecutor modifying page {} of memory ({}-{})",
+                     pageIdx,
+                     offset,
+                     offset + data.size());
+
+        uint8_t* offsetPtr = dummyMemory + offset;
+        std::memcpy(offsetPtr, data.data(), data.size());
+    }
+
+    if (msg.function() == "echo") {
+        msg.set_outputdata(msg.inputdata());
+        return 0;
+    }
+
+    if (msg.function() == "error") {
+        throw std::runtime_error("This is a test error");
+    }
+
+    if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
+        SPDLOG_DEBUG("TestExecutor executing simple thread {}", msg.id());
+        return msg.id() / 100;
+    }
+
+    // Default
+    msg.set_outputdata(fmt::format("Simple function {} executed", msg.id()));
+
+    return 0;
+}
+
+std::shared_ptr<Executor> TestExecutorFactory::createExecutor(
+  faabric::Message& msg)
+{
+    return std::make_shared<TestExecutor>(msg);
+}
 
 class TestExecutorFixture
   : public SchedulerTestFixture
@@ -296,8 +280,14 @@ class TestExecutorFixture
     {
         conf.overrideCpuCount = 10;
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
+        faabric::util::SchedulingTopologyHint topologyHint =
+          faabric::util::SchedulingTopologyHint::NORMAL;
 
-        return sch.callFunctions(req, forceLocal).hosts;
+        if (forceLocal) {
+            topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+        }
+
+        return sch.callFunctions(req, topologyHint).hosts;
     }
 };
 
@@ -322,6 +312,35 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Check that restore has not been called
     REQUIRE(restoreCount == 0);
+}
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test executing function repeatedly and flushing",
+                 "[executor]")
+{
+    // Set the bound timeout to something short so the test runs fast
+    conf.boundTimeout = 100;
+
+    int numRepeats = 20;
+    for (int i = 0; i < numRepeats; i++) {
+        std::shared_ptr<BatchExecuteRequest> req =
+          faabric::util::batchExecFactory("dummy", "simple", 1);
+        uint32_t msgId = req->messages().at(0).id();
+
+        executeWithTestExecutor(req, false);
+        faabric::Message result =
+          sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
+        std::string expected =
+          fmt::format("Simple function {} executed", msgId);
+        REQUIRE(result.outputdata() == expected);
+
+        // We sleep for the same timeout threads have, to force a race condition
+        // between the scheduler's flush and the thread's own cleanup timeout
+        SLEEP_MS(conf.boundTimeout);
+
+        // Flush
+        sch.flushLocally();
+    }
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -552,9 +571,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
     // Execute all the functions
-    sch.callFunctions(reqA, false);
-    sch.callFunctions(reqB, false);
-    sch.callFunctions(reqC, false);
+    sch.callFunctions(reqA);
+    sch.callFunctions(reqB);
+    sch.callFunctions(reqC);
 
     faabric::Message resA1 =
       sch.getFunctionResult(reqA->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
@@ -750,17 +769,18 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(faabric::snapshot::getSnapshotDiffPushes().empty());
 
     // Check that we're not registering any dirty pages on the snapshot
-    faabric::util::SnapshotData& snap = reg.getSnapshot(snapshotKey);
-    REQUIRE(snap.getDirtyRegions().empty());
+    auto snap = reg.getSnapshot(snapshotKey);
+    REQUIRE(snap->getDirtyRegions().empty());
 
     // Now reset snapshot pushes of all kinds
     faabric::snapshot::clearMockSnapshotRequests();
 
     // Make an edit to the snapshot memory and get the expected diffs
-    snap.data[0] = 9;
-    snap.data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
+    snap->data[0] = 9;
+    snap->data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-      snap.getDirtyRegions();
+    snap->getDirtyRegions();
+
     REQUIRE(expectedDiffs.size() == 2);
 
     // Set up another function
@@ -839,7 +859,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Call functions and force to execute locally
-    sch.callFunctions(req, true);
+    sch.callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
 
     // As we're faking a non-master execution results will be sent back to
     // the fake master so we can't wait on them, thus have to sleep

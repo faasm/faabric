@@ -201,8 +201,10 @@ std::string messageToJson(const faabric::Message& msg)
             }
 
             std::string out = ss.str();
+            // As out is a temporary, pass the allocator to Value() to make a
+            // copy
             d.AddMember(
-              "exec_graph_detail", Value(out.c_str(), out.size()).Move(), a);
+              "exec_graph_detail", Value(out.c_str(), out.size(), a).Move(), a);
         }
 
         if (msg.intexecgraphdetails_size() > 0) {
@@ -218,11 +220,11 @@ std::string messageToJson(const faabric::Message& msg)
             }
 
             std::string out = ss.str();
-
-            // Need to create a value (instead of move) as the string's scope
-            // is smaller than the document's one
-            Value value = Value(out.c_str(), out.size(), a);
-            d.AddMember("int_exec_graph_detail", value, a);
+            // As out is a temporary, pass the allocator to Value() to make a
+            // copy
+            d.AddMember("int_exec_graph_detail",
+                        Value(out.c_str(), out.size(), a).Move(),
+                        a);
         }
     }
 
@@ -325,7 +327,7 @@ std::map<std::string, std::string> getStringStringMapFromJson(
       std::string(valuePtr, valuePtr + it->value.GetStringLength()));
     std::string keyVal;
     while (std::getline(ss, keyVal, ',')) {
-        auto pos = keyVal.find(":");
+        auto pos = keyVal.find(':');
         std::string key = keyVal.substr(0, pos);
         map[key] = keyVal.erase(0, pos + sizeof(char));
     }
@@ -348,7 +350,7 @@ std::map<std::string, int> getStringIntMapFromJson(Document& doc,
       std::string(valuePtr, valuePtr + it->value.GetStringLength()));
     std::string keyVal;
     while (std::getline(ss, keyVal, ',')) {
-        auto pos = keyVal.find(":");
+        auto pos = keyVal.find(':');
         std::string key = keyVal.substr(0, pos);
         int val = std::stoi(keyVal.erase(0, pos + sizeof(char)));
         map[key] = val;

@@ -13,6 +13,9 @@ using namespace faabric::transport;
 
 namespace tests {
 
+// These tests are unstable under ThreadSanitizer
+#if !(defined(__has_feature) && __has_feature(thread_sanitizer))
+
 TEST_CASE_METHOD(SchedulerTestFixture,
                  "Test send/recv one message",
                  "[transport]")
@@ -220,4 +223,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         REQUIRE_THROWS(SyncSendMessageEndpoint(LOCALHOST, TEST_PORT + 10, -1));
     }
 }
+
+#endif
+
 }
