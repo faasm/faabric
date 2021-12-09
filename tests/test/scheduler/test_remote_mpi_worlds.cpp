@@ -412,6 +412,79 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
 }
 
 TEST_CASE_METHOD(RemoteCollectiveTestFixture,
+                 "Test reduce across hosts multiple times",
+                 "[mpi]")
+{
+    MpiWorld& thisWorld = setUpThisWorld();
+
+    std::vector<int> messageData = { 0, 1, 2 };
+    int recvRank = 0;
+    int numRepeats = 10;
+
+    std::thread otherWorldThread([this, recvRank, numRepeats, &messageData] {
+        otherWorld.initialiseFromMsg(msg);
+
+        std::vector<int> sendRanksInOrder = { 4, 5, 3 };
+        for (int i = 0; i < numRepeats; i++) {
+            for (int r : sendRanksInOrder) {
+                otherWorld.reduce(r,
+                                  recvRank,
+                                  BYTES(messageData.data()),
+                                  nullptr,
+                                  MPI_INT,
+                                  messageData.size(),
+                                  MPI_SUM);
+            }
+        }
+
+        // Give the other host time to receive the broadcast
+        testLatch->wait();
+        otherWorld.destroy();
+    });
+
+    std::vector<int> actual = messageData;
+    std::vector<int> sendRanksInOrder = { 1, 2, 0 };
+    for (int i = 0; i < numRepeats; i++) {
+        for (int r : sendRanksInOrder) {
+            if (r != recvRank) {
+                thisWorld.reduce(r,
+                                 recvRank,
+                                 BYTES(messageData.data()),
+                                 nullptr,
+                                 MPI_INT,
+                                 messageData.size(),
+                                 MPI_SUM);
+            } else {
+                thisWorld.reduce(r,
+                                 recvRank,
+                                 BYTES(actual.data()),
+                                 BYTES(actual.data()),
+                                 MPI_INT,
+                                 messageData.size(),
+                                 MPI_SUM);
+            }
+        }
+    }
+
+    // The world size is hardcoded in the test fixture
+    int worldSize = 6;
+    std::vector<int> expected(messageData.size());
+    for (int i = 0; i < messageData.size(); i++) {
+        expected.at(i) = messageData.at(i) * worldSize +
+                         messageData.at(i) * (worldSize - 1) * (numRepeats - 1);
+    }
+    REQUIRE(actual == expected);
+
+    // Clean up
+    testLatch->wait();
+    if (otherWorldThread.joinable()) {
+        otherWorldThread.join();
+    }
+
+    thisWorld.destroy();
+}
+
+TEST_CASE_METHOD(RemoteCollectiveTestFixture,
                  "Test scatter across hosts",
                  "[mpi]")
 {

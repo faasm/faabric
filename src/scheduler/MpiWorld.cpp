@@ -1106,6 +1106,12 @@ void MpiWorld::reduce(int sendRank,
         // the receiver is not co-located with us, do a reduce with the data of
         // all our local ranks, and then send the result to the receiver
         if (getHostForRank(recvRank) != thisHost) {
+            // In this step we reduce our local ranks data. It is important
+            // that we do so in a copy of the send buffer, as the application
+            // does not expect said buffer's contents to be modified.
+            auto sendBufferCopy = std::make_unique<uint8_t[]>(bufferSize);
+            memcpy(sendBufferCopy.get(), sendBuffer, bufferSize);
+
             for (const int r : localRanks) {
                 if (r == sendRank) {
                     continue;
@@ -1120,21 +1126,28 @@ void MpiWorld::reduce(int sendRank,
                      nullptr,
                      faabric::MPIMessage::REDUCE);
 
-                // Note that we accumulate the reuce operation on the send
-                // buffer, not the receive one, as we later need to send all
-                // the reduced data (including ours) to the root rank
-                op_reduce(
-                  operation, datatype, count, rankData.get(), sendBuffer);
+                op_reduce(operation,
+                          datatype,
+                          count,
+                          rankData.get(),
+                          sendBufferCopy.get());
             }
-        }
 
-        // Send to the receiver rank
-        send(sendRank,
-             recvRank,
-             sendBuffer,
-             datatype,
-             count,
-             faabric::MPIMessage::REDUCE);
+            send(sendRank,
+                 recvRank,
+                 sendBufferCopy.get(),
+                 datatype,
+                 count,
+                 faabric::MPIMessage::REDUCE);
+        } else {
+            // Send to the receiver rank
+            send(sendRank,
+                 recvRank,
+                 sendBuffer,
+                 datatype,
+                 count,
+                 faabric::MPIMessage::REDUCE);
+        }
     } else {
         // If we are neither the receiver of the reduce nor a local leader, we
         // send our data for reduction either to our local leader or the
