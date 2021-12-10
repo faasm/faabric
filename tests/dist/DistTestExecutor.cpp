@@ -52,13 +52,12 @@ int32_t DistTestExecutor::executeTask(
     return callback(this, threadPoolIdx, msgIdx, req);
 }
 
-faabric::util::SnapshotData DistTestExecutor::snapshot()
+faabric::util::SnapshotData& DistTestExecutor::snapshot()
 {
-    faabric::util::SnapshotData snap;
-    snap.data = snapshotMemory;
-    snap.size = snapshotSize;
+    _snapshot.data = snapshotMemory;
+    _snapshot.size = snapshotSize;
 
-    return snap;
+    return _snapshot;
 }
 
 void DistTestExecutor::restore(faabric::Message& msg)

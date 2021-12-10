@@ -1,5 +1,6 @@
 #pragma once
 
+#include "faabric/util/memory.h"
 #include <map>
 #include <memory>
 #include <mutex>
@@ -76,18 +77,34 @@ class SnapshotMergeRegion
 class SnapshotData
 {
   public:
-    uint8_t* data = nullptr;
     size_t size = 0;
+    size_t maxSize = 0;
 
     SnapshotData() = default;
 
-    SnapshotData(const SnapshotData&);
+    explicit SnapshotData(size_t sizeIn);
+
+    SnapshotData(size_t sizeIn, size_t maxSizeIn);
+
+    SnapshotData(uint8_t* dataIn, size_t sizeIn, size_t maxSizeIn);
+
+    SnapshotData(const SnapshotData&) = delete;
 
     SnapshotData& operator=(const SnapshotData&) = delete;
 
     ~SnapshotData();
 
     bool isRestorable();
+
+    void makeRestorable(const std::string& fdLabel);
+
+    void setSnapshotSize(size_t newSize);
+
+    void copyInData(uint8_t* buffer, size_t bufferSize, uint32_t offset = 0);
+
+    const uint8_t* getDataPtr(uint32_t offset = 0);
+
+    uint8_t* getMutableDataPtr(uint32_t offset = 0);
 
     std::vector<SnapshotDiff> getDirtyRegions();
 
@@ -102,11 +119,7 @@ class SnapshotData
 
     void clearMergeRegions();
 
-    void setSnapshotSize(size_t newSize);
-
     void updateFd();
-
-    void writeToFd(const std::string& fdLabel);
 
     void mapToMemory(uint8_t* target);
 
@@ -117,6 +130,10 @@ class SnapshotData
     size_t fdSize = 0;
 
     std::shared_mutex snapMx;
+
+    bool owner = false;
+    uint8_t* rawData = nullptr;
+    OwnedMmapRegion ownedData = nullptr;
 
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets

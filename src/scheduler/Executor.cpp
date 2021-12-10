@@ -408,7 +408,7 @@ void Executor::postFinish() {}
 
 void Executor::reset(faabric::Message& msg) {}
 
-faabric::util::SnapshotData& Executor::snapshot()
+std::shared_ptr<faabric::util::SnapshotData> Executor::snapshot()
 {
     SPDLOG_WARN("Executor has not implemented snapshot method");
     return _snapshot;

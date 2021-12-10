@@ -83,25 +83,12 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
       faabric::snapshot::getSnapshotRegistry();
 
     // Set up the snapshot
-    faabric::util::SnapshotData snap;
-    snap.size = r->contents()->size();
+    size_t snapSize = r->contents()->size();
+    auto d =
+      std::make_shared<faabric::util::SnapshotData>(snapSize, r->maxSize());
+    d->copyInData((uint8_t*)r->contents()->Data(), snapSize);
 
-    if (r->maxSize() > 0) {
-        // Allocate virtual memory big enough for the max size if provided
-        snap.data = faabric::util::allocateVirtualMemory(r->maxSize());
-
-        // Claim just the snapshot region
-        faabric::util::claimVirtualMemory(snap.data, snap.size);
-    } else {
-        // Normal provisioning of just snapshot region
-        snap.data = faabric::util::allocatePrivateMemory(snap.size);
-    }
-
-    // TODO - somehow avoid this copy?
-    std::memcpy(snap.data, r->contents()->Data(), snap.size);
-
-    // TODO - avoid a further copy in here when setting up fd
-    reg.takeSnapshot(r->key()->str(), snap, true);
+    reg.registerSnapshot(r->key()->str(), d);
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -147,21 +134,11 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     for (const auto* chunk : *r->chunks()) {
         maxSize =
           std::max<uint32_t>(chunk->offset() + chunk->data()->size(), maxSize);
-    }
-
-    if (maxSize > snap->size) {
-        SPDLOG_DEBUG("Expanding snapshot {} to accommodate diffs ({} > {})",
-                     r->key()->str(),
-                     maxSize,
-                     snap->size);
-
-        reg.changeSnapshotSize(r->key()->str(), maxSize);
+        snap->setSnapshotSize(maxSize);
     }
 
     // Iterate through the chunks passed in the request
     for (const auto* chunk : *r->chunks()) {
-        uint8_t* dest = snap->data + chunk->offset();
-
         SPDLOG_TRACE("Applying snapshot diff to {} at {}-{}",
                      r->key()->str(),
                      chunk->offset(),
@@ -171,8 +148,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
             case (faabric::util::SnapshotDataType::Raw): {
                 switch (chunk->mergeOp()) {
                     case (faabric::util::SnapshotMergeOperation::Overwrite): {
-                        std::memcpy(
-                          dest, chunk->data()->data(), chunk->data()->size());
+                        snap->copyInData((uint8_t*)chunk->data()->data(),
+                                         chunk->data()->size(),
+                                         chunk->offset());
                         break;
                     }
                     default: {
@@ -185,28 +163,31 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                 break;
             }
             case (faabric::util::SnapshotDataType::Int): {
-                const auto* value =
+                const auto* diffValue =
                   reinterpret_cast<const int32_t*>(chunk->data()->data());
-                auto* destValue = reinterpret_cast<int32_t*>(dest);
+                const int32_t* original = reinterpret_cast<const int32_t*>(
+                  snap->getDataPtr(chunk->offset()));
+
+                int32_t finalValue = 0;
                 switch (chunk->mergeOp()) {
                     case (faabric::util::SnapshotMergeOperation::Sum): {
-                        *destValue += *value;
+                        finalValue = *original + *diffValue;
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Subtract): {
-                        *destValue -= *value;
+                        finalValue = *original - *diffValue;
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Product): {
-                        *destValue *= *value;
+                        finalValue = *original * *diffValue;
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Min): {
-                        *destValue = std::min(*destValue, *value);
+                        finalValue = std::min(*original, *diffValue);
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Max): {
-                        *destValue = std::max(*destValue, *value);
+                        finalValue = std::max(*original, *diffValue);
                         break;
                     }
                     default: {
@@ -216,6 +197,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                           "Unsupported int merge operation");
                     }
                 }
+
+                snap->copyInData(
+                  BYTES(&finalValue), sizeof(int32_t), chunk->offset());
                 break;
             }
             default: {
@@ -227,11 +211,6 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
         // Make changes visible to other threads
         std::atomic_thread_fence(std::memory_order_release);
         this->diffsAppliedCounter.fetch_add(1, std::memory_order_acq_rel);
-    }
-
-    // Update snapshot
-    if (maxSize > snap->size) {
-        snap->updateFd();
     }
 
     // Unlock group if exists

@@ -222,17 +222,14 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
 
     // Set up a dummy snapshot if necessary
-    faabric::util::SnapshotData snapshot;
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
     std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
-        snapshot.size = 1234;
-        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
-        snapshot.data = snapshotDataAllocation.get();
-
-        snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
+        snapshotDataAllocation = std::make_unique<uint8_t[]>(1234);
+        snapRegistry.registerSnapshot(
+          expectedSnapshot, snapshotDataAllocation.get(), 1234);
     }
 
     // Mock everything
@@ -302,10 +299,13 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         REQUIRE(snapshotPushes.empty());
     } else {
         REQUIRE(snapshotPushes.size() == 1);
+
+        auto snapshot = snapRegistry.getSnapshot(expectedSnapshot);
+
         auto pushedSnapshot = snapshotPushes.at(0);
         REQUIRE(pushedSnapshot.first == otherHost);
-        REQUIRE(pushedSnapshot.second.size == snapshot.size);
-        REQUIRE(pushedSnapshot.second.data == snapshot.data);
+        REQUIRE(pushedSnapshot.second.size == snapshot->size);
+        REQUIRE(pushedSnapshot.second.data == snapshot->data);
     }
 
     // Check the executor counts on this host
@@ -418,16 +418,15 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
 
     // Set up snapshot if necessary
-    faabric::util::SnapshotData snapshot;
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
+    size_t snapSize = 1234;
     std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
-        snapshot.size = 1234;
-        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
-        snapshot.data = snapshotDataAllocation.get();
-        snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
+        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapSize);
+        snapRegistry.registerSnapshot(
+          expectedSnapshot, snapshotDataAllocation.get(), snapSize);
     }
 
     // Set up this host with very low resources

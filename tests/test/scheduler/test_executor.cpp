@@ -108,12 +108,10 @@ int32_t TestExecutor::executeTask(
         std::string snapKey = funcStr + "-snap";
         faabric::snapshot::SnapshotRegistry& reg =
           faabric::snapshot::getSnapshotRegistry();
-        faabric::util::SnapshotData snap;
-        snap.size = 10;
-        auto snapDataAllocation = std::make_unique<uint8_t[]>(snap.size);
-        snap.data = snapDataAllocation.get();
+        size_t snapSize = 10;
+        auto snapDataAllocation = std::make_unique<uint8_t[]>(snapSize);
 
-        reg.takeSnapshot(snapKey, snap);
+        reg.registerSnapshot(snapKey, snapDataAllocation.get(), snapSize);
 
         for (int i = 0; i < chainedReq->messages_size(); i++) {
             faabric::Message& m = chainedReq->mutable_messages()->at(i);
@@ -257,21 +255,21 @@ class TestExecutorFixture
           std::make_shared<TestExecutorFactory>();
         setExecutorFactory(fac);
 
-        setUpSnapshot(dummySnap, snapshotKey, snapshotNPages, true);
+        dummySnap = setUpSnapshot(snapshotKey, snapshotNPages, true);
         faabric::util::resetDirtyTracking();
 
         restoreCount = 0;
         resetCount = 0;
     }
 
-    ~TestExecutorFixture() { munmap(snapshotData, snapshotSize); }
+    ~TestExecutorFixture() {}
 
   protected:
     std::string snapshotKey = "foobar";
-    uint8_t* snapshotData = nullptr;
     int snapshotNPages = 10;
     size_t snapshotSize = snapshotNPages * faabric::util::HOST_PAGE_SIZE;
-    faabric::util::SnapshotData dummySnap;
+
+    std::shared_ptr<faabric::util::SnapshotData> dummySnap;
 
     std::vector<std::string> executeWithTestExecutor(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -763,7 +761,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Check snapshot has been pushed
     auto pushes = faabric::snapshot::getSnapshotPushes();
     REQUIRE(pushes.at(0).first == otherHost);
-    REQUIRE(pushes.at(0).second.size == snapshotSize);
+    REQUIRE(pushes.at(0).second->size == snapshotSize);
 
     REQUIRE(faabric::snapshot::getSnapshotDiffPushes().empty());
 

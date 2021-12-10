@@ -37,12 +37,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     auto* snapshotData = (uint8_t*)mmap(
       nullptr, snapshotSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
-    faabric::util::SnapshotData snap;
-    snap.data = snapshotData;
-    snap.size = snapshotSize;
-
     std::string snapKey = std::to_string(faabric::util::generateGid());
-    reg.takeSnapshot(snapKey, snap);
+    reg.registerSnapshot(snapKey, snapshotData, snapshotSize);
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     firstMsg.set_snapshotkey(snapKey);

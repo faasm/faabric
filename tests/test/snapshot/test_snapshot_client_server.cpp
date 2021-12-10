@@ -145,13 +145,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     size_t initialSnapSize = 5 * HOST_PAGE_SIZE;
     size_t expandedSnapSize = 10 * HOST_PAGE_SIZE;
 
-    faabric::util::SnapshotData snap;
-    snap.size = initialSnapSize;
-    snap.data = faabric::util::allocateVirtualMemory(expandedSnapSize);
-    faabric::util::claimVirtualMemory(snap.data, initialSnapSize);
+    OwnedMmapRegion snapData =
+      faabric::util::allocateVirtualMemory(expandedSnapSize);
+    faabric::util::claimVirtualMemory(snapData.get(), initialSnapSize);
 
     // Set up the snapshot
-    reg.takeSnapshot(snapKey, snap, true);
+    reg.registerSnapshot(snapKey, snapData.get(), initialSnapSize, true);
 
     // Set up some diffs for the initial request
     uint32_t offsetA1 = 5;
@@ -213,10 +212,9 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(server.diffsApplied() == 5);
 
     // Check changes have been applied
-    checkDiffsApplied(snap.data, diffsA);
-    checkDiffsApplied(snap.data, diffsB);
-
-    deallocateMemory(snap.data, expandedSnapSize);
+    auto snap = reg.getSnapshot(snapKey);
+    checkDiffsApplied(snap->data, diffsA);
+    checkDiffsApplied(snap->data, diffsB);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
@@ -227,12 +225,9 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::string snapKey = std::to_string(generateGid());
     int snapSize = 5 * HOST_PAGE_SIZE;
 
-    faabric::util::SnapshotData snap;
-    uint8_t* data = faabric::util::allocateSharedMemory(snapSize);
-    snap.size = snapSize;
-    snap.data = data;
+    OwnedMmapRegion data = faabric::util::allocateSharedMemory(snapSize);
 
-    reg.takeSnapshot(snapKey, snap, true);
+    reg.registerSnapshot(snapKey, data.get(), snapSize, true);
 
     // Set up a couple of ints in the snapshot
     int offsetA1 = 8;
@@ -240,8 +235,9 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int baseA1 = 25;
     int baseA2 = 60;
 
-    int* basePtrA1 = (int*)(snap.data + offsetA1);
-    int* basePtrA2 = (int*)(snap.data + offsetA2);
+    auto snap = reg.getSnapshot(snapKey);
+    int* basePtrA1 = (int*)(snap->data + offsetA1);
+    int* basePtrA2 = (int*)(snap->data + offsetA2);
     *basePtrA1 = baseA1;
     *basePtrA2 = baseA2;
 
@@ -283,7 +279,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
     REQUIRE(*basePtrA2 == baseA2 + diffIntA2);
 
-    deallocatePages(snap.data, 5);
+    deallocatePages(snap->data, 5);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
@@ -292,8 +288,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 {
     // Set up a snapshot
     std::string snapKey = std::to_string(generateGid());
-    SnapshotData snap;
-    setUpSnapshot(snap, snapKey, 5, false);
+    auto snap = setUpSnapshot(snapKey, 5, false);
 
     int offset = 8;
     std::vector<uint8_t> originalData;
@@ -381,7 +376,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     }
 
     // Put original data in place
-    std::memcpy(snap.data + offset, originalData.data(), originalData.size());
+    std::memcpy(snap->data + offset, originalData.data(), originalData.size());
 
     SnapshotDiff diff(SnapshotDataType::Raw,
                       SnapshotMergeOperation::Overwrite,
@@ -401,11 +396,11 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(server.diffsApplied() == originalDiffsApplied + 1);
 
     // Check data is as expected
-    std::vector<uint8_t> actualData(snap.data + offset,
-                                    snap.data + offset + expectedData.size());
+    std::vector<uint8_t> actualData(snap->data + offset,
+                                    snap->data + offset + expectedData.size());
     REQUIRE(actualData == expectedData);
 
-    deallocatePages(snap.data, 5);
+    deallocatePages(snap->data, 5);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,

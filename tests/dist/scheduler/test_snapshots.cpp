@@ -32,10 +32,7 @@ TEST_CASE_METHOD(DistTestsFixture,
       nullptr, snapSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
     // Set up snapshot
-    faabric::util::SnapshotData snap;
-    snap.data = snapMemory;
-    snap.size = snapSize;
-    reg.takeSnapshot(snapshotKey, snap);
+    reg.registerSnapshot(snapshotKey, snapMemory, snapSize);
 
     // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =

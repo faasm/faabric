@@ -1,3 +1,4 @@
+#include "faabric/util/snapshot.h"
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/func.h>
 #include <faabric/util/locks.h>
@@ -36,27 +37,26 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
     d->mapToMemory(target);
 }
 
-void SnapshotRegistry::takeSnapshotIfNotExists(
+void SnapshotRegistry::registerSnapshotIfNotExists(
   const std::string& key,
-  faabric::util::SnapshotData& data,
-  bool locallyRestorable)
+  std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    doTakeSnapshot(key, data, locallyRestorable, false);
+    doRegisterSnapshot(key, data, false);
 }
 
-void SnapshotRegistry::takeSnapshot(const std::string& key,
-                                    faabric::util::SnapshotData& data,
-                                    bool locallyRestorable)
+void SnapshotRegistry::registerSnapshot(
+  const std::string& key,
+  std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    doTakeSnapshot(key, data, locallyRestorable, true);
+    doRegisterSnapshot(key, data, true);
 }
 
-void SnapshotRegistry::doTakeSnapshot(const std::string& key,
-                                      const faabric::util::SnapshotData& data,
-                                      bool locallyRestorable,
-                                      bool overwrite)
+void SnapshotRegistry::doRegisterSnapshot(
+  const std::string& key,
+  std::shared_ptr<faabric::util::SnapshotData> data,
+  bool overwrite)
 {
-    if (data.size == 0) {
+    if (data->size == 0) {
         SPDLOG_ERROR("Cannot take snapshot {} of size zero", key);
         throw std::runtime_error("Taking snapshot size zero");
     }
@@ -68,21 +68,9 @@ void SnapshotRegistry::doTakeSnapshot(const std::string& key,
         return;
     }
 
-    SPDLOG_TRACE("Registering snapshot {} size {} (restorable={})",
-                 key,
-                 data.size,
-                 locallyRestorable);
+    SPDLOG_TRACE("Registering snapshot {} size {}", key, data->size);
 
-    // Note - we only preserve the snapshot in the in-memory file, and do not
-    // take ownership for the original data referenced in SnapshotData
-    auto sharedData =
-      std::make_shared<faabric::util::SnapshotData>(std::move(data));
-    snapshotMap[key] = sharedData;
-
-    // Write to fd to be locally restorable
-    if (locallyRestorable) {
-        sharedData->writeToFd(key);
-    }
+    snapshotMap[key] = data;
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)
@@ -94,13 +82,6 @@ void SnapshotRegistry::deleteSnapshot(const std::string& key)
     }
 
     snapshotMap.erase(key);
-}
-
-void SnapshotRegistry::changeSnapshotSize(const std::string& key,
-                                          size_t newSize)
-{
-    auto d = getSnapshot(key);
-    d->setSnapshotSize(newSize);
 }
 
 size_t SnapshotRegistry::getSnapshotCount()

@@ -29,7 +29,7 @@ class DistTestExecutor final : public faabric::scheduler::Executor
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override;
 
-    faabric::util::SnapshotData snapshot() override;
+    std::shared_ptr<faabric::util::SnapshotData> snapshot() override;
 
     uint8_t* snapshotMemory = nullptr;
     size_t snapshotSize = 0;

@@ -507,7 +507,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 c.pushSnapshotDiffs(
                   snapshotKey, firstMsg.groupid(), snapshotDiffs);
             } else {
-                c.pushSnapshot(snapshotKey, firstMsg.groupid(), *snapshotData);
+                c.pushSnapshot(snapshotKey, firstMsg.groupid(), snapshotData);
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }

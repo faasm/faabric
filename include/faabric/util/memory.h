@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -46,21 +48,22 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // Allocation
 // -------------------------
 
-void deallocateMemory(uint8_t* memory, size_t size);
+typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>>
+  OwnedMmapRegion;
 
-void deallocatePages(uint8_t* memory, int nPages);
+OwnedMmapRegion allocateSharedMemory(size_t size);
 
-uint8_t* allocateSharedMemory(size_t size);
+OwnedMmapRegion allocatePrivateMemory(size_t size);
 
-uint8_t* allocatePrivateMemory(size_t size);
-
-uint8_t* allocateVirtualMemory(size_t size);
+OwnedMmapRegion allocateVirtualMemory(size_t size);
 
 void claimVirtualMemory(uint8_t* start, size_t size);
 
 void mapMemory(uint8_t* target, size_t size, int fd);
 
-int writeMemoryToFd(uint8_t* source, size_t size, const std::string& fdLabel);
+int writeMemoryToFd(const uint8_t* source,
+                    size_t size,
+                    const std::string& fdLabel);
 
 void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* newData);
 }

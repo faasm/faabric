@@ -115,11 +115,7 @@ int handleFakeDiffsThreadedFunction(
         uint8_t* snapMemory = (uint8_t*)mmap(
           nullptr, snapSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
-        faabric::util::SnapshotData snap;
-        snap.data = snapMemory;
-        snap.size = snapSize;
-
-        reg.takeSnapshot(snapshotKey, snap);
+        reg.registerSnapshot(snapshotKey, snapMemory, snapSize);
 
         auto req =
           faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);

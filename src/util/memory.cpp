@@ -182,62 +182,36 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // Allocation
 // -------------------------
 
-uint8_t* allocateSharedMemory(size_t size)
+OwnedMmapRegion doAlloc(size_t size, int prot, int flags)
+{
+    auto deleter = [size](uint8_t* u) { munmap(u, size); };
+    OwnedMmapRegion mem(
+        (uint8_t*)::mmap(nullptr, size, prot, flags, -1, 0), deleter);
+    return mem;
+}
+
+OwnedMmapRegion allocateSharedMemory(size_t size)
 {
     if (size < HOST_PAGE_SIZE) {
         SPDLOG_WARN("Allocating less than a page of memory");
     }
 
-    void* mmapRes =
-      ::mmap(nullptr, size, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
-    if (mmapRes == nullptr) {
-        SPDLOG_ERROR("Failed allocating memory: {}", strerror(errno));
-        throw std::runtime_error("Failed allocating memory");
-    }
-
-    return (uint8_t*)mmapRes;
+    return doAlloc(size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
 }
 
-uint8_t* allocatePrivateMemory(size_t size)
+OwnedMmapRegion allocatePrivateMemory(size_t size)
 {
-    void* mmapRes =
-      ::mmap(nullptr, size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-    if (mmapRes == nullptr) {
-        SPDLOG_ERROR("Failed allocating memory: {}", strerror(errno));
-        throw std::runtime_error("Failed allocating memory");
-    }
-
-    return (uint8_t*)mmapRes;
+    return doAlloc(size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
 }
 
-uint8_t* allocateVirtualMemory(size_t size)
+OwnedMmapRegion allocateVirtualMemory(size_t size)
 {
-    void* mmapRes = (uint8_t*)::mmap(
-      nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-    if (mmapRes == nullptr) {
-        SPDLOG_ERROR("Failed allocating virtual memory: {}", strerror(errno));
-        throw std::runtime_error("Failed allocating virtual memory");
-    }
-
-    return (uint8_t*)mmapRes;
-}
-
-void deallocatePages(uint8_t* memory, int nPages)
-{
-    deallocateMemory(memory, nPages * HOST_PAGE_SIZE);
-}
-
-void deallocateMemory(uint8_t* memory, size_t size)
-{
-    ::munmap(memory, size);
+    return doAlloc(size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS);
 }
 
 void claimVirtualMemory(uint8_t* start, size_t size)
 {
-    int protectRes = ::mprotect(start, size, PROT_WRITE);
+    int protectRes = ::mprotect(start, size, PROT_READ | PROT_WRITE);
     if (protectRes != 0) {
         SPDLOG_ERROR("Failed claiming virtual memory: {}", strerror(errno));
         throw std::runtime_error("Failed claiming virtual memory");
@@ -257,8 +231,8 @@ void mapMemory(uint8_t* target, size_t size, int fd)
     }
 
     // Make mmap call to do the mapping
-    void* mmapRes =
-      ::mmap(target, size, PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
+    void* mmapRes = ::mmap(
+      target, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
 
     if (mmapRes == MAP_FAILED) {
         SPDLOG_ERROR("mapping memory to fd {} failed: {} ({})",
@@ -269,7 +243,7 @@ void mapMemory(uint8_t* target, size_t size, int fd)
     }
 }
 
-int writeMemoryToFd(uint8_t* source, size_t size, const std::string& fdLabel)
+int writeMemoryToFd(const uint8_t* source, size_t size, const std::string& fdLabel)
 {
     int fd = ::memfd_create(fdLabel.c_str(), 0);
     if (fd == -1) {

@@ -113,23 +113,27 @@ class SnapshotTestFixture
         reg.clear();
     }
 
-    void setUpSnapshot(faabric::util::SnapshotData& snap,
-                       const std::string& snapKey,
-                       int nPages,
-                       bool locallyRestorable)
+    std::shared_ptr<faabric::util::SnapshotData> setUpSnapshot(
+      const std::string& snapKey,
+      int nPages,
+      bool locallyRestorable)
     {
         size_t snapSize = nPages * faabric::util::HOST_PAGE_SIZE;
-        uint8_t* data = faabric::util::allocateSharedMemory(snapSize);
-        snap.size = snapSize;
-        snap.data = data;
 
-        reg.takeSnapshot(snapKey, snap, locallyRestorable);
+        auto snapData = std::make_shared<faabric::util::SnapshotData>(snapSize);
+
+        if (locallyRestorable) {
+            snapData->makeRestorable(snapKey);
+        }
+
+        reg.registerSnapshot(snapKey, snapData);
+
+        return snapData;
     }
 
     void removeSnapshot(const std::string& key, int nPages)
     {
         auto snap = reg.getSnapshot(key);
-        faabric::util::deallocatePages(snap->data, nPages);
         reg.deleteSnapshot(key);
     }
 
@@ -313,7 +317,7 @@ class TestExecutor final : public faabric::scheduler::Executor
 
     void restore(faabric::Message& msg) override;
 
-    faabric::util::SnapshotData& snapshot() override;
+    std::shared_ptr<faabric::util::SnapshotData> snapshot() override;
 
     int32_t executeTask(
       int threadPoolIdx,
