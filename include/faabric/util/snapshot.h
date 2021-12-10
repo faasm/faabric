@@ -1,6 +1,5 @@
 #pragma once
 
-#include "faabric/util/memory.h"
 #include <map>
 #include <memory>
 #include <mutex>
@@ -10,8 +9,7 @@
 
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
-
-#define FOUR_GB (size_t)(1024L * 1024L * 1024L * 4L)
+#include <faabric/util/memory.h>
 
 namespace faabric::util {
 

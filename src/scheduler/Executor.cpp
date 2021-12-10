@@ -144,6 +144,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Work out if we should skip the reset after this batch. This only needs to
     // happen when we're executing threads on the master host, in which case the
     // original function call will cause a reset
+
+    // TODO - should this be on master or all hosts?
     // bool skipReset = isMaster && isThreads;
     bool skipReset = isThreads;
 
@@ -293,8 +295,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
                          msg.snapshotkey());
 
             std::vector<faabric::util::SnapshotDiff> diffs =
-              snapshotPreExecution->getChangeDiffs(snapshotPostExecution.data,
-                                                   snapshotPostExecution.size);
+              snapshotPreExecution->getChangeDiffs(
+                snapshotPostExecution->getDataPtr(),
+                snapshotPostExecution->size);
 
             sch.pushSnapshotDiffs(msg, diffs);
 
@@ -411,7 +414,7 @@ void Executor::reset(faabric::Message& msg) {}
 std::shared_ptr<faabric::util::SnapshotData> Executor::snapshot()
 {
     SPDLOG_WARN("Executor has not implemented snapshot method");
-    return _snapshot;
+    return nullptr;
 }
 
 void Executor::restore(faabric::Message& msg)
