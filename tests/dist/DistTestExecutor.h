@@ -29,12 +29,17 @@ class DistTestExecutor final : public faabric::scheduler::Executor
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override;
 
+    void reset(faabric::Message& msg) override;
+
+    void restore(faabric::Message& msg) override;
+
     std::shared_ptr<faabric::util::SnapshotData> snapshot() override;
 
     size_t snapshotSize = 0;
 
   protected:
-    std::shared_ptr<faabric::util::SnapshotData> _snapshot = nullptr;
+    faabric::util::OwnedMmapRegion dummyMemory = nullptr;
+    size_t dummyMemorySize = 0;
 };
 
 class DistTestExecutorFactory : public faabric::scheduler::ExecutorFactory

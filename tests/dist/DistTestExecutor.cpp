@@ -53,13 +53,23 @@ int32_t DistTestExecutor::executeTask(
     return callback(this, threadPoolIdx, msgIdx, req);
 }
 
+void DistTestExecutor::reset(faabric::Message& msg) {}
+
+void DistTestExecutor::restore(faabric::Message& msg)
+{
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+    auto snap = reg.getSnapshot(msg.snapshotkey());
+
+    dummyMemorySize = snap->size;
+    dummyMemory = faabric::util::allocateSharedMemory(snap->size);
+    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
+}
+
 std::shared_ptr<faabric::util::SnapshotData> DistTestExecutor::snapshot()
 {
-    if (_snapshot == nullptr) {
-        _snapshot = std::make_shared<faabric::util::SnapshotData>(snapshotSize);
-    }
-
-    return _snapshot;
+    return std::make_shared<faabric::util::SnapshotData>(dummyMemory.get(),
+                                                         dummyMemorySize);
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(
