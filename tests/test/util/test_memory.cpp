@@ -416,8 +416,7 @@ TEST_CASE("Test mapping memory", "[util]")
     appendDataToFd(fd, chunk.size(), chunk.size() + chunkB.size(), vMem.get());
 
     // Map a region to both chunks
-    OwnedMmapRegion memB =
-      allocateSharedMemory(chunk.size() + chunkB.size());
+    OwnedMmapRegion memB = allocateSharedMemory(chunk.size() + chunkB.size());
     mapMemory(memB.get(), chunk.size() + chunkB.size(), fd);
 
     // Check region now contains both bits of data

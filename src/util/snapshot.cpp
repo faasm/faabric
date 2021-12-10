@@ -28,7 +28,7 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     faabric::util::claimVirtualMemory(BYTES(ownedData.get()), size);
 }
 
-SnapshotData::SnapshotData(std::vector<uint8_t> &dataIn)
+SnapshotData::SnapshotData(std::vector<uint8_t>& dataIn)
   : SnapshotData(dataIn.data(), dataIn.size())
 {}
 
@@ -58,7 +58,8 @@ bool SnapshotData::isRestorable()
     return fd > 0;
 }
 
-bool SnapshotData::isOwner() {
+bool SnapshotData::isOwner()
+{
     faabric::util::SharedLock lock(snapMx);
     return owner;
 }

@@ -185,8 +185,8 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 OwnedMmapRegion doAlloc(size_t size, int prot, int flags)
 {
     auto deleter = [size](uint8_t* u) { munmap(u, size); };
-    OwnedMmapRegion mem(
-        (uint8_t*)::mmap(nullptr, size, prot, flags, -1, 0), deleter);
+    OwnedMmapRegion mem((uint8_t*)::mmap(nullptr, size, prot, flags, -1, 0),
+                        deleter);
     return mem;
 }
 
@@ -238,7 +238,9 @@ void mapMemory(uint8_t* target, size_t size, int fd)
     }
 }
 
-int writeMemoryToFd(const uint8_t* source, size_t size, const std::string& fdLabel)
+int writeMemoryToFd(const uint8_t* source,
+                    size_t size,
+                    const std::string& fdLabel)
 {
     int fd = ::memfd_create(fdLabel.c_str(), 0);
     if (fd == -1) {
