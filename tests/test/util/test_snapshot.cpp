@@ -16,6 +16,7 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
 {
   public:
     SnapshotMergeTestFixture() = default;
+
     ~SnapshotMergeTestFixture() = default;
 
   protected:
@@ -142,10 +143,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<uint8_t> dataA(100, 2);
     std::vector<uint8_t> dataB(300, 4);
 
-    uint8_t* snapData = snap->getMutableDataPtr();
-    std::memcpy(snapData + (2 * HOST_PAGE_SIZE), dataA.data(), dataA.size());
-    std::memcpy(
-      snapData + (5 * HOST_PAGE_SIZE) + 2, dataB.data(), dataB.size());
+    snap->copyInData(dataA, 2 * HOST_PAGE_SIZE);
+    snap->copyInData(dataB, (5 * HOST_PAGE_SIZE) + 2);
 
     std::vector<uint8_t> originalData = snap->getDataCopy();
     REQUIRE(originalData.size() == originalSize);
@@ -157,28 +156,33 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(snap->isRestorable());
 
     // Map to some other region of memory large enough for the extended version
-    OwnedMmapRegion sharedMem = allocatePrivateMemory(expandedSize);
+    OwnedMmapRegion sharedMem = allocateSharedMemory(expandedSize);
     snap->mapToMemory(sharedMem.get());
 
-    // Extend the original snapshot
-    snap->setSnapshotSize(expandedSize);
-    REQUIRE(snap->size == expandedSize);
-
-    // Add some data to the extended region
+    // Add some data to the extended region. Check the snapshot extends to fit
     std::vector<uint8_t> dataC(300, 5);
-    snap->copyInData(dataC, (originalPages + 3) * HOST_PAGE_SIZE);
+    std::vector<uint8_t> dataD(200, 6);
+    uint32_t extendedOffsetA = (originalPages + 3) * HOST_PAGE_SIZE;
+    uint32_t extendedOffsetB = (originalPages + 5) * HOST_PAGE_SIZE;
 
-    std::vector<uint8_t> expandedData = snap->getDataCopy(0, expandedSize);
+    snap->copyInData(dataC, extendedOffsetA);
+    size_t expectedSizeA = extendedOffsetA + dataC.size();
+    REQUIRE(snap->size == expectedSizeA);
 
-    // Remap to same memory
+    snap->copyInData(dataD, extendedOffsetB);
+    size_t expectedSizeB = extendedOffsetB + dataD.size();
+    REQUIRE(snap->size == expectedSizeB);
+
+    // Remap to shared memory
     snap->mapToMemory(sharedMem.get());
 
     // Check mapped region matches
+    std::vector<uint8_t> actualData = snap->getDataCopy();
     std::vector<uint8_t> actualSharedMem(sharedMem.get(),
-                                         sharedMem.get() + expandedSize);
+                                         sharedMem.get() + snap->size);
 
-    REQUIRE(actualSharedMem.size() == expandedData.size());
-    REQUIRE(actualSharedMem == expandedData);
+    REQUIRE(actualSharedMem.size() == actualData.size());
+    REQUIRE(actualSharedMem == actualData);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
@@ -807,4 +811,67 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
+
+TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
+{
+    std::vector<uint8_t> data(2 * HOST_PAGE_SIZE, 3);
+
+    // Add known subsection
+    uint32_t chunkOffset = 120;
+    std::vector<uint8_t> chunk(100, 4);
+    ::memcpy(data.data() + chunkOffset, chunk.data(), chunk.size());
+
+    bool expectOwner = false;
+    size_t expectedMaxSize = data.size();
+
+    std::shared_ptr<SnapshotData> snap = nullptr;
+    SECTION("From size")
+    {
+        SECTION("No max")
+        {
+            snap = std::make_shared<SnapshotData>(data.size());
+        }
+
+        SECTION("Zero max")
+        {
+            snap = std::make_shared<SnapshotData>(data.size(), 0);
+        }
+
+        SECTION("With max")
+        {
+            expectedMaxSize = data.size() + 123;
+            snap = std::make_shared<SnapshotData>(data.size(), expectedMaxSize);
+        }
+
+        snap->copyInData(data, 0);
+        expectOwner = true;
+    }
+
+    SECTION("From ptr")
+    {
+        snap = std::make_shared<SnapshotData>(data.data(), data.size());
+    }
+
+    SECTION("From vector") { snap = std::make_shared<SnapshotData>(data); }
+
+    REQUIRE(snap->size == data.size());
+    REQUIRE(snap->maxSize == expectedMaxSize);
+    REQUIRE(snap->isOwner() == expectOwner);
+
+    std::vector<uint8_t> actualCopy = snap->getDataCopy();
+    REQUIRE(actualCopy == data);
+
+    std::vector<uint8_t> actualChunk =
+      snap->getDataCopy(chunkOffset, chunk.size());
+    REQUIRE(actualChunk == chunk);
+
+    const std::vector<uint8_t> actualConst(snap->getDataPtr(),
+                                           snap->getDataPtr() + snap->size);
+    REQUIRE(actualConst == data);
+
+    std::vector<uint8_t> actualMutable(snap->getMutableDataPtr(),
+                                       snap->getMutableDataPtr() + snap->size);
+    REQUIRE(actualMutable == data);
+}
+
 }

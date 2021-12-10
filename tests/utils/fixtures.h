@@ -115,17 +115,10 @@ class SnapshotTestFixture
 
     std::shared_ptr<faabric::util::SnapshotData> setUpSnapshot(
       const std::string& snapKey,
-      int nPages,
-      bool locallyRestorable)
+      int nPages)
     {
         size_t snapSize = nPages * faabric::util::HOST_PAGE_SIZE;
-
         auto snapData = std::make_shared<faabric::util::SnapshotData>(snapSize);
-
-        if (locallyRestorable) {
-            snapData->makeRestorable(snapKey);
-        }
-
         reg.registerSnapshot(snapKey, snapData);
 
         return snapData;
@@ -305,13 +298,8 @@ class TestExecutor final : public faabric::scheduler::Executor
   public:
     TestExecutor(faabric::Message& msg);
 
-    ~TestExecutor();
-
-    uint8_t* dummyMemory = nullptr;
-
+    faabric::util::OwnedMmapRegion dummyMemory = nullptr;
     size_t dummyMemorySize = 0;
-
-    void postFinish() override;
 
     void reset(faabric::Message& msg) override;
 
@@ -323,9 +311,6 @@ class TestExecutor final : public faabric::scheduler::Executor
       int threadPoolIdx,
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override;
-
-  protected:
-    std::shared_ptr<faabric::util::SnapshotData> _snapshot = nullptr;
 };
 
 class TestExecutorFactory : public faabric::scheduler::ExecutorFactory

@@ -53,8 +53,6 @@ typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>>
 
 OwnedMmapRegion allocateSharedMemory(size_t size);
 
-OwnedMmapRegion allocatePrivateMemory(size_t size);
-
 OwnedMmapRegion allocateVirtualMemory(size_t size);
 
 void claimVirtualMemory(uint8_t* start, size_t size);

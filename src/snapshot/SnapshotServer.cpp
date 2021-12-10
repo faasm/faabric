@@ -84,13 +84,18 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
       faabric::snapshot::getSnapshotRegistry();
 
     // Set up the snapshot
-    // Note, the snapshot object must take ownership of the data here.
+    // Note, the snapshot object must take ownership of the data here, which
+    // implies a copy.
+    // TODO - can we take ownership from flatbuffer object to avoid the copy?
     size_t snapSize = r->contents()->size();
+    std::string snapKey = r->key()->str();
     auto d =
       std::make_shared<faabric::util::SnapshotData>(snapSize, r->maxSize());
     d->copyInData((uint8_t*)r->contents()->Data(), snapSize);
 
-    reg.registerSnapshot(r->key()->str(), d);
+    // Register and make restorable
+    d->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, d);
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -129,14 +134,6 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
         faabric::transport::PointToPointGroup::groupExists(groupId)) {
         faabric::transport::PointToPointGroup::getGroup(r->groupid())
           ->localLock();
-    }
-
-    // Work out max size of the snapshot and extend if necessary
-    uint32_t maxSize = 0;
-    for (const auto* chunk : *r->chunks()) {
-        maxSize =
-          std::max<uint32_t>(chunk->offset() + chunk->data()->size(), maxSize);
-        snap->setSnapshotSize(maxSize);
     }
 
     // Iterate through the chunks passed in the request

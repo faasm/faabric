@@ -26,15 +26,15 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(!reg.snapshotExists(keyB));
     REQUIRE(!reg.snapshotExists(keyC));
 
-    auto snapA = setUpSnapshot(keyA, 1, true);
-    auto snapB = setUpSnapshot(keyB, 2, false);
+    auto snapA = setUpSnapshot(keyA, 1);
+    auto snapB = setUpSnapshot(keyB, 2);
 
     REQUIRE(reg.snapshotExists(keyA));
     REQUIRE(reg.snapshotExists(keyB));
     REQUIRE(!reg.snapshotExists(keyC));
     REQUIRE(reg.getSnapshotCount() == 2);
 
-    auto snapC = setUpSnapshot(keyC, 3, true);
+    auto snapC = setUpSnapshot(keyC, 3);
 
     REQUIRE(reg.snapshotExists(keyA));
     REQUIRE(reg.snapshotExists(keyB));
@@ -51,6 +51,10 @@ TEST_CASE_METHOD(SnapshotTestFixture,
         rawB[i + 1] = i;
         rawC[i + 2] = i;
     }
+
+    // Make two restorable
+    snapA->makeRestorable(keyA);
+    snapC->makeRestorable(keyC);
 
     // Take snapshots again with updated data
     reg.registerSnapshot(keyA, snapA);
@@ -87,11 +91,11 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE_THROWS(reg.mapSnapshot(keyB, actualDataB.get()));
 
     // Here we need to check the actual data after mapping
-    std::vector<uint8_t> vecDataA = snapA->getDataCopy(0, HOST_PAGE_SIZE);
+    std::vector<uint8_t> vecDataA = snapA->getDataCopy();
     std::vector<uint8_t> vecActualDataA(actualDataA.get(),
                                         actualDataA.get() + HOST_PAGE_SIZE);
 
-    std::vector<uint8_t> vecDataC = snapC->getDataCopy(0, 3 * HOST_PAGE_SIZE);
+    std::vector<uint8_t> vecDataC = snapC->getDataCopy();
     std::vector<uint8_t> vecActualDataC(
       actualDataC.get(), actualDataC.get() + (3 * HOST_PAGE_SIZE));
 
@@ -127,7 +131,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(!reg.snapshotExists(keyB));
 
     // Take one of the snapshots
-    auto snapBefore = setUpSnapshot(keyA, 1, true);
+    auto snapBefore = setUpSnapshot(keyA, 1);
 
     REQUIRE(reg.snapshotExists(keyA));
     REQUIRE(!reg.snapshotExists(keyB));
@@ -135,7 +139,8 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     auto otherSnap =
       std::make_shared<faabric::util::SnapshotData>(snapBefore->size + 10);
-    otherSnap->copyInData(std::vector<uint8_t>(snapBefore->size + 10, 1));
+    std::vector<uint8_t> otherData(snapBefore->size + 10, 1);
+    otherSnap->copyInData(otherData);
 
     // Check existing snapshot is not overwritten
     reg.registerSnapshotIfNotExists(keyA, otherSnap);

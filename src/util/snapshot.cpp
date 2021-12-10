@@ -28,7 +28,7 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     faabric::util::claimVirtualMemory(BYTES(ownedData.get()), size);
 }
 
-SnapshotData::SnapshotData(std::vector<uint8_t> dataIn)
+SnapshotData::SnapshotData(std::vector<uint8_t> &dataIn)
   : SnapshotData(dataIn.data(), dataIn.size())
 {}
 
@@ -58,18 +58,12 @@ bool SnapshotData::isRestorable()
     return fd > 0;
 }
 
-void SnapshotData::setSnapshotSize(size_t newSize)
-{
-    faabric::util::FullLock lock(snapMx);
-    uint8_t* data = getPtrInternal();
-
-    if (newSize > size) {
-        claimVirtualMemory(data, newSize);
-        size = newSize;
-    }
+bool SnapshotData::isOwner() {
+    faabric::util::SharedLock lock(snapMx);
+    return owner;
 }
 
-void SnapshotData::copyInData(std::vector<uint8_t> buffer, uint32_t offset)
+void SnapshotData::copyInData(std::vector<uint8_t>& buffer, uint32_t offset)
 {
     copyInData(buffer.data(), buffer.size(), offset);
 }

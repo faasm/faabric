@@ -82,7 +82,7 @@ class SnapshotData
 
     explicit SnapshotData(size_t sizeIn);
 
-    explicit SnapshotData(std::vector<uint8_t> dataIn);
+    explicit SnapshotData(std::vector<uint8_t> &dataIn);
 
     SnapshotData(size_t sizeIn, size_t maxSizeIn);
 
@@ -98,11 +98,11 @@ class SnapshotData
 
     bool isRestorable();
 
+    bool isOwner();
+
     void makeRestorable(const std::string& fdLabel);
 
-    void setSnapshotSize(size_t newSize);
-
-    void copyInData(std::vector<uint8_t> buffer, uint32_t offset = 0);
+    void copyInData(std::vector<uint8_t> &buffer, uint32_t offset = 0);
 
     void copyInData(uint8_t* buffer, size_t bufferSize, uint32_t offset = 0);
 

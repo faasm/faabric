@@ -33,15 +33,6 @@ TestExecutor::TestExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 
-TestExecutor::~TestExecutor() = default;
-
-void TestExecutor::postFinish()
-{
-    if (dummyMemory != nullptr) {
-        munmap(dummyMemory, dummyMemorySize);
-    }
-}
-
 void TestExecutor::reset(faabric::Message& msg)
 {
     SPDLOG_DEBUG("Resetting TestExecutor");
@@ -53,26 +44,19 @@ void TestExecutor::restore(faabric::Message& msg)
     SPDLOG_DEBUG("Restoring TestExecutor");
     restoreCount += 1;
 
-    // Initialise the dummy memory and map to snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
     auto snap = reg.getSnapshot(msg.snapshotkey());
 
-    // Note this has to be mmapped to be page-aligned
     dummyMemorySize = snap->size;
-    dummyMemory = (uint8_t*)mmap(
-      nullptr, snap->size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-    reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
+    dummyMemory = faabric::util::allocateSharedMemory(snap->size);
+    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
 }
 
 std::shared_ptr<faabric::util::SnapshotData> TestExecutor::snapshot()
 {
-    if (_snapshot == nullptr) {
-        _snapshot =
-          std::make_shared<faabric::util::SnapshotData>(dummyMemorySize);
-    }
-    return _snapshot;
+    return std::make_shared<faabric::util::SnapshotData>(dummyMemory.get(),
+                                                         dummyMemorySize);
 }
 
 int32_t TestExecutor::executeTask(
@@ -213,8 +197,7 @@ int32_t TestExecutor::executeTask(
                      offset,
                      offset + data.size());
 
-        uint8_t* offsetPtr = dummyMemory + offset;
-        std::memcpy(offsetPtr, data.data(), data.size());
+        ::memcpy(dummyMemory.get() + offset, data.data(), data.size());
     }
 
     if (msg.function() == "echo") {
@@ -256,14 +239,15 @@ class TestExecutorFixture
           std::make_shared<TestExecutorFactory>();
         setExecutorFactory(fac);
 
-        dummySnap = setUpSnapshot(snapshotKey, snapshotNPages, true);
+        dummySnap = setUpSnapshot(snapshotKey, snapshotNPages);
+        dummySnap->makeRestorable(snapshotKey);
         faabric::util::resetDirtyTracking();
 
         restoreCount = 0;
         resetCount = 0;
     }
 
-    ~TestExecutorFixture() {}
+    ~TestExecutorFixture() = default;
 
   protected:
     std::string snapshotKey = "foobar";

@@ -401,7 +401,7 @@ TEST_CASE("Test mapping memory", "[util]")
     int fd = writeMemoryToFd(vMem.get(), chunk.size(), "foobar");
 
     // Map some new memory to this fd
-    OwnedMmapRegion memA = allocatePrivateMemory(chunk.size());
+    OwnedMmapRegion memA = allocateSharedMemory(chunk.size());
     mapMemory(memA.get(), chunk.size(), fd);
 
     std::vector<uint8_t> memAData(memA.get(), memA.get() + chunk.size());
@@ -417,7 +417,7 @@ TEST_CASE("Test mapping memory", "[util]")
 
     // Map a region to both chunks
     OwnedMmapRegion memB =
-      allocatePrivateMemory(chunk.size() + chunkB.size());
+      allocateSharedMemory(chunk.size() + chunkB.size());
     mapMemory(memB.get(), chunk.size() + chunkB.size(), fd);
 
     // Check region now contains both bits of data

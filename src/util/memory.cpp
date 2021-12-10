@@ -199,11 +199,6 @@ OwnedMmapRegion allocateSharedMemory(size_t size)
     return doAlloc(size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
 }
 
-OwnedMmapRegion allocatePrivateMemory(size_t size)
-{
-    return doAlloc(size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
-}
-
 OwnedMmapRegion allocateVirtualMemory(size_t size)
 {
     return doAlloc(size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS);

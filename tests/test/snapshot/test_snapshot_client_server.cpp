@@ -277,7 +277,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 {
     // Set up a snapshot
     std::string snapKey = std::to_string(generateGid());
-    auto snap = setUpSnapshot(snapKey, 5, false);
+    auto snap = setUpSnapshot(snapKey, 5);
 
     int offset = 8;
     std::vector<uint8_t> originalData;
