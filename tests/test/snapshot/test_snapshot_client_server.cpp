@@ -83,14 +83,14 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     auto snapA = std::make_shared<SnapshotData>(dataA);
     auto snapB = std::make_shared<SnapshotData>(dataB);
 
-    // One request with no group
     int appId = 111;
     int groupIdA = 0;
     int groupIdB = 123;
-
     setUpFunctionGroup(appId, groupIdB);
 
-    // Send the message
+    REQUIRE(reg.getSnapshotCount() == 0);
+
+    // Send the messages
     cli.pushSnapshot(snapKeyA, groupIdA, snapA);
     cli.pushSnapshot(snapKeyB, groupIdB, snapB);
 
@@ -388,7 +388,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     // Check data is as expected
     std::vector<uint8_t> actualData =
-      snap->getDataCopy(offset, offset + expectedData.size());
+      snap->getDataCopy(offset, expectedData.size());
     REQUIRE(actualData == expectedData);
 }
 

@@ -91,11 +91,11 @@ void SnapshotClient::pushSnapshot(
         snapshotPushes.emplace_back(host, data);
     } else {
         // Set up the main request
-        // TODO - avoid copying data here
+        // TODO - avoid copying data here?
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto dataOffset =
-          mb.CreateVector<uint8_t>(data->getDataPtr(), data->size);
+          mb.CreateVector<uint8_t>(data->getMutableDataPtr(), data->size);
         auto requestOffset = CreateSnapshotPushRequest(
           mb, keyOffset, groupId, data->maxSize, dataOffset);
         mb.Finish(requestOffset);

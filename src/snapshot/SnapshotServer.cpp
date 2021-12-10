@@ -75,14 +75,16 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
         throw std::runtime_error("Received snapshot with zero size");
     }
 
-    SPDLOG_DEBUG("Receiving snapshot {} (size {})",
+    SPDLOG_DEBUG("Receiving snapshot {} (size {}, max {})",
                  r->key()->c_str(),
-                 r->contents()->size());
+                 r->contents()->size(),
+                 r->maxSize());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
     // Set up the snapshot
+    // Note, the snapshot object must take ownership of the data here.
     size_t snapSize = r->contents()->size();
     auto d =
       std::make_shared<faabric::util::SnapshotData>(snapSize, r->maxSize());

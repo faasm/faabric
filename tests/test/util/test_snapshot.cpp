@@ -85,7 +85,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "[snapshot][util]")
 {
     int snapPages = 10;
-    auto snap = setUpSnapshot(snapPages, snapPages);
+    auto snap = std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
 
     // Put some data into the snapshot
     std::vector<uint8_t> dataA(100, 2);
@@ -134,7 +134,6 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(originalSize, expandedSize);
-    snap->makeRestorable(snapKey);
 
     // Take the snapsho at the original size
     reg.registerSnapshot(snapKey, snap);
@@ -197,9 +196,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     int finalValueB = 650123;
     int sumValueB = 350123;
 
-    std::shared_ptr<SnapshotData> snap = setUpSnapshot(snapPages, snapPages);
-    snap->makeRestorable(snapKey);
-
+    size_t memSize = snapPages * HOST_PAGE_SIZE;
+    auto snap = std::make_shared<SnapshotData>(memSize);
     uint8_t* snapData = snap->getMutableDataPtr();
 
     // Set up some integers in the snapshot
@@ -213,12 +211,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     *intBOriginal = originalValueB;
 
     // Take the snapshot
+    snap->makeRestorable(snapKey);
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot to some memory
-    size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    OwnedMmapRegion sharedMem =
-      allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+    OwnedMmapRegion sharedMem = allocateSharedMemory(memSize);
 
     reg.mapSnapshot(snapKey, sharedMem.get());
 
@@ -255,7 +252,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Get the snapshot diffs
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs(sharedMem.get(), memSize);
 
     // Check original hasn't changed
     REQUIRE(*intAOriginal == originalValueA);
@@ -322,6 +319,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
+    snap->makeRestorable(snapKey);
     uint8_t* snapData = snap->getMutableDataPtr();
 
     // Set up original values
@@ -621,6 +619,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
     snap->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
     OwnedMmapRegion sharedMem = allocateSharedMemory(sharedMemSize);
@@ -692,6 +691,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
     snap->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
     OwnedMmapRegion sharedMem = allocateSharedMemory(sharedMemSize);
@@ -773,6 +773,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
     snap->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
     OwnedMmapRegion sharedMem = allocateSharedMemory(sharedMemSize);

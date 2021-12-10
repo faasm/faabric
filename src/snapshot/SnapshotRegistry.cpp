@@ -56,11 +56,6 @@ void SnapshotRegistry::doRegisterSnapshot(
   std::shared_ptr<faabric::util::SnapshotData> data,
   bool overwrite)
 {
-    if (data->size == 0) {
-        SPDLOG_ERROR("Cannot take snapshot {} of size zero", key);
-        throw std::runtime_error("Taking snapshot size zero");
-    }
-
     faabric::util::FullLock lock(snapshotsMx);
 
     if (snapshotExists(key) && !overwrite) {

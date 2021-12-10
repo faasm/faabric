@@ -90,7 +90,8 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     std::vector<uint8_t> vecDataA = snapA->getDataCopy(0, HOST_PAGE_SIZE);
     std::vector<uint8_t> vecActualDataA(actualDataA.get(),
                                         actualDataA.get() + HOST_PAGE_SIZE);
-    std::vector<uint8_t> vecDataC = snapA->getDataCopy(0, 3 * HOST_PAGE_SIZE);
+
+    std::vector<uint8_t> vecDataC = snapC->getDataCopy(0, 3 * HOST_PAGE_SIZE);
     std::vector<uint8_t> vecActualDataC(
       actualDataC.get(), actualDataC.get() + (3 * HOST_PAGE_SIZE));
 

@@ -141,6 +141,8 @@ class SnapshotData
     uint8_t* rawData = nullptr;
     OwnedMmapRegion ownedData = nullptr;
 
+    uint8_t* getPtrInternal(uint32_t offset = 0);
+
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
