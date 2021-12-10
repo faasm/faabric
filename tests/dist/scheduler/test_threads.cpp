@@ -1,3 +1,4 @@
+#include "faabric/util/snapshot.h"
 #include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
@@ -34,11 +35,10 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Set up a snapshot
     size_t snapshotSize = 5 * faabric::util::HOST_PAGE_SIZE;
-    auto* snapshotData = (uint8_t*)mmap(
-      nullptr, snapshotSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    auto snap = std::make_shared<faabric::util::SnapshotData>(snapshotSize);
 
     std::string snapKey = std::to_string(faabric::util::generateGid());
-    reg.registerSnapshot(snapKey, snapshotData, snapshotSize);
+    reg.registerSnapshot(snapKey, snap);
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     firstMsg.set_snapshotkey(snapKey);
@@ -59,7 +59,5 @@ TEST_CASE_METHOD(DistTestsFixture,
         int res = sch.awaitThreadResult(m.id());
         REQUIRE(res == m.id() / 2);
     }
-
-    munmap(snapshotData, snapshotSize);
 }
 }

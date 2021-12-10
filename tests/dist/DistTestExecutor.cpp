@@ -1,4 +1,5 @@
 #include "DistTestExecutor.h"
+#include "faabric/util/snapshot.h"
 
 #include <sys/mman.h>
 
@@ -52,27 +53,13 @@ int32_t DistTestExecutor::executeTask(
     return callback(this, threadPoolIdx, msgIdx, req);
 }
 
-faabric::util::SnapshotData& DistTestExecutor::snapshot()
+std::shared_ptr<faabric::util::SnapshotData> DistTestExecutor::snapshot()
 {
-    _snapshot.data = snapshotMemory;
-    _snapshot.size = snapshotSize;
+    if (_snapshot == nullptr) {
+        _snapshot = std::make_shared<faabric::util::SnapshotData>(snapshotSize);
+    }
 
     return _snapshot;
-}
-
-void DistTestExecutor::restore(faabric::Message& msg)
-{
-    // Initialise the dummy memory and map to snapshot
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-    auto snap = reg.getSnapshot(msg.snapshotkey());
-
-    // Note this has to be mmapped to be page-aligned
-    snapshotMemory = (uint8_t*)mmap(
-      nullptr, snap->size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    snapshotSize = snap->size;
-
-    reg.mapSnapshot(msg.snapshotkey(), snapshotMemory);
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

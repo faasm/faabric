@@ -28,11 +28,10 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::string snapshotKey = "dist-snap-check";
 
     size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
-    uint8_t* snapMemory = (uint8_t*)mmap(
-      nullptr, snapSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
 
     // Set up snapshot
-    reg.registerSnapshot(snapshotKey, snapMemory, snapSize);
+    reg.registerSnapshot(snapshotKey, snap);
 
     // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -61,8 +60,9 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Check the diffs have been applied
     size_t sizeA = snapshotKey.size();
     size_t sizeB = inputData.size();
-    uint8_t* startA = snapMemory + 10;
-    uint8_t* startB = snapMemory + 100;
+
+    uint8_t* startA = snap->getMutableDataPtr() + 10;
+    uint8_t* startB = snap->getMutableDataPtr() + 100;
     std::vector<uint8_t> actualA(startA, startA + sizeA);
     std::vector<uint8_t> actualB(startB, startB + sizeB);
 
