@@ -29,6 +29,14 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     faabric::util::claimVirtualMemory(BYTES(ownedData.get()), size);
 }
 
+SnapshotData::SnapshotData(std::vector<uint8_t> dataIn)
+  : SnapshotData(dataIn.data(), dataIn.size())
+{}
+
+SnapshotData::SnapshotData(uint8_t* dataIn, size_t sizeIn)
+  : SnapshotData(dataIn, sizeIn, sizeIn)
+{}
+
 SnapshotData::SnapshotData(uint8_t* dataIn, size_t sizeIn, size_t maxSizeIn)
   : size(sizeIn)
   , maxSize(maxSizeIn)
@@ -60,6 +68,11 @@ void SnapshotData::setSnapshotSize(size_t newSize)
         claimVirtualMemory(data, newSize);
         size = newSize;
     }
+}
+
+void SnapshotData::copyInData(std::vector<uint8_t> buffer, uint32_t offset)
+{
+    copyInData(buffer.data(), buffer.size(), offset);
 }
 
 void SnapshotData::copyInData(uint8_t* buffer,
@@ -94,11 +107,25 @@ const uint8_t* SnapshotData::getDataPtr(uint32_t offset)
 
 uint8_t* SnapshotData::getMutableDataPtr(uint32_t offset)
 {
+    faabric::util::SharedLock lock(snapMx);
     if (owner) {
         return ownedData.get() + offset;
     }
 
     return rawData + offset;
+}
+
+std::vector<uint8_t> SnapshotData::getDataCopy()
+{
+    return getDataCopy(0, size);
+}
+
+std::vector<uint8_t> SnapshotData::getDataCopy(uint32_t offset, size_t dataSize)
+{
+    faabric::util::SharedLock lock(snapMx);
+
+    uint8_t* ptr = getMutableDataPtr(offset);
+    return std::vector<uint8_t>(ptr, ptr + dataSize);
 }
 
 std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()

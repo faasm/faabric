@@ -323,6 +323,9 @@ class TestExecutor final : public faabric::scheduler::Executor
       int threadPoolIdx,
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override;
+
+  protected:
+    std::shared_ptr<faabric::util::SnapshotData> _snapshot = nullptr;
 };
 
 class TestExecutorFactory : public faabric::scheduler::ExecutorFactory

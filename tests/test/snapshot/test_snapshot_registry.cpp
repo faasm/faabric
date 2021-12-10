@@ -41,17 +41,21 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(reg.snapshotExists(keyC));
     REQUIRE(reg.getSnapshotCount() == 3);
 
+    uint8_t* rawA = snapA->getMutableDataPtr();
+    uint8_t* rawB = snapB->getMutableDataPtr();
+    uint8_t* rawC = snapC->getMutableDataPtr();
+
     // Add some random bits of data to the vectors
     for (int i = 0; i < HOST_PAGE_SIZE - 10; i += 50) {
-        snapA->data[i] = i;
-        snapB->data[i + 1] = i;
-        snapC->data[i + 2] = i;
+        rawA[i] = i;
+        rawB[i + 1] = i;
+        rawC[i + 2] = i;
     }
 
     // Take snapshots again with updated data
-    reg.registerSnapshot(keyA, snapA->data, snapA->size);
-    reg.registerSnapshot(keyB, snapB->data, snapB->size, false);
-    reg.registerSnapshot(keyC, snapC->data, snapC->size);
+    reg.registerSnapshot(keyA, snapA);
+    reg.registerSnapshot(keyB, snapB);
+    reg.registerSnapshot(keyC, snapC);
 
     auto actualA = reg.getSnapshot(keyA);
     auto actualB = reg.getSnapshot(keyB);
@@ -62,9 +66,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(actualC->size == snapC->size);
 
     // Pointer equality here is good enough
-    REQUIRE(actualA->data == snapA->data);
-    REQUIRE(actualB->data == snapB->data);
-    REQUIRE(actualC->data == snapC->data);
+    REQUIRE(actualA->getDataPtr() == snapA->getDataPtr());
+    REQUIRE(actualB->getDataPtr() == snapB->getDataPtr());
+    REQUIRE(actualC->getDataPtr() == snapC->getDataPtr());
 
     REQUIRE(actualA->isRestorable());
     REQUIRE(!actualB->isRestorable());
@@ -83,11 +87,10 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE_THROWS(reg.mapSnapshot(keyB, actualDataB.get()));
 
     // Here we need to check the actual data after mapping
-    std::vector<uint8_t> vecDataA(snapA->data, snapA->data + HOST_PAGE_SIZE);
+    std::vector<uint8_t> vecDataA = snapA->getDataCopy(0, HOST_PAGE_SIZE);
     std::vector<uint8_t> vecActualDataA(actualDataA.get(),
                                         actualDataA.get() + HOST_PAGE_SIZE);
-    std::vector<uint8_t> vecDataC(snapC->data,
-                                  snapC->data + (3 * HOST_PAGE_SIZE));
+    std::vector<uint8_t> vecDataC = snapA->getDataCopy(0, 3 * HOST_PAGE_SIZE);
     std::vector<uint8_t> vecActualDataC(
       actualDataC.get(), actualDataC.get() + (3 * HOST_PAGE_SIZE));
 
@@ -111,7 +114,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,
-                 "Test set snapshot if not exists",
+                 "Test register snapshot if not exists",
                  "[snapshot]")
 {
     REQUIRE(reg.getSnapshotCount() == 0);
@@ -129,28 +132,26 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(!reg.snapshotExists(keyB));
     REQUIRE(reg.getSnapshotCount() == 1);
 
-    // Set up some different data
-    std::vector<uint8_t> otherDataA(snapBefore->size + 10, 1);
-    std::vector<uint8_t> otherDataB(snapBefore->size + 5, 2);
+    auto otherSnap =
+      std::make_shared<faabric::util::SnapshotData>(snapBefore->size + 10);
+    otherSnap->copyInData(std::vector<uint8_t>(snapBefore->size + 10, 1));
 
     // Check existing snapshot is not overwritten
-    reg.registerSnapshotIfNotExists(
-      keyA, otherDataA.data(), otherDataA.size(), true);
+    reg.registerSnapshotIfNotExists(keyA, otherSnap);
     auto snapAfterA = reg.getSnapshot(keyA);
-    REQUIRE(snapAfterA->data == snapBefore->data);
+    REQUIRE(snapAfterA->getDataPtr() == snapBefore->getDataPtr());
     REQUIRE(snapAfterA->size == snapBefore->size);
 
     // Check new snapshot is still created
-    reg.registerSnapshotIfNotExists(
-      keyB, otherDataB.data(), otherDataB.size(), true);
+    reg.registerSnapshotIfNotExists(keyB, otherSnap);
 
     REQUIRE(reg.snapshotExists(keyA));
     REQUIRE(reg.snapshotExists(keyB));
     REQUIRE(reg.getSnapshotCount() == 2);
 
     auto snapAfterB = reg.getSnapshot(keyB);
-    REQUIRE(snapAfterB->data == otherDataB.data());
-    REQUIRE(snapAfterB->size == otherDataB.size());
+    REQUIRE(snapAfterB->getDataPtr() == otherSnap->getDataPtr());
+    REQUIRE(snapAfterB->size == otherSnap->size);
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,

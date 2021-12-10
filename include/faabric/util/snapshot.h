@@ -82,7 +82,11 @@ class SnapshotData
 
     explicit SnapshotData(size_t sizeIn);
 
+    explicit SnapshotData(std::vector<uint8_t> dataIn);
+
     SnapshotData(size_t sizeIn, size_t maxSizeIn);
+
+    SnapshotData(uint8_t* dataIn, size_t sizeIn);
 
     SnapshotData(uint8_t* dataIn, size_t sizeIn, size_t maxSizeIn);
 
@@ -98,11 +102,17 @@ class SnapshotData
 
     void setSnapshotSize(size_t newSize);
 
+    void copyInData(std::vector<uint8_t> buffer, uint32_t offset = 0);
+
     void copyInData(uint8_t* buffer, size_t bufferSize, uint32_t offset = 0);
 
     const uint8_t* getDataPtr(uint32_t offset = 0);
 
     uint8_t* getMutableDataPtr(uint32_t offset = 0);
+
+    std::vector<uint8_t> getDataCopy();
+
+    std::vector<uint8_t> getDataCopy(uint32_t offset, size_t dataSize);
 
     std::vector<SnapshotDiff> getDirtyRegions();
 
@@ -116,8 +126,6 @@ class SnapshotData
                         bool overwrite = false);
 
     void clearMergeRegions();
-
-    void updateFd();
 
     void mapToMemory(uint8_t* target);
 

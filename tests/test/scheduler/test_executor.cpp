@@ -66,10 +66,12 @@ void TestExecutor::restore(faabric::Message& msg)
     reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
 }
 
-faabric::util::SnapshotData& TestExecutor::snapshot()
+std::shared_ptr<faabric::util::SnapshotData> TestExecutor::snapshot()
 {
-    _snapshot.data = dummyMemory;
-    _snapshot.size = dummyMemorySize;
+    if (_snapshot == nullptr) {
+        _snapshot =
+          std::make_shared<faabric::util::SnapshotData>(dummyMemorySize);
+    }
     return _snapshot;
 }
 
@@ -109,9 +111,8 @@ int32_t TestExecutor::executeTask(
         faabric::snapshot::SnapshotRegistry& reg =
           faabric::snapshot::getSnapshotRegistry();
         size_t snapSize = 10;
-        auto snapDataAllocation = std::make_unique<uint8_t[]>(snapSize);
-
-        reg.registerSnapshot(snapKey, snapDataAllocation.get(), snapSize);
+        auto snap = std::make_shared<SnapshotData>(snapSize);
+        reg.registerSnapshot(snapKey, snap);
 
         for (int i = 0; i < chainedReq->messages_size(); i++) {
             faabric::Message& m = chainedReq->mutable_messages()->at(i);
@@ -773,8 +774,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::snapshot::clearMockSnapshotRequests();
 
     // Make an edit to the snapshot memory and get the expected diffs
-    snap->data[0] = 9;
-    snap->data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
+    uint8_t* snapData = snap->getMutableDataPtr();
+    snapData[0] = 9;
+    snapData[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
       snap->getDirtyRegions();
 

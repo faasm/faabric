@@ -74,18 +74,14 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Prepare some snapshot data
     std::string snapKeyA = "foo";
     std::string snapKeyB = "bar";
-    SnapshotData snapA;
-    SnapshotData snapB;
     size_t snapSizeA = 1024;
     size_t snapSizeB = 500;
-    snapA.size = snapSizeA;
-    snapB.size = snapSizeB;
 
     std::vector<uint8_t> dataA(snapSizeA, 1);
     std::vector<uint8_t> dataB(snapSizeB, 2);
 
-    snapA.data = dataA.data();
-    snapB.data = dataB.data();
+    auto snapA = std::make_shared<SnapshotData>(dataA);
+    auto snapB = std::make_shared<SnapshotData>(dataB);
 
     // One request with no group
     int appId = 111;
@@ -103,13 +99,11 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     const auto actualA = reg.getSnapshot(snapKeyA);
     const auto actualB = reg.getSnapshot(snapKeyB);
 
-    REQUIRE(actualA->size == snapA.size);
-    REQUIRE(actualB->size == snapB.size);
+    REQUIRE(actualA->size == snapA->size);
+    REQUIRE(actualB->size == snapB->size);
 
-    std::vector<uint8_t> actualDataA(actualA->data,
-                                     actualA->data + dataA.size());
-    std::vector<uint8_t> actualDataB(actualB->data,
-                                     actualB->data + dataB.size());
+    std::vector<uint8_t> actualDataA = actualA->getDataCopy();
+    std::vector<uint8_t> actualDataB = actualB->getDataCopy();
 
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
@@ -145,12 +139,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     size_t initialSnapSize = 5 * HOST_PAGE_SIZE;
     size_t expandedSnapSize = 10 * HOST_PAGE_SIZE;
 
-    OwnedMmapRegion snapData =
-      faabric::util::allocateVirtualMemory(expandedSnapSize);
-    faabric::util::claimVirtualMemory(snapData.get(), initialSnapSize);
+    auto snap =
+      std::make_shared<SnapshotData>(initialSnapSize, expandedSnapSize);
+    snap->makeRestorable(snapKey);
 
     // Set up the snapshot
-    reg.registerSnapshot(snapKey, snapData.get(), initialSnapSize, true);
+    reg.registerSnapshot(snapKey, snap);
 
     // Set up some diffs for the initial request
     uint32_t offsetA1 = 5;
@@ -212,9 +206,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(server.diffsApplied() == 5);
 
     // Check changes have been applied
-    auto snap = reg.getSnapshot(snapKey);
-    checkDiffsApplied(snap->data, diffsA);
-    checkDiffsApplied(snap->data, diffsB);
+    checkDiffsApplied(snap->getMutableDataPtr(), diffsA);
+    checkDiffsApplied(snap->getMutableDataPtr(), diffsB);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
@@ -224,10 +217,9 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Set up a snapshot
     std::string snapKey = std::to_string(generateGid());
     int snapSize = 5 * HOST_PAGE_SIZE;
-
-    OwnedMmapRegion data = faabric::util::allocateSharedMemory(snapSize);
-
-    reg.registerSnapshot(snapKey, data.get(), snapSize, true);
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+    snap->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, snap);
 
     // Set up a couple of ints in the snapshot
     int offsetA1 = 8;
@@ -235,9 +227,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int baseA1 = 25;
     int baseA2 = 60;
 
-    auto snap = reg.getSnapshot(snapKey);
-    int* basePtrA1 = (int*)(snap->data + offsetA1);
-    int* basePtrA2 = (int*)(snap->data + offsetA2);
+    int* basePtrA1 = (int*)(snap->getMutableDataPtr() + offsetA1);
+    int* basePtrA2 = (int*)(snap->getMutableDataPtr() + offsetA2);
     *basePtrA1 = baseA1;
     *basePtrA2 = baseA2;
 
@@ -278,8 +269,6 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Check diffs have been applied according to the merge operations
     REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
     REQUIRE(*basePtrA2 == baseA2 + diffIntA2);
-
-    deallocatePages(snap->data, 5);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
@@ -376,7 +365,9 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     }
 
     // Put original data in place
-    std::memcpy(snap->data + offset, originalData.data(), originalData.size());
+    std::memcpy(snap->getMutableDataPtr(offset),
+                originalData.data(),
+                originalData.size());
 
     SnapshotDiff diff(SnapshotDataType::Raw,
                       SnapshotMergeOperation::Overwrite,
@@ -396,11 +387,9 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(server.diffsApplied() == originalDiffsApplied + 1);
 
     // Check data is as expected
-    std::vector<uint8_t> actualData(snap->data + offset,
-                                    snap->data + offset + expectedData.size());
+    std::vector<uint8_t> actualData =
+      snap->getDataCopy(offset, offset + expectedData.size());
     REQUIRE(actualData == expectedData);
-
-    deallocatePages(snap->data, 5);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,

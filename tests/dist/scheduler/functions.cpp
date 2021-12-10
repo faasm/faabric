@@ -68,7 +68,7 @@ int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
       faabric::snapshot::getSnapshotRegistry();
 
     auto originalSnap = reg.getSnapshot(snapshotKey);
-    faabric::util::SnapshotData updatedSnap = exec->snapshot();
+    std::shared_ptr<faabric::util::SnapshotData> updatedSnap = exec->snapshot();
 
     // Add a single merge region to catch both diffs
     int offsetA = 10;
@@ -83,9 +83,8 @@ int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
 
     // Modify the executor's memory
     std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
-    std::memcpy(updatedSnap.data + offsetA, keyBytes.data(), keyBytes.size());
-    std::memcpy(
-      updatedSnap.data + offsetB, inputBytes.data(), inputBytes.size());
+    updatedSnap->copyInData(keyBytes, offsetA);
+    updatedSnap->copyInData(inputBytes, offsetB);
 
     return 123;
 }
@@ -112,10 +111,8 @@ int handleFakeDiffsThreadedFunction(
 
         // Set up the snapshot
         size_t snapSize = (nThreads * 4) * faabric::util::HOST_PAGE_SIZE;
-        uint8_t* snapMemory = (uint8_t*)mmap(
-          nullptr, snapSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-        reg.registerSnapshot(snapshotKey, snapMemory, snapSize);
+        auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
+        reg.registerSnapshot(snapshotKey, snap);
 
         auto req =
           faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
@@ -131,8 +128,7 @@ int handleFakeDiffsThreadedFunction(
             // the child thread to make sure it's not overwritten
             std::vector<uint8_t> localChange(3, i);
             int offset = 2 * i * faabric::util::HOST_PAGE_SIZE;
-            std::memcpy(
-              snapMemory + offset, localChange.data(), localChange.size());
+            snap->copyInData(localChange, offset);
         }
 
         // Dispatch the message, expecting them all to execute on other hosts
@@ -167,9 +163,8 @@ int handleFakeDiffsThreadedFunction(
             // Check local modifications
             std::vector<uint8_t> expectedLocal(3, i);
             int localOffset = 2 * i * faabric::util::HOST_PAGE_SIZE;
-            std::vector<uint8_t> actualLocal(snapMemory + localOffset,
-                                             snapMemory + localOffset +
-                                               expectedLocal.size());
+            std::vector<uint8_t> actualLocal =
+              snap->getDataCopy(localOffset, expectedLocal.size());
 
             if (actualLocal != expectedLocal) {
                 SPDLOG_ERROR("Local modifications not present for {}", i);
@@ -179,7 +174,8 @@ int handleFakeDiffsThreadedFunction(
             // Check remote modifications
             int offset = 2 * i * faabric::util::HOST_PAGE_SIZE + 10;
             std::string expectedData("thread_" + std::to_string(i));
-            auto* charPtr = reinterpret_cast<char*>(snapMemory + offset);
+            auto* charPtr =
+              reinterpret_cast<char*>(snap->getMutableDataPtr(offset));
             std::string actual(charPtr);
 
             if (actual != expectedData) {
@@ -206,7 +202,8 @@ int handleFakeDiffsThreadedFunction(
           faabric::util::stringToBytes(msgInput);
 
         auto originalSnap = reg.getSnapshot(snapshotKey);
-        faabric::util::SnapshotData updatedSnap = exec->snapshot();
+        std::shared_ptr<faabric::util::SnapshotData> updatedSnap =
+          exec->snapshot();
 
         // Make sure it's captured by the region
         int regionLength = 20 + inputBytes.size();
@@ -217,9 +214,7 @@ int handleFakeDiffsThreadedFunction(
           faabric::util::SnapshotMergeOperation::Overwrite);
 
         // Now modify the memory
-        std::memcpy(updatedSnap.data + changeOffset,
-                    inputBytes.data(),
-                    inputBytes.size());
+        updatedSnap->copyInData(inputBytes, changeOffset);
 
         return 0;
     }

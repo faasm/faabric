@@ -30,9 +30,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     int snapPages = 5;
 
     size_t snapSize = snapPages * faabric::util::HOST_PAGE_SIZE;
-    OwnedMmapRegion data = faabric::util::allocateSharedMemory(snapSize);
-
-    reg.registerSnapshot(snapKey, data.get(), snapSize, true);
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+    snap->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, snap);
 
     int sharedMemPages = 8;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
@@ -47,7 +47,6 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     sharedMem[8 * HOST_PAGE_SIZE - 20] = 1;
 
     // Check there are no diffs
-    auto snap = reg.getSnapshot(snapKey);
     std::vector<SnapshotDiff> changeDiffs =
       snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
     REQUIRE(changeDiffs.empty());
@@ -59,10 +58,9 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     int snapPages = 5;
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
 
-    OwnedMmapRegion data = faabric::util::allocateSharedMemory(snapSize);
-
-    reg.registerSnapshot(snapKey, data.get(), snapSize, true);
-    auto snap = reg.getSnapshot(snapKey);
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+    snap->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, snap);
 
     // Make shared memory larger than original snapshot
     int sharedMemPages = 8;

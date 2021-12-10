@@ -1,9 +1,9 @@
-#include <faabric/util/snapshot.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/func.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/snapshot.h>
 
 #include <sys/mman.h>
 

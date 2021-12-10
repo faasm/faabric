@@ -227,9 +227,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
     std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
-        snapshotDataAllocation = std::make_unique<uint8_t[]>(1234);
-        snapRegistry.registerSnapshot(
-          expectedSnapshot, snapshotDataAllocation.get(), 1234);
+        auto snap = std::make_shared<faabric::util::SnapshotData>(1234);
+        snapRegistry.registerSnapshot(expectedSnapshot, snap);
     }
 
     // Mock everything
@@ -304,8 +303,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
         auto pushedSnapshot = snapshotPushes.at(0);
         REQUIRE(pushedSnapshot.first == otherHost);
-        REQUIRE(pushedSnapshot.second.size == snapshot->size);
-        REQUIRE(pushedSnapshot.second.data == snapshot->data);
+        REQUIRE(pushedSnapshot.second->size == snapshot->size);
+        REQUIRE(pushedSnapshot.second->getDataPtr() == snapshot->getDataPtr());
     }
 
     // Check the executor counts on this host
@@ -422,11 +421,9 @@ TEST_CASE_METHOD(SlowExecutorFixture,
       faabric::snapshot::getSnapshotRegistry();
 
     size_t snapSize = 1234;
-    std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
-        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapSize);
-        snapRegistry.registerSnapshot(
-          expectedSnapshot, snapshotDataAllocation.get(), snapSize);
+        auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
+        snapRegistry.registerSnapshot(expectedSnapshot, snap);
     }
 
     // Set up this host with very low resources

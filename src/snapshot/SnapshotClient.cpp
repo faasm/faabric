@@ -76,8 +76,7 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
 void SnapshotClient::pushSnapshot(
   const std::string& key,
   int groupId,
-  std::shared_ptr<faabric::util::SnapshotData> data,
-  size_t maxSize)
+  std::shared_ptr<faabric::util::SnapshotData> data)
 {
     if (data->size == 0) {
         SPDLOG_ERROR("Cannot push snapshot {} with size zero to {}", key, host);
@@ -98,7 +97,7 @@ void SnapshotClient::pushSnapshot(
         auto dataOffset =
           mb.CreateVector<uint8_t>(data->getDataPtr(), data->size);
         auto requestOffset = CreateSnapshotPushRequest(
-          mb, keyOffset, groupId, maxSize, dataOffset);
+          mb, keyOffset, groupId, data->maxSize, dataOffset);
         mb.Finish(requestOffset);
 
         // Send it
