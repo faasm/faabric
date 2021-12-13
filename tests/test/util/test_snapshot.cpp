@@ -107,7 +107,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Set up shared memory
     int sharedMemPages = 20;
-    OwnedMmapRegion sharedMem =
+    MemoryRegion sharedMem =
       allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
 
     // Check it's zeroed
@@ -156,7 +156,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(snap->isRestorable());
 
     // Map to some other region of memory large enough for the extended version
-    OwnedMmapRegion sharedMem = allocateSharedMemory(expandedSize);
+    MemoryRegion sharedMem = allocateSharedMemory(expandedSize);
     snap->mapToMemory(sharedMem.get());
 
     // Add some data to the extended region. Check the snapshot extends to fit
@@ -219,7 +219,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot to some memory
-    OwnedMmapRegion sharedMem = allocateSharedMemory(memSize);
+    MemoryRegion sharedMem = allocateSharedMemory(memSize);
 
     reg.mapSnapshot(snapKey, sharedMem.get());
 
@@ -256,7 +256,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Get the snapshot diffs
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs(sharedMem.get(), memSize);
+      snap->getChangeDiffs({ sharedMem.get(), memSize });
 
     // Check original hasn't changed
     REQUIRE(*intAOriginal == originalValueA);
@@ -337,8 +337,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    OwnedMmapRegion sharedMem =
-      allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+    MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     reg.mapSnapshot(snapKey, sharedMem.get());
 
@@ -393,7 +392,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     };
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
     REQUIRE(actualDiffs.size() == 4);
 
     checkDiffs(actualDiffs, expectedDiffs);
@@ -516,8 +515,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    OwnedMmapRegion sharedMem =
-      allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+    MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
     reg.mapSnapshot(snapKey, sharedMem.get());
 
@@ -533,7 +531,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Get the snapshot diffs
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
 
     // Check diff
     REQUIRE(actualDiffs.size() == 1);
@@ -587,8 +585,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    OwnedMmapRegion sharedMem =
-      allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+    MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
     reg.mapSnapshot(snapKey, sharedMem.get());
 
     // Reset dirty tracking
@@ -604,7 +601,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Check getting diffs throws an exception
     bool failed = false;
     try {
-        snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+        snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
     } catch (std::runtime_error& ex) {
         failed = true;
         REQUIRE(ex.what() == expectedMsg);
@@ -626,7 +623,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
-    OwnedMmapRegion sharedMem = allocateSharedMemory(sharedMemSize);
+    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
     reg.mapSnapshot(snapKey, sharedMem.get());
 
     // Reset dirty tracking
@@ -680,7 +677,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Check number of diffs
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -698,7 +695,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
-    OwnedMmapRegion sharedMem = allocateSharedMemory(sharedMemSize);
+    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
     reg.mapSnapshot(snapKey, sharedMem.get());
 
     // Reset dirty tracking
@@ -761,7 +758,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     };
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -780,7 +777,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
-    OwnedMmapRegion sharedMem = allocateSharedMemory(sharedMemSize);
+    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
     reg.mapSnapshot(snapKey, sharedMem.get());
     faabric::util::resetDirtyTracking();
 
@@ -798,7 +795,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                          faabric::util::SnapshotMergeOperation::Overwrite);
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
 
     // Make sure the whole page containing the diff is included
     std::vector<SnapshotDiff> expectedDiffs = {
@@ -847,9 +844,10 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
         expectOwner = true;
     }
 
-    SECTION("From ptr")
+    SECTION("From span")
     {
-        snap = std::make_shared<SnapshotData>(data.data(), data.size());
+        snap = std::make_shared<SnapshotData>(
+          std::span<uint8_t>(data.data(), data.size()));
     }
 
     SECTION("From vector") { snap = std::make_shared<SnapshotData>(data); }

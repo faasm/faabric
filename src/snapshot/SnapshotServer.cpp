@@ -6,6 +6,7 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
@@ -86,12 +87,11 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // Set up the snapshot
     // Note, the snapshot object must take ownership of the data here, which
     // implies a copy.
-    // TODO - can we take ownership from flatbuffer object to avoid the copy?
     size_t snapSize = r->contents()->size();
     std::string snapKey = r->key()->str();
     auto d =
       std::make_shared<faabric::util::SnapshotData>(snapSize, r->maxSize());
-    d->copyInData((uint8_t*)r->contents()->Data(), snapSize);
+    d->copyInData({ (uint8_t*)r->contents()->Data(), snapSize });
 
     // Register and make restorable
     d->makeRestorable(snapKey);
@@ -147,8 +147,8 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
             case (faabric::util::SnapshotDataType::Raw): {
                 switch (chunk->mergeOp()) {
                     case (faabric::util::SnapshotMergeOperation::Overwrite): {
-                        snap->copyInData((uint8_t*)chunk->data()->data(),
-                                         chunk->data()->size(),
+                        snap->copyInData({ (uint8_t*)chunk->data()->data(),
+                                           chunk->data()->size() },
                                          chunk->offset());
                         break;
                     }
@@ -164,29 +164,30 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
             case (faabric::util::SnapshotDataType::Int): {
                 const auto* diffValue =
                   reinterpret_cast<const int32_t*>(chunk->data()->data());
-                const int32_t* original = reinterpret_cast<const int32_t*>(
+
+                auto original = faabric::util::unalignedRead<int32_t>(
                   snap->getDataPtr(chunk->offset()));
 
                 int32_t finalValue = 0;
                 switch (chunk->mergeOp()) {
                     case (faabric::util::SnapshotMergeOperation::Sum): {
-                        finalValue = *original + *diffValue;
+                        finalValue = original + *diffValue;
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Subtract): {
-                        finalValue = *original - *diffValue;
+                        finalValue = original - *diffValue;
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Product): {
-                        finalValue = *original * *diffValue;
+                        finalValue = original * *diffValue;
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Min): {
-                        finalValue = std::min(*original, *diffValue);
+                        finalValue = std::min(original, *diffValue);
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Max): {
-                        finalValue = std::max(*original, *diffValue);
+                        finalValue = std::max(original, *diffValue);
                         break;
                     }
                     default: {
@@ -197,8 +198,8 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
                     }
                 }
 
-                snap->copyInData(
-                  BYTES(&finalValue), sizeof(int32_t), chunk->offset());
+                snap->copyInData({ BYTES(&finalValue), sizeof(int32_t) },
+                                 chunk->offset());
                 break;
             }
             default: {

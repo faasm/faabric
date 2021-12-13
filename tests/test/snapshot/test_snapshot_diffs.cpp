@@ -36,7 +36,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     int sharedMemPages = 8;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    OwnedMmapRegion sharedMem = allocateSharedMemory(sharedMemSize);
+    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
 
     reg.mapSnapshot(snapKey, sharedMem.get());
 
@@ -48,7 +48,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     // Check there are no diffs
     std::vector<SnapshotDiff> changeDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
     REQUIRE(changeDiffs.empty());
 }
 
@@ -65,7 +65,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // Make shared memory larger than original snapshot
     int sharedMemPages = 8;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    OwnedMmapRegion sharedMem =
+    MemoryRegion sharedMem =
       allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
 
     // Map the snapshot to the start of the memory
@@ -158,7 +158,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
 
     // Check we have the right number of diffs
     std::vector<SnapshotDiff> changeDiffs =
-      snap->getChangeDiffs(sharedMem.get(), sharedMemSize);
+      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
 
     REQUIRE(changeDiffs.size() == 6);
 

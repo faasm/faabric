@@ -28,6 +28,7 @@ std::shared_ptr<faabric::util::SnapshotData> SnapshotRegistry::getSnapshot(
 
 bool SnapshotRegistry::snapshotExists(const std::string& key)
 {
+    faabric::util::SharedLock lock(snapshotsMx);
     return snapshotMap.find(key) != snapshotMap.end();
 }
 
@@ -58,24 +59,19 @@ void SnapshotRegistry::doRegisterSnapshot(
 {
     faabric::util::FullLock lock(snapshotsMx);
 
-    if (snapshotExists(key) && !overwrite) {
+    if (!overwrite && (snapshotMap.find(key) != snapshotMap.end())) {
         SPDLOG_TRACE("Skipping already existing snapshot {}", key);
         return;
     }
 
     SPDLOG_TRACE("Registering snapshot {} size {}", key, data->size);
 
-    snapshotMap[key] = data;
+    snapshotMap.insert_or_assign(key, std::move(data));
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)
 {
     faabric::util::FullLock lock(snapshotsMx);
-
-    if (snapshotMap.count(key) == 0) {
-        return;
-    }
-
     snapshotMap.erase(key);
 }
 

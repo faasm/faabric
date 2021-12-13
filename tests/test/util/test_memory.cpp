@@ -360,10 +360,10 @@ TEST_CASE("Test allocating and claiming memory", "[util]")
 {
     // Allocate some virtual memory
     size_t vMemSize = 100 * HOST_PAGE_SIZE;
-    OwnedMmapRegion vMem = allocateVirtualMemory(vMemSize);
+    MemoryRegion vMem = allocateVirtualMemory(vMemSize);
 
     size_t sizeA = 10 * HOST_PAGE_SIZE;
-    claimVirtualMemory(vMem.get(), sizeA);
+    claimVirtualMemory({ vMem.get(), sizeA });
 
     // Write something to the new memory
     vMem[10] = 1;
@@ -371,7 +371,7 @@ TEST_CASE("Test allocating and claiming memory", "[util]")
     vMem[6 * HOST_PAGE_SIZE + 10] = 3;
 
     size_t sizeB = 5 * HOST_PAGE_SIZE;
-    claimVirtualMemory(vMem.get() + sizeA, sizeB);
+    claimVirtualMemory({ vMem.get() + sizeA, sizeB });
 
     // Write something to the new memory
     vMem[sizeA + 10] = 4;
@@ -390,34 +390,34 @@ TEST_CASE("Test allocating and claiming memory", "[util]")
 TEST_CASE("Test mapping memory", "[util]")
 {
     size_t vMemSize = 100 * HOST_PAGE_SIZE;
-    OwnedMmapRegion vMem = allocateVirtualMemory(vMemSize);
+    MemoryRegion vMem = allocateVirtualMemory(vMemSize);
 
     // Set up some data in memory
     std::vector<uint8_t> chunk(10 * HOST_PAGE_SIZE, 3);
-    claimVirtualMemory(vMem.get(), chunk.size());
+    claimVirtualMemory({ vMem.get(), chunk.size() });
     std::memcpy(vMem.get(), chunk.data(), chunk.size());
 
     // Write this to a file descriptor
-    int fd = writeMemoryToFd(vMem.get(), chunk.size(), "foobar");
+    int fd = writeMemoryToFd({ vMem.get(), chunk.size() }, "foobar");
 
     // Map some new memory to this fd
-    OwnedMmapRegion memA = allocateSharedMemory(chunk.size());
-    mapMemory(memA.get(), chunk.size(), fd);
+    MemoryRegion memA = allocateSharedMemory(chunk.size());
+    mapMemory({ memA.get(), chunk.size() }, fd);
 
     std::vector<uint8_t> memAData(memA.get(), memA.get() + chunk.size());
     REQUIRE(memAData == chunk);
 
     // Extend the memory and copy some new data in
     std::vector<uint8_t> chunkB(5 * HOST_PAGE_SIZE, 4);
-    claimVirtualMemory(vMem.get() + chunk.size(), chunkB.size());
+    claimVirtualMemory({ vMem.get() + chunk.size(), chunkB.size() });
     std::memcpy(vMem.get() + chunk.size(), chunkB.data(), chunkB.size());
 
     // Append the data to the fd
-    appendDataToFd(fd, chunk.size(), chunk.size() + chunkB.size(), vMem.get());
+    appendDataToFd(fd, { chunkB.data(), chunkB.size() });
 
     // Map a region to both chunks
-    OwnedMmapRegion memB = allocateSharedMemory(chunk.size() + chunkB.size());
-    mapMemory(memB.get(), chunk.size() + chunkB.size(), fd);
+    MemoryRegion memB = allocateSharedMemory(chunk.size() + chunkB.size());
+    mapMemory({ memB.get(), chunk.size() + chunkB.size() }, fd);
 
     // Check region now contains both bits of data
     std::vector<uint8_t> memBData(memB.get(),

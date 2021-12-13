@@ -55,8 +55,8 @@ void TestExecutor::restore(faabric::Message& msg)
 
 std::shared_ptr<faabric::util::SnapshotData> TestExecutor::snapshot()
 {
-    return std::make_shared<faabric::util::SnapshotData>(dummyMemory.get(),
-                                                         dummyMemorySize);
+    return std::make_shared<faabric::util::SnapshotData>(
+      std::span<uint8_t>(dummyMemory.get(), dummyMemorySize));
 }
 
 int32_t TestExecutor::executeTask(

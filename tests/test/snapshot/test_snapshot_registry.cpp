@@ -79,9 +79,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(actualC->isRestorable());
 
     // Create regions onto which we will map the snapshots
-    OwnedMmapRegion actualDataA = allocateSharedMemory(1 * HOST_PAGE_SIZE);
-    OwnedMmapRegion actualDataB = allocateSharedMemory(2 * HOST_PAGE_SIZE);
-    OwnedMmapRegion actualDataC = allocateSharedMemory(3 * HOST_PAGE_SIZE);
+    MemoryRegion actualDataA = allocateSharedMemory(1 * HOST_PAGE_SIZE);
+    MemoryRegion actualDataB = allocateSharedMemory(2 * HOST_PAGE_SIZE);
+    MemoryRegion actualDataC = allocateSharedMemory(3 * HOST_PAGE_SIZE);
 
     // Check those that are mappable are mapped
     reg.mapSnapshot(keyA, actualDataA.get());

@@ -298,7 +298,7 @@ class TestExecutor final : public faabric::scheduler::Executor
   public:
     TestExecutor(faabric::Message& msg);
 
-    faabric::util::OwnedMmapRegion dummyMemory = nullptr;
+    faabric::util::MemoryRegion dummyMemory = nullptr;
     size_t dummyMemorySize = 0;
 
     void reset(faabric::Message& msg) override;

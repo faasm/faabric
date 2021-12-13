@@ -38,7 +38,7 @@ class DistTestExecutor final : public faabric::scheduler::Executor
     size_t snapshotSize = 0;
 
   protected:
-    faabric::util::OwnedMmapRegion dummyMemory = nullptr;
+    faabric::util::MemoryRegion dummyMemory = nullptr;
     size_t dummyMemorySize = 0;
 };
 

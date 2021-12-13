@@ -293,8 +293,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             std::vector<faabric::util::SnapshotDiff> diffs =
               snapshotPreExecution->getChangeDiffs(
-                snapshotPostExecution->getDataPtr(),
-                snapshotPostExecution->size);
+                std::span<const uint8_t>(snapshotPostExecution->getDataPtr(),
+                                         snapshotPostExecution->size));
 
             sch.pushSnapshotDiffs(msg, diffs);
 

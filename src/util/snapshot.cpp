@@ -22,25 +22,25 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     }
 
     // Allocate virtual memory big enough for the max size if provided
-    ownedData = faabric::util::allocateVirtualMemory(maxSize);
+    _data = faabric::util::allocateVirtualMemory(maxSize);
 
     // Claim just the snapshot region
-    faabric::util::claimVirtualMemory(BYTES(ownedData.get()), size);
+    faabric::util::claimVirtualMemory({ BYTES(_data.get()), size });
 }
 
 SnapshotData::SnapshotData(std::vector<uint8_t>& dataIn)
-  : SnapshotData(dataIn.data(), dataIn.size())
+  : SnapshotData({ dataIn.data(), dataIn.size() })
 {}
 
-SnapshotData::SnapshotData(uint8_t* dataIn, size_t sizeIn)
-  : SnapshotData(dataIn, sizeIn, sizeIn)
+SnapshotData::SnapshotData(std::span<uint8_t> dataIn)
+  : SnapshotData(dataIn, dataIn.size())
 {}
 
-SnapshotData::SnapshotData(uint8_t* dataIn, size_t sizeIn, size_t maxSizeIn)
-  : size(sizeIn)
+SnapshotData::SnapshotData(std::span<uint8_t> dataIn, size_t maxSizeIn)
+  : size(dataIn.size())
   , maxSize(maxSizeIn)
   , owner(false)
-  , rawData(dataIn)
+  , _data(wrapNotOwnedRegion(dataIn.data()))
 {}
 
 SnapshotData::~SnapshotData()
@@ -66,21 +66,16 @@ bool SnapshotData::isOwner()
 
 void SnapshotData::copyInData(std::vector<uint8_t>& buffer, uint32_t offset)
 {
-    copyInData(buffer.data(), buffer.size(), offset);
+    copyInData({ buffer.data(), buffer.size() }, offset);
 }
 
-void SnapshotData::copyInData(uint8_t* buffer,
-                              size_t bufferSize,
-                              uint32_t offset)
+void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
 {
     faabric::util::FullLock lock(snapMx);
 
-    uint8_t* data = getPtrInternal();
-
     // Try to allocate more memory on top of existing data if necessary.
     // Will throw an exception if not possible
-    size_t newSize = bufferSize + offset;
-    bool sizeChanged = false;
+    size_t newSize = offset + buffer.size();
     if (newSize > size) {
         if (newSize > maxSize) {
             SPDLOG_ERROR(
@@ -88,45 +83,44 @@ void SnapshotData::copyInData(uint8_t* buffer,
             throw std::runtime_error("Copying snapshot data over max");
         }
 
-        claimVirtualMemory(data, newSize);
+        claimVirtualMemory({ _data.get(), newSize });
         size = newSize;
-        sizeChanged = true;
+
+        // Update fd
+        if (fd > 0) {
+            // TODO - extend fd
+        }
     }
 
     // Copy in new data
-    ::memcpy(data + offset, buffer, bufferSize);
+    uint8_t* copyTarget = validateDataOffset(offset);
+    ::memcpy(copyTarget, buffer.data(), buffer.size());
 
-    // Update fd
-    if (fd > 0 && sizeChanged) {
-        faabric::util::appendDataToFd(fd, fdSize, size, data);
-        fdSize = size;
+    if (fd > 0) {
+        // TODO - update fd contents
     }
 }
 
 const uint8_t* SnapshotData::getDataPtr(uint32_t offset)
 {
     faabric::util::SharedLock lock(snapMx);
-    return getPtrInternal(offset);
+    return validateDataOffset(offset);
 }
 
 uint8_t* SnapshotData::getMutableDataPtr(uint32_t offset)
 {
     faabric::util::SharedLock lock(snapMx);
-    return getPtrInternal(offset);
+    return validateDataOffset(offset);
 }
 
-uint8_t* SnapshotData::getPtrInternal(uint32_t offset)
+uint8_t* SnapshotData::validateDataOffset(uint32_t offset)
 {
     if (offset > size) {
         SPDLOG_ERROR("Out of bounds snapshot access: {} > {}", offset, size);
         throw std::runtime_error("Out of bounds snapshot access");
     }
 
-    if (owner) {
-        return ownedData.get() + offset;
-    }
-
-    return rawData + offset;
+    return _data.get() + offset;
 }
 
 std::vector<uint8_t> SnapshotData::getDataCopy()
@@ -146,7 +140,7 @@ std::vector<uint8_t> SnapshotData::getDataCopy(uint32_t offset, size_t dataSize)
         throw std::runtime_error("Out of bounds snapshot access");
     }
 
-    uint8_t* ptr = getPtrInternal(offset);
+    uint8_t* ptr = validateDataOffset(offset);
     return std::vector<uint8_t>(ptr, ptr + dataSize);
 }
 
@@ -154,18 +148,18 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
 {
     faabric::util::SharedLock lock(snapMx);
 
-    uint8_t* data = getPtrInternal();
-    if (data == nullptr || size == 0) {
+    if (_data == nullptr || size == 0) {
         std::vector<SnapshotDiff> empty;
         return empty;
     }
 
     // Get dirty regions
     int nPages = getRequiredHostPages(size);
-    std::vector<int> dirtyPageNumbers = getDirtyPageNumbers(data, nPages);
+    std::vector<int> dirtyPageNumbers =
+      getDirtyPageNumbers(_data.get(), nPages);
 
     std::vector<std::pair<uint32_t, uint32_t>> regions =
-      faabric::util::getDirtyRegions(data, nPages);
+      faabric::util::getDirtyRegions(_data.get(), nPages);
 
     // Convert to snapshot diffs
     std::vector<SnapshotDiff> diffs;
@@ -173,7 +167,7 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
         diffs.emplace_back(SnapshotDataType::Raw,
                            SnapshotMergeOperation::Overwrite,
                            p.first,
-                           data + p.first,
+                           _data.get() + p.first,
                            (p.second - p.first));
     }
 
@@ -182,8 +176,8 @@ std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
     return diffs;
 }
 
-std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
-                                                       size_t updatedSize)
+std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(
+  std::span<const uint8_t> updated)
 {
     faabric::util::SharedLock lock(snapMx);
 
@@ -194,14 +188,13 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
     }
 
     // Work out which regions of memory have changed
-    size_t nThisPages = getRequiredHostPages(updatedSize);
+    size_t nThisPages = getRequiredHostPages(updated.size());
     std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-      faabric::util::getDirtyRegions(updated, nThisPages);
+      faabric::util::getDirtyRegions(updated.data(), nThisPages);
     SPDLOG_TRACE("Found {} dirty regions", dirtyRegions.size());
 
     // Iterate through merge regions, see which ones overlap with dirty memory
     // regions, and add corresponding diffs
-    uint8_t* data = getPtrInternal();
     for (auto& mrPair : mergeRegions) {
         SnapshotMergeRegion& mr = mrPair.second;
 
@@ -214,9 +207,9 @@ std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(const uint8_t* updated,
         for (auto& dirtyRegion : dirtyRegions) {
             // Add the diffs
             mr.addDiffs(diffs,
-                        data,
+                        _data.get(),
                         size,
-                        updated,
+                        updated.data(),
                         dirtyRegion.first,
                         dirtyRegion.second);
         }
@@ -279,16 +272,13 @@ void SnapshotData::mapToMemory(uint8_t* target)
         throw std::runtime_error(msg);
     }
 
-    faabric::util::mapMemory(target, size, fd);
+    faabric::util::mapMemory({ target, size }, fd);
 }
 
 void SnapshotData::makeRestorable(const std::string& fdLabel)
 {
     faabric::util::FullLock lock(snapMx);
-
-    uint8_t* data = getPtrInternal();
-    fd = writeMemoryToFd(data, size, fdLabel);
-    fdSize = size;
+    fd = writeMemoryToFd({ _data.get(), size }, fdLabel);
 }
 
 std::map<uint32_t, SnapshotMergeRegion> SnapshotData::getMergeRegions()

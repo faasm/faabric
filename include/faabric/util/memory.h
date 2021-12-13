@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -48,20 +49,23 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // Allocation
 // -------------------------
 
-typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>>
-  OwnedMmapRegion;
+typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
-OwnedMmapRegion allocateSharedMemory(size_t size);
+MemoryRegion wrapNotOwnedRegion(uint8_t* ptr);
 
-OwnedMmapRegion allocateVirtualMemory(size_t size);
+MemoryRegion allocateSharedMemory(size_t size);
 
-void claimVirtualMemory(uint8_t* start, size_t size);
+MemoryRegion allocateVirtualMemory(size_t size);
 
-void mapMemory(uint8_t* target, size_t size, int fd);
+void claimVirtualMemory(std::span<uint8_t> region);
 
-int writeMemoryToFd(const uint8_t* source,
-                    size_t size,
-                    const std::string& fdLabel);
+void mapMemory(std::span<uint8_t> target, int fd);
 
-void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* newData);
+void resizeFd(int fd, size_t size);
+
+void writeToFd(int fd, off_t offset, std::span<const uint8_t> data);
+
+int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel);
+
+void appendDataToFd(int fd, std::span<uint8_t> data);
 }

@@ -68,8 +68,8 @@ void DistTestExecutor::restore(faabric::Message& msg)
 
 std::shared_ptr<faabric::util::SnapshotData> DistTestExecutor::snapshot()
 {
-    return std::make_shared<faabric::util::SnapshotData>(dummyMemory.get(),
-                                                         dummyMemorySize);
+    return std::make_shared<faabric::util::SnapshotData>(
+      std::span<uint8_t>(dummyMemory.get(), dummyMemorySize));
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

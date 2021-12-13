@@ -82,7 +82,7 @@ def install(ctx, target, shared=False):
 
 
 @task
-def sanitise(ctx, mode, target, noclean=False, shared=False):
+def sanitise(ctx, mode, target="faabric_tests", noclean=False, shared=False):
     """
     Build the tests with different sanitisers
     """

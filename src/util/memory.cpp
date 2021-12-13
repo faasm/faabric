@@ -182,15 +182,30 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // Allocation
 // -------------------------
 
-OwnedMmapRegion doAlloc(size_t size, int prot, int flags)
+MemoryRegion wrapNotOwnedRegion(uint8_t* ptr)
+{
+    auto deleter = [](uint8_t* u) {};
+    MemoryRegion res(ptr, deleter);
+    return res;
+}
+
+MemoryRegion doAlloc(size_t size, int prot, int flags)
 {
     auto deleter = [size](uint8_t* u) { munmap(u, size); };
-    OwnedMmapRegion mem((uint8_t*)::mmap(nullptr, size, prot, flags, -1, 0),
-                        deleter);
+    MemoryRegion mem((uint8_t*)::mmap(nullptr, size, prot, flags, -1, 0),
+                     deleter);
+
+    if (mem.get() == MAP_FAILED) {
+        SPDLOG_ERROR("Allocating memory with mmap failed: {} ({})",
+                     errno,
+                     ::strerror(errno));
+        throw std::runtime_error("Allocating memory failed");
+    }
+
     return mem;
 }
 
-OwnedMmapRegion allocateSharedMemory(size_t size)
+MemoryRegion allocateSharedMemory(size_t size)
 {
     if (size < HOST_PAGE_SIZE) {
         SPDLOG_WARN("Allocating less than a page of memory");
@@ -199,23 +214,24 @@ OwnedMmapRegion allocateSharedMemory(size_t size)
     return doAlloc(size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
 }
 
-OwnedMmapRegion allocateVirtualMemory(size_t size)
+MemoryRegion allocateVirtualMemory(size_t size)
 {
     return doAlloc(size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS);
 }
 
-void claimVirtualMemory(uint8_t* start, size_t size)
+void claimVirtualMemory(std::span<uint8_t> region)
 {
-    int protectRes = ::mprotect(start, size, PROT_READ | PROT_WRITE);
+    int protectRes =
+      ::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE);
     if (protectRes != 0) {
         SPDLOG_ERROR("Failed claiming virtual memory: {}", strerror(errno));
         throw std::runtime_error("Failed claiming virtual memory");
     }
 }
 
-void mapMemory(uint8_t* target, size_t size, int fd)
+void mapMemory(std::span<uint8_t> target, int fd)
 {
-    if (!faabric::util::isPageAligned((void*)target)) {
+    if (!faabric::util::isPageAligned((void*)target.data())) {
         SPDLOG_ERROR("Mapping memory to non page-aligned address");
         throw std::runtime_error("Mapping memory to non page-aligned address");
     }
@@ -226,8 +242,12 @@ void mapMemory(uint8_t* target, size_t size, int fd)
     }
 
     // Make mmap call to do the mapping
-    void* mmapRes = ::mmap(
-      target, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd, 0);
+    void* mmapRes = ::mmap(target.data(),
+                           target.size(),
+                           PROT_READ | PROT_WRITE,
+                           MAP_PRIVATE | MAP_FIXED,
+                           fd,
+                           0);
 
     if (mmapRes == MAP_FAILED) {
         SPDLOG_ERROR("mapping memory to fd {} failed: {} ({})",
@@ -238,10 +258,36 @@ void mapMemory(uint8_t* target, size_t size, int fd)
     }
 }
 
-int writeMemoryToFd(const uint8_t* source,
-                    size_t size,
-                    const std::string& fdLabel)
+void resizeFd(int fd, size_t size)
 {
+    // Make the fd big enough
+    int ferror = ::ftruncate(fd, size);
+    if (ferror != 0) {
+        SPDLOG_ERROR("ftruncate call failed with error {}", ferror);
+        throw std::runtime_error("Failed writing memory to fd (ftruncate)");
+    }
+}
+
+void writeToFd(int fd, off_t offset, std::span<const uint8_t> data)
+{
+    // Seek to the right point
+    off_t lseekRes = ::lseek(fd, offset, SEEK_SET);
+    if (lseekRes == -1) {
+        SPDLOG_ERROR("Failed to set fd {} to offset {}", fd, offset);
+        throw std::runtime_error("Failed changing fd size");
+    }
+
+    // Write the data
+    ssize_t werror = ::write(fd, data.data(), data.size());
+    if (werror == -1) {
+        SPDLOG_ERROR("Write call failed with error {}", werror);
+        throw std::runtime_error("Failed writing memory to fd (write)");
+    }
+}
+
+int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel)
+{
+    // Create new fd
     int fd = ::memfd_create(fdLabel.c_str(), 0);
     if (fd == -1) {
         SPDLOG_ERROR("Failed to create file descriptor: {}", strerror(errno));
@@ -249,29 +295,28 @@ int writeMemoryToFd(const uint8_t* source,
     }
 
     // Make the fd big enough
-    int ferror = ::ftruncate(fd, size);
-    if (ferror != 0) {
-        SPDLOG_ERROR("ftruncate call failed with error {}", ferror);
-        throw std::runtime_error("Failed writing memory to fd (ftruncate)");
-    }
+    resizeFd(fd, data.size());
 
     // Write the data
-    ssize_t werror = ::write(fd, source, size);
-    if (werror == -1) {
-        SPDLOG_ERROR("Write call failed with error {}", werror);
-        throw std::runtime_error("Failed writing memory to fd (write)");
-    }
+    writeToFd(fd, 0, data);
 
     return fd;
 }
 
-void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* data)
+void appendDataToFd(int fd, std::span<uint8_t> data)
 {
-    if (newSize == oldSize) {
+    off_t oldSize = ::lseek(fd, 0, SEEK_END);
+    if (oldSize == -1) {
+        SPDLOG_ERROR("lseek to get old size failed: {}", strerror(errno));
+        throw std::runtime_error("Failed seeking existing size of fd");
+    }
+
+    if (data.empty()) {
         return;
     }
 
     // Extend the fd
+    off_t newSize = oldSize + data.size();
     int ferror = ::ftruncate(fd, newSize);
     if (ferror != 0) {
         SPDLOG_ERROR("Extending with ftruncate failed with error {}", ferror);
@@ -279,16 +324,14 @@ void appendDataToFd(int fd, size_t oldSize, size_t newSize, uint8_t* data)
     }
 
     // Skip to the end of the old data
-    int seekRes = ::lseek(fd, oldSize, SEEK_SET);
+    off_t seekRes = ::lseek(fd, oldSize, SEEK_SET);
     if (seekRes == -1) {
         SPDLOG_ERROR("lseek call failed with error {}", strerror(errno));
         throw std::runtime_error("Failed appending data to fd");
     }
 
     // Write the data
-    uint8_t* newDataStart = data + oldSize;
-    size_t newDataSize = newSize - oldSize;
-    ssize_t werror = ::write(fd, newDataStart, newDataSize);
+    ssize_t werror = ::write(fd, data.data(), data.size());
     if (werror == -1) {
         SPDLOG_ERROR("Appending with write failed with error {}", werror);
         throw std::runtime_error("Failed appending memory to fd (write)");
