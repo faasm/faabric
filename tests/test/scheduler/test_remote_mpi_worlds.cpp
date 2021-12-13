@@ -626,11 +626,20 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::vector<int> actual(thisWorldSize * nPerRank, -1);
 
     // Call gather for each rank other than the root (out of order)
-    int root = 0;
-    std::vector<int> orderedLocalGatherRanks = {1, 2, 0};
+    int root;
+    std::vector<int> orderedLocalGatherRanks;
 
-    root = 0;
-    orderedLocalGatherRanks = {1, 2, 0};
+    SECTION("Gather receiver is also local leader")
+    {
+        root = 0;
+        orderedLocalGatherRanks = {1, 2, 0};
+    }
+
+    SECTION("Gather receiver is not a local leader")
+    {
+        root = 1;
+        orderedLocalGatherRanks = {1, 2, 0};
+    }
 
     std::thread otherWorldThread([this, root, &rankData, nPerRank] {
         otherWorld.initialiseFromMsg(msg);
