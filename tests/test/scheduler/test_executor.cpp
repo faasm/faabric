@@ -745,19 +745,17 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Check snapshot has been pushed
     auto pushes = faabric::snapshot::getSnapshotPushes();
+    REQUIRE(pushes.size() == 1);
     REQUIRE(pushes.at(0).first == otherHost);
     REQUIRE(pushes.at(0).second->size == snapshotSize);
 
     REQUIRE(faabric::snapshot::getSnapshotDiffPushes().empty());
 
-    // Check that we're not registering any dirty pages on the snapshot
-    auto snap = reg.getSnapshot(snapshotKey);
-    REQUIRE(snap->getDirtyRegions().empty());
-
     // Now reset snapshot pushes of all kinds
     faabric::snapshot::clearMockSnapshotRequests();
 
     // Make an edit to the snapshot memory and get the expected diffs
+    auto snap = reg.getSnapshot(snapshotKey);
     uint8_t* snapData = snap->getMutableDataPtr();
     snapData[0] = 9;
     snapData[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
