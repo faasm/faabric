@@ -28,10 +28,6 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     faabric::util::claimVirtualMemory({ BYTES(_data.get()), size });
 }
 
-SnapshotData::SnapshotData(std::vector<uint8_t>& dataIn)
-  : SnapshotData({ dataIn.data(), dataIn.size() })
-{}
-
 SnapshotData::SnapshotData(std::span<uint8_t> dataIn)
   : SnapshotData(dataIn, dataIn.size())
 {}
@@ -64,11 +60,6 @@ bool SnapshotData::isOwner()
     return owner;
 }
 
-void SnapshotData::copyInData(std::vector<uint8_t>& buffer, uint32_t offset)
-{
-    copyInData({ buffer.data(), buffer.size() }, offset);
-}
-
 void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
 {
     faabric::util::FullLock lock(snapMx);
@@ -88,7 +79,7 @@ void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
 
         // Update fd
         if (fd > 0) {
-            // TODO - extend fd
+            resizeFd(fd, newSize);
         }
     }
 
@@ -96,8 +87,9 @@ void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
     uint8_t* copyTarget = validateDataOffset(offset);
     ::memcpy(copyTarget, buffer.data(), buffer.size());
 
+    // Update fd
     if (fd > 0) {
-        // TODO - update fd contents
+        writeToFd(fd, offset, buffer);
     }
 }
 

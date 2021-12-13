@@ -260,7 +260,6 @@ void mapMemory(std::span<uint8_t> target, int fd)
 
 void resizeFd(int fd, size_t size)
 {
-    // Make the fd big enough
     int ferror = ::ftruncate(fd, size);
     if (ferror != 0) {
         SPDLOG_ERROR("ftruncate call failed with error {}", ferror);
@@ -283,6 +282,9 @@ void writeToFd(int fd, off_t offset, std::span<const uint8_t> data)
         SPDLOG_ERROR("Write call failed with error {}", werror);
         throw std::runtime_error("Failed writing memory to fd (write)");
     }
+
+    // Set back to end
+    ::lseek(fd, 0, SEEK_END);
 }
 
 int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel)

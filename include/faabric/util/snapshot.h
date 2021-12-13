@@ -94,11 +94,7 @@ class SnapshotData
 
     // Object does not own data, has size and max size equal to size of input
     // data.
-    explicit SnapshotData(std::vector<uint8_t>& dataIn);
-
-    // Object does not own data, has size and max size equal to size of input
-    // data.
-    SnapshotData(std::span<uint8_t> dataIn);
+    explicit SnapshotData(std::span<uint8_t> dataIn);
 
     // Object does not own data, has size equal to size of input data and given
     // max size.
@@ -115,8 +111,6 @@ class SnapshotData
     bool isOwner();
 
     void makeRestorable(const std::string& fdLabel);
-
-    void copyInData(std::vector<uint8_t>& buffer, uint32_t offset = 0);
 
     void copyInData(std::span<uint8_t> buffer, uint32_t offset = 0);
 
