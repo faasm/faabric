@@ -1,10 +1,10 @@
 #include "DistTestExecutor.h"
-#include "faabric/util/snapshot.h"
 
 #include <sys/mman.h>
 
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/snapshot.h>
 
 using namespace faabric::scheduler;
 

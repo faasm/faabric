@@ -1,7 +1,6 @@
-#include "faabric/util/snapshot.h"
-#include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
+#include "faabric_utils.h"
 #include "fixtures.h"
 #include "init.h"
 
@@ -14,6 +13,7 @@
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/snapshot.h>
 
 namespace tests {
 

@@ -686,6 +686,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
         REQUIRE(actual == expected);
     }
+
+    // Check no merge regions left on the snapshot
+    REQUIRE(reg.getSnapshot(snapshotKey)->getMergeRegions().empty());
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
