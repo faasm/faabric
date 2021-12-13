@@ -70,7 +70,8 @@ std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
             if (result.type() == faabric::Message_MessageType_EMPTY) {
                 response = std::make_pair(0, "RUNNING");
             } else if (result.returnvalue() == 0) {
-                response = std::make_pair(0, "SUCCESS: " + result.outputdata());
+                response =
+                  std::make_pair(0, faabric::util::messageToJson(result));
             } else {
                 response = std::make_pair(1, "FAILED: " + result.outputdata());
             }

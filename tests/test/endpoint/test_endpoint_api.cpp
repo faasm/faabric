@@ -187,8 +187,11 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
       submitGetRequestToUrl(LOCALHOST, port, statusBody);
 
     REQUIRE(statusResultAfter.first == 200);
-    REQUIRE(statusResultAfter.second ==
-            fmt::format("SUCCESS: Finished async message {}", msg.id()));
+    faabric::Message resultMsg =
+      faabric::util::jsonToMessage(statusResultAfter.second);
+    REQUIRE(resultMsg.returnvalue() == 0);
+    REQUIRE(resultMsg.outputdata() ==
+            fmt::format("Finished async message {}", msg.id()));
 
     endpoint.stop();
 

@@ -137,7 +137,7 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
         msg.set_returnvalue(0);
         sch.setFunctionResult(msg);
 
-        expectedOutput = "SUCCESS: " + errorMsg;
+        expectedOutput = faabric::util::messageToJson(msg);
     }
 
     msg.set_isstatusrequest(true);
