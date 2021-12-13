@@ -713,7 +713,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     resOther.set_slots(10);
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
-    // Execute a batch of threads
+    // Set up message for a batch of threads
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
@@ -757,7 +757,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Now reset snapshot pushes of all kinds
     faabric::snapshot::clearMockSnapshotRequests();
 
-    // Make an edit to the snapshot memory and get the expected diffs
+    // Make edits to the snapshot memory and get the expected diffs
     auto snap = reg.getSnapshot(snapshotKey);
     uint8_t* snapData = snap->getMutableDataPtr();
     snapData[0] = 9;
