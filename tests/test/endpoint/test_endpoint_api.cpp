@@ -9,8 +9,6 @@
 #include <faabric/util/json.h>
 #include <faabric/util/macros.h>
 
-#define ASYNC_REQ_SLEEP_MS 3000
-
 using namespace Pistache;
 using namespace faabric::scheduler;
 
@@ -47,9 +45,7 @@ class EndpointApiTestExecutor final : public Executor
               "Endpoint API returning {} for {}", returnVal, msg.id()));
         } else if (msg.isasync()) {
             returnVal = 0;
-            SLEEP_MS(ASYNC_REQ_SLEEP_MS);
-            msg.set_finishtimestamp(
-              faabric::util::getGlobalClock().epochMillis());
+            SLEEP_MS(3000);
             msg.set_outputdata(
               fmt::format("Finished async message {}", msg.id()));
         } else {
@@ -191,21 +187,11 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
       submitGetRequestToUrl(LOCALHOST, port, statusBody);
 
     REQUIRE(statusResultAfter.first == 200);
-    std::stringstream ss(statusResultAfter.second);
-    // Check the part with the output text first
-    std::string outputDataStr;
-    std::getline(ss, outputDataStr, '\n');
-    REQUIRE(outputDataStr ==
-            fmt::format("SUCCESS: Finished async message {}", msg.id()));
-    // Then check the executed time string
-    std::string executedTimeStr;
-    std::getline(ss, executedTimeStr, ':');
-    REQUIRE(executedTimeStr == fmt::format("Executed time (ms)"));
-    // Lastly, sanity check that the executed time returned is greater than the
-    // sleep in the executor
-    std::string executedTime;
-    std::getline(ss, executedTime);
-    REQUIRE(std::stoi(executedTime) > ASYNC_REQ_SLEEP_MS);
+    faabric::Message resultMsg =
+      faabric::util::jsonToMessage(statusResultAfter.second);
+    REQUIRE(resultMsg.returnvalue() == 0);
+    REQUIRE(resultMsg.outputdata() ==
+            fmt::format("Finished async message {}", msg.id()));
 
     endpoint.stop();
 

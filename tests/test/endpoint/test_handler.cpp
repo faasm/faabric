@@ -135,13 +135,9 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
         std::string errorMsg = "I have succeeded";
         msg.set_outputdata(errorMsg);
         msg.set_returnvalue(0);
-        // Enforce an exactly 0 execution time
-        auto ts = faabric::util::getGlobalClock().epochMillis();
-        msg.set_timestamp(ts);
-        msg.set_finishtimestamp(ts);
         sch.setFunctionResult(msg);
 
-        expectedOutput = "SUCCESS: " + errorMsg + "\nExecuted time (ms): 0";
+        expectedOutput = faabric::util::messageToJson(msg);
     }
 
     msg.set_isstatusrequest(true);
