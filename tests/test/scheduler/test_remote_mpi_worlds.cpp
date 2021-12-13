@@ -626,11 +626,17 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::vector<int> actual(thisWorldSize * nPerRank, -1);
 
     // Call gather for each rank other than the root (out of order)
-    int root = thisHostRankA;
+    int root = 0;
+    std::vector<int> orderedLocalGatherRanks = {1, 2, 0};
+
+    root = 0;
+    orderedLocalGatherRanks = {1, 2, 0};
+
     std::thread otherWorldThread([this, root, &rankData, nPerRank] {
         otherWorld.initialiseFromMsg(msg);
 
-        for (int rank : otherWorldRanks) {
+        std::vector<int> orderedRemoteGatherRanks = {4, 5, 3};
+        for (const int rank : orderedRemoteGatherRanks) {
             otherWorld.gather(rank,
                               root,
                               BYTES(rankData[rank].data()),
@@ -645,7 +651,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         otherWorld.destroy();
     });
 
-    for (int rank : thisWorldRanks) {
+    for (const int rank : orderedLocalGatherRanks) {
         if (rank == root) {
             continue;
         }
