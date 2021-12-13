@@ -242,7 +242,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     executedAt.insert(executedAt.begin(), thisHost);
 
     // Record rank-to-host mapping and base ports
-    rankHosts = executedAt;
+    hostForRank = executedAt;
     basePorts = initLocalBasePorts(executedAt);
 
     // Record which ranks are local to this world, and query for all leaders
@@ -258,7 +258,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 void MpiWorld::broadcastHostsToRanks()
 {
     // Set up a list of hosts to broadcast to (excluding this host)
-    std::set<std::string> targetHosts(rankHosts.begin(), rankHosts.end());
+    std::set<std::string> targetHosts(hostForRank.begin(), hostForRank.end());
     targetHosts.erase(thisHost);
 
     if (targetHosts.empty()) {
@@ -268,7 +268,7 @@ void MpiWorld::broadcastHostsToRanks()
 
     // Register hosts to rank mappings on this host
     faabric::MpiHostsToRanksMessage hostRankMsg;
-    *hostRankMsg.mutable_hosts() = { rankHosts.begin(), rankHosts.end() };
+    *hostRankMsg.mutable_hosts() = { hostForRank.begin(), hostForRank.end() };
 
     // Prepare the base port for each rank
     *hostRankMsg.mutable_baseports() = { basePorts.begin(), basePorts.end() };
@@ -344,13 +344,13 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     // enforced in the world registry.
 
     // Assert we are only setting the values once
-    assert(rankHosts.empty());
+    assert(hostForRank.empty());
     assert(basePorts.empty());
 
     assert(hostRankMsg.hosts().size() == size);
     assert(hostRankMsg.baseports().size() == size);
 
-    rankHosts = { hostRankMsg.hosts().begin(), hostRankMsg.hosts().end() };
+    hostForRank = { hostRankMsg.hosts().begin(), hostRankMsg.hosts().end() };
     basePorts = { hostRankMsg.baseports().begin(),
                   hostRankMsg.baseports().end() };
 
@@ -368,9 +368,9 @@ void MpiWorld::setMsgForRank(faabric::Message& msg)
 
 std::string MpiWorld::getHostForRank(int rank)
 {
-    assert(rankHosts.size() == size);
+    assert(hostForRank.size() == size);
 
-    std::string host = rankHosts[rank];
+    std::string host = hostForRank[rank];
     if (host.empty()) {
         throw std::runtime_error(
           fmt::format("No host found for rank {}", rank));
@@ -379,37 +379,32 @@ std::string MpiWorld::getHostForRank(int rank)
     return host;
 }
 
-std::vector<int> MpiWorld::getRanksForHost(const std::string& host)
+// Group the ranks to host vector by host
+void MpiWorld::setRanksForHost()
 {
-    assert(rankHosts.size() == size);
+    assert(hostForRank.size() == size);
 
-    std::vector<int> ranksForHost;
-    for (int i = 0; i < rankHosts.size(); i++) {
-        if (rankHosts.at(i) == host) {
-            ranksForHost.push_back(i);
-        }
+    for (int rank = 0; rank < hostForRank.size(); rank++) {
+        std::string host = hostForRank.at(rank);
+        ranksForHost[host].push_back(rank);
     }
-
-    return ranksForHost;
 }
 
 // The local leader for an MPI world is defined as the lowest rank assigned to
-// this host
+// this host. For simplicity, we set the local leader to be the first element
+// in the ranks to hosts map.
 void MpiWorld::initLocalRemoteLeaders()
 {
-    std::set<std::string> uniqueHosts(rankHosts.begin(), rankHosts.end());
+    setRanksForHost();
 
-    for (const std::string& host : uniqueHosts) {
-        auto ranksInHost = getRanksForHost(host);
-        // Persist the ranks that are colocated in this host for further use
-        if (host == thisHost) {
-            localRanks = ranksInHost;
-            localLeader =
-              *std::min_element(ranksInHost.begin(), ranksInHost.end());
-        } else {
-            remoteLeaders.push_back(
-              *std::min_element(ranksInHost.begin(), ranksInHost.end()));
+    for (auto it : ranksForHost) {
+        // Persist the local leader in this host for further use
+        if (it.first == thisHost) {
+            localLeader = *std::min_element(it.second.begin(), it.second.end());
         }
+
+        std::iter_swap(it.second.begin(),
+                       std::min_element(it.second.begin(), it.second.end()));
     }
 }
 
@@ -788,19 +783,30 @@ void MpiWorld::broadcast(int sendRank,
     SPDLOG_TRACE("MPI - bcast {} -> all", sendRank);
 
     if (recvRank == sendRank) {
-        // The sending rank sends a message to all local ranks in the broadcast,
-        // and all remote leaders
-        for (const int localRecvRank : localRanks) {
-            if (localRecvRank == recvRank) {
-                continue;
+        for (auto it : ranksForHost) {
+            if (it.first == thisHost) {
+                // Send message to all our local ranks besides ourselves
+                for (const int localRecvRank : it.second) {
+                    if (localRecvRank == recvRank) {
+                        continue;
+                    }
+
+                    send(recvRank,
+                         localRecvRank,
+                         buffer,
+                         dataType,
+                         count,
+                         messageType);
+                }
+            } else {
+                // Send message to all remote leaders
+                send(recvRank,
+                     it.second.front(),
+                     buffer,
+                     dataType,
+                     count,
+                     messageType);
             }
-
-            send(recvRank, localRecvRank, buffer, dataType, count, messageType);
-        }
-
-        for (const int remoteRecvRank : remoteLeaders) {
-            send(
-              recvRank, remoteRecvRank, buffer, dataType, count, messageType);
         }
     } else if (recvRank == localLeader) {
         // If we are the local leader, first we receive the message sent by
@@ -810,7 +816,7 @@ void MpiWorld::broadcast(int sendRank,
         // If the broadcast originated locally, we are done. If not, we now
         // distribute to all our local ranks
         if (getHostForRank(sendRank) != thisHost) {
-            for (const int localRecvRank : localRanks) {
+            for (const int localRecvRank : ranksForHost[thisHost]) {
                 if (localRecvRank == recvRank) {
                     continue;
                 }
@@ -913,24 +919,9 @@ void MpiWorld::gather(int sendRank,
     bool isInPlace = sendBuffer == recvBuffer;
 
     if (sendRank == recvRank) {
-        // If we're the receiver of the gather, await inputs from our local
-        // ranks (besides ourselves) and remote leaders
         SPDLOG_TRACE("MPI - gather all -> {}", recvRank);
 
-        // Work out the list of all the ranks we need to wait for, and which
-        // ranks will send their data through an intermediary.
-        // We wait for all ranks in our host, and for all remote leaders in
-        // other hosts.
-        // Note - even if slighlty more inefficient, we initialise the map
-        // calling the same method we use to initialise the local ranks set
-        // in remote worlds to ensure correct gathering order.
-        std::map<std::string, std::vector<int>> senderRanks;
-        std::set<std::string> uniqueHosts(rankHosts.begin(), rankHosts.end());
-        for (const std::string& host : uniqueHosts) {
-            senderRanks[host] = getRanksForHost(host);
-        }
-
-        for (auto it : senderRanks) {
+        for (auto it : ranksForHost) {
             if (it.first == thisHost) {
                 // Each local rank will send a separate message that we receive
                 // directly in the receive buffer.
@@ -958,22 +949,22 @@ void MpiWorld::gather(int sendRank,
             } else {
                 // Each remote leader will send a signle message with the data
                 // for all its local ranks
-                int leaderForHost = *std::min_element(it.second.begin(), it.second.end());
-                int batchSize = it.second.size();
-                auto rankData = std::make_unique<uint8_t[]>(batchSize * recvOffset);
+                auto rankData =
+                  std::make_unique<uint8_t[]>(it.second.size() * recvOffset);
 
-                recv(leaderForHost,
+                recv(it.second.front(),
                      recvRank,
                      rankData.get(),
                      recvType,
-                     recvCount * batchSize,
+                     recvCount * it.second.size(),
                      nullptr,
                      faabric::MPIMessage::GATHER);
 
                 // Copy each received chunk to its offset
                 for (int r = 0; r < it.second.size(); r++) {
                     memcpy(recvBuffer + (it.second.at(r) * recvOffset),
-                           rankData.get() + (r * recvOffset), recvOffset);
+                           rankData.get() + (r * recvOffset),
+                           recvOffset);
                 }
             }
         }
@@ -982,10 +973,11 @@ void MpiWorld::gather(int sendRank,
             // If we are the local leader (but not the receiver of the gather)
             // and the receiver is not co-located with us, we gather all our
             // local rank's data and send it in a single message
-            auto rankData = std::make_unique<uint8_t[]>(localRanks.size() * sendOffset);
+            auto rankData = std::make_unique<uint8_t[]>(
+              ranksForHost[thisHost].size() * sendOffset);
 
-            for (int r = 0; r < localRanks.size(); r++) {
-                if (localRanks.at(r) == sendRank) {
+            for (int r = 0; r < ranksForHost[thisHost].size(); r++) {
+                if (ranksForHost[thisHost].at(r) == sendRank) {
                     // If gathering in-place from a rank that is not-receiving
                     // means that the gather is part of an all gather, and
                     // the rank expects the send buffer to be populated with
@@ -1004,7 +996,7 @@ void MpiWorld::gather(int sendRank,
                     continue;
                 }
 
-                recv(localRanks.at(r),
+                recv(ranksForHost[thisHost].at(r),
                      sendRank,
                      rankData.get() + r * sendOffset,
                      sendType,
@@ -1017,7 +1009,7 @@ void MpiWorld::gather(int sendRank,
                  recvRank,
                  rankData.get(),
                  sendType,
-                 sendCount * localRanks.size(),
+                 sendCount * ranksForHost[thisHost].size(),
                  faabric::MPIMessage::GATHER);
         } else {
             // If we are the local leader but are co-located with the receiver
@@ -1164,17 +1156,7 @@ void MpiWorld::reduce(int sendRank,
     auto rankData = std::make_unique<uint8_t[]>(bufferSize);
 
     if (sendRank == recvRank) {
-        // If we're the receiver of the reduce, await inputs from our local
-        // ranks (besides ourselves) and remote leaders
         SPDLOG_TRACE("MPI - reduce ({}) all -> {}", operation->id, recvRank);
-
-        // Work out the list of all the ranks we need to wait for
-        std::vector<int> senderRanks = localRanks;
-        senderRanks.erase(
-          std::remove(senderRanks.begin(), senderRanks.end(), sendRank),
-          senderRanks.end());
-        senderRanks.insert(
-          senderRanks.end(), remoteLeaders.begin(), remoteLeaders.end());
 
         // If not receiving in-place, initialize the receive buffer to the send
         // buffer values. This prevents issues when 0-initializing for operators
@@ -1186,18 +1168,40 @@ void MpiWorld::reduce(int sendRank,
             memcpy(recvBuffer, sendBuffer, bufferSize);
         }
 
-        for (const int r : senderRanks) {
-            // Work out the data for this rank
-            memset(rankData.get(), 0, bufferSize);
-            recv(r,
-                 recvRank,
-                 rankData.get(),
-                 datatype,
-                 count,
-                 nullptr,
-                 faabric::MPIMessage::REDUCE);
+        for (auto it : ranksForHost) {
+            if (it.first == thisHost) {
+                // Reduce all data from our local ranks besides ourselves
+                for (const int r : it.second) {
+                    if (r == recvRank) {
+                        continue;
+                    }
 
-            op_reduce(operation, datatype, count, rankData.get(), recvBuffer);
+                    memset(rankData.get(), 0, bufferSize);
+                    recv(r,
+                         recvRank,
+                         rankData.get(),
+                         datatype,
+                         count,
+                         nullptr,
+                         faabric::MPIMessage::REDUCE);
+
+                    op_reduce(
+                      operation, datatype, count, rankData.get(), recvBuffer);
+                }
+            } else {
+                // For remote ranks, only receive from the host leader
+                memset(rankData.get(), 0, bufferSize);
+                recv(it.second.front(),
+                     recvRank,
+                     rankData.get(),
+                     datatype,
+                     count,
+                     nullptr,
+                     faabric::MPIMessage::REDUCE);
+
+                op_reduce(
+                  operation, datatype, count, rankData.get(), recvBuffer);
+            }
         }
 
     } else if (sendRank == localLeader) {
@@ -1211,7 +1215,7 @@ void MpiWorld::reduce(int sendRank,
             auto sendBufferCopy = std::make_unique<uint8_t[]>(bufferSize);
             memcpy(sendBufferCopy.get(), sendBuffer, bufferSize);
 
-            for (const int r : localRanks) {
+            for (const int r : ranksForHost[thisHost]) {
                 if (r == sendRank) {
                     continue;
                 }

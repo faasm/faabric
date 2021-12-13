@@ -632,19 +632,19 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     SECTION("Gather receiver is also local leader")
     {
         root = 0;
-        orderedLocalGatherRanks = {1, 2, 0};
+        orderedLocalGatherRanks = { 1, 2, 0 };
     }
 
     SECTION("Gather receiver is not a local leader")
     {
         root = 1;
-        orderedLocalGatherRanks = {1, 2, 0};
+        orderedLocalGatherRanks = { 1, 2, 0 };
     }
 
     std::thread otherWorldThread([this, root, &rankData, nPerRank] {
         otherWorld.initialiseFromMsg(msg);
 
-        std::vector<int> orderedRemoteGatherRanks = {4, 5, 3};
+        std::vector<int> orderedRemoteGatherRanks = { 4, 5, 3 };
         for (const int rank : orderedRemoteGatherRanks) {
             otherWorld.gather(rank,
                               root,
