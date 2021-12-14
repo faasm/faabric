@@ -44,7 +44,7 @@ SnapshotData::~SnapshotData()
     if (fd > 0) {
         SPDLOG_TRACE("Closing fd {}", fd);
         ::close(fd);
-        fd = 0;
+        fd = -1;
     }
 }
 
@@ -258,7 +258,7 @@ void SnapshotData::mapToMemory(uint8_t* target)
 {
     faabric::util::FullLock lock(snapMx);
 
-    if (fd == 0) {
+    if (fd <= 0) {
         std::string msg = "Attempting to map memory of non-restorable snapshot";
         SPDLOG_ERROR(msg);
         throw std::runtime_error(msg);

@@ -124,6 +124,77 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test mapping snapshot updates",
+                 "[snapshot][util]")
+{
+    int snapPages = 2;
+    size_t snapSize = snapPages * HOST_PAGE_SIZE;
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+
+    std::vector<uint8_t> dataA(100, 2);
+    std::vector<uint8_t> dataB(300, 4);
+    std::vector<uint8_t> dataC(200, 6);
+
+    uint32_t offsetA = 0;
+    uint32_t offsetB = HOST_PAGE_SIZE;
+    uint32_t offsetC = HOST_PAGE_SIZE + dataB.size();
+
+    // Make it restorable
+    REQUIRE(!snap->isRestorable());
+    snap->makeRestorable("snap-map-test");
+    REQUIRE(snap->isRestorable());
+
+    // Set up initial data _after_ making restorable, to make sure change
+    // propagated
+    snap->copyInData(dataA, offsetA);
+    std::vector<uint8_t> initialSnapData = snap->getDataCopy();
+
+    // Map to shared mem
+    MemoryRegion mappedMem = allocateSharedMemory(snapSize);
+    snap->mapToMemory(mappedMem.get());
+
+    // Check mapped memory now reflects change
+    std::vector<uint8_t> expectedSnap(snapSize, 0);
+    std::vector<uint8_t> expectedMapped(snapSize, 0);
+    std::memcpy(expectedSnap.data() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(expectedMapped.data() + offsetA, dataA.data(), dataA.size());
+
+    std::vector<uint8_t> actualSnap = snap->getDataCopy();
+    std::vector<uint8_t> actualMapped(mappedMem.get(),
+                                      mappedMem.get() + snap->size);
+    REQUIRE(actualSnap == expectedSnap);
+    REQUIRE(actualMapped == expectedMapped);
+
+    // Update mapped memory, make sure *not* seen in snapshot
+    std::memcpy(mappedMem.get() + offsetB, dataB.data(), dataB.size());
+    std::memcpy(expectedMapped.data() + offsetB, dataB.data(), dataB.size());
+
+    actualSnap = snap->getDataCopy();
+    actualMapped =
+      std::vector<uint8_t>(mappedMem.get(), mappedMem.get() + snap->size);
+    REQUIRE(actualSnap == expectedSnap);
+    REQUIRE(actualMapped == expectedMapped);
+
+    // Now update snapshot, make sure change is also seen in mapped memory
+    snap->copyInData(dataC, offsetC);
+    std::memcpy(expectedSnap.data() + offsetC, dataC.data(), dataC.size());
+    std::memcpy(expectedMapped.data() + offsetC, dataC.data(), dataC.size());
+
+    actualSnap = snap->getDataCopy();
+    actualMapped =
+      std::vector<uint8_t>(mappedMem.get(), mappedMem.get() + snap->size);
+    REQUIRE(actualSnap == expectedSnap);
+    REQUIRE(actualMapped == expectedMapped);
+
+    // Map another region of memory, check only snapshot changes visible
+    MemoryRegion mappedMemB = allocateSharedMemory(snapSize);
+    snap->mapToMemory(mappedMemB.get());
+    std::vector<uint8_t> actualMappedB(mappedMemB.get(),
+                                       mappedMemB.get() + snap->size);
+    REQUIRE(actualMappedB == expectedSnap);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test growing snapshots",
                  "[snapshot][util]")
 {

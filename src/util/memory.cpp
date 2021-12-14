@@ -236,9 +236,9 @@ void mapMemory(std::span<uint8_t> target, int fd)
         throw std::runtime_error("Mapping memory to non page-aligned address");
     }
 
-    if (fd == 0) {
-        SPDLOG_ERROR("Attempting to map to zero fd");
-        throw std::runtime_error("Attempting to map to zero fd");
+    if (fd <= 0) {
+        SPDLOG_ERROR("Mapping invalid or zero fd ({})", fd);
+        throw std::runtime_error("Invalid fd for mapping");
     }
 
     // Make mmap call to do the mapping

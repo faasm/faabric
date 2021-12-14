@@ -81,23 +81,18 @@ class SnapshotData
 
     SnapshotData() = default;
 
-    // Note - if providing data to one of these constructors, the snapshot will
-    // not take ownership of the lifecycle of that data.
-    // Only when just providing dimensions will the object create and own the
-    // underlying buffer.
-
-    // Same size and max size. Object owns data.
+    // Has same size and max size. Object owns data.
     explicit SnapshotData(size_t sizeIn);
 
-    // Given size and max size. Object owns data.
+    // Has size and max size. Object owns data.
     SnapshotData(size_t sizeIn, size_t maxSizeIn);
 
-    // Object does not own data, has size and max size equal to size of input
+    // Has size and max size equal to size of input data. Object does not own
     // data.
     explicit SnapshotData(std::span<uint8_t> dataIn);
 
-    // Object does not own data, has size equal to size of input data and given
-    // max size.
+    // Has size equal to size of input data and specified max size. Object does
+    // not own data.
     SnapshotData(std::span<uint8_t> dataIn, size_t maxSizeIn);
 
     SnapshotData(const SnapshotData&) = delete;
@@ -139,7 +134,7 @@ class SnapshotData
     std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
 
   private:
-    int fd = 0;
+    int fd = -1;
 
     std::shared_mutex snapMx;
 

@@ -428,4 +428,17 @@ TEST_CASE("Test mapping memory", "[util]")
 
     REQUIRE(memBData == expected);
 }
+
+TEST_CASE("Test mapping memory fails with invalid fd", "[util]")
+{
+    size_t memSize = 10 * HOST_PAGE_SIZE;
+    MemoryRegion sharedMem = allocateSharedMemory(memSize);
+
+    int fd = 0;
+    SECTION("Zero fd") { fd = 0; }
+
+    SECTION("Negative fd") { fd = -2; }
+
+    REQUIRE_THROWS(mapMemory({ sharedMem.get(), memSize }, fd));
+}
 }
