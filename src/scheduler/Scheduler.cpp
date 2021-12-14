@@ -11,6 +11,7 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/network.h>
 #include <faabric/util/random.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
@@ -905,9 +906,20 @@ void Scheduler::pushSnapshotDiffs(
 {
     bool isMaster = msg.masterhost() == conf.endpointHost;
 
-    if (!isMaster && !diffs.empty()) {
+    if (diffs.empty()) {
+        return;
+    }
+
+    const std::string& snapKey = msg.snapshotkey();
+
+    if (isMaster) {
+        // TODO - this is a bit of a hack, having to go through local
+        // networking, but all logic is currently stored in the snapshot server
+        SnapshotClient& c = getSnapshotClient(LOCALHOST);
+        c.pushSnapshotDiffs(snapKey, msg.groupid(), diffs);
+    } else {
         SnapshotClient& c = getSnapshotClient(msg.masterhost());
-        c.pushSnapshotDiffs(msg.snapshotkey(), msg.groupid(), diffs);
+        c.pushSnapshotDiffs(snapKey, msg.groupid(), diffs);
     }
 }
 

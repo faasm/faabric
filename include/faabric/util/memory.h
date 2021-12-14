@@ -52,8 +52,6 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 
 typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
-MemoryRegion wrapNotOwnedRegion(uint8_t* ptr);
-
 MemoryRegion allocateSharedMemory(size_t size);
 
 MemoryRegion allocateVirtualMemory(size_t size);
@@ -69,8 +67,6 @@ void resizeFd(int fd, size_t size);
 void writeToFd(int fd, off_t offset, std::span<const uint8_t> data);
 
 int createFd(size_t size, const std::string &fdLabel);
-
-int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel);
 
 void appendDataToFd(int fd, std::span<uint8_t> data);
 }

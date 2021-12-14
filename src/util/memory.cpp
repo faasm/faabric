@@ -182,13 +182,6 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // Allocation
 // -------------------------
 
-MemoryRegion wrapNotOwnedRegion(uint8_t* ptr)
-{
-    auto deleter = [](uint8_t* u) {};
-    MemoryRegion res(ptr, deleter);
-    return res;
-}
-
 MemoryRegion doAlloc(size_t size, int prot, int flags)
 {
     auto deleter = [size](uint8_t* u) { munmap(u, size); };
@@ -303,15 +296,6 @@ int createFd(size_t size, const std::string &fdLabel) {
 
     // Make the fd big enough
     resizeFd(fd, size);
-
-    return fd;
-}
-
-int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel)
-{
-    int fd = createFd(data.size(), fdLabel);
-
-    writeToFd(fd, 0, data);
 
     return fd;
 }

@@ -398,7 +398,8 @@ TEST_CASE("Test mapping memory", "[util]")
     std::memcpy(vMem.get(), chunk.data(), chunk.size());
 
     // Write this to a file descriptor
-    int fd = writeMemoryToFd({ vMem.get(), chunk.size() }, "foobar");
+    int fd = createFd(chunk.size(), "foobar");
+    writeToFd(fd, 0, { vMem.get(), chunk.size() });
 
     // Map some new memory to this fd
     MemoryRegion memA = allocateSharedMemory(chunk.size());

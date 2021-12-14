@@ -131,9 +131,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 
     // Reset dirty page tracking if we're executing threads.
-    // Note this must be done after the restore has happened
+    // Note this must be done after the restore has happened.
     bool needsSnapshotPush = false;
-    if (isThreads && isSnapshot && !isMaster) {
+    if (isThreads && isSnapshot) {
         faabric::util::resetDirtyTracking();
         needsSnapshotPush = true;
     }
@@ -282,18 +282,17 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Handle snapshot diffs _before_ we reset the executor
         if (isLastInBatch && task.needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
-            std::shared_ptr<faabric::util::MemoryView> memoryPostExecution =
+            std::shared_ptr<faabric::util::MemoryView> funcMemory =
               getMemoryView();
 
-            auto snapshotPreExecution =
-              faabric::snapshot::getSnapshotRegistry().getSnapshot(
-                msg.snapshotkey());
+            auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
+              msg.snapshotkey());
 
-            SPDLOG_TRACE("Diffing pre and post execution snapshots for {}",
+            SPDLOG_TRACE("Diffing memory with pre-execution snapshot for {}",
                          msg.snapshotkey());
 
             std::vector<faabric::util::SnapshotDiff> diffs =
-              memoryPostExecution->diffWithSnapshot(snapshotPreExecution);
+              funcMemory->diffWithSnapshot(snap);
 
             sch.pushSnapshotDiffs(msg, diffs);
 
@@ -302,7 +301,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Clear any merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
-            snapshotPreExecution->clearMergeRegions();
+            snap->clearMergeRegions();
         }
 
         // If this batch is finished, reset the executor and release its claim.
