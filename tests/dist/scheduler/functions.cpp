@@ -18,7 +18,7 @@
 
 namespace tests {
 
-int handleSimpleThread(faabric::scheduler::Executor* exec,
+int handleSimpleThread(tests::DistTestExecutor* exec,
                        int threadPoolIdx,
                        int msgIdx,
                        std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -37,7 +37,7 @@ int handleSimpleThread(faabric::scheduler::Executor* exec,
     return returnValue;
 }
 
-int handleSimpleFunction(faabric::scheduler::Executor* exec,
+int handleSimpleFunction(tests::DistTestExecutor* exec,
                          int threadPoolIdx,
                          int msgIdx,
                          std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -54,7 +54,7 @@ int handleSimpleFunction(faabric::scheduler::Executor* exec,
     return 0;
 }
 
-int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
+int handleFakeDiffsFunction(tests::DistTestExecutor* exec,
                             int threadPoolIdx,
                             int msgIdx,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -84,14 +84,17 @@ int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
 
     // Modify the executor's memory
     std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
-    updatedSnap->copyInData(keyBytes, offsetA);
-    updatedSnap->copyInData(inputBytes, offsetB);
+
+    std::memcpy(
+      exec->dummyMemory.get() + offsetA, keyBytes.data(), keyBytes.size());
+    std::memcpy(
+      exec->dummyMemory.get() + offsetB, inputBytes.data(), inputBytes.size());
 
     return 123;
 }
 
 int handleFakeDiffsThreadedFunction(
-  faabric::scheduler::Executor* exec,
+  tests::DistTestExecutor* exec,
   int threadPoolIdx,
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -203,8 +206,6 @@ int handleFakeDiffsThreadedFunction(
           faabric::util::stringToBytes(msgInput);
 
         auto originalSnap = reg.getSnapshot(snapshotKey);
-        std::shared_ptr<faabric::util::SnapshotData> updatedSnap =
-          exec->snapshot();
 
         // Make sure it's captured by the region
         int regionLength = 20 + inputBytes.size();
@@ -215,7 +216,9 @@ int handleFakeDiffsThreadedFunction(
           faabric::util::SnapshotMergeOperation::Overwrite);
 
         // Now modify the memory
-        updatedSnap->copyInData(inputBytes, changeOffset);
+        std::memcpy(exec->dummyMemory.get() + changeOffset,
+                    inputBytes.data(),
+                    inputBytes.size());
 
         return 0;
     }

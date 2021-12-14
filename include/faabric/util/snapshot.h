@@ -140,33 +140,21 @@ class SnapshotData
 class MemoryView
 {
   public:
-    // Note - this object is just a view of a function's memory, and does not
+    // Note - this object is just a view of a section of memory, and does not
     // own the underlying data
-    explicit MemoryView(std::span<uint8_t> dataIn);
+    explicit MemoryView(std::span<const uint8_t> dataIn);
 
     MemoryView(const MemoryView&) = delete;
 
     MemoryView& operator=(const MemoryView&) = delete;
-
-    size_t size = 0;
 
     std::vector<SnapshotDiff> getDirtyRegions();
 
     std::vector<SnapshotDiff> diffWithSnapshot(
       std::shared_ptr<SnapshotData> snap);
 
-    std::vector<uint8_t> getDataCopy();
-
-    std::vector<uint8_t> getDataCopy(uint32_t offset, size_t dataSize);
-
-    void copyInData(std::span<uint8_t> buffer, uint32_t offset = 0);
-
   private:
-    std::shared_mutex memMx;
-
-    // Note, as this object doesn't own the data, the poiinter's deleter will
-    // be a noop.
-    MemoryRegion _data = nullptr;
+    std::span<const uint8_t> data;
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);

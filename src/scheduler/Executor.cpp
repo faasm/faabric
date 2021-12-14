@@ -282,7 +282,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Handle snapshot diffs _before_ we reset the executor
         if (isLastInBatch && task.needsSnapshotPush) {
             // Get diffs between original snapshot and after execution
-            auto snapshotPostExecution = snapshot();
+            std::shared_ptr<faabric::util::MemoryView> memoryPostExecution =
+              getMemoryView();
 
             auto snapshotPreExecution =
               faabric::snapshot::getSnapshotRegistry().getSnapshot(
@@ -292,9 +293,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                          msg.snapshotkey());
 
             std::vector<faabric::util::SnapshotDiff> diffs =
-              snapshotPreExecution->getChangeDiffs(
-                std::span<const uint8_t>(snapshotPostExecution->getDataPtr(),
-                                         snapshotPostExecution->size));
+              memoryPostExecution->diffWithSnapshot(snapshotPreExecution);
 
             sch.pushSnapshotDiffs(msg, diffs);
 

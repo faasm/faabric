@@ -15,7 +15,6 @@ SnapshotData::SnapshotData(size_t sizeIn)
 SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
   : size(sizeIn)
   , maxSize(maxSizeIn)
-  , owner(true)
 {
     if (maxSize == 0) {
         maxSize = size;
@@ -29,15 +28,16 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
 }
 
 SnapshotData::SnapshotData(std::span<uint8_t> dataIn)
-  : SnapshotData(dataIn, dataIn.size())
-{}
+  : SnapshotData(dataIn.size())
+{
+    copyInData(dataIn);
+}
 
 SnapshotData::SnapshotData(std::span<uint8_t> dataIn, size_t maxSizeIn)
-  : size(dataIn.size())
-  , maxSize(maxSizeIn)
-  , owner(false)
-  , _data(wrapNotOwnedRegion(dataIn.data()))
-{}
+  : SnapshotData(dataIn.size(), maxSizeIn)
+{
+    copyInData(dataIn);
+}
 
 SnapshotData::~SnapshotData()
 {
@@ -52,12 +52,6 @@ bool SnapshotData::isRestorable()
 {
     faabric::util::SharedLock lock(snapMx);
     return fd > 0;
-}
-
-bool SnapshotData::isOwner()
-{
-    faabric::util::SharedLock lock(snapMx);
-    return owner;
 }
 
 void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
@@ -99,12 +93,6 @@ const uint8_t* SnapshotData::getDataPtr(uint32_t offset)
     return validateDataOffset(offset);
 }
 
-uint8_t* SnapshotData::getMutableDataPtr(uint32_t offset)
-{
-    faabric::util::SharedLock lock(snapMx);
-    return validateDataOffset(offset);
-}
-
 uint8_t* SnapshotData::validateDataOffset(uint32_t offset)
 {
     if (offset > size) {
@@ -134,80 +122,6 @@ std::vector<uint8_t> SnapshotData::getDataCopy(uint32_t offset, size_t dataSize)
 
     uint8_t* ptr = validateDataOffset(offset);
     return std::vector<uint8_t>(ptr, ptr + dataSize);
-}
-
-std::vector<SnapshotDiff> SnapshotData::getDirtyRegions()
-{
-    faabric::util::SharedLock lock(snapMx);
-
-    if (_data == nullptr || size == 0) {
-        std::vector<SnapshotDiff> empty;
-        return empty;
-    }
-
-    // Get dirty regions
-    int nPages = getRequiredHostPages(size);
-    std::vector<int> dirtyPageNumbers =
-      getDirtyPageNumbers(_data.get(), nPages);
-
-    std::vector<std::pair<uint32_t, uint32_t>> regions =
-      faabric::util::getDirtyRegions(_data.get(), nPages);
-
-    // Convert to snapshot diffs
-    std::vector<SnapshotDiff> diffs;
-    for (auto& p : regions) {
-        diffs.emplace_back(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Overwrite,
-                           p.first,
-                           _data.get() + p.first,
-                           (p.second - p.first));
-    }
-
-    SPDLOG_DEBUG("Snapshot has {}/{} dirty pages", diffs.size(), nPages);
-
-    return diffs;
-}
-
-std::vector<SnapshotDiff> SnapshotData::getChangeDiffs(
-  std::span<const uint8_t> updated)
-{
-    faabric::util::SharedLock lock(snapMx);
-
-    std::vector<SnapshotDiff> diffs;
-    if (mergeRegions.empty()) {
-        SPDLOG_DEBUG("No merge regions set, thus no diffs");
-        return diffs;
-    }
-
-    // Work out which regions of memory have changed
-    size_t nThisPages = getRequiredHostPages(updated.size());
-    std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-      faabric::util::getDirtyRegions(updated.data(), nThisPages);
-    SPDLOG_TRACE("Found {} dirty regions", dirtyRegions.size());
-
-    // Iterate through merge regions, see which ones overlap with dirty memory
-    // regions, and add corresponding diffs
-    for (auto& mrPair : mergeRegions) {
-        SnapshotMergeRegion& mr = mrPair.second;
-
-        SPDLOG_TRACE("Merge region {} {} at {}-{}",
-                     snapshotDataTypeStr(mr.dataType),
-                     snapshotMergeOpStr(mr.operation),
-                     mr.offset,
-                     mr.offset + mr.length);
-
-        for (auto& dirtyRegion : dirtyRegions) {
-            // Add the diffs
-            mr.addDiffs(diffs,
-                        _data.get(),
-                        size,
-                        updated.data(),
-                        dirtyRegion.first,
-                        dirtyRegion.second);
-        }
-    }
-
-    return diffs;
 }
 
 void SnapshotData::addMergeRegion(uint32_t offset,
@@ -297,6 +211,82 @@ void SnapshotData::clearMergeRegions()
 {
     faabric::util::FullLock lock(snapMx);
     mergeRegions.clear();
+}
+
+MemoryView::MemoryView(std::span<const uint8_t> dataIn)
+  : data(dataIn)
+{}
+
+std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
+{
+    if (data.empty()) {
+        std::vector<SnapshotDiff> empty;
+        return empty;
+    }
+
+    // Get dirty regions
+    int nPages = getRequiredHostPages(data.size());
+    std::vector<int> dirtyPageNumbers =
+      getDirtyPageNumbers(data.data(), nPages);
+
+    std::vector<std::pair<uint32_t, uint32_t>> regions =
+      faabric::util::getDirtyRegions(data.data(), nPages);
+
+    // Convert to snapshot diffs
+    std::vector<SnapshotDiff> diffs;
+    for (auto& p : regions) {
+        diffs.emplace_back(SnapshotDataType::Raw,
+                           SnapshotMergeOperation::Overwrite,
+                           p.first,
+                           data.data() + p.first,
+                           (p.second - p.first));
+    }
+
+    SPDLOG_DEBUG("Snapshot has {}/{} dirty pages", diffs.size(), nPages);
+
+    return diffs;
+}
+
+std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
+  std::shared_ptr<SnapshotData> snap)
+{
+    std::vector<SnapshotDiff> diffs;
+    std::map<uint32_t, SnapshotMergeRegion> mergeRegions =
+      snap->getMergeRegions();
+    if (mergeRegions.empty()) {
+        SPDLOG_DEBUG("No merge regions set, thus no diffs");
+        return diffs;
+    }
+
+    // Work out which regions of memory have changed
+    size_t nThisPages = getRequiredHostPages(data.size());
+    std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
+      faabric::util::getDirtyRegions(data.data(), nThisPages);
+    SPDLOG_TRACE("Found {} dirty regions", dirtyRegions.size());
+
+    // Iterate through merge regions, see which ones overlap with dirty memory
+    // regions, and add corresponding diffs
+    for (auto& mrPair : mergeRegions) {
+        SnapshotMergeRegion& mr = mrPair.second;
+
+        SPDLOG_TRACE("Merge region {} {} at {}-{}",
+                     snapshotDataTypeStr(mr.dataType),
+                     snapshotMergeOpStr(mr.operation),
+                     mr.offset,
+                     mr.offset + mr.length);
+
+        for (auto& dirtyRegion : dirtyRegions) {
+            // Add the diffs
+            mr.addDiffs(diffs,
+                        snap->getDataPtr(),
+                        snap->size,
+                        data.data(),
+                        dirtyRegion.first,
+                        dirtyRegion.second);
+        }
+    }
+
+    return diffs;
 }
 
 std::string snapshotDataTypeStr(SnapshotDataType dt)

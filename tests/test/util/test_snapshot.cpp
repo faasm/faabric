@@ -92,10 +92,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<uint8_t> dataA(100, 2);
     std::vector<uint8_t> dataB(300, 4);
 
-    uint8_t* snapData = snap->getMutableDataPtr();
-    std::memcpy(snapData + (2 * HOST_PAGE_SIZE), dataA.data(), dataA.size());
-    std::memcpy(
-      snapData + (5 * HOST_PAGE_SIZE) + 2, dataB.data(), dataB.size());
+    snap->copyInData(dataA, 2 * HOST_PAGE_SIZE);
+    snap->copyInData(dataB, 5 * HOST_PAGE_SIZE + 2);
 
     // Record the snap memory
     std::vector<uint8_t> actualSnapMem = snap->getDataCopy();
@@ -275,17 +273,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     size_t memSize = snapPages * HOST_PAGE_SIZE;
     auto snap = std::make_shared<SnapshotData>(memSize);
-    uint8_t* snapData = snap->getMutableDataPtr();
 
     // Set up some integers in the snapshot
     int intAOffset = HOST_PAGE_SIZE + (10 * sizeof(int32_t));
     int intBOffset = (2 * HOST_PAGE_SIZE) + (20 * sizeof(int32_t));
-    int* intAOriginal = (int*)(snapData + intAOffset);
-    int* intBOriginal = (int*)(snapData + intBOffset);
 
     // Set the original values
-    *intAOriginal = originalValueA;
-    *intBOriginal = originalValueB;
+    snap->copyInData({ BYTES(&originalValueA), sizeof(int) }, intAOffset);
+    snap->copyInData({ BYTES(&originalValueB), sizeof(int) }, intBOffset);
 
     // Take the snapshot
     snap->makeRestorable(snapKey);
@@ -328,11 +323,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Get the snapshot diffs
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), memSize });
+      MemoryView({ sharedMem.get(), memSize }).diffWithSnapshot(snap);
 
     // Check original hasn't changed
-    REQUIRE(*intAOriginal == originalValueA);
-    REQUIRE(*intBOriginal == originalValueB);
+    const uint8_t* rawSnapData = snap->getDataPtr();
+    int actualA = *(int*)(rawSnapData + intAOffset);
+    int actualB = *(int*)(rawSnapData + intBOffset);
+    REQUIRE(actualA == originalValueA);
+    REQUIRE(actualB == originalValueB);
 
     // Check diffs themselves
     REQUIRE(actualDiffs.size() == 2);
@@ -396,13 +394,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
     snap->makeRestorable(snapKey);
-    uint8_t* snapData = snap->getMutableDataPtr();
 
     // Set up original values
-    *(int*)(snapData + offsetA) = originalA;
-    *(int*)(snapData + offsetB) = originalB;
-    *(int*)(snapData + offsetC) = originalC;
-    *(int*)(snapData + offsetD) = originalD;
+    snap->copyInData({ BYTES(&originalA), sizeof(int) }, offsetA);
+    snap->copyInData({ BYTES(&originalB), sizeof(int) }, offsetB);
+    snap->copyInData({ BYTES(&originalC), sizeof(int) }, offsetC);
+    snap->copyInData({ BYTES(&originalD), sizeof(int) }, offsetD);
 
     // Take the snapshot
     reg.registerSnapshot(snapKey, snap);
@@ -464,7 +461,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     };
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
     REQUIRE(actualDiffs.size() == 4);
 
     checkDiffs(actualDiffs, expectedDiffs);
@@ -482,8 +479,6 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
     snap->makeRestorable(snapKey);
-
-    uint8_t* snapData = snap->getMutableDataPtr();
 
     std::vector<uint8_t> originalData;
     std::vector<uint8_t> updatedData;
@@ -580,9 +575,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     }
 
     // Write the original data into place
-    std::memcpy(snapData + offset, originalData.data(), originalData.size());
+    snap->copyInData(originalData, offset);
 
-    // Take the snapshot
+    // Register the snap
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot to some memory
@@ -603,7 +598,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Get the snapshot diffs
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
 
     // Check diff
     REQUIRE(actualDiffs.size() == 1);
@@ -673,7 +668,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Check getting diffs throws an exception
     bool failed = false;
     try {
-        snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+        MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
     } catch (std::runtime_error& ex) {
         failed = true;
         REQUIRE(ex.what() == expectedMsg);
@@ -749,7 +744,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Check number of diffs
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -812,7 +807,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                          sizeof(int32_t),
                          faabric::util::SnapshotDataType::Int,
                          faabric::util::SnapshotMergeOperation::Sum);
-    *(int*)(snap->getMutableDataPtr(sumOffset)) = sumOriginal;
+    snap->copyInData({ BYTES(&sumOriginal), sizeof(int) }, sumOffset);
     *(int*)(sharedMem.get() + sumOffset) = sumValue;
 
     // Check diffs
@@ -830,7 +825,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     };
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -867,7 +862,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                          faabric::util::SnapshotMergeOperation::Overwrite);
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
 
     // Make sure the whole page containing the diff is included
     std::vector<SnapshotDiff> expectedDiffs = {
@@ -890,7 +885,6 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
     std::vector<uint8_t> chunk(100, 4);
     ::memcpy(data.data() + chunkOffset, chunk.data(), chunk.size());
 
-    bool expectOwner = false;
     size_t expectedMaxSize = data.size();
 
     std::shared_ptr<SnapshotData> snap = nullptr;
@@ -913,7 +907,6 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
         }
 
         snap->copyInData(data, 0);
-        expectOwner = true;
     }
 
     SECTION("From span")
@@ -926,7 +919,6 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
 
     REQUIRE(snap->size == data.size());
     REQUIRE(snap->maxSize == expectedMaxSize);
-    REQUIRE(snap->isOwner() == expectOwner);
 
     std::vector<uint8_t> actualCopy = snap->getDataCopy();
     REQUIRE(actualCopy == data);
@@ -938,10 +930,5 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
     const std::vector<uint8_t> actualConst(snap->getDataPtr(),
                                            snap->getDataPtr() + snap->size);
     REQUIRE(actualConst == data);
-
-    std::vector<uint8_t> actualMutable(snap->getMutableDataPtr(),
-                                       snap->getMutableDataPtr() + snap->size);
-    REQUIRE(actualMutable == data);
 }
-
 }

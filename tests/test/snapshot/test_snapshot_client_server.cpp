@@ -206,8 +206,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(server.diffsApplied() == 5);
 
     // Check changes have been applied
-    checkDiffsApplied(snap->getMutableDataPtr(), diffsA);
-    checkDiffsApplied(snap->getMutableDataPtr(), diffsB);
+    checkDiffsApplied(snap->getDataPtr(), diffsA);
+    checkDiffsApplied(snap->getDataPtr(), diffsB);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
@@ -227,10 +227,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int baseA1 = 25;
     int baseA2 = 60;
 
-    int* basePtrA1 = (int*)(snap->getMutableDataPtr() + offsetA1);
-    int* basePtrA2 = (int*)(snap->getMutableDataPtr() + offsetA2);
-    *basePtrA1 = baseA1;
-    *basePtrA2 = baseA2;
+    snap->copyInData({ BYTES(&baseA1), sizeof(int) }, offsetA1);
+    snap->copyInData({ BYTES(&baseA2), sizeof(int) }, offsetA2);
 
     // Set up some diffs with different merge operations
     int diffIntA1 = 123;
@@ -267,8 +265,11 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(server.diffsApplied() == originalDiffsApplied + 2);
 
     // Check diffs have been applied according to the merge operations
-    REQUIRE(*basePtrA1 == baseA1 + diffIntA1);
-    REQUIRE(*basePtrA2 == baseA2 + diffIntA2);
+    const uint8_t* rawSnapData = snap->getDataPtr();
+    int actualA1 = faabric::util::unalignedRead<int>(rawSnapData + offsetA1);
+    int actualA2 = faabric::util::unalignedRead<int>(rawSnapData + offsetA2);
+    REQUIRE(actualA1 == baseA1 + diffIntA1);
+    REQUIRE(actualA2 == baseA2 + diffIntA2);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
@@ -365,9 +366,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     }
 
     // Put original data in place
-    std::memcpy(snap->getMutableDataPtr(offset),
-                originalData.data(),
-                originalData.size());
+    snap->copyInData(originalData, offset);
 
     SnapshotDiff diff(SnapshotDataType::Raw,
                       SnapshotMergeOperation::Overwrite,

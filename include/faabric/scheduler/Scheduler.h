@@ -69,7 +69,7 @@ class Executor
 
     void releaseClaim();
 
-    virtual std::shared_ptr<faabric::util::SnapshotData> snapshot();
+    virtual std::shared_ptr<faabric::util::MemoryView> getMemoryView();
 
   protected:
     virtual void restore(faabric::Message& msg);

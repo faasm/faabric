@@ -48,7 +48,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     // Check there are no diffs
     std::vector<SnapshotDiff> changeDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
     REQUIRE(changeDiffs.empty());
 }
 
@@ -147,9 +147,6 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
                 dataNoChange.data(),
                 dataNoChange.size());
 
-    // Check original has no dirty pages
-    REQUIRE(snap->getDirtyRegions().empty());
-
     // Check shared memory does have dirty pages (including the non-change)
     std::vector<int> sharedDirtyPages =
       getDirtyPageNumbers(sharedMem.get(), sharedMemPages);
@@ -158,7 +155,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
 
     // Check we have the right number of diffs
     std::vector<SnapshotDiff> changeDiffs =
-      snap->getChangeDiffs({ sharedMem.get(), sharedMemSize });
+      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
 
     REQUIRE(changeDiffs.size() == 6);
 

@@ -19,7 +19,7 @@ using namespace faabric::util;
 namespace tests {
 
 int handlePointToPointFunction(
-  faabric::scheduler::Executor* exec,
+  tests::DistTestExecutor* exec,
   int threadPoolIdx,
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -62,7 +62,7 @@ int handlePointToPointFunction(
     return 0;
 }
 
-int handleDistributedLock(faabric::scheduler::Executor* exec,
+int handleDistributedLock(tests::DistTestExecutor* exec,
                           int threadPoolIdx,
                           int msgIdx,
                           std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -280,7 +280,7 @@ class DistributedCoordinationTestRunner
     int groupId = 123;
 };
 
-int handleDistributedBarrier(faabric::scheduler::Executor* exec,
+int handleDistributedBarrier(tests::DistTestExecutor* exec,
                              int threadPoolIdx,
                              int msgIdx,
                              std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -298,7 +298,7 @@ int handleDistributedBarrier(faabric::scheduler::Executor* exec,
 }
 
 int handleDistributedBarrierWorker(
-  faabric::scheduler::Executor* exec,
+  tests::DistTestExecutor* exec,
   int threadPoolIdx,
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -334,7 +334,7 @@ int handleDistributedBarrierWorker(
     return runner.checkResults(expectedResults);
 }
 
-int handleDistributedNotify(faabric::scheduler::Executor* exec,
+int handleDistributedNotify(tests::DistTestExecutor* exec,
                             int threadPoolIdx,
                             int msgIdx,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -352,7 +352,7 @@ int handleDistributedNotify(faabric::scheduler::Executor* exec,
 }
 
 int handleDistributedNotifyWorker(
-  faabric::scheduler::Executor* exec,
+  tests::DistTestExecutor* exec,
   int threadPoolIdx,
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> req)

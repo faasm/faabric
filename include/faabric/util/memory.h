@@ -45,6 +45,7 @@ std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
 
 std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
                                                            int nPages);
+
 // -------------------------
 // Allocation
 // -------------------------

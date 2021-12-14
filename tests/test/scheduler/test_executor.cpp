@@ -53,9 +53,9 @@ void TestExecutor::restore(faabric::Message& msg)
     reg.mapSnapshotPrivate(msg.snapshotkey(), dummyMemory.get());
 }
 
-std::shared_ptr<faabric::util::SnapshotData> TestExecutor::snapshot()
+std::shared_ptr<faabric::util::MemoryView> TestExecutor::getMemoryView()
 {
-    return std::make_shared<faabric::util::SnapshotData>(
+    return std::make_shared<faabric::util::MemoryView>(
       std::span<uint8_t>(dummyMemory.get(), dummyMemorySize));
 }
 
@@ -759,11 +759,14 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Make edits to the snapshot memory and get the expected diffs
     auto snap = reg.getSnapshot(snapshotKey);
-    uint8_t* snapData = snap->getMutableDataPtr();
-    snapData[0] = 9;
-    snapData[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
+    int newValue = 9;
+    snap->copyInData({ BYTES(&newValue), sizeof(int) });
+    snap->copyInData({ BYTES(&newValue), sizeof(int) },
+                     2 * faabric::util::HOST_PAGE_SIZE + 1);
+
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-      snap->getDirtyRegions();
+      faabric::util::MemoryView({ snap->getDataPtr(), snap->size })
+        .getDirtyRegions();
 
     REQUIRE(expectedDiffs.size() == 2);
 

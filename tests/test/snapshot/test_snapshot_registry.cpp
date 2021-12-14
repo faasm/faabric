@@ -41,15 +41,11 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(reg.snapshotExists(keyC));
     REQUIRE(reg.getSnapshotCount() == 3);
 
-    uint8_t* rawA = snapA->getMutableDataPtr();
-    uint8_t* rawB = snapB->getMutableDataPtr();
-    uint8_t* rawC = snapC->getMutableDataPtr();
-
-    // Add some random bits of data to the vectors
+    // Add some random bits of data to the snapshots
     for (int i = 0; i < HOST_PAGE_SIZE - 10; i += 50) {
-        rawA[i] = i;
-        rawB[i + 1] = i;
-        rawC[i + 2] = i;
+        snapA->copyInData({ BYTES(&i), sizeof(int) }, i);
+        snapB->copyInData({ BYTES(&i), sizeof(int) }, i + 1);
+        snapC->copyInData({ BYTES(&i), sizeof(int) }, i + 2);
     }
 
     // Make two restorable
