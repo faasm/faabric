@@ -59,7 +59,9 @@ MemoryRegion allocateVirtualMemory(size_t size);
 
 void claimVirtualMemory(std::span<uint8_t> region);
 
-void mapMemory(std::span<uint8_t> target, int fd);
+void mapMemoryPrivate(std::span<uint8_t> target, int fd);
+
+void mapMemoryShared(std::span<uint8_t> target, int fd);
 
 void resizeFd(int fd, size_t size);
 

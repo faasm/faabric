@@ -20,7 +20,9 @@ class SnapshotRegistry
 
     bool snapshotExists(const std::string& key);
 
-    void mapSnapshot(const std::string& key, uint8_t* target);
+    void mapSnapshotPrivate(const std::string& key, uint8_t* target);
+
+    void mapSnapshotShared(const std::string& key, uint8_t* target);
 
     void registerSnapshot(const std::string& key,
                           std::shared_ptr<faabric::util::SnapshotData> data);

@@ -129,7 +129,9 @@ class SnapshotData
 
     void clearMergeRegions();
 
-    void mapToMemory(uint8_t* target);
+    void mapToMemoryPrivate(uint8_t* target);
+
+    void mapToMemoryShared(uint8_t* target);
 
     std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
 
@@ -144,11 +146,13 @@ class SnapshotData
     bool owner = false;
     MemoryRegion _data = nullptr;
 
-    uint8_t* validateDataOffset(uint32_t offset);
-
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
+
+    uint8_t* validateDataOffset(uint32_t offset);
+
+    void mapToMemory(uint8_t* target, bool shared);
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);

@@ -229,7 +229,7 @@ void claimVirtualMemory(std::span<uint8_t> region)
     }
 }
 
-void mapMemory(std::span<uint8_t> target, int fd)
+void mapMemory(std::span<uint8_t> target, int fd, int flags)
 {
     if (!faabric::util::isPageAligned((void*)target.data())) {
         SPDLOG_ERROR("Mapping memory to non page-aligned address");
@@ -256,6 +256,16 @@ void mapMemory(std::span<uint8_t> target, int fd)
                      ::strerror(errno));
         throw std::runtime_error("mmapping memory failed");
     }
+}
+
+void mapMemoryPrivate(std::span<uint8_t> target, int fd)
+{
+    mapMemory(target, fd, MAP_PRIVATE | MAP_FIXED);
+}
+
+void mapMemoryShared(std::span<uint8_t> target, int fd)
+{
+    mapMemory(target, fd, MAP_SHARED | MAP_FIXED);
 }
 
 void resizeFd(int fd, size_t size)

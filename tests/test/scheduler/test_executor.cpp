@@ -50,7 +50,7 @@ void TestExecutor::restore(faabric::Message& msg)
 
     dummyMemorySize = snap->size;
     dummyMemory = faabric::util::allocateSharedMemory(snap->size);
-    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
+    reg.mapSnapshotPrivate(msg.snapshotkey(), dummyMemory.get());
 }
 
 std::shared_ptr<faabric::util::SnapshotData> TestExecutor::snapshot()
