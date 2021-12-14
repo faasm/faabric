@@ -50,7 +50,7 @@ void TestExecutor::restore(faabric::Message& msg)
 
     dummyMemorySize = snap->getSize();
     dummyMemory = faabric::util::allocateSharedMemory(snap->getSize());
-    reg.mapSnapshotPrivate(msg.snapshotkey(), dummyMemory.get());
+    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
 }
 
 std::shared_ptr<faabric::util::MemoryView> TestExecutor::getMemoryView()
@@ -240,7 +240,6 @@ class TestExecutorFixture
         setExecutorFactory(fac);
 
         dummySnap = setUpSnapshot(snapshotKey, snapshotNPages);
-        dummySnap->makeRestorable(snapshotKey);
         faabric::util::resetDirtyTracking();
 
         restoreCount = 0;

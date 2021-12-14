@@ -21,9 +21,9 @@ namespace faabric::util {
 // Alignment
 // -------------------------
 
-bool isPageAligned(void* ptr)
+bool isPageAligned(const void* ptr)
 {
-    return (((uintptr_t)(const void*)(ptr)) % (HOST_PAGE_SIZE) == 0);
+    return (((uintptr_t)(ptr)) % (HOST_PAGE_SIZE) == 0);
 }
 
 size_t getRequiredHostPages(size_t nBytes)

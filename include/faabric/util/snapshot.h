@@ -92,11 +92,7 @@ class SnapshotData
 
     ~SnapshotData();
 
-    bool isRestorable();
-
     void copyInData(std::span<uint8_t> buffer, uint32_t offset = 0);
-
-    void makeRestorable(const std::string& fdLabel);
 
     const uint8_t* getDataPtr(uint32_t offset = 0);
 
@@ -104,9 +100,7 @@ class SnapshotData
 
     std::vector<uint8_t> getDataCopy(uint32_t offset, size_t dataSize);
 
-    void mapToMemoryPrivate(uint8_t* target);
-
-    void mapToMemoryShared(uint8_t* target);
+    void mapToMemory(uint8_t* target);
 
     void addMergeRegion(uint32_t offset,
                         size_t length,

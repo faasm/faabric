@@ -54,12 +54,6 @@ SnapshotData::~SnapshotData()
     }
 }
 
-bool SnapshotData::isRestorable()
-{
-    faabric::util::SharedLock lock(snapMx);
-    return fd > 0;
-}
-
 void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
 {
     faabric::util::FullLock lock(snapMx);
@@ -172,17 +166,7 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     mergeRegions[region.offset] = region;
 }
 
-void SnapshotData::mapToMemoryPrivate(uint8_t* target)
-{
-    mapToMemory(target, false);
-}
-
-void SnapshotData::mapToMemoryShared(uint8_t* target)
-{
-    mapToMemory(target, true);
-}
-
-void SnapshotData::mapToMemory(uint8_t* target, bool shared)
+void SnapshotData::mapToMemory(uint8_t* target)
 {
     faabric::util::FullLock lock(snapMx);
 
@@ -192,17 +176,7 @@ void SnapshotData::mapToMemory(uint8_t* target, bool shared)
         throw std::runtime_error(msg);
     }
 
-    if (shared) {
-        mapMemoryShared({ target, size }, fd);
-    } else {
-        mapMemoryPrivate({ target, size }, fd);
-    }
-}
-
-void SnapshotData::makeRestorable(const std::string& fdLabel)
-{
-    faabric::util::FullLock lock(snapMx);
-    fd = writeMemoryToFd({ _data.get(), size }, fdLabel);
+    mapMemoryPrivate({ target, size }, fd);
 }
 
 std::map<uint32_t, SnapshotMergeRegion> SnapshotData::getMergeRegions()
@@ -217,11 +191,13 @@ void SnapshotData::clearMergeRegions()
     mergeRegions.clear();
 }
 
-size_t SnapshotData::getSize() {
+size_t SnapshotData::getSize()
+{
     return size;
 }
 
-size_t SnapshotData::getMaxSize() {
+size_t SnapshotData::getMaxSize()
+{
     return maxSize;
 }
 

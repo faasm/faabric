@@ -32,18 +32,11 @@ bool SnapshotRegistry::snapshotExists(const std::string& key)
     return snapshotMap.find(key) != snapshotMap.end();
 }
 
-void SnapshotRegistry::mapSnapshotPrivate(const std::string& key,
+void SnapshotRegistry::mapSnapshot(const std::string& key,
                                           uint8_t* target)
 {
     auto d = getSnapshot(key);
-    d->mapToMemoryPrivate(target);
-}
-
-void SnapshotRegistry::mapSnapshotShared(const std::string& key,
-                                         uint8_t* target)
-{
-    auto d = getSnapshot(key);
-    d->mapToMemoryShared(target);
+    d->mapToMemory(target);
 }
 
 void SnapshotRegistry::registerSnapshotIfNotExists(

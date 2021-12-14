@@ -48,10 +48,6 @@ TEST_CASE_METHOD(SnapshotTestFixture,
         snapC->copyInData({ BYTES(&i), sizeof(int) }, i + 2);
     }
 
-    // Make two restorable
-    snapA->makeRestorable(keyA);
-    snapC->makeRestorable(keyC);
-
     // Take snapshots again with updated data
     reg.registerSnapshot(keyA, snapA);
     reg.registerSnapshot(keyB, snapB);
@@ -70,21 +66,14 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(actualB->getDataPtr() == snapB->getDataPtr());
     REQUIRE(actualC->getDataPtr() == snapC->getDataPtr());
 
-    REQUIRE(actualA->isRestorable());
-    REQUIRE(!actualB->isRestorable());
-    REQUIRE(actualC->isRestorable());
-
     // Create regions onto which we will map the snapshots
     MemoryRegion actualDataA = allocateSharedMemory(1 * HOST_PAGE_SIZE);
     MemoryRegion actualDataB = allocateSharedMemory(2 * HOST_PAGE_SIZE);
     MemoryRegion actualDataC = allocateSharedMemory(3 * HOST_PAGE_SIZE);
 
-    // Check those that are mappable are mapped
-    reg.mapSnapshotPrivate(keyA, actualDataA.get());
-    reg.mapSnapshotPrivate(keyC, actualDataC.get());
-
-    // Check error when mapping an unmappable snapshot
-    REQUIRE_THROWS(reg.mapSnapshotPrivate(keyB, actualDataB.get()));
+    // Map two of them
+    reg.mapSnapshot(keyA, actualDataA.get());
+    reg.mapSnapshot(keyC, actualDataC.get());
 
     // Here we need to check the actual data after mapping
     std::vector<uint8_t> vecDataA = snapA->getDataCopy();

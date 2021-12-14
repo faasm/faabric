@@ -141,7 +141,6 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     auto snap =
       std::make_shared<SnapshotData>(initialSnapSize, expandedSnapSize);
-    snap->makeRestorable(snapKey);
 
     // Set up the snapshot
     reg.registerSnapshot(snapKey, snap);
@@ -218,7 +217,6 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::string snapKey = std::to_string(generateGid());
     int snapSize = 5 * HOST_PAGE_SIZE;
     auto snap = std::make_shared<SnapshotData>(snapSize);
-    snap->makeRestorable(snapKey);
     reg.registerSnapshot(snapKey, snap);
 
     // Set up a couple of ints in the snapshot

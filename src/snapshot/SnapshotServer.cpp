@@ -87,12 +87,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // Set up the snapshot
     size_t snapSize = r->contents()->size();
     std::string snapKey = r->key()->str();
-    auto d =
-      std::make_shared<faabric::util::SnapshotData>(snapSize, r->maxSize());
-    d->copyInData({ (uint8_t*)r->contents()->Data(), snapSize });
+    auto d = std::make_shared<faabric::util::SnapshotData>(
+      std::span((uint8_t*)r->contents()->Data(), snapSize), r->maxSize());
 
-    // Register and make restorable
-    d->makeRestorable(snapKey);
+    // Register snapshot
     reg.registerSnapshot(snapKey, d);
 
     // Send response
