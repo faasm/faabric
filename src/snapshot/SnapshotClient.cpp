@@ -95,7 +95,7 @@ void SnapshotClient::pushSnapshot(
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto dataOffset =
-          mb.CreateVector<uint8_t>(data->getMutableDataPtr(), data->size);
+          mb.CreateVector<uint8_t>(data->getDataPtr(), data->size);
         auto requestOffset = CreateSnapshotPushRequest(
           mb, keyOffset, groupId, data->maxSize, dataOffset);
         mb.Finish(requestOffset);

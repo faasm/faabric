@@ -85,8 +85,6 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
       faabric::snapshot::getSnapshotRegistry();
 
     // Set up the snapshot
-    // Note, the snapshot object must take ownership of the data here, which
-    // implies a copy.
     size_t snapSize = r->contents()->size();
     std::string snapKey = r->key()->str();
     auto d =

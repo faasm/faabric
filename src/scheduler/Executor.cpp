@@ -141,9 +141,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Set up shared counter for this batch of tasks
     auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
 
-    // Work out if we should skip the reset after this batch. This only needs to
-    // happen when we're executing threads on the master host, in which case the
-    // original function call will cause a reset
+    // Work out if we should skip the reset after this batch. This happens for
+    // threads, as they will be restored from their respective snapshot on the
+    // next execution.
     bool skipReset = isThreads;
 
     // Iterate through and invoke tasks. By default, we allocate tasks
@@ -408,9 +408,9 @@ void Executor::postFinish() {}
 
 void Executor::reset(faabric::Message& msg) {}
 
-std::shared_ptr<faabric::util::SnapshotData> Executor::snapshot()
+std::shared_ptr<faabric::util::MemoryView> Executor::getMemoryView()
 {
-    SPDLOG_WARN("Executor has not implemented snapshot method");
+    SPDLOG_WARN("Executor has not implemented memory view method");
     return nullptr;
 }
 

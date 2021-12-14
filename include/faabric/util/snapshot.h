@@ -81,18 +81,12 @@ class SnapshotData
 
     SnapshotData() = default;
 
-    // Has same size and max size. Object owns data.
     explicit SnapshotData(size_t sizeIn);
 
-    // Has size and max size. Object owns data.
     SnapshotData(size_t sizeIn, size_t maxSizeIn);
 
-    // Has size and max size equal to size of input data. Object does not own
-    // data.
     explicit SnapshotData(std::span<uint8_t> dataIn);
 
-    // Has size equal to size of input data and specified max size. Object does
-    // not own data.
     SnapshotData(std::span<uint8_t> dataIn, size_t maxSizeIn);
 
     SnapshotData(const SnapshotData&) = delete;
@@ -103,23 +97,19 @@ class SnapshotData
 
     bool isRestorable();
 
-    bool isOwner();
+    void copyInData(std::span<uint8_t> buffer, uint32_t offset = 0);
 
     void makeRestorable(const std::string& fdLabel);
 
-    void copyInData(std::span<uint8_t> buffer, uint32_t offset = 0);
-
     const uint8_t* getDataPtr(uint32_t offset = 0);
-
-    uint8_t* getMutableDataPtr(uint32_t offset = 0);
 
     std::vector<uint8_t> getDataCopy();
 
     std::vector<uint8_t> getDataCopy(uint32_t offset, size_t dataSize);
 
-    std::vector<SnapshotDiff> getDirtyRegions();
+    void mapToMemoryPrivate(uint8_t* target);
 
-    std::vector<SnapshotDiff> getChangeDiffs(std::span<const uint8_t> updated);
+    void mapToMemoryShared(uint8_t* target);
 
     void addMergeRegion(uint32_t offset,
                         size_t length,
@@ -129,10 +119,6 @@ class SnapshotData
 
     void clearMergeRegions();
 
-    void mapToMemoryPrivate(uint8_t* target);
-
-    void mapToMemoryShared(uint8_t* target);
-
     std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
 
   private:
@@ -140,10 +126,6 @@ class SnapshotData
 
     std::shared_mutex snapMx;
 
-    // If we are the owner, the data pointer's deleter will take care of
-    // unmapping the underlying memory. If we are not the owner, the deleter for
-    // the pointer will be a noop.
-    bool owner = false;
     MemoryRegion _data = nullptr;
 
     // Note - we care about the order of this map, as we iterate through it
@@ -153,6 +135,38 @@ class SnapshotData
     uint8_t* validateDataOffset(uint32_t offset);
 
     void mapToMemory(uint8_t* target, bool shared);
+};
+
+class MemoryView
+{
+  public:
+    // Note - this object is just a view of a function's memory, and does not
+    // own the underlying data
+    explicit MemoryView(std::span<uint8_t> dataIn);
+
+    MemoryView(const MemoryView&) = delete;
+
+    MemoryView& operator=(const MemoryView&) = delete;
+
+    size_t size = 0;
+
+    std::vector<SnapshotDiff> getDirtyRegions();
+
+    std::vector<SnapshotDiff> diffWithSnapshot(
+      std::shared_ptr<SnapshotData> snap);
+
+    std::vector<uint8_t> getDataCopy();
+
+    std::vector<uint8_t> getDataCopy(uint32_t offset, size_t dataSize);
+
+    void copyInData(std::span<uint8_t> buffer, uint32_t offset = 0);
+
+  private:
+    std::shared_mutex memMx;
+
+    // Note, as this object doesn't own the data, the poiinter's deleter will
+    // be a noop.
+    MemoryRegion _data = nullptr;
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);

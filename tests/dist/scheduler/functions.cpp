@@ -68,7 +68,8 @@ int handleFakeDiffsFunction(faabric::scheduler::Executor* exec,
       faabric::snapshot::getSnapshotRegistry();
 
     auto originalSnap = reg.getSnapshot(snapshotKey);
-    std::shared_ptr<faabric::util::SnapshotData> updatedSnap = exec->snapshot();
+    std::shared_ptr<faabric::util::MemoryView> funcMemory =
+      exec->getMemoryView();
 
     // Add a single merge region to catch both diffs
     int offsetA = 10;
@@ -174,8 +175,8 @@ int handleFakeDiffsThreadedFunction(
             // Check remote modifications
             int offset = 2 * i * faabric::util::HOST_PAGE_SIZE + 10;
             std::string expectedData("thread_" + std::to_string(i));
-            auto* charPtr =
-              reinterpret_cast<char*>(snap->getMutableDataPtr(offset));
+            const auto* charPtr =
+              reinterpret_cast<const char*>(snap->getDataPtr(offset));
             std::string actual(charPtr);
 
             if (actual != expectedData) {

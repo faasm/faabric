@@ -61,8 +61,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     size_t sizeA = snapshotKey.size();
     size_t sizeB = inputData.size();
 
-    uint8_t* startA = snap->getMutableDataPtr() + 10;
-    uint8_t* startB = snap->getMutableDataPtr() + 100;
+    const uint8_t* startA = snap->getDataPtr() + 10;
+    const uint8_t* startB = snap->getDataPtr() + 100;
     std::vector<uint8_t> actualA(startA, startA + sizeA);
     std::vector<uint8_t> actualB(startB, startB + sizeB);
 
