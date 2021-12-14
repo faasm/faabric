@@ -117,14 +117,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(actualSharedMemBefore == expectedInitial);
 
     // Map the snapshot and check again
-    snap->mapToMemory(sharedMem.get());
+    snap->mapToMemoryPrivate(sharedMem.get());
     std::vector<uint8_t> actualSharedMemAfter(sharedMem.get(),
                                               sharedMem.get() + snap->size);
     REQUIRE(actualSharedMemAfter == actualSnapMem);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
-                 "Test mapping snapshot updates",
+                 "Test shared mapping updates",
                  "[snapshot][util]")
 {
     int snapPages = 2;
@@ -144,14 +144,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->makeRestorable("snap-map-test");
     REQUIRE(snap->isRestorable());
 
-    // Set up initial data _after_ making restorable, to make sure change
-    // propagated
+    // Set up initial data _after_ making restorable to make sure this change
+    // gets picked up
     snap->copyInData(dataA, offsetA);
     std::vector<uint8_t> initialSnapData = snap->getDataCopy();
 
     // Map to shared mem
     MemoryRegion mappedMem = allocateSharedMemory(snapSize);
-    snap->mapToMemory(mappedMem.get());
+    snap->mapToMemoryPrivate(mappedMem.get());
 
     // Check mapped memory now reflects change
     std::vector<uint8_t> expectedSnap(snapSize, 0);
@@ -165,7 +165,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(actualSnap == expectedSnap);
     REQUIRE(actualMapped == expectedMapped);
 
-    // Update mapped memory, make sure *not* seen in snapshot
+    // Update mapped memory, make sure it's not transferred to snapshot
     std::memcpy(mappedMem.get() + offsetB, dataB.data(), dataB.size());
     std::memcpy(expectedMapped.data() + offsetB, dataB.data(), dataB.size());
 
@@ -175,8 +175,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(actualSnap == expectedSnap);
     REQUIRE(actualMapped == expectedMapped);
 
-    // Now update snapshot, make sure change is also seen in mapped memory
+    // Now update snapshot on the same page as the mapped memory update.
+    // Make sure change is also seen in mapped memory
     snap->copyInData(dataC, offsetC);
+
     std::memcpy(expectedSnap.data() + offsetC, dataC.data(), dataC.size());
     std::memcpy(expectedMapped.data() + offsetC, dataC.data(), dataC.size());
 
@@ -186,9 +188,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(actualSnap == expectedSnap);
     REQUIRE(actualMapped == expectedMapped);
 
-    // Map another region of memory, check only snapshot changes visible
+    // Map another region of memory, check only changes to snapshot visible
     MemoryRegion mappedMemB = allocateSharedMemory(snapSize);
-    snap->mapToMemory(mappedMemB.get());
+    snap->mapToMemoryPrivate(mappedMemB.get());
     std::vector<uint8_t> actualMappedB(mappedMemB.get(),
                                        mappedMemB.get() + snap->size);
     REQUIRE(actualMappedB == expectedSnap);
@@ -228,7 +230,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map to some other region of memory large enough for the extended version
     MemoryRegion sharedMem = allocateSharedMemory(expandedSize);
-    snap->mapToMemory(sharedMem.get());
+    snap->mapToMemoryPrivate(sharedMem.get());
 
     // Add some data to the extended region. Check the snapshot extends to fit
     std::vector<uint8_t> dataC(300, 5);
@@ -245,7 +247,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(snap->size == expectedSizeB);
 
     // Remap to shared memory
-    snap->mapToMemory(sharedMem.get());
+    snap->mapToMemoryPrivate(sharedMem.get());
 
     // Check mapped region matches
     std::vector<uint8_t> actualData = snap->getDataCopy();
@@ -291,8 +293,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     MemoryRegion sharedMem = allocateSharedMemory(memSize);
-
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    reg.mapSnapshotPrivate(snapKey, sharedMem.get());
 
     // Check mapping works
     int* intA = (int*)(sharedMem.get() + intAOffset);
@@ -410,7 +411,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
     MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    reg.mapSnapshotPrivate(snapKey, sharedMem.get());
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -588,7 +589,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
     MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
 
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    reg.mapSnapshotPrivate(snapKey, sharedMem.get());
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -657,7 +658,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Map the snapshot
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
     MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    reg.mapSnapshotPrivate(snapKey, sharedMem.get());
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -695,7 +696,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot
     MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    reg.mapSnapshotPrivate(snapKey, sharedMem.get());
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -767,7 +768,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot
     MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    reg.mapSnapshotPrivate(snapKey, sharedMem.get());
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -849,7 +850,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot
     MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    reg.mapSnapshotPrivate(snapKey, sharedMem.get());
     faabric::util::resetDirtyTracking();
 
     // Make an edit somewhere in the extended memory, outside the original

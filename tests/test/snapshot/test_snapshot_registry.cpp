@@ -84,11 +84,11 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     MemoryRegion actualDataC = allocateSharedMemory(3 * HOST_PAGE_SIZE);
 
     // Check those that are mappable are mapped
-    reg.mapSnapshot(keyA, actualDataA.get());
-    reg.mapSnapshot(keyC, actualDataC.get());
+    reg.mapSnapshotPrivate(keyA, actualDataA.get());
+    reg.mapSnapshotPrivate(keyC, actualDataC.get());
 
     // Check error when mapping an unmappable snapshot
-    REQUIRE_THROWS(reg.mapSnapshot(keyB, actualDataB.get()));
+    REQUIRE_THROWS(reg.mapSnapshotPrivate(keyB, actualDataB.get()));
 
     // Here we need to check the actual data after mapping
     std::vector<uint8_t> vecDataA = snapA->getDataCopy();

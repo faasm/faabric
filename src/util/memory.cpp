@@ -242,12 +242,8 @@ void mapMemory(std::span<uint8_t> target, int fd, int flags)
     }
 
     // Make mmap call to do the mapping
-    void* mmapRes = ::mmap(target.data(),
-                           target.size(),
-                           PROT_READ | PROT_WRITE,
-                           MAP_PRIVATE | MAP_FIXED,
-                           fd,
-                           0);
+    void* mmapRes = ::mmap(
+      target.data(), target.size(), PROT_READ | PROT_WRITE, flags, fd, 0);
 
     if (mmapRes == MAP_FAILED) {
         SPDLOG_ERROR("mapping memory to fd {} failed: {} ({})",

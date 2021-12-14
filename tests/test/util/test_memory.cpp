@@ -402,7 +402,7 @@ TEST_CASE("Test mapping memory", "[util]")
 
     // Map some new memory to this fd
     MemoryRegion memA = allocateSharedMemory(chunk.size());
-    mapMemory({ memA.get(), chunk.size() }, fd);
+    mapMemoryPrivate({ memA.get(), chunk.size() }, fd);
 
     std::vector<uint8_t> memAData(memA.get(), memA.get() + chunk.size());
     REQUIRE(memAData == chunk);
@@ -417,7 +417,7 @@ TEST_CASE("Test mapping memory", "[util]")
 
     // Map a region to both chunks
     MemoryRegion memB = allocateSharedMemory(chunk.size() + chunkB.size());
-    mapMemory({ memB.get(), chunk.size() + chunkB.size() }, fd);
+    mapMemoryPrivate({ memB.get(), chunk.size() + chunkB.size() }, fd);
 
     // Check region now contains both bits of data
     std::vector<uint8_t> memBData(memB.get(),
@@ -439,6 +439,6 @@ TEST_CASE("Test mapping memory fails with invalid fd", "[util]")
 
     SECTION("Negative fd") { fd = -2; }
 
-    REQUIRE_THROWS(mapMemory({ sharedMem.get(), memSize }, fd));
+    REQUIRE_THROWS(mapMemoryPrivate({ sharedMem.get(), memSize }, fd));
 }
 }
