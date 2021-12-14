@@ -303,7 +303,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
         auto pushedSnapshot = snapshotPushes.at(0);
         REQUIRE(pushedSnapshot.first == otherHost);
-        REQUIRE(pushedSnapshot.second->size == snapshot->size);
+        REQUIRE(pushedSnapshot.second->getSize() == snapshot->getSize());
         REQUIRE(pushedSnapshot.second->getDataPtr() == snapshot->getDataPtr());
     }
 

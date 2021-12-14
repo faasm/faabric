@@ -293,8 +293,7 @@ void writeToFd(int fd, off_t offset, std::span<const uint8_t> data)
     ::lseek(fd, 0, SEEK_END);
 }
 
-int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel)
-{
+int createFd(size_t size, const std::string &fdLabel) {
     // Create new fd
     int fd = ::memfd_create(fdLabel.c_str(), 0);
     if (fd == -1) {
@@ -303,9 +302,15 @@ int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel)
     }
 
     // Make the fd big enough
-    resizeFd(fd, data.size());
+    resizeFd(fd, size);
 
-    // Write the data
+    return fd;
+}
+
+int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel)
+{
+    int fd = createFd(data.size(), fdLabel);
+
     writeToFd(fd, 0, data);
 
     return fd;

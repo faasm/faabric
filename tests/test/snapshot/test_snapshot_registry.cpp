@@ -61,9 +61,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     auto actualB = reg.getSnapshot(keyB);
     auto actualC = reg.getSnapshot(keyC);
 
-    REQUIRE(actualA->size == snapA->size);
-    REQUIRE(actualB->size == snapB->size);
-    REQUIRE(actualC->size == snapC->size);
+    REQUIRE(actualA->getSize() == snapA->getSize());
+    REQUIRE(actualB->getSize() == snapB->getSize());
+    REQUIRE(actualC->getSize() == snapC->getSize());
 
     // Pointer equality here is good enough
     REQUIRE(actualA->getDataPtr() == snapA->getDataPtr());
@@ -134,15 +134,15 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(reg.getSnapshotCount() == 1);
 
     auto otherSnap =
-      std::make_shared<faabric::util::SnapshotData>(snapBefore->size + 10);
-    std::vector<uint8_t> otherData(snapBefore->size + 10, 1);
+      std::make_shared<faabric::util::SnapshotData>(snapBefore->getSize() + 10);
+    std::vector<uint8_t> otherData(snapBefore->getSize() + 10, 1);
     otherSnap->copyInData(otherData);
 
     // Check existing snapshot is not overwritten
     reg.registerSnapshotIfNotExists(keyA, otherSnap);
     auto snapAfterA = reg.getSnapshot(keyA);
     REQUIRE(snapAfterA->getDataPtr() == snapBefore->getDataPtr());
-    REQUIRE(snapAfterA->size == snapBefore->size);
+    REQUIRE(snapAfterA->getSize() == snapBefore->getSize());
 
     // Check new snapshot is still created
     reg.registerSnapshotIfNotExists(keyB, otherSnap);
@@ -153,7 +153,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     auto snapAfterB = reg.getSnapshot(keyB);
     REQUIRE(snapAfterB->getDataPtr() == otherSnap->getDataPtr());
-    REQUIRE(snapAfterB->size == otherSnap->size);
+    REQUIRE(snapAfterB->getSize() == otherSnap->getSize());
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,

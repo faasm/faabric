@@ -78,12 +78,13 @@ void SnapshotClient::pushSnapshot(
   int groupId,
   std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    if (data->size == 0) {
+    if (data->getSize() == 0) {
         SPDLOG_ERROR("Cannot push snapshot {} with size zero to {}", key, host);
         throw std::runtime_error("Pushing snapshot with zero size");
     }
 
-    SPDLOG_DEBUG("Pushing snapshot {} to {} ({} bytes)", key, host, data->size);
+    SPDLOG_DEBUG(
+      "Pushing snapshot {} to {} ({} bytes)", key, host, data->getSize());
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
@@ -95,9 +96,9 @@ void SnapshotClient::pushSnapshot(
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
         auto dataOffset =
-          mb.CreateVector<uint8_t>(data->getDataPtr(), data->size);
+          mb.CreateVector<uint8_t>(data->getDataPtr(), data->getSize());
         auto requestOffset = CreateSnapshotPushRequest(
-          mb, keyOffset, groupId, data->maxSize, dataOffset);
+          mb, keyOffset, groupId, data->getMaxSize(), dataOffset);
         mb.Finish(requestOffset);
 
         // Send it

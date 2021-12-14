@@ -76,9 +76,6 @@ class SnapshotMergeRegion
 class SnapshotData
 {
   public:
-    size_t size = 0;
-    size_t maxSize = 0;
-
     SnapshotData() = default;
 
     explicit SnapshotData(size_t sizeIn);
@@ -121,7 +118,14 @@ class SnapshotData
 
     std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
 
+    size_t getSize();
+
+    size_t getMaxSize();
+
   private:
+    size_t size = 0;
+    size_t maxSize = 0;
+
     int fd = -1;
 
     std::shared_mutex snapMx;
@@ -132,7 +136,7 @@ class SnapshotData
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
 
-    uint8_t* validateDataOffset(uint32_t offset);
+    uint8_t* validatedOffsetPtr(uint32_t offset);
 
     void mapToMemory(uint8_t* target, bool shared);
 };

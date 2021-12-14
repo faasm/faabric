@@ -61,8 +61,8 @@ void DistTestExecutor::restore(faabric::Message& msg)
       faabric::snapshot::getSnapshotRegistry();
     auto snap = reg.getSnapshot(msg.snapshotkey());
 
-    dummyMemorySize = snap->size;
-    dummyMemory = faabric::util::allocateSharedMemory(snap->size);
+    dummyMemorySize = snap->getSize();
+    dummyMemory = faabric::util::allocateSharedMemory(snap->getSize());
     reg.mapSnapshotPrivate(msg.snapshotkey(), dummyMemory.get());
 }
 

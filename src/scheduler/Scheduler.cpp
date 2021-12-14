@@ -502,7 +502,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             // See if we've already pushed this snapshot to the given host,
             // if so, just push the diffs
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
-                MemoryView snapMemView({ snap->getDataPtr(), snap->size });
+                MemoryView snapMemView({ snap->getDataPtr(), snap->getSize() });
 
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
                   snapMemView.getDirtyRegions();

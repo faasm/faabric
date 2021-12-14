@@ -72,7 +72,7 @@ void SnapshotRegistry::doRegisterSnapshot(
         return;
     }
 
-    SPDLOG_TRACE("Registering snapshot {} size {}", key, data->size);
+    SPDLOG_TRACE("Registering snapshot {} size {}", key, data->getSize());
 
     snapshotMap.insert_or_assign(key, std::move(data));
 }

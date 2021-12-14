@@ -1,3 +1,4 @@
+#include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -25,6 +26,11 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
 
     // Claim just the snapshot region
     faabric::util::claimVirtualMemory({ BYTES(_data.get()), size });
+
+    // Set up the fd with a two-way mapping to the data
+    std::string fdLabel = "snap_" + std::to_string(generateGid());
+    fd = createFd(size, fdLabel);
+    mapMemoryShared({ _data.get(), size }, fd);
 }
 
 SnapshotData::SnapshotData(std::span<uint8_t> dataIn)
@@ -75,25 +81,23 @@ void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
         if (fd > 0) {
             resizeFd(fd, newSize);
         }
+
+        // Remap data
+        mapMemoryShared({ _data.get(), size }, fd);
     }
 
     // Copy in new data
-    uint8_t* copyTarget = validateDataOffset(offset);
+    uint8_t* copyTarget = validatedOffsetPtr(offset);
     ::memcpy(copyTarget, buffer.data(), buffer.size());
-
-    // Update fd
-    if (fd > 0) {
-        writeToFd(fd, offset, buffer);
-    }
 }
 
 const uint8_t* SnapshotData::getDataPtr(uint32_t offset)
 {
     faabric::util::SharedLock lock(snapMx);
-    return validateDataOffset(offset);
+    return validatedOffsetPtr(offset);
 }
 
-uint8_t* SnapshotData::validateDataOffset(uint32_t offset)
+uint8_t* SnapshotData::validatedOffsetPtr(uint32_t offset)
 {
     if (offset > size) {
         SPDLOG_ERROR("Out of bounds snapshot access: {} > {}", offset, size);
@@ -120,7 +124,7 @@ std::vector<uint8_t> SnapshotData::getDataCopy(uint32_t offset, size_t dataSize)
         throw std::runtime_error("Out of bounds snapshot access");
     }
 
-    uint8_t* ptr = validateDataOffset(offset);
+    uint8_t* ptr = validatedOffsetPtr(offset);
     return std::vector<uint8_t>(ptr, ptr + dataSize);
 }
 
@@ -189,9 +193,9 @@ void SnapshotData::mapToMemory(uint8_t* target, bool shared)
     }
 
     if (shared) {
-        faabric::util::mapMemoryShared({ target, size }, fd);
+        mapMemoryShared({ target, size }, fd);
     } else {
-        faabric::util::mapMemoryPrivate({ target, size }, fd);
+        mapMemoryPrivate({ target, size }, fd);
     }
 }
 
@@ -211,6 +215,14 @@ void SnapshotData::clearMergeRegions()
 {
     faabric::util::FullLock lock(snapMx);
     mergeRegions.clear();
+}
+
+size_t SnapshotData::getSize() {
+    return size;
+}
+
+size_t SnapshotData::getMaxSize() {
+    return maxSize;
 }
 
 MemoryView::MemoryView(std::span<const uint8_t> dataIn)
@@ -242,7 +254,7 @@ std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
                            (p.second - p.first));
     }
 
-    SPDLOG_DEBUG("Snapshot has {}/{} dirty pages", diffs.size(), nPages);
+    SPDLOG_DEBUG("Memory view has {}/{} dirty pages", diffs.size(), nPages);
 
     return diffs;
 }
@@ -279,7 +291,7 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
             // Add the diffs
             mr.addDiffs(diffs,
                         snap->getDataPtr(),
-                        snap->size,
+                        snap->getSize(),
                         data.data(),
                         dirtyRegion.first,
                         dirtyRegion.second);

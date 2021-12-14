@@ -109,15 +109,15 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
       allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
 
     // Check it's zeroed
-    std::vector<uint8_t> expectedInitial(snap->size, 0);
-    std::vector<uint8_t> actualSharedMemBefore(sharedMem.get(),
-                                               sharedMem.get() + snap->size);
+    std::vector<uint8_t> expectedInitial(snap->getSize(), 0);
+    std::vector<uint8_t> actualSharedMemBefore(
+      sharedMem.get(), sharedMem.get() + snap->getSize());
     REQUIRE(actualSharedMemBefore == expectedInitial);
 
     // Map the snapshot and check again
     snap->mapToMemoryPrivate(sharedMem.get());
-    std::vector<uint8_t> actualSharedMemAfter(sharedMem.get(),
-                                              sharedMem.get() + snap->size);
+    std::vector<uint8_t> actualSharedMemAfter(
+      sharedMem.get(), sharedMem.get() + snap->getSize());
     REQUIRE(actualSharedMemAfter == actualSnapMem);
 }
 
@@ -159,7 +159,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::vector<uint8_t> actualSnap = snap->getDataCopy();
     std::vector<uint8_t> actualMapped(mappedMem.get(),
-                                      mappedMem.get() + snap->size);
+                                      mappedMem.get() + snap->getSize());
     REQUIRE(actualSnap == expectedSnap);
     REQUIRE(actualMapped == expectedMapped);
 
@@ -169,7 +169,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     actualSnap = snap->getDataCopy();
     actualMapped =
-      std::vector<uint8_t>(mappedMem.get(), mappedMem.get() + snap->size);
+      std::vector<uint8_t>(mappedMem.get(), mappedMem.get() + snap->getSize());
     REQUIRE(actualSnap == expectedSnap);
     REQUIRE(actualMapped == expectedMapped);
 
@@ -182,7 +182,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     actualSnap = snap->getDataCopy();
     actualMapped =
-      std::vector<uint8_t>(mappedMem.get(), mappedMem.get() + snap->size);
+      std::vector<uint8_t>(mappedMem.get(), mappedMem.get() + snap->getSize());
     REQUIRE(actualSnap == expectedSnap);
     REQUIRE(actualMapped == expectedMapped);
 
@@ -190,7 +190,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     MemoryRegion mappedMemB = allocateSharedMemory(snapSize);
     snap->mapToMemoryPrivate(mappedMemB.get());
     std::vector<uint8_t> actualMappedB(mappedMemB.get(),
-                                       mappedMemB.get() + snap->size);
+                                       mappedMemB.get() + snap->getSize());
     REQUIRE(actualMappedB == expectedSnap);
 }
 
@@ -238,11 +238,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     snap->copyInData(dataC, extendedOffsetA);
     size_t expectedSizeA = extendedOffsetA + dataC.size();
-    REQUIRE(snap->size == expectedSizeA);
+    REQUIRE(snap->getSize() == expectedSizeA);
 
     snap->copyInData(dataD, extendedOffsetB);
     size_t expectedSizeB = extendedOffsetB + dataD.size();
-    REQUIRE(snap->size == expectedSizeB);
+    REQUIRE(snap->getSize() == expectedSizeB);
 
     // Remap to shared memory
     snap->mapToMemoryPrivate(sharedMem.get());
@@ -250,7 +250,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Check mapped region matches
     std::vector<uint8_t> actualData = snap->getDataCopy();
     std::vector<uint8_t> actualSharedMem(sharedMem.get(),
-                                         sharedMem.get() + snap->size);
+                                         sharedMem.get() + snap->getSize());
 
     REQUIRE(actualSharedMem.size() == actualData.size());
     REQUIRE(actualSharedMem == actualData);
@@ -678,6 +678,45 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test diffing snapshot memory",
+                 "[snapshot][util]")
+{
+    // Set up a snapshot
+    int snapPages = 3;
+
+    std::shared_ptr<SnapshotData> snap =
+      std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
+    snap->makeRestorable(snapKey);
+    reg.registerSnapshot(snapKey, snap);
+
+    // Update the snapshot
+    int valueA = 8;
+    uint32_t offsetA = 0;
+    int valueB = 7;
+    uint32_t offsetB = 2 * HOST_PAGE_SIZE + 1;
+    snap->copyInData({ BYTES(&valueA), sizeof(int) }, offsetA);
+    snap->copyInData({ BYTES(&valueB), sizeof(int) }, offsetB);
+
+    // Check we get the expected diffs
+    std::vector<SnapshotDiff> expectedDiffs =
+      MemoryView({ snap->getDataPtr(), snap->getSize() }).getDirtyRegions();
+
+    REQUIRE(expectedDiffs.size() == 2);
+
+    SnapshotDiff diffA = expectedDiffs.at(0);
+    SnapshotDiff diffB = expectedDiffs.at(1);
+
+    REQUIRE(diffA.size == sizeof(int));
+    REQUIRE(diffB.size == sizeof(int));
+
+    int actualA = unalignedRead<int>(diffA.data);
+    int actualB = unalignedRead<int>(diffA.data);
+
+    REQUIRE(actualA == valueA);
+    REQUIRE(actualB == valueB);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test fine-grained byte-wise diffs",
                  "[snapshot][util]")
 {
@@ -856,7 +895,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::memcpy(sharedMem.get() + diffOffset, diffData.data(), diffData.size());
 
     // Add a merge region from near end of original snapshot upwards
-    snap->addMergeRegion(snap->size - 120,
+    snap->addMergeRegion(snap->getSize() - 120,
                          0,
                          faabric::util::SnapshotDataType::Raw,
                          faabric::util::SnapshotMergeOperation::Overwrite);
@@ -917,8 +956,8 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
 
     SECTION("From vector") { snap = std::make_shared<SnapshotData>(data); }
 
-    REQUIRE(snap->size == data.size());
-    REQUIRE(snap->maxSize == expectedMaxSize);
+    REQUIRE(snap->getSize() == data.size());
+    REQUIRE(snap->getMaxSize() == expectedMaxSize);
 
     std::vector<uint8_t> actualCopy = snap->getDataCopy();
     REQUIRE(actualCopy == data);
@@ -927,8 +966,8 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
       snap->getDataCopy(chunkOffset, chunk.size());
     REQUIRE(actualChunk == chunk);
 
-    const std::vector<uint8_t> actualConst(snap->getDataPtr(),
-                                           snap->getDataPtr() + snap->size);
+    const std::vector<uint8_t> actualConst(
+      snap->getDataPtr(), snap->getDataPtr() + snap->getSize());
     REQUIRE(actualConst == data);
 }
 }

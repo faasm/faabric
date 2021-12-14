@@ -99,8 +99,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     const auto actualA = reg.getSnapshot(snapKeyA);
     const auto actualB = reg.getSnapshot(snapKeyB);
 
-    REQUIRE(actualA->size == snapA->size);
-    REQUIRE(actualB->size == snapB->size);
+    REQUIRE(actualA->getSize() == snapA->getSize());
+    REQUIRE(actualB->getSize() == snapB->getSize());
 
     std::vector<uint8_t> actualDataA = actualA->getDataCopy();
     std::vector<uint8_t> actualDataB = actualB->getDataCopy();

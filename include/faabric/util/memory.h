@@ -68,6 +68,8 @@ void resizeFd(int fd, size_t size);
 
 void writeToFd(int fd, off_t offset, std::span<const uint8_t> data);
 
+int createFd(size_t size, const std::string &fdLabel);
+
 int writeMemoryToFd(std::span<const uint8_t> data, const std::string& fdLabel);
 
 void appendDataToFd(int fd, std::span<uint8_t> data);
