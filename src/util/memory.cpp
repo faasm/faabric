@@ -286,7 +286,8 @@ void writeToFd(int fd, off_t offset, std::span<const uint8_t> data)
     ::lseek(fd, 0, SEEK_END);
 }
 
-int createFd(size_t size, const std::string &fdLabel) {
+int createFd(size_t size, const std::string& fdLabel)
+{
     // Create new fd
     int fd = ::memfd_create(fdLabel.c_str(), 0);
     if (fd == -1) {

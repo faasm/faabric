@@ -101,9 +101,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     REQUIRE(actualResult.returnvalue() == 333);
 }
 
-TEST_CASE_METHOD(DistTestsFixture,
-                 "Check repeated reduction",
-                 "[snapshots]")
+TEST_CASE_METHOD(DistTestsFixture, "Check repeated reduction", "[snapshots]")
 {
     std::string user = "snapshots";
     std::string function = "reduction";

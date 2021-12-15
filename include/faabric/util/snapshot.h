@@ -112,7 +112,7 @@ class SnapshotData
 
     std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
 
-    void writeDiffs(const std::vector<SnapshotDiff> &diffs);
+    void writeDiffs(const std::vector<SnapshotDiff>& diffs);
 
     size_t getSize();
 

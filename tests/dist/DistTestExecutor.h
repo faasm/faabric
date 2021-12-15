@@ -25,6 +25,11 @@ class DistTestExecutor final : public faabric::scheduler::Executor
 
     std::shared_ptr<faabric::util::MemoryView> getMemoryView() override;
 
+    std::span<uint8_t> getDummyMemory();
+
+    void setUpDummyMemory(size_t memSize);
+
+  private:
     faabric::util::MemoryRegion dummyMemory = nullptr;
 
     size_t dummyMemorySize = 0;

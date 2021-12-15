@@ -32,8 +32,7 @@ bool SnapshotRegistry::snapshotExists(const std::string& key)
     return snapshotMap.find(key) != snapshotMap.end();
 }
 
-void SnapshotRegistry::mapSnapshot(const std::string& key,
-                                          uint8_t* target)
+void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
     auto d = getSnapshot(key);
     d->mapToMemory(target);

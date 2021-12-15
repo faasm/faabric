@@ -28,11 +28,6 @@ TEST_CASE_METHOD(DistTestsFixture,
     res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);
 
-    // Set up the messages
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("threads", "simple", 4);
-    req->set_type(faabric::BatchExecuteRequest::THREADS);
-
     // Set up a snapshot
     size_t snapshotSize = 5 * faabric::util::HOST_PAGE_SIZE;
     auto snap = std::make_shared<faabric::util::SnapshotData>(snapshotSize);
@@ -40,8 +35,16 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::string snapKey = std::to_string(faabric::util::generateGid());
     reg.registerSnapshot(snapKey, snap);
 
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    firstMsg.set_snapshotkey(snapKey);
+    // Set up the message
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("threads", "simple", nThreads);
+    req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+    for (int i = 0; i < nThreads; i++) {
+        faabric::Message& m = req->mutable_messages()->at(i);
+        m.set_appidx(i);
+        m.set_snapshotkey(snapKey);
+    }
 
     // Call the functions
     sch.callFunctions(req);

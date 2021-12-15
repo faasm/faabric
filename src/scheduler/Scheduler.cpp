@@ -518,7 +518,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     }
 
     // Now reset the dirty page tracking just before we start executing
-    SPDLOG_DEBUG("Resetting dirty tracking before executing {}", funcStr);
     faabric::util::resetDirtyTracking();
 
     // -------------------------------------------

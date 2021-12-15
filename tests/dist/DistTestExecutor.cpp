@@ -1,4 +1,5 @@
 #include "DistTestExecutor.h"
+#include "faabric/util/func.h"
 
 #include <sys/mman.h>
 
@@ -53,10 +54,16 @@ int32_t DistTestExecutor::executeTask(
     return callback(this, threadPoolIdx, msgIdx, req);
 }
 
-void DistTestExecutor::reset(faabric::Message& msg) {}
+void DistTestExecutor::reset(faabric::Message& msg)
+{
+    SPDLOG_DEBUG("Dist test executor resetting for {}",
+                 faabric::util::funcToString(msg, false));
+}
 
 void DistTestExecutor::restore(faabric::Message& msg)
 {
+    SPDLOG_DEBUG("Dist test executor restoring for {}",
+                 faabric::util::funcToString(msg, false));
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
     auto snap = reg.getSnapshot(msg.snapshotkey());
@@ -70,6 +77,17 @@ std::shared_ptr<faabric::util::MemoryView> DistTestExecutor::getMemoryView()
 {
     return std::make_shared<faabric::util::MemoryView>(
       std::span<uint8_t>(dummyMemory.get(), dummyMemorySize));
+}
+
+std::span<uint8_t> DistTestExecutor::getDummyMemory()
+{
+    return { dummyMemory.get(), dummyMemorySize };
+}
+
+void DistTestExecutor::setUpDummyMemory(size_t memSize)
+{
+    dummyMemory = faabric::util::allocateSharedMemory(memSize);
+    dummyMemorySize = memSize;
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

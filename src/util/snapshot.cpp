@@ -196,14 +196,14 @@ void SnapshotData::writeDiffs(const std::vector<SnapshotDiff>& diffs)
 {
     // Iterate through diffs
     for (const auto& diff : diffs) {
-        SPDLOG_TRACE("Applying snapshot diff at {}-{}",
-                     diff.offset,
-                     diff.offset + diff.size);
-
         switch (diff.dataType) {
             case (faabric::util::SnapshotDataType::Raw): {
                 switch (diff.operation) {
                     case (faabric::util::SnapshotMergeOperation::Overwrite): {
+                        SPDLOG_TRACE("Copying raw snapshot diff into {}-{}",
+                                     diff.offset,
+                                     diff.offset + diff.size);
+
                         copyInData({ diff.data, diff.size }, diff.offset);
                         break;
                     }
@@ -226,22 +226,50 @@ void SnapshotData::writeDiffs(const std::vector<SnapshotDiff>& diffs)
                 switch (diff.operation) {
                     case (faabric::util::SnapshotMergeOperation::Sum): {
                         finalValue = original + diffValue;
+
+                        SPDLOG_TRACE("Applying int sum diff {}: {} = {} + {}",
+                                     diff.offset,
+                                     finalValue,
+                                     original,
+                                     diffValue);
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Subtract): {
                         finalValue = original - diffValue;
+
+                        SPDLOG_TRACE("Applying int sub diff {}: {} = {} - {}",
+                                     diff.offset,
+                                     finalValue,
+                                     original,
+                                     diffValue);
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Product): {
                         finalValue = original * diffValue;
+
+                        SPDLOG_TRACE("Applying int mult diff {}: {} = {} * {}",
+                                     diff.offset,
+                                     finalValue,
+                                     original,
+                                     diffValue);
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Min): {
                         finalValue = std::min(original, diffValue);
+
+                        SPDLOG_TRACE("Applying int min diff {}: min({}, {})",
+                                     diff.offset,
+                                     original,
+                                     diffValue);
                         break;
                     }
                     case (faabric::util::SnapshotMergeOperation::Max): {
                         finalValue = std::max(original, diffValue);
+
+                        SPDLOG_TRACE("Applying int max diff {}: max({}, {})",
+                                     diff.offset,
+                                     original,
+                                     diffValue);
                         break;
                     }
                     default: {
@@ -323,7 +351,10 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
     size_t nThisPages = getRequiredHostPages(data.size());
     std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
       faabric::util::getDirtyRegions(data.data(), nThisPages);
-    SPDLOG_TRACE("Found {} dirty regions", dirtyRegions.size());
+    SPDLOG_TRACE("Found {} dirty regions at {} for {} pages",
+                 dirtyRegions.size(),
+                 (void*)data.data(),
+                 nThisPages);
 
     // Iterate through merge regions, see which ones overlap with dirty memory
     // regions, and add corresponding diffs

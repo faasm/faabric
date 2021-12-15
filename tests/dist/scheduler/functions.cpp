@@ -88,10 +88,12 @@ int handleFakeDiffsFunction(tests::DistTestExecutor* exec,
     // Modify the executor's memory
     std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
 
-    std::memcpy(
-      exec->dummyMemory.get() + offsetA, keyBytes.data(), keyBytes.size());
-    std::memcpy(
-      exec->dummyMemory.get() + offsetB, inputBytes.data(), inputBytes.size());
+    std::memcpy(exec->getDummyMemory().data() + offsetA,
+                keyBytes.data(),
+                keyBytes.size());
+    std::memcpy(exec->getDummyMemory().data() + offsetB,
+                inputBytes.data(),
+                inputBytes.size());
 
     return 123;
 }
@@ -219,7 +221,7 @@ int handleFakeDiffsThreadedFunction(
           faabric::util::SnapshotMergeOperation::Overwrite);
 
         // Now modify the memory
-        std::memcpy(exec->dummyMemory.get() + changeOffset,
+        std::memcpy(exec->getDummyMemory().data() + changeOffset,
                     inputBytes.data(),
                     inputBytes.size());
 
@@ -246,9 +248,6 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
     size_t snapSize = 4 * HOST_PAGE_SIZE;
     int groupId = 1234;
 
-    // Initialise dummy memory
-    exec->getMemoryView();
-
     // Perform two reductions and one array modification. One reduction on same
     // page as array change
     uint32_t reductionAOffset = HOST_PAGE_SIZE;
@@ -271,9 +270,8 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
         reg.registerSnapshot(snapKey, snap);
 
         // Map memory to snapshot
-        exec->dummyMemory =
-          faabric::util::allocateSharedMemory(snap->getSize());
-        snap->mapToMemory(exec->dummyMemory.get());
+        exec->setUpDummyMemory(snapSize);
+        snap->mapToMemory(exec->getDummyMemory().data());
 
         // Set up thread request
         auto req =
@@ -324,12 +322,16 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             }
         }
 
-        // Remap memory to snapshot
-        snap->mapToMemory(exec->dummyMemory.get());
+        SPDLOG_DEBUG("Reduce test threads finished");
 
-        uint8_t* reductionAPtr = exec->dummyMemory.get() + reductionAOffset;
-        uint8_t* reductionBPtr = exec->dummyMemory.get() + reductionBOffset;
-        uint8_t* arrayPtr = exec->dummyMemory.get() + arrayOffset;
+        // Remap memory to snapshot
+        snap->mapToMemory(exec->getDummyMemory().data());
+
+        uint8_t* reductionAPtr =
+          exec->getDummyMemory().data() + reductionAOffset;
+        uint8_t* reductionBPtr =
+          exec->getDummyMemory().data() + reductionBOffset;
+        uint8_t* arrayPtr = exec->getDummyMemory().data() + arrayOffset;
 
         // Check everything as expected
         int expectedReductionA = nThreads * 10;
@@ -338,6 +340,21 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
         auto actualReductionB = unalignedRead<int32_t>(reductionBPtr);
 
         bool success = true;
+
+        for (int i = 0; i < nThreads; i++) {
+            uint8_t* thisPtr = arrayPtr + (i * sizeof(int32_t));
+            int expectedValue = i * 30;
+            auto actualValue = unalignedRead<int32_t>(thisPtr);
+
+            if (expectedValue != actualValue) {
+                success = false;
+                SPDLOG_ERROR("Dist array merge at {} failed: {} != {}",
+                             i,
+                             expectedValue,
+                             actualValue);
+            }
+        }
+
         if (expectedReductionA != actualReductionA) {
             success = false;
             SPDLOG_ERROR("Dist reduction A failed: {} != {}",
@@ -350,20 +367,6 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             SPDLOG_ERROR("Dist reduction B failed: {} != {}",
                          expectedReductionB,
                          actualReductionB);
-        }
-
-        for (int i = 0; i < nThreads; i++) {
-            uint8_t* thisPtr = arrayPtr + (i * sizeof(int32_t));
-            int expectedValue = i * 30;
-            auto actualValue = unalignedRead<int32_t>(thisPtr);
-
-            if (expectedValue != actualValue) {
-                success = false;
-                SPDLOG_ERROR("Dist array merge at {} failed: {} != {}",
-                             i,
-                             expectedReductionB,
-                             actualReductionB);
-            }
         }
 
         if (!success) {
@@ -380,9 +383,12 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
         }
 
     } else {
-        uint8_t* reductionAPtr = exec->dummyMemory.get() + reductionAOffset;
-        uint8_t* reductionBPtr = exec->dummyMemory.get() + reductionBOffset;
-        uint8_t* arrayPtr = exec->dummyMemory.get() + arrayOffset;
+        uint8_t* reductionAPtr =
+          exec->getDummyMemory().data() + reductionAOffset;
+        uint8_t* reductionBPtr =
+          exec->getDummyMemory().data() + reductionBOffset;
+
+        uint8_t* arrayPtr = exec->getDummyMemory().data() + arrayOffset;
         uint32_t thisIdx = msg.appidx();
         uint8_t* thisArrayPtr = arrayPtr + (sizeof(int32_t) * thisIdx);
 
@@ -414,10 +420,18 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
         // Make modifications
         int32_t initialA = unalignedRead<int32_t>(reductionAPtr);
         int32_t initialB = unalignedRead<int32_t>(reductionBPtr);
+
         unalignedWrite(initialA + 10, reductionAPtr);
         unalignedWrite(initialB + 20, reductionBPtr);
 
-        unalignedWrite<int32_t>(thisIdx * 30, thisArrayPtr);
+        int arrayValue = thisIdx * 30;
+        unalignedWrite<int32_t>(arrayValue, thisArrayPtr);
+
+        SPDLOG_DEBUG("Reduce test thread {}: {} {} {}",
+                     thisIdx,
+                     arrayValue,
+                     initialA,
+                     initialB);
 
         // Unlock group
         group->localUnlock();
