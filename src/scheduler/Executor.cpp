@@ -296,15 +296,15 @@ void Executor::threadPoolThread(int threadPoolIdx)
               funcMemory->diffWithSnapshot(snap);
 
             // If we're on master, we write the diffs straight to the snapshot
-            // otherwise we push them to master.
+            // otherwise we push them to the master.
             if (isMaster) {
                 snap->writeDiffs(diffs);
             } else {
                 sch.pushSnapshotDiffs(msg, diffs);
-            }
 
-            // Reset dirty page tracking now that we've pushed the diffs
-            faabric::util::resetDirtyTracking();
+                // Reset dirty page tracking
+                faabric::util::resetDirtyTracking();
+            }
 
             // Clear any merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());

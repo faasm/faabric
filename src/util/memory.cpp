@@ -200,10 +200,6 @@ MemoryRegion doAlloc(size_t size, int prot, int flags)
 
 MemoryRegion allocateSharedMemory(size_t size)
 {
-    if (size < HOST_PAGE_SIZE) {
-        SPDLOG_WARN("Allocating less than a page of memory");
-    }
-
     return doAlloc(size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
 }
 
@@ -234,7 +230,6 @@ void mapMemory(std::span<uint8_t> target, int fd, int flags)
         throw std::runtime_error("Invalid fd for mapping");
     }
 
-    // Make mmap call to do the mapping
     void* mmapRes = ::mmap(
       target.data(), target.size(), PROT_READ | PROT_WRITE, flags, fd, 0);
 

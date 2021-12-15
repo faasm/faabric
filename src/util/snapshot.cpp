@@ -111,7 +111,7 @@ std::vector<uint8_t> SnapshotData::getDataCopy(uint32_t offset, size_t dataSize)
 {
     faabric::util::SharedLock lock(snapMx);
 
-    if (offset + dataSize > size) {
+    if ((offset + dataSize) > size) {
         SPDLOG_ERROR("Out of bounds snapshot access: {} + {} > {}",
                      offset,
                      dataSize,

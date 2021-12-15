@@ -244,7 +244,10 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
     int nThreads = 4;
+    int nRepeats = 20;
     size_t snapSize = 4 * HOST_PAGE_SIZE;
     int groupId = 1234;
 
@@ -257,131 +260,121 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
     // Initialise message
     bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
 
-    // Set up snapshot on master
-    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+    // Set up memory
+    exec->setUpDummyMemory(snapSize);
+
+    // Set up snapshot
+    std::string snapKey = "dist-reduction-" + std::to_string(generateGid());
+    std::shared_ptr<SnapshotData> snap =
+      std::make_shared<faabric::util::SnapshotData>(snapSize);
+    reg.registerSnapshot(snapKey, snap);
 
     // Main function will set up the snapshot and merge regions, while the child
     // threads will modify an array and perform a reduction operation
     if (!isThread) {
-        // Set up snapshot
-        std::string snapKey = "dist-reduction-" + std::to_string(generateGid());
-        std::shared_ptr<SnapshotData> snap =
-          std::make_shared<faabric::util::SnapshotData>(snapSize);
-        reg.registerSnapshot(snapKey, snap);
+        for (int r = 0; r < nRepeats; r++) {
+            // Set up thread request
+            auto req = faabric::util::batchExecFactory(
+              msg.user(), msg.function(), nThreads);
+            req->set_type(faabric::BatchExecuteRequest::THREADS);
+            for (int i = 0; i < nThreads; i++) {
+                auto& m = req->mutable_messages()->at(i);
+                m.set_snapshotkey(snapKey);
 
-        // Map memory to snapshot
-        exec->setUpDummyMemory(snapSize);
-        snap->mapToMemory(exec->getDummyMemory().data());
-
-        // Set up thread request
-        auto req =
-          faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
-        req->set_type(faabric::BatchExecuteRequest::THREADS);
-        for (int i = 0; i < nThreads; i++) {
-            auto& m = req->mutable_messages()->at(i);
-            m.set_snapshotkey(snapKey);
-
-            // Set app/ group info
-            m.set_groupid(groupId);
-            m.set_groupidx(i);
-            m.set_appidx(i);
-        }
-
-        // Make the request
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        std::vector<std::string> actualHosts = sch.callFunctions(req).hosts;
-
-        // Check hosts
-        std::string thisHost = getSystemConfig().endpointHost;
-        int nThisHost = 0;
-        int nOtherHost = 0;
-        for (const auto& h : actualHosts) {
-            if (h == thisHost) {
-                nThisHost++;
-            } else {
-                nOtherHost++;
+                // Set app/ group info
+                m.set_groupid(groupId);
+                m.set_groupidx(i);
+                m.set_appidx(i);
             }
-        }
 
-        if (nThisHost != 2 || nOtherHost != 2) {
-            SPDLOG_ERROR("Threads not scheduled as expected: {} {}",
-                         nThisHost,
-                         nOtherHost);
-            return 1;
-        }
+            // Make the request
+            faabric::scheduler::Scheduler& sch =
+              faabric::scheduler::getScheduler();
+            std::vector<std::string> actualHosts = sch.callFunctions(req).hosts;
 
-        // Wait for the threads
-        for (const auto& m : req->messages()) {
-            int32_t thisRes = sch.awaitThreadResult(m.id());
-            if (thisRes != 0) {
-                SPDLOG_ERROR("Distributed reduction test thread {} failed: {}",
-                             m.id(),
-                             thisRes);
+            // Check hosts
+            std::string thisHost = getSystemConfig().endpointHost;
+            int nThisHost = 0;
+            int nOtherHost = 0;
+            for (const auto& h : actualHosts) {
+                if (h == thisHost) {
+                    nThisHost++;
+                } else {
+                    nOtherHost++;
+                }
+            }
 
+            if (nThisHost != 2 || nOtherHost != 2) {
+                SPDLOG_ERROR("Threads not scheduled as expected: {} {}",
+                             nThisHost,
+                             nOtherHost);
+                return 1;
+            }
+
+            // Wait for the threads
+            for (const auto& m : req->messages()) {
+                int32_t thisRes = sch.awaitThreadResult(m.id());
+                if (thisRes != 0) {
+                    SPDLOG_ERROR(
+                      "Distributed reduction test thread {} failed: {}",
+                      m.id(),
+                      thisRes);
+
+                    return 1;
+                }
+            }
+
+            SPDLOG_DEBUG("Reduce test threads finished");
+
+            // Remap memory to snapshot
+            snap->mapToMemory(exec->getDummyMemory().data());
+
+            uint8_t* reductionAPtr =
+              exec->getDummyMemory().data() + reductionAOffset;
+            uint8_t* reductionBPtr =
+              exec->getDummyMemory().data() + reductionBOffset;
+            uint8_t* arrayPtr = exec->getDummyMemory().data() + arrayOffset;
+
+            // Check everything as expected
+            int expectedReductionA = (r + 1) * nThreads * 10;
+            int expectedReductionB = (r + 1) * nThreads * 20;
+            auto actualReductionA = unalignedRead<int32_t>(reductionAPtr);
+            auto actualReductionB = unalignedRead<int32_t>(reductionBPtr);
+
+            bool success = true;
+
+            for (int i = 0; i < nThreads; i++) {
+                uint8_t* thisPtr = arrayPtr + (i * sizeof(int32_t));
+                int expectedValue = i * 30;
+                auto actualValue = unalignedRead<int32_t>(thisPtr);
+
+                if (expectedValue != actualValue) {
+                    success = false;
+                    SPDLOG_ERROR("Dist array merge at {} failed: {} != {}",
+                                 i,
+                                 expectedValue,
+                                 actualValue);
+                }
+            }
+
+            if (expectedReductionA != actualReductionA) {
+                success = false;
+                SPDLOG_ERROR("Dist reduction A failed: {} != {}",
+                             expectedReductionA,
+                             actualReductionA);
+            }
+
+            if (expectedReductionB != actualReductionB) {
+                success = false;
+                SPDLOG_ERROR("Dist reduction B failed: {} != {}",
+                             expectedReductionB,
+                             actualReductionB);
+            }
+
+            if (!success) {
                 return 1;
             }
         }
-
-        SPDLOG_DEBUG("Reduce test threads finished");
-
-        // Remap memory to snapshot
-        snap->mapToMemory(exec->getDummyMemory().data());
-
-        uint8_t* reductionAPtr =
-          exec->getDummyMemory().data() + reductionAOffset;
-        uint8_t* reductionBPtr =
-          exec->getDummyMemory().data() + reductionBOffset;
-        uint8_t* arrayPtr = exec->getDummyMemory().data() + arrayOffset;
-
-        // Check everything as expected
-        int expectedReductionA = nThreads * 10;
-        int expectedReductionB = nThreads * 20;
-        auto actualReductionA = unalignedRead<int32_t>(reductionAPtr);
-        auto actualReductionB = unalignedRead<int32_t>(reductionBPtr);
-
-        bool success = true;
-
-        for (int i = 0; i < nThreads; i++) {
-            uint8_t* thisPtr = arrayPtr + (i * sizeof(int32_t));
-            int expectedValue = i * 30;
-            auto actualValue = unalignedRead<int32_t>(thisPtr);
-
-            if (expectedValue != actualValue) {
-                success = false;
-                SPDLOG_ERROR("Dist array merge at {} failed: {} != {}",
-                             i,
-                             expectedValue,
-                             actualValue);
-            }
-        }
-
-        if (expectedReductionA != actualReductionA) {
-            success = false;
-            SPDLOG_ERROR("Dist reduction A failed: {} != {}",
-                         expectedReductionA,
-                         actualReductionA);
-        }
-
-        if (expectedReductionB != actualReductionB) {
-            success = false;
-            SPDLOG_ERROR("Dist reduction B failed: {} != {}",
-                         expectedReductionB,
-                         actualReductionB);
-        }
-
-        if (!success) {
-            return 1;
-        }
-
-        // Reset shared variables
-        unalignedWrite<int32_t>(0, reductionAPtr);
-        unalignedWrite<int32_t>(0, reductionBPtr);
-
-        for (int i = 0; i < nThreads; i++) {
-            uint8_t* thisPtr = arrayPtr + (i * sizeof(int32_t));
-            unalignedWrite<int32_t>(0, thisPtr);
-        }
-
     } else {
         uint8_t* reductionAPtr =
           exec->getDummyMemory().data() + reductionAOffset;
