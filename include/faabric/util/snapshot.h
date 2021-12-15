@@ -92,7 +92,7 @@ class SnapshotData
 
     ~SnapshotData();
 
-    void copyInData(std::span<uint8_t> buffer, uint32_t offset = 0);
+    void copyInData(std::span<const uint8_t> buffer, uint32_t offset = 0);
 
     const uint8_t* getDataPtr(uint32_t offset = 0);
 
@@ -111,6 +111,8 @@ class SnapshotData
     void clearMergeRegions();
 
     std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
+
+    void writeDiffs(const std::vector<SnapshotDiff> &diffs);
 
     size_t getSize();
 

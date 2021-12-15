@@ -1,3 +1,4 @@
+#include <faabric/util/bytes.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -54,7 +55,7 @@ SnapshotData::~SnapshotData()
     }
 }
 
-void SnapshotData::copyInData(std::span<uint8_t> buffer, uint32_t offset)
+void SnapshotData::copyInData(std::span<const uint8_t> buffer, uint32_t offset)
 {
     faabric::util::FullLock lock(snapMx);
 
@@ -189,6 +190,78 @@ void SnapshotData::clearMergeRegions()
 {
     faabric::util::FullLock lock(snapMx);
     mergeRegions.clear();
+}
+
+void SnapshotData::writeDiffs(const std::vector<SnapshotDiff>& diffs)
+{
+    // Iterate through diffs
+    for (const auto& diff : diffs) {
+        SPDLOG_TRACE("Applying snapshot diff at {}-{}",
+                     diff.offset,
+                     diff.offset + diff.size);
+
+        switch (diff.dataType) {
+            case (faabric::util::SnapshotDataType::Raw): {
+                switch (diff.operation) {
+                    case (faabric::util::SnapshotMergeOperation::Overwrite): {
+                        copyInData({ diff.data, diff.size }, diff.offset);
+                        break;
+                    }
+                    default: {
+                        SPDLOG_ERROR("Unsupported raw merge operation: {}",
+                                     diff.operation);
+                        throw std::runtime_error(
+                          "Unsupported raw merge operation");
+                    }
+                }
+                break;
+            }
+            case (faabric::util::SnapshotDataType::Int): {
+                auto diffValue = unalignedRead<int32_t>(diff.data);
+
+                auto original = faabric::util::unalignedRead<int32_t>(
+                  getDataPtr(diff.offset));
+
+                int32_t finalValue = 0;
+                switch (diff.operation) {
+                    case (faabric::util::SnapshotMergeOperation::Sum): {
+                        finalValue = original + diffValue;
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Subtract): {
+                        finalValue = original - diffValue;
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Product): {
+                        finalValue = original * diffValue;
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Min): {
+                        finalValue = std::min(original, diffValue);
+                        break;
+                    }
+                    case (faabric::util::SnapshotMergeOperation::Max): {
+                        finalValue = std::max(original, diffValue);
+                        break;
+                    }
+                    default: {
+                        SPDLOG_ERROR("Unsupported int merge operation: {}",
+                                     diff.operation);
+                        throw std::runtime_error(
+                          "Unsupported int merge operation");
+                    }
+                }
+
+                copyInData({ BYTES(&finalValue), sizeof(int32_t) },
+                           diff.offset);
+                break;
+            }
+            default: {
+                SPDLOG_ERROR("Unsupported data type: {}", diff.dataType);
+                throw std::runtime_error("Unsupported merge data type");
+            }
+        }
+    }
 }
 
 size_t SnapshotData::getSize()

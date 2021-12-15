@@ -12,13 +12,15 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
 
+using namespace faabric::util;
+
 namespace faabric::snapshot {
 SnapshotServer::SnapshotServer()
   : faabric::transport::MessageEndpointServer(
       SNAPSHOT_ASYNC_PORT,
       SNAPSHOT_SYNC_PORT,
       SNAPSHOT_INPROC_LABEL,
-      faabric::util::getSystemConfig().snapshotServerThreads)
+      getSystemConfig().snapshotServerThreads)
   , broker(faabric::transport::getPointToPointBroker())
 {}
 
@@ -87,7 +89,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // Set up the snapshot
     size_t snapSize = r->contents()->size();
     std::string snapKey = r->key()->str();
-    auto d = std::make_shared<faabric::util::SnapshotData>(
+    auto d = std::make_shared<SnapshotData>(
       std::span((uint8_t*)r->contents()->Data(), snapSize), r->maxSize());
 
     // Register snapshot
@@ -132,82 +134,22 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
           ->localLock();
     }
 
-    // Iterate through the chunks passed in the request
+    // Convert chunks to snapshot diff objects
+    std::vector<SnapshotDiff> diffs;
     for (const auto* chunk : *r->chunks()) {
-        SPDLOG_TRACE("Applying snapshot diff to {} at {}-{}",
-                     r->key()->str(),
-                     chunk->offset(),
-                     chunk->offset() + chunk->data()->size());
-
-        switch (chunk->dataType()) {
-            case (faabric::util::SnapshotDataType::Raw): {
-                switch (chunk->mergeOp()) {
-                    case (faabric::util::SnapshotMergeOperation::Overwrite): {
-                        snap->copyInData({ (uint8_t*)chunk->data()->data(),
-                                           chunk->data()->size() },
-                                         chunk->offset());
-                        break;
-                    }
-                    default: {
-                        SPDLOG_ERROR("Unsupported raw merge operation: {}",
-                                     chunk->mergeOp());
-                        throw std::runtime_error(
-                          "Unsupported raw merge operation");
-                    }
-                }
-                break;
-            }
-            case (faabric::util::SnapshotDataType::Int): {
-                const auto* diffValue =
-                  reinterpret_cast<const int32_t*>(chunk->data()->data());
-
-                auto original = faabric::util::unalignedRead<int32_t>(
-                  snap->getDataPtr(chunk->offset()));
-
-                int32_t finalValue = 0;
-                switch (chunk->mergeOp()) {
-                    case (faabric::util::SnapshotMergeOperation::Sum): {
-                        finalValue = original + *diffValue;
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Subtract): {
-                        finalValue = original - *diffValue;
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Product): {
-                        finalValue = original * *diffValue;
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Min): {
-                        finalValue = std::min(original, *diffValue);
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Max): {
-                        finalValue = std::max(original, *diffValue);
-                        break;
-                    }
-                    default: {
-                        SPDLOG_ERROR("Unsupported int merge operation: {}",
-                                     chunk->mergeOp());
-                        throw std::runtime_error(
-                          "Unsupported int merge operation");
-                    }
-                }
-
-                snap->copyInData({ BYTES(&finalValue), sizeof(int32_t) },
-                                 chunk->offset());
-                break;
-            }
-            default: {
-                SPDLOG_ERROR("Unsupported data type: {}", chunk->dataType());
-                throw std::runtime_error("Unsupported merge data type");
-            }
-        }
-
-        // Make changes visible to other threads
-        std::atomic_thread_fence(std::memory_order_release);
-        this->diffsAppliedCounter.fetch_add(1, std::memory_order_acq_rel);
+        diffs.emplace_back(
+          static_cast<SnapshotDataType>(chunk->dataType()),
+          static_cast<SnapshotMergeOperation>(chunk->mergeOp()),
+          chunk->offset(),
+          chunk->data()->data(),
+          chunk->data()->size());
     }
+    snap->writeDiffs(diffs);
+
+    // Make changes visible to other threads
+    std::atomic_thread_fence(std::memory_order_release);
+    this->diffsAppliedCounter.fetch_add(diffs.size(),
+                                        std::memory_order_acq_rel);
 
     // Unlock group if exists
     if (groupId > 0 &&

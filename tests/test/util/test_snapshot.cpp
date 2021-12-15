@@ -115,6 +115,82 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test mapping editing and remapping memory",
+                 "[snapshot][util]")
+{
+    int snapPages = 4;
+    size_t snapSize = snapPages * HOST_PAGE_SIZE;
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+
+    std::vector<uint8_t> dataA(100, 2);
+    std::vector<uint8_t> dataB(150, 3);
+    std::vector<uint8_t> dataC(200, 4);
+
+    // Deliberately use offsets on the same page to check copy-on-write mappings
+    uint32_t offsetA = 0;
+    uint32_t offsetB = HOST_PAGE_SIZE;
+    uint32_t offsetC = HOST_PAGE_SIZE + dataB.size();
+
+    // Set up some initial data
+    snap->copyInData(dataA, offsetA);
+    std::vector<uint8_t> expectedSnapMem = snap->getDataCopy();
+
+    // Set up two shared mem regions
+    MemoryRegion sharedMemA = allocateSharedMemory(snapSize);
+    MemoryRegion sharedMemB = allocateSharedMemory(snapSize);
+
+    // Map the snapshot and both regions reflect the change
+    snap->mapToMemory(sharedMemA.get());
+    snap->mapToMemory(sharedMemB.get());
+
+    REQUIRE(std::vector(sharedMemA.get(), sharedMemA.get() + snapSize) ==
+            expectedSnapMem);
+    REQUIRE(std::vector(sharedMemB.get(), sharedMemB.get() + snapSize) ==
+            expectedSnapMem);
+
+    // Reset dirty tracking
+    faabric::util::resetDirtyTracking();
+
+    // Make different edits to both mapped regions, check they are not
+    // propagated back to the snapshot
+    std::memcpy(sharedMemA.get() + offsetB, dataB.data(), dataB.size());
+    std::memcpy(sharedMemB.get() + offsetC, dataC.data(), dataC.size());
+
+    std::vector<uint8_t> actualSnapMem = snap->getDataCopy();
+    REQUIRE(actualSnapMem == expectedSnapMem);
+
+    // Set two separate merge regions to cover both changes
+    snap->addMergeRegion(offsetB,
+                         dataB.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::Overwrite);
+
+    snap->addMergeRegion(offsetC,
+                         dataC.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::Overwrite);
+
+    // Apply diffs from both snapshots
+    std::vector<SnapshotDiff> diffsA =
+      MemoryView({ sharedMemA.get(), snapSize }).diffWithSnapshot(snap);
+    std::vector<SnapshotDiff> diffsB =
+      MemoryView({ sharedMemB.get(), snapSize }).diffWithSnapshot(snap);
+
+    REQUIRE(diffsA.size() == 1);
+    REQUIRE(diffsB.size() == 1);
+
+    snap->writeDiffs(diffsA);
+    snap->writeDiffs(diffsB);
+
+    // Make sure snapshot now includes both
+    std::memcpy(expectedSnapMem.data() + offsetB, dataB.data(), dataB.size());
+    std::memcpy(expectedSnapMem.data() + offsetC, dataC.data(), dataC.size());
+
+    actualSnapMem = snap->getDataCopy();
+    REQUIRE(actualSnapMem == expectedSnapMem);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test growing snapshots",
                  "[snapshot][util]")
 {
@@ -632,8 +708,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::vector<uint8_t> actualA(diffA.data + offsetA,
                                  diffA.data + offsetA + dataA.size());
-    std::vector<uint8_t> actualB(diffB.data + 1,
-                                 diffB.data + 1 + dataB.size());
+    std::vector<uint8_t> actualB(diffB.data + 1, diffB.data + 1 + dataB.size());
 
     REQUIRE(actualA == dataA);
     REQUIRE(actualB == dataB);
