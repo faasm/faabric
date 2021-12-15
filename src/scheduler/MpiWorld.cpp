@@ -799,7 +799,9 @@ void MpiWorld::broadcast(int sendRank,
                          messageType);
                 }
             } else {
-                // Send message to all remote leaders
+                // Send message to the local leader of each remote host. Note
+                // that the local leader will then broadcast the message to its
+                // local ranks.
                 send(recvRank,
                      it.second.front(),
                      buffer,
@@ -930,9 +932,9 @@ void MpiWorld::gather(int sendRank,
                         // If not receiving in place, copy our data to the
                         // right offset
                         if (!isInPlace) {
-                            memcpy(recvBuffer + (recvRank * recvOffset),
-                                   sendBuffer,
-                                   sendOffset);
+                            ::memcpy(recvBuffer + (recvRank * recvOffset),
+                                     sendBuffer,
+                                     sendOffset);
                         }
 
                         continue;
@@ -962,9 +964,9 @@ void MpiWorld::gather(int sendRank,
 
                 // Copy each received chunk to its offset
                 for (int r = 0; r < it.second.size(); r++) {
-                    memcpy(recvBuffer + (it.second.at(r) * recvOffset),
-                           rankData.get() + (r * recvOffset),
-                           recvOffset);
+                    ::memcpy(recvBuffer + (it.second.at(r) * recvOffset),
+                             rankData.get() + (r * recvOffset),
+                             recvOffset);
                 }
             }
         }
@@ -984,13 +986,13 @@ void MpiWorld::gather(int sendRank,
                     // the gather results. Thus, we read from the appropriate
                     // offset.
                     if (isInPlace) {
-                        memcpy(rankData.get() + r * sendOffset,
-                               sendBuffer + (sendRank * sendOffset),
-                               sendOffset);
+                        ::memcpy(rankData.get() + r * sendOffset,
+                                 sendBuffer + (sendRank * sendOffset),
+                                 sendOffset);
                     } else {
-                        memcpy(rankData.get() + r * sendOffset,
-                               sendBuffer,
-                               sendOffset);
+                        ::memcpy(rankData.get() + r * sendOffset,
+                                 sendBuffer,
+                                 sendOffset);
                     }
 
                     continue;
@@ -1165,7 +1167,7 @@ void MpiWorld::reduce(int sendRank,
         // already done and the results are written in the recv buffer
         bool isInPlace = sendBuffer == recvBuffer;
         if (!isInPlace) {
-            memcpy(recvBuffer, sendBuffer, bufferSize);
+            ::memcpy(recvBuffer, sendBuffer, bufferSize);
         }
 
         for (auto it : ranksForHost) {
@@ -1213,7 +1215,7 @@ void MpiWorld::reduce(int sendRank,
             // that we do so in a copy of the send buffer, as the application
             // does not expect said buffer's contents to be modified.
             auto sendBufferCopy = std::make_unique<uint8_t[]>(bufferSize);
-            memcpy(sendBufferCopy.get(), sendBuffer, bufferSize);
+            ::memcpy(sendBufferCopy.get(), sendBuffer, bufferSize);
 
             for (const int r : ranksForHost[thisHost]) {
                 if (r == sendRank) {
@@ -1405,7 +1407,7 @@ void MpiWorld::scan(int rank,
     // need also to be considered.
     size_t bufferSize = datatype->size * count;
     if (!isInPlace) {
-        memcpy(recvBuffer, sendBuffer, bufferSize);
+        ::memcpy(recvBuffer, sendBuffer, bufferSize);
     }
 
     if (rank > 0) {
