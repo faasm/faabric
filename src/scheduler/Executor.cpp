@@ -243,6 +243,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         faabric::Message& msg =
           task.req->mutable_messages()->at(task.messageIndex);
 
+        bool isMaster = msg.masterhost() == conf.endpointHost;
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={})",
@@ -294,7 +295,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
             std::vector<faabric::util::SnapshotDiff> diffs =
               funcMemory->diffWithSnapshot(snap);
 
-            sch.pushSnapshotDiffs(msg, diffs);
+            // If we're on master, we write the diffs straight to the snapshot
+            // otherwise we push them to master.
+            if (isMaster) {
+                snap->writeDiffs(diffs);
+            } else {
+                sch.pushSnapshotDiffs(msg, diffs);
+            }
 
             // Reset dirty page tracking now that we've pushed the diffs
             faabric::util::resetDirtyTracking();

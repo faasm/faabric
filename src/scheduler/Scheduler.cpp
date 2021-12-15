@@ -904,23 +904,21 @@ void Scheduler::pushSnapshotDiffs(
   const faabric::Message& msg,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
-    bool isMaster = msg.masterhost() == conf.endpointHost;
-
     if (diffs.empty()) {
         return;
     }
 
+    bool isMaster = msg.masterhost() == conf.endpointHost;
     const std::string& snapKey = msg.snapshotkey();
-
     if (isMaster) {
-        // TODO - this is a bit of a hack, having to go through local
-        // networking, but all logic is currently stored in the snapshot server
-        SnapshotClient& c = getSnapshotClient(LOCALHOST);
-        c.pushSnapshotDiffs(snapKey, msg.groupid(), diffs);
-    } else {
-        SnapshotClient& c = getSnapshotClient(msg.masterhost());
-        c.pushSnapshotDiffs(snapKey, msg.groupid(), diffs);
+        SPDLOG_ERROR("{} pushing snapshot diffs for {} on master",
+                     faabric::util::funcToString(msg, false),
+                     snapKey);
+        throw std::runtime_error("Cannot push snapshot diffs on master");
     }
+
+    SnapshotClient& c = getSnapshotClient(msg.masterhost());
+    c.pushSnapshotDiffs(snapKey, msg.groupid(), diffs);
 }
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)

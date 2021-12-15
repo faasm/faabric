@@ -122,17 +122,17 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
     auto snap = std::make_shared<SnapshotData>(snapSize);
 
-    std::vector<uint8_t> dataA(100, 2);
-    std::vector<uint8_t> dataB(150, 3);
-    std::vector<uint8_t> dataC(200, 4);
+    std::vector<uint8_t> initialData(100, 2);
+    std::vector<uint8_t> dataA(150, 3);
+    std::vector<uint8_t> dataB(200, 4);
 
     // Deliberately use offsets on the same page to check copy-on-write mappings
-    uint32_t offsetA = 0;
-    uint32_t offsetB = HOST_PAGE_SIZE;
-    uint32_t offsetC = HOST_PAGE_SIZE + dataB.size();
+    uint32_t initialOffset = 0;
+    uint32_t offsetA = HOST_PAGE_SIZE;
+    uint32_t offsetB = HOST_PAGE_SIZE + dataA.size() + 1;
 
     // Set up some initial data
-    snap->copyInData(dataA, offsetA);
+    snap->copyInData(initialData, initialOffset);
     std::vector<uint8_t> expectedSnapMem = snap->getDataCopy();
 
     // Set up two shared mem regions
@@ -153,20 +153,20 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Make different edits to both mapped regions, check they are not
     // propagated back to the snapshot
-    std::memcpy(sharedMemA.get() + offsetB, dataB.data(), dataB.size());
-    std::memcpy(sharedMemB.get() + offsetC, dataC.data(), dataC.size());
+    std::memcpy(sharedMemA.get() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(sharedMemB.get() + offsetB, dataB.data(), dataB.size());
 
     std::vector<uint8_t> actualSnapMem = snap->getDataCopy();
     REQUIRE(actualSnapMem == expectedSnapMem);
 
     // Set two separate merge regions to cover both changes
-    snap->addMergeRegion(offsetB,
-                         dataB.size(),
+    snap->addMergeRegion(offsetA,
+                         dataA.size(),
                          SnapshotDataType::Raw,
                          SnapshotMergeOperation::Overwrite);
 
-    snap->addMergeRegion(offsetC,
-                         dataC.size(),
+    snap->addMergeRegion(offsetB,
+                         dataB.size(),
                          SnapshotDataType::Raw,
                          SnapshotMergeOperation::Overwrite);
 
@@ -177,14 +177,21 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
       MemoryView({ sharedMemB.get(), snapSize }).diffWithSnapshot(snap);
 
     REQUIRE(diffsA.size() == 1);
+    SnapshotDiff diffA = diffsA.front();
+    REQUIRE(diffA.size == dataA.size());
+    REQUIRE(diffA.offset == offsetA);
+
     REQUIRE(diffsB.size() == 1);
+    SnapshotDiff diffB = diffsB.front();
+    REQUIRE(diffB.size == dataB.size());
+    REQUIRE(diffB.offset == offsetB);
 
     snap->writeDiffs(diffsA);
     snap->writeDiffs(diffsB);
 
     // Make sure snapshot now includes both
+    std::memcpy(expectedSnapMem.data() + offsetA, dataA.data(), dataA.size());
     std::memcpy(expectedSnapMem.data() + offsetB, dataB.data(), dataB.size());
-    std::memcpy(expectedSnapMem.data() + offsetC, dataC.data(), dataC.size());
 
     actualSnapMem = snap->getDataCopy();
     REQUIRE(actualSnapMem == expectedSnapMem);
