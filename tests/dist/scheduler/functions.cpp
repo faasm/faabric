@@ -12,9 +12,12 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
+
+using namespace faabric::util;
 
 namespace tests {
 
@@ -226,6 +229,203 @@ int handleFakeDiffsThreadedFunction(
     return 333;
 }
 
+/*
+ * This function performs two reductions and non-conflicting updates to a shared
+ * array in a loop to check distributed snapshot synchronisation and merge
+ * strategies.
+ */
+int handleReductionFunction(tests::DistTestExecutor* exec,
+                            int threadPoolIdx,
+                            int msgIdx,
+                            std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+
+    int nThreads = 4;
+    size_t snapSize = 4 * HOST_PAGE_SIZE;
+    int groupId = 1234;
+
+    // Initialise dummy memory
+    exec->getMemoryView();
+
+    // Perform two reductions and one array modification. One reduction on same
+    // page as array change
+    uint32_t reductionAOffset = HOST_PAGE_SIZE;
+    uint32_t reductionBOffset = 2 * HOST_PAGE_SIZE;
+    uint32_t arrayOffset = HOST_PAGE_SIZE + 10 * sizeof(int32_t);
+
+    // Initialise message
+    bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
+
+    // Set up snapshot on master
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
+    // Main function will set up the snapshot and merge regions, while the child
+    // threads will modify an array and perform a reduction operation
+    if (!isThread) {
+        // Set up snapshot
+        std::string snapKey = "dist-reduction-" + std::to_string(generateGid());
+        std::shared_ptr<SnapshotData> snap =
+          std::make_shared<faabric::util::SnapshotData>(snapSize);
+        reg.registerSnapshot(snapKey, snap);
+
+        // Map memory to snapshot
+        exec->dummyMemory =
+          faabric::util::allocateSharedMemory(snap->getSize());
+        snap->mapToMemory(exec->dummyMemory.get());
+
+        // Set up thread request
+        auto req =
+          faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
+        req->set_type(faabric::BatchExecuteRequest::THREADS);
+        for (int i = 0; i < nThreads; i++) {
+            auto& m = req->mutable_messages()->at(i);
+            m.set_snapshotkey(snapKey);
+
+            // Set app/ group info
+            m.set_groupid(groupId);
+            m.set_groupidx(i);
+            m.set_appidx(i);
+        }
+
+        // Make the request
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        std::vector<std::string> actualHosts = sch.callFunctions(req).hosts;
+
+        // Check hosts
+        std::string thisHost = getSystemConfig().endpointHost;
+        int nThisHost = 0;
+        int nOtherHost = 0;
+        for (const auto& h : actualHosts) {
+            if (h == thisHost) {
+                nThisHost++;
+            } else {
+                nOtherHost++;
+            }
+        }
+
+        if (nThisHost != 2 || nOtherHost != 2) {
+            SPDLOG_ERROR("Threads not scheduled as expected: {} {}",
+                         nThisHost,
+                         nOtherHost);
+            return 1;
+        }
+
+        // Wait for the threads
+        for (const auto& m : req->messages()) {
+            int32_t thisRes = sch.awaitThreadResult(m.id());
+            if (thisRes != 0) {
+                SPDLOG_ERROR("Distributed reduction test thread {} failed: {}",
+                             m.id(),
+                             thisRes);
+
+                return 1;
+            }
+        }
+
+        // Remap memory to snapshot
+        snap->mapToMemory(exec->dummyMemory.get());
+
+        uint8_t* reductionAPtr = exec->dummyMemory.get() + reductionAOffset;
+        uint8_t* reductionBPtr = exec->dummyMemory.get() + reductionBOffset;
+        uint8_t* arrayPtr = exec->dummyMemory.get() + arrayOffset;
+
+        // Check everything as expected
+        int expectedReductionA = nThreads * 10;
+        int expectedReductionB = nThreads * 20;
+        auto actualReductionA = unalignedRead<int32_t>(reductionAPtr);
+        auto actualReductionB = unalignedRead<int32_t>(reductionBPtr);
+
+        bool success = true;
+        if (expectedReductionA != actualReductionA) {
+            success = false;
+            SPDLOG_ERROR("Dist reduction A failed: {} != {}",
+                         expectedReductionA,
+                         actualReductionA);
+        }
+
+        if (expectedReductionB != actualReductionB) {
+            success = false;
+            SPDLOG_ERROR("Dist reduction B failed: {} != {}",
+                         expectedReductionB,
+                         actualReductionB);
+        }
+
+        for (int i = 0; i < nThreads; i++) {
+            uint8_t* thisPtr = arrayPtr + (i * sizeof(int32_t));
+            int expectedValue = i * 30;
+            auto actualValue = unalignedRead<int32_t>(thisPtr);
+
+            if (expectedValue != actualValue) {
+                success = false;
+                SPDLOG_ERROR("Dist array merge at {} failed: {} != {}",
+                             i,
+                             expectedReductionB,
+                             actualReductionB);
+            }
+        }
+
+        if (!success) {
+            return 1;
+        }
+
+        // Reset shared variables
+        unalignedWrite<int32_t>(0, reductionAPtr);
+        unalignedWrite<int32_t>(0, reductionBPtr);
+
+        for (int i = 0; i < nThreads; i++) {
+            uint8_t* thisPtr = arrayPtr + (i * sizeof(int32_t));
+            unalignedWrite<int32_t>(0, thisPtr);
+        }
+
+    } else {
+        uint8_t* reductionAPtr = exec->dummyMemory.get() + reductionAOffset;
+        uint8_t* reductionBPtr = exec->dummyMemory.get() + reductionBOffset;
+        uint8_t* arrayPtr = exec->dummyMemory.get() + arrayOffset;
+        uint32_t thisIdx = msg.appidx();
+        uint8_t* thisArrayPtr = arrayPtr + (sizeof(int32_t) * thisIdx);
+
+        // Set merge regions
+        std::shared_ptr<SnapshotData> snap = reg.getSnapshot(msg.snapshotkey());
+        snap->addMergeRegion(reductionAOffset,
+                             sizeof(int32_t),
+                             SnapshotDataType::Int,
+                             SnapshotMergeOperation::Sum,
+                             true);
+
+        snap->addMergeRegion(reductionBOffset,
+                             sizeof(int32_t),
+                             SnapshotDataType::Int,
+                             SnapshotMergeOperation::Sum,
+                             true);
+
+        snap->addMergeRegion(arrayOffset,
+                             sizeof(int32_t) * nThreads,
+                             SnapshotDataType::Raw,
+                             SnapshotMergeOperation::Overwrite,
+                             true);
+
+        // Lock group locally
+        std::shared_ptr<faabric::transport::PointToPointGroup> group =
+          faabric::transport::PointToPointGroup::getGroup(groupId);
+        group->localLock();
+
+        // Make modifications
+        int32_t initialA = unalignedRead<int32_t>(reductionAPtr);
+        int32_t initialB = unalignedRead<int32_t>(reductionBPtr);
+        unalignedWrite(initialA + 10, reductionAPtr);
+        unalignedWrite(initialB + 20, reductionBPtr);
+
+        unalignedWrite<int32_t>(thisIdx * 30, thisArrayPtr);
+
+        // Unlock group
+        group->localUnlock();
+    }
+
+    return 0;
+}
+
 void registerSchedulerTestFunctions()
 {
     registerDistTestExecutorCallback("threads", "simple", handleSimpleThread);
@@ -237,5 +437,8 @@ void registerSchedulerTestFunctions()
 
     registerDistTestExecutorCallback(
       "snapshots", "fake-diffs-threaded", handleFakeDiffsThreadedFunction);
+
+    registerDistTestExecutorCallback(
+      "snapshots", "reduction", handleReductionFunction);
 }
 }

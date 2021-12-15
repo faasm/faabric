@@ -34,13 +34,13 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     mapMemoryShared({ _data.get(), size }, fd);
 }
 
-SnapshotData::SnapshotData(std::span<uint8_t> dataIn)
+SnapshotData::SnapshotData(std::span<const uint8_t> dataIn)
   : SnapshotData(dataIn.size())
 {
     copyInData(dataIn);
 }
 
-SnapshotData::SnapshotData(std::span<uint8_t> dataIn, size_t maxSizeIn)
+SnapshotData::SnapshotData(std::span<const uint8_t> dataIn, size_t maxSizeIn)
   : SnapshotData(dataIn.size(), maxSizeIn)
 {
     copyInData(dataIn);
@@ -348,6 +348,11 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
     }
 
     return diffs;
+}
+
+std::span<const uint8_t> MemoryView::getData()
+{
+    return data;
 }
 
 std::string snapshotDataTypeStr(SnapshotDataType dt)

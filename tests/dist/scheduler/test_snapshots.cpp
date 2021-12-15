@@ -100,4 +100,29 @@ TEST_CASE_METHOD(DistTestsFixture,
     faabric::Message actualResult = sch.getFunctionResult(m.id(), 10000);
     REQUIRE(actualResult.returnvalue() == 333);
 }
+
+TEST_CASE_METHOD(DistTestsFixture,
+                 "Check repeated reduction",
+                 "[snapshots]")
+{
+    std::string user = "snapshots";
+    std::string function = "reduction";
+
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory(user, function, 1);
+    faabric::Message& m = req->mutable_messages()->at(0);
+
+    // Main function and one thread execute on this host, others on another
+    faabric::HostResources res;
+    res.set_slots(3);
+    sch.setThisHostResources(res);
+
+    std::vector<std::string> expectedHosts = { getMasterIP() };
+    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    std::vector<std::string> executedHosts = decision.hosts;
+    REQUIRE(expectedHosts == executedHosts);
+
+    faabric::Message actualResult = sch.getFunctionResult(m.id(), 10000);
+    REQUIRE(actualResult.returnvalue() == 0);
+}
 }

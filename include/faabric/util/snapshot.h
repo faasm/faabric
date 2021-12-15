@@ -82,9 +82,9 @@ class SnapshotData
 
     SnapshotData(size_t sizeIn, size_t maxSizeIn);
 
-    explicit SnapshotData(std::span<uint8_t> dataIn);
+    explicit SnapshotData(std::span<const uint8_t> dataIn);
 
-    SnapshotData(std::span<uint8_t> dataIn, size_t maxSizeIn);
+    SnapshotData(std::span<const uint8_t> dataIn, size_t maxSizeIn);
 
     SnapshotData(const SnapshotData&) = delete;
 
@@ -152,6 +152,8 @@ class MemoryView
 
     std::vector<SnapshotDiff> diffWithSnapshot(
       std::shared_ptr<SnapshotData> snap);
+
+    std::span<const uint8_t> getData();
 
   private:
     std::span<const uint8_t> data;

@@ -119,8 +119,10 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
     int groupId = r->groupid();
 
-    SPDLOG_DEBUG(
-      "Applying {} diffs to snapshot {}", r->chunks()->size(), r->key()->str());
+    SPDLOG_DEBUG("Applying {} diffs to snapshot {} ({})",
+                 r->chunks()->size(),
+                 r->key()->str(),
+                 groupId);
 
     // Get the snapshot
     faabric::snapshot::SnapshotRegistry& reg =
@@ -157,10 +159,6 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
         faabric::transport::PointToPointGroup::getGroup(r->groupid())
           ->localUnlock();
     }
-
-    // Reset dirty tracking having applied diffs
-    SPDLOG_DEBUG("Resetting dirty page tracking having applied diffs to {}",
-                 r->key()->str());
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
