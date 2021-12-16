@@ -379,24 +379,21 @@ std::string MpiWorld::getHostForRank(int rank)
     return host;
 }
 
-// Group the ranks to host vector by host
-void MpiWorld::setRanksForHost()
+// The local leader for an MPI world is defined as the lowest rank assigned to
+// this host. For simplicity, we set the local leader to be the first element
+// in the ranks to hosts map.
+void MpiWorld::initLocalRemoteLeaders()
 {
+    // First, group the ranks per host they belong to for convinience
     assert(hostForRank.size() == size);
 
     for (int rank = 0; rank < hostForRank.size(); rank++) {
         std::string host = hostForRank.at(rank);
         ranksForHost[host].push_back(rank);
     }
-}
 
-// The local leader for an MPI world is defined as the lowest rank assigned to
-// this host. For simplicity, we set the local leader to be the first element
-// in the ranks to hosts map.
-void MpiWorld::initLocalRemoteLeaders()
-{
-    setRanksForHost();
-
+    // Second, put the local leader for each host (currently lowest rank) at the
+    // front.
     for (auto it : ranksForHost) {
         // Persist the local leader in this host for further use
         if (it.first == thisHost) {
@@ -914,45 +911,73 @@ void MpiWorld::gather(int sendRank,
                       int recvCount)
 {
     checkSendRecvMatch(sendType, sendCount, recvType, recvCount);
+    size_t sendSize = sendCount * sendType->size;
+    size_t recvSize = recvCount * recvType->size;
 
-    size_t sendOffset = sendCount * sendType->size;
-    size_t recvOffset = recvCount * recvType->size;
+    // This method does a two-step gather where each local leader does a gather
+    // for its local ranks, and then the receiver and the local leaders do
+    // one global gather. There are five scenarios:
+    // 1. The rank calling gather is the receiver of the gather. This rank
+    //    expects all its local ranks and the remote local leaders to send their
+    //    data for gathering.
+    // 2. The rank calling gather is a local leader, not co-located with the
+    //    gather receiver. This rank expects all its local ranks to send their
+    //    data for gathering, and then sends the resulting aggregation to the
+    //    gather receiver.
+    // 3. The rank calling gather is a local leader, co-located with the gather
+    //    receiver. This rank just sends its data for gathering to the gather
+    //    receiver.
+    // 4. The rank calling gather is not a local leader, not co-located with
+    //    the gather receiver. This rank sends its data for gathering to its
+    //    local leader.
+    // 5. The rank calling gather is a not a local leader, co-located with the
+    //    gather receiver. This rank sends its data for gathering to the gather
+    //    receiver.
+
+    bool isGatherReceiver = sendRank == recvRank;
+    bool isLocalLeader = sendRank == localLeader;
+    bool isLocalGather = getHostForRank(recvRank) == thisHost;
+
+    // Additionally, when sending data from gathering we must also differentiate
+    // between two scenarios.
+    // 1. Sending rank sets the MPI_IN_PLACE flag. This means the gather is part
+    // of an allGather, and the sending rank has allocated enough space for all
+    // ranks in the sending buffer. As a consequence, the to-be-gathered data
+    // is in the offset corresponding to the sending rank.
+    // 2. Sending rank does not set the MPI_IN_PLACE flag. This means that the
+    // sending buffer only contains the to-be-gathered data.
 
     bool isInPlace = sendBuffer == recvBuffer;
+    size_t sendBufferOffset = isInPlace ? sendRank * sendSize : 0;
 
-    if (sendRank == recvRank) {
+    if (isGatherReceiver) {
+        // Scenario 1
         SPDLOG_TRACE("MPI - gather all -> {}", recvRank);
 
         for (auto it : ranksForHost) {
             if (it.first == thisHost) {
-                // Each local rank will send a separate message that we receive
-                // directly in the receive buffer.
+                // Receive from all local ranks besides ourselves
                 for (const int r : it.second) {
-                    if (r == recvRank) {
-                        // If not receiving in place, copy our data to the
-                        // right offset
-                        if (!isInPlace) {
-                            ::memcpy(recvBuffer + (recvRank * recvOffset),
-                                     sendBuffer,
-                                     sendOffset);
-                        }
-
-                        continue;
+                    // If receiving from ourselves, but not in place, copy our
+                    // data to the right offset
+                    if (r == recvRank && !isInPlace) {
+                        ::memcpy(recvBuffer + (recvRank * recvSize),
+                                 sendBuffer,
+                                 sendSize);
+                    } else if (r != recvRank) {
+                        recv(r,
+                             recvRank,
+                             recvBuffer + (r * recvSize),
+                             recvType,
+                             recvCount,
+                             nullptr,
+                             faabric::MPIMessage::GATHER);
                     }
-
-                    recv(r,
-                         recvRank,
-                         recvBuffer + (r * recvOffset),
-                         recvType,
-                         recvCount,
-                         nullptr,
-                         faabric::MPIMessage::GATHER);
                 }
             } else {
-                // Each remote leader will send a signle message with the data
-                // for all its local ranks
+                // Receive from remote local leaders their local gathered data
                 auto rankData =
-                  std::make_unique<uint8_t[]>(it.second.size() * recvOffset);
+                  std::make_unique<uint8_t[]>(it.second.size() * recvSize);
 
                 recv(it.second.front(),
                      recvRank,
@@ -964,99 +989,78 @@ void MpiWorld::gather(int sendRank,
 
                 // Copy each received chunk to its offset
                 for (int r = 0; r < it.second.size(); r++) {
-                    ::memcpy(recvBuffer + (it.second.at(r) * recvOffset),
-                             rankData.get() + (r * recvOffset),
-                             recvOffset);
+                    ::memcpy(recvBuffer + (it.second.at(r) * recvSize),
+                             rankData.get() + (r * recvSize),
+                             recvSize);
                 }
             }
         }
-    } else if (sendRank == localLeader) {
-        if (getHostForRank(recvRank) != thisHost) {
-            // If we are the local leader (but not the receiver of the gather)
-            // and the receiver is not co-located with us, we gather all our
-            // local rank's data and send it in a single message
-            auto rankData = std::make_unique<uint8_t[]>(
-              ranksForHost[thisHost].size() * sendOffset);
+    } else if (isLocalLeader && !isLocalGather) {
+        // Scenario 2
+        auto rankData =
+          std::make_unique<uint8_t[]>(ranksForHost[thisHost].size() * sendSize);
 
-            for (int r = 0; r < ranksForHost[thisHost].size(); r++) {
-                if (ranksForHost[thisHost].at(r) == sendRank) {
-                    // If gathering in-place from a rank that is not-receiving
-                    // means that the gather is part of an all gather, and
-                    // the rank expects the send buffer to be populated with
-                    // the gather results. Thus, we read from the appropriate
-                    // offset.
-                    if (isInPlace) {
-                        ::memcpy(rankData.get() + r * sendOffset,
-                                 sendBuffer + (sendRank * sendOffset),
-                                 sendOffset);
-                    } else {
-                        ::memcpy(rankData.get() + r * sendOffset,
-                                 sendBuffer,
-                                 sendOffset);
-                    }
-
-                    continue;
-                }
-
+        // Gather all our local ranks data and send in a single remote message
+        for (int r = 0; r < ranksForHost[thisHost].size(); r++) {
+            if (ranksForHost[thisHost].at(r) == sendRank) {
+                // Receive from ourselves, just copy from/to the right offset
+                ::memcpy(rankData.get() + r * sendSize,
+                         sendBuffer + sendBufferOffset,
+                         sendSize);
+            } else {
+                // Receive from other local ranks
                 recv(ranksForHost[thisHost].at(r),
                      sendRank,
-                     rankData.get() + r * sendOffset,
+                     rankData.get() + r * sendSize,
                      sendType,
                      sendCount,
                      nullptr,
                      faabric::MPIMessage::GATHER);
             }
-
-            send(sendRank,
-                 recvRank,
-                 rankData.get(),
-                 sendType,
-                 sendCount * ranksForHost[thisHost].size(),
-                 faabric::MPIMessage::GATHER);
-        } else {
-            // If we are the local leader but are co-located with the receiver
-            // of the gather, we just send our data for gathering.
-            // Note that we, again, make a distinction between sending with
-            // the in place flag or not.
-            if (isInPlace) {
-                send(sendRank,
-                     recvRank,
-                     sendBuffer + (sendRank * sendOffset),
-                     sendType,
-                     sendCount,
-                     faabric::MPIMessage::GATHER);
-            } else {
-                send(sendRank,
-                     recvRank,
-                     sendBuffer,
-                     sendType,
-                     sendCount,
-                     faabric::MPIMessage::GATHER);
-            }
         }
+
+        // Send the locally-gathered data to the receiver rank
+        send(sendRank,
+             recvRank,
+             rankData.get(),
+             sendType,
+             sendCount * ranksForHost[thisHost].size(),
+             faabric::MPIMessage::GATHER);
+
+    } else if (isLocalLeader && isLocalGather) {
+        // Scenario 3
+        send(sendRank,
+             recvRank,
+             sendBuffer + sendBufferOffset,
+             sendType,
+             sendCount,
+             faabric::MPIMessage::GATHER);
+    } else if (!isLocalLeader && !isLocalGather) {
+        // Scenario 4
+        send(sendRank,
+             localLeader,
+             sendBuffer + sendBufferOffset,
+             sendType,
+             sendCount,
+             faabric::MPIMessage::GATHER);
+    } else if (!isLocalLeader && isLocalGather) {
+        // Scenario 5
+        send(sendRank,
+             recvRank,
+             sendBuffer + sendBufferOffset,
+             sendType,
+             sendCount,
+             faabric::MPIMessage::GATHER);
     } else {
-        // If we are neither the receiver of the gather, nor a local leader,
-        // we send our data for gathering. We send it to either the receiver
-        // or our local leader, depending on whether we are colocated with
-        // the receiver or not.
-        int realRecvRank =
-          getHostForRank(recvRank) == thisHost ? recvRank : localLeader;
-
-        if (isInPlace) {
-            send(sendRank,
-                 realRecvRank,
-                 sendBuffer + (sendRank * sendOffset),
-                 sendType,
-                 sendCount,
-                 faabric::MPIMessage::GATHER);
-        } else {
-            send(sendRank,
-                 realRecvRank,
-                 sendBuffer,
-                 sendType,
-                 sendCount,
-                 faabric::MPIMessage::GATHER);
-        }
+        SPDLOG_ERROR("Don't know how to gather rank's data.");
+        SPDLOG_ERROR("- sendRank: {}\n- recvRank: {}\n- isGatherReceiver: "
+                     "{}\n- isLocalLeader: {}\n- isLocalGather:{}",
+                     sendRank,
+                     recvRank,
+                     isGatherReceiver,
+                     isLocalLeader,
+                     isLocalGather);
+        throw std::runtime_error("Don't know how to gather rank's data.");
     }
 }
 

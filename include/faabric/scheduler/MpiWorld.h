@@ -229,7 +229,6 @@ class MpiWorld
 
     // Store the ranks that live in each host
     std::map<std::string, std::vector<int>> ranksForHost;
-    void setRanksForHost();
 
     // Track local and remote leaders. The leader is stored in the first
     // position of the host to ranks map.
