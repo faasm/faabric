@@ -1297,4 +1297,124 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     otherWorld.destroy();
     thisWorld.destroy();
 }
+
+std::set<int> getMsgCountsFromMessages(
+  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+{
+    std::set<int> counts;
+    for (const auto& msg : msgs) {
+        counts.insert(msg->count());
+    }
+
+    return counts;
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during gather",
+                 "[mpi]")
+{
+    int worldSize = 4;
+    setWorldSizes(worldSize, 2, 2);
+    std::vector<int> messageData = { 0, 1, 2 };
+    int nPerRank = messageData.size();
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    std::set<int> expectedSentMsgRanks;
+    std::set<int> expectedSentMsgCounts;
+    int expectedNumMsgSent;
+    int sendRank;
+    int recvRank;
+
+    SECTION("Call gather from receiver (local), and receiver is local leader")
+    {
+        recvRank = 0;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+        expectedSentMsgCounts = {};
+    }
+
+    SECTION(
+      "Call gather from receiver (local), and receiver is non-local leader")
+    {
+        recvRank = 1;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+        expectedSentMsgCounts = {};
+    }
+
+    SECTION("Call gather from non-receiver, colocated with receiver, and local "
+            "leader")
+    {
+        recvRank = 1;
+        sendRank = 0;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+        expectedSentMsgCounts = { nPerRank };
+    }
+
+    SECTION("Call gather from non-receiver, colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 1;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+        expectedSentMsgCounts = { nPerRank };
+    }
+
+    SECTION("Call gather from non-receiver rank, not colocated with receiver, "
+            "but local leader")
+    {
+        recvRank = 0;
+        sendRank = 2;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+        expectedSentMsgCounts = { 2 * nPerRank };
+    }
+
+    SECTION("Call gather from non-receiver rank, not colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 3;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { 2 };
+        expectedSentMsgCounts = { nPerRank };
+    }
+
+    std::vector<int> gatherData(worldSize * nPerRank);
+    if (sendRank < 2) {
+        thisWorld.gather(sendRank,
+                         recvRank,
+                         BYTES(messageData.data()),
+                         MPI_INT,
+                         nPerRank,
+                         BYTES(gatherData.data()),
+                         MPI_INT,
+                         nPerRank);
+    } else {
+        otherWorld.gather(sendRank,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          MPI_INT,
+                          nPerRank,
+                          BYTES(gatherData.data()),
+                          MPI_INT,
+                          nPerRank);
+    }
+    auto msgs = getMpiMockedMessages(sendRank);
+    REQUIRE(msgs.size() == expectedNumMsgSent);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
+    REQUIRE(getMsgCountsFromMessages(msgs) == expectedSentMsgCounts);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
+    thisWorld.destroy();
+}
 }
