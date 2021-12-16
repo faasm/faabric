@@ -626,11 +626,26 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::vector<int> actual(thisWorldSize * nPerRank, -1);
 
     // Call gather for each rank other than the root (out of order)
-    int root = thisHostRankA;
+    int root;
+    std::vector<int> orderedLocalGatherRanks;
+
+    SECTION("Gather receiver is also local leader")
+    {
+        root = 0;
+        orderedLocalGatherRanks = { 1, 2, 0 };
+    }
+
+    SECTION("Gather receiver is not a local leader")
+    {
+        root = 1;
+        orderedLocalGatherRanks = { 1, 2, 0 };
+    }
+
     std::thread otherWorldThread([this, root, &rankData, nPerRank] {
         otherWorld.initialiseFromMsg(msg);
 
-        for (int rank : otherWorldRanks) {
+        std::vector<int> orderedRemoteGatherRanks = { 4, 5, 3 };
+        for (const int rank : orderedRemoteGatherRanks) {
             otherWorld.gather(rank,
                               root,
                               BYTES(rankData[rank].data()),
@@ -645,7 +660,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         otherWorld.destroy();
     });
 
-    for (int rank : thisWorldRanks) {
+    for (const int rank : orderedLocalGatherRanks) {
         if (rank == root) {
             continue;
         }
@@ -1277,6 +1292,126 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     auto msgs = getMpiMockedMessages(sendRank);
     REQUIRE(msgs.size() == expectedNumMsgSent);
     REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
+
+    faabric::util::setMockMode(false);
+    otherWorld.destroy();
+    thisWorld.destroy();
+}
+
+std::set<int> getMsgCountsFromMessages(
+  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+{
+    std::set<int> counts;
+    for (const auto& msg : msgs) {
+        counts.insert(msg->count());
+    }
+
+    return counts;
+}
+
+TEST_CASE_METHOD(RemoteMpiTestFixture,
+                 "Test number of messages sent during gather",
+                 "[mpi]")
+{
+    int worldSize = 4;
+    setWorldSizes(worldSize, 2, 2);
+    std::vector<int> messageData = { 0, 1, 2 };
+    int nPerRank = messageData.size();
+
+    // Init worlds
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    faabric::util::setMockMode(true);
+    thisWorld.broadcastHostsToRanks();
+    REQUIRE(getMpiHostsToRanksMessages().size() == 1);
+    otherWorld.initialiseFromMsg(msg);
+
+    std::set<int> expectedSentMsgRanks;
+    std::set<int> expectedSentMsgCounts;
+    int expectedNumMsgSent;
+    int sendRank;
+    int recvRank;
+
+    SECTION("Call gather from receiver (local), and receiver is local leader")
+    {
+        recvRank = 0;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+        expectedSentMsgCounts = {};
+    }
+
+    SECTION(
+      "Call gather from receiver (local), and receiver is non-local leader")
+    {
+        recvRank = 1;
+        sendRank = recvRank;
+        expectedNumMsgSent = 0;
+        expectedSentMsgRanks = {};
+        expectedSentMsgCounts = {};
+    }
+
+    SECTION("Call gather from non-receiver, colocated with receiver, and local "
+            "leader")
+    {
+        recvRank = 1;
+        sendRank = 0;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+        expectedSentMsgCounts = { nPerRank };
+    }
+
+    SECTION("Call gather from non-receiver, colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 1;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+        expectedSentMsgCounts = { nPerRank };
+    }
+
+    SECTION("Call gather from non-receiver rank, not colocated with receiver, "
+            "but local leader")
+    {
+        recvRank = 0;
+        sendRank = 2;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { recvRank };
+        expectedSentMsgCounts = { 2 * nPerRank };
+    }
+
+    SECTION("Call gather from non-receiver rank, not colocated with receiver")
+    {
+        recvRank = 0;
+        sendRank = 3;
+        expectedNumMsgSent = 1;
+        expectedSentMsgRanks = { 2 };
+        expectedSentMsgCounts = { nPerRank };
+    }
+
+    std::vector<int> gatherData(worldSize * nPerRank);
+    if (sendRank < 2) {
+        thisWorld.gather(sendRank,
+                         recvRank,
+                         BYTES(messageData.data()),
+                         MPI_INT,
+                         nPerRank,
+                         BYTES(gatherData.data()),
+                         MPI_INT,
+                         nPerRank);
+    } else {
+        otherWorld.gather(sendRank,
+                          recvRank,
+                          BYTES(messageData.data()),
+                          MPI_INT,
+                          nPerRank,
+                          BYTES(gatherData.data()),
+                          MPI_INT,
+                          nPerRank);
+    }
+    auto msgs = getMpiMockedMessages(sendRank);
+    REQUIRE(msgs.size() == expectedNumMsgSent);
+    REQUIRE(getReceiversFromMessages(msgs) == expectedSentMsgRanks);
+    REQUIRE(getMsgCountsFromMessages(msgs) == expectedSentMsgCounts);
 
     faabric::util::setMockMode(false);
     otherWorld.destroy();

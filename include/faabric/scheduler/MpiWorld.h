@@ -224,15 +224,16 @@ class MpiWorld
     /* MPI internal messaging layer */
 
     // Track at which host each rank lives
-    std::vector<std::string> rankHosts;
+    std::vector<std::string> hostForRank;
     int getIndexForRanks(int sendRank, int recvRank);
-    std::vector<int> getRanksForHost(const std::string& host);
 
-    // Track ranks that are local to this world, and local/remote leaders
+    // Store the ranks that live in each host
+    std::map<std::string, std::vector<int>> ranksForHost;
+
+    // Track local and remote leaders. The leader is stored in the first
+    // position of the host to ranks map.
     // MPITOPTP - this information exists in the broker
     int localLeader = -1;
-    std::vector<int> localRanks;
-    std::vector<int> remoteLeaders;
     void initLocalRemoteLeaders();
 
     // In-memory queues for local messaging
