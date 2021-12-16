@@ -1,9 +1,9 @@
 #include "DistTestExecutor.h"
-#include "faabric/util/func.h"
 
 #include <sys/mman.h>
 
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/snapshot.h>
 

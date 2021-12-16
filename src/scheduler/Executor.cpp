@@ -22,12 +22,12 @@ namespace faabric::scheduler {
 ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                            std::shared_ptr<std::atomic<int>> batchCounterIn,
-                           bool needsSnapshotPushIn,
+                           bool needsSnapshotSyncIn,
                            bool skipResetIn)
   : req(std::move(reqIn))
   , batchCounter(std::move(batchCounterIn))
   , messageIndex(messageIndexIn)
-  , needsSnapshotPush(needsSnapshotPushIn)
+  , needsSnapshotSync(needsSnapshotSyncIn)
   , skipReset(skipResetIn)
 {}
 
@@ -131,10 +131,10 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     // Reset dirty page tracking if we're executing threads.
     // Note this must be done after the restore has happened.
-    bool needsSnapshotPush = false;
+    bool needsSnapshotSync = false;
     if (isThreads && isSnapshot) {
         faabric::util::resetDirtyTracking();
-        needsSnapshotPush = true;
+        needsSnapshotSync = true;
     }
 
     // Set up shared counter for this batch of tasks
@@ -191,7 +191,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Enqueue the task
         threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(
-          msgIdx, req, batchCounter, needsSnapshotPush, skipReset));
+          msgIdx, req, batchCounter, needsSnapshotSync, skipReset));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -281,7 +281,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Handle snapshot diffs _before_ we reset the executor
         std::shared_ptr<faabric::util::MemoryView> funcMemory = getMemoryView();
-        if (funcMemory != nullptr && isLastInBatch && task.needsSnapshotPush) {
+        if (funcMemory != nullptr && isLastInBatch && task.needsSnapshotSync) {
             auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
               msg.snapshotkey());
 

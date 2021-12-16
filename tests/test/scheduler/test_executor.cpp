@@ -403,8 +403,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::Message res = sch.getFunctionResult(msg.id(), 5000);
     REQUIRE(res.returnvalue() == 0);
 
-    // Check that restore has not been called as we're on the master
-    REQUIRE(restoreCount == 0);
+    // Check that restore has been called
+    REQUIRE(restoreCount == 1);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
