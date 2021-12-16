@@ -64,12 +64,14 @@ void DistTestExecutor::restore(faabric::Message& msg)
 {
     SPDLOG_DEBUG("Dist test executor restoring for {}",
                  faabric::util::funcToString(msg, false));
+
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
+
     auto snap = reg.getSnapshot(msg.snapshotkey());
 
-    dummyMemorySize = snap->getSize();
-    dummyMemory = faabric::util::allocateSharedMemory(snap->getSize());
+    setUpDummyMemory(snap->getSize());
+
     reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
 }
 
@@ -86,8 +88,11 @@ std::span<uint8_t> DistTestExecutor::getDummyMemory()
 
 void DistTestExecutor::setUpDummyMemory(size_t memSize)
 {
-    dummyMemory = faabric::util::allocateSharedMemory(memSize);
-    dummyMemorySize = memSize;
+    if (dummyMemory.get() == nullptr) {
+        SPDLOG_DEBUG("Dist test executor initialising memory size {}", memSize);
+        dummyMemory = faabric::util::allocateSharedMemory(memSize);
+        dummyMemorySize = memSize;
+    }
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

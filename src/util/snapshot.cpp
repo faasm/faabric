@@ -351,7 +351,7 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
     size_t nThisPages = getRequiredHostPages(data.size());
     std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
       faabric::util::getDirtyRegions(data.data(), nThisPages);
-    SPDLOG_TRACE("Found {} dirty regions at {} for {} pages",
+    SPDLOG_TRACE("Found {} dirty regions at {} over {} pages",
                  dirtyRegions.size(),
                  (void*)data.data(),
                  nThisPages);
@@ -448,9 +448,11 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         return;
     }
 
-    SPDLOG_TRACE("Checking for {} {} merge region in dirty region {}-{}",
+    SPDLOG_TRACE("{} {} merge region {}-{} aligns with dirty region {}-{}",
                  snapshotDataTypeStr(dataType),
                  snapshotMergeOpStr(operation),
+                 offset,
+                 offset + length,
                  dirtyRegionStart,
                  dirtyRegionEnd);
 
@@ -515,7 +517,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             diffs.emplace_back(
               dataType, operation, offset, updatedValue, length);
 
-            SPDLOG_TRACE("Adding {} {} diff at {}-{} ({})",
+            SPDLOG_TRACE("Found {} {} diff at {}-{} ({})",
                          snapshotDataTypeStr(dataType),
                          snapshotMergeOpStr(operation),
                          offset,
@@ -556,7 +558,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                             // Diff ends if it's not different and diff is
                             // in progress
                             int diffLength = b - diffStart;
-                            SPDLOG_TRACE("Adding {} {} diff at {}-{}",
+                            SPDLOG_TRACE("Found {} {} diff at {}-{}",
                                          snapshotDataTypeStr(dataType),
                                          snapshotMergeOpStr(operation),
                                          diffStart,

@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include "faabric/snapshot/SnapshotRegistry.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -971,5 +972,107 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
     const std::vector<uint8_t> actualConst(
       snap->getDataPtr(), snap->getDataPtr() + snap->getSize());
     REQUIRE(actualConst == data);
+}
+
+TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
+{
+    int nSnapPages = 5;
+    size_t snapSize = nSnapPages * HOST_PAGE_SIZE;
+
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+
+    std::vector<uint8_t> dataA(150, 3);
+    std::vector<uint8_t> dataB(200, 4);
+    std::vector<uint8_t> dataC(250, 5);
+
+    uint32_t offsetA = 0;
+    uint32_t offsetB = HOST_PAGE_SIZE;
+    uint32_t offsetC = HOST_PAGE_SIZE + 1 + dataB.size();
+
+    // Add merge regions
+    snap->addMergeRegion(offsetA,
+                         dataA.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::Overwrite);
+
+    snap->addMergeRegion(offsetB,
+                         dataB.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::Overwrite);
+
+    snap->addMergeRegion(offsetC,
+                         dataC.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::Overwrite);
+
+    // Write data to snapshot
+    snap->copyInData(dataA);
+
+    // Map some memory
+    MemoryRegion memA = allocateSharedMemory(snapSize);
+    MemoryRegion memB = allocateSharedMemory(snapSize);
+
+    snap->mapToMemory(memA.get());
+
+    faabric::util::resetDirtyTracking();
+
+    std::vector<uint8_t> actualSnap = snap->getDataCopy();
+    std::vector<uint8_t> actualA(memA.get(), memA.get() + snapSize);
+    REQUIRE(actualSnap == actualA);
+
+    // Write data to snapshot
+    snap->copyInData(dataB, offsetB);
+
+    // Write data to memory
+    std::memcpy(memA.get() + offsetC, dataC.data(), dataC.size());
+
+    // Check diffs from memory vs snapshot
+    std::vector<SnapshotDiff> actualDiffs =
+      MemoryView({ memA.get(), snapSize }).diffWithSnapshot(snap);
+    REQUIRE(actualDiffs.size() == 1);
+
+    SnapshotDiff actualDiff = actualDiffs.at(0);
+    REQUIRE(actualDiff.size == dataC.size());
+    REQUIRE(actualDiff.offset == offsetC);
+
+    // Apply diffs to the snapshot
+    snap->writeDiffs(actualDiffs);
+
+    // Check snapshot now registers diff for just the modified page
+    std::vector<SnapshotDiff> snapDirtyRegions =
+      MemoryView({ snap->getDataPtr(), snap->getSize() }).getDirtyRegions();
+
+    REQUIRE(snapDirtyRegions.size() == 1);
+    SnapshotDiff snapDirtyRegion = snapDirtyRegions.at(0);
+    REQUIRE(snapDirtyRegion.size == HOST_PAGE_SIZE);
+    REQUIRE(snapDirtyRegion.offset == HOST_PAGE_SIZE);
+
+    // Check modified data includes both updates
+    std::vector<uint8_t> dirtyRegionData(snapDirtyRegion.data,
+                                         snapDirtyRegion.data + HOST_PAGE_SIZE);
+    std::vector<uint8_t> expectedDirtyRegionData(HOST_PAGE_SIZE, 0);
+    std::memcpy(expectedDirtyRegionData.data() + (offsetB - HOST_PAGE_SIZE),
+                dataB.data(),
+                dataB.size());
+    std::memcpy(expectedDirtyRegionData.data() + (offsetC - HOST_PAGE_SIZE),
+                dataC.data(),
+                dataC.size());
+
+    REQUIRE(dirtyRegionData == expectedDirtyRegionData);
+
+    // Map more memory from the snapshot, check it contains all updates
+    snap->mapToMemory(memB.get());
+    std::vector<uint8_t> expectedFinal(snapSize, 0);
+    std::memcpy(expectedFinal.data() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(expectedFinal.data() + offsetB, dataB.data(), dataB.size());
+    std::memcpy(expectedFinal.data() + offsetC, dataC.data(), dataC.size());
+
+    std::vector<uint8_t> actualMemB(memB.get(), memB.get() + snapSize);
+    REQUIRE(actualMemB == expectedFinal);
+
+    // Remap first memory and check this also contains all updates
+    snap->mapToMemory(memA.get());
+    std::vector<uint8_t> remappedMemA(memB.get(), memB.get() + snapSize);
+    REQUIRE(remappedMemA == expectedFinal);
 }
 }

@@ -115,8 +115,6 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // competing, hence is rare so we can afford to be conservative here.
     faabric::util::UniqueLock lock(threadsMutex);
 
-    // Restore if necessary. If we're executing threads on the master host we
-    // assume we don't need to restore, but for everything else we do.
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string snapshotKey = firstMsg.snapshotkey();
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -125,7 +123,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     bool isSnapshot = !snapshotKey.empty();
 
-    if (isSnapshot && !isMaster) {
+    // Restore if we have a snapshot
+    if (isSnapshot) {
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
         restore(firstMsg);
     }
@@ -281,11 +280,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        if (isLastInBatch && task.needsSnapshotPush) {
-            // Get diffs between original snapshot and after execution
-            std::shared_ptr<faabric::util::MemoryView> funcMemory =
-              getMemoryView();
-
+        std::shared_ptr<faabric::util::MemoryView> funcMemory = getMemoryView();
+        if (funcMemory != nullptr && isLastInBatch && task.needsSnapshotPush) {
             auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
               msg.snapshotkey());
 
@@ -415,7 +411,8 @@ void Executor::reset(faabric::Message& msg) {}
 
 std::shared_ptr<faabric::util::MemoryView> Executor::getMemoryView()
 {
-    SPDLOG_WARN("Executor has not implemented memory view method");
+    SPDLOG_WARN("Executor for {} has not implemented memory view method",
+                faabric::util::funcToString(boundMessage, false));
     return nullptr;
 }
 

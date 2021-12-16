@@ -260,9 +260,6 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
     // Initialise message
     bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
 
-    // Set up memory
-    exec->setUpDummyMemory(snapSize);
-
     // Set up snapshot
     std::string snapKey = "dist-reduction-" + std::to_string(generateGid());
     std::shared_ptr<SnapshotData> snap =

@@ -75,6 +75,14 @@ export PS1="(faabric) $PS1"
 
 export PATH=/build/faabric/static/bin:${PATH}
 
+# ----------------------------
+# Sanitisers
+# ----------------------------
+# Check these match the CI build
+export ASAN_OPTIONS = "verbosity=1:halt_on_error=1"
+export TSAN_OPTIONS="halt_on_error=1:suppressions=${PROJ_ROOT}/thread-sanitizer-ignorelist.txt:history_size=7:second_deadlock_stack=1"
+export UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1"
+
 # -----------------------------
 # Splash
 # -----------------------------

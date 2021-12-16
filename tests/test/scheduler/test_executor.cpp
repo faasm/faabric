@@ -377,8 +377,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
         REQUIRE(result == msgId / 100);
     }
 
-    // Check that restore has not been called as we're on the master
-    REQUIRE(restoreCount == 0);
+    // Check that restore has been called
+    REQUIRE(restoreCount == 1);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
