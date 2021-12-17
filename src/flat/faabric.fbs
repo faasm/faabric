@@ -19,6 +19,7 @@ table SnapshotDiffChunk {
 table SnapshotDiffPushRequest {
   key:string;
   groupid:int;
+  force:bool;
   chunks:[SnapshotDiffChunk];
 }
 

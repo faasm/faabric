@@ -24,11 +24,6 @@ SnapshotServer::SnapshotServer()
   , broker(faabric::transport::getPointToPointBroker())
 {}
 
-size_t SnapshotServer::diffsApplied() const
-{
-    return diffsAppliedCounter.load(std::memory_order_acquire);
-}
-
 void SnapshotServer::doAsyncRecv(int header,
                                  const uint8_t* buffer,
                                  size_t bufferSize)
@@ -143,15 +138,17 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
           static_cast<SnapshotDataType>(chunk->dataType()),
           static_cast<SnapshotMergeOperation>(chunk->mergeOp()),
           chunk->offset(),
-          chunk->data()->data(),
-          chunk->data()->size());
+          std::span<const uint8_t>(chunk->data()->data(),
+                                   chunk->data()->size()));
     }
-    snap->writeDiffs(diffs);
 
-    // Make changes visible to other threads
-    std::atomic_thread_fence(std::memory_order_release);
-    this->diffsAppliedCounter.fetch_add(diffs.size(),
-                                        std::memory_order_acq_rel);
+    // Queue on the snapshot
+    snap->queueDiffs(diffs);
+
+    // Write if necessary
+    if(r->force()) {
+        snap->writeQueuedDiffs();
+    }
 
     // Unlock group if exists
     if (groupId > 0 &&

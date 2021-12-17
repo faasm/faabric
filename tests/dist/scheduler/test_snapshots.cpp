@@ -20,7 +20,7 @@
 namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture,
-                 "Check snapshots sent back from worker are applied",
+                 "Check snapshots sent back from worker are queued",
                  "[snapshots]")
 {
     std::string user = "snapshots";
@@ -57,7 +57,10 @@ TEST_CASE_METHOD(DistTestsFixture,
     int actualResult = sch.awaitThreadResult(m.id());
     REQUIRE(actualResult == 123);
 
-    // Check the diffs have been applied
+    // Write the diffs and check they've been applied
+    REQUIRE(snap->getQueuedDiffsCount() == 2);
+    snap->writeQueuedDiffs();
+
     size_t sizeA = snapshotKey.size();
     size_t sizeB = inputData.size();
 

@@ -674,14 +674,14 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < diffList.size(); i++) {
         // Check offset and data (according to logic defined in the dummy
         // executor)
-        REQUIRE(diffList.at(i).offset == i * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(diffList.at(i).getOffset() ==
+                i * faabric::util::HOST_PAGE_SIZE);
 
         std::vector<uint8_t> expected = { (uint8_t)(i + 1),
                                           (uint8_t)(i + 2),
                                           (uint8_t)(i + 3) };
 
-        std::vector<uint8_t> actual(diffList.at(i).data,
-                                    diffList.at(i).data + 3);
+        std::vector<uint8_t> actual(diffList.at(i).getData());
 
         REQUIRE(actual == expected);
     }
@@ -795,8 +795,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
       diffPushes.at(0).second;
 
     for (int i = 0; i < actualDiffs.size(); i++) {
-        REQUIRE(actualDiffs.at(i).offset == expectedDiffs.at(i).offset);
-        REQUIRE(actualDiffs.at(i).size == expectedDiffs.at(i).size);
+        REQUIRE(actualDiffs.at(i).getOffset() ==
+                expectedDiffs.at(i).getOffset());
+        REQUIRE(actualDiffs.at(i).getData().size() ==
+                expectedDiffs.at(i).getData().size());
     }
 }
 

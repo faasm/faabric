@@ -41,17 +41,15 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
         REQUIRE(actualDiffs.size() == expectedDiffs.size());
 
         for (int i = 0; i < actualDiffs.size(); i++) {
-            SnapshotDiff actualDiff = actualDiffs.at(i);
-            SnapshotDiff expectedDiff = expectedDiffs.at(i);
+            SnapshotDiff& actualDiff = actualDiffs.at(i);
+            SnapshotDiff& expectedDiff = expectedDiffs.at(i);
 
-            REQUIRE(actualDiff.operation == expectedDiff.operation);
-            REQUIRE(actualDiff.dataType == expectedDiff.dataType);
-            REQUIRE(actualDiff.offset == expectedDiff.offset);
+            REQUIRE(actualDiff.getOperation() == expectedDiff.getOperation());
+            REQUIRE(actualDiff.getDataType() == expectedDiff.getDataType());
+            REQUIRE(actualDiff.getOffset() == expectedDiff.getOffset());
 
-            std::vector<uint8_t> actualData(actualDiff.data,
-                                            actualDiff.data + actualDiff.size);
-            std::vector<uint8_t> expectedData(
-              expectedDiff.data, expectedDiff.data + expectedDiff.size);
+            std::vector<uint8_t> actualData = actualDiff.getData();
+            std::vector<uint8_t> expectedData = expectedDiff.getData();
             REQUIRE(actualData == expectedData);
         }
     }
@@ -178,17 +176,20 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
       MemoryView({ sharedMemB.get(), snapSize }).diffWithSnapshot(snap);
 
     REQUIRE(diffsA.size() == 1);
-    SnapshotDiff diffA = diffsA.front();
-    REQUIRE(diffA.size == dataA.size());
-    REQUIRE(diffA.offset == offsetA);
+    SnapshotDiff& diffA = diffsA.front();
+    REQUIRE(diffA.getData().size() == dataA.size());
+    REQUIRE(diffA.getOffset() == offsetA);
 
     REQUIRE(diffsB.size() == 1);
-    SnapshotDiff diffB = diffsB.front();
-    REQUIRE(diffB.size == dataB.size());
-    REQUIRE(diffB.offset == offsetB);
+    SnapshotDiff& diffB = diffsB.front();
+    REQUIRE(diffB.getData().size() == dataB.size());
+    REQUIRE(diffB.getOffset() == offsetB);
 
-    snap->writeDiffs(diffsA);
-    snap->writeDiffs(diffsB);
+    snap->queueDiffs(diffsA);
+    snap->writeQueuedDiffs();
+
+    snap->queueDiffs(diffsB);
+    snap->writeQueuedDiffs();
 
     // Make sure snapshot now includes both
     std::memcpy(expectedSnapMem.data() + offsetA, dataA.data(), dataA.size());
@@ -332,25 +333,25 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Check diffs themselves
     REQUIRE(actualDiffs.size() == 2);
 
-    SnapshotDiff diffA = actualDiffs.at(0);
-    SnapshotDiff diffB = actualDiffs.at(1);
+    SnapshotDiff& diffA = actualDiffs.at(0);
+    SnapshotDiff& diffB = actualDiffs.at(1);
 
-    REQUIRE(diffA.offset == intAOffset);
-    REQUIRE(diffB.offset == intBOffset);
+    REQUIRE(diffA.getOffset() == intAOffset);
+    REQUIRE(diffB.getOffset() == intBOffset);
 
-    REQUIRE(diffA.operation == SnapshotMergeOperation::Sum);
-    REQUIRE(diffB.operation == SnapshotMergeOperation::Sum);
+    REQUIRE(diffA.getOperation() == SnapshotMergeOperation::Sum);
+    REQUIRE(diffB.getOperation() == SnapshotMergeOperation::Sum);
 
-    REQUIRE(diffA.dataType == SnapshotDataType::Int);
-    REQUIRE(diffB.dataType == SnapshotDataType::Int);
+    REQUIRE(diffA.getDataType() == SnapshotDataType::Int);
+    REQUIRE(diffB.getDataType() == SnapshotDataType::Int);
 
-    REQUIRE(diffA.size == sizeof(int32_t));
-    REQUIRE(diffB.size == sizeof(int32_t));
+    REQUIRE(diffA.getData().size() == sizeof(int32_t));
+    REQUIRE(diffB.getData().size() == sizeof(int32_t));
 
     // Check that original values have been subtracted from final values for
     // sums
-    REQUIRE(*(int*)diffA.data == sumValueA);
-    REQUIRE(*(int*)diffB.data == sumValueB);
+    REQUIRE(*(int*)diffA.getData().data() == sumValueA);
+    REQUIRE(*(int*)diffB.getData().data() == sumValueB);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
@@ -437,23 +438,19 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Subtract,
           offsetA,
-          BYTES(&subA),
-          sizeof(int32_t) },
+          { BYTES(&subA), sizeof(int32_t) } },
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Sum,
           offsetB,
-          BYTES(&sumB),
-          sizeof(int32_t) },
+          { BYTES(&sumB), sizeof(int32_t) } },
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Subtract,
           offsetC,
-          BYTES(&subC),
-          sizeof(int32_t) },
+          { BYTES(&subC), sizeof(int32_t) } },
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Sum,
           offsetD,
-          BYTES(&sumD),
-          sizeof(int32_t) },
+          { BYTES(&sumD), sizeof(int32_t) } },
     };
 
     std::vector<SnapshotDiff> actualDiffs =
@@ -600,8 +597,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<SnapshotDiff> expectedDiffs = { { dataType,
                                                   operation,
                                                   offset,
-                                                  expectedData.data(),
-                                                  expectedData.size() } };
+                                                  { expectedData.data(),
+                                                    expectedData.size() } } };
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -708,15 +705,17 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     REQUIRE(expectedDiffs.size() == 2);
 
-    SnapshotDiff diffA = expectedDiffs.at(0);
-    SnapshotDiff diffB = expectedDiffs.at(1);
+    SnapshotDiff& diffA = expectedDiffs.at(0);
+    SnapshotDiff& diffB = expectedDiffs.at(1);
 
-    REQUIRE(diffA.size == HOST_PAGE_SIZE);
-    REQUIRE(diffB.size == HOST_PAGE_SIZE);
+    REQUIRE(diffA.getData().size() == HOST_PAGE_SIZE);
+    REQUIRE(diffB.getData().size() == HOST_PAGE_SIZE);
 
-    std::vector<uint8_t> actualA(diffA.data + offsetA,
-                                 diffA.data + offsetA + dataA.size());
-    std::vector<uint8_t> actualB(diffB.data + 1, diffB.data + 1 + dataB.size());
+    std::vector<uint8_t> actualA(diffA.getData().data() + offsetA,
+                                 diffA.getData().data() + offsetA +
+                                   dataA.size());
+    std::vector<uint8_t> actualB(diffB.getData().data() + 1,
+                                 diffB.getData().data() + 1 + dataB.size());
 
     REQUIRE(actualA == dataA);
     REQUIRE(actualB == dataB);
@@ -761,23 +760,19 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Overwrite,
           offsetA,
-          dataA.data(),
-          dataA.size() },
+          { dataA.data(), dataA.size() } },
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Overwrite,
           offsetB,
-          dataB.data(),
-          dataB.size() },
+          { dataB.data(), dataB.size() } },
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Overwrite,
           offsetC,
-          dataC.data(),
-          dataC.size() },
+          { dataC.data(), dataC.size() } },
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Overwrite,
           offsetD,
-          dataD.data(),
-          dataD.size() },
+          { dataD.data(), dataD.size() } },
     };
 
     // Add a single merge region for all the changes
@@ -858,13 +853,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         { faabric::util::SnapshotDataType::Raw,
           faabric::util::SnapshotMergeOperation::Overwrite,
           overwriteAOffset,
-          BYTES(overwriteData.data()),
-          overwriteData.size() },
+          { BYTES(overwriteData.data()), overwriteData.size() } },
         { faabric::util::SnapshotDataType::Int,
           faabric::util::SnapshotMergeOperation::Sum,
           sumOffset,
-          BYTES(&sumExpected),
-          sizeof(int32_t) },
+          { BYTES(&sumExpected), sizeof(int32_t) } },
     };
 
     std::vector<SnapshotDiff> actualDiffs =
@@ -911,8 +904,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         { faabric::util::SnapshotDataType::Raw,
           faabric::util::SnapshotMergeOperation::Overwrite,
           diffPageStart,
-          sharedMem.get() + diffPageStart,
-          (size_t)HOST_PAGE_SIZE },
+          { sharedMem.get() + diffPageStart, (size_t)HOST_PAGE_SIZE } },
     };
 
     checkDiffs(actualDiffs, expectedDiffs);
@@ -1031,25 +1023,27 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
       MemoryView({ memA.get(), snapSize }).diffWithSnapshot(snap);
     REQUIRE(actualDiffs.size() == 1);
 
-    SnapshotDiff actualDiff = actualDiffs.at(0);
-    REQUIRE(actualDiff.size == dataC.size());
-    REQUIRE(actualDiff.offset == offsetC);
+    SnapshotDiff& actualDiff = actualDiffs.at(0);
+    REQUIRE(actualDiff.getData().size() == dataC.size());
+    REQUIRE(actualDiff.getOffset() == offsetC);
 
     // Apply diffs to the snapshot
-    snap->writeDiffs(actualDiffs);
+    snap->queueDiffs(actualDiffs);
+    snap->writeQueuedDiffs();
 
     // Check snapshot now registers diff for just the modified page
     std::vector<SnapshotDiff> snapDirtyRegions =
       MemoryView({ snap->getDataPtr(), snap->getSize() }).getDirtyRegions();
 
     REQUIRE(snapDirtyRegions.size() == 1);
-    SnapshotDiff snapDirtyRegion = snapDirtyRegions.at(0);
-    REQUIRE(snapDirtyRegion.size == HOST_PAGE_SIZE);
-    REQUIRE(snapDirtyRegion.offset == HOST_PAGE_SIZE);
+    SnapshotDiff& snapDirtyRegion = snapDirtyRegions.at(0);
+    REQUIRE(snapDirtyRegion.getData().size() == HOST_PAGE_SIZE);
+    REQUIRE(snapDirtyRegion.getOffset() == HOST_PAGE_SIZE);
 
     // Check modified data includes both updates
-    std::vector<uint8_t> dirtyRegionData(snapDirtyRegion.data,
-                                         snapDirtyRegion.data + HOST_PAGE_SIZE);
+    std::vector<uint8_t> dirtyRegionData(snapDirtyRegion.getData().data(),
+                                         snapDirtyRegion.getData().data() +
+                                           HOST_PAGE_SIZE);
     std::vector<uint8_t> expectedDirtyRegionData(HOST_PAGE_SIZE, 0);
     std::memcpy(expectedDirtyRegionData.data() + (offsetB - HOST_PAGE_SIZE),
                 dataB.data(),

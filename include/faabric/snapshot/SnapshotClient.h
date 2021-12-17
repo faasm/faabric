@@ -41,7 +41,8 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
 
     void pushSnapshotDiffs(std::string snapshotKey,
                            int32_t groupId,
-                           std::vector<faabric::util::SnapshotDiff> diffs);
+                           bool force,
+                           const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void deleteSnapshot(const std::string& key);
 

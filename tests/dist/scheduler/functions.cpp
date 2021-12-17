@@ -166,7 +166,11 @@ int handleFakeDiffsThreadedFunction(
             sch.awaitThreadResult(m.id());
         }
 
-        // Check that the changes have been made to the snapshot memory
+        // Check that the changes have been queued, then apply
+        REQUIRE(snap->getQueuedDiffsCount() == nThreads);
+        snap->writeQueuedDiffs();
+
+        // Check changes have been applied
         bool success = true;
         for (int i = 0; i < nThreads; i++) {
             // Check local modifications
@@ -322,6 +326,9 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             }
 
             SPDLOG_DEBUG("Reduce test threads finished");
+
+            // Write queued snapshot diffs
+            snap->writeQueuedDiffs();
 
             // Remap memory to snapshot
             snap->mapToMemory(exec->getDummyMemory().data());

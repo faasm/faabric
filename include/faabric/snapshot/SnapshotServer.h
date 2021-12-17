@@ -14,10 +14,6 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
   public:
     SnapshotServer();
 
-    // Returns how many diffs have been applied since started, useful for
-    // testing
-    size_t diffsApplied() const;
-
   protected:
     void doAsyncRecv(int header,
                      const uint8_t* buffer,
@@ -40,6 +36,5 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
 
   private:
     faabric::transport::PointToPointBroker& broker;
-    std::atomic_size_t diffsAppliedCounter = 0;
 };
 }

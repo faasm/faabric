@@ -111,11 +111,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
 void checkDiffsApplied(const uint8_t* snapBase, std::vector<SnapshotDiff> diffs)
 {
-    for (const auto& d : diffs) {
-        std::vector<uint8_t> actual(snapBase + d.offset,
-                                    snapBase + d.offset + d.size);
+    for (auto& d : diffs) {
+        std::vector<uint8_t> actual(snapBase + d.getOffset(),
+                                    snapBase + d.getOffset() +
+                                      d.getData().size());
 
-        std::vector<uint8_t> expected(d.data, d.data + d.size);
+        std::vector<uint8_t> expected = d.getData();
 
         REQUIRE(actual == expected);
     }
@@ -151,23 +152,21 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<uint8_t> diffDataA1 = { 0, 1, 2, 3 };
     std::vector<uint8_t> diffDataA2 = { 4, 5, 6 };
 
-    REQUIRE(server.diffsApplied() == 0);
+    REQUIRE(snap->getQueuedDiffsCount() == 0);
 
     SnapshotDiff diffA1(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
                         offsetA1,
-                        diffDataA1.data(),
-                        diffDataA1.size());
+                        diffDataA1);
 
     SnapshotDiff diffA2(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
                         offsetA2,
-                        diffDataA2.data(),
-                        diffDataA2.size());
+                        diffDataA2);
 
     std::vector<SnapshotDiff> diffsA = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, groupIdA, diffsA);
-    REQUIRE(server.diffsApplied() == 2);
+    cli.pushSnapshotDiffs(snapKey, groupIdA, false, diffsA);
+    REQUIRE(snap->getQueuedDiffsCount() == 2);
 
     // Submit some more diffs, some larger than the original snapshot (to check
     // it gets extended)
@@ -182,29 +181,27 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     SnapshotDiff diffB1(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
                         offsetB1,
-                        diffDataB1.data(),
-                        diffDataB1.size());
+                        diffDataB1);
 
     SnapshotDiff diffB2(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
                         offsetB2,
-                        diffDataB2.data(),
-                        diffDataB2.size());
+                        diffDataB2);
 
     SnapshotDiff diffB3(SnapshotDataType::Raw,
                         SnapshotMergeOperation::Overwrite,
                         offsetB3,
-                        diffDataB3.data(),
-                        diffDataB3.size());
+                        diffDataB3);
 
     std::vector<SnapshotDiff> diffsB = { diffB1, diffB2, diffB3 };
-    cli.pushSnapshotDiffs(snapKey, groupIdB, diffsB);
+    cli.pushSnapshotDiffs(snapKey, groupIdB, false, diffsB);
 
     // Ensure the right number of diffs is applied
     // Also acts as a memory barrier for TSan
-    REQUIRE(server.diffsApplied() == 5);
+    REQUIRE(snap->getQueuedDiffsCount() == 5);
 
-    // Check changes have been applied
+    // Write queued diffs and check changes have been applied
+    snap->writeQueuedDiffs();
     checkDiffsApplied(snap->getDataPtr(), diffsA);
     checkDiffsApplied(snap->getDataPtr(), diffsB);
 }
@@ -237,32 +234,22 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     std::vector<SnapshotDiff> diffs;
 
-    SnapshotDiff diffA1(SnapshotDataType::Raw,
-                        SnapshotMergeOperation::Overwrite,
-                        offsetA1,
-                        intDataA1.data(),
-                        intDataA1.size());
-    diffA1.operation = SnapshotMergeOperation::Sum;
-    diffA1.dataType = SnapshotDataType::Int;
+    SnapshotDiff diffA1(
+      SnapshotDataType::Int, SnapshotMergeOperation::Sum, offsetA1, intDataA1);
 
-    SnapshotDiff diffA2(SnapshotDataType::Raw,
-                        SnapshotMergeOperation::Overwrite,
-                        offsetA2,
-                        intDataA2.data(),
-                        intDataA2.size());
-    diffA2.operation = SnapshotMergeOperation::Sum;
-    diffA2.dataType = SnapshotDataType::Int;
+    SnapshotDiff diffA2(
+      SnapshotDataType::Int, SnapshotMergeOperation::Sum, offsetA2, intDataA2);
 
-    size_t originalDiffsApplied = server.diffsApplied();
+    size_t originalDiffsApplied = snap->getQueuedDiffsCount();
 
     diffs = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, 0, diffs);
+    cli.pushSnapshotDiffs(snapKey, 0, false, diffs);
 
     // Ensure the right number of diffs is applied
-    // Also acts as a memory barrier for TSan
-    REQUIRE(server.diffsApplied() == originalDiffsApplied + 2);
+    REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 2);
 
-    // Check diffs have been applied according to the merge operations
+    // Write and check diffs have been applied according to the merge operations
+    snap->writeQueuedDiffs();
     const uint8_t* rawSnapData = snap->getDataPtr();
     int actualA1 = faabric::util::unalignedRead<int>(rawSnapData + offsetA1);
     int actualA2 = faabric::util::unalignedRead<int>(rawSnapData + offsetA2);
@@ -366,24 +353,18 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Put original data in place
     snap->copyInData(originalData, offset);
 
-    SnapshotDiff diff(SnapshotDataType::Raw,
-                      SnapshotMergeOperation::Overwrite,
-                      offset,
-                      diffData.data(),
-                      diffData.size());
-    diff.operation = operation;
-    diff.dataType = dataType;
+    SnapshotDiff diff(dataType, operation, offset, diffData);
 
-    size_t originalDiffsApplied = server.diffsApplied();
+    size_t originalDiffsApplied = snap->getQueuedDiffsCount();
 
     std::vector<SnapshotDiff> diffs = { diff };
-    cli.pushSnapshotDiffs(snapKey, 0, diffs);
+    cli.pushSnapshotDiffs(snapKey, 0, false, diffs);
 
     // Ensure the right number of diffs is applied
-    // Also acts as a memory barrier for TSan
-    REQUIRE(server.diffsApplied() == originalDiffsApplied + 1);
+    REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 1);
 
-    // Check data is as expected
+    // Apply and check data is as expected
+    snap->writeQueuedDiffs();
     std::vector<uint8_t> actualData =
       snap->getDataCopy(offset, expectedData.size());
     REQUIRE(actualData == expectedData);

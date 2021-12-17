@@ -311,13 +311,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             if (isMaster) {
                 SPDLOG_DEBUG(
-                  "Writing {} diffs for {} to snapshot {} on master (group {})",
+                  "Queueing {} diffs for {} to snapshot {} on master (group {})",
                   diffs.size(),
                   faabric::util::funcToString(msg, false),
                   msg.snapshotkey(),
                   msg.groupid());
 
-                snap->writeDiffs(diffs);
+                snap->queueDiffs(diffs);
             } else {
                 sch.pushSnapshotDiffs(msg, diffs);
 

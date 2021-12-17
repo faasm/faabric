@@ -109,7 +109,8 @@ void SnapshotClient::pushSnapshot(
 void SnapshotClient::pushSnapshotDiffs(
   std::string snapshotKey,
   int groupId,
-  std::vector<faabric::util::SnapshotDiff> diffs)
+  bool force,
+  const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
@@ -126,18 +127,18 @@ void SnapshotClient::pushSnapshotDiffs(
         // Create objects for all the chunks
         std::vector<flatbuffers::Offset<SnapshotDiffChunk>> diffsFbVector;
         for (const auto& d : diffs) {
-            auto dataOffset = mb.CreateVector<uint8_t>(d.data, d.size);
+            auto dataOffset = mb.CreateVector<uint8_t>(d.getData());
 
             auto chunk = CreateSnapshotDiffChunk(
-              mb, d.offset, d.dataType, d.operation, dataOffset);
+              mb, d.getOffset(), d.getDataType(), d.getOperation(), dataOffset);
             diffsFbVector.push_back(chunk);
         }
 
         // Set up the request
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
-        auto requestOffset =
-          CreateSnapshotDiffPushRequest(mb, keyOffset, groupId, diffsOffset);
+        auto requestOffset = CreateSnapshotDiffPushRequest(
+          mb, keyOffset, groupId, force, diffsOffset);
         mb.Finish(requestOffset);
 
         SEND_FB_MSG(SnapshotCalls::PushSnapshotDiffs, mb);

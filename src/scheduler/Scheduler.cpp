@@ -509,7 +509,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                   snapMemView.getDirtyRegions();
 
                 c.pushSnapshotDiffs(
-                  snapshotKey, firstMsg.groupid(), snapshotDiffs);
+                  snapshotKey, firstMsg.groupid(), true, snapshotDiffs);
             } else {
                 c.pushSnapshot(snapshotKey, firstMsg.groupid(), snap);
                 pushedSnapshotsMap[snapshotKey].insert(host);
@@ -917,7 +917,7 @@ void Scheduler::pushSnapshotDiffs(
     }
 
     SnapshotClient& c = getSnapshotClient(msg.masterhost());
-    c.pushSnapshotDiffs(snapKey, msg.groupid(), diffs);
+    c.pushSnapshotDiffs(snapKey, msg.groupid(), false, diffs);
 }
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)

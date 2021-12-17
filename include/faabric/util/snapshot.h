@@ -33,28 +33,26 @@ enum SnapshotMergeOperation
 class SnapshotDiff
 {
   public:
-    const uint8_t* data = nullptr;
-    size_t size = 0;
-    SnapshotDataType dataType = SnapshotDataType::Raw;
-    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
-    uint32_t offset = 0;
-
-    bool noChange = false;
-
     SnapshotDiff() = default;
 
     SnapshotDiff(SnapshotDataType dataTypeIn,
                  SnapshotMergeOperation operationIn,
                  uint32_t offsetIn,
-                 const uint8_t* dataIn,
-                 size_t sizeIn)
-    {
-        dataType = dataTypeIn;
-        operation = operationIn;
-        offset = offsetIn;
-        data = dataIn;
-        size = sizeIn;
-    }
+                 std::span<const uint8_t> dataIn);
+
+    SnapshotDataType getDataType() const;
+
+    SnapshotMergeOperation getOperation() const;
+
+    uint32_t getOffset() const;
+
+    std::vector<uint8_t> getData() const;
+
+  private:
+    SnapshotDataType dataType = SnapshotDataType::Raw;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
+    uint32_t offset = 0;
+    std::vector<uint8_t> _data;
 };
 
 class SnapshotMergeRegion
@@ -112,7 +110,11 @@ class SnapshotData
 
     std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
 
-    void writeDiffs(const std::vector<SnapshotDiff>& diffs);
+    size_t getQueuedDiffsCount();
+
+    void queueDiffs(const std::vector<SnapshotDiff>& diffs);
+
+    void writeQueuedDiffs();
 
     size_t getSize();
 
@@ -128,6 +130,8 @@ class SnapshotData
 
     MemoryRegion _data = nullptr;
 
+    std::vector<SnapshotDiff> queuedDiffs;
+
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
@@ -135,6 +139,8 @@ class SnapshotData
     uint8_t* validatedOffsetPtr(uint32_t offset);
 
     void mapToMemory(uint8_t* target, bool shared);
+
+    void writeData(std::span<const uint8_t> buffer, uint32_t offset = 0);
 };
 
 class MemoryView
