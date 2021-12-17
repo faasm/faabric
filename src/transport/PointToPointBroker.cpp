@@ -236,6 +236,7 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
 
 void PointToPointGroup::localLock()
 {
+    SPDLOG_DEBUG("Locking locally on {}", groupId);
     LOCK_TIMEOUT(localMx, timeoutMs);
 }
 
