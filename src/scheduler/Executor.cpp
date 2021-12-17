@@ -242,15 +242,23 @@ void Executor::threadPoolThread(int threadPoolIdx)
         faabric::Message& msg =
           task.req->mutable_messages()->at(task.messageIndex);
 
+        // Check ptp group
+        std::shared_ptr<faabric::transport::PointToPointGroup> group = nullptr;
+        if (msg.groupid() > 0) {
+            group =
+              faabric::transport::PointToPointGroup::getGroup(msg.groupid());
+        }
+
         bool isMaster = msg.masterhost() == conf.endpointHost;
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
-        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={})",
+        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
                      task.messageIndex,
                      msg.id(),
-                     isThreads);
+                     isThreads,
+                     msg.groupid());
 
         int32_t returnValue;
         try {
@@ -269,6 +277,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         msg.set_returnvalue(returnValue);
 
         // Decrement the task count
+        std::atomic_thread_fence(std::memory_order_release);
         int oldTaskCount = task.batchCounter->fetch_sub(1);
         assert(oldTaskCount >= 0);
         bool isLastInBatch = oldTaskCount == 1;
@@ -294,11 +303,19 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // If we're on master, we write the diffs straight to the snapshot
             // otherwise we push them to the master.
             if (isMaster) {
+                if (group != nullptr) {
+                    group->localLock();
+                }
+
                 snap->writeDiffs(diffs);
+
+                if (group != nullptr) {
+                    group->localUnlock();
+                }
             } else {
                 sch.pushSnapshotDiffs(msg, diffs);
 
-                // Reset dirty page tracking
+                // Reset dirty page tracking on non-master
                 faabric::util::resetDirtyTracking();
             }
 

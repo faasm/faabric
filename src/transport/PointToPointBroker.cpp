@@ -241,7 +241,6 @@ void PointToPointGroup::localLock()
 
 bool PointToPointGroup::localTryLock()
 {
-    SPDLOG_TRACE("Trying local lock on {}", groupId);
     return localMx.try_lock();
 }
 
@@ -301,6 +300,7 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
 
 void PointToPointGroup::localUnlock()
 {
+    SPDLOG_DEBUG("Unlocking locally on {}", groupId);
     localMx.unlock();
 }
 

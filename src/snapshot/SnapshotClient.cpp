@@ -132,8 +132,7 @@ void SnapshotClient::pushSnapshotDiffs(
             diffsFbVector.push_back(chunk);
         }
 
-        // Set up the main request
-        // TODO - avoid copying data here
+        // Set up the request
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
         auto requestOffset =
