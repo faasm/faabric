@@ -974,5 +974,15 @@ TEST_CASE_METHOD(DummyExecutorFixture,
     } else {
         REQUIRE(sentMappings.empty());
     }
+
+    // Wait for the functions on this host to complete
+    for (int i = 0; i < expectedHosts.size(); i++) {
+        if (expectedHosts.at(i) != thisHost) {
+            continue;
+        }
+
+        uint32_t messageId = req->mutable_messages()->at(i).id();
+        sch.getFunctionResult(messageId, 10000);
+    }
 }
 }
