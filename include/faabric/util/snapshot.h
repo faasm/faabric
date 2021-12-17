@@ -54,7 +54,7 @@ class SnapshotDiff
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
     uint32_t offset = 0;
-    std::vector<uint8_t> _data;
+    std::vector<uint8_t> data;
 };
 
 class SnapshotMergeRegion
@@ -130,7 +130,7 @@ class SnapshotData
 
     std::shared_mutex snapMx;
 
-    MemoryRegion _data = nullptr;
+    MemoryRegion data = nullptr;
 
     std::vector<SnapshotDiff> queuedDiffs;
 

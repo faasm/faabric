@@ -17,7 +17,7 @@ SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
   : dataType(dataTypeIn)
   , operation(operationIn)
   , offset(offsetIn)
-  , _data(dataIn.data(), dataIn.data() + dataIn.size())
+  , data(dataIn.begin(), dataIn.end())
 {}
 
 SnapshotDataType SnapshotDiff::getDataType() const
@@ -37,12 +37,12 @@ uint32_t SnapshotDiff::getOffset() const
 
 std::span<const uint8_t> SnapshotDiff::getData() const
 {
-    return _data;
+    return data;
 }
 
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
 {
-    return std::vector<uint8_t>(_data.begin(), _data.end());
+    return std::vector<uint8_t>(data.begin(), data.end());
 }
 
 SnapshotData::SnapshotData(size_t sizeIn)
@@ -58,15 +58,15 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     }
 
     // Allocate virtual memory big enough for the max size if provided
-    _data = faabric::util::allocateVirtualMemory(maxSize);
+    data = faabric::util::allocateVirtualMemory(maxSize);
 
     // Claim just the snapshot region
-    faabric::util::claimVirtualMemory({ BYTES(_data.get()), size });
+    faabric::util::claimVirtualMemory({ BYTES(data.get()), size });
 
     // Set up the fd with a two-way mapping to the data
     std::string fdLabel = "snap_" + std::to_string(generateGid());
     fd = createFd(size, fdLabel);
-    mapMemoryShared({ _data.get(), size }, fd);
+    mapMemoryShared({ data.get(), size }, fd);
 }
 
 SnapshotData::SnapshotData(std::span<const uint8_t> dataIn)
@@ -109,7 +109,7 @@ void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
             throw std::runtime_error("Copying snapshot data over max");
         }
 
-        claimVirtualMemory({ _data.get(), newSize });
+        claimVirtualMemory({ data.get(), newSize });
         size = newSize;
 
         // Update fd
@@ -118,7 +118,7 @@ void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
         }
 
         // Remap data
-        mapMemoryShared({ _data.get(), size }, fd);
+        mapMemoryShared({ data.get(), size }, fd);
     }
 
     // Copy in new data
@@ -139,7 +139,7 @@ uint8_t* SnapshotData::validatedOffsetPtr(uint32_t offset)
         throw std::runtime_error("Out of bounds snapshot access");
     }
 
-    return _data.get() + offset;
+    return data.get() + offset;
 }
 
 std::vector<uint8_t> SnapshotData::getDataCopy()
