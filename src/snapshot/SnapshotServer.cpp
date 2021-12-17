@@ -112,24 +112,14 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 {
     const SnapshotDiffPushRequest* r =
       flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
-    int groupId = r->groupid();
 
-    SPDLOG_DEBUG("Applying {} diffs to snapshot {} ({})",
-                 r->chunks()->size(),
-                 r->key()->str(),
-                 groupId);
+    SPDLOG_DEBUG(
+      "Applying {} diffs to snapshot {}", r->chunks()->size(), r->key()->str());
 
     // Get the snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
     auto snap = reg.getSnapshot(r->key()->str());
-
-    // Lock the function group if it exists
-    if (groupId > 0 &&
-        faabric::transport::PointToPointGroup::groupExists(groupId)) {
-        faabric::transport::PointToPointGroup::getGroup(r->groupid())
-          ->localLock();
-    }
 
     // Convert chunks to snapshot diff objects
     std::vector<SnapshotDiff> diffs;
@@ -148,13 +138,6 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     // Write if necessary
     if (r->force()) {
         snap->writeQueuedDiffs();
-    }
-
-    // Unlock group if exists
-    if (groupId > 0 &&
-        faabric::transport::PointToPointGroup::groupExists(groupId)) {
-        faabric::transport::PointToPointGroup::getGroup(r->groupid())
-          ->localUnlock();
     }
 
     // Send response

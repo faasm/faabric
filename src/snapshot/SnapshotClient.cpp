@@ -75,7 +75,6 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
 
 void SnapshotClient::pushSnapshot(
   const std::string& key,
-  int groupId,
   std::shared_ptr<faabric::util::SnapshotData> data)
 {
     if (data->getSize() == 0) {
@@ -98,7 +97,7 @@ void SnapshotClient::pushSnapshot(
         auto dataOffset =
           mb.CreateVector<uint8_t>(data->getDataPtr(), data->getSize());
         auto requestOffset = CreateSnapshotPushRequest(
-          mb, keyOffset, groupId, data->getMaxSize(), dataOffset);
+          mb, keyOffset, data->getMaxSize(), dataOffset);
         mb.Finish(requestOffset);
 
         // Send it
@@ -108,7 +107,6 @@ void SnapshotClient::pushSnapshot(
 
 void SnapshotClient::pushSnapshotDiffs(
   std::string snapshotKey,
-  int groupId,
   bool force,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
@@ -116,11 +114,10 @@ void SnapshotClient::pushSnapshotDiffs(
         faabric::util::UniqueLock lock(mockMutex);
         snapshotDiffPushes.emplace_back(host, diffs);
     } else {
-        SPDLOG_DEBUG("Pushing {} diffs for snapshot {} to {} (group {})",
+        SPDLOG_DEBUG("Pushing {} diffs for snapshot {} to {}",
                      diffs.size(),
                      snapshotKey,
-                     host,
-                     groupId);
+                     host);
 
         flatbuffers::FlatBufferBuilder mb;
 
@@ -139,8 +136,8 @@ void SnapshotClient::pushSnapshotDiffs(
         // Set up the request
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
-        auto requestOffset = CreateSnapshotDiffPushRequest(
-          mb, keyOffset, groupId, force, diffsOffset);
+        auto requestOffset =
+          CreateSnapshotDiffPushRequest(mb, keyOffset, force, diffsOffset);
         mb.Finish(requestOffset);
 
         SEND_FB_MSG(SnapshotCalls::PushSnapshotDiffs, mb);

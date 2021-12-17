@@ -408,7 +408,7 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
                              SnapshotMergeOperation::Overwrite,
                              true);
 
-        // Lock group locally
+        // Lock group locally while doing reduction
         std::shared_ptr<faabric::transport::PointToPointGroup> group =
           faabric::transport::PointToPointGroup::getGroup(groupId);
         group->localLock();

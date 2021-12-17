@@ -83,16 +83,11 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     auto snapA = std::make_shared<SnapshotData>(dataA);
     auto snapB = std::make_shared<SnapshotData>(dataB);
 
-    int appId = 111;
-    int groupIdA = 0;
-    int groupIdB = 123;
-    setUpFunctionGroup(appId, groupIdB);
-
     REQUIRE(reg.getSnapshotCount() == 0);
 
     // Send the messages
-    cli.pushSnapshot(snapKeyA, groupIdA, snapA);
-    cli.pushSnapshot(snapKeyB, groupIdB, snapB);
+    cli.pushSnapshot(snapKeyA, snapA);
+    cli.pushSnapshot(snapKeyB, snapB);
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
@@ -128,13 +123,6 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 {
     std::string thisHost = getSystemConfig().endpointHost;
 
-    // One request with no group, another with a group we must initialise
-    int appId = 111;
-    int groupIdA = 0;
-    int groupIdB = 234;
-
-    setUpFunctionGroup(appId, groupIdB);
-
     // Set up a snapshot that's got enough memory to expand into
     std::string snapKey = std::to_string(generateGid());
     size_t initialSnapSize = 5 * HOST_PAGE_SIZE;
@@ -165,7 +153,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                         diffDataA2);
 
     std::vector<SnapshotDiff> diffsA = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, groupIdA, false, diffsA);
+    cli.pushSnapshotDiffs(snapKey, false, diffsA);
     REQUIRE(snap->getQueuedDiffsCount() == 2);
 
     // Submit some more diffs, some larger than the original snapshot (to check
@@ -201,7 +189,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     SECTION("Don't force") { force = false; }
 
     // Make the request
-    cli.pushSnapshotDiffs(snapKey, groupIdB, force, diffsB);
+    cli.pushSnapshotDiffs(snapKey, force, diffsB);
 
     if (force) {
         // Check nothing queued
@@ -255,7 +243,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     size_t originalDiffsApplied = snap->getQueuedDiffsCount();
 
     diffs = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, 0, false, diffs);
+    cli.pushSnapshotDiffs(snapKey, false, diffs);
 
     // Ensure the right number of diffs is applied
     REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 2);
@@ -370,7 +358,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     size_t originalDiffsApplied = snap->getQueuedDiffsCount();
 
     std::vector<SnapshotDiff> diffs = { diff };
-    cli.pushSnapshotDiffs(snapKey, 0, false, diffs);
+    cli.pushSnapshotDiffs(snapKey, false, diffs);
 
     // Ensure the right number of diffs is applied
     REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 1);

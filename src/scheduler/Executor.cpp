@@ -299,13 +299,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // If we're on master, we write the diffs straight to the snapshot
             // otherwise we push them to the master.
-            // NOTE - we have to be careful to lock the function group while
-            // reading and writing diffs to avoid races with diffs coming in
-            // from other hosts.
-            if (group != nullptr) {
-                group->localLock();
-            }
-
             std::vector<faabric::util::SnapshotDiff> diffs =
               funcMemory->diffWithSnapshot(snap);
 
@@ -323,10 +316,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
                 // Reset dirty page tracking on non-master
                 faabric::util::resetDirtyTracking();
-            }
-
-            if (group != nullptr) {
-                group->localUnlock();
             }
 
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());

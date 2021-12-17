@@ -36,12 +36,10 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
     explicit SnapshotClient(const std::string& hostIn);
 
     void pushSnapshot(const std::string& key,
-                      int32_t groupId,
                       std::shared_ptr<faabric::util::SnapshotData> data);
 
     void pushSnapshotDiffs(
       std::string snapshotKey,
-      int32_t groupId,
       bool force,
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
