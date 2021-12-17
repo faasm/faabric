@@ -56,6 +56,50 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
 };
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test snapshot diff operations",
+                 "[snapshot][util]")
+{
+    std::vector<uint8_t> dataA(100, 1);
+
+    std::vector<uint8_t> dataB(2 * HOST_PAGE_SIZE, 2);
+    MemoryRegion memB = allocateSharedMemory(dataB.size());
+    std::memcpy(memB.get(), dataB.data(), dataB.size());
+
+    std::vector<uint8_t> dataC(sizeof(int), 3);
+
+    uint32_t offsetA = 10;
+    uint32_t offsetB = 5 * HOST_PAGE_SIZE;
+    uint32_t offsetC = 10 * HOST_PAGE_SIZE;
+
+    SnapshotDiff diffA(
+      SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite, offsetA, dataA);
+
+    SnapshotDiff diffB(SnapshotDataType::Raw,
+                       SnapshotMergeOperation::Overwrite,
+                       offsetB,
+                       std::span<const uint8_t>(memB.get(), dataB.size()));
+
+    SnapshotDiff diffC(
+      SnapshotDataType::Int, SnapshotMergeOperation::Sum, offsetC, dataC);
+
+    REQUIRE(diffA.getOffset() == offsetA);
+    REQUIRE(diffB.getOffset() == offsetB);
+    REQUIRE(diffC.getOffset() == offsetC);
+
+    REQUIRE(diffA.getDataType() == SnapshotDataType::Raw);
+    REQUIRE(diffB.getDataType() == SnapshotDataType::Raw);
+    REQUIRE(diffC.getDataType() == SnapshotDataType::Int);
+
+    REQUIRE(diffA.getOperation() == SnapshotMergeOperation::Overwrite);
+    REQUIRE(diffB.getOperation() == SnapshotMergeOperation::Overwrite);
+    REQUIRE(diffC.getOperation() == SnapshotMergeOperation::Sum);
+
+    REQUIRE(diffA.getData() == dataA);
+    REQUIRE(diffB.getData() == dataB);
+    REQUIRE(diffC.getData() == dataC);
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test clear merge regions",
                  "[snapshot][util]")
 {
@@ -711,14 +755,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(diffA.getData().size() == HOST_PAGE_SIZE);
     REQUIRE(diffB.getData().size() == HOST_PAGE_SIZE);
 
-    std::vector<uint8_t> actualA(diffA.getData().data() + offsetA,
-                                 diffA.getData().data() + offsetA +
-                                   dataA.size());
-    std::vector<uint8_t> actualB(diffB.getData().data() + 1,
-                                 diffB.getData().data() + 1 + dataB.size());
-
-    REQUIRE(actualA == dataA);
-    REQUIRE(actualB == dataB);
+    REQUIRE(diffA.getData() == dataA);
+    REQUIRE(diffB.getData() == dataB);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
@@ -1002,8 +1040,6 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
 
     // Map some memory
     MemoryRegion memA = allocateSharedMemory(snapSize);
-    MemoryRegion memB = allocateSharedMemory(snapSize);
-
     snap->mapToMemory(memA.get());
 
     faabric::util::resetDirtyTracking();
@@ -1027,23 +1063,22 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     REQUIRE(actualDiff.getData().size() == dataC.size());
     REQUIRE(actualDiff.getOffset() == offsetC);
 
-    // Apply diffs to the snapshot
+    // Apply diffs from memory to the snapshot
     snap->queueDiffs(actualDiffs);
     snap->writeQueuedDiffs();
 
-    // Check snapshot now registers diff for just the modified page
+    // Check snapshot now shows modified page
     std::vector<SnapshotDiff> snapDirtyRegions =
       MemoryView({ snap->getDataPtr(), snap->getSize() }).getDirtyRegions();
 
     REQUIRE(snapDirtyRegions.size() == 1);
     SnapshotDiff& snapDirtyRegion = snapDirtyRegions.at(0);
-    REQUIRE(snapDirtyRegion.getData().size() == HOST_PAGE_SIZE);
     REQUIRE(snapDirtyRegion.getOffset() == HOST_PAGE_SIZE);
 
     // Check modified data includes both updates
-    std::vector<uint8_t> dirtyRegionData(snapDirtyRegion.getData().data(),
-                                         snapDirtyRegion.getData().data() +
-                                           HOST_PAGE_SIZE);
+    std::vector<uint8_t> dirtyRegionData = snapDirtyRegion.getData();
+    REQUIRE(dirtyRegionData.size() == HOST_PAGE_SIZE);
+
     std::vector<uint8_t> expectedDirtyRegionData(HOST_PAGE_SIZE, 0);
     std::memcpy(expectedDirtyRegionData.data() + (offsetB - HOST_PAGE_SIZE),
                 dataB.data(),
@@ -1055,6 +1090,7 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     REQUIRE(dirtyRegionData == expectedDirtyRegionData);
 
     // Map more memory from the snapshot, check it contains all updates
+    MemoryRegion memB = allocateSharedMemory(snapSize);
     snap->mapToMemory(memB.get());
     std::vector<uint8_t> expectedFinal(snapSize, 0);
     std::memcpy(expectedFinal.data() + offsetA, dataA.data(), dataA.size());

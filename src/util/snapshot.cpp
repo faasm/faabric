@@ -271,7 +271,7 @@ void SnapshotData::writeQueuedDiffs()
                 auto diffValue = unalignedRead<int32_t>(diff.getData().data());
 
                 auto original = faabric::util::unalignedRead<int32_t>(
-                  getDataPtr(diff.getOffset()));
+                  validatedOffsetPtr(diff.getOffset()));
 
                 int32_t finalValue = 0;
                 switch (diff.getOperation()) {

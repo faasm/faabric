@@ -49,7 +49,6 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // -------------------------
 // Allocation
 // -------------------------
-
 typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
 MemoryRegion allocateSharedMemory(size_t size);
