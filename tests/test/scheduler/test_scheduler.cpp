@@ -795,15 +795,11 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     msg.set_masterhost("otherHost");
 
-    std::vector<faabric::util::SnapshotDiff> diffs;
     int returnValue = 123;
     std::string snapshotKey;
 
-    SECTION("Without diffs")
-    {
-        // Set the thread result
-        sch.setThreadResult(msg, returnValue);
-    }
+    // Set the thread result
+    sch.setThreadResult(msg, returnValue);
 
     auto actualResults = faabric::snapshot::getThreadResults();
 

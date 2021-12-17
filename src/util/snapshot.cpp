@@ -35,9 +35,14 @@ uint32_t SnapshotDiff::getOffset() const
     return offset;
 }
 
-std::vector<uint8_t> SnapshotDiff::getData() const
+std::span<const uint8_t> SnapshotDiff::getData() const
 {
     return _data;
+}
+
+std::vector<uint8_t> SnapshotDiff::getDataCopy() const
+{
+    return std::vector<uint8_t>(_data.begin(), _data.end());
 }
 
 SnapshotData::SnapshotData(size_t sizeIn)
@@ -341,6 +346,9 @@ void SnapshotData::writeQueuedDiffs()
             }
         }
     }
+
+    // Clear queue
+    queuedDiffs.clear();
 }
 
 size_t SnapshotData::getSize()

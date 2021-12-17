@@ -46,7 +46,9 @@ class SnapshotDiff
 
     uint32_t getOffset() const;
 
-    std::vector<uint8_t> getData() const;
+    std::span<const uint8_t> getData() const;
+
+    std::vector<uint8_t> getDataCopy() const;
 
   private:
     SnapshotDataType dataType = SnapshotDataType::Raw;

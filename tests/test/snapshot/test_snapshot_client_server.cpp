@@ -116,7 +116,7 @@ void checkDiffsApplied(const uint8_t* snapBase, std::vector<SnapshotDiff> diffs)
                                     snapBase + d.getOffset() +
                                       d.getData().size());
 
-        std::vector<uint8_t> expected = d.getData();
+        std::vector<uint8_t> expected(d.getData().begin(), d.getData().end());
 
         REQUIRE(actual == expected);
     }
@@ -194,14 +194,26 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                         diffDataB3);
 
     std::vector<SnapshotDiff> diffsB = { diffB1, diffB2, diffB3 };
-    cli.pushSnapshotDiffs(snapKey, groupIdB, false, diffsB);
 
-    // Ensure the right number of diffs is applied
-    // Also acts as a memory barrier for TSan
-    REQUIRE(snap->getQueuedDiffsCount() == 5);
+    bool force = false;
+    SECTION("Force") { force = true; }
 
-    // Write queued diffs and check changes have been applied
-    snap->writeQueuedDiffs();
+    SECTION("Don't force") { force = false; }
+
+    // Make the request
+    cli.pushSnapshotDiffs(snapKey, groupIdB, force, diffsB);
+
+    if (force) {
+        // Check nothing queued
+        REQUIRE(snap->getQueuedDiffsCount() == 0);
+    } else {
+        // Check and write queued diffs
+        REQUIRE(snap->getQueuedDiffsCount() == 5);
+
+        snap->writeQueuedDiffs();
+    }
+
+    // Check diffs have been applied
     checkDiffsApplied(snap->getDataPtr(), diffsA);
     checkDiffsApplied(snap->getDataPtr(), diffsB);
 }

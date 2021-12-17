@@ -18,7 +18,8 @@ void checkSnapshotDiff(int offset,
     REQUIRE(!actual.getData().empty());
     REQUIRE(actual.getData().data() != nullptr);
 
-    std::vector<uint8_t> actualData = actual.getData();
+    std::vector<uint8_t> actualData(actual.getData().begin(),
+                                    actual.getData().end());
     REQUIRE(data == actualData);
 }
 

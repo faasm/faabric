@@ -48,8 +48,8 @@ class SnapshotMergeTestFixture : public SnapshotTestFixture
             REQUIRE(actualDiff.getDataType() == expectedDiff.getDataType());
             REQUIRE(actualDiff.getOffset() == expectedDiff.getOffset());
 
-            std::vector<uint8_t> actualData = actualDiff.getData();
-            std::vector<uint8_t> expectedData = expectedDiff.getData();
+            std::vector<uint8_t> actualData = actualDiff.getDataCopy();
+            std::vector<uint8_t> expectedData = expectedDiff.getDataCopy();
             REQUIRE(actualData == expectedData);
         }
     }
@@ -94,9 +94,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(diffB.getOperation() == SnapshotMergeOperation::Overwrite);
     REQUIRE(diffC.getOperation() == SnapshotMergeOperation::Sum);
 
-    REQUIRE(diffA.getData() == dataA);
-    REQUIRE(diffB.getData() == dataB);
-    REQUIRE(diffC.getData() == dataC);
+    REQUIRE(diffA.getDataCopy() == dataA);
+    REQUIRE(diffB.getDataCopy() == dataB);
+    REQUIRE(diffC.getDataCopy() == dataC);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
@@ -230,9 +230,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(diffB.getOffset() == offsetB);
 
     snap->queueDiffs(diffsA);
-    snap->writeQueuedDiffs();
+    REQUIRE(snap->getQueuedDiffsCount() == diffsA.size());
 
     snap->queueDiffs(diffsB);
+    REQUIRE(snap->getQueuedDiffsCount() == diffsA.size() + diffsB.size());
+
     snap->writeQueuedDiffs();
 
     // Make sure snapshot now includes both
@@ -755,8 +757,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(diffA.getData().size() == HOST_PAGE_SIZE);
     REQUIRE(diffB.getData().size() == HOST_PAGE_SIZE);
 
-    REQUIRE(diffA.getData() == dataA);
-    REQUIRE(diffB.getData() == dataB);
+    std::vector<uint8_t> actualA = { diffA.getData().begin(),
+                                     diffA.getData().begin() + dataA.size() };
+    std::vector<uint8_t> actualB = {
+        diffB.getData().begin() + 1, diffB.getData().begin() + 1 + dataB.size()
+    };
+
+    REQUIRE(actualA == dataA);
+    REQUIRE(actualB == dataB);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
@@ -1076,7 +1084,7 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     REQUIRE(snapDirtyRegion.getOffset() == HOST_PAGE_SIZE);
 
     // Check modified data includes both updates
-    std::vector<uint8_t> dirtyRegionData = snapDirtyRegion.getData();
+    std::vector<uint8_t> dirtyRegionData = snapDirtyRegion.getDataCopy();
     REQUIRE(dirtyRegionData.size() == HOST_PAGE_SIZE);
 
     std::vector<uint8_t> expectedDirtyRegionData(HOST_PAGE_SIZE, 0);

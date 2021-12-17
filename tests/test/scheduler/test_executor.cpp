@@ -681,7 +681,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
                                           (uint8_t)(i + 2),
                                           (uint8_t)(i + 3) };
 
-        std::vector<uint8_t> actual(diffList.at(i).getData());
+        std::vector<uint8_t> actual = diffList.at(i).getDataCopy();
 
         REQUIRE(actual == expected);
     }

@@ -127,7 +127,9 @@ void SnapshotClient::pushSnapshotDiffs(
         // Create objects for all the chunks
         std::vector<flatbuffers::Offset<SnapshotDiffChunk>> diffsFbVector;
         for (const auto& d : diffs) {
-            auto dataOffset = mb.CreateVector<uint8_t>(d.getData());
+            std::span<const uint8_t> diffData = d.getData();
+            auto dataOffset =
+              mb.CreateVector<uint8_t>(diffData.data(), diffData.size());
 
             auto chunk = CreateSnapshotDiffChunk(
               mb, d.getOffset(), d.getDataType(), d.getOperation(), dataOffset);
