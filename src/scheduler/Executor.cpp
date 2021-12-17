@@ -297,21 +297,27 @@ void Executor::threadPoolThread(int threadPoolIdx)
             SPDLOG_TRACE("Diffing memory with pre-execution snapshot for {}",
                          msg.snapshotkey());
 
+            // If we're on master, we write the diffs straight to the snapshot
+            // otherwise we push them to the master.
+            // NOTE - we have to be careful to lock the function group while
+            // reading and writing diffs to avoid races with diffs coming in
+            // from other hosts.
+            if (group != nullptr) {
+                group->localLock();
+            }
+
             std::vector<faabric::util::SnapshotDiff> diffs =
               funcMemory->diffWithSnapshot(snap);
 
-            // If we're on master, we write the diffs straight to the snapshot
-            // otherwise we push them to the master.
             if (isMaster) {
-                if (group != nullptr) {
-                    group->localLock();
-                }
+                SPDLOG_DEBUG(
+                  "Writing {} diffs for {} to snapshot {} on master (group {})",
+                  diffs.size(),
+                  faabric::util::funcToString(msg, false),
+                  msg.snapshotkey(),
+                  msg.groupid());
 
                 snap->writeDiffs(diffs);
-
-                if (group != nullptr) {
-                    group->localUnlock();
-                }
             } else {
                 sch.pushSnapshotDiffs(msg, diffs);
 
@@ -319,7 +325,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 faabric::util::resetDirtyTracking();
             }
 
-            // Clear any merge regions
+            if (group != nullptr) {
+                group->localUnlock();
+            }
+
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
             snap->clearMergeRegions();
         }

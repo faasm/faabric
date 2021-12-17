@@ -115,10 +115,11 @@ void SnapshotClient::pushSnapshotDiffs(
         faabric::util::UniqueLock lock(mockMutex);
         snapshotDiffPushes.emplace_back(host, diffs);
     } else {
-        SPDLOG_DEBUG("Pushing {} diffs for snapshot {} to {}",
+        SPDLOG_DEBUG("Pushing {} diffs for snapshot {} to {} (group {})",
                      diffs.size(),
                      snapshotKey,
-                     host);
+                     host,
+                     groupId);
 
         flatbuffers::FlatBufferBuilder mb;
 

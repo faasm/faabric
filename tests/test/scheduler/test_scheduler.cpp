@@ -858,6 +858,9 @@ TEST_CASE_METHOD(DummyExecutorFixture,
     std::string thisHost = conf.endpointHost;
     std::string otherHost = "foobar";
 
+    faabric::transport::PointToPointBroker& broker =
+      faabric::transport::getPointToPointBroker();
+
     sch.addHostToGlobalSet(otherHost);
 
     // Set resources for this host
@@ -878,6 +881,7 @@ TEST_CASE_METHOD(DummyExecutorFixture,
 
     int appId = firstMsg.appid();
     int groupId = 0;
+    int groupSize = 10;
     bool forceLocal = false;
     bool expectMappingsSent = false;
 
@@ -915,6 +919,13 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         }
     }
 
+    // Set up the group
+    if (groupId > 0) {
+        faabric::transport::PointToPointGroup::addGroup(
+          appId, groupId, groupSize);
+    }
+
+    // Build expectation
     std::vector<std::string> expectedHosts = {
         thisHost, thisHost, otherHost, otherHost
     };
@@ -946,8 +957,6 @@ TEST_CASE_METHOD(DummyExecutorFixture,
     checkSchedulingDecisionEquality(expectedDecision, actualDecision);
 
     // Check mappings set up locally or not
-    faabric::transport::PointToPointBroker& broker =
-      faabric::transport::getPointToPointBroker();
     std::set<int> registeredIdxs = broker.getIdxsRegisteredForGroup(groupId);
     if (expectMappingsSent) {
         REQUIRE(registeredIdxs.size() == 4);
