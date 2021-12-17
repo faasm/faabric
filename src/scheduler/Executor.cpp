@@ -310,12 +310,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
               funcMemory->diffWithSnapshot(snap);
 
             if (isMaster) {
-                SPDLOG_DEBUG(
-                  "Queueing {} diffs for {} to snapshot {} on master (group {})",
-                  diffs.size(),
-                  faabric::util::funcToString(msg, false),
-                  msg.snapshotkey(),
-                  msg.groupid());
+                SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} on "
+                             "master (group {})",
+                             diffs.size(),
+                             faabric::util::funcToString(msg, false),
+                             msg.snapshotkey(),
+                             msg.groupid());
 
                 snap->queueDiffs(diffs);
             } else {

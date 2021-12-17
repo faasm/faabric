@@ -146,7 +146,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     snap->queueDiffs(diffs);
 
     // Write if necessary
-    if(r->force()) {
+    if (r->force()) {
         snap->writeQueuedDiffs();
     }
 
