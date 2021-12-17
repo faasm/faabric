@@ -166,8 +166,7 @@ int handleFakeDiffsThreadedFunction(
             sch.awaitThreadResult(m.id());
         }
 
-        // Check that the changes have been queued, then apply
-        REQUIRE(snap->getQueuedDiffsCount() == nThreads);
+        // Write queued diffs
         snap->writeQueuedDiffs();
 
         // Check changes have been applied
