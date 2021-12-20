@@ -31,8 +31,13 @@ std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
   int sendRank);
 
+#if 0
 typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
+#else
+typedef faabric::util::SpscQueue<std::shared_ptr<faabric::MPIMessage>>
+  InMemoryMpiQueue;
+#endif
 
 class MpiWorld
 {

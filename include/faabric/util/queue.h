@@ -4,6 +4,7 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
+#include <boost/lockfree/spsc_queue.hpp>
 #include <condition_variable>
 #include <queue>
 
@@ -158,5 +159,39 @@ class TokenPool
   private:
     int _size;
     Queue<int> queue;
+};
+
+// Lock-free single-producer, single-consumer queue
+template<typename T>
+class SpscQueue
+{
+  public:
+    void enqueue(T value)
+    {
+        while (!mq.push(value));
+    }
+
+    T dequeue()
+    {
+        T value;
+        while (!mq.pop(value));
+
+        return value;
+    }
+
+    T* peek()
+    {
+        while (mq.read_available() <= 0);
+
+        return &mq.front();
+    }
+
+    long size()
+    {
+        return mq.read_available();
+    }
+
+  private:
+    boost::lockfree::spsc_queue<T, boost::lockfree::capacity<128> > mq;
 };
 }
