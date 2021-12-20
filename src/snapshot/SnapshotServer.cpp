@@ -76,7 +76,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     SPDLOG_DEBUG("Receiving snapshot {} (size {}, max {})",
                  r->key()->c_str(),
                  r->contents()->size(),
-                 r->maxSize());
+                 r->max_size());
 
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
@@ -84,11 +84,20 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // Set up the snapshot
     size_t snapSize = r->contents()->size();
     std::string snapKey = r->key()->str();
-    auto d = std::make_shared<SnapshotData>(
-      std::span((uint8_t*)r->contents()->Data(), snapSize), r->maxSize());
+    auto snap = std::make_shared<SnapshotData>(
+      std::span((uint8_t*)r->contents()->Data(), snapSize), r->max_size());
+
+    // Add the merge regions
+    for (const auto* mr : *r->merge_regions()) {
+        snap->addMergeRegion(
+          mr->offset(),
+          mr->length(),
+          static_cast<SnapshotDataType>(mr->data_type()),
+          static_cast<SnapshotMergeOperation>(mr->merge_op()));
+    }
 
     // Register snapshot
-    reg.registerSnapshot(snapKey, d);
+    reg.registerSnapshot(snapKey, snap);
 
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
@@ -114,31 +123,38 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
 
     SPDLOG_DEBUG(
-      "Applying {} diffs to snapshot {}", r->chunks()->size(), r->key()->str());
+      "Applying {} diffs to snapshot {}", r->diffs()->size(), r->key()->str());
 
     // Get the snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
     auto snap = reg.getSnapshot(r->key()->str());
 
-    // Convert chunks to snapshot diff objects
+    // Convert diffs to snapshot diff objects
     std::vector<SnapshotDiff> diffs;
-    diffs.reserve(r->chunks()->size());
-    for (const auto* chunk : *r->chunks()) {
+    diffs.reserve(r->diffs()->size());
+    for (const auto* diff : *r->diffs()) {
         diffs.emplace_back(
-          static_cast<SnapshotDataType>(chunk->dataType()),
-          static_cast<SnapshotMergeOperation>(chunk->mergeOp()),
-          chunk->offset(),
-          std::span<const uint8_t>(chunk->data()->data(),
-                                   chunk->data()->size()));
+          static_cast<SnapshotDataType>(diff->data_type()),
+          static_cast<SnapshotMergeOperation>(diff->merge_op()),
+          diff->offset(),
+          std::span<const uint8_t>(diff->data()->data(), diff->data()->size()));
     }
 
     // Queue on the snapshot
     snap->queueDiffs(diffs);
 
-    // Write if necessary
+    // Write diffs and set merge regions if necessary
     if (r->force()) {
         snap->writeQueuedDiffs();
+
+        for (const auto* mr : *r->merge_regions()) {
+            snap->addMergeRegion(
+              mr->offset(),
+              mr->length(),
+              static_cast<SnapshotDataType>(mr->data_type()),
+              static_cast<SnapshotMergeOperation>(mr->merge_op()));
+        }
     }
 
     // Send response

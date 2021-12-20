@@ -80,8 +80,19 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<uint8_t> dataA(snapSizeA, 1);
     std::vector<uint8_t> dataB(snapSizeB, 2);
 
+    // Set up snapshots
     auto snapA = std::make_shared<SnapshotData>(dataA);
     auto snapB = std::make_shared<SnapshotData>(dataB);
+
+    // Add merge regions to one
+    std::vector<SnapshotMergeRegion> mergeRegions = {
+        { 123, 1234, SnapshotDataType::Int, SnapshotMergeOperation::Sum },
+        { 345, 3456, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite }
+    };
+
+    for (const auto& m : mergeRegions) {
+        snapA->addMergeRegion(m.offset, m.length, m.dataType, m.operation);
+    }
 
     REQUIRE(reg.getSnapshotCount() == 0);
 
@@ -97,6 +108,21 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(actualA->getSize() == snapA->getSize());
     REQUIRE(actualB->getSize() == snapB->getSize());
 
+    // Check merge regions
+    REQUIRE(actualA->getMergeRegions().size() == mergeRegions.size());
+    REQUIRE(actualB->getMergeRegions().empty());
+
+    for (int i = 0; i < mergeRegions.size(); i++) {
+        SnapshotMergeRegion expected = mergeRegions.at(i);
+        SnapshotMergeRegion actual = snapA->getMergeRegions()[expected.offset];
+
+        REQUIRE(actual.offset == expected.offset);
+        REQUIRE(actual.dataType == expected.dataType);
+        REQUIRE(actual.length == expected.length);
+        REQUIRE(actual.operation == expected.operation);
+    }
+
+    // Check data contents
     std::vector<uint8_t> actualDataA = actualA->getDataCopy();
     std::vector<uint8_t> actualDataB = actualB->getDataCopy();
 
@@ -134,6 +160,20 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Set up the snapshot
     reg.registerSnapshot(snapKey, snap);
 
+    // Set up another snapshot with some merge regions to check they're added
+    // on an update
+    auto otherSnap =
+      std::make_shared<SnapshotData>(initialSnapSize, expandedSnapSize);
+
+    std::vector<SnapshotMergeRegion> mergeRegions = {
+        { 123, 1234, SnapshotDataType::Int, SnapshotMergeOperation::Sum },
+        { 345, 3456, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite }
+    };
+
+    for (const auto& m : mergeRegions) {
+        otherSnap->addMergeRegion(m.offset, m.length, m.dataType, m.operation);
+    }
+
     // Set up some diffs for the initial request
     uint32_t offsetA1 = 5;
     uint32_t offsetA2 = 2 * HOST_PAGE_SIZE;
@@ -153,7 +193,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
                         diffDataA2);
 
     std::vector<SnapshotDiff> diffsA = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, false, diffsA);
+    cli.pushSnapshotDiffs(snapKey, diffsA);
     REQUIRE(snap->getQueuedDiffsCount() == 2);
 
     // Submit some more diffs, some larger than the original snapshot (to check
@@ -183,22 +223,41 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     std::vector<SnapshotDiff> diffsB = { diffB1, diffB2, diffB3 };
 
-    bool force = false;
-    SECTION("Force") { force = true; }
+    SECTION("Full update")
+    {
+        // Make the request
+        cli.pushSnapshotUpdate(snapKey, otherSnap, diffsB);
 
-    SECTION("Don't force") { force = false; }
-
-    // Make the request
-    cli.pushSnapshotDiffs(snapKey, force, diffsB);
-
-    if (force) {
         // Check nothing queued
         REQUIRE(snap->getQueuedDiffsCount() == 0);
-    } else {
+
+        // Check merge regions from other snap pushed
+        REQUIRE(snap->getMergeRegions().size() == mergeRegions.size());
+
+        for (int i = 0; i < mergeRegions.size(); i++) {
+            SnapshotMergeRegion expected = mergeRegions.at(i);
+            SnapshotMergeRegion actual =
+              snap->getMergeRegions()[expected.offset];
+
+            REQUIRE(actual.offset == expected.offset);
+            REQUIRE(actual.dataType == expected.dataType);
+            REQUIRE(actual.length == expected.length);
+            REQUIRE(actual.operation == expected.operation);
+        }
+    }
+
+    SECTION("Just diffs")
+    {
+        // Make the request
+        cli.pushSnapshotDiffs(snapKey, diffsB);
+
         // Check and write queued diffs
         REQUIRE(snap->getQueuedDiffsCount() == 5);
 
         snap->writeQueuedDiffs();
+
+        // Check no merge regions sent
+        REQUIRE(snap->getMergeRegions().empty());
     }
 
     // Check diffs have been applied
@@ -243,7 +302,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     size_t originalDiffsApplied = snap->getQueuedDiffsCount();
 
     diffs = { diffA1, diffA2 };
-    cli.pushSnapshotDiffs(snapKey, false, diffs);
+    cli.pushSnapshotDiffs(snapKey, diffs);
 
     // Ensure the right number of diffs is applied
     REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 2);
@@ -358,7 +417,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     size_t originalDiffsApplied = snap->getQueuedDiffsCount();
 
     std::vector<SnapshotDiff> diffs = { diff };
-    cli.pushSnapshotDiffs(snapKey, false, diffs);
+    cli.pushSnapshotDiffs(snapKey, diffs);
 
     // Ensure the right number of diffs is applied
     REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 1);
