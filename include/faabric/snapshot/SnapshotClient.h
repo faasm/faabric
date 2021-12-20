@@ -12,7 +12,8 @@ namespace faabric::snapshot {
 // Mocking
 // -----------------------------------
 
-std::vector<std::pair<std::string, faabric::util::SnapshotData>>
+std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::util::SnapshotData>>>
 getSnapshotPushes();
 
 std::vector<std::pair<std::string, std::vector<faabric::util::SnapshotDiff>>>
@@ -35,12 +36,12 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
     explicit SnapshotClient(const std::string& hostIn);
 
     void pushSnapshot(const std::string& key,
-                      int32_t groupId,
-                      const faabric::util::SnapshotData& data);
+                      std::shared_ptr<faabric::util::SnapshotData> data);
 
-    void pushSnapshotDiffs(std::string snapshotKey,
-                           int32_t groupId,
-                           std::vector<faabric::util::SnapshotDiff> diffs);
+    void pushSnapshotDiffs(
+      std::string snapshotKey,
+      bool force,
+      const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void deleteSnapshot(const std::string& key);
 

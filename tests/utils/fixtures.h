@@ -113,40 +113,20 @@ class SnapshotTestFixture
         reg.clear();
     }
 
-    uint8_t* allocatePages(int nPages)
+    std::shared_ptr<faabric::util::SnapshotData> setUpSnapshot(
+      const std::string& snapKey,
+      int nPages)
     {
-        return (uint8_t*)mmap(nullptr,
-                              nPages * faabric::util::HOST_PAGE_SIZE,
-                              PROT_WRITE,
-                              MAP_SHARED | MAP_ANONYMOUS,
-                              -1,
-                              0);
-    }
+        size_t snapSize = nPages * faabric::util::HOST_PAGE_SIZE;
+        auto snapData = std::make_shared<faabric::util::SnapshotData>(snapSize);
+        reg.registerSnapshot(snapKey, snapData);
 
-    void deallocatePages(uint8_t* base, int nPages)
-    {
-        munmap(base, nPages * faabric::util::HOST_PAGE_SIZE);
-    }
-
-    faabric::util::SnapshotData takeSnapshot(const std::string& snapKey,
-                                             int nPages,
-                                             bool locallyRestorable)
-    {
-        faabric::util::SnapshotData snap;
-        uint8_t* data = allocatePages(nPages);
-
-        snap.size = nPages * faabric::util::HOST_PAGE_SIZE;
-        snap.data = data;
-
-        reg.takeSnapshot(snapKey, snap, locallyRestorable);
-
-        return snap;
+        return snapData;
     }
 
     void removeSnapshot(const std::string& key, int nPages)
     {
         auto snap = reg.getSnapshot(key);
-        deallocatePages(snap->data, nPages);
         reg.deleteSnapshot(key);
     }
 
@@ -318,19 +298,14 @@ class TestExecutor final : public faabric::scheduler::Executor
   public:
     TestExecutor(faabric::Message& msg);
 
-    ~TestExecutor();
-
-    uint8_t* dummyMemory = nullptr;
-
+    faabric::util::MemoryRegion dummyMemory = nullptr;
     size_t dummyMemorySize = 0;
-
-    void postFinish() override;
 
     void reset(faabric::Message& msg) override;
 
     void restore(faabric::Message& msg) override;
 
-    faabric::util::SnapshotData snapshot() override;
+    faabric::util::MemoryView getMemoryView() override;
 
     int32_t executeTask(
       int threadPoolIdx,

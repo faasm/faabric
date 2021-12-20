@@ -22,13 +22,12 @@ class SnapshotRegistry
 
     void mapSnapshot(const std::string& key, uint8_t* target);
 
-    void takeSnapshot(const std::string& key,
-                      faabric::util::SnapshotData data,
-                      bool locallyRestorable = true);
+    void registerSnapshot(const std::string& key,
+                          std::shared_ptr<faabric::util::SnapshotData> data);
 
-    void takeSnapshotIfNotExists(const std::string& key,
-                                 faabric::util::SnapshotData data,
-                                 bool locallyRestorable = true);
+    void registerSnapshotIfNotExists(
+      const std::string& key,
+      std::shared_ptr<faabric::util::SnapshotData> data);
 
     void deleteSnapshot(const std::string& key);
 
@@ -46,10 +45,9 @@ class SnapshotRegistry
     int writeSnapshotToFd(const std::string& key,
                           faabric::util::SnapshotData& data);
 
-    void doTakeSnapshot(const std::string& key,
-                        faabric::util::SnapshotData data,
-                        bool locallyRestorable,
-                        bool overwrite);
+    void doRegisterSnapshot(const std::string& key,
+                            std::shared_ptr<faabric::util::SnapshotData> data,
+                            bool overwrite);
 };
 
 SnapshotRegistry& getSnapshotRegistry();

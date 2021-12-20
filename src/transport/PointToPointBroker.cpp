@@ -68,6 +68,8 @@ std::string getPointToPointKey(int groupId, int recvIdx)
 
 std::shared_ptr<PointToPointGroup> PointToPointGroup::getGroup(int groupId)
 {
+    faabric::util::SharedLock lock(groupsMutex);
+
     if (groups.find(groupId) == groups.end()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
         throw std::runtime_error("Group ID not found on host");
@@ -241,7 +243,6 @@ void PointToPointGroup::localLock()
 
 bool PointToPointGroup::localTryLock()
 {
-    SPDLOG_TRACE("Trying local lock on {}", groupId);
     return localMx.try_lock();
 }
 

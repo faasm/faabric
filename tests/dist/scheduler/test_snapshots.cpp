@@ -20,7 +20,7 @@
 namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture,
-                 "Check snapshots sent back from worker are applied",
+                 "Check snapshots sent back from worker are queued",
                  "[snapshots]")
 {
     std::string user = "snapshots";
@@ -28,14 +28,10 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::string snapshotKey = "dist-snap-check";
 
     size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
-    uint8_t* snapMemory = (uint8_t*)mmap(
-      nullptr, snapSize, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
 
     // Set up snapshot
-    faabric::util::SnapshotData snap;
-    snap.data = snapMemory;
-    snap.size = snapSize;
-    reg.takeSnapshot(snapshotKey, snap);
+    reg.registerSnapshot(snapshotKey, snap);
 
     // Set up the message
     std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -61,11 +57,15 @@ TEST_CASE_METHOD(DistTestsFixture,
     int actualResult = sch.awaitThreadResult(m.id());
     REQUIRE(actualResult == 123);
 
-    // Check the diffs have been applied
+    // Write the diffs and check they've been applied
+    REQUIRE(snap->getQueuedDiffsCount() == 2);
+    snap->writeQueuedDiffs();
+
     size_t sizeA = snapshotKey.size();
     size_t sizeB = inputData.size();
-    uint8_t* startA = snapMemory + 10;
-    uint8_t* startB = snapMemory + 100;
+
+    const uint8_t* startA = snap->getDataPtr() + 10;
+    const uint8_t* startB = snap->getDataPtr() + 100;
     std::vector<uint8_t> actualA(startA, startA + sizeA);
     std::vector<uint8_t> actualB(startB, startB + sizeB);
 
@@ -102,5 +102,28 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     faabric::Message actualResult = sch.getFunctionResult(m.id(), 10000);
     REQUIRE(actualResult.returnvalue() == 333);
+}
+
+TEST_CASE_METHOD(DistTestsFixture, "Check repeated reduction", "[snapshots]")
+{
+    std::string user = "snapshots";
+    std::string function = "reduction";
+
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory(user, function, 1);
+    faabric::Message& m = req->mutable_messages()->at(0);
+
+    // Main function and one thread execute on this host, others on another
+    faabric::HostResources res;
+    res.set_slots(3);
+    sch.setThisHostResources(res);
+
+    std::vector<std::string> expectedHosts = { getMasterIP() };
+    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    std::vector<std::string> executedHosts = decision.hosts;
+    REQUIRE(expectedHosts == executedHosts);
+
+    faabric::Message actualResult = sch.getFunctionResult(m.id(), 10000);
+    REQUIRE(actualResult.returnvalue() == 0);
 }
 }

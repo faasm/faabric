@@ -32,13 +32,13 @@ class ExecutorTask
     ExecutorTask(int messageIndexIn,
                  std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                  std::shared_ptr<std::atomic<int>> batchCounterIn,
-                 bool needsSnapshotPushIn,
+                 bool needsSnapshotSyncIn,
                  bool skipResetIn);
 
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
     int messageIndex = 0;
-    bool needsSnapshotPush = false;
+    bool needsSnapshotSync = false;
     bool skipReset = false;
 };
 
@@ -69,7 +69,7 @@ class Executor
 
     void releaseClaim();
 
-    virtual faabric::util::SnapshotData snapshot();
+    virtual faabric::util::MemoryView getMemoryView();
 
   protected:
     virtual void restore(faabric::Message& msg);

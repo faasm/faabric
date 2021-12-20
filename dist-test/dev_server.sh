@@ -5,6 +5,8 @@ THIS_DIR=$(dirname $(readlink -f $0))
 PROJ_ROOT=${THIS_DIR}/..
 pushd ${PROJ_ROOT} > /dev/null
 
+export OVERRIDE_CPU_COUNT=4
+
 if [[ -z "$1" ]]; then
     docker-compose up -d dist-test-server
 elif [[ "$1" == "restart" ]]; then

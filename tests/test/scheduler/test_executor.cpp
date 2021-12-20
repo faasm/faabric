@@ -33,15 +33,6 @@ TestExecutor::TestExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 
-TestExecutor::~TestExecutor() = default;
-
-void TestExecutor::postFinish()
-{
-    if (dummyMemory != nullptr) {
-        munmap(dummyMemory, dummyMemorySize);
-    }
-}
-
 void TestExecutor::reset(faabric::Message& msg)
 {
     SPDLOG_DEBUG("Resetting TestExecutor");
@@ -53,25 +44,18 @@ void TestExecutor::restore(faabric::Message& msg)
     SPDLOG_DEBUG("Restoring TestExecutor");
     restoreCount += 1;
 
-    // Initialise the dummy memory and map to snapshot
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
     auto snap = reg.getSnapshot(msg.snapshotkey());
 
-    // Note this has to be mmapped to be page-aligned
-    dummyMemorySize = snap->size;
-    dummyMemory = (uint8_t*)mmap(
-      nullptr, snap->size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-    reg.mapSnapshot(msg.snapshotkey(), dummyMemory);
+    dummyMemorySize = snap->getSize();
+    dummyMemory = faabric::util::allocateSharedMemory(snap->getSize());
+    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
 }
 
-faabric::util::SnapshotData TestExecutor::snapshot()
+faabric::util::MemoryView TestExecutor::getMemoryView()
 {
-    faabric::util::SnapshotData snap;
-    snap.data = dummyMemory;
-    snap.size = dummyMemorySize;
-    return snap;
+    return faabric::util::MemoryView({ dummyMemory.get(), dummyMemorySize });
 }
 
 int32_t TestExecutor::executeTask(
@@ -79,9 +63,7 @@ int32_t TestExecutor::executeTask(
   int msgIdx,
   std::shared_ptr<faabric::BatchExecuteRequest> reqOrig)
 {
-
     faabric::Message& msg = reqOrig->mutable_messages()->at(msgIdx);
-
     std::string funcStr = faabric::util::funcToString(msg, true);
 
     bool isThread = reqOrig->type() == faabric::BatchExecuteRequest::THREADS;
@@ -111,12 +93,9 @@ int32_t TestExecutor::executeTask(
         std::string snapKey = funcStr + "-snap";
         faabric::snapshot::SnapshotRegistry& reg =
           faabric::snapshot::getSnapshotRegistry();
-        faabric::util::SnapshotData snap;
-        snap.size = 10;
-        auto snapDataAllocation = std::make_unique<uint8_t[]>(snap.size);
-        snap.data = snapDataAllocation.get();
-
-        reg.takeSnapshot(snapKey, snap);
+        size_t snapSize = 10;
+        auto snap = std::make_shared<SnapshotData>(snapSize);
+        reg.registerSnapshot(snapKey, snap);
 
         for (int i = 0; i < chainedReq->messages_size(); i++) {
             faabric::Message& m = chainedReq->mutable_messages()->at(i);
@@ -217,8 +196,7 @@ int32_t TestExecutor::executeTask(
                      offset,
                      offset + data.size());
 
-        uint8_t* offsetPtr = dummyMemory + offset;
-        std::memcpy(offsetPtr, data.data(), data.size());
+        ::memcpy(dummyMemory.get() + offset, data.data(), data.size());
     }
 
     if (msg.function() == "echo") {
@@ -260,19 +238,21 @@ class TestExecutorFixture
           std::make_shared<TestExecutorFactory>();
         setExecutorFactory(fac);
 
-        setUpDummySnapshot();
+        dummySnap = setUpSnapshot(snapshotKey, snapshotNPages);
+        faabric::util::resetDirtyTracking();
 
         restoreCount = 0;
         resetCount = 0;
     }
 
-    ~TestExecutorFixture() { munmap(snapshotData, snapshotSize); }
+    ~TestExecutorFixture() = default;
 
   protected:
     std::string snapshotKey = "foobar";
-    uint8_t* snapshotData = nullptr;
     int snapshotNPages = 10;
     size_t snapshotSize = snapshotNPages * faabric::util::HOST_PAGE_SIZE;
+
+    std::shared_ptr<faabric::util::SnapshotData> dummySnap;
 
     std::vector<std::string> executeWithTestExecutor(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -288,13 +268,6 @@ class TestExecutorFixture
         }
 
         return sch.callFunctions(req, topologyHint).hosts;
-    }
-
-  private:
-    void setUpDummySnapshot()
-    {
-        takeSnapshot(snapshotKey, snapshotNPages, true);
-        faabric::util::resetDirtyTracking();
     }
 };
 
@@ -403,8 +376,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
         REQUIRE(result == msgId / 100);
     }
 
-    // Check that restore has not been called as we're on the master
-    REQUIRE(restoreCount == 0);
+    // Check that restore has been called
+    REQUIRE(restoreCount == 1);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -429,8 +402,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::Message res = sch.getFunctionResult(msg.id(), 5000);
     REQUIRE(res.returnvalue() == 0);
 
-    // Check that restore has not been called as we're on the master
-    REQUIRE(restoreCount == 0);
+    // Check that restore has been called
+    REQUIRE(restoreCount == 1);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -700,17 +673,20 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < diffList.size(); i++) {
         // Check offset and data (according to logic defined in the dummy
         // executor)
-        REQUIRE(diffList.at(i).offset == i * faabric::util::HOST_PAGE_SIZE);
+        REQUIRE(diffList.at(i).getOffset() ==
+                i * faabric::util::HOST_PAGE_SIZE);
 
         std::vector<uint8_t> expected = { (uint8_t)(i + 1),
                                           (uint8_t)(i + 2),
                                           (uint8_t)(i + 3) };
 
-        std::vector<uint8_t> actual(diffList.at(i).data,
-                                    diffList.at(i).data + 3);
+        std::vector<uint8_t> actual = diffList.at(i).getDataCopy();
 
         REQUIRE(actual == expected);
     }
+
+    // Check no merge regions left on the snapshot
+    REQUIRE(reg.getSnapshot(snapshotKey)->getMergeRegions().empty());
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -735,7 +711,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     resOther.set_slots(10);
     faabric::scheduler::queueResourceResponse(otherHost, resOther);
 
-    // Execute a batch of threads
+    // Set up message for a batch of threads
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
@@ -770,23 +746,26 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Check snapshot has been pushed
     auto pushes = faabric::snapshot::getSnapshotPushes();
+    REQUIRE(pushes.size() == 1);
     REQUIRE(pushes.at(0).first == otherHost);
-    REQUIRE(pushes.at(0).second.size == snapshotSize);
+    REQUIRE(pushes.at(0).second->getSize() == snapshotSize);
 
     REQUIRE(faabric::snapshot::getSnapshotDiffPushes().empty());
-
-    // Check that we're not registering any dirty pages on the snapshot
-    auto snap = reg.getSnapshot(snapshotKey);
-    REQUIRE(snap->getDirtyPages().empty());
 
     // Now reset snapshot pushes of all kinds
     faabric::snapshot::clearMockSnapshotRequests();
 
-    // Make an edit to the snapshot memory and get the expected diffs
-    snap->data[0] = 9;
-    snap->data[(2 * faabric::util::HOST_PAGE_SIZE) + 1] = 9;
+    // Update the snapshot and check we get expected diffs
+    auto snap = reg.getSnapshot(snapshotKey);
+    int newValue = 8;
+    snap->copyInData({ BYTES(&newValue), sizeof(int) });
+    snap->copyInData({ BYTES(&newValue), sizeof(int) },
+                     2 * faabric::util::HOST_PAGE_SIZE + 1);
+
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-      snap->getDirtyPages();
+      faabric::util::MemoryView({ snap->getDataPtr(), snap->getSize() })
+        .getDirtyRegions();
+
     REQUIRE(expectedDiffs.size() == 2);
 
     // Set up another function
@@ -815,13 +794,15 @@ TEST_CASE_METHOD(TestExecutorFixture,
       diffPushes.at(0).second;
 
     for (int i = 0; i < actualDiffs.size(); i++) {
-        REQUIRE(actualDiffs.at(i).offset == expectedDiffs.at(i).offset);
-        REQUIRE(actualDiffs.at(i).size == expectedDiffs.at(i).size);
+        REQUIRE(actualDiffs.at(i).getOffset() ==
+                expectedDiffs.at(i).getOffset());
+        REQUIRE(actualDiffs.at(i).getData().size() ==
+                expectedDiffs.at(i).getData().size());
     }
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test reset not called on master threads",
+                 "Test reset not called on threads",
                  "[executor]")
 {
     faabric::util::setMockMode(true);
@@ -840,6 +821,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         hostOverride = "foobar";
         nMessages = 3;
         requestType = faabric::BatchExecuteRequest::THREADS;
+        expectedResets = 0;
     }
 
     SECTION("Master threads")

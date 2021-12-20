@@ -6,6 +6,8 @@ pushd ${PROJ_ROOT} >> /dev/null
 export CONAN_CACHE_MOUNT_SOURCE=$HOME/.conan/
 RETURN_VAL=0
 
+export OVERRIDE_CPU_COUNT=4
+
 # Run the test server in the background
 docker-compose \
     up \

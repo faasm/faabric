@@ -222,17 +222,13 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     bool isThreads = execMode == faabric::BatchExecuteRequest::THREADS;
 
     // Set up a dummy snapshot if necessary
-    faabric::util::SnapshotData snapshot;
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
     std::unique_ptr<uint8_t[]> snapshotDataAllocation;
     if (!expectedSnapshot.empty()) {
-        snapshot.size = 1234;
-        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
-        snapshot.data = snapshotDataAllocation.get();
-
-        snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
+        auto snap = std::make_shared<faabric::util::SnapshotData>(1234);
+        snapRegistry.registerSnapshot(expectedSnapshot, snap);
     }
 
     // Mock everything
@@ -302,10 +298,13 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         REQUIRE(snapshotPushes.empty());
     } else {
         REQUIRE(snapshotPushes.size() == 1);
+
+        auto snapshot = snapRegistry.getSnapshot(expectedSnapshot);
+
         auto pushedSnapshot = snapshotPushes.at(0);
         REQUIRE(pushedSnapshot.first == otherHost);
-        REQUIRE(pushedSnapshot.second.size == snapshot.size);
-        REQUIRE(pushedSnapshot.second.data == snapshot.data);
+        REQUIRE(pushedSnapshot.second->getSize() == snapshot->getSize());
+        REQUIRE(pushedSnapshot.second->getDataPtr() == snapshot->getDataPtr());
     }
 
     // Check the executor counts on this host
@@ -418,16 +417,13 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     SECTION("Functions") { execMode = faabric::BatchExecuteRequest::FUNCTIONS; }
 
     // Set up snapshot if necessary
-    faabric::util::SnapshotData snapshot;
     faabric::snapshot::SnapshotRegistry& snapRegistry =
       faabric::snapshot::getSnapshotRegistry();
 
-    std::unique_ptr<uint8_t[]> snapshotDataAllocation;
+    size_t snapSize = 1234;
     if (!expectedSnapshot.empty()) {
-        snapshot.size = 1234;
-        snapshotDataAllocation = std::make_unique<uint8_t[]>(snapshot.size);
-        snapshot.data = snapshotDataAllocation.get();
-        snapRegistry.takeSnapshot(expectedSnapshot, snapshot);
+        auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
+        snapRegistry.registerSnapshot(expectedSnapshot, snap);
     }
 
     // Set up this host with very low resources
@@ -799,15 +795,11 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     msg.set_masterhost("otherHost");
 
-    std::vector<faabric::util::SnapshotDiff> diffs;
     int returnValue = 123;
     std::string snapshotKey;
 
-    SECTION("Without diffs")
-    {
-        // Set the thread result
-        sch.setThreadResult(msg, returnValue);
-    }
+    // Set the thread result
+    sch.setThreadResult(msg, returnValue);
 
     auto actualResults = faabric::snapshot::getThreadResults();
 
@@ -862,6 +854,9 @@ TEST_CASE_METHOD(DummyExecutorFixture,
     std::string thisHost = conf.endpointHost;
     std::string otherHost = "foobar";
 
+    faabric::transport::PointToPointBroker& broker =
+      faabric::transport::getPointToPointBroker();
+
     sch.addHostToGlobalSet(otherHost);
 
     // Set resources for this host
@@ -882,6 +877,7 @@ TEST_CASE_METHOD(DummyExecutorFixture,
 
     int appId = firstMsg.appid();
     int groupId = 0;
+    int groupSize = 10;
     bool forceLocal = false;
     bool expectMappingsSent = false;
 
@@ -919,6 +915,13 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         }
     }
 
+    // Set up the group
+    if (groupId > 0) {
+        faabric::transport::PointToPointGroup::addGroup(
+          appId, groupId, groupSize);
+    }
+
+    // Build expectation
     std::vector<std::string> expectedHosts = {
         thisHost, thisHost, otherHost, otherHost
     };
@@ -950,8 +953,6 @@ TEST_CASE_METHOD(DummyExecutorFixture,
     checkSchedulingDecisionEquality(expectedDecision, actualDecision);
 
     // Check mappings set up locally or not
-    faabric::transport::PointToPointBroker& broker =
-      faabric::transport::getPointToPointBroker();
     std::set<int> registeredIdxs = broker.getIdxsRegisteredForGroup(groupId);
     if (expectMappingsSent) {
         REQUIRE(registeredIdxs.size() == 4);
@@ -968,6 +969,16 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         REQUIRE(sentMappings.at(0).first == otherHost);
     } else {
         REQUIRE(sentMappings.empty());
+    }
+
+    // Wait for the functions on this host to complete
+    for (int i = 0; i < expectedHosts.size(); i++) {
+        if (expectedHosts.at(i) != thisHost) {
+            continue;
+        }
+
+        uint32_t messageId = req->mutable_messages()->at(i).id();
+        sch.getFunctionResult(messageId, 10000);
     }
 }
 }

@@ -1,6 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <memory>
+#include <span>
+#include <string>
 #include <unistd.h>
 #include <vector>
 
@@ -22,7 +26,7 @@ struct AlignedChunk
 
 static const long HOST_PAGE_SIZE = sysconf(_SC_PAGESIZE);
 
-bool isPageAligned(void* ptr);
+bool isPageAligned(const void* ptr);
 
 size_t getRequiredHostPages(size_t nBytes);
 
@@ -41,4 +45,27 @@ std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
 
 std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
                                                            int nPages);
+
+// -------------------------
+// Allocation
+// -------------------------
+typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
+
+MemoryRegion allocateSharedMemory(size_t size);
+
+MemoryRegion allocateVirtualMemory(size_t size);
+
+void claimVirtualMemory(std::span<uint8_t> region);
+
+void mapMemoryPrivate(std::span<uint8_t> target, int fd);
+
+void mapMemoryShared(std::span<uint8_t> target, int fd);
+
+void resizeFd(int fd, size_t size);
+
+void writeToFd(int fd, off_t offset, std::span<const uint8_t> data);
+
+int createFd(size_t size, const std::string& fdLabel);
+
+void appendDataToFd(int fd, std::span<uint8_t> data);
 }

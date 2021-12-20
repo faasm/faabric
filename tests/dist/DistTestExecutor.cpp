@@ -3,7 +3,9 @@
 #include <sys/mman.h>
 
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/func.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/snapshot.h>
 
 using namespace faabric::scheduler;
 
@@ -52,28 +54,44 @@ int32_t DistTestExecutor::executeTask(
     return callback(this, threadPoolIdx, msgIdx, req);
 }
 
-faabric::util::SnapshotData DistTestExecutor::snapshot()
+void DistTestExecutor::reset(faabric::Message& msg)
 {
-    faabric::util::SnapshotData snap;
-    snap.data = snapshotMemory;
-    snap.size = snapshotSize;
-
-    return snap;
+    SPDLOG_DEBUG("Dist test executor resetting for {}",
+                 faabric::util::funcToString(msg, false));
 }
 
 void DistTestExecutor::restore(faabric::Message& msg)
 {
-    // Initialise the dummy memory and map to snapshot
+    SPDLOG_DEBUG("Dist test executor restoring for {}",
+                 faabric::util::funcToString(msg, false));
+
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
+
     auto snap = reg.getSnapshot(msg.snapshotkey());
 
-    // Note this has to be mmapped to be page-aligned
-    snapshotMemory = (uint8_t*)mmap(
-      nullptr, snap->size, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    snapshotSize = snap->size;
+    setUpDummyMemory(snap->getSize());
 
-    reg.mapSnapshot(msg.snapshotkey(), snapshotMemory);
+    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
+}
+
+faabric::util::MemoryView DistTestExecutor::getMemoryView()
+{
+    return faabric::util::MemoryView({ dummyMemory.get(), dummyMemorySize });
+}
+
+std::span<uint8_t> DistTestExecutor::getDummyMemory()
+{
+    return { dummyMemory.get(), dummyMemorySize };
+}
+
+void DistTestExecutor::setUpDummyMemory(size_t memSize)
+{
+    if (dummyMemory.get() == nullptr) {
+        SPDLOG_DEBUG("Dist test executor initialising memory size {}", memSize);
+        dummyMemory = faabric::util::allocateSharedMemory(memSize);
+        dummyMemorySize = memSize;
+    }
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

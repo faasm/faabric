@@ -22,12 +22,12 @@ namespace faabric::scheduler {
 ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                            std::shared_ptr<std::atomic<int>> batchCounterIn,
-                           bool needsSnapshotPushIn,
+                           bool needsSnapshotSyncIn,
                            bool skipResetIn)
   : req(std::move(reqIn))
   , batchCounter(std::move(batchCounterIn))
   , messageIndex(messageIndexIn)
-  , needsSnapshotPush(needsSnapshotPushIn)
+  , needsSnapshotSync(needsSnapshotSyncIn)
   , skipReset(skipResetIn)
 {}
 
@@ -115,8 +115,6 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // competing, hence is rare so we can afford to be conservative here.
     faabric::util::UniqueLock lock(threadsMutex);
 
-    // Restore if necessary. If we're executing threads on the master host we
-    // assume we don't need to restore, but for everything else we do.
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string snapshotKey = firstMsg.snapshotkey();
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -125,26 +123,27 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     bool isSnapshot = !snapshotKey.empty();
 
-    if (isSnapshot && !isMaster) {
+    // Restore if we have a snapshot
+    if (isSnapshot) {
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
         restore(firstMsg);
     }
 
     // Reset dirty page tracking if we're executing threads.
-    // Note this must be done after the restore has happened
-    bool needsSnapshotPush = false;
-    if (isThreads && isSnapshot && !isMaster) {
+    // Note this must be done after the restore has happened.
+    bool needsSnapshotSync = false;
+    if (isThreads && isSnapshot) {
         faabric::util::resetDirtyTracking();
-        needsSnapshotPush = true;
+        needsSnapshotSync = true;
     }
 
     // Set up shared counter for this batch of tasks
     auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
 
-    // Work out if we should skip the reset after this batch. This only needs to
-    // happen when we're executing threads on the master host, in which case the
-    // original function call will cause a reset
-    bool skipReset = isMaster && isThreads;
+    // Work out if we should skip the reset after this batch. This happens for
+    // threads, as they will be restored from their respective snapshot on the
+    // next execution.
+    bool skipReset = isThreads;
 
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted do
@@ -192,7 +191,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Enqueue the task
         threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(
-          msgIdx, req, batchCounter, needsSnapshotPush, skipReset));
+          msgIdx, req, batchCounter, needsSnapshotSync, skipReset));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -243,14 +242,23 @@ void Executor::threadPoolThread(int threadPoolIdx)
         faabric::Message& msg =
           task.req->mutable_messages()->at(task.messageIndex);
 
+        // Check ptp group
+        std::shared_ptr<faabric::transport::PointToPointGroup> group = nullptr;
+        if (msg.groupid() > 0) {
+            group =
+              faabric::transport::PointToPointGroup::getGroup(msg.groupid());
+        }
+
+        bool isMaster = msg.masterhost() == conf.endpointHost;
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
-        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={})",
+        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
                      task.messageIndex,
                      msg.id(),
-                     isThreads);
+                     isThreads,
+                     msg.groupid());
 
         int32_t returnValue;
         try {
@@ -269,6 +277,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         msg.set_returnvalue(returnValue);
 
         // Decrement the task count
+        std::atomic_thread_fence(std::memory_order_release);
         int oldTaskCount = task.batchCounter->fetch_sub(1);
         assert(oldTaskCount >= 0);
         bool isLastInBatch = oldTaskCount == 1;
@@ -280,25 +289,38 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        if (isLastInBatch && task.needsSnapshotPush) {
-            // Get diffs between original snapshot and after execution
-            auto snapshotPostExecution = snapshot();
+        faabric::util::MemoryView funcMemory = getMemoryView();
+        if (!funcMemory.getData().empty() && isLastInBatch &&
+            task.needsSnapshotSync) {
+            auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
+              msg.snapshotkey());
 
-            auto snapshotPreExecution =
-              faabric::snapshot::getSnapshotRegistry().getSnapshot(
-                msg.snapshotkey());
-
-            SPDLOG_TRACE("Diffing pre and post execution snapshots for {}",
+            SPDLOG_TRACE("Diffing memory with pre-execution snapshot for {}",
                          msg.snapshotkey());
 
+            // If we're on master, we write the diffs straight to the snapshot
+            // otherwise we push them to the master.
             std::vector<faabric::util::SnapshotDiff> diffs =
-              snapshotPreExecution->getChangeDiffs(snapshotPostExecution.data,
-                                                   snapshotPostExecution.size);
+              funcMemory.diffWithSnapshot(snap);
 
-            sch.pushSnapshotDiffs(msg, diffs);
+            if (isMaster) {
+                SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} on "
+                             "master (group {})",
+                             diffs.size(),
+                             faabric::util::funcToString(msg, false),
+                             msg.snapshotkey(),
+                             msg.groupid());
 
-            // Reset dirty page tracking now that we've pushed the diffs
-            faabric::util::resetDirtyTracking();
+                snap->queueDiffs(diffs);
+            } else {
+                sch.pushSnapshotDiffs(msg, diffs);
+
+                // Reset dirty page tracking on non-master
+                faabric::util::resetDirtyTracking();
+            }
+
+            SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
+            snap->clearMergeRegions();
         }
 
         // If this batch is finished, reset the executor and release its claim.
@@ -403,11 +425,11 @@ void Executor::postFinish() {}
 
 void Executor::reset(faabric::Message& msg) {}
 
-faabric::util::SnapshotData Executor::snapshot()
+faabric::util::MemoryView Executor::getMemoryView()
 {
-    SPDLOG_WARN("Executor has not implemented snapshot method");
-    faabric::util::SnapshotData d;
-    return d;
+    SPDLOG_WARN("Executor for {} has not implemented memory view method",
+                faabric::util::funcToString(boundMessage, false));
+    return faabric::util::MemoryView();
 }
 
 void Executor::restore(faabric::Message& msg)

@@ -14,7 +14,8 @@ namespace faabric::snapshot {
 
 static std::mutex mockMutex;
 
-static std::vector<std::pair<std::string, faabric::util::SnapshotData>>
+static std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::util::SnapshotData>>>
   snapshotPushes;
 
 static std::vector<
@@ -26,7 +27,8 @@ static std::vector<std::pair<std::string, std::string>> snapshotDeletes;
 static std::vector<std::pair<std::string, std::pair<uint32_t, int>>>
   threadResults;
 
-std::vector<std::pair<std::string, faabric::util::SnapshotData>>
+std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::util::SnapshotData>>>
 getSnapshotPushes()
 {
     faabric::util::UniqueLock lock(mockMutex);
@@ -71,28 +73,31 @@ SnapshotClient::SnapshotClient(const std::string& hostIn)
                                               SNAPSHOT_SYNC_PORT)
 {}
 
-void SnapshotClient::pushSnapshot(const std::string& key,
-                                  int groupId,
-                                  const faabric::util::SnapshotData& data)
+void SnapshotClient::pushSnapshot(
+  const std::string& key,
+  std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    if (data.size == 0) {
+    if (data->getSize() == 0) {
         SPDLOG_ERROR("Cannot push snapshot {} with size zero to {}", key, host);
         throw std::runtime_error("Pushing snapshot with zero size");
     }
 
-    SPDLOG_DEBUG("Pushing snapshot {} to {} ({} bytes)", key, host, data.size);
+    SPDLOG_DEBUG(
+      "Pushing snapshot {} to {} ({} bytes)", key, host, data->getSize());
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
+
         snapshotPushes.emplace_back(host, data);
     } else {
         // Set up the main request
-        // TODO - avoid copying data here
+        // TODO - avoid copying data here?
         flatbuffers::FlatBufferBuilder mb;
         auto keyOffset = mb.CreateString(key);
-        auto dataOffset = mb.CreateVector<uint8_t>(data.data, data.size);
-        auto requestOffset =
-          CreateSnapshotPushRequest(mb, keyOffset, groupId, dataOffset);
+        auto dataOffset =
+          mb.CreateVector<uint8_t>(data->getDataPtr(), data->getSize());
+        auto requestOffset = CreateSnapshotPushRequest(
+          mb, keyOffset, data->getMaxSize(), dataOffset);
         mb.Finish(requestOffset);
 
         // Send it
@@ -102,8 +107,8 @@ void SnapshotClient::pushSnapshot(const std::string& key,
 
 void SnapshotClient::pushSnapshotDiffs(
   std::string snapshotKey,
-  int groupId,
-  std::vector<faabric::util::SnapshotDiff> diffs)
+  bool force,
+  const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
@@ -119,19 +124,20 @@ void SnapshotClient::pushSnapshotDiffs(
         // Create objects for all the chunks
         std::vector<flatbuffers::Offset<SnapshotDiffChunk>> diffsFbVector;
         for (const auto& d : diffs) {
-            auto dataOffset = mb.CreateVector<uint8_t>(d.data, d.size);
+            std::span<const uint8_t> diffData = d.getData();
+            auto dataOffset =
+              mb.CreateVector<uint8_t>(diffData.data(), diffData.size());
 
             auto chunk = CreateSnapshotDiffChunk(
-              mb, d.offset, d.dataType, d.operation, dataOffset);
+              mb, d.getOffset(), d.getDataType(), d.getOperation(), dataOffset);
             diffsFbVector.push_back(chunk);
         }
 
-        // Set up the main request
-        // TODO - avoid copying data here
+        // Set up the request
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
         auto requestOffset =
-          CreateSnapshotDiffPushRequest(mb, keyOffset, groupId, diffsOffset);
+          CreateSnapshotDiffPushRequest(mb, keyOffset, force, diffsOffset);
         mb.Finish(requestOffset);
 
         SEND_FB_MSG(SnapshotCalls::PushSnapshotDiffs, mb);
