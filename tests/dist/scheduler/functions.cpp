@@ -71,8 +71,6 @@ int handleFakeDiffsFunction(tests::DistTestExecutor* exec,
       faabric::snapshot::getSnapshotRegistry();
 
     auto originalSnap = reg.getSnapshot(snapshotKey);
-    std::shared_ptr<faabric::util::MemoryView> funcMemory =
-      exec->getMemoryView();
 
     // Add a single merge region to catch both diffs
     int offsetA = 10;

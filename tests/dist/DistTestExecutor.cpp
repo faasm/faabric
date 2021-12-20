@@ -75,10 +75,9 @@ void DistTestExecutor::restore(faabric::Message& msg)
     reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
 }
 
-std::shared_ptr<faabric::util::MemoryView> DistTestExecutor::getMemoryView()
+faabric::util::MemoryView DistTestExecutor::getMemoryView()
 {
-    return std::make_shared<faabric::util::MemoryView>(
-      std::span<uint8_t>(dummyMemory.get(), dummyMemorySize));
+    return faabric::util::MemoryView({ dummyMemory.get(), dummyMemorySize });
 }
 
 std::span<uint8_t> DistTestExecutor::getDummyMemory()

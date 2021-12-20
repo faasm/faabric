@@ -40,13 +40,13 @@ class SnapshotDiff
                  uint32_t offsetIn,
                  std::span<const uint8_t> dataIn);
 
-    SnapshotDataType getDataType() const;
+    SnapshotDataType getDataType() const { return dataType; }
 
-    SnapshotMergeOperation getOperation() const;
+    SnapshotMergeOperation getOperation() const { return operation; }
 
-    uint32_t getOffset() const;
+    uint32_t getOffset() const { return offset; }
 
-    std::span<const uint8_t> getData() const;
+    std::span<const uint8_t> getData() const { return data; }
 
     std::vector<uint8_t> getDataCopy() const;
 
@@ -114,13 +114,13 @@ class SnapshotData
 
     size_t getQueuedDiffsCount();
 
-    void queueDiffs(const std::vector<SnapshotDiff>& diffs);
+    void queueDiffs(std::span<SnapshotDiff> diffs);
 
     void writeQueuedDiffs();
 
-    size_t getSize();
+    size_t getSize() const { return size; }
 
-    size_t getMaxSize();
+    size_t getMaxSize() const { return maxSize; }
 
   private:
     size_t size = 0;
@@ -150,18 +150,16 @@ class MemoryView
   public:
     // Note - this object is just a view of a section of memory, and does not
     // own the underlying data
+    MemoryView() = default;
+
     explicit MemoryView(std::span<const uint8_t> dataIn);
-
-    MemoryView(const MemoryView&) = delete;
-
-    MemoryView& operator=(const MemoryView&) = delete;
 
     std::vector<SnapshotDiff> getDirtyRegions();
 
     std::vector<SnapshotDiff> diffWithSnapshot(
       std::shared_ptr<SnapshotData> snap);
 
-    std::span<const uint8_t> getData();
+    std::span<const uint8_t> getData() { return data; }
 
   private:
     std::span<const uint8_t> data;

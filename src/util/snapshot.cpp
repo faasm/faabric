@@ -20,26 +20,6 @@ SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
   , data(dataIn.begin(), dataIn.end())
 {}
 
-SnapshotDataType SnapshotDiff::getDataType() const
-{
-    return dataType;
-}
-
-SnapshotMergeOperation SnapshotDiff::getOperation() const
-{
-    return operation;
-}
-
-uint32_t SnapshotDiff::getOffset() const
-{
-    return offset;
-}
-
-std::span<const uint8_t> SnapshotDiff::getData() const
-{
-    return data;
-}
-
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
 {
     return std::vector<uint8_t>(data.begin(), data.end());
@@ -238,7 +218,7 @@ size_t SnapshotData::getQueuedDiffsCount()
     return queuedDiffs.size();
 }
 
-void SnapshotData::queueDiffs(const std::vector<SnapshotDiff>& diffs)
+void SnapshotData::queueDiffs(const std::span<SnapshotDiff> diffs)
 {
     faabric::util::FullLock lock(snapMx);
     for (const auto& diff : diffs) {
@@ -351,16 +331,6 @@ void SnapshotData::writeQueuedDiffs()
     queuedDiffs.clear();
 }
 
-size_t SnapshotData::getSize()
-{
-    return size;
-}
-
-size_t SnapshotData::getMaxSize()
-{
-    return maxSize;
-}
-
 MemoryView::MemoryView(std::span<const uint8_t> dataIn)
   : data(dataIn)
 {}
@@ -368,8 +338,7 @@ MemoryView::MemoryView(std::span<const uint8_t> dataIn)
 std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
 {
     if (data.empty()) {
-        std::vector<SnapshotDiff> empty;
-        return empty;
+        return {};
     }
 
     // Get dirty regions
@@ -382,13 +351,12 @@ std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
 
     // Convert to snapshot diffs
     std::vector<SnapshotDiff> diffs;
-    for (auto& p : regions) {
-        size_t regionSize = p.second - p.first;
-        const uint8_t* regionData = data.data() + p.first;
+    diffs.reserve(regions.size());
+    for (auto [regionBegin, regionEnd] : regions) {
         diffs.emplace_back(SnapshotDataType::Raw,
                            SnapshotMergeOperation::Overwrite,
-                           p.first,
-                           std::span<const uint8_t>(regionData, regionSize));
+                           regionBegin,
+                           data.subspan(regionBegin, regionEnd - regionBegin));
     }
 
     SPDLOG_DEBUG("Memory view has {}/{} dirty pages", diffs.size(), nPages);
@@ -439,11 +407,6 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
     }
 
     return diffs;
-}
-
-std::span<const uint8_t> MemoryView::getData()
-{
-    return data;
 }
 
 std::string snapshotDataTypeStr(SnapshotDataType dt)

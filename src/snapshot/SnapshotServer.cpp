@@ -123,6 +123,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Convert chunks to snapshot diff objects
     std::vector<SnapshotDiff> diffs;
+    diffs.reserve(r->chunks()->size());
     for (const auto* chunk : *r->chunks()) {
         diffs.emplace_back(
           static_cast<SnapshotDataType>(chunk->dataType()),

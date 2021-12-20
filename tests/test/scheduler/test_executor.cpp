@@ -53,10 +53,9 @@ void TestExecutor::restore(faabric::Message& msg)
     reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
 }
 
-std::shared_ptr<faabric::util::MemoryView> TestExecutor::getMemoryView()
+faabric::util::MemoryView TestExecutor::getMemoryView()
 {
-    return std::make_shared<faabric::util::MemoryView>(
-      std::span<uint8_t>(dummyMemory.get(), dummyMemorySize));
+    return faabric::util::MemoryView({ dummyMemory.get(), dummyMemorySize });
 }
 
 int32_t TestExecutor::executeTask(

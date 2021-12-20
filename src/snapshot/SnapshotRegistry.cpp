@@ -42,14 +42,14 @@ void SnapshotRegistry::registerSnapshotIfNotExists(
   const std::string& key,
   std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    doRegisterSnapshot(key, data, false);
+    doRegisterSnapshot(key, std::move(data), false);
 }
 
 void SnapshotRegistry::registerSnapshot(
   const std::string& key,
   std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    doRegisterSnapshot(key, data, true);
+    doRegisterSnapshot(key, std::move(data), true);
 }
 
 void SnapshotRegistry::doRegisterSnapshot(

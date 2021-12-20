@@ -289,8 +289,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        std::shared_ptr<faabric::util::MemoryView> funcMemory = getMemoryView();
-        if (funcMemory != nullptr && isLastInBatch && task.needsSnapshotSync) {
+        faabric::util::MemoryView funcMemory = getMemoryView();
+        if (!funcMemory.getData().empty() && isLastInBatch &&
+            task.needsSnapshotSync) {
             auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
               msg.snapshotkey());
 
@@ -300,7 +301,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // If we're on master, we write the diffs straight to the snapshot
             // otherwise we push them to the master.
             std::vector<faabric::util::SnapshotDiff> diffs =
-              funcMemory->diffWithSnapshot(snap);
+              funcMemory.diffWithSnapshot(snap);
 
             if (isMaster) {
                 SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} on "
@@ -424,11 +425,11 @@ void Executor::postFinish() {}
 
 void Executor::reset(faabric::Message& msg) {}
 
-std::shared_ptr<faabric::util::MemoryView> Executor::getMemoryView()
+faabric::util::MemoryView Executor::getMemoryView()
 {
     SPDLOG_WARN("Executor for {} has not implemented memory view method",
                 faabric::util::funcToString(boundMessage, false));
-    return nullptr;
+    return faabric::util::MemoryView();
 }
 
 void Executor::restore(faabric::Message& msg)
