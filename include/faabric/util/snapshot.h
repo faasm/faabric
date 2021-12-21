@@ -17,7 +17,10 @@ namespace faabric::util {
 enum SnapshotDataType
 {
     Raw,
-    Int
+    Bool,
+    Int,
+    Float,
+    Double
 };
 
 enum SnapshotMergeOperation
@@ -66,12 +69,100 @@ class SnapshotMergeRegion
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
 
     void addDiffs(std::vector<SnapshotDiff>& diffs,
-                  const uint8_t* original,
-                  uint32_t originalSize,
+                  std::span<const uint8_t> original,
                   const uint8_t* updated,
-                  uint32_t dirtyRegionStart,
-                  uint32_t dirtyRegionEnd);
+                  std::pair<uint32_t, uint32_t> dirtyRange);
+
+  private:
+    void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
+                          std::span<const uint8_t> original,
+                          const uint8_t* updated,
+                          std::pair<uint32_t, uint32_t> dirtyRange);
+
+    void addMergeDiff(std::vector<SnapshotDiff>& diffs,
+                      std::span<const uint8_t> original,
+                      const uint8_t* updated,
+                      std::pair<uint32_t, uint32_t> dirtyRange);
 };
+
+template<typename T>
+T calculateDiffValue(const uint8_t* original,
+                     const uint8_t* updated,
+                     SnapshotMergeOperation operation)
+{
+    // Cast to value
+    T updatedValue = unalignedRead<T>(updated);
+    T originalValue = unalignedRead<T>(original);
+
+    // Skip if no change
+    if (originalValue == updatedValue) {
+        return;
+    }
+
+    // Work out final result
+    switch (operation) {
+        case (SnapshotMergeOperation::Sum): {
+            // Sums must send the value to be _added_, and
+            // not the final result
+            updatedValue -= originalValue;
+            break;
+        }
+        case (SnapshotMergeOperation::Subtract): {
+            // Subtractions must send the value to be
+            // subtracted, not the result
+            updatedValue = originalValue - updatedValue;
+            break;
+        }
+        case (SnapshotMergeOperation::Product): {
+            // Products must send the value to be
+            // multiplied, not the result
+            updatedValue /= originalValue;
+            break;
+        }
+        case (SnapshotMergeOperation::Max):
+        case (SnapshotMergeOperation::Min):
+            // Min and max don't need to change
+            break;
+        default: {
+            SPDLOG_ERROR("Can't calculate diff for operation: {}", operation);
+            throw std::runtime_error("Can't calculate diff");
+        }
+    }
+
+    return updatedValue;
+}
+
+template<typename T>
+T applyDiffValue(const uint8_t* original,
+                 const uint8_t* diff,
+                 SnapshotMergeOperation operation)
+{
+
+    auto diffValue = unalignedRead<T>(diff);
+    T originalValue = unalignedRead<T>(original);
+
+    switch (operation) {
+        case (SnapshotMergeOperation::Sum): {
+            return diffValue + originalValue;
+        }
+        case (SnapshotMergeOperation::Subtract): {
+            return originalValue - diffValue;
+        }
+        case (SnapshotMergeOperation::Product): {
+            return originalValue * diffValue;
+        }
+        case (SnapshotMergeOperation::Max): {
+            return std::max<T>(originalValue, diffValue);
+        }
+        case (SnapshotMergeOperation::Min): {
+            return std::min<T>(originalValue, diffValue);
+        }
+        default: {
+            SPDLOG_ERROR("Can't apply merge operation: {}", operation);
+            throw std::runtime_error("Can't apply merge operation");
+        }
+    }
+}
 
 class SnapshotData
 {

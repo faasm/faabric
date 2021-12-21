@@ -232,91 +232,41 @@ void SnapshotData::writeQueuedDiffs()
 
     // Iterate through diffs
     for (auto& diff : queuedDiffs) {
-        switch (diff.getDataType()) {
-            case (faabric::util::SnapshotDataType::Raw): {
-                switch (diff.getOperation()) {
-                    case (faabric::util::SnapshotMergeOperation::Overwrite): {
-                        SPDLOG_TRACE("Copying raw snapshot diff into {}-{}",
-                                     diff.getOffset(),
-                                     diff.getOffset() + diff.getData().size());
+        if (diff.getOperation() ==
+            faabric::util::SnapshotMergeOperation::Overwrite) {
 
-                        writeData(diff.getData(), diff.getOffset());
-                        break;
-                    }
-                    default: {
-                        SPDLOG_ERROR("Unsupported raw merge operation: {}",
-                                     diff.getOperation());
-                        throw std::runtime_error(
-                          "Unsupported raw merge operation");
-                    }
-                }
+            SPDLOG_TRACE("Copying snapshot diff into {}-{}",
+                         diff.getOffset(),
+                         diff.getOffset() + diff.getData().size());
+
+            writeData(diff.getData(), diff.getOffset());
+        }
+
+        switch (diff.getDataType()) {
+            case (faabric::util::SnapshotDataType::Int): {
+                int32_t finalValue =
+                  applyDiffValue<int32_t>(validatedOffsetPtr(diff.getOffset()),
+                                          diff.getData().data(),
+                                          diff.getOperation());
+                writeData({ BYTES(&finalValue), sizeof(int32_t) },
+                          diff.getOffset());
                 break;
             }
-            case (faabric::util::SnapshotDataType::Int): {
-                auto diffValue = unalignedRead<int32_t>(diff.getData().data());
-
-                auto original = faabric::util::unalignedRead<int32_t>(
-                  validatedOffsetPtr(diff.getOffset()));
-
-                int32_t finalValue = 0;
-                switch (diff.getOperation()) {
-                    case (faabric::util::SnapshotMergeOperation::Sum): {
-                        finalValue = original + diffValue;
-
-                        SPDLOG_TRACE("Applying int sum diff {}: {} = {} + {}",
-                                     diff.getOffset(),
-                                     finalValue,
-                                     original,
-                                     diffValue);
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Subtract): {
-                        finalValue = original - diffValue;
-
-                        SPDLOG_TRACE("Applying int sub diff {}: {} = {} - {}",
-                                     diff.getOffset(),
-                                     finalValue,
-                                     original,
-                                     diffValue);
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Product): {
-                        finalValue = original * diffValue;
-
-                        SPDLOG_TRACE("Applying int mult diff {}: {} = {} * {}",
-                                     diff.getOffset(),
-                                     finalValue,
-                                     original,
-                                     diffValue);
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Min): {
-                        finalValue = std::min(original, diffValue);
-
-                        SPDLOG_TRACE("Applying int min diff {}: min({}, {})",
-                                     diff.getOffset(),
-                                     original,
-                                     diffValue);
-                        break;
-                    }
-                    case (faabric::util::SnapshotMergeOperation::Max): {
-                        finalValue = std::max(original, diffValue);
-
-                        SPDLOG_TRACE("Applying int max diff {}: max({}, {})",
-                                     diff.getOffset(),
-                                     original,
-                                     diffValue);
-                        break;
-                    }
-                    default: {
-                        SPDLOG_ERROR("Unsupported int merge operation: {}",
-                                     diff.getOperation());
-                        throw std::runtime_error(
-                          "Unsupported int merge operation");
-                    }
-                }
-
-                writeData({ BYTES(&finalValue), sizeof(int32_t) },
+            case (faabric::util::SnapshotDataType::Float): {
+                float finalValue =
+                  applyDiffValue<float>(validatedOffsetPtr(diff.getOffset()),
+                                          diff.getData().data(),
+                                          diff.getOperation());
+                writeData({ BYTES(&finalValue), sizeof(float) },
+                          diff.getOffset());
+                break;
+            }
+            case (faabric::util::SnapshotDataType::Double): {
+                double finalValue =
+                  applyDiffValue<double>(validatedOffsetPtr(diff.getOffset()),
+                                          diff.getData().data(),
+                                          diff.getOperation());
+                writeData({ BYTES(&finalValue), sizeof(double) },
                           diff.getOffset());
                 break;
             }
@@ -398,11 +348,9 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
         for (auto& dirtyRegion : dirtyRegions) {
             // Add the diffs
             mr.addDiffs(diffs,
-                        snap->getDataPtr(),
-                        snap->getSize(),
+                        { snap->getDataPtr(), snap->getSize() },
                         data.data(),
-                        dirtyRegion.first,
-                        dirtyRegion.second);
+                        dirtyRegion);
         }
     }
 
@@ -415,8 +363,17 @@ std::string snapshotDataTypeStr(SnapshotDataType dt)
         case (SnapshotDataType::Raw): {
             return "Raw";
         }
+        case (SnapshotDataType::Bool): {
+            return "Bool";
+        }
         case (SnapshotDataType::Int): {
             return "Int";
+        }
+        case (SnapshotDataType::Float): {
+            return "Float";
+        }
+        case (SnapshotDataType::Double): {
+            return "Double";
         }
         default: {
             SPDLOG_ERROR("Cannot convert snapshot data type to string: {}", dt);
@@ -453,19 +410,84 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
     }
 }
 
+void SnapshotMergeRegion::addOverwriteDiff(
+  std::vector<SnapshotDiff>& diffs,
+  std::span<const uint8_t> original,
+  const uint8_t* updated,
+  std::pair<uint32_t, uint32_t> dirtyRange)
+{
+    auto operation = SnapshotMergeOperation::Overwrite;
+
+    // Work out bounds of region we're checking
+    uint32_t checkStart = std::max<uint32_t>(dirtyRange.first, offset);
+
+    uint32_t checkEnd;
+    if (length == 0) {
+        checkEnd = dirtyRange.second;
+    } else {
+        checkEnd = std::min<uint32_t>(dirtyRange.second, offset + length);
+    }
+
+    bool diffInProgress = false;
+    int diffStart = 0;
+    for (int b = checkStart; b <= checkEnd; b++) {
+        // If this byte is outside the original region, we can't
+        // compare (i.e. always dirty)
+        bool isDirtyByte =
+          (b > original.size()) || (*(original.data() + b) != *(updated + b));
+
+        if (isDirtyByte && !diffInProgress) {
+            // Diff starts here if it's different and diff
+            // not in progress
+            diffInProgress = true;
+            diffStart = b;
+        } else if (!isDirtyByte && diffInProgress) {
+            // Diff ends if it's not different and diff is
+            // in progress
+            int diffLength = b - diffStart;
+            SPDLOG_TRACE("Found {} overwrite diff at {}-{}",
+                         snapshotDataTypeStr(dataType),
+                         diffStart,
+                         diffStart + diffLength);
+
+            diffInProgress = false;
+            diffs.emplace_back(
+              dataType,
+              operation,
+              diffStart,
+              std::span<const uint8_t>(updated + diffStart, diffLength));
+        }
+    }
+
+    // If we've reached the end of this region with a diff
+    // in progress, we need to close it off
+    if (diffInProgress) {
+        int finalDiffLength = checkEnd - diffStart;
+        SPDLOG_TRACE("Adding {} {} diff at {}-{} (end of region)",
+                     snapshotDataTypeStr(dataType),
+                     snapshotMergeOpStr(operation),
+                     diffStart,
+                     diffStart + finalDiffLength);
+
+        diffs.emplace_back(
+          dataType,
+          operation,
+          diffStart,
+          std::span<const uint8_t>(updated + diffStart, finalDiffLength));
+    }
+}
+
 void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
-                                   const uint8_t* original,
-                                   uint32_t originalSize,
+                                   std::span<const uint8_t> original,
                                    const uint8_t* updated,
-                                   uint32_t dirtyRegionStart,
-                                   uint32_t dirtyRegionEnd)
+                                   std::pair<uint32_t, uint32_t> dirtyRange)
 {
     // If the region has zero length, it signifies that it goes to the
     // end of the memory, so we go all the way to the end of the dirty region.
     // For all other regions, we just check if the dirty range is within the
     // merge region.
-    bool isInRange = (dirtyRegionEnd > offset) &&
-                     ((length == 0) || (dirtyRegionStart < offset + length));
+    bool isInRange = (dirtyRange.second > offset) &&
+                     ((length == 0) || (dirtyRange.first < offset + length));
 
     if (!isInRange) {
         return;
@@ -476,162 +498,52 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                  snapshotMergeOpStr(operation),
                  offset,
                  offset + length,
-                 dirtyRegionStart,
-                 dirtyRegionEnd);
+                 dirtyRange.first,
+                 dirtyRange.second);
+
+    if (operation == SnapshotMergeOperation::Overwrite) {
+        addOverwriteDiff(diffs, original, updated, dirtyRange);
+        return;
+    }
+
+    if (original.size() < offset) {
+        throw std::runtime_error(
+          "Do not support non-overwrite operations outside original snapshot");
+    }
+
+    uint8_t* updatedValue = (uint8_t*)updated + offset;
+    const uint8_t* originalValue = original.data() + offset;
 
     switch (dataType) {
         case (SnapshotDataType::Int): {
-            // Check if the value has changed
-            const uint8_t* updatedValue = updated + offset;
-            int updatedInt = *(reinterpret_cast<const int*>(updatedValue));
-
-            if (originalSize < offset) {
-                throw std::runtime_error(
-                  "Do not support int operations outside original snapshot");
-            }
-
-            const uint8_t* originalValue = original + offset;
-            int originalInt = *(reinterpret_cast<const int*>(originalValue));
-
-            // Skip if no change
-            if (originalInt == updatedInt) {
-                return;
-            }
-
-            // Potentially modify the original in place depending on the
-            // operation
-            switch (operation) {
-                case (SnapshotMergeOperation::Sum): {
-                    // Sums must send the value to be _added_, and
-                    // not the final result
-                    updatedInt -= originalInt;
-                    break;
-                }
-                case (SnapshotMergeOperation::Subtract): {
-                    // Subtractions must send the value to be
-                    // subtracted, not the result
-                    updatedInt = originalInt - updatedInt;
-                    break;
-                }
-                case (SnapshotMergeOperation::Product): {
-                    // Products must send the value to be
-                    // multiplied, not the result
-                    updatedInt /= originalInt;
-                    break;
-                }
-                case (SnapshotMergeOperation::Max):
-                case (SnapshotMergeOperation::Min):
-                    // Min and max don't need to change
-                    break;
-                default: {
-                    SPDLOG_ERROR("Unhandled integer merge operation: {}",
-                                 operation);
-                    throw std::runtime_error(
-                      "Unhandled integer merge operation");
-                }
-            }
-
-            // TODO - somehow avoid casting away the const here?
-            // Modify the memory in-place here
-            std::memcpy(
-              (uint8_t*)updatedValue, BYTES(&updatedInt), sizeof(int32_t));
-
-            // Add the diff
-            diffs.emplace_back(dataType,
-                               operation,
-                               offset,
-                               std::span<const uint8_t>(updatedValue, length));
-
-            SPDLOG_TRACE("Found {} {} diff at {}-{} ({})",
-                         snapshotDataTypeStr(dataType),
-                         snapshotMergeOpStr(operation),
-                         offset,
-                         offset + length,
-                         updatedInt);
-
+            int merged =
+              calculateDiffValue<int>(originalValue, updatedValue, operation);
+            unalignedWrite<int>(merged, updatedValue);
             break;
         }
-        case (SnapshotDataType::Raw): {
-            switch (operation) {
-                case (SnapshotMergeOperation::Overwrite): {
-                    // Work out bounds of region we're checking
-                    uint32_t checkStart =
-                      std::max<uint32_t>(dirtyRegionStart, offset);
-
-                    uint32_t checkEnd;
-                    if (length == 0) {
-                        checkEnd = dirtyRegionEnd;
-                    } else {
-                        checkEnd =
-                          std::min<uint32_t>(dirtyRegionEnd, offset + length);
-                    }
-
-                    bool diffInProgress = false;
-                    int diffStart = 0;
-                    for (int b = checkStart; b <= checkEnd; b++) {
-                        // If this byte is outside the original region, we can't
-                        // compare (i.e. always dirty)
-                        bool isDirtyByte = (b > originalSize) ||
-                                           (*(original + b) != *(updated + b));
-
-                        if (isDirtyByte && !diffInProgress) {
-                            // Diff starts here if it's different and diff
-                            // not in progress
-                            diffInProgress = true;
-                            diffStart = b;
-                        } else if (!isDirtyByte && diffInProgress) {
-                            // Diff ends if it's not different and diff is
-                            // in progress
-                            int diffLength = b - diffStart;
-                            SPDLOG_TRACE("Found {} {} diff at {}-{}",
-                                         snapshotDataTypeStr(dataType),
-                                         snapshotMergeOpStr(operation),
-                                         diffStart,
-                                         diffStart + diffLength);
-
-                            diffInProgress = false;
-                            diffs.emplace_back(
-                              dataType,
-                              operation,
-                              diffStart,
-                              std::span<const uint8_t>(updated + diffStart,
-                                                       diffLength));
-                        }
-                    }
-
-                    // If we've reached the end of this region with a diff
-                    // in progress, we need to close it off
-                    if (diffInProgress) {
-                        int finalDiffLength = checkEnd - diffStart;
-                        SPDLOG_TRACE(
-                          "Adding {} {} diff at {}-{} (end of region)",
-                          snapshotDataTypeStr(dataType),
-                          snapshotMergeOpStr(operation),
-                          diffStart,
-                          diffStart + finalDiffLength);
-
-                        diffs.emplace_back(
-                          dataType,
-                          operation,
-                          diffStart,
-                          std::span<const uint8_t>(updated + diffStart,
-                                                   finalDiffLength));
-                    }
-                    break;
-                }
-                default: {
-                    SPDLOG_ERROR("Unhandled raw merge operation: {}",
-                                 operation);
-                    throw std::runtime_error("Unhandled raw merge operation");
-                }
-            }
-
+        case (SnapshotDataType::Float): {
+            float merged =
+              calculateDiffValue<float>(originalValue, updatedValue, operation);
+            unalignedWrite<float>(merged, updatedValue);
+            break;
+        }
+        case (SnapshotDataType::Double): {
+            double merged = calculateDiffValue<double>(
+              originalValue, updatedValue, operation);
+            unalignedWrite<double>(merged, updatedValue);
             break;
         }
         default: {
-            SPDLOG_ERROR("Merge region for unhandled data type: {}", dataType);
-            throw std::runtime_error("Merge region for unhandled data type");
+            SPDLOG_ERROR(
+              "Unsupported merge op combination {} {}", dataType, operation);
+            throw std::runtime_error("Unsupported merge op combination");
         }
     }
+
+    // Add the diff
+    diffs.emplace_back(dataType,
+                       operation,
+                       offset,
+                       std::span<const uint8_t>(updatedValue, length));
 }
 }
