@@ -96,6 +96,7 @@ void SnapshotClient::pushSnapshot(
 
         std::vector<flatbuffers::Offset<SnapshotMergeRegionRequest>>
           mrsFbVector;
+        mrsFbVector.reserve(data->getMergeRegions().size());
         for (const auto& m : data->getMergeRegions()) {
             auto mr = CreateSnapshotMergeRegionRequest(mb,
                                                        m.second.offset,
@@ -171,6 +172,7 @@ void SnapshotClient::doPushSnapshotDiffs(
         // force too.
         std::vector<flatbuffers::Offset<SnapshotMergeRegionRequest>>
           mrsFbVector;
+        mrsFbVector.reserve(data->getMergeRegions().size());
         bool force = false;
         if (data != nullptr) {
             for (const auto& m : data->getMergeRegions()) {
