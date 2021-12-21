@@ -590,6 +590,66 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedData = faabric::util::valueToBytes<int>(diffValue);
     }
 
+    SECTION("Long")
+    {
+        long originalValue = 0;
+        long finalValue = 0;
+        long diffValue = 0;
+
+        dataType = faabric::util::SnapshotDataType::Long;
+        dataLength = sizeof(long);
+        regionLength = sizeof(long);
+
+        SECTION("Long sum")
+        {
+            originalValue = 100;
+            finalValue = 150;
+            diffValue = 50;
+
+            operation = faabric::util::SnapshotMergeOperation::Sum;
+        }
+
+        SECTION("Long subtract")
+        {
+            originalValue = 150;
+            finalValue = 100;
+            diffValue = 50;
+
+            operation = faabric::util::SnapshotMergeOperation::Subtract;
+        }
+
+        SECTION("Long product")
+        {
+            originalValue = 3;
+            finalValue = 150;
+            diffValue = 50;
+
+            operation = faabric::util::SnapshotMergeOperation::Product;
+        }
+
+        SECTION("Long max")
+        {
+            originalValue = 10;
+            finalValue = 200;
+            diffValue = 200;
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        SECTION("Long min")
+        {
+            originalValue = 30;
+            finalValue = 10;
+            diffValue = 10;
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        originalData = faabric::util::valueToBytes<long>(originalValue);
+        updatedData = faabric::util::valueToBytes<long>(finalValue);
+        expectedData = faabric::util::valueToBytes<long>(diffValue);
+    }
+
     SECTION("Float")
     {
         float originalValue = 0.0;

@@ -230,6 +230,8 @@ void SnapshotData::writeQueuedDiffs()
 {
     faabric::util::FullLock lock(snapMx);
 
+    SPDLOG_DEBUG("Writing {} queued diffs to snapshot", queuedDiffs.size());
+
     // Iterate through diffs
     for (auto& diff : queuedDiffs) {
         if (diff.getOperation() ==
@@ -251,6 +253,15 @@ void SnapshotData::writeQueuedDiffs()
                                           diff.getData().data(),
                                           diff.getOperation());
                 writeData({ BYTES(&finalValue), sizeof(int32_t) },
+                          diff.getOffset());
+                break;
+            }
+            case (faabric::util::SnapshotDataType::Long): {
+                long finalValue =
+                  applyDiffValue<long>(validatedOffsetPtr(diff.getOffset()),
+                                       diff.getData().data(),
+                                       diff.getOperation());
+                writeData({ BYTES(&finalValue), sizeof(long) },
                           diff.getOffset());
                 break;
             }
@@ -370,6 +381,9 @@ std::string snapshotDataTypeStr(SnapshotDataType dt)
         }
         case (SnapshotDataType::Int): {
             return "Int";
+        }
+        case (SnapshotDataType::Long): {
+            return "Long";
         }
         case (SnapshotDataType::Float): {
             return "Float";
@@ -520,6 +534,10 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     switch (dataType) {
         case (SnapshotDataType::Int): {
             changed = calculateDiffValue<int>(original, updated, operation);
+            break;
+        }
+        case (SnapshotDataType::Long): {
+            changed = calculateDiffValue<long>(original, updated, operation);
             break;
         }
         case (SnapshotDataType::Float): {

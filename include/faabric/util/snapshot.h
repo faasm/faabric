@@ -19,6 +19,7 @@ enum SnapshotDataType
     Raw,
     Bool,
     Int,
+    Long,
     Float,
     Double
 };
