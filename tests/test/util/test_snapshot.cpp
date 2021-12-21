@@ -590,6 +590,153 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedData = faabric::util::valueToBytes<int>(diffValue);
     }
 
+    SECTION("Float")
+    {
+        float originalValue = 0.0;
+        float finalValue = 0.0;
+        float diffValue = 0.0;
+
+        dataType = faabric::util::SnapshotDataType::Float;
+        dataLength = sizeof(float);
+        regionLength = sizeof(float);
+
+        // Note - imprecision in float arithmetic makes it difficult to test
+        // the floating point types here unless we use integer values.
+        SECTION("Float sum")
+        {
+            originalValue = 513;
+            finalValue = 945;
+            diffValue = 432;
+
+            operation = faabric::util::SnapshotMergeOperation::Sum;
+        }
+
+        SECTION("Float subtract")
+        {
+            originalValue = 945;
+            finalValue = 513;
+            diffValue = 432;
+
+            operation = faabric::util::SnapshotMergeOperation::Subtract;
+        }
+
+        SECTION("Float product")
+        {
+            originalValue = 5;
+            finalValue = 655;
+            diffValue = 131;
+
+            operation = faabric::util::SnapshotMergeOperation::Product;
+        }
+
+        SECTION("Float max")
+        {
+            originalValue = 555.55;
+            finalValue = 666.66;
+            diffValue = 666.66;
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        SECTION("Float min")
+        {
+            originalValue = 222.22;
+            finalValue = 333.33;
+            diffValue = 333.33;
+
+            operation = faabric::util::SnapshotMergeOperation::Min;
+        }
+
+        originalData = faabric::util::valueToBytes<float>(originalValue);
+        updatedData = faabric::util::valueToBytes<float>(finalValue);
+        expectedData = faabric::util::valueToBytes<float>(diffValue);
+    }
+
+    SECTION("Double")
+    {
+        double originalValue = 0.0;
+        double finalValue = 0.0;
+        double diffValue = 0.0;
+
+        dataType = faabric::util::SnapshotDataType::Double;
+        dataLength = sizeof(double);
+        regionLength = sizeof(double);
+
+        // Note - imprecision in float arithmetic makes it difficult to test
+        // the floating point types here unless we use integer values.
+        SECTION("Double sum")
+        {
+            originalValue = 513;
+            finalValue = 945;
+            diffValue = 432;
+
+            operation = faabric::util::SnapshotMergeOperation::Sum;
+        }
+
+        SECTION("Double subtract")
+        {
+            originalValue = 945;
+            finalValue = 513;
+            diffValue = 432;
+
+            operation = faabric::util::SnapshotMergeOperation::Subtract;
+        }
+
+        SECTION("Double product")
+        {
+            originalValue = 5;
+            finalValue = 655;
+            diffValue = 131;
+
+            operation = faabric::util::SnapshotMergeOperation::Product;
+        }
+
+        SECTION("Double max")
+        {
+            originalValue = 555.55;
+            finalValue = 666.66;
+            diffValue = 666.66;
+
+            operation = faabric::util::SnapshotMergeOperation::Max;
+        }
+
+        SECTION("Double min")
+        {
+            originalValue = 222.22;
+            finalValue = 333.33;
+            diffValue = 333.33;
+
+            operation = faabric::util::SnapshotMergeOperation::Min;
+        }
+
+        originalData = faabric::util::valueToBytes<double>(originalValue);
+        updatedData = faabric::util::valueToBytes<double>(finalValue);
+        expectedData = faabric::util::valueToBytes<double>(diffValue);
+    }
+    SECTION("Bool")
+    {
+        bool originalValue = false;
+        bool finalValue = false;
+        bool diffValue = false;
+
+        dataType = faabric::util::SnapshotDataType::Bool;
+        dataLength = sizeof(bool);
+        regionLength = sizeof(bool);
+
+        SECTION("Bool overwrite")
+        {
+            originalValue = true;
+            finalValue = false;
+            diffValue = false;
+
+            operation = faabric::util::SnapshotMergeOperation::Overwrite;
+        }
+
+        originalData = faabric::util::valueToBytes<bool>(originalValue);
+        updatedData = faabric::util::valueToBytes<bool>(finalValue);
+        expectedData = faabric::util::valueToBytes<bool>(diffValue);
+    }
+
     SECTION("Raw")
     {
         dataLength = 100;
@@ -668,12 +815,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::string expectedMsg;
 
-    SECTION("Integer overwrite")
+    SECTION("Bool product")
     {
-        dataType = faabric::util::SnapshotDataType::Int;
-        operation = faabric::util::SnapshotMergeOperation::Overwrite;
-        dataLength = sizeof(int32_t);
-        expectedMsg = "Unhandled integer merge operation";
+        dataType = faabric::util::SnapshotDataType::Bool;
+        operation = faabric::util::SnapshotMergeOperation::Product;
+        dataLength = sizeof(bool);
+        expectedMsg = "Unsupported merge op combination";
     }
 
     SECTION("Raw sum")
@@ -681,7 +828,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         dataType = faabric::util::SnapshotDataType::Raw;
         operation = faabric::util::SnapshotMergeOperation::Sum;
         dataLength = 123;
-        expectedMsg = "Unhandled raw merge operation";
+        expectedMsg = "Unsupported merge op combination";
     }
 
     // Take the snapshot

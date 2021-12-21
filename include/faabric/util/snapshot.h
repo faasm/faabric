@@ -69,8 +69,8 @@ class SnapshotMergeRegion
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
 
     void addDiffs(std::vector<SnapshotDiff>& diffs,
-                  std::span<const uint8_t> original,
-                  const uint8_t* updated,
+                  std::span<const uint8_t> originalData,
+                  const uint8_t* updatedData,
                   std::pair<uint32_t, uint32_t> dirtyRange);
 
   private:
@@ -86,9 +86,9 @@ class SnapshotMergeRegion
 };
 
 template<typename T>
-T calculateDiffValue(const uint8_t* original,
-                     const uint8_t* updated,
-                     SnapshotMergeOperation operation)
+inline bool calculateDiffValue(const uint8_t* original,
+                            uint8_t* updated,
+                            SnapshotMergeOperation operation)
 {
     // Cast to value
     T updatedValue = unalignedRead<T>(updated);
@@ -96,7 +96,7 @@ T calculateDiffValue(const uint8_t* original,
 
     // Skip if no change
     if (originalValue == updatedValue) {
-        return;
+        return false;
     }
 
     // Work out final result
@@ -129,13 +129,15 @@ T calculateDiffValue(const uint8_t* original,
         }
     }
 
-    return updatedValue;
+    unalignedWrite<T>(updatedValue, updated);
+
+    return true;
 }
 
 template<typename T>
-T applyDiffValue(const uint8_t* original,
-                 const uint8_t* diff,
-                 SnapshotMergeOperation operation)
+inline T applyDiffValue(const uint8_t* original,
+                        const uint8_t* diff,
+                        SnapshotMergeOperation operation)
 {
 
     auto diffValue = unalignedRead<T>(diff);

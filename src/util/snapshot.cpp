@@ -240,6 +240,8 @@ void SnapshotData::writeQueuedDiffs()
                          diff.getOffset() + diff.getData().size());
 
             writeData(diff.getData(), diff.getOffset());
+
+            continue;
         }
 
         switch (diff.getDataType()) {
@@ -255,8 +257,8 @@ void SnapshotData::writeQueuedDiffs()
             case (faabric::util::SnapshotDataType::Float): {
                 float finalValue =
                   applyDiffValue<float>(validatedOffsetPtr(diff.getOffset()),
-                                          diff.getData().data(),
-                                          diff.getOperation());
+                                        diff.getData().data(),
+                                        diff.getOperation());
                 writeData({ BYTES(&finalValue), sizeof(float) },
                           diff.getOffset());
                 break;
@@ -264,8 +266,8 @@ void SnapshotData::writeQueuedDiffs()
             case (faabric::util::SnapshotDataType::Double): {
                 double finalValue =
                   applyDiffValue<double>(validatedOffsetPtr(diff.getOffset()),
-                                          diff.getData().data(),
-                                          diff.getOperation());
+                                         diff.getData().data(),
+                                         diff.getOperation());
                 writeData({ BYTES(&finalValue), sizeof(double) },
                           diff.getOffset());
                 break;
@@ -478,8 +480,8 @@ void SnapshotMergeRegion::addOverwriteDiff(
 }
 
 void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
-                                   std::span<const uint8_t> original,
-                                   const uint8_t* updated,
+                                   std::span<const uint8_t> originalData,
+                                   const uint8_t* updatedData,
                                    std::pair<uint32_t, uint32_t> dirtyRange)
 {
     // If the region has zero length, it signifies that it goes to the
@@ -502,35 +504,30 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                  dirtyRange.second);
 
     if (operation == SnapshotMergeOperation::Overwrite) {
-        addOverwriteDiff(diffs, original, updated, dirtyRange);
+        addOverwriteDiff(diffs, originalData, updatedData, dirtyRange);
         return;
     }
 
-    if (original.size() < offset) {
+    if (originalData.size() < offset) {
         throw std::runtime_error(
           "Do not support non-overwrite operations outside original snapshot");
     }
 
-    uint8_t* updatedValue = (uint8_t*)updated + offset;
-    const uint8_t* originalValue = original.data() + offset;
+    uint8_t* updated = (uint8_t*)updatedData + offset;
+    const uint8_t* original = originalData.data() + offset;
 
+    bool changed = false;
     switch (dataType) {
         case (SnapshotDataType::Int): {
-            int merged =
-              calculateDiffValue<int>(originalValue, updatedValue, operation);
-            unalignedWrite<int>(merged, updatedValue);
+            changed = calculateDiffValue<int>(original, updated, operation);
             break;
         }
         case (SnapshotDataType::Float): {
-            float merged =
-              calculateDiffValue<float>(originalValue, updatedValue, operation);
-            unalignedWrite<float>(merged, updatedValue);
+            changed = calculateDiffValue<float>(original, updated, operation);
             break;
         }
         case (SnapshotDataType::Double): {
-            double merged = calculateDiffValue<double>(
-              originalValue, updatedValue, operation);
-            unalignedWrite<double>(merged, updatedValue);
+            changed = calculateDiffValue<double>(original, updated, operation);
             break;
         }
         default: {
@@ -541,9 +538,11 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     }
 
     // Add the diff
-    diffs.emplace_back(dataType,
-                       operation,
-                       offset,
-                       std::span<const uint8_t>(updatedValue, length));
+    if (changed) {
+        diffs.emplace_back(dataType,
+                           operation,
+                           offset,
+                           std::span<const uint8_t>(updated, length));
+    }
 }
 }
