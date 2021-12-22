@@ -537,6 +537,13 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                      ((length == 0) || (dirtyRange.first < offset + length));
 
     if (!isInRange) {
+        SPDLOG_TRACE("{} {} merge region {}-{} not in dirty region {}-{}",
+                     snapshotDataTypeStr(dataType),
+                     snapshotMergeOpStr(operation),
+                     offset,
+                     offset + length,
+                     dirtyRange.first,
+                     dirtyRange.second);
         return;
     }
 
