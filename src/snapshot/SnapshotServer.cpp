@@ -149,6 +149,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
         // Write queued diffs
         snap->writeQueuedDiffs();
 
+        // Clear merge regions
+        snap->clearMergeRegions();
+
         // Add merge regions from request
         for (const auto* mr : *r->merge_regions()) {
             snap->addMergeRegion(

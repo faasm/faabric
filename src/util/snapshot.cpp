@@ -338,6 +338,9 @@ std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
     std::vector<int> dirtyPageNumbers =
       getDirtyPageNumbers(data.data(), nPages);
 
+    SPDLOG_DEBUG(
+      "Memory view has {}/{} dirty pages", dirtyPageNumbers.size(), nPages);
+
     std::vector<std::pair<uint32_t, uint32_t>> regions =
       faabric::util::getDirtyRegions(data.data(), nPages);
 
@@ -345,13 +348,12 @@ std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
     std::vector<SnapshotDiff> diffs;
     diffs.reserve(regions.size());
     for (auto [regionBegin, regionEnd] : regions) {
+        SPDLOG_TRACE("Memory view dirty {}-{}", regionBegin, regionEnd);
         diffs.emplace_back(SnapshotDataType::Raw,
                            SnapshotMergeOperation::Overwrite,
                            regionBegin,
                            data.subspan(regionBegin, regionEnd - regionBegin));
     }
-
-    SPDLOG_DEBUG("Memory view has {}/{} dirty pages", diffs.size(), nPages);
 
     return diffs;
 }

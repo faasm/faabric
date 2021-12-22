@@ -36,37 +36,23 @@ void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
 {
     auto d = getSnapshot(key);
     d->mapToMemory(target);
-}
 
-void SnapshotRegistry::registerSnapshotIfNotExists(
-  const std::string& key,
-  std::shared_ptr<faabric::util::SnapshotData> data)
-{
-    doRegisterSnapshot(key, std::move(data), false);
+    // Reset dirty tracking otherwise whole mapped region is marked dirty
+    faabric::util::resetDirtyTracking();
 }
 
 void SnapshotRegistry::registerSnapshot(
   const std::string& key,
   std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    doRegisterSnapshot(key, std::move(data), true);
-}
-
-void SnapshotRegistry::doRegisterSnapshot(
-  const std::string& key,
-  std::shared_ptr<faabric::util::SnapshotData> data,
-  bool overwrite)
-{
     faabric::util::FullLock lock(snapshotsMx);
-
-    if (!overwrite && (snapshotMap.find(key) != snapshotMap.end())) {
-        SPDLOG_TRACE("Skipping already existing snapshot {}", key);
-        return;
-    }
 
     SPDLOG_TRACE("Registering snapshot {} size {}", key, data->getSize());
 
     snapshotMap.insert_or_assign(key, std::move(data));
+
+    // Reset dirty tracking
+    faabric::util::resetDirtyTracking();
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)

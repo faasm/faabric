@@ -25,10 +25,6 @@ class SnapshotRegistry
     void registerSnapshot(const std::string& key,
                           std::shared_ptr<faabric::util::SnapshotData> data);
 
-    void registerSnapshotIfNotExists(
-      const std::string& key,
-      std::shared_ptr<faabric::util::SnapshotData> data);
-
     void deleteSnapshot(const std::string& key);
 
     size_t getSnapshotCount();
@@ -44,10 +40,6 @@ class SnapshotRegistry
 
     int writeSnapshotToFd(const std::string& key,
                           faabric::util::SnapshotData& data);
-
-    void doRegisterSnapshot(const std::string& key,
-                            std::shared_ptr<faabric::util::SnapshotData> data,
-                            bool overwrite);
 };
 
 SnapshotRegistry& getSnapshotRegistry();

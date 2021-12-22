@@ -312,6 +312,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
                              msg.groupid());
 
                 snap->queueDiffs(diffs);
+
+                // Reset dirty page tracking on master
+                faabric::util::resetDirtyTracking();
             } else {
                 // Push diffs back to master
                 sch.pushSnapshotDiffs(msg, diffs);
@@ -319,9 +322,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 // Reset dirty page tracking on non-master
                 faabric::util::resetDirtyTracking();
             }
-
-            SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
-            snap->clearMergeRegions();
         }
 
         // If this batch is finished, reset the executor and release its claim.
