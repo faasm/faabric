@@ -237,7 +237,7 @@ void SnapshotData::writeQueuedDiffs()
         if (diff.getOperation() ==
             faabric::util::SnapshotMergeOperation::Overwrite) {
 
-            SPDLOG_TRACE("Copying snapshot diff into {}-{}",
+            SPDLOG_TRACE("Copying overwrite diff into {}-{}",
                          diff.getOffset(),
                          diff.getOffset() + diff.getData().size());
 
@@ -246,12 +246,20 @@ void SnapshotData::writeQueuedDiffs()
             continue;
         }
 
+        uint8_t* copyTarget = validatedOffsetPtr(diff.getOffset());
         switch (diff.getDataType()) {
             case (faabric::util::SnapshotDataType::Int): {
                 int32_t finalValue =
                   applyDiffValue<int32_t>(validatedOffsetPtr(diff.getOffset()),
                                           diff.getData().data(),
                                           diff.getOperation());
+
+                SPDLOG_TRACE("Writing int {} diff: {} {} -> {}",
+                             snapshotMergeOpStr(diff.getOperation()),
+                             unalignedRead<int32_t>(copyTarget),
+                             unalignedRead<int32_t>(diff.getData().data()),
+                             finalValue);
+
                 writeData({ BYTES(&finalValue), sizeof(int32_t) },
                           diff.getOffset());
                 break;
@@ -261,6 +269,13 @@ void SnapshotData::writeQueuedDiffs()
                   applyDiffValue<long>(validatedOffsetPtr(diff.getOffset()),
                                        diff.getData().data(),
                                        diff.getOperation());
+
+                SPDLOG_TRACE("Writing long {} diff: {} {} -> {}",
+                             snapshotMergeOpStr(diff.getOperation()),
+                             unalignedRead<long>(copyTarget),
+                             unalignedRead<long>(diff.getData().data()),
+                             finalValue);
+
                 writeData({ BYTES(&finalValue), sizeof(long) },
                           diff.getOffset());
                 break;
@@ -270,6 +285,13 @@ void SnapshotData::writeQueuedDiffs()
                   applyDiffValue<float>(validatedOffsetPtr(diff.getOffset()),
                                         diff.getData().data(),
                                         diff.getOperation());
+
+                SPDLOG_TRACE("Writing float {} diff: {} {} -> {}",
+                             snapshotMergeOpStr(diff.getOperation()),
+                             unalignedRead<float>(copyTarget),
+                             unalignedRead<float>(diff.getData().data()),
+                             finalValue);
+
                 writeData({ BYTES(&finalValue), sizeof(float) },
                           diff.getOffset());
                 break;
@@ -279,6 +301,13 @@ void SnapshotData::writeQueuedDiffs()
                   applyDiffValue<double>(validatedOffsetPtr(diff.getOffset()),
                                          diff.getData().data(),
                                          diff.getOperation());
+
+                SPDLOG_TRACE("Writing double {} diff: {} {} -> {}",
+                             snapshotMergeOpStr(diff.getOperation()),
+                             unalignedRead<double>(copyTarget),
+                             unalignedRead<double>(diff.getData().data()),
+                             finalValue);
+
                 writeData({ BYTES(&finalValue), sizeof(double) },
                           diff.getOffset());
                 break;
@@ -533,24 +562,53 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     bool changed = false;
     switch (dataType) {
         case (SnapshotDataType::Int): {
+            int preUpdate = unalignedRead<int>(updated);
             changed = calculateDiffValue<int>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated int {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<int>(original),
+                         unalignedRead<int>(updated));
             break;
         }
         case (SnapshotDataType::Long): {
+            long preUpdate = unalignedRead<long>(updated);
             changed = calculateDiffValue<long>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated long {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<long>(original),
+                         unalignedRead<long>(updated));
             break;
         }
         case (SnapshotDataType::Float): {
+            float preUpdate = unalignedRead<float>(updated);
             changed = calculateDiffValue<float>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated float {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<float>(original),
+                         unalignedRead<float>(updated));
             break;
         }
         case (SnapshotDataType::Double): {
+            double preUpdate = unalignedRead<double>(updated);
             changed = calculateDiffValue<double>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated double {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<double>(original),
+                         unalignedRead<double>(updated));
             break;
         }
         default: {
-            SPDLOG_ERROR(
-              "Unsupported merge op combination {} {}", dataType, operation);
+            SPDLOG_ERROR("Unsupported merge op combination {} {}",
+                         snapshotDataTypeStr(dataType),
+                         snapshotMergeOpStr(operation));
             throw std::runtime_error("Unsupported merge op combination");
         }
     }
