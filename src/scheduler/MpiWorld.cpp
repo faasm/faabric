@@ -22,6 +22,8 @@ static thread_local std::set<int> iSendRequests;
 
 static thread_local std::map<int, std::pair<int, int>> reqIdToRanks;
 
+static thread_local int localMsgCount = 1;
+
 // These long-lived sockets are used by each world to communicate rank-to-host
 // mappings. They are thread-local to ensure separation between concurrent
 // worlds executing on the same host
@@ -624,7 +626,7 @@ void MpiWorld::send(int sendRank,
     bool isLocal = otherHost == thisHost;
 
     // Generate a message ID
-    int msgId = (int)faabric::util::generateGid();
+    int msgId = (localMsgCount + 1) % INT32_MAX;
 
     // Create the message
     auto m = std::make_shared<faabric::MPIMessage>();
