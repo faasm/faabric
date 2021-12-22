@@ -88,8 +88,8 @@ class SnapshotMergeRegion
 
 template<typename T>
 inline bool calculateDiffValue(const uint8_t* original,
-                            uint8_t* updated,
-                            SnapshotMergeOperation operation)
+                               uint8_t* updated,
+                               SnapshotMergeOperation operation)
 {
     // Cast to value
     T updatedValue = unalignedRead<T>(updated);
