@@ -69,6 +69,13 @@ class SnapshotMergeRegion
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
 
+    SnapshotMergeRegion() = default;
+
+    SnapshotMergeRegion(uint32_t offsetIn,
+                        size_t lengthIn,
+                        SnapshotDataType dataTypeIn,
+                        SnapshotMergeOperation operationIn);
+
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
                   const uint8_t* updatedData,
@@ -201,6 +208,8 @@ class SnapshotData
                         SnapshotDataType dataType,
                         SnapshotMergeOperation operation,
                         bool overwrite = false);
+
+    void fillGapsWithOverwriteRegions();
 
     void clearMergeRegions();
 

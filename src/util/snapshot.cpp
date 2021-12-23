@@ -151,10 +151,7 @@ void SnapshotData::addMergeRegion(uint32_t offset,
 {
     faabric::util::FullLock lock(snapMx);
 
-    SnapshotMergeRegion region{ .offset = offset,
-                                .length = length,
-                                .dataType = dataType,
-                                .operation = operation };
+    SnapshotMergeRegion region(offset, length, dataType, operation);
 
     if (mergeRegions.find(region.offset) != mergeRegions.end()) {
         if (!overwrite) {
@@ -185,6 +182,49 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     }
 
     mergeRegions[region.offset] = region;
+}
+
+void SnapshotData::fillGapsWithOverwriteRegions()
+{
+    faabric::util::FullLock lock(snapMx);
+
+    // If there's no merge regions, just do one big one (note, zero length means
+    // fill all space
+    if (mergeRegions.empty()) {
+        mergeRegions.emplace(std::pair<uint32_t, SnapshotMergeRegion>(
+          0,
+          { 0, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite }));
+
+        return;
+    }
+
+    uint32_t lastRegionEnd = 0;
+    for (auto [offset, region] : mergeRegions) {
+        if (offset == 0) {
+            // Zeroth byte is in a merge region
+            lastRegionEnd = region.length;
+            continue;
+        }
+
+        mergeRegions.emplace(std::pair<uint32_t, SnapshotMergeRegion>(
+          lastRegionEnd,
+          { lastRegionEnd,
+            region.offset - lastRegionEnd,
+            SnapshotDataType::Raw,
+            SnapshotMergeOperation::Overwrite }));
+
+        lastRegionEnd = region.offset + region.length;
+    }
+
+    if (lastRegionEnd < size) {
+        // Add a final region at the end of the snapshot
+        mergeRegions.emplace(std::pair<uint32_t, SnapshotMergeRegion>(
+          lastRegionEnd,
+          { lastRegionEnd,
+            0,
+            SnapshotDataType::Raw,
+            SnapshotMergeOperation::Overwrite }));
+    }
 }
 
 void SnapshotData::mapToMemory(uint8_t* target)
@@ -523,6 +563,16 @@ void SnapshotMergeRegion::addOverwriteDiff(
           std::span<const uint8_t>(updated + diffStart, finalDiffLength));
     }
 }
+
+SnapshotMergeRegion::SnapshotMergeRegion(uint32_t offsetIn,
+                                         size_t lengthIn,
+                                         SnapshotDataType dataTypeIn,
+                                         SnapshotMergeOperation operationIn)
+  : offset(offsetIn)
+  , length(lengthIn)
+  , dataType(dataTypeIn)
+  , operation(operationIn)
+{}
 
 void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                    std::span<const uint8_t> originalData,

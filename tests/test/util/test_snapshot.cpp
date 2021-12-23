@@ -1042,6 +1042,130 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test filling gaps in regions with overwrite",
+                 "[snapshot][util]")
+{
+    int snapPages = 3;
+    size_t snapSize = snapPages * HOST_PAGE_SIZE;
+
+    std::shared_ptr<SnapshotData> snap =
+      std::make_shared<SnapshotData>(snapSize);
+
+    std::map<uint32_t, SnapshotMergeRegion> expectedRegions;
+
+    SECTION("No existing regions")
+    {
+        expectedRegions[0] = {
+            0, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite
+        };
+    }
+
+    SECTION("One region at start")
+    {
+        snap->addMergeRegion(
+          0, 100, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+        expectedRegions[0] = {
+            0, 100, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite
+        };
+        expectedRegions[100] = {
+            100, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite
+        };
+    }
+
+    SECTION("One region at end")
+    {
+        snap->addMergeRegion(snapSize - 100,
+                             100,
+                             SnapshotDataType::Raw,
+                             SnapshotMergeOperation::Overwrite);
+
+        expectedRegions[0] = { 0,
+                               snapSize - 100,
+                               SnapshotDataType::Raw,
+                               SnapshotMergeOperation::Overwrite };
+
+        expectedRegions[snapSize - 100] = { (uint32_t)snapSize - 100,
+                                            100,
+                                            SnapshotDataType::Raw,
+                                            SnapshotMergeOperation::Overwrite };
+    }
+
+    SECTION("Multiple regions")
+    {
+        // Deliberately add out of order
+        snap->addMergeRegion(HOST_PAGE_SIZE,
+                             sizeof(double),
+                             SnapshotDataType::Double,
+                             SnapshotMergeOperation::Product);
+
+        snap->addMergeRegion(
+          100, sizeof(int), SnapshotDataType::Int, SnapshotMergeOperation::Sum);
+
+        snap->addMergeRegion(HOST_PAGE_SIZE + 200,
+                             HOST_PAGE_SIZE,
+                             SnapshotDataType::Raw,
+                             SnapshotMergeOperation::Overwrite);
+
+        expectedRegions[0] = {
+            0, 100, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite
+        };
+
+        expectedRegions[100] = {
+            100, sizeof(int), SnapshotDataType::Int, SnapshotMergeOperation::Sum
+        };
+
+        expectedRegions[100 + sizeof(int)] = {
+            100 + sizeof(int),
+            HOST_PAGE_SIZE - (100 + sizeof(int)),
+            SnapshotDataType::Raw,
+            SnapshotMergeOperation::Overwrite
+        };
+
+        expectedRegions[HOST_PAGE_SIZE] = { (uint32_t)HOST_PAGE_SIZE,
+                                            sizeof(double),
+                                            SnapshotDataType::Double,
+                                            SnapshotMergeOperation::Product };
+
+        expectedRegions[HOST_PAGE_SIZE + sizeof(double)] = {
+            (uint32_t)(HOST_PAGE_SIZE + sizeof(double)),
+            200 - sizeof(double),
+            SnapshotDataType::Raw,
+            SnapshotMergeOperation::Overwrite
+        };
+
+        expectedRegions[HOST_PAGE_SIZE + 200] = {
+            (uint32_t)HOST_PAGE_SIZE + 200,
+            (uint32_t)HOST_PAGE_SIZE,
+            SnapshotDataType::Raw,
+            SnapshotMergeOperation::Overwrite
+        };
+
+        expectedRegions[(2 * HOST_PAGE_SIZE) + 200] = {
+            (uint32_t)(2 * HOST_PAGE_SIZE) + 200,
+            0,
+            SnapshotDataType::Raw,
+            SnapshotMergeOperation::Overwrite
+        };
+    }
+
+    snap->fillGapsWithOverwriteRegions();
+
+    std::map<uint32_t, SnapshotMergeRegion> actualRegions =
+      snap->getMergeRegions();
+
+    REQUIRE(actualRegions.size() == expectedRegions.size());
+    for (auto [expectedOffset, expectedRegion] : expectedRegions) {
+        REQUIRE(actualRegions.find(expectedOffset) != actualRegions.end());
+
+        SnapshotMergeRegion actualRegion = actualRegions[expectedOffset];
+        REQUIRE(actualRegion.offset == expectedRegion.offset);
+        REQUIRE(actualRegion.dataType == expectedRegion.dataType);
+        REQUIRE(actualRegion.length == expectedRegion.length);
+        REQUIRE(actualRegion.operation == expectedRegion.operation);
+    }
+}
+
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test mix of applicable and non-applicable merge regions",
                  "[snapshot][util]")
 {
