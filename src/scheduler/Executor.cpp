@@ -298,6 +298,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
             SPDLOG_TRACE("Diffing memory with pre-execution snapshot for {}",
                          msg.snapshotkey());
 
+            // Fill gaps with overwrites
+            snap->fillGapsWithOverwriteRegions();
+
             // If we're on master, we write the diffs straight to the snapshot
             // otherwise we push them to the master.
             std::vector<faabric::util::SnapshotDiff> diffs =
