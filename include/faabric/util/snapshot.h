@@ -78,13 +78,13 @@ class SnapshotMergeRegion
 
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
-                  const uint8_t* updatedData,
+                  std::span<const uint8_t> updatedData,
                   std::pair<uint32_t, uint32_t> dirtyRange);
 
   private:
     void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                           std::span<const uint8_t> original,
-                          const uint8_t* updated,
+                          std::span<const uint8_t> updated,
                           std::pair<uint32_t, uint32_t> dirtyRange);
 
     void addMergeDiff(std::vector<SnapshotDiff>& diffs,

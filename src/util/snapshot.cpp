@@ -433,7 +433,7 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
             // Add the diffs
             mr.addDiffs(diffs,
                         { snap->getDataPtr(), snap->getSize() },
-                        data.data(),
+                        data,
                         dirtyRegion);
         }
     }
@@ -500,7 +500,7 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
 void SnapshotMergeRegion::addOverwriteDiff(
   std::vector<SnapshotDiff>& diffs,
   std::span<const uint8_t> original,
-  const uint8_t* updated,
+  std::span<const uint8_t> updated,
   std::pair<uint32_t, uint32_t> dirtyRange)
 {
     auto operation = SnapshotMergeOperation::Overwrite;
@@ -508,6 +508,8 @@ void SnapshotMergeRegion::addOverwriteDiff(
     // Work out bounds of region we're checking
     uint32_t checkStart = std::max<uint32_t>(dirtyRange.first, offset);
 
+    // Here we need to make sure we don't overrun the original or the updated
+    // data
     uint32_t checkEnd;
     if (length == 0) {
         checkEnd = dirtyRange.second;
@@ -520,8 +522,8 @@ void SnapshotMergeRegion::addOverwriteDiff(
     for (int b = checkStart; b <= checkEnd; b++) {
         // If this byte is outside the original region, we can't
         // compare (i.e. always dirty)
-        bool isDirtyByte =
-          (b > original.size()) || (*(original.data() + b) != *(updated + b));
+        bool isDirtyByte = (b > original.size()) ||
+                           (*(original.data() + b) != *(updated.data() + b));
 
         if (isDirtyByte && !diffInProgress) {
             // Diff starts here if it's different and diff
@@ -538,11 +540,10 @@ void SnapshotMergeRegion::addOverwriteDiff(
                          diffStart + diffLength);
 
             diffInProgress = false;
-            diffs.emplace_back(
-              dataType,
-              operation,
-              diffStart,
-              std::span<const uint8_t>(updated + diffStart, diffLength));
+            diffs.emplace_back(dataType,
+                               operation,
+                               diffStart,
+                               updated.subspan(diffStart, diffLength));
         }
     }
 
@@ -556,11 +557,10 @@ void SnapshotMergeRegion::addOverwriteDiff(
                      diffStart,
                      diffStart + finalDiffLength);
 
-        diffs.emplace_back(
-          dataType,
-          operation,
-          diffStart,
-          std::span<const uint8_t>(updated + diffStart, finalDiffLength));
+        diffs.emplace_back(dataType,
+                           operation,
+                           diffStart,
+                           updated.subspan(diffStart, finalDiffLength));
     }
 }
 
@@ -576,7 +576,7 @@ SnapshotMergeRegion::SnapshotMergeRegion(uint32_t offsetIn,
 
 void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                    std::span<const uint8_t> originalData,
-                                   const uint8_t* updatedData,
+                                   std::span<const uint8_t> updatedData,
                                    std::pair<uint32_t, uint32_t> dirtyRange)
 {
     // If the region has zero length, it signifies that it goes to the
@@ -615,7 +615,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
           "Do not support non-overwrite operations outside original snapshot");
     }
 
-    uint8_t* updated = (uint8_t*)updatedData + offset;
+    uint8_t* updated = (uint8_t*)updatedData.data() + offset;
     const uint8_t* original = originalData.data() + offset;
 
     bool changed = false;
