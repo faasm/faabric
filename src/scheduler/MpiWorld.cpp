@@ -698,7 +698,7 @@ void MpiWorld::recv(int sendRank,
     doRecv(m, buffer, dataType, count, status, messageType);
 }
 
-void MpiWorld::doRecv(std::shared_ptr<faabric::MPIMessage> m,
+void MpiWorld::doRecv(std::shared_ptr<faabric::MPIMessage>& m,
                       uint8_t* buffer,
                       faabric_datatype_t* dataType,
                       int count,
