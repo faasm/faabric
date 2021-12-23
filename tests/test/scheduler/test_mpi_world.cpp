@@ -709,6 +709,7 @@ template void doReduceTest<double>(scheduler::MpiWorld& world,
                                    std::vector<std::vector<double>> rankData,
                                    std::vector<double>& expected);
 
+/*
 TEST_CASE_METHOD(MpiTestFixture, "Test reduce", "[mpi]")
 {
     // Prepare inputs
@@ -859,6 +860,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test reduce", "[mpi]")
         }
     }
 }
+*/
 
 TEST_CASE_METHOD(MpiTestFixture, "Test operator reduce", "[mpi]")
 {
