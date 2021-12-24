@@ -147,36 +147,55 @@ class SpscQueue
   public:
     void enqueue(T value, long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        while (!mq.push(value)) {
+        if (!mq.push(value)) {
             UniqueLock lock(mx);
 
-            std::cv_status returnVal = notFullNotifier.wait_for(
-              lock, std::chrono::milliseconds(timeoutMs));
+            writerWaiting.store(true, std::memory_order_relaxed);
 
-            if (returnVal == std::cv_status::timeout) {
-                throw QueueTimeoutException("Timeout waiting for enqueue");
+            while (!mq.push(value)) {
+                std::cv_status returnVal = notFullNotifier.wait_for(
+                  lock, std::chrono::milliseconds(timeoutMs));
+
+                if (returnVal == std::cv_status::timeout) {
+                    throw QueueTimeoutException("Timeout waiting for enqueue");
+                }
             }
+
+            writerWaiting.store(false, std::memory_order_relaxed);
         }
 
-        notEmptyNotifier.notify_one();
+        // For this to work well, I'd have to take a lock before notify_one
+        if (readerWaiting.load(std::memory_order_relaxed)) {
+            UniqueLock lock(mx);
+            notEmptyNotifier.notify_one();
+        }
     }
 
     T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
         T value;
 
-        while (!mq.pop(value)) {
+        if (!mq.pop(value)) {
             UniqueLock lock(mx);
 
-            std::cv_status returnVal = notEmptyNotifier.wait_for(
-              lock, std::chrono::milliseconds(timeoutMs));
+            readerWaiting.store(true, std::memory_order_relaxed);
 
-            if (returnVal == std::cv_status::timeout) {
-                throw QueueTimeoutException("Timeout waiting for dequeue");
+            while (!mq.pop(value)) {
+                std::cv_status returnVal = notEmptyNotifier.wait_for(
+                  lock, std::chrono::milliseconds(timeoutMs));
+
+                if (returnVal == std::cv_status::timeout) {
+                    throw QueueTimeoutException("Timeout waiting for dequeue");
+                }
             }
+
+            readerWaiting.store(false, std::memory_order_relaxed);
         }
 
-        notFullNotifier.notify_one();
+        if (writerWaiting.load(std::memory_order_relaxed)) {
+            UniqueLock lock(mx);
+            notFullNotifier.notify_one();
+        }
 
         return value;
     }
@@ -204,7 +223,9 @@ class SpscQueue
                                 boost::lockfree::capacity<DEFAULT_QUEUE_SIZE>>
       mq;
     std::mutex mx;
+    std::atomic<bool> writerWaiting = false;
     std::condition_variable notEmptyNotifier;
+    std::atomic<bool> readerWaiting = false;
     std::condition_variable notFullNotifier;
 };
 
