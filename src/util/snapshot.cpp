@@ -224,6 +224,9 @@ void SnapshotData::fillGapsWithOverwriteRegions()
     }
 
     if (lastRegionEnd < size) {
+        SPDLOG_TRACE("Filling final gap with merge region starting at {}",
+                     lastRegionEnd);
+
         // Add a final region at the end of the snapshot
         mergeRegions.emplace(std::pair<uint32_t, SnapshotMergeRegion>(
           lastRegionEnd,
@@ -536,12 +539,22 @@ void SnapshotMergeRegion::addOverwriteDiff(
         checkEnd = std::min<uint32_t>(dirtyRange.second, offset + length);
     }
 
+    // If the region is outside the original data, automatically add a diff for
+    // the whole region
+    if (checkStart >= original.size()) {
+        diffs.emplace_back(dataType,
+                           operation,
+                           checkStart,
+                           updated.subspan(checkStart, checkEnd - checkStart));
+        return;
+    }
+
     bool diffInProgress = false;
     int diffStart = 0;
     for (int b = checkStart; b <= checkEnd; b++) {
         // If this byte is outside the original region, we can't
         // compare (i.e. always dirty)
-        bool isDirtyByte = (b > original.size()) ||
+        bool isDirtyByte = (b >= original.size()) ||
                            (*(original.data() + b) != *(updated.data() + b));
 
         if (isDirtyByte && !diffInProgress) {
@@ -616,13 +629,15 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         return;
     }
 
-    SPDLOG_TRACE("{} {} merge region {}-{} aligns with dirty region {}-{}",
-                 snapshotDataTypeStr(dataType),
-                 snapshotMergeOpStr(operation),
-                 offset,
-                 offset + length,
-                 dirtyRange.first,
-                 dirtyRange.second);
+    SPDLOG_TRACE(
+      "{} {} merge region {}-{}, dirty region {}-{}, original size {}",
+      snapshotDataTypeStr(dataType),
+      snapshotMergeOpStr(operation),
+      offset,
+      offset + length,
+      dirtyRange.first,
+      dirtyRange.second,
+      originalData.size());
 
     if (operation == SnapshotMergeOperation::Overwrite) {
         addOverwriteDiff(diffs, originalData, updatedData, dirtyRange);
