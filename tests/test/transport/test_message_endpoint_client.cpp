@@ -1,4 +1,3 @@
-#include "faabric/util/latch.h"
 #include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
@@ -6,6 +5,7 @@
 #include <unistd.h>
 
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/util/latch.h>
 #include <faabric/util/macros.h>
 
 using namespace faabric::transport;
@@ -301,5 +301,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         t.join();
     }
 }
+
+#endif // End ThreadSanitizer exclusion
+
 }
-#endif
