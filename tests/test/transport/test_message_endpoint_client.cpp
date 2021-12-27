@@ -232,7 +232,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test direct messaging", "[transport]")
 
     std::string inprocLabel = "direct-test";
 
-    AsyncDirectSendEndpoint sender(inprocLabel, TEST_PORT);
+    AsyncDirectSendEndpoint sender(inprocLabel);
     sender.send(msg, expected.size());
 
     AsyncDirectRecvEndpoint receiver(inprocLabel);
@@ -276,7 +276,8 @@ TEST_CASE_METHOD(SchedulerTestFixture,
                 SLEEP_MS(10);
             }
 
-            // Make main thread wait until messages are queued
+            // Make main thread wait until messages are queued (to check no
+            // issue with connecting before binding)
             if (i == 10) {
                 startLatch->wait();
             }
