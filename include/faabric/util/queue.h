@@ -5,7 +5,6 @@
 #include <faabric/util/logging.h>
 
 #include <boost/circular_buffer.hpp>
-#include <boost/lockfree/spsc_queue.hpp>
 #include <condition_variable>
 #include <queue>
 
@@ -141,7 +140,7 @@ class Queue
     std::mutex mx;
 };
 
-// Queue on top of a circular buffer
+// Fixed size queue using a circular buffer as underlying container
 template<typename T>
 class FixedCapacityQueue
 {
@@ -156,6 +155,12 @@ class FixedCapacityQueue
     {
         UniqueLock lock(mx);
 
+        if (timeoutMs <= 0) {
+            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
+            throw std::runtime_error("Invalid queue timeout");
+        }
+
+        // If the queue is full, wait until elements are consumed
         while (mq.size() == mq.capacity()) {
             std::cv_status returnVal = notFullNotifier.wait_for(
               lock, std::chrono::milliseconds(timeoutMs));

@@ -163,4 +163,15 @@ TEST_CASE("Test queue timeout must be positive", "[util]")
     q.enqueue(10);
     REQUIRE_THROWS(q.dequeue(timeoutValueMs));
 }
+
+TEST_CASE("Test fixed capacity queue blocks if queue is full", "[util]")
+{
+    FixedCapIntQueue q(2);
+
+    q.enqueue(1);
+    q.enqueue(2);
+
+    // Enqueue with a short timeout so the operation fails quickly
+    REQUIRE_THROWS(q.enqueue(100));
+}
 }
