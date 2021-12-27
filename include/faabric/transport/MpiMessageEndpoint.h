@@ -30,4 +30,19 @@ class MpiMessageEndpoint
     AsyncSendMessageEndpoint sendSocket;
     AsyncRecvMessageEndpoint recvSocket;
 };
+
+class LocalMpiMessageEndpoint
+{
+  public:
+    LocalMpiMessageEndpoint(const std::string& sendLabel,
+                            const std::string& recvLabel);
+
+    void sendMpiMessage(const std::shared_ptr<faabric::MPIMessage>& msg);
+
+    std::shared_ptr<faabric::MPIMessage> recvMpiMessage();
+
+  private:
+    AsyncDirectSendEndpoint sendSocket;
+    AsyncDirectRecvEndpoint recvSocket;
+};
 }

@@ -15,6 +15,10 @@ static thread_local std::vector<
   mpiMessageEndpoints;
 
 static thread_local std::vector<
+  std::unique_ptr<faabric::transport::LocalMpiMessageEndpoint>>
+  localMpiMessageEndpoints;
+
+static thread_local std::vector<
   std::shared_ptr<faabric::scheduler::MpiMessageBuffer>>
   unackedMessageBuffers;
 
@@ -252,7 +256,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     assert(localLeader == 0);
 
     // Initialise the memory queues for message reception
-    initLocalQueues();
+    // initLocalQueues();
 }
 
 void MpiWorld::broadcastHostsToRanks()
@@ -288,6 +292,7 @@ void MpiWorld::destroy()
     // We must force the destructors for all message endpoints to run here
     // rather than at the end of their global thread-local lifespan. If we
     // don't, the ZMQ shutdown can hang.
+    localMpiMessageEndpoints.clear();
     mpiMessageEndpoints.clear();
     ranksRecvEndpoint = nullptr;
     ranksSendEndpoints.clear();
@@ -358,7 +363,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     initLocalRemoteLeaders();
 
     // Initialise the memory queues for message reception
-    initLocalQueues();
+    // initLocalQueues();
 }
 
 void MpiWorld::setMsgForRank(faabric::Message& msg)
@@ -650,7 +655,7 @@ void MpiWorld::send(int sendRank,
     // Dispatch the message locally or globally
     if (isLocal) {
         SPDLOG_TRACE("MPI - send {} -> {}", sendRank, recvRank);
-        getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
+        sendLocalMpiMessage(sendRank, recvRank, m);
     } else {
         SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
         sendRemoteMpiMessage(sendRank, recvRank, m);
@@ -1494,6 +1499,8 @@ void MpiWorld::allToAll(int rank,
 
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
+    throw std::runtime_error("probe not implemented");
+    /*
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
     std::shared_ptr<faabric::MPIMessage> m = *(queue->peek());
@@ -1502,6 +1509,7 @@ void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
     status->bytesSize = m->count() * datatype->size;
     status->MPI_ERROR = 0;
     status->MPI_SOURCE = m->sender();
+    */
 }
 
 void MpiWorld::barrier(int thisRank)
@@ -1531,6 +1539,7 @@ void MpiWorld::barrier(int thisRank)
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
 }
 
+/*
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
                                                           int recvRank)
 {
@@ -1539,11 +1548,13 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 
     return localQueues[getIndexForRanks(sendRank, recvRank)];
 }
+*/
 
 // We pre-allocate all _potentially_ necessary queues in advance. Queues are
 // necessary to _receive_ messages, thus we initialise all queues whose
 // corresponding receiver is local to this host
 // Note - the queues themselves perform concurrency control
+/*
 void MpiWorld::initLocalQueues()
 {
     // Assert we only allocate queues once
@@ -1557,6 +1568,68 @@ void MpiWorld::initLocalQueues()
             }
         }
     }
+}
+*/
+
+std::pair<std::string, std::string> MpiWorld::getLabelForRanks(int thisRank,
+                                                               int otherRank)
+{
+    // As we don't know wether labels will be initialised during a send or a
+    // receive, and ranks are local, we can make no distinction between which
+    // rank is sending, and which is receiving, nor between local or remote
+    // ranks.
+    // Given which rank is calling, we generate a label to send to the other
+    // rank, and to receive from the other rank.
+    std::pair<std::string, std::string> rankLabels;
+
+    rankLabels.first = fmt::format("{}-{}-{}", id, thisRank, otherRank);
+    rankLabels.second = fmt::format("{}-{}-{}", id, otherRank, thisRank);
+
+    return rankLabels;
+}
+
+void MpiWorld::initLocalMpiEndpoints(int thisRank)
+{
+    // Assert we only allocate queues once
+    assert(localMpiMessageEndpoints.size() == 0);
+    localMpiMessageEndpoints.resize(size);
+    for (const auto& otherLocalRank : ranksForHost[thisHost]) {
+        if (thisRank == otherLocalRank) {
+            continue;
+        }
+
+        auto rankLabels = getLabelForRanks(thisRank, otherLocalRank);
+        localMpiMessageEndpoints.at(otherLocalRank) =
+          std::make_unique<faabric::transport::LocalMpiMessageEndpoint>(
+              rankLabels.first, rankLabels.second);
+    }
+}
+
+void MpiWorld::sendLocalMpiMessage(
+  int sendRank,
+  int recvRank,
+  const std::shared_ptr<faabric::MPIMessage>& msg)
+{
+    // We must initialise the local endpoints from the rank performing the
+    // operation. In this case the sending rank.
+    if (localMpiMessageEndpoints.empty()) {
+        initLocalMpiEndpoints(sendRank);
+    }
+
+    localMpiMessageEndpoints.at(recvRank)->sendMpiMessage(msg);
+}
+
+std::shared_ptr<faabric::MPIMessage> MpiWorld::recvLocalMpiMessage(
+  int sendRank,
+  int recvRank)
+{
+    // We must initialise the local endpoints from the rank performing the
+    // operation. In this case the receiving rank.
+    if (localMpiMessageEndpoints.empty()) {
+        initLocalMpiEndpoints(recvRank);
+    }
+
+    return localMpiMessageEndpoints.at(sendRank)->recvMpiMessage();
 }
 
 // Here we rely on the scheduler returning a list of hosts where equal
@@ -1614,7 +1687,7 @@ MpiWorld::recvBatchReturnLast(int sendRank, int recvRank, int batchSize)
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
             SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-            auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+            auto pendingMsg = recvLocalMpiMessage(sendRank, recvRank);
 
             // Put the unacked message in the UMB
             assert(!msgIt->isAcknowledged());
@@ -1624,7 +1697,7 @@ MpiWorld::recvBatchReturnLast(int sendRank, int recvRank, int batchSize)
 
         // Finally receive the message corresponding to us
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        ourMsg = recvLocalMpiMessage(sendRank, recvRank);
     } else {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
@@ -1653,12 +1726,14 @@ int MpiWorld::getIndexForRanks(int sendRank, int recvRank)
     return index;
 }
 
+/*
 long MpiWorld::getLocalQueueSize(int sendRank, int recvRank)
 {
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
     return queue->size();
 }
+*/
 
 double MpiWorld::getWTime()
 {

@@ -30,4 +30,29 @@ std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
 
     return std::make_shared<faabric::MPIMessage>(msg);
 }
+
+LocalMpiMessageEndpoint::LocalMpiMessageEndpoint(const std::string& sendLabel,
+                                                 const std::string& recvLabel)
+  : sendSocket(sendLabel)
+  , recvSocket(recvLabel)
+{}
+
+void LocalMpiMessageEndpoint::sendMpiMessage(
+  const std::shared_ptr<faabric::MPIMessage>& msg)
+{
+    SERIALISE_MSG_PTR(msg)
+    sendSocket.send(buffer, msgSize, false);
+}
+
+std::shared_ptr<faabric::MPIMessage> LocalMpiMessageEndpoint::recvMpiMessage()
+{
+    std::optional<Message> mMaybe = recvSocket.recv();
+    if (!mMaybe.has_value()) {
+        throw MessageTimeoutException("Mpi message timeout");
+    }
+    Message& m = mMaybe.value();
+    PARSE_MSG(faabric::MPIMessage, m.data(), m.size());
+
+    return std::make_shared<faabric::MPIMessage>(msg);
+}
 }

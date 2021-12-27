@@ -191,9 +191,9 @@ class MpiWorld
 
     void barrier(int thisRank);
 
-    std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
+    // std::shared_ptr<InMemoryMpiQueue> getLocalQueue(int sendRank, int recvRank);
 
-    long getLocalQueueSize(int sendRank, int recvRank);
+    // long getLocalQueueSize(int sendRank, int recvRank);
 
     void overrideHost(const std::string& newHost);
 
@@ -236,9 +236,19 @@ class MpiWorld
     int localLeader = -1;
     void initLocalRemoteLeaders();
 
-    // In-memory queues for local messaging
-    std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
-    void initLocalQueues();
+    // Intra-process sockets for local messaging
+    // std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
+    // void initLocalQueues();
+    void initLocalMpiEndpoints(int thisRank);
+
+    std::pair<std::string, std::string> getLabelForRanks(int thisRank, int otherRank);
+
+    void sendLocalMpiMessage(int sendRank,
+                              int recvRank,
+                              const std::shared_ptr<faabric::MPIMessage>& msg);
+
+    std::shared_ptr<faabric::MPIMessage> recvLocalMpiMessage(int sendRank,
+                                                             int recvRank);
 
     // Rank-to-rank sockets for remote messaging
     std::vector<int> basePorts;
