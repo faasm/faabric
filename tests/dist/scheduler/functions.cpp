@@ -129,16 +129,6 @@ int handleFakeDiffsThreadedFunction(
             std::vector<uint8_t> localChange(3, i);
             int offset = 2 * i * faabric::util::HOST_PAGE_SIZE;
             snap->copyInData(localChange, offset);
-
-            // Make sure changes made by this message are covered by a merge
-            // region
-            int regionOffset = 2 * i * faabric::util::HOST_PAGE_SIZE;
-            int regionLength = 20 + msg.inputdata().size();
-            snap->addMergeRegion(
-              regionOffset,
-              regionLength,
-              faabric::util::SnapshotDataType::Raw,
-              faabric::util::SnapshotMergeOperation::Overwrite);
         }
 
         // Dispatch the message, expecting them all to execute on other hosts
@@ -288,12 +278,6 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
                                  sizeof(int32_t),
                                  SnapshotDataType::Int,
                                  SnapshotMergeOperation::Sum,
-                                 true);
-
-            snap->addMergeRegion(arrayOffset,
-                                 sizeof(int32_t) * nThreads,
-                                 SnapshotDataType::Raw,
-                                 SnapshotMergeOperation::Overwrite,
                                  true);
 
             // Make the request

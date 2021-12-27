@@ -32,12 +32,6 @@ TEST_CASE_METHOD(DistTestsFixture,
     size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
     auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
 
-    // Add a merge region to catch all changes
-    snap->addMergeRegion(0,
-                         snapSize,
-                         faabric::util::SnapshotDataType::Raw,
-                         faabric::util::SnapshotMergeOperation::Overwrite);
-
     reg.registerSnapshot(snapshotKey, snap);
 
     // Set up the message
