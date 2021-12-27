@@ -1,6 +1,7 @@
 #include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
+#include <atomic>
 #include <thread>
 #include <unistd.h>
 
@@ -259,47 +260,75 @@ TEST_CASE_METHOD(SchedulerTestFixture,
                  "[transport]")
 {
     int nMessages = 1000;
-    std::string inprocLabel = "direct-test";
+    int nPairs = 3;
+    std::string inprocLabel = "direct-test-";
 
     std::shared_ptr<faabric::util::Latch> startLatch =
-      faabric::util::Latch::create(2);
+      faabric::util::Latch::create(nPairs + 1);
 
-    std::thread t([nMessages, inprocLabel, &startLatch] {
-        AsyncDirectSendEndpoint sender(inprocLabel, TEST_PORT);
+    std::vector<std::thread> senders;
+    std::vector<std::thread> receivers;
 
-        for (int i = 0; i < nMessages; i++) {
-            std::string expected = "Direct hello " + std::to_string(i);
-            const uint8_t* msg = BYTES_CONST(expected.c_str());
-            sender.send(msg, expected.size());
+    for (int i = 0; i < nPairs; i++) {
+        senders.emplace_back([i, nMessages, inprocLabel, &startLatch] {
+            std::string thisLabel = inprocLabel + std::to_string(i);
+            AsyncDirectSendEndpoint sender(thisLabel);
 
-            if (i % 100 == 0) {
-                SLEEP_MS(10);
+            for (int m = 0; m < nMessages; m++) {
+                std::string expected =
+                  "Direct hello " + std::to_string(i) + "_" + std::to_string(m);
+                const uint8_t* msg = BYTES_CONST(expected.c_str());
+                sender.send(msg, expected.size());
+
+                if (m % 100 == 0) {
+                    SLEEP_MS(10);
+                }
+
+                // Make main thread wait until messages are queued (to check no
+                // issue with connecting before binding)
+                if (m == 10) {
+                    startLatch->wait();
+                }
             }
-
-            // Make main thread wait until messages are queued (to check no
-            // issue with connecting before binding)
-            if (i == 10) {
-                startLatch->wait();
-            }
-        }
-    });
+        });
+    }
 
     // Wait for queued messages
     startLatch->wait();
 
-    AsyncDirectRecvEndpoint receiver(inprocLabel);
+    std::atomic<bool> success = true;
+    for (int i = 0; i < nPairs; i++) {
+        receivers.emplace_back([i, nMessages, inprocLabel, &success] {
+            std::string thisLabel = inprocLabel + std::to_string(i);
+            AsyncDirectRecvEndpoint receiver(thisLabel);
 
-    // Receive messages
-    for (int i = 0; i < nMessages; i++) {
-        faabric::transport::Message recvMsg = receiver.recv().value();
-        std::string actual(recvMsg.data(), recvMsg.size());
+            // Receive messages
+            for (int m = 0; m < nMessages; m++) {
+                faabric::transport::Message recvMsg = receiver.recv().value();
+                std::string actual(recvMsg.data(), recvMsg.size());
 
-        std::string expected = "Direct hello " + std::to_string(i);
-        REQUIRE(actual == expected);
+                std::string expected =
+                  "Direct hello " + std::to_string(i) + "_" + std::to_string(m);
+
+                if (actual != expected) {
+                    success.store(false);
+                }
+            }
+        });
     }
 
-    if (t.joinable()) {
-        t.join();
+    REQUIRE(success.load(std::memory_order_acquire));
+
+    for (auto& t : senders) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+
+    for (auto& t : receivers) {
+        if (t.joinable()) {
+            t.join();
+        }
     }
 }
 
