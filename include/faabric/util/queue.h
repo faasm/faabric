@@ -4,6 +4,7 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
+#include <boost/circular_buffer.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
 #include <condition_variable>
 #include <queue>
@@ -140,108 +141,145 @@ class Queue
     std::mutex mx;
 };
 
-// Single-consumer, single-producer fixed-size queue
+// Queue on top of a circular buffer
 template<typename T>
-class SpscQueue
+class FixedCapacityQueue
 {
   public:
-    SpscQueue(int capacity)
+    FixedCapacityQueue(int capacity)
       : mq(capacity){};
 
-    SpscQueue()
+    FixedCapacityQueue()
       : mq(DEFAULT_QUEUE_SIZE){};
 
     void enqueue(T value, long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        if (!mq.push(value)) {
-            UniqueLock lock(mx);
+        UniqueLock lock(mx);
 
-            writerWaiting.store(true, std::memory_order_release);
+        while (mq.size() == mq.capacity()) {
+            std::cv_status returnVal = notFullNotifier.wait_for(
+              lock, std::chrono::milliseconds(timeoutMs));
 
-            while (!mq.push(value)) {
-                std::cv_status returnVal = notFullNotifier.wait_for(
-                  lock, std::chrono::milliseconds(timeoutMs));
-
-                if (returnVal == std::cv_status::timeout) {
-                    throw QueueTimeoutException("Timeout waiting for enqueue");
-                }
+            // Work out if this has returned due to timeout expiring
+            if (returnVal == std::cv_status::timeout) {
+                throw QueueTimeoutException(
+                  "Timeout waiting for queue to empty");
             }
-
-            writerWaiting.store(false, std::memory_order_release);
         }
 
-        // If we'd always sent a notification, it works.
-        // if (readerWaiting.load(std::memory_order_relaxed) || true) {
-        if (readerWaiting.load(std::memory_order_acquire)) {
-            UniqueLock lock(mx);
-            notEmptyNotifier.notify_one();
+        mq.push_back(std::move(value));
+        notEmptyNotifier.notify_one();
+    }
+
+    void dequeueIfPresent(T* res)
+    {
+        UniqueLock lock(mx);
+
+        if (!mq.empty()) {
+            T value = std::move(mq.front());
+            mq.pop_front();
+            notFullNotifier.notify_one();
+
+            *res = value;
         }
     }
 
     T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        T value;
+        UniqueLock lock(mx);
 
-        if (!mq.pop(value)) {
-            UniqueLock lock(mx);
+        if (timeoutMs <= 0) {
+            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
+            throw std::runtime_error("Invalid queue timeout");
+        }
 
-            readerWaiting.store(true, std::memory_order_release);
+        while (mq.empty()) {
+            std::cv_status returnVal = notEmptyNotifier.wait_for(
+              lock, std::chrono::milliseconds(timeoutMs));
 
-            while (!mq.pop(value)) {
-                // we lock on notify, to prevent pushing a value between these
-                // two lines.
-                std::cv_status returnVal = notEmptyNotifier.wait_for(
-                  lock, std::chrono::milliseconds(timeoutMs));
-
-                // How could we possibly miss a notification?
-                if (returnVal == std::cv_status::timeout) {
-                    SPDLOG_ERROR("Hit this with {} to read", mq.read_available());
-                    throw QueueTimeoutException("Timeout waiting for dequeue");
-                }
+            // Work out if this has returned due to timeout expiring
+            if (returnVal == std::cv_status::timeout) {
+                throw QueueTimeoutException("Timeout waiting for dequeue");
             }
-
-            readerWaiting.store(false, std::memory_order_release);
         }
 
-        if (writerWaiting.load(std::memory_order_acquire)) {
-            UniqueLock lock(mx);
-            notFullNotifier.notify_one();
-        }
+        T value = std::move(mq.front());
+        mq.pop_front();
+        notFullNotifier.notify_one();
 
         return value;
     }
 
     T* peek(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        if (mq.read_available() == 0) {
-            UniqueLock lock(mx);
+        UniqueLock lock(mx);
 
-            readerWaiting.store(true, std::memory_order_release);
+        if (timeoutMs <= 0) {
+            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
+            throw std::runtime_error("Invalid queue timeout");
+        }
 
-            while (mq.read_available() == 0) {
-                std::cv_status returnVal = notEmptyNotifier.wait_for(
-                  lock, std::chrono::milliseconds(timeoutMs));
+        while (mq.empty()) {
+            std::cv_status returnVal = notEmptyNotifier.wait_for(
+              lock, std::chrono::milliseconds(timeoutMs));
 
-                if (returnVal == std::cv_status::timeout) {
-                    throw QueueTimeoutException("Timeout waiting for dequeue");
-                }
+            // Work out if this has returned due to timeout expiring
+            if (returnVal == std::cv_status::timeout) {
+                throw QueueTimeoutException("Timeout waiting for dequeue");
             }
-
-            readerWaiting.store(false, std::memory_order_release);
         }
 
         return &mq.front();
     }
 
-    long size() { return mq.read_available(); }
+    void waitToDrain(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    {
+        UniqueLock lock(mx);
+
+        if (timeoutMs <= 0) {
+            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
+            throw std::runtime_error("Invalid queue timeout");
+        }
+
+        while (!mq.empty()) {
+            std::cv_status returnVal = notFullNotifier.wait_for(
+              lock, std::chrono::milliseconds(timeoutMs));
+
+            // Work out if this has returned due to timeout expiring
+            if (returnVal == std::cv_status::timeout) {
+                throw QueueTimeoutException("Timeout waiting for empty");
+            }
+        }
+    }
+
+    void drain()
+    {
+        UniqueLock lock(mx);
+
+        while (!mq.empty()) {
+            mq.pop_front();
+        }
+    }
+
+    long size()
+    {
+        UniqueLock lock(mx);
+        return mq.size();
+    }
+
+    void reset()
+    {
+        UniqueLock lock(mx);
+
+        boost::circular_buffer<T> empty(mq.capacity());
+        std::swap(mq, empty);
+    }
 
   private:
-    boost::lockfree::spsc_queue<T> mq;
-    std::mutex mx;
-    std::atomic<bool> writerWaiting = false;
-    std::condition_variable notEmptyNotifier;
-    std::atomic<bool> readerWaiting = false;
+    boost::circular_buffer<T> mq;
     std::condition_variable notFullNotifier;
+    std::condition_variable notEmptyNotifier;
+    std::mutex mx;
 };
 
 class TokenPool

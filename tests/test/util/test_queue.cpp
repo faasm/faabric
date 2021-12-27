@@ -13,11 +13,18 @@
 using namespace faabric::util;
 
 typedef faabric::util::Queue<int> IntQueue;
+typedef faabric::util::FixedCapacityQueue<int> FixedCapIntQueue;
+typedef faabric::util::Queue<std::promise<int32_t>> PromiseQueue;
+typedef faabric::util::FixedCapacityQueue<std::promise<int32_t>>
+  FixedCapPromiseQueue;
 
 namespace tests {
-TEST_CASE("Test queue operations", "[util]")
+TEMPLATE_TEST_CASE("Test queue operations",
+                   "[util]",
+                   IntQueue,
+                   FixedCapIntQueue)
 {
-    IntQueue q;
+    TestType q;
 
     // Check deqeue if present does nothing if nothing in queue
     int dummy = -999;
@@ -52,9 +59,9 @@ TEST_CASE("Test queue operations", "[util]")
     REQUIRE_THROWS(q.dequeue(1));
 }
 
-TEST_CASE("Test drain queue", "[util]")
+TEMPLATE_TEST_CASE("Test drain queue", "[util]", IntQueue, FixedCapIntQueue)
 {
-    IntQueue q;
+    TestType q;
 
     q.enqueue(1);
     q.enqueue(2);
@@ -67,16 +74,22 @@ TEST_CASE("Test drain queue", "[util]")
     REQUIRE(q.size() == 0);
 }
 
-TEST_CASE("Test wait for draining empty queue", "[util]")
+TEMPLATE_TEST_CASE("Test wait for draining empty queue",
+                   "[util]",
+                   IntQueue,
+                   FixedCapIntQueue)
 {
     // Just need to check this doesn't fail
-    IntQueue q;
+    TestType q;
     q.waitToDrain(100);
 }
 
-TEST_CASE("Test wait for draining queue with elements", "[util]")
+TEMPLATE_TEST_CASE("Test wait for draining queue with elements",
+                   "[util]",
+                   IntQueue,
+                   FixedCapIntQueue)
 {
-    IntQueue q;
+    TestType q;
     int nElems = 5;
     std::vector<int> dequeued;
     std::vector<int> expected;
@@ -105,9 +118,12 @@ TEST_CASE("Test wait for draining queue with elements", "[util]")
     REQUIRE(dequeued == expected);
 }
 
-TEST_CASE("Test queue on non-copy-constructible object", "[util]")
+TEMPLATE_TEST_CASE("Test queue on non-copy-constructible object",
+                   "[util]",
+                   PromiseQueue,
+                   FixedCapPromiseQueue)
 {
-    faabric::util::Queue<std::promise<int32_t>> q;
+    TestType q;
 
     std::promise<int32_t> a;
     std::promise<int32_t> b;
