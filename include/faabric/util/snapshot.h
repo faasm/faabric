@@ -31,7 +31,8 @@ enum SnapshotMergeOperation
     Product,
     Subtract,
     Max,
-    Min
+    Min,
+    Ignore
 };
 
 class SnapshotDiff

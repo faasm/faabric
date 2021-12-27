@@ -282,6 +282,15 @@ void SnapshotData::writeQueuedDiffs()
     // Iterate through diffs
     for (auto& diff : queuedDiffs) {
         if (diff.getOperation() ==
+            faabric::util::SnapshotMergeOperation::Ignore) {
+
+            SPDLOG_TRACE("Ignoring region {}-{}",
+                         diff.getOffset(),
+                         diff.getOffset() + diff.getData().size());
+
+            continue;
+        }
+        if (diff.getOperation() ==
             faabric::util::SnapshotMergeOperation::Overwrite) {
 
             SPDLOG_TRACE("Copying overwrite diff into {}-{}",
@@ -479,6 +488,9 @@ std::string snapshotDataTypeStr(SnapshotDataType dt)
 std::string snapshotMergeOpStr(SnapshotMergeOperation op)
 {
     switch (op) {
+        case (SnapshotMergeOperation::Ignore): {
+            return "Ignore";
+        }
         case (SnapshotMergeOperation::Max): {
             return "Max";
         }
@@ -614,6 +626,10 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
 
     if (operation == SnapshotMergeOperation::Overwrite) {
         addOverwriteDiff(diffs, originalData, updatedData, dirtyRange);
+        return;
+    }
+
+    if (operation == SnapshotMergeOperation::Ignore) {
         return;
     }
 

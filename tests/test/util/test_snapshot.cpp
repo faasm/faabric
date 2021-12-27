@@ -530,6 +530,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     size_t dataLength = 0;
     size_t regionLength = 0;
 
+    bool expectNoDiff = false;
+
     SECTION("Integer")
     {
         int originalValue = 0;
@@ -773,6 +775,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         updatedData = faabric::util::valueToBytes<double>(finalValue);
         expectedData = faabric::util::valueToBytes<double>(diffValue);
     }
+
     SECTION("Bool")
     {
         bool originalValue = false;
@@ -817,6 +820,15 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
             regionLength = 0;
             operation = faabric::util::SnapshotMergeOperation::Overwrite;
         }
+
+        SECTION("Ignore")
+        {
+            regionLength = dataLength;
+            operation = faabric::util::SnapshotMergeOperation::Ignore;
+
+            expectedData = originalData;
+            expectNoDiff = true;
+        }
     }
 
     // Write the original data into place
@@ -845,15 +857,20 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<SnapshotDiff> actualDiffs =
       MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
 
-    // Check diff
-    REQUIRE(actualDiffs.size() == 1);
-    std::vector<SnapshotDiff> expectedDiffs = { { dataType,
-                                                  operation,
-                                                  offset,
-                                                  { expectedData.data(),
-                                                    expectedData.size() } } };
+    if (expectNoDiff) {
+        REQUIRE(actualDiffs.empty());
+    } else {
+        // Check diff
+        REQUIRE(actualDiffs.size() == 1);
+        std::vector<SnapshotDiff> expectedDiffs = {
+            { dataType,
+              operation,
+              offset,
+              { expectedData.data(), expectedData.size() } }
+        };
 
-    checkDiffs(actualDiffs, expectedDiffs);
+        checkDiffs(actualDiffs, expectedDiffs);
+    }
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
