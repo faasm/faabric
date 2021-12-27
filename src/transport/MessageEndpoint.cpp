@@ -79,6 +79,13 @@ zmq::socket_t socketFactory(zmq::socket_type socketType,
                     CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
                     break;
                 }
+                case zmq::socket_type::pair: {
+                    SPDLOG_TRACE("Bind socket: pair {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
+                    break;
+                }
                 case zmq::socket_type::pub: {
                     SPDLOG_TRACE(
                       "Bind socket: pub {} (timeout {}ms)", address, timeoutMs);
@@ -123,6 +130,13 @@ zmq::socket_t socketFactory(zmq::socket_type socketType,
         }
         case (MessageEndpointConnectType::CONNECT): {
             switch (socketType) {
+                case zmq::socket_type::pair: {
+                    SPDLOG_TRACE("Connect socket: pair {} (timeout {}ms)",
+                                 address,
+                                 timeoutMs);
+                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
+                    break;
+                }
                 case zmq::socket_type::pull: {
                     SPDLOG_TRACE("Connect socket: pull {} (timeout {}ms)",
                                  address,
@@ -558,5 +572,39 @@ void SyncRecvMessageEndpoint::sendResponse(const uint8_t* data, int size)
 {
     SPDLOG_TRACE("REP {} ({} bytes)", address, size);
     doSend(socket, data, size, false);
+}
+
+// ----------------------------------------------
+// INTERNAL DIRECT MESSAGE ENDPOINTS
+// ----------------------------------------------
+
+AsyncDirectRecvEndpoint::AsyncDirectRecvEndpoint(const std::string& inprocLabel,
+                                                 int timeoutMs)
+  : RecvMessageEndpoint(inprocLabel,
+                        timeoutMs,
+                        zmq::socket_type::pair,
+                        MessageEndpointConnectType::BIND)
+{}
+
+std::optional<Message> AsyncDirectRecvEndpoint::recv(int size)
+{
+    SPDLOG_TRACE("PAIR recv {} ({} bytes)", address, size);
+    return RecvMessageEndpoint::recv(size);
+}
+
+AsyncDirectSendEndpoint::AsyncDirectSendEndpoint(const std::string& inprocLabel,
+                                                 int timeoutMs)
+  : MessageEndpoint("inproc://" + inprocLabel, timeoutMs)
+{
+    socket =
+      setUpSocket(zmq::socket_type::pair, MessageEndpointConnectType::CONNECT);
+}
+
+void AsyncDirectSendEndpoint::send(const uint8_t* data,
+                                   size_t dataSize,
+                                   bool more)
+{
+    SPDLOG_TRACE("PAIR send {} ({} bytes, more {})", address, dataSize, more);
+    doSend(socket, data, dataSize, more);
 }
 }

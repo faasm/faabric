@@ -1,3 +1,4 @@
+#include "faabric/util/latch.h"
 #include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
@@ -224,6 +225,81 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     }
 }
 
-#endif
+TEST_CASE_METHOD(SchedulerTestFixture, "Test direct messaging", "[transport]")
+{
+    std::string expected = "Direct hello";
+    const uint8_t* msg = BYTES_CONST(expected.c_str());
 
+    std::string inprocLabel = "direct-test";
+
+    AsyncDirectSendEndpoint sender(inprocLabel, TEST_PORT);
+    sender.send(msg, expected.size());
+
+    AsyncDirectRecvEndpoint receiver(inprocLabel);
+
+    std::string actual;
+    SECTION("Recv with size")
+    {
+        faabric::transport::Message recvMsg =
+          receiver.recv(expected.size()).value();
+        actual = std::string(recvMsg.data(), recvMsg.size());
+    }
+
+    SECTION("Recv no size")
+    {
+        faabric::transport::Message recvMsg = receiver.recv().value();
+        actual = std::string(recvMsg.data(), recvMsg.size());
+    }
+
+    REQUIRE(actual == expected);
 }
+
+TEST_CASE_METHOD(SchedulerTestFixture,
+                 "Stress test direct messaging",
+                 "[transport]")
+{
+    int nMessages = 1000;
+    std::string inprocLabel = "direct-test";
+
+    std::shared_ptr<faabric::util::Latch> startLatch =
+      faabric::util::Latch::create(2);
+
+    std::thread t([nMessages, inprocLabel, &startLatch] {
+        AsyncDirectSendEndpoint sender(inprocLabel, TEST_PORT);
+
+        for (int i = 0; i < nMessages; i++) {
+            std::string expected = "Direct hello " + std::to_string(i);
+            const uint8_t* msg = BYTES_CONST(expected.c_str());
+            sender.send(msg, expected.size());
+
+            if (i % 100 == 0) {
+                SLEEP_MS(10);
+            }
+
+            // Make main thread wait until messages are queued
+            if (i == 10) {
+                startLatch->wait();
+            }
+        }
+    });
+
+    // Wait for queued messages
+    startLatch->wait();
+
+    AsyncDirectRecvEndpoint receiver(inprocLabel);
+
+    // Receive messages
+    for (int i = 0; i < nMessages; i++) {
+        faabric::transport::Message recvMsg = receiver.recv().value();
+        std::string actual(recvMsg.data(), recvMsg.size());
+
+        std::string expected = "Direct hello " + std::to_string(i);
+        REQUIRE(actual == expected);
+    }
+
+    if (t.joinable()) {
+        t.join();
+    }
+}
+}
+#endif

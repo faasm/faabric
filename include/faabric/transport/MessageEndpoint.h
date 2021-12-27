@@ -218,6 +218,26 @@ class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
     void sendResponse(const uint8_t* data, int size);
 };
 
+class AsyncDirectRecvEndpoint final : public RecvMessageEndpoint
+{
+  public:
+    AsyncDirectRecvEndpoint(const std::string& inprocLabel,
+                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    std::optional<Message> recv(int size = 0) override;
+};
+
+class AsyncDirectSendEndpoint final : public MessageEndpoint
+{
+  public:
+    AsyncDirectSendEndpoint(const std::string& inProcLabel,
+                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+
+    void send(const uint8_t* data, size_t dataSize, bool more = false);
+
+    zmq::socket_t socket;
+};
+
 class MessageTimeoutException final : public faabric::util::FaabricException
 {
   public:
