@@ -156,7 +156,7 @@ class SpscQueue
         if (!mq.push(value)) {
             UniqueLock lock(mx);
 
-            writerWaiting.store(true, std::memory_order_relaxed);
+            writerWaiting.store(true, std::memory_order_release);
 
             while (!mq.push(value)) {
                 std::cv_status returnVal = notFullNotifier.wait_for(
@@ -167,10 +167,12 @@ class SpscQueue
                 }
             }
 
-            writerWaiting.store(false, std::memory_order_relaxed);
+            writerWaiting.store(false, std::memory_order_release);
         }
 
-        if (readerWaiting.load(std::memory_order_relaxed)) {
+        // If we'd always sent a notification, it works.
+        // if (readerWaiting.load(std::memory_order_relaxed) || true) {
+        if (readerWaiting.load(std::memory_order_acquire)) {
             UniqueLock lock(mx);
             notEmptyNotifier.notify_one();
         }
@@ -183,21 +185,25 @@ class SpscQueue
         if (!mq.pop(value)) {
             UniqueLock lock(mx);
 
-            readerWaiting.store(true, std::memory_order_relaxed);
+            readerWaiting.store(true, std::memory_order_release);
 
             while (!mq.pop(value)) {
+                // we lock on notify, to prevent pushing a value between these
+                // two lines.
                 std::cv_status returnVal = notEmptyNotifier.wait_for(
                   lock, std::chrono::milliseconds(timeoutMs));
 
+                // How could we possibly miss a notification?
                 if (returnVal == std::cv_status::timeout) {
+                    SPDLOG_ERROR("Hit this with {} to read", mq.read_available());
                     throw QueueTimeoutException("Timeout waiting for dequeue");
                 }
             }
 
-            readerWaiting.store(false, std::memory_order_relaxed);
+            readerWaiting.store(false, std::memory_order_release);
         }
 
-        if (writerWaiting.load(std::memory_order_relaxed)) {
+        if (writerWaiting.load(std::memory_order_acquire)) {
             UniqueLock lock(mx);
             notFullNotifier.notify_one();
         }
@@ -210,7 +216,7 @@ class SpscQueue
         if (mq.read_available() == 0) {
             UniqueLock lock(mx);
 
-            readerWaiting.store(true, std::memory_order_relaxed);
+            readerWaiting.store(true, std::memory_order_release);
 
             while (mq.read_available() == 0) {
                 std::cv_status returnVal = notEmptyNotifier.wait_for(
@@ -221,7 +227,7 @@ class SpscQueue
                 }
             }
 
-            readerWaiting.store(false, std::memory_order_relaxed);
+            readerWaiting.store(false, std::memory_order_release);
         }
 
         return &mq.front();
