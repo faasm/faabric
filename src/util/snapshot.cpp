@@ -191,6 +191,7 @@ void SnapshotData::fillGapsWithOverwriteRegions()
     // If there's no merge regions, just do one big one (note, zero length means
     // fill all space
     if (mergeRegions.empty()) {
+        SPDLOG_TRACE("Filling gap with single overwrite merge region");
         mergeRegions.emplace(std::pair<uint32_t, SnapshotMergeRegion>(
           0,
           { 0, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite }));
@@ -206,10 +207,16 @@ void SnapshotData::fillGapsWithOverwriteRegions()
             continue;
         }
 
+        uint32_t regionLen = region.offset - lastRegionEnd;
+
+        SPDLOG_TRACE("Filling gap with overwrite merge region {}-{}",
+                     lastRegionEnd,
+                     lastRegionEnd + regionLen);
+
         mergeRegions.emplace(std::pair<uint32_t, SnapshotMergeRegion>(
           lastRegionEnd,
           { lastRegionEnd,
-            region.offset - lastRegionEnd,
+            regionLen,
             SnapshotDataType::Raw,
             SnapshotMergeOperation::Overwrite }));
 
