@@ -145,6 +145,7 @@ jobs:
 
   dist-tests:
     if: github.event.pull_request.draft == false
+    needs: [conan-cache]
     runs-on: ubuntu-latest
     steps:
       # --- Code update ---
@@ -182,6 +183,7 @@ jobs:
 
   examples:
     if: github.event.pull_request.draft == false
+    needs: [conan-cache]
     runs-on: ubuntu-latest
     env:
       HOST_TYPE: ci
