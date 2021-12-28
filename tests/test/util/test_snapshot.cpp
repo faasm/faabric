@@ -1261,15 +1261,16 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
-                 "Test overwrite region to end of memory",
+                 "Test merge regions past end of original memory",
                  "[snapshot][util]")
 {
     int snapPages = 6;
     int sharedMemPages = 10;
+    size_t snapSize = snapPages * HOST_PAGE_SIZE;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
 
     std::shared_ptr<SnapshotData> snap =
-      std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
+      std::make_shared<SnapshotData>(snapSize);
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
@@ -1279,13 +1280,43 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Make an edit somewhere in the extended memory, outside the original
     // snapshot
-    uint32_t diffPageStart = (snapPages + 2) * HOST_PAGE_SIZE;
-    uint32_t diffOffset = diffPageStart + 100;
+    uint32_t diffPageStart = 0;
+    uint32_t diffOffset = 0;
+    uint32_t mergeRegionStart = snapSize;
+
+    SECTION("Diff at end of original data, overlapping merge region")
+    {
+        diffPageStart = snapSize;
+        diffOffset = diffPageStart + 100;
+        mergeRegionStart = snapSize;
+    }
+
+    SECTION("Diff and merge region aligned at end of original data")
+    {
+        diffPageStart = snapSize;
+        diffOffset = diffPageStart;
+        mergeRegionStart = snapSize;
+    }
+
+    SECTION("Diff Past end of original data, overlapping merge region")
+    {
+        diffPageStart = (snapPages + 2) * HOST_PAGE_SIZE;
+        diffOffset = diffPageStart + 100;
+        mergeRegionStart = diffPageStart;
+    }
+
+    SECTION("Diff and merge region aligned past end of original data")
+    {
+        diffPageStart = (snapPages + 2) * HOST_PAGE_SIZE;
+        diffOffset = diffPageStart;
+        mergeRegionStart = diffPageStart;
+    }
+
     std::vector<uint8_t> diffData(120, 2);
     std::memcpy(sharedMem.get() + diffOffset, diffData.data(), diffData.size());
 
-    // Add a merge region from near end of original snapshot upwards
-    snap->addMergeRegion(snap->getSize() - 120,
+    // Add a merge region
+    snap->addMergeRegion(mergeRegionStart,
                          0,
                          faabric::util::SnapshotDataType::Raw,
                          faabric::util::SnapshotMergeOperation::Overwrite);
