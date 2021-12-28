@@ -13,7 +13,7 @@ static thread_local std::shared_ptr<Queue<std::shared_ptr<faabric::MPIMessage>>>
 
 static float doRun(int nProducers, int nConsumers, size_t msgSize, bool single)
 {
-    int nMessages = 1000000;
+    int nMessages = 2000000;
     int perProducer = nMessages / nProducers;
     int perConsumer = nMessages / nConsumers;
 
@@ -90,8 +90,8 @@ static float doRun(int nProducers, int nConsumers, size_t msgSize, bool single)
 
 int main()
 {
-    std::vector<int> producers = { 1, 10, 20, 50, 100 };
-    std::vector<int> consumers = { 1, 10, 20, 50, 100 };
+    std::vector<int> producers = { 1, 10, 100 };
+    std::vector<int> consumers = { 1, 10, 100 };
 
     SPDLOG_INFO("Starting queue profiler\n");
 
