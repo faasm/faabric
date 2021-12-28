@@ -14,7 +14,7 @@ from invoke import task
 
 
 @task
-def cmake(ctx, clean=False, shared=False, build="Debug", sanitise_mode="None"):
+def cmake(ctx, clean=False, shared=False, build="Debug", sanitiser="None"):
     """
     Configures the build
     """
@@ -40,7 +40,7 @@ def cmake(ctx, clean=False, shared=False, build="Debug", sanitise_mode="None"):
         "-DBUILD_SHARED_LIBS={}".format("ON" if shared else "OFF"),
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
         "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
-        "-DFAABRIC_USE_SANITISER={}".format(sanitise_mode),
+        "-DFAABRIC_USE_SANITISER={}".format(sanitiser),
         PROJ_ROOT,
     ]
 
@@ -92,7 +92,7 @@ def sanitise(ctx, mode, target="faabric_tests", noclean=False, shared=False):
         clean=(not noclean),
         shared=shared,
         build="Debug",
-        sanitise_mode=mode,
+        sanitiser=mode,
     )
 
     cc(ctx, target, shared=shared)
