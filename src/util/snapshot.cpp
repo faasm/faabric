@@ -5,6 +5,7 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/snapshot.h>
+#include <faabric/util/timing.h>
 
 #include <sys/mman.h>
 
@@ -239,6 +240,7 @@ void SnapshotData::fillGapsWithOverwriteRegions()
 
 void SnapshotData::mapToMemory(uint8_t* target)
 {
+    PROF_START(MapToMemory)
     faabric::util::FullLock lock(snapMx);
 
     if (fd <= 0) {
@@ -248,6 +250,7 @@ void SnapshotData::mapToMemory(uint8_t* target)
     }
 
     mapMemoryPrivate({ target, size }, fd);
+    PROF_END(MapToMemory)
 }
 
 std::map<uint32_t, SnapshotMergeRegion> SnapshotData::getMergeRegions()
@@ -278,6 +281,7 @@ void SnapshotData::queueDiffs(const std::span<SnapshotDiff> diffs)
 
 void SnapshotData::writeQueuedDiffs()
 {
+    PROF_START(WriteQueuedDiffs)
     faabric::util::FullLock lock(snapMx);
 
     SPDLOG_DEBUG("Writing {} queued diffs to snapshot", queuedDiffs.size());
@@ -380,6 +384,7 @@ void SnapshotData::writeQueuedDiffs()
 
     // Clear queue
     queuedDiffs.clear();
+    PROF_END(WriteQueuedDiffs)
 }
 
 MemoryView::MemoryView(std::span<const uint8_t> dataIn)
@@ -388,6 +393,7 @@ MemoryView::MemoryView(std::span<const uint8_t> dataIn)
 
 std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
 {
+    PROF_START(GetDirtyRegions)
     if (data.empty()) {
         return {};
     }
@@ -414,12 +420,14 @@ std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
                            data.subspan(regionBegin, regionEnd - regionBegin));
     }
 
+    PROF_END(GetDirtyRegions)
     return diffs;
 }
 
 std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
   std::shared_ptr<SnapshotData> snap)
 {
+    PROF_START(DiffWithSnapshot)
     std::vector<SnapshotDiff> diffs;
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions =
       snap->getMergeRegions();
@@ -457,6 +465,7 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
         }
     }
 
+    PROF_END(DiffWithSnapshot)
     return diffs;
 }
 
