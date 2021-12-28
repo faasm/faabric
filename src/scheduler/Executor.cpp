@@ -301,11 +301,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Fill gaps with overwrites
             snap->fillGapsWithOverwriteRegions();
 
-            // If we're on master, we write the diffs straight to the snapshot
-            // otherwise we push them to the master.
+            // Work out the diffs
             std::vector<faabric::util::SnapshotDiff> diffs =
               funcMemory.diffWithSnapshot(snap);
 
+            // On master we queue the diffs locally directly, on a remote host
+            // we push them back to master
             if (isMaster) {
                 SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} on "
                              "master (group {})",
@@ -315,17 +316,14 @@ void Executor::threadPoolThread(int threadPoolIdx)
                              msg.groupid());
 
                 snap->queueDiffs(diffs);
-
-                // Reset dirty page tracking on master
-                faabric::util::resetDirtyTracking();
             } else {
-                // Push diffs back to master
                 sch.pushSnapshotDiffs(msg, diffs);
-
-                // Reset dirty page tracking on non-master
-                faabric::util::resetDirtyTracking();
             }
 
+            // Reset dirty page tracking
+            faabric::util::resetDirtyTracking();
+
+            // Clear merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
             snap->clearMergeRegions();
         }

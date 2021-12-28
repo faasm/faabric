@@ -87,11 +87,6 @@ class SnapshotMergeRegion
                           std::span<const uint8_t> original,
                           std::span<const uint8_t> updated,
                           std::pair<uint32_t, uint32_t> dirtyRange);
-
-    void addMergeDiff(std::vector<SnapshotDiff>& diffs,
-                      std::span<const uint8_t> original,
-                      const uint8_t* updated,
-                      std::pair<uint32_t, uint32_t> dirtyRange);
 };
 
 template<typename T>

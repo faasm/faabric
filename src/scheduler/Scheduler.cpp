@@ -508,8 +508,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
                   snapMemView.getDirtyRegions();
 
-                c.pushSnapshotUpdate(
-                  snapshotKey, std::move(snap), snapshotDiffs);
+                c.pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
             } else {
                 c.pushSnapshot(snapshotKey, snap);
                 pushedSnapshotsMap[snapshotKey].insert(host);

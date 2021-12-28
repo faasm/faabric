@@ -121,7 +121,7 @@ void SnapshotClient::pushSnapshot(
 
 void SnapshotClient::pushSnapshotUpdate(
   std::string snapshotKey,
-  std::shared_ptr<faabric::util::SnapshotData> data,
+  const std::shared_ptr<faabric::util::SnapshotData>& data,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     SPDLOG_DEBUG("Pushing update to snapshot {} to {} ({} diffs, {} regions)",
@@ -147,7 +147,7 @@ void SnapshotClient::pushSnapshotDiffs(
 
 void SnapshotClient::doPushSnapshotDiffs(
   const std::string& snapshotKey,
-  std::shared_ptr<faabric::util::SnapshotData> data,
+  const std::shared_ptr<faabric::util::SnapshotData>& data,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (faabric::util::isMockMode()) {
@@ -158,6 +158,7 @@ void SnapshotClient::doPushSnapshotDiffs(
 
         // Create objects for all the diffs
         std::vector<flatbuffers::Offset<SnapshotDiffRequest>> diffsFbVector;
+        diffsFbVector.reserve(diffs.size());
         for (const auto& d : diffs) {
             std::span<const uint8_t> diffData = d.getData();
             auto dataOffset =
