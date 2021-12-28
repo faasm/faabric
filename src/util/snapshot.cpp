@@ -542,6 +542,10 @@ void SnapshotMergeRegion::addOverwriteDiff(
     // If the region is outside the original data, automatically add a diff for
     // the whole region
     if (checkStart >= original.size()) {
+        SPDLOG_TRACE("Single extension {} overwrite diff at {}-{}",
+                     snapshotDataTypeStr(dataType),
+                     checkStart,
+                     checkEnd - checkStart);
         diffs.emplace_back(dataType,
                            operation,
                            checkStart,
@@ -550,13 +554,30 @@ void SnapshotMergeRegion::addOverwriteDiff(
     }
 
     bool diffInProgress = false;
-    int diffStart = 0;
-    for (int b = checkStart; b <= checkEnd; b++) {
-        // If this byte is outside the original region, we can't
-        // compare (i.e. always dirty)
-        bool isDirtyByte = (b >= original.size()) ||
-                           (*(original.data() + b) != *(updated.data() + b));
+    uint32_t diffStart = 0;
+    for (uint32_t b = checkStart; b <= checkEnd; b++) {
+        // If this byte is outside the original region, everything from here on
+        // is dirty, so we can add a single region to go from here to the end
+        if (b >= original.size()) {
+            if (!diffInProgress) {
+                diffStart = b;
+            }
 
+            uint32_t diffLength = checkEnd - diffStart;
+
+            SPDLOG_TRACE("Extension {} overwrite diff at {}-{}",
+                         snapshotDataTypeStr(dataType),
+                         diffStart,
+                         diffStart + diffLength);
+
+            diffs.emplace_back(dataType,
+                               operation,
+                               diffStart,
+                               updated.subspan(diffStart, diffLength));
+            return;
+        }
+
+        bool isDirtyByte = (*(original.data() + b) != *(updated.data() + b));
         if (isDirtyByte && !diffInProgress) {
             // Diff starts here if it's different and diff
             // not in progress
@@ -565,7 +586,7 @@ void SnapshotMergeRegion::addOverwriteDiff(
         } else if (!isDirtyByte && diffInProgress) {
             // Diff ends if it's not different and diff is
             // in progress
-            int diffLength = b - diffStart;
+            uint32_t diffLength = b - diffStart;
             SPDLOG_TRACE("Found {} overwrite diff at {}-{}",
                          snapshotDataTypeStr(dataType),
                          diffStart,
@@ -582,7 +603,7 @@ void SnapshotMergeRegion::addOverwriteDiff(
     // If we've reached the end of this region with a diff
     // in progress, we need to close it off
     if (diffInProgress) {
-        int finalDiffLength = checkEnd - diffStart;
+        uint32_t finalDiffLength = checkEnd - diffStart;
         SPDLOG_TRACE("Adding {} {} diff at {}-{} (end of region)",
                      snapshotDataTypeStr(dataType),
                      snapshotMergeOpStr(operation),

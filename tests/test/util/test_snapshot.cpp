@@ -1,9 +1,9 @@
 #include <catch2/catch.hpp>
 
-#include "faabric/snapshot/SnapshotRegistry.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
@@ -1278,42 +1278,66 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.mapSnapshot(snapKey, sharedMem.get());
     faabric::util::resetDirtyTracking();
 
-    // Make an edit somewhere in the extended memory, outside the original
-    // snapshot
-    uint32_t diffPageStart = 0;
-    uint32_t diffOffset = 0;
+    uint32_t changeStartPage = 0;
+    uint32_t changeOffset = 0;
     uint32_t mergeRegionStart = snapSize;
+    size_t changeLength = 123;
 
-    SECTION("Diff at end of original data, overlapping merge region")
+    uint32_t expectedDiffStart = 0;
+    uint32_t expectedDiffSize = 0;
+
+    // When memory has changed at or past the end of the original data, the diff
+    // will start at the end of the original data and round up to the next page
+    // boundary. If the change starts before the end, it will start at the
+    // beginning of the change and continue into the page boundary past the
+    // original data.
+
+    SECTION("Change at end of original data, overlapping merge region")
     {
-        diffPageStart = snapSize;
-        diffOffset = diffPageStart + 100;
+        changeStartPage = snapSize;
+        changeOffset = changeStartPage + 100;
         mergeRegionStart = snapSize;
+        expectedDiffStart = changeStartPage;
+        expectedDiffSize = HOST_PAGE_SIZE;
     }
 
-    SECTION("Diff and merge region aligned at end of original data")
+    SECTION("Change and merge region aligned at end of original data")
     {
-        diffPageStart = snapSize;
-        diffOffset = diffPageStart;
+        changeStartPage = snapSize;
+        changeOffset = changeStartPage;
         mergeRegionStart = snapSize;
+        expectedDiffStart = changeStartPage;
+        expectedDiffSize = HOST_PAGE_SIZE;
     }
 
-    SECTION("Diff Past end of original data, overlapping merge region")
+    SECTION("Change after end of original data, overlapping merge region")
     {
-        diffPageStart = (snapPages + 2) * HOST_PAGE_SIZE;
-        diffOffset = diffPageStart + 100;
-        mergeRegionStart = diffPageStart;
+        changeStartPage = (snapPages + 2) * HOST_PAGE_SIZE;
+        changeOffset = changeStartPage + 100;
+        mergeRegionStart = changeStartPage;
+        expectedDiffStart = changeStartPage;
+        expectedDiffSize = HOST_PAGE_SIZE;
     }
 
-    SECTION("Diff and merge region aligned past end of original data")
+    SECTION("Merge region and change crossing end of original data")
     {
-        diffPageStart = (snapPages + 2) * HOST_PAGE_SIZE;
-        diffOffset = diffPageStart;
-        mergeRegionStart = diffPageStart;
+        // Merge region starts before diff
+        changeStartPage = (snapPages - 1) * HOST_PAGE_SIZE;
+        changeOffset = changeStartPage + 100;
+        mergeRegionStart = (snapPages - 2) * HOST_PAGE_SIZE;
+
+        // Change goes from inside original data to overshoot the end
+        changeLength = 2 * HOST_PAGE_SIZE;
+
+        // Diff will cover from the start of the change to round up to the
+        // nearest page in the overshoot region.
+        expectedDiffStart = changeOffset;
+        expectedDiffSize = changeLength + (HOST_PAGE_SIZE - 100);
     }
 
-    std::vector<uint8_t> diffData(120, 2);
-    std::memcpy(sharedMem.get() + diffOffset, diffData.data(), diffData.size());
+    std::vector<uint8_t> diffData(changeLength, 2);
+    std::memcpy(
+      sharedMem.get() + changeOffset, diffData.data(), diffData.size());
 
     // Add a merge region
     snap->addMergeRegion(mergeRegionStart,
@@ -1324,12 +1348,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<SnapshotDiff> actualDiffs =
       MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
 
-    // Make sure the whole page containing the diff is included
+    // Set up expected diff
     std::vector<SnapshotDiff> expectedDiffs = {
         { faabric::util::SnapshotDataType::Raw,
           faabric::util::SnapshotMergeOperation::Overwrite,
-          diffPageStart,
-          { sharedMem.get() + diffPageStart, (size_t)HOST_PAGE_SIZE } },
+          expectedDiffStart,
+          { sharedMem.get() + expectedDiffStart, expectedDiffSize } },
     };
 
     checkDiffs(actualDiffs, expectedDiffs);
