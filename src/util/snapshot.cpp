@@ -254,6 +254,9 @@ void SnapshotData::mapToMemory(std::span<uint8_t> target)
 
     faabric::util::mapMemoryPrivate(target, fd);
 
+    // Reset dirty tracking otherwise whole mapped region is marked dirty
+    faabric::util::resetDirtyTracking();
+
     PROF_END(MapSnapshot)
 }
 
