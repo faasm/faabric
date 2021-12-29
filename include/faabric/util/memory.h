@@ -78,7 +78,9 @@ class RegionTracker
         // Check uffd API
         struct uffdio_api uffdApi;
         uffdApi.api = UFFD_API;
-        uffdApi.features = UFFD_FEATURE_EVENT_UNMAP;
+        uffdApi.features = UFFD_FEATURE_EVENT_UNMAP | UFFD_FEATURE_EVENT_REMAP |
+                           UFFD_FEATURE_MISSING_SHMEM |
+                           UFFD_FEATURE_EVENT_REMOVE;
         if (ioctl(uffd, UFFDIO_API, &uffdApi) == -1) {
             SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
             throw std::runtime_error("ioctl API failed");
@@ -149,7 +151,8 @@ class RegionTracker
                 zeroPage.range.len = HOST_PAGE_SIZE;
 
                 if (ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage) == -1) {
-                    SPDLOG_ERROR("ioctl zeropage failed");
+                    SPDLOG_ERROR(
+                      "ioctl zeropage failed {} {}", errno, strerror(errno));
                 }
             }
         });

@@ -443,21 +443,41 @@ TEST_CASE("Test mapping memory fails with invalid fd", "[util]")
     REQUIRE_THROWS(mapMemoryPrivate({ sharedMem.get(), memSize }, fd));
 }
 
-TEST_CASE("Test uffd", "[util]")
+TEST_CASE("Test uffd tracking", "[util]")
 {
     size_t memSize = 10 * HOST_PAGE_SIZE;
 
+    // In order to close down the region tracker, it has to outlive the
+    // unmapping of the memory it's tracking (hence scoping).
     RegionTracker t;
+
     {
         MemoryRegion mem = allocatePrivateMemory(memSize);
+
+        SECTION("No mapping")
+        {
+            // Do nothing
+        }
+
+        SECTION("Mapped to file descriptor")
+        {
+            int fd = createFd(memSize, "foobar");
+            mapMemoryPrivate({ mem.get(), memSize }, fd);
+        }
+
         t.start(std::span<uint8_t>(mem.get(), memSize));
 
-        // Make some changes
+        // Make a change on one page
         mem[0] = 3;
+
+        // Make two changes on same page
         mem[HOST_PAGE_SIZE + 10] = 4;
         mem[HOST_PAGE_SIZE + 50] = 5;
+
+        // Change another page
         mem[5 * HOST_PAGE_SIZE + 10] = 6;
 
+        // Get dirty regions
         std::vector<std::pair<uint32_t, uint32_t>> actualDirty = t.getDirty();
 
         REQUIRE(actualDirty.size() == 3);
