@@ -442,4 +442,45 @@ TEST_CASE("Test mapping memory fails with invalid fd", "[util]")
 
     REQUIRE_THROWS(mapMemoryPrivate({ sharedMem.get(), memSize }, fd));
 }
+
+TEST_CASE("Test uffd", "[util]")
+{
+    size_t memSize = 10 * HOST_PAGE_SIZE;
+
+    auto* mem = (uint8_t*)mmap(NULL,
+                               memSize,
+                               PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS,
+                               -1,
+                               0);
+    if (mem == MAP_FAILED) {
+        FAIL("mmap failed");
+    }
+
+    RegionTracker t(std::span<uint8_t>(mem, memSize));
+
+    t.start();
+
+    // Make some changes
+    mem[0] = 3;
+    mem[HOST_PAGE_SIZE + 10] = 4;
+    mem[HOST_PAGE_SIZE + 50] = 5;
+    mem[5 * HOST_PAGE_SIZE + 10] = 6;
+
+    std::vector<std::pair<uint32_t, uint32_t>> actualDirty = t.getDirty();
+
+    REQUIRE(actualDirty.size() == 3);
+
+    std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
+        { 0, HOST_PAGE_SIZE },
+        { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
+        { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
+    };
+
+    REQUIRE(actualDirty == expectedDirty);
+
+    munmap(mem, memSize);
+
+    t.stop();
+}
 }

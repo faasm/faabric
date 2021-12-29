@@ -1,12 +1,23 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
+#include <fcntl.h>
 #include <functional>
+#include <inttypes.h>
+#include <linux/userfaultfd.h>
 #include <memory>
+#include <poll.h>
 #include <span>
 #include <string>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include <thread>
 #include <unistd.h>
 #include <vector>
+
+#include <faabric/util/logging.h>
 
 namespace faabric::util {
 
@@ -45,11 +56,124 @@ std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
 
 std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
                                                            int nPages);
+// -------------------------
+// Userfault
+// -------------------------
+
+class RegionTracker
+{
+  public:
+    RegionTracker(std::span<uint8_t> regionIn)
+      : region(regionIn)
+    {}
+
+    void start()
+    {
+        uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+        if (uffd == -1) {
+            SPDLOG_ERROR(
+              "Failed on userfaultfd: {} ({})", errno, strerror(errno));
+            throw std::runtime_error("userfaultfd failed");
+        }
+
+        uffdApi.api = UFFD_API;
+        uffdApi.features = 0;
+        if (ioctl(uffd, UFFDIO_API, &uffdApi) == -1) {
+            SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
+            throw std::runtime_error("ioctl API failed");
+        }
+
+        uffdRegister.range.start = (unsigned long)region.data();
+        uffdRegister.range.len = region.size();
+        uffdRegister.mode = UFFDIO_REGISTER_MODE_MISSING;
+        if (ioctl(uffd, UFFDIO_REGISTER, &uffdRegister) == -1) {
+            SPDLOG_ERROR(
+              "Failed on ioctl register {} ({})", errno, strerror(errno));
+            throw std::runtime_error("ioctl register failed");
+        }
+
+        // Thread to monitor for events
+        trackerThread = std::thread([this] {
+            for (;;) {
+                // Poll for events
+                struct pollfd pollfd;
+                int nready;
+                pollfd.fd = uffd;
+                pollfd.events = POLLIN;
+                nready = poll(&pollfd, 1, -1);
+                if (nready == -1) {
+                    SPDLOG_ERROR("Poll failed");
+                    throw std::runtime_error("Poll failed");
+                }
+
+                // Read an event
+                uffd_msg msg;
+                ssize_t nread = read(uffd, &msg, sizeof(msg));
+                if (nread == 0) {
+                    printf("EOF on userfaultfd!\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                if (nread == -1) {
+                    SPDLOG_ERROR("Read failed");
+                    throw std::runtime_error("Read failed");
+                }
+
+                if (msg.event != UFFD_EVENT_PAGEFAULT) {
+                    SPDLOG_ERROR("Unexpected userfault event: {}", msg.event);
+                    throw std::runtime_error("Unexpected userfault event");
+                }
+
+                if (!(msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)) {
+                    throw std::runtime_error("Pagefault flag not as expected");
+                }
+
+                size_t pageBase =
+                  ((uint8_t*)msg.arg.pagefault.address) - region.data();
+
+                SPDLOG_TRACE(
+                  "Uffd fault: {} ({})", msg.arg.pagefault.address, pageBase);
+
+                dirty.emplace_back(pageBase, pageBase + HOST_PAGE_SIZE);
+
+                uffdio_zeropage zeroPage;
+                zeroPage.range.start = msg.arg.pagefault.address;
+                zeroPage.range.len = HOST_PAGE_SIZE;
+
+                if (ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage) == -1) {
+                    SPDLOG_ERROR("ioctl zeropage failed");
+                }
+            }
+        });
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> getDirty() { return dirty; }
+
+    void stop()
+    {
+        if (trackerThread.joinable()) {
+            trackerThread.join();
+        }
+    }
+
+  private:
+    std::span<const uint8_t> region;
+
+    std::vector<std::pair<uint32_t, uint32_t>> dirty;
+
+    long uffd;
+    struct uffdio_api uffdApi;
+    struct uffdio_register uffdRegister;
+
+    std::thread trackerThread;
+};
 
 // -------------------------
 // Allocation
 // -------------------------
 typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
+
+MemoryRegion allocatePrivateMemory(size_t size);
 
 MemoryRegion allocateSharedMemory(size_t size);
 

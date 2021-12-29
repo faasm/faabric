@@ -198,6 +198,11 @@ MemoryRegion doAlloc(size_t size, int prot, int flags)
     return mem;
 }
 
+MemoryRegion allocatePrivateMemory(size_t size)
+{
+    return doAlloc(size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
+}
+
 MemoryRegion allocateSharedMemory(size_t size)
 {
     return doAlloc(size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
