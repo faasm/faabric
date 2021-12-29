@@ -1,24 +1,33 @@
+table SnapshotMergeRegionRequest {
+  offset:int;
+  length:ulong;
+  data_type:int;
+  merge_op:int;
+}
+
 table SnapshotPushRequest {
   key:string;
-  maxSize:ulong;
+  max_size:ulong;
   contents:[ubyte];
+  merge_regions:[SnapshotMergeRegionRequest];
 }
 
 table SnapshotDeleteRequest {
   key:string;
 }
 
-table SnapshotDiffChunk {
+table SnapshotDiffRequest {
   offset:int;
-  dataType:int;
-  mergeOp:int;
+  data_type:int;
+  merge_op:int;
   data:[ubyte];
 }
 
 table SnapshotDiffPushRequest {
   key:string;
   force:bool;
-  chunks:[SnapshotDiffChunk];
+  merge_regions:[SnapshotMergeRegionRequest];
+  diffs:[SnapshotDiffRequest];
 }
 
 table ThreadResultRequest {

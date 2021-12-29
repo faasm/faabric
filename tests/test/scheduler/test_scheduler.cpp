@@ -226,8 +226,20 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
       faabric::snapshot::getSnapshotRegistry();
 
     std::unique_ptr<uint8_t[]> snapshotDataAllocation;
+    std::vector<faabric::util::SnapshotMergeRegion> snapshotMergeRegions;
     if (!expectedSnapshot.empty()) {
         auto snap = std::make_shared<faabric::util::SnapshotData>(1234);
+
+        snap->addMergeRegion(123,
+                             1234,
+                             faabric::util::SnapshotDataType::Int,
+                             faabric::util::SnapshotMergeOperation::Sum);
+
+        snap->addMergeRegion(345,
+                             3456,
+                             faabric::util::SnapshotDataType::Raw,
+                             faabric::util::SnapshotMergeOperation::Overwrite);
+
         snapRegistry.registerSnapshot(expectedSnapshot, snap);
     }
 
@@ -305,6 +317,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         REQUIRE(pushedSnapshot.first == otherHost);
         REQUIRE(pushedSnapshot.second->getSize() == snapshot->getSize());
         REQUIRE(pushedSnapshot.second->getDataPtr() == snapshot->getDataPtr());
+        REQUIRE(pushedSnapshot.second->getMergeRegions().size() ==
+                snapshot->getMergeRegions().size());
     }
 
     // Check the executor counts on this host

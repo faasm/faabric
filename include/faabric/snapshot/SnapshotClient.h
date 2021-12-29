@@ -38,9 +38,13 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
     void pushSnapshot(const std::string& key,
                       std::shared_ptr<faabric::util::SnapshotData> data);
 
+    void pushSnapshotUpdate(
+      std::string snapshotKey,
+      const std::shared_ptr<faabric::util::SnapshotData>& data,
+      const std::vector<faabric::util::SnapshotDiff>& diffs);
+
     void pushSnapshotDiffs(
       std::string snapshotKey,
-      bool force,
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void deleteSnapshot(const std::string& key);
@@ -49,5 +53,10 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
 
   private:
     void sendHeader(faabric::snapshot::SnapshotCalls call);
+
+    void doPushSnapshotDiffs(
+      const std::string& snapshotKey,
+      const std::shared_ptr<faabric::util::SnapshotData>& data,
+      const std::vector<faabric::util::SnapshotDiff>& diffs);
 };
 }

@@ -402,7 +402,7 @@ TEST_CASE("Test mapping memory", "[util]")
     writeToFd(fd, 0, { vMem.get(), chunk.size() });
 
     // Map some new memory to this fd
-    MemoryRegion memA = allocateSharedMemory(chunk.size());
+    MemoryRegion memA = allocatePrivateMemory(chunk.size());
     mapMemoryPrivate({ memA.get(), chunk.size() }, fd);
 
     std::vector<uint8_t> memAData(memA.get(), memA.get() + chunk.size());
@@ -417,7 +417,7 @@ TEST_CASE("Test mapping memory", "[util]")
     appendDataToFd(fd, { chunkB.data(), chunkB.size() });
 
     // Map a region to both chunks
-    MemoryRegion memB = allocateSharedMemory(chunk.size() + chunkB.size());
+    MemoryRegion memB = allocatePrivateMemory(chunk.size() + chunkB.size());
     mapMemoryPrivate({ memB.get(), chunk.size() + chunkB.size() }, fd);
 
     // Check region now contains both bits of data
@@ -433,7 +433,7 @@ TEST_CASE("Test mapping memory", "[util]")
 TEST_CASE("Test mapping memory fails with invalid fd", "[util]")
 {
     size_t memSize = 10 * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocateSharedMemory(memSize);
+    MemoryRegion sharedMem = allocatePrivateMemory(memSize);
 
     int fd = 0;
     SECTION("Zero fd") { fd = 0; }
@@ -441,6 +441,44 @@ TEST_CASE("Test mapping memory fails with invalid fd", "[util]")
     SECTION("Negative fd") { fd = -2; }
 
     REQUIRE_THROWS(mapMemoryPrivate({ sharedMem.get(), memSize }, fd));
+}
+
+TEST_CASE("Test remapping memory", "[util]")
+{
+    // Set up some data
+    size_t dataSize = 10 * HOST_PAGE_SIZE;
+    std::vector<uint8_t> expectedData(dataSize, 3);
+
+    // Write this to a file descriptor
+    int fd = createFd(expectedData.size(), "foobar");
+    writeToFd(fd, 0, { expectedData.data(), expectedData.size() });
+
+    // Map some new memory to this fd
+    MemoryRegion mappedMem = allocatePrivateMemory(dataSize);
+    mapMemoryPrivate({ mappedMem.get(), dataSize }, fd);
+
+    std::vector<uint8_t> actualData(mappedMem.get(),
+                                    mappedMem.get() + dataSize);
+    REQUIRE(actualData == expectedData);
+
+    // Modify the memory
+    std::vector<uint8_t> update(100, 4);
+    size_t updateOffset = HOST_PAGE_SIZE + 10;
+    std::memcpy(mappedMem.get() + updateOffset, update.data(), update.size());
+
+    // Spot check to make sure update has been made
+    REQUIRE(*(mappedMem.get() + (updateOffset + 5)) == (uint8_t)4);
+
+    // Remap
+    mapMemoryPrivate({ mappedMem.get(), dataSize }, fd);
+
+    // Spot check to make sure update has been removed
+    REQUIRE(*(mappedMem.get() + (updateOffset + 5)) == (uint8_t)3);
+
+    // Check all data
+    std::vector<uint8_t> actualDataAfter(mappedMem.get(),
+                                         mappedMem.get() + dataSize);
+    REQUIRE(actualDataAfter == expectedData);
 }
 
 TEST_CASE("Test uffd tracking", "[util]")

@@ -67,13 +67,15 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(actualC->getDataPtr() == snapC->getDataPtr());
 
     // Create regions onto which we will map the snapshots
-    MemoryRegion actualDataA = allocateSharedMemory(1 * HOST_PAGE_SIZE);
-    MemoryRegion actualDataB = allocateSharedMemory(2 * HOST_PAGE_SIZE);
-    MemoryRegion actualDataC = allocateSharedMemory(3 * HOST_PAGE_SIZE);
+    size_t sizeA = HOST_PAGE_SIZE;
+    size_t sizeC = 3 * HOST_PAGE_SIZE;
+    MemoryRegion actualDataA = allocatePrivateMemory(sizeA);
+    MemoryRegion actualDataB = allocatePrivateMemory(2 * HOST_PAGE_SIZE);
+    MemoryRegion actualDataC = allocatePrivateMemory(sizeC);
 
     // Map two of them
-    reg.mapSnapshot(keyA, actualDataA.get());
-    reg.mapSnapshot(keyC, actualDataC.get());
+    snapA->mapToMemory({ actualDataA.get(), sizeA });
+    snapC->mapToMemory({ actualDataC.get(), sizeC });
 
     // Here we need to check the actual data after mapping
     std::vector<uint8_t> vecDataA = snapA->getDataCopy();
@@ -101,48 +103,6 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(!reg.snapshotExists(keyB));
     REQUIRE(!reg.snapshotExists(keyC));
     REQUIRE(reg.getSnapshotCount() == 0);
-}
-
-TEST_CASE_METHOD(SnapshotTestFixture,
-                 "Test register snapshot if not exists",
-                 "[snapshot]")
-{
-    REQUIRE(reg.getSnapshotCount() == 0);
-
-    std::string keyA = "snapA";
-    std::string keyB = "snapB";
-
-    REQUIRE(!reg.snapshotExists(keyA));
-    REQUIRE(!reg.snapshotExists(keyB));
-
-    // Take one of the snapshots
-    auto snapBefore = setUpSnapshot(keyA, 1);
-
-    REQUIRE(reg.snapshotExists(keyA));
-    REQUIRE(!reg.snapshotExists(keyB));
-    REQUIRE(reg.getSnapshotCount() == 1);
-
-    auto otherSnap =
-      std::make_shared<faabric::util::SnapshotData>(snapBefore->getSize() + 10);
-    std::vector<uint8_t> otherData(snapBefore->getSize() + 10, 1);
-    otherSnap->copyInData(otherData);
-
-    // Check existing snapshot is not overwritten
-    reg.registerSnapshotIfNotExists(keyA, otherSnap);
-    auto snapAfterA = reg.getSnapshot(keyA);
-    REQUIRE(snapAfterA->getDataPtr() == snapBefore->getDataPtr());
-    REQUIRE(snapAfterA->getSize() == snapBefore->getSize());
-
-    // Check new snapshot is still created
-    reg.registerSnapshotIfNotExists(keyB, otherSnap);
-
-    REQUIRE(reg.snapshotExists(keyA));
-    REQUIRE(reg.snapshotExists(keyB));
-    REQUIRE(reg.getSnapshotCount() == 2);
-
-    auto snapAfterB = reg.getSnapshot(keyB);
-    REQUIRE(snapAfterB->getDataPtr() == otherSnap->getDataPtr());
-    REQUIRE(snapAfterB->getSize() == otherSnap->getSize());
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,

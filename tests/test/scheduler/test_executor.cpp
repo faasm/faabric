@@ -49,8 +49,8 @@ void TestExecutor::restore(faabric::Message& msg)
     auto snap = reg.getSnapshot(msg.snapshotkey());
 
     dummyMemorySize = snap->getSize();
-    dummyMemory = faabric::util::allocateSharedMemory(snap->getSize());
-    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
+    dummyMemory = faabric::util::allocatePrivateMemory(snap->getSize());
+    snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
 }
 
 faabric::util::MemoryView TestExecutor::getMemoryView()
@@ -178,19 +178,15 @@ int32_t TestExecutor::executeTask(
         auto snapData = faabric::snapshot::getSnapshotRegistry().getSnapshot(
           msg.snapshotkey());
 
-        // Avoid writing a zero here as the memory is already zeroed hence
+        // Set up the data.
+        // Note, avoid writing a zero here as the memory is already zeroed hence
         // it's not a change
         std::vector<uint8_t> data = { (uint8_t)(pageIdx + 1),
                                       (uint8_t)(pageIdx + 2),
                                       (uint8_t)(pageIdx + 3) };
 
-        // Set up a merge region that should catch the diff
+        // Copy in the data
         size_t offset = (pageIdx * faabric::util::HOST_PAGE_SIZE);
-        snapData->addMergeRegion(offset,
-                                 data.size() + 10,
-                                 SnapshotDataType::Raw,
-                                 SnapshotMergeOperation::Overwrite);
-
         SPDLOG_DEBUG("TestExecutor modifying page {} of memory ({}-{})",
                      pageIdx,
                      offset,
