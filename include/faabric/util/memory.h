@@ -63,26 +63,29 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 class RegionTracker
 {
   public:
-    RegionTracker(std::span<uint8_t> regionIn)
-      : region(regionIn)
-    {}
+    RegionTracker() = default;
 
-    void start()
+    void start(std::span<const uint8_t> region)
     {
-        uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+        // Create uffd
+        long uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
         if (uffd == -1) {
             SPDLOG_ERROR(
               "Failed on userfaultfd: {} ({})", errno, strerror(errno));
             throw std::runtime_error("userfaultfd failed");
         }
 
+        // Check uffd API
+        struct uffdio_api uffdApi;
         uffdApi.api = UFFD_API;
-        uffdApi.features = 0;
+        uffdApi.features = UFFD_FEATURE_EVENT_UNMAP;
         if (ioctl(uffd, UFFDIO_API, &uffdApi) == -1) {
             SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
             throw std::runtime_error("ioctl API failed");
         }
 
+        // Register uffd
+        struct uffdio_register uffdRegister;
         uffdRegister.range.start = (unsigned long)region.data();
         uffdRegister.range.len = region.size();
         uffdRegister.mode = UFFDIO_REGISTER_MODE_MISSING;
@@ -93,7 +96,7 @@ class RegionTracker
         }
 
         // Thread to monitor for events
-        trackerThread = std::thread([this] {
+        trackerThread = std::thread([this, region, uffd] {
             for (;;) {
                 // Poll for events
                 struct pollfd pollfd;
@@ -110,13 +113,16 @@ class RegionTracker
                 uffd_msg msg;
                 ssize_t nread = read(uffd, &msg, sizeof(msg));
                 if (nread == 0) {
-                    printf("EOF on userfaultfd!\n");
-                    exit(EXIT_FAILURE);
+                    throw std::runtime_error("EOF while reading userfaultfd");
                 }
 
                 if (nread == -1) {
-                    SPDLOG_ERROR("Read failed");
-                    throw std::runtime_error("Read failed");
+                    throw std::runtime_error("Reading userfaultfd failed");
+                }
+
+                if (msg.event == UFFD_EVENT_UNMAP) {
+                    SPDLOG_TRACE("Memory unmapped, finishing tracking");
+                    break;
                 }
 
                 if (msg.event != UFFD_EVENT_PAGEFAULT) {
@@ -134,8 +140,10 @@ class RegionTracker
                 SPDLOG_TRACE(
                   "Uffd fault: {} ({})", msg.arg.pagefault.address, pageBase);
 
+                // Record that this page is now dirty
                 dirty.emplace_back(pageBase, pageBase + HOST_PAGE_SIZE);
 
+                // Continue mapping a zero page (as kernel would normally)
                 uffdio_zeropage zeroPage;
                 zeroPage.range.start = msg.arg.pagefault.address;
                 zeroPage.range.len = HOST_PAGE_SIZE;
@@ -157,13 +165,7 @@ class RegionTracker
     }
 
   private:
-    std::span<const uint8_t> region;
-
     std::vector<std::pair<uint32_t, uint32_t>> dirty;
-
-    long uffd;
-    struct uffdio_api uffdApi;
-    struct uffdio_register uffdRegister;
 
     std::thread trackerThread;
 };
