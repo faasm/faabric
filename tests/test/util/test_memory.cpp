@@ -484,6 +484,7 @@ TEST_CASE("Test remapping memory", "[util]")
 TEST_CASE("Test uffd tracking", "[util]")
 {
     size_t memSize = 10 * HOST_PAGE_SIZE;
+    std::vector<uint8_t> expectedData(memSize, 5);
 
     // In order to close down the region tracker, it has to outlive the
     // unmapping of the memory it's tracking (hence scoping).
@@ -492,32 +493,61 @@ TEST_CASE("Test uffd tracking", "[util]")
     {
         MemoryRegion mem = allocatePrivateMemory(memSize);
 
-        SECTION("No mapping")
+        SECTION("No change")
         {
-            // Do nothing
+            // Expect memory to be zeroed
+            expectedData = std::vector<uint8_t>(memSize, 0);
         }
 
         SECTION("Mapped to file descriptor")
         {
+            // Create a file descriptor holding expected data
             int fd = createFd(memSize, "foobar");
+            writeToFd(fd, 0, expectedData);
+
+            // Map the memory
             mapMemoryPrivate({ mem.get(), memSize }, fd);
         }
 
+        SECTION("Edited memory")
+        {
+            // Copy expected data into memory
+            std::memcpy(mem.get(), expectedData.data(), memSize);
+        }
+
+        // Start tracking
         t.start(std::span<uint8_t>(mem.get(), memSize));
 
+        // Check memory is as expected to start with
+        std::vector<uint8_t> actualMem(mem.get(), mem.get() + memSize);
+        REQUIRE(actualMem == expectedData);
+
         // Make a change on one page
-        mem[0] = 3;
+        size_t offsetA = 0;
+        mem[offsetA] = 3;
+        expectedData[offsetA] = 3;
 
         // Make two changes on same page
-        mem[HOST_PAGE_SIZE + 10] = 4;
-        mem[HOST_PAGE_SIZE + 50] = 5;
+        size_t offsetB1 = HOST_PAGE_SIZE + 10;
+        size_t offsetB2 = HOST_PAGE_SIZE + 50;
+        mem[offsetB1] = 4;
+        mem[offsetB2] = 5;
+        expectedData[offsetB1] = 4;
+        expectedData[offsetB2] = 5;
 
         // Change another page
-        mem[5 * HOST_PAGE_SIZE + 10] = 6;
+        size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
+        mem[offsetC] = 6;
+        expectedData[offsetC] = 6;
+
+        // Check writes have propagated to the actual memory
+        std::vector<uint8_t> actualMemAfter(mem.get(), mem.get() + memSize);
+        REQUIRE(actualMemAfter == expectedData);
 
         // Get dirty regions
         std::vector<std::pair<uint32_t, uint32_t>> actualDirty = t.getDirty();
 
+        // Check dirty regions
         REQUIRE(actualDirty.size() == 3);
 
         std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {

@@ -8,6 +8,7 @@
 #include <linux/userfaultfd.h>
 #include <memory>
 #include <poll.h>
+#include <signal.h>
 #include <span>
 #include <string>
 #include <sys/ioctl.h>
@@ -57,18 +58,66 @@ std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
 std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
                                                            int nPages);
 // -------------------------
-// Userfault
+// Dirty tracking alternatives
 // -------------------------
 
-class RegionTracker
+class MprotectRegionTracker
 {
   public:
-    RegionTracker() = default;
+    MprotectRegionTracker() = default;
 
-    void start(std::span<const uint8_t> region)
+    static std::vector<std::pair<uint32_t, uint32_t>> dirty;
+
+    static void handler(int sig, siginfo_t* si, void* unused)
     {
+        // TODO - work out the page that's dirtied
+
+
+        // TODO - register dirty page somewhere
+
+        // TODO - reset mprotect to READ/WRITE
+    }
+
+    void start(std::span<uint8_t> regionIn)
+    {
+        region = regionIn;
+
+        struct sigaction sa;
+
+        sa.sa_flags = SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_sigaction = handler;
+        if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+            throw std::runtime_error("Failed sigaction");
+        }
+
+        if (::mprotect(region.data(), region.size(), PROT_READ) == -1) {
+            throw std::runtime_error("Failed mprotect");
+        }
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> getDirty() { return dirty; }
+
+    void stop() {}
+
+  private:
+    std::vector<std::pair<uint32_t, uint32_t>> dirty;
+    std::span<uint8_t> region;
+};
+
+class UffdRegionTracker
+{
+  public:
+    UffdRegionTracker() = default;
+
+    void start(std::span<const uint8_t> regionIn) { start(regionIn, -1); }
+
+    void start(std::span<const uint8_t> regionIn, int fd)
+    {
+        region = regionIn;
+
         // Create uffd
-        long uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+        uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
         if (uffd == -1) {
             SPDLOG_ERROR(
               "Failed on userfaultfd: {} ({})", errno, strerror(errno));
@@ -98,7 +147,7 @@ class RegionTracker
         }
 
         // Thread to monitor for events
-        trackerThread = std::thread([this, region, uffd] {
+        trackerThread = std::thread([this, fd] {
             for (;;) {
                 // Poll for events
                 struct pollfd pollfd;
@@ -132,27 +181,69 @@ class RegionTracker
                     throw std::runtime_error("Unexpected userfault event");
                 }
 
-                if (!(msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)) {
-                    throw std::runtime_error("Pagefault flag not as expected");
-                }
-
                 size_t pageBase =
                   ((uint8_t*)msg.arg.pagefault.address) - region.data();
 
-                SPDLOG_TRACE(
-                  "Uffd fault: {} ({})", msg.arg.pagefault.address, pageBase);
+                bool isDirty = false;
+                bool zero = false;
+                if (msg.arg.pagefault.flags == 0) {
+                    SPDLOG_TRACE("Uffd read: {} ({})",
+                                 msg.arg.pagefault.address,
+                                 pageBase);
+                    zero = true;
+                } else if (msg.arg.pagefault.flags &
+                           UFFD_PAGEFAULT_FLAG_WRITE) {
+                    SPDLOG_TRACE("Uffd write: {} ({})",
+                                 msg.arg.pagefault.address,
+                                 pageBase);
 
-                // Record that this page is now dirty
-                dirty.emplace_back(pageBase, pageBase + HOST_PAGE_SIZE);
+                    isDirty = true;
+                    zero = fd <= 0;
+                } else {
+                    SPDLOG_ERROR("Unexpected pagefault flag: {}",
+                                 msg.arg.pagefault.flags);
+                    throw std::runtime_error("Pagefault flag not as expected");
+                }
 
-                // Continue mapping a zero page (as kernel would normally)
-                uffdio_zeropage zeroPage;
-                zeroPage.range.start = msg.arg.pagefault.address;
-                zeroPage.range.len = HOST_PAGE_SIZE;
+                if (isDirty) {
+                    // Record that this page is now dirty
+                    dirty.emplace_back(pageBase, pageBase + HOST_PAGE_SIZE);
+                }
 
-                if (ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage) == -1) {
-                    SPDLOG_ERROR(
-                      "ioctl zeropage failed {} {}", errno, strerror(errno));
+                // Resolve the page fault so that the waiting thread can
+                // continue. If the fault was triggered from a standard private
+                // memory mapping, this means we can just write a zero page. If
+                // it was caused by a copy-on-write mapping, we need to copy the
+                // source page into the destination.
+                if (zero) {
+                    uffdio_zeropage zeroPage;
+                    zeroPage.range.start = msg.arg.pagefault.address;
+                    zeroPage.range.len = HOST_PAGE_SIZE;
+
+                    int ioctlRes = ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage);
+
+                    if (ioctlRes == -1) {
+                        SPDLOG_ERROR("ioctl zeropage failed {} {}",
+                                     errno,
+                                     strerror(errno));
+                    }
+                } else {
+                    uffdio_copy copyPage;
+
+                    copyPage.src = msg.arg.pagefault.address;
+                    copyPage.dst = (unsigned long)msg.arg.pagefault.address &
+                                   ~(HOST_PAGE_SIZE - 1);
+                    copyPage.len = HOST_PAGE_SIZE;
+                    copyPage.mode = 0;
+                    copyPage.copy = 0;
+
+                    int ioctlRes = ioctl(uffd, UFFDIO_COPY, &copyPage);
+
+                    if (ioctlRes == -1) {
+                        SPDLOG_ERROR("ioctl copypage failed {} {}",
+                                     errno,
+                                     strerror(errno));
+                    }
                 }
             }
         });
@@ -169,6 +260,8 @@ class RegionTracker
 
   private:
     std::vector<std::pair<uint32_t, uint32_t>> dirty;
+    std::span<const uint8_t> region;
+    long uffd;
 
     std::thread trackerThread;
 };
