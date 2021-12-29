@@ -35,22 +35,10 @@ bool SnapshotRegistry::snapshotExists(const std::string& key)
     return snapshotMap.find(key) != snapshotMap.end();
 }
 
-void SnapshotRegistry::mapSnapshot(const std::string& key, uint8_t* target)
-{
-    PROF_START(MapSnapshot)
-    auto d = getSnapshot(key);
-    d->mapToMemory(target);
-
-    // Reset dirty tracking otherwise whole mapped region is marked dirty
-    faabric::util::resetDirtyTracking();
-    PROF_END(MapSnapshot)
-}
-
 void SnapshotRegistry::registerSnapshot(
   const std::string& key,
   std::shared_ptr<faabric::util::SnapshotData> data)
 {
-    PROF_START(RegisterSnapshot)
     faabric::util::FullLock lock(snapshotsMx);
 
     SPDLOG_TRACE("Registering snapshot {} size {}", key, data->getSize());
@@ -59,7 +47,6 @@ void SnapshotRegistry::registerSnapshot(
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
-    PROF_END(RegisterSnapshot)
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)

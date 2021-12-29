@@ -197,9 +197,7 @@ class SnapshotData
 
     std::vector<uint8_t> getDataCopy(uint32_t offset, size_t dataSize);
 
-    void remapToMemory(uint8_t* target);
-
-    void mapToMemory(uint8_t* target);
+    void mapToMemory(std::span<uint8_t> target);
 
     void addMergeRegion(uint32_t offset,
                         size_t length,

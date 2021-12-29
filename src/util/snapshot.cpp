@@ -238,19 +238,23 @@ void SnapshotData::fillGapsWithOverwriteRegions()
     }
 }
 
-void SnapshotData::mapToMemory(uint8_t* target)
+void SnapshotData::mapToMemory(std::span<uint8_t> target)
 {
-    PROF_START(MapToMemory)
-    faabric::util::FullLock lock(snapMx);
+    // Note we only need a shared lock here as we are not modifying data and the
+    // OS will handle synchronisation of the mapping itself
+    PROF_START(MapSnapshot)
+    faabric::util::SharedLock lock(snapMx);
 
-    if (fd <= 0) {
-        std::string msg = "Attempting to map memory of non-restorable snapshot";
-        SPDLOG_ERROR(msg);
-        throw std::runtime_error(msg);
+    if (target.size() > size) {
+        SPDLOG_ERROR("Mapping target memory larger than snapshot ({} > {})",
+                     target.size(),
+                     size);
+        throw std::runtime_error("Target memory larger than snapshot");
     }
 
-    mapMemoryPrivate({ target, size }, fd);
-    PROF_END(MapToMemory)
+    faabric::util::mapMemoryPrivate(target, fd);
+
+    PROF_END(MapSnapshot)
 }
 
 std::map<uint32_t, SnapshotMergeRegion> SnapshotData::getMergeRegions()

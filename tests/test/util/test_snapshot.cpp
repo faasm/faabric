@@ -62,7 +62,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<uint8_t> dataA(100, 1);
 
     std::vector<uint8_t> dataB(2 * HOST_PAGE_SIZE, 2);
-    MemoryRegion memB = allocateSharedMemory(dataB.size());
+    MemoryRegion memB = allocatePrivateMemory(dataB.size());
     std::memcpy(memB.get(), dataB.data(), dataB.size());
 
     std::vector<uint8_t> dataC(sizeof(int), 3);
@@ -141,8 +141,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Set up shared memory
     int sharedMemPages = 20;
-    MemoryRegion sharedMem =
-      allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
+    size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
 
     // Check it's zeroed
     std::vector<uint8_t> expectedInitial(snap->getSize(), 0);
@@ -151,7 +151,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(actualSharedMemBefore == expectedInitial);
 
     // Map the snapshot and check again
-    snap->mapToMemory(sharedMem.get());
+    snap->mapToMemory({ sharedMem.get(), snap->getSize() });
     std::vector<uint8_t> actualSharedMemAfter(
       sharedMem.get(), sharedMem.get() + snap->getSize());
     REQUIRE(actualSharedMemAfter == actualSnapMem);
@@ -179,12 +179,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<uint8_t> expectedSnapMem = snap->getDataCopy();
 
     // Set up two shared mem regions
-    MemoryRegion sharedMemA = allocateSharedMemory(snapSize);
-    MemoryRegion sharedMemB = allocateSharedMemory(snapSize);
+    MemoryRegion sharedMemA = allocatePrivateMemory(snapSize);
+    MemoryRegion sharedMemB = allocatePrivateMemory(snapSize);
 
     // Map the snapshot and both regions reflect the change
-    snap->mapToMemory(sharedMemA.get());
-    snap->mapToMemory(sharedMemB.get());
+    snap->mapToMemory({ sharedMemA.get(), snapSize });
+    snap->mapToMemory({ sharedMemB.get(), snapSize });
 
     REQUIRE(std::vector(sharedMemA.get(), sharedMemA.get() + snapSize) ==
             expectedSnapMem);
@@ -272,8 +272,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(originalData.size() == originalSize);
 
     // Map to some other region of memory large enough for the extended version
-    MemoryRegion sharedMem = allocateSharedMemory(expandedSize);
-    snap->mapToMemory(sharedMem.get());
+    MemoryRegion sharedMem = allocatePrivateMemory(expandedSize);
+    snap->mapToMemory({ sharedMem.get(), originalSize });
 
     // Add some data to the extended region. Check the snapshot extends to fit
     std::vector<uint8_t> dataC(300, 5);
@@ -290,7 +290,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(snap->getSize() == expectedSizeB);
 
     // Remap to shared memory
-    snap->mapToMemory(sharedMem.get());
+    snap->mapToMemory({ sharedMem.get(), snap->getSize() });
 
     // Check mapped region matches
     std::vector<uint8_t> actualData = snap->getDataCopy();
@@ -331,8 +331,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot to some memory
-    MemoryRegion sharedMem = allocateSharedMemory(memSize);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    MemoryRegion sharedMem = allocatePrivateMemory(memSize);
+    snap->mapToMemory({ sharedMem.get(), memSize });
 
     // Check mapping works
     int* intA = (int*)(sharedMem.get() + intAOffset);
@@ -449,9 +449,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
 
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    snap->mapToMemory({ sharedMem.get(), sharedMemSize });
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -839,9 +839,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot to some memory
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
 
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    snap->mapToMemory({ sharedMem.get(), sharedMemSize });
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -913,8 +913,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Map the snapshot
     size_t sharedMemSize = snapPages * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocateSharedMemory(snapPages * HOST_PAGE_SIZE);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
+    snap->mapToMemory({ sharedMem.get(), sharedMemSize });
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -1003,8 +1003,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
-    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
+    snap->mapToMemory({ sharedMem.get(), sharedMemSize });
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -1194,8 +1194,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
-    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
+    snap->mapToMemory({ sharedMem.get(), sharedMemSize });
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();
@@ -1274,8 +1274,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     reg.registerSnapshot(snapKey, snap);
 
     // Map the snapshot
-    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
+    snap->mapToMemory({ sharedMem.get(), snapSize });
     faabric::util::resetDirtyTracking();
 
     uint32_t changeStartPage = 0;
@@ -1450,8 +1450,8 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     snap->copyInData(dataA);
 
     // Map some memory
-    MemoryRegion memA = allocateSharedMemory(snapSize);
-    snap->mapToMemory(memA.get());
+    MemoryRegion memA = allocatePrivateMemory(snapSize);
+    snap->mapToMemory({ memA.get(), snapSize });
 
     faabric::util::resetDirtyTracking();
 
@@ -1501,8 +1501,8 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     REQUIRE(dirtyRegionData == expectedDirtyRegionData);
 
     // Map more memory from the snapshot, check it contains all updates
-    MemoryRegion memB = allocateSharedMemory(snapSize);
-    snap->mapToMemory(memB.get());
+    MemoryRegion memB = allocatePrivateMemory(snapSize);
+    snap->mapToMemory({ memB.get(), snapSize });
     std::vector<uint8_t> expectedFinal(snapSize, 0);
     std::memcpy(expectedFinal.data() + offsetA, dataA.data(), dataA.size());
     std::memcpy(expectedFinal.data() + offsetB, dataB.data(), dataB.size());
@@ -1512,7 +1512,7 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     REQUIRE(actualMemB == expectedFinal);
 
     // Remap first memory and check this also contains all updates
-    snap->mapToMemory(memA.get());
+    snap->mapToMemory({ memA.get(), snapSize });
     std::vector<uint8_t> remappedMemA(memB.get(), memB.get() + snapSize);
     REQUIRE(remappedMemA == expectedFinal);
 }

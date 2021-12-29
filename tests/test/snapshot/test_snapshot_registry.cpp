@@ -67,13 +67,15 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(actualC->getDataPtr() == snapC->getDataPtr());
 
     // Create regions onto which we will map the snapshots
-    MemoryRegion actualDataA = allocateSharedMemory(1 * HOST_PAGE_SIZE);
-    MemoryRegion actualDataB = allocateSharedMemory(2 * HOST_PAGE_SIZE);
-    MemoryRegion actualDataC = allocateSharedMemory(3 * HOST_PAGE_SIZE);
+    size_t sizeA = HOST_PAGE_SIZE;
+    size_t sizeC = 3 * HOST_PAGE_SIZE;
+    MemoryRegion actualDataA = allocatePrivateMemory(sizeA);
+    MemoryRegion actualDataB = allocatePrivateMemory(2 * HOST_PAGE_SIZE);
+    MemoryRegion actualDataC = allocatePrivateMemory(sizeC);
 
     // Map two of them
-    reg.mapSnapshot(keyA, actualDataA.get());
-    reg.mapSnapshot(keyC, actualDataC.get());
+    snapA->mapToMemory({ actualDataA.get(), sizeA });
+    snapC->mapToMemory({ actualDataC.get(), sizeC });
 
     // Here we need to check the actual data after mapping
     std::vector<uint8_t> vecDataA = snapA->getDataCopy();

@@ -323,7 +323,7 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             snap->writeQueuedDiffs();
 
             // Remap memory to snapshot
-            snap->mapToMemory(exec->getDummyMemory().data());
+            snap->mapToMemory(exec->getDummyMemory());
 
             uint8_t* reductionAPtr =
               exec->getDummyMemory().data() + reductionAOffset;

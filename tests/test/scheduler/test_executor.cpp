@@ -49,8 +49,8 @@ void TestExecutor::restore(faabric::Message& msg)
     auto snap = reg.getSnapshot(msg.snapshotkey());
 
     dummyMemorySize = snap->getSize();
-    dummyMemory = faabric::util::allocateSharedMemory(snap->getSize());
-    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
+    dummyMemory = faabric::util::allocatePrivateMemory(snap->getSize());
+    snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
 }
 
 faabric::util::MemoryView TestExecutor::getMemoryView()

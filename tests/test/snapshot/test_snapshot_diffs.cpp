@@ -36,9 +36,13 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     int sharedMemPages = 8;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocateSharedMemory(sharedMemSize);
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
 
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    // Check we can write to shared mem
+    sharedMem[0] = 1;
+
+    // Map to the snapshot
+    snap->mapToMemory({ sharedMem.get(), snapSize });
 
     // Make various changes
     sharedMem[0] = 1;
@@ -64,11 +68,10 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // Make shared memory larger than original snapshot
     int sharedMemPages = 8;
     size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem =
-      allocateSharedMemory(sharedMemPages * HOST_PAGE_SIZE);
+    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
 
     // Map the snapshot to the start of the memory
-    reg.mapSnapshot(snapKey, sharedMem.get());
+    snap->mapToMemory({ sharedMem.get(), snapSize });
 
     // Reset dirty tracking
     faabric::util::resetDirtyTracking();

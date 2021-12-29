@@ -51,6 +51,8 @@ std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
 // -------------------------
 typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
+MemoryRegion allocatePrivateMemory(size_t size);
+
 MemoryRegion allocateSharedMemory(size_t size);
 
 MemoryRegion allocateVirtualMemory(size_t size);

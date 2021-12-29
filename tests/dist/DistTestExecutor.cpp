@@ -72,7 +72,7 @@ void DistTestExecutor::restore(faabric::Message& msg)
 
     setUpDummyMemory(snap->getSize());
 
-    reg.mapSnapshot(msg.snapshotkey(), dummyMemory.get());
+    snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
 }
 
 faabric::util::MemoryView DistTestExecutor::getMemoryView()
@@ -89,7 +89,7 @@ void DistTestExecutor::setUpDummyMemory(size_t memSize)
 {
     if (dummyMemory.get() == nullptr) {
         SPDLOG_DEBUG("Dist test executor initialising memory size {}", memSize);
-        dummyMemory = faabric::util::allocateSharedMemory(memSize);
+        dummyMemory = faabric::util::allocatePrivateMemory(memSize);
         dummyMemorySize = memSize;
     }
 }
