@@ -3,6 +3,7 @@ project(faabric)
 
 option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
 option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
+option(FAABRIC_SELF_TRACING "Turn on system tracing using the logger" OFF)
 
 # Enable colorized compiler output
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -21,6 +22,11 @@ set(CMAKE_EXE_LINKER_FLAGS "-fuse-ld=lld")
 
 # Compile comamnds for clang tools
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(${FAABRIC_SELF_TRACING})
+    message("-- Activated Faabric self-tracing")
+    add_definitions(-DTRACE_ALL=1)
+endif()
 
 # Set-up use of sanitisers
 if (FAABRIC_USE_SANITISER STREQUAL "Address")

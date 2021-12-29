@@ -1,5 +1,6 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/timing.h>
 
 #include <fcntl.h>
 #include <stdexcept>
@@ -80,27 +81,50 @@ AlignedChunk getPageAlignedChunk(long offset, long length)
 // Dirty page tracking
 // -------------------------
 
+class ClearRefsWrapper
+{
+  public:
+    ClearRefsWrapper()
+    {
+        f = ::fopen(CLEAR_REFS, "w");
+        if (f == nullptr) {
+            SPDLOG_ERROR("Could not open clear_refs ({})", strerror(errno));
+            throw std::runtime_error("Could not open clear_refs");
+        }
+    }
+
+    ~ClearRefsWrapper() { ::fclose(f); }
+
+    void reset()
+    {
+        // Write 4 to the file to track from now on
+        // https://www.kernel.org/doc/html/v5.4/admin-guide/mm/soft-dirty.html
+        char value[] = "4";
+        size_t nWritten = ::fwrite(value, sizeof(char), 1, f);
+
+        if (nWritten != 1) {
+            SPDLOG_ERROR("Failed to write to clear_refs ({})", nWritten);
+            ::fclose(f);
+            throw std::runtime_error("Failed to write to clear_refs");
+        }
+
+        ::rewind(f);
+    }
+
+  private:
+    FILE* f = nullptr;
+};
+
 void resetDirtyTracking()
 {
+    static ClearRefsWrapper wrap;
+
+    PROF_START(ResetDirty)
+
     SPDLOG_DEBUG("Resetting dirty tracking");
+    wrap.reset();
 
-    FILE* fd = fopen(CLEAR_REFS, "w");
-    if (fd == nullptr) {
-        SPDLOG_ERROR("Could not open clear_refs ({})", strerror(errno));
-        throw std::runtime_error("Could not open clear_refs");
-    }
-
-    // Write 4 to the file to track from now on
-    // https://www.kernel.org/doc/html/v5.4/admin-guide/mm/soft-dirty.html
-    char value[] = "4";
-    size_t nWritten = fwrite(value, sizeof(char), 1, fd);
-    if (nWritten != 1) {
-        SPDLOG_ERROR("Failed to write to clear_refs ({})", nWritten);
-        fclose(fd);
-        throw std::runtime_error("Failed to write to clear_refs");
-    }
-
-    fclose(fd);
+    PROF_END(ResetDirty)
 }
 
 std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries)
@@ -196,6 +220,11 @@ MemoryRegion doAlloc(size_t size, int prot, int flags)
     }
 
     return mem;
+}
+
+MemoryRegion allocatePrivateMemory(size_t size)
+{
+    return doAlloc(size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);
 }
 
 MemoryRegion allocateSharedMemory(size_t size)

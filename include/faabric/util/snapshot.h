@@ -17,7 +17,11 @@ namespace faabric::util {
 enum SnapshotDataType
 {
     Raw,
-    Int
+    Bool,
+    Int,
+    Long,
+    Float,
+    Double
 };
 
 enum SnapshotMergeOperation
@@ -27,7 +31,8 @@ enum SnapshotMergeOperation
     Product,
     Subtract,
     Max,
-    Min
+    Min,
+    Ignore
 };
 
 class SnapshotDiff
@@ -65,13 +70,105 @@ class SnapshotMergeRegion
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
 
+    SnapshotMergeRegion() = default;
+
+    SnapshotMergeRegion(uint32_t offsetIn,
+                        size_t lengthIn,
+                        SnapshotDataType dataTypeIn,
+                        SnapshotMergeOperation operationIn);
+
     void addDiffs(std::vector<SnapshotDiff>& diffs,
-                  const uint8_t* original,
-                  uint32_t originalSize,
-                  const uint8_t* updated,
-                  uint32_t dirtyRegionStart,
-                  uint32_t dirtyRegionEnd);
+                  std::span<const uint8_t> originalData,
+                  std::span<const uint8_t> updatedData,
+                  std::pair<uint32_t, uint32_t> dirtyRange);
+
+  private:
+    void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
+                          std::span<const uint8_t> original,
+                          std::span<const uint8_t> updated,
+                          std::pair<uint32_t, uint32_t> dirtyRange);
 };
+
+template<typename T>
+inline bool calculateDiffValue(const uint8_t* original,
+                               uint8_t* updated,
+                               SnapshotMergeOperation operation)
+{
+    // Cast to value
+    T updatedValue = unalignedRead<T>(updated);
+    T originalValue = unalignedRead<T>(original);
+
+    // Skip if no change
+    if (originalValue == updatedValue) {
+        return false;
+    }
+
+    // Work out final result
+    switch (operation) {
+        case (SnapshotMergeOperation::Sum): {
+            // Sums must send the value to be _added_, and
+            // not the final result
+            updatedValue -= originalValue;
+            break;
+        }
+        case (SnapshotMergeOperation::Subtract): {
+            // Subtractions must send the value to be
+            // subtracted, not the result
+            updatedValue = originalValue - updatedValue;
+            break;
+        }
+        case (SnapshotMergeOperation::Product): {
+            // Products must send the value to be
+            // multiplied, not the result
+            updatedValue /= originalValue;
+            break;
+        }
+        case (SnapshotMergeOperation::Max):
+        case (SnapshotMergeOperation::Min):
+            // Min and max don't need to change
+            break;
+        default: {
+            SPDLOG_ERROR("Can't calculate diff for operation: {}", operation);
+            throw std::runtime_error("Can't calculate diff");
+        }
+    }
+
+    unalignedWrite<T>(updatedValue, updated);
+
+    return true;
+}
+
+template<typename T>
+inline T applyDiffValue(const uint8_t* original,
+                        const uint8_t* diff,
+                        SnapshotMergeOperation operation)
+{
+
+    auto diffValue = unalignedRead<T>(diff);
+    T originalValue = unalignedRead<T>(original);
+
+    switch (operation) {
+        case (SnapshotMergeOperation::Sum): {
+            return diffValue + originalValue;
+        }
+        case (SnapshotMergeOperation::Subtract): {
+            return originalValue - diffValue;
+        }
+        case (SnapshotMergeOperation::Product): {
+            return originalValue * diffValue;
+        }
+        case (SnapshotMergeOperation::Max): {
+            return std::max<T>(originalValue, diffValue);
+        }
+        case (SnapshotMergeOperation::Min): {
+            return std::min<T>(originalValue, diffValue);
+        }
+        default: {
+            SPDLOG_ERROR("Can't apply merge operation: {}", operation);
+            throw std::runtime_error("Can't apply merge operation");
+        }
+    }
+}
 
 class SnapshotData
 {
@@ -100,13 +197,15 @@ class SnapshotData
 
     std::vector<uint8_t> getDataCopy(uint32_t offset, size_t dataSize);
 
-    void mapToMemory(uint8_t* target);
+    void mapToMemory(std::span<uint8_t> target);
 
     void addMergeRegion(uint32_t offset,
                         size_t length,
                         SnapshotDataType dataType,
                         SnapshotMergeOperation operation,
                         bool overwrite = false);
+
+    void fillGapsWithOverwriteRegions();
 
     void clearMergeRegions();
 

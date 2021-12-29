@@ -14,7 +14,9 @@ from invoke import task
 
 
 @task
-def cmake(ctx, clean=False, shared=False, build="Debug", sanitiser="None"):
+def cmake(
+    ctx, clean=False, shared=False, build="Debug", sanitiser="None", prof=False
+):
     """
     Configures the build
     """
@@ -41,6 +43,7 @@ def cmake(ctx, clean=False, shared=False, build="Debug", sanitiser="None"):
         "-DCMAKE_CXX_COMPILER=/usr/bin/clang++-13",
         "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
         "-DFAABRIC_USE_SANITISER={}".format(sanitiser),
+        "-DFAABRIC_SELF_TRACING=ON" if prof else "",
         PROJ_ROOT,
     ]
 

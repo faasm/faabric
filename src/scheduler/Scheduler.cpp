@@ -508,7 +508,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
                   snapMemView.getDirtyRegions();
 
-                c.pushSnapshotDiffs(snapshotKey, true, snapshotDiffs);
+                c.pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
             } else {
                 c.pushSnapshot(snapshotKey, snap);
                 pushedSnapshotsMap[snapshotKey].insert(host);
@@ -916,7 +916,7 @@ void Scheduler::pushSnapshotDiffs(
     }
 
     SnapshotClient& c = getSnapshotClient(msg.masterhost());
-    c.pushSnapshotDiffs(snapKey, false, diffs);
+    c.pushSnapshotDiffs(snapKey, diffs);
 }
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)

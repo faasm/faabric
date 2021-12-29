@@ -26,11 +26,12 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::string user = "snapshots";
     std::string function = "fake-diffs";
     std::string snapshotKey = "dist-snap-check";
+    std::vector<uint8_t> inputData = { 0, 1, 2, 3, 4, 5, 6 };
 
+    // Set up snapshot
     size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
     auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
 
-    // Set up snapshot
     reg.registerSnapshot(snapshotKey, snap);
 
     // Set up the message
@@ -40,7 +41,6 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Set up some input data
     faabric::Message& m = req->mutable_messages()->at(0);
-    std::vector<uint8_t> inputData = { 0, 1, 2, 3, 4, 5, 6 };
     m.set_inputdata(inputData.data(), inputData.size());
     m.set_snapshotkey(snapshotKey);
 
