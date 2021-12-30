@@ -7,6 +7,7 @@
 #include <boost/circular_buffer.hpp>
 #include <condition_variable>
 #include <queue>
+#include <readerwriterqueue/readerwritercircularbuffer.h>
 
 #define DEFAULT_QUEUE_TIMEOUT_MS 5000
 #define DEFAULT_QUEUE_SIZE 1024
@@ -140,7 +141,8 @@ class Queue
     std::mutex mx;
 };
 
-// Fixed size queue using a circular buffer as underlying container
+// Wrapper around moodycamel's blocking fixed capacity single producer single
+// consumer queue
 template<typename T>
 class FixedCapacityQueue
 {
@@ -153,138 +155,64 @@ class FixedCapacityQueue
 
     void enqueue(T value, long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        UniqueLock lock(mx);
-
         if (timeoutMs <= 0) {
             SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
             throw std::runtime_error("Invalid queue timeout");
         }
 
-        // If the queue is full, wait until elements are consumed
-        while (mq.size() == mq.capacity()) {
-            std::cv_status returnVal = notFullNotifier.wait_for(
-              lock, std::chrono::milliseconds(timeoutMs));
-
-            // Work out if this has returned due to timeout expiring
-            if (returnVal == std::cv_status::timeout) {
-                throw QueueTimeoutException(
-                  "Timeout waiting for queue to empty");
-            }
-        }
-
-        mq.push_back(std::move(value));
-        notEmptyNotifier.notify_one();
-    }
-
-    void dequeueIfPresent(T* res)
-    {
-        UniqueLock lock(mx);
-
-        if (!mq.empty()) {
-            T value = std::move(mq.front());
-            mq.pop_front();
-            notFullNotifier.notify_one();
-
-            *res = value;
+        bool success =
+          mq.wait_enqueue_timed(std::move(value), timeoutMs * 1000);
+        if (!success) {
+            throw QueueTimeoutException("Timeout waiting for enqueue");
         }
     }
+
+    void dequeueIfPresent(T* res) { mq.try_dequeue(*res); }
 
     T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        UniqueLock lock(mx);
-
         if (timeoutMs <= 0) {
             SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
             throw std::runtime_error("Invalid queue timeout");
         }
 
-        while (mq.empty()) {
-            std::cv_status returnVal = notEmptyNotifier.wait_for(
-              lock, std::chrono::milliseconds(timeoutMs));
-
-            // Work out if this has returned due to timeout expiring
-            if (returnVal == std::cv_status::timeout) {
-                throw QueueTimeoutException("Timeout waiting for dequeue");
-            }
+        T value;
+        bool success = mq.wait_dequeue_timed(value, timeoutMs * 1000);
+        if (!success) {
+            throw QueueTimeoutException("Timeout waiting for dequeue");
         }
-
-        T value = std::move(mq.front());
-        mq.pop_front();
-        notFullNotifier.notify_one();
 
         return value;
     }
 
     T* peek(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        UniqueLock lock(mx);
-
-        if (timeoutMs <= 0) {
-            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
-            throw std::runtime_error("Invalid queue timeout");
-        }
-
-        while (mq.empty()) {
-            std::cv_status returnVal = notEmptyNotifier.wait_for(
-              lock, std::chrono::milliseconds(timeoutMs));
-
-            // Work out if this has returned due to timeout expiring
-            if (returnVal == std::cv_status::timeout) {
-                throw QueueTimeoutException("Timeout waiting for dequeue");
-            }
-        }
-
-        return &mq.front();
+        throw std::runtime_error("Peek not implemented");
     }
 
-    void waitToDrain(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    void drain(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
     {
-        UniqueLock lock(mx);
-
-        if (timeoutMs <= 0) {
-            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
-            throw std::runtime_error("Invalid queue timeout");
-        }
-
-        while (!mq.empty()) {
-            std::cv_status returnVal = notFullNotifier.wait_for(
-              lock, std::chrono::milliseconds(timeoutMs));
-
-            // Work out if this has returned due to timeout expiring
-            if (returnVal == std::cv_status::timeout) {
-                throw QueueTimeoutException("Timeout waiting for empty");
+        T value;
+        bool success;
+        while (size() > 0) {
+            success = mq.wait_dequeue_timed(value, timeoutMs * 1000);
+            if (!success) {
+                throw QueueTimeoutException("Timeout waiting to drain");
             }
         }
     }
 
-    void drain()
-    {
-        UniqueLock lock(mx);
-
-        while (!mq.empty()) {
-            mq.pop_front();
-        }
-    }
-
-    long size()
-    {
-        UniqueLock lock(mx);
-        return mq.size();
-    }
+    long size() { return mq.size_approx(); }
 
     void reset()
     {
-        UniqueLock lock(mx);
-
-        boost::circular_buffer<T> empty(mq.capacity());
+        moodycamel::BlockingReaderWriterCircularBuffer<T> empty(
+          mq.max_capacity());
         std::swap(mq, empty);
     }
 
   private:
-    boost::circular_buffer<T> mq;
-    std::condition_variable notFullNotifier;
-    std::condition_variable notEmptyNotifier;
-    std::mutex mx;
+    moodycamel::BlockingReaderWriterCircularBuffer<T> mq;
 };
 
 class TokenPool

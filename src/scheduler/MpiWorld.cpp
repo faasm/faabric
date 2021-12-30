@@ -1494,10 +1494,16 @@ void MpiWorld::allToAll(int rank,
     }
 }
 
+// 30/12/21 - Probe is now broken after the switch to a different type of
+// queues for local messaging. New queues don't support (off the shelve) the
+// ability to return a reference to the first element in the queue. In order
+// to re-include support for probe we must fix the peek method in the
+// queues.
 void MpiWorld::probe(int sendRank, int recvRank, MPI_Status* status)
 {
     const std::shared_ptr<InMemoryMpiQueue>& queue =
       getLocalQueue(sendRank, recvRank);
+    // 30/12/21 - Peek will throw a runtime error
     std::shared_ptr<faabric::MPIMessage> m = *(queue->peek());
 
     faabric_datatype_t* datatype = getFaabricDatatypeFromId(m->type());

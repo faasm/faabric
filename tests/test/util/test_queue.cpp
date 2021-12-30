@@ -19,12 +19,9 @@ typedef faabric::util::FixedCapacityQueue<std::promise<int32_t>>
   FixedCapPromiseQueue;
 
 namespace tests {
-TEMPLATE_TEST_CASE("Test queue operations",
-                   "[util]",
-                   IntQueue,
-                   FixedCapIntQueue)
+TEST_CASE("Test queue operations", "[util]")
 {
-    TestType q;
+    IntQueue q;
 
     // Check deqeue if present does nothing if nothing in queue
     int dummy = -999;
@@ -74,22 +71,16 @@ TEMPLATE_TEST_CASE("Test drain queue", "[util]", IntQueue, FixedCapIntQueue)
     REQUIRE(q.size() == 0);
 }
 
-TEMPLATE_TEST_CASE("Test wait for draining empty queue",
-                   "[util]",
-                   IntQueue,
-                   FixedCapIntQueue)
+TEST_CASE("Test wait for draining empty queue", "[util]")
 {
     // Just need to check this doesn't fail
-    TestType q;
+    IntQueue q;
     q.waitToDrain(100);
 }
 
-TEMPLATE_TEST_CASE("Test wait for draining queue with elements",
-                   "[util]",
-                   IntQueue,
-                   FixedCapIntQueue)
+TEST_CASE("Test wait for draining queue with elements", "[util]")
 {
-    TestType q;
+    IntQueue q;
     int nElems = 5;
     std::vector<int> dequeued;
     std::vector<int> expected;
@@ -151,7 +142,10 @@ TEMPLATE_TEST_CASE("Test queue on non-copy-constructible object",
     REQUIRE(fb.get() == 2);
 }
 
-TEST_CASE("Test queue timeout must be positive", "[util]")
+TEMPLATE_TEST_CASE("Test queue timeout must be positive",
+                   "[util]",
+                   IntQueue,
+                   FixedCapIntQueue)
 {
     int timeoutValueMs;
 
@@ -159,7 +153,7 @@ TEST_CASE("Test queue timeout must be positive", "[util]")
 
     SECTION("Negative timeout") { timeoutValueMs = -1; }
 
-    faabric::util::Queue<int> q;
+    TestType q;
     q.enqueue(10);
     REQUIRE_THROWS(q.dequeue(timeoutValueMs));
 }
