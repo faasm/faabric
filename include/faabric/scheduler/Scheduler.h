@@ -69,10 +69,6 @@ class Executor
 
     void releaseClaim();
 
-    void resetDirtyTracking();
-
-    std::vector<faabric::util::SnapshotDiff> getDirtyRegions();
-
   protected:
     virtual void restore(faabric::Message& msg);
 

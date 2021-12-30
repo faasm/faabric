@@ -134,8 +134,20 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Note this must be done after the restore has happened.
     bool needsSnapshotSync = false;
     if (isThreads && isSnapshot) {
-        resetDirtyTracking();
         needsSnapshotSync = true;
+
+        // Fill snapshot gaps with overwrites
+        auto snap =
+          faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+        snap->fillGapsWithOverwriteRegions();
+
+        // Restart dirty tracking if need be
+        faabric::util::DirtyPageTracker& tracker =
+          faabric::util::getDirtyPageTracker();
+
+        if (!tracker.isThreadLocal()) {
+            tracker.restartTracking(getMemoryView());
+        }
     }
 
     // Set up shared counter for this batch of tasks
@@ -250,6 +262,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
               faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
+        // Start dirty tracking if necessary
+        faabric::util::DirtyPageTracker& tracker =
+          faabric::util::getDirtyPageTracker();
+        if (task.needsSnapshotSync && tracker.isThreadLocal()) {
+            tracker.startTracking(getMemoryView());
+        }
+
         bool isMaster = msg.masterhost() == conf.endpointHost;
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
@@ -274,6 +293,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
             msg.set_outputdata(errorMessage);
         }
 
+        // Stop dirty tracking if necessary
+        if (task.needsSnapshotSync && tracker.isThreadLocal()) {
+            tracker.stopTracking(getMemoryView());
+        }
+
         // Set the return value
         msg.set_returnvalue(returnValue);
 
@@ -291,17 +315,15 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Handle snapshot diffs _before_ we reset the executor
         std::span<uint8_t> funcMemory = getMemoryView();
-        if (!funcMemory.empty() && isLastInBatch && task.needsSnapshotSync) {
+        bool shouldSync = tracker.isThreadLocal() || isLastInBatch;
+        if (!funcMemory.empty() && shouldSync && task.needsSnapshotSync) {
             auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
               msg.snapshotkey());
 
             SPDLOG_TRACE("Diffing memory with pre-execution snapshot for {}",
                          msg.snapshotkey());
 
-            // Fill gaps with overwrites
-            snap->fillGapsWithOverwriteRegions();
-
-            // Work out the diffs
+            // Stop dirty tracking and work out the diffs
             std::vector<faabric::util::SnapshotDiff> diffs =
               snap->diffWithMemory(funcMemory);
 
@@ -317,11 +339,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
                 snap->queueDiffs(diffs);
             } else {
+                // TODO - avoid doing this for every thread, batch into a single
+                // request.
                 sch.pushSnapshotDiffs(msg, diffs);
             }
-
-            // Reset dirty page tracking
-            resetDirtyTracking();
 
             // Clear merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
@@ -441,36 +462,4 @@ void Executor::restore(faabric::Message& msg)
 {
     SPDLOG_WARN("Executor has not implemented restore method");
 }
-
-void Executor::resetDirtyTracking()
-{
-    faabric::util::DirtyPageTracker& tracker =
-      faabric::util::getDirtyPageTracker();
-    tracker.restartTracking(getMemoryView());
-}
-
-std::vector<faabric::util::SnapshotDiff> Executor::getDirtyRegions()
-{
-    // TODO - have threads themselves write the dirty regions into a list then
-    // return that
-    faabric::util::DirtyPageTracker& tracker =
-      faabric::util::getDirtyPageTracker();
-    std::vector<std::pair<uint32_t, uint32_t>> regions =
-      tracker.getDirtyOffsets(getMemoryView());
-
-    // Convert to snapshot diffs
-    std::vector<faabric::util::SnapshotDiff> diffs;
-    diffs.reserve(regions.size());
-    for (auto [regionBegin, regionEnd] : regions) {
-        SPDLOG_TRACE("Executor memory dirty {}-{}", regionBegin, regionEnd);
-        diffs.emplace_back(
-          faabric::util::SnapshotDataType::Raw,
-          faabric::util::SnapshotMergeOperation::Overwrite,
-          regionBegin,
-          getMemoryView().subspan(regionBegin, regionEnd - regionBegin));
-    }
-
-    return diffs;
-}
-
 }

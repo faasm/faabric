@@ -261,7 +261,6 @@ void SnapshotData::mapToMemory(std::span<uint8_t> target)
     // Reset dirty tracking otherwise whole mapped region is marked dirty
     faabric::util::DirtyPageTracker& tracker =
       faabric::util::getDirtyPageTracker();
-    tracker.restartTracking(target);
 
     PROF_END(MapSnapshot)
 }
