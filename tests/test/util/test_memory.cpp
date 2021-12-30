@@ -1,5 +1,7 @@
 #include <catch2/catch.hpp>
 
+#include "fixtures.h"
+
 #include <faabric/util/dirty.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
@@ -242,48 +244,58 @@ TEST_CASE("Test already aligned memory chunk", "[util]")
     REQUIRE(actual.offsetRemainder == 0);
 }
 
-TEST_CASE("Test dirty page checking", "[util]")
+TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
 {
+    SECTION("Soft dirty PTEs") { conf.dirtyTrackingMode = "softpte"; }
+
+    // SECTION("Segfaults") { conf.dirtyTrackingMode = "sigseg"; }
+
     // Create several pages of memory
     int nPages = 6;
     size_t memSize = faabric::util::HOST_PAGE_SIZE * nPages;
-    auto* sharedMemory = (uint8_t*)mmap(
-      nullptr, memSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    MemoryRegion memPtr = allocatePrivateMemory(memSize);
+    std::span<uint8_t> memView(memPtr.get(), memSize);
 
-    if (sharedMemory == nullptr) {
+    if (memPtr == nullptr) {
         FAIL("Could not provision memory");
     }
 
-    resetDirtyTracking();
+    DirtyPageTracker& tracker = getDirtyPageTracker();
+    tracker.clearAll();
 
-    std::vector<int> actual =
-      faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    std::vector<std::pair<uint32_t, uint32_t>> actual =
+      tracker.getDirtyOffsets(memView);
     REQUIRE(actual.empty());
 
+    tracker.startTracking(memView);
+
     // Dirty two of the pages
-    uint8_t* pageZero = sharedMemory;
+    uint8_t* pageZero = memPtr.get();
     uint8_t* pageOne = pageZero + faabric::util::HOST_PAGE_SIZE;
     uint8_t* pageThree = pageOne + (2 * faabric::util::HOST_PAGE_SIZE);
 
     pageOne[10] = 1;
     pageThree[123] = 4;
 
-    std::vector<int> expected = { 1, 3 };
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    std::vector<std::pair<uint32_t, uint32_t>> expected = {
+        { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
+        { 3 * HOST_PAGE_SIZE, 4* HOST_PAGE_SIZE }
+    };
+    actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
     // And another
     uint8_t* pageFive = pageThree + (2 * faabric::util::HOST_PAGE_SIZE);
     pageFive[99] = 3;
 
-    expected = { 1, 3, 5 };
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    expected.emplace_back(5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE);
+    actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
     // Reset
-    resetDirtyTracking();
+    tracker.restartTracking(memView);
 
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual.empty());
 
     // Check the data hasn't changed
@@ -296,16 +308,17 @@ TEST_CASE("Test dirty page checking", "[util]")
     pageThree[100] = 2;
     pageFour[22] = 5;
 
-    expected = { 3, 4 };
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    // As pages are adjacent we get a single region
+    expected = {
+        { 3 * HOST_PAGE_SIZE, 5 * HOST_PAGE_SIZE },
+    };
+    actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
     // Final reset and check
-    resetDirtyTracking();
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
+    tracker.stopTracking(memView);
+    actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual.empty());
-
-    munmap(sharedMemory, memSize);
 }
 
 TEST_CASE("Test dirty region checking", "[util]")
@@ -486,145 +499,75 @@ TEST_CASE("Test remapping memory", "[util]")
     REQUIRE(actualDataAfter == expectedData);
 }
 
-TEST_CASE("Test mprotect tracking", "[util]")
+TEST_CASE_METHOD(ConfTestFixture, "Test mprotect tracking", "[.]")
 {
+    conf.dirtyTrackingMode = "sigseg";
+
     size_t memSize = 10 * HOST_PAGE_SIZE;
     std::vector<uint8_t> expectedData(memSize, 5);
 
-    // In order to close down the region tracker, it has to outlive the
-    // unmapping of the memory it's tracking (hence scoping).
-    UffdRegionTracker t;
+    MprotectRegionTracker t;
+    MemoryRegion mem = allocatePrivateMemory(memSize);
 
+    std::span<uint8_t> memView(mem.get(), memSize);
+
+    SECTION("Mapped from fd")
     {
-        MemoryRegion mem = allocatePrivateMemory(memSize);
+        // Create a file descriptor holding expected data
+        int fd = createFd(memSize, "foobar");
+        writeToFd(fd, 0, expectedData);
 
-        SECTION("Mapped from fd")
-        {
-            // Create a file descriptor holding expected data
-            int fd = createFd(memSize, "foobar");
-            writeToFd(fd, 0, expectedData);
-
-            // Map the memory
-            mapMemoryPrivate({ mem.get(), memSize }, fd);
-        }
-
-        SECTION("Standard alloc")
-        {
-            // Copy expected data into memory
-            std::memcpy(mem.get(), expectedData.data(), memSize);
-        }
-
-        // Start tracking
-        t.start(std::span<uint8_t>(mem.get(), memSize));
-
-        // Make a change on one page
-        size_t offsetA = 0;
-        mem[offsetA] = 3;
-        expectedData[offsetA] = 3;
-
-        // Make two changes on same page
-        size_t offsetB1 = HOST_PAGE_SIZE + 10;
-        size_t offsetB2 = HOST_PAGE_SIZE + 50;
-        mem[offsetB1] = 4;
-        mem[offsetB2] = 5;
-        expectedData[offsetB1] = 4;
-        expectedData[offsetB2] = 5;
-
-        // Change another page
-        size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
-        mem[offsetC] = 6;
-        expectedData[offsetC] = 6;
-
-        // Check writes have propagated to the actual memory
-        std::vector<uint8_t> actualMemAfter(mem.get(), mem.get() + memSize);
-        REQUIRE(actualMemAfter == expectedData);
-
-        // Get dirty regions
-        std::vector<std::pair<uint32_t, uint32_t>> actualDirty = t.getDirty();
-
-        // Check dirty regions
-        REQUIRE(actualDirty.size() == 3);
-
-        std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
-            { 0, HOST_PAGE_SIZE },
-            { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
-            { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
-        };
-
-        REQUIRE(actualDirty == expectedDirty);
+        // Map the memory
+        mapMemoryPrivate(memView, fd);
     }
+
+    SECTION("Standard alloc")
+    {
+        // Copy expected data into memory
+        std::memcpy(mem.get(), expectedData.data(), memSize);
+    }
+
+    // Start tracking
+    t.startTracking(memView);
+
+    // Make a change on one page
+    size_t offsetA = 0;
+    mem[offsetA] = 3;
+    expectedData[offsetA] = 3;
+
+    // Make two changes on same page
+    size_t offsetB1 = HOST_PAGE_SIZE + 10;
+    size_t offsetB2 = HOST_PAGE_SIZE + 50;
+    mem[offsetB1] = 4;
+    mem[offsetB2] = 5;
+    expectedData[offsetB1] = 4;
+    expectedData[offsetB2] = 5;
+
+    // Change another page
+    size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
+    mem[offsetC] = 6;
+    expectedData[offsetC] = 6;
+
+    // Check writes have propagated to the actual memory
+    std::vector<uint8_t> actualMemAfter(mem.get(), mem.get() + memSize);
+    REQUIRE(actualMemAfter == expectedData);
+
+    // Get dirty regions
+    std::vector<std::pair<uint32_t, uint32_t>> actualDirty =
+      t.getDirtyOffsets(memView);
+
+    // Check dirty regions
+    REQUIRE(actualDirty.size() == 3);
+
+    std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
+        { 0, HOST_PAGE_SIZE },
+        { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
+        { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
+    };
+
+    REQUIRE(actualDirty == expectedDirty);
 
     t.stop();
 }
 
-TEST_CASE("Test uffd tracking", "[util]")
-{
-    size_t memSize = 10 * HOST_PAGE_SIZE;
-    std::vector<uint8_t> expectedData(memSize, 5);
-
-    // In order to close down the region tracker, it has to outlive the
-    // unmapping of the memory it's tracking (hence scoping).
-    UffdRegionTracker t;
-
-    {
-        MemoryRegion mem = allocatePrivateMemory(memSize);
-
-        SECTION("Mapped from fd")
-        {
-            // Create a file descriptor holding expected data
-            int fd = createFd(memSize, "foobar");
-            writeToFd(fd, 0, expectedData);
-
-            // Map the memory
-            mapMemoryPrivate({ mem.get(), memSize }, fd);
-        }
-
-        SECTION("Standard alloc")
-        {
-            // Copy expected data into memory
-            std::memcpy(mem.get(), expectedData.data(), memSize);
-        }
-
-        // Start tracking
-        t.start(std::span<uint8_t>(mem.get(), memSize));
-
-        // Make a change on one page
-        size_t offsetA = 0;
-        mem[offsetA] = 3;
-        expectedData[offsetA] = 3;
-
-        // Make two changes on same page
-        size_t offsetB1 = HOST_PAGE_SIZE + 10;
-        size_t offsetB2 = HOST_PAGE_SIZE + 50;
-        mem[offsetB1] = 4;
-        mem[offsetB2] = 5;
-        expectedData[offsetB1] = 4;
-        expectedData[offsetB2] = 5;
-
-        // Change another page
-        size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
-        mem[offsetC] = 6;
-        expectedData[offsetC] = 6;
-
-        // Check writes have propagated to the actual memory
-        std::vector<uint8_t> actualMemAfter(mem.get(), mem.get() + memSize);
-        REQUIRE(actualMemAfter == expectedData);
-
-        // Get dirty regions
-        std::vector<std::pair<uint32_t, uint32_t>> actualDirty = t.getDirty();
-
-        // Check dirty regions
-        REQUIRE(actualDirty.size() == 3);
-
-        std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
-            { 0, HOST_PAGE_SIZE },
-            { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
-            { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
-        };
-
-        REQUIRE(actualDirty == expectedDirty);
-    }
-
-    t.stop();
-}
 }

@@ -15,6 +15,54 @@
 
 namespace faabric::util {
 
+enum SnapshotDataType
+{
+    Raw,
+    Bool,
+    Int,
+    Long,
+    Float,
+    Double
+};
+
+enum SnapshotMergeOperation
+{
+    Overwrite,
+    Sum,
+    Product,
+    Subtract,
+    Max,
+    Min,
+    Ignore
+};
+
+class SnapshotDiff
+{
+  public:
+    SnapshotDiff() = default;
+
+    SnapshotDiff(SnapshotDataType dataTypeIn,
+                 SnapshotMergeOperation operationIn,
+                 uint32_t offsetIn,
+                 std::span<const uint8_t> dataIn);
+
+    SnapshotDataType getDataType() const { return dataType; }
+
+    SnapshotMergeOperation getOperation() const { return operation; }
+
+    uint32_t getOffset() const { return offset; }
+
+    std::span<const uint8_t> getData() const { return data; }
+
+    std::vector<uint8_t> getDataCopy() const;
+
+  private:
+    SnapshotDataType dataType = SnapshotDataType::Raw;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
+    uint32_t offset = 0;
+    std::vector<uint8_t> data;
+};
+
 class SnapshotMergeRegion
 {
   public:

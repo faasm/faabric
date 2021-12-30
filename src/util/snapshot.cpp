@@ -406,9 +406,24 @@ void SnapshotData::resetDirtyTracking()
 
 std::vector<faabric::util::SnapshotDiff> SnapshotData::getDirtyRegions()
 {
+    std::span<uint8_t> d(data.get(), size);
     faabric::util::DirtyPageTracker& tracker =
       faabric::util::getDirtyPageTracker();
-    tracker.getDirty({ data.get(), size });
+    std::vector<std::pair<uint32_t, uint32_t>> regions =
+      tracker.getDirtyOffsets(d);
+
+    // Convert to snapshot diffs
+    std::vector<SnapshotDiff> diffs;
+    diffs.reserve(regions.size());
+    for (auto [regionBegin, regionEnd] : regions) {
+        SPDLOG_TRACE("Snapshot dirty {}-{}", regionBegin, regionEnd);
+        diffs.emplace_back(SnapshotDataType::Raw,
+                           SnapshotMergeOperation::Overwrite,
+                           regionBegin,
+                           d.subspan(regionBegin, regionEnd - regionBegin));
+    }
+
+    return diffs;
 }
 
 std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithMemory(

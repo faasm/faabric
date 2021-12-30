@@ -306,7 +306,7 @@ class TestExecutor final : public faabric::scheduler::Executor
 
     void restore(faabric::Message& msg) override;
 
-    faabric::util::MemoryView getMemoryView() override;
+    std::span<uint8_t> getMemoryView() override;
 
     int32_t executeTask(
       int threadPoolIdx,

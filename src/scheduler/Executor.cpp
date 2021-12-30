@@ -430,11 +430,11 @@ void Executor::postFinish() {}
 
 void Executor::reset(faabric::Message& msg) {}
 
-faabric::util::MemoryView Executor::getMemoryView()
+std::span<uint8_t> Executor::getMemoryView()
 {
     SPDLOG_WARN("Executor for {} has not implemented memory view method",
                 faabric::util::funcToString(boundMessage, false));
-    return faabric::util::MemoryView();
+    return {};
 }
 
 void Executor::restore(faabric::Message& msg)
@@ -453,7 +453,22 @@ std::vector<faabric::util::SnapshotDiff> Executor::getDirtyRegions()
 {
     faabric::util::DirtyPageTracker& tracker =
       faabric::util::getDirtyPageTracker();
-    return tracker.getDirty(getMemoryView());
+    std::vector<std::pair<uint32_t, uint32_t>> regions =
+      tracker.getDirtyOffsets(getMemoryView());
+
+    // Convert to snapshot diffs
+    std::vector<faabric::util::SnapshotDiff> diffs;
+    diffs.reserve(regions.size());
+    for (auto [regionBegin, regionEnd] : regions) {
+        SPDLOG_TRACE("Executor memory dirty {}-{}", regionBegin, regionEnd);
+        diffs.emplace_back(
+          faabric::util::SnapshotDataType::Raw,
+          faabric::util::SnapshotMergeOperation::Overwrite,
+          regionBegin,
+          getMemoryView().subspan(regionBegin, regionEnd - regionBegin));
+    }
+
+    return diffs;
 }
 
 }

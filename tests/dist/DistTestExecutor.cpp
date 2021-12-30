@@ -75,9 +75,9 @@ void DistTestExecutor::restore(faabric::Message& msg)
     snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
 }
 
-faabric::util::MemoryView DistTestExecutor::getMemoryView()
+std::span<uint8_t> DistTestExecutor::getMemoryView()
 {
-    return faabric::util::MemoryView({ dummyMemory.get(), dummyMemorySize });
+    return { dummyMemory.get(), dummyMemorySize };
 }
 
 std::span<uint8_t> DistTestExecutor::getDummyMemory()
