@@ -236,4 +236,47 @@ TEST_CASE("Stress test fixed capacity queue", "[util]")
         }
     }
 }
+
+TEST_CASE("Test fixed capacity queue with asymetric consume/produce rates",
+          "[util]")
+{
+    FixedCapIntQueue q(2);
+    int nMessages = 100;
+
+    // Fast producer
+    bool producerSuccess = false;
+    std::thread producerThread([&q, nMessages, &producerSuccess] {
+        for (int i = 0; i < nMessages; i++) {
+            SLEEP_MS(1);
+            q.enqueue(i);
+        }
+
+        producerSuccess = true;
+    });
+
+    // Slow consumer
+    bool consumerSuccess = false;
+    std::thread consumerThread([&q, nMessages, &consumerSuccess] {
+        for (int i = 0; i < nMessages; i++) {
+            SLEEP_MS(50);
+            int res = q.dequeue();
+            if (res != i) {
+                return;
+            }
+        }
+
+        consumerSuccess = true;
+    });
+
+    if (producerThread.joinable()) {
+        producerThread.join();
+    }
+
+    if (consumerThread.joinable()) {
+        consumerThread.join();
+    }
+
+    REQUIRE(producerSuccess);
+    REQUIRE(consumerSuccess);
+}
 }

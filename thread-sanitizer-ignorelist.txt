@@ -8,7 +8,7 @@ race:zmq::*
 race:faabric::util::SystemConfig::*
 # Catch2 allocates in its signal handler, this prevents showing the wrong crash report
 signal:*
-# TODO: moodycael's queue version 1.0.6 fixes the warnings we silence here
+# TODO: moodycamel's queue version 1.0.6 fixes the warnings we silence here
 race:moodycamel::*
 
 # TODO: Remove: There's something weird going on with MPI code I don't understand
