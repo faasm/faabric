@@ -3,11 +3,8 @@
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
-#include <functional>
 #include <inttypes.h>
-#include <linux/userfaultfd.h>
 #include <memory>
-#include <poll.h>
 #include <signal.h>
 #include <span>
 #include <string>
@@ -33,6 +30,8 @@ namespace faabric::util {
 class DirtyPageTracker
 {
   public:
+    virtual bool isThreadLocal() = 0;
+
     virtual void restartTracking(std::span<uint8_t> region) = 0;
 
     virtual std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
@@ -51,6 +50,8 @@ class SoftPTEDirtyTracker final : public DirtyPageTracker
     SoftPTEDirtyTracker();
 
     ~SoftPTEDirtyTracker();
+
+    bool isThreadLocal() override { return false; }
 
     void clearAll() override;
 
@@ -75,10 +76,12 @@ class SoftPTEDirtyTracker final : public DirtyPageTracker
       int nPages);
 };
 
-class MprotectRegionTracker final : public DirtyPageTracker
+class SegfaultDirtyTracker final : public DirtyPageTracker
 {
   public:
-    MprotectRegionTracker();
+    SegfaultDirtyTracker();
+
+    bool isThreadLocal() override { return true; }
 
     void clearAll() override;
 

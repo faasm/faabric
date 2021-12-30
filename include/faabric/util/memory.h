@@ -1,23 +1,12 @@
 #pragma once
 
 #include <cstdint>
-#include <cstring>
-#include <fcntl.h>
 #include <functional>
-#include <inttypes.h>
 #include <memory>
-#include <poll.h>
-#include <signal.h>
 #include <span>
 #include <string>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <sys/syscall.h>
-#include <thread>
 #include <unistd.h>
 #include <vector>
-
-#include <faabric/util/logging.h>
 
 namespace faabric::util {
 

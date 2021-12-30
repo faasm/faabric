@@ -83,20 +83,20 @@ void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
 {
     // Try to allocate more memory on top of existing data if necessary.
     // Will throw an exception if not possible
-    size_t newSize = offset + buffer.size();
-    if (newSize > size) {
-        if (newSize > maxSize) {
+    size_t regionEnd = offset + buffer.size();
+    if (regionEnd > size) {
+        if (regionEnd > maxSize) {
             SPDLOG_ERROR(
-              "Copying snapshot data over max: {} > {}", newSize, maxSize);
+              "Copying snapshot data over max: {} > {}", regionEnd, maxSize);
             throw std::runtime_error("Copying snapshot data over max");
         }
 
-        claimVirtualMemory({ data.get(), newSize });
-        size = newSize;
+        claimVirtualMemory({ data.get(), regionEnd });
+        size = regionEnd;
 
         // Update fd
         if (fd > 0) {
-            resizeFd(fd, newSize);
+            resizeFd(fd, regionEnd);
         }
 
         // Remap data
@@ -106,6 +106,9 @@ void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
     // Copy in new data
     uint8_t* copyTarget = validatedOffsetPtr(offset);
     ::memcpy(copyTarget, buffer.data(), buffer.size());
+
+    // Record the change
+    dirtyRegions.emplace_back(offset, regionEnd);
 }
 
 const uint8_t* SnapshotData::getDataPtr(uint32_t offset)
@@ -399,23 +402,24 @@ void SnapshotData::writeQueuedDiffs()
 
 void SnapshotData::resetDirtyTracking()
 {
-    faabric::util::DirtyPageTracker& tracker =
-      faabric::util::getDirtyPageTracker();
-    tracker.restartTracking({ data.get(), size });
+    faabric::util::FullLock lock(snapMx);
+    dirtyRegions.clear();
 }
 
 std::vector<faabric::util::SnapshotDiff> SnapshotData::getDirtyRegions()
 {
+    faabric::util::SharedLock lock(snapMx);
+
+    std::vector<SnapshotDiff> diffs;
+    if (dirtyRegions.empty()) {
+        return diffs;
+    }
+
     std::span<uint8_t> d(data.get(), size);
-    faabric::util::DirtyPageTracker& tracker =
-      faabric::util::getDirtyPageTracker();
-    std::vector<std::pair<uint32_t, uint32_t>> regions =
-      tracker.getDirtyOffsets(d);
 
     // Convert to snapshot diffs
-    std::vector<SnapshotDiff> diffs;
-    diffs.reserve(regions.size());
-    for (auto [regionBegin, regionEnd] : regions) {
+    diffs.reserve(dirtyRegions.size());
+    for (auto [regionBegin, regionEnd] : dirtyRegions) {
         SPDLOG_TRACE("Snapshot dirty {}-{}", regionBegin, regionEnd);
         diffs.emplace_back(SnapshotDataType::Raw,
                            SnapshotMergeOperation::Overwrite,
@@ -429,6 +433,8 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::getDirtyRegions()
 std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithMemory(
   std::span<uint8_t> mem)
 {
+    faabric::util::SharedLock lock(snapMx);
+
     PROF_START(DiffWithSnapshot)
     std::vector<faabric::util::SnapshotDiff> diffs;
 

@@ -241,6 +241,8 @@ class SnapshotData
 
     std::vector<SnapshotDiff> queuedDiffs;
 
+    std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions;
+
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;

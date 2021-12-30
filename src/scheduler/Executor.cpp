@@ -451,6 +451,8 @@ void Executor::resetDirtyTracking()
 
 std::vector<faabric::util::SnapshotDiff> Executor::getDirtyRegions()
 {
+    // TODO - have threads themselves write the dirty regions into a list then
+    // return that
     faabric::util::DirtyPageTracker& tracker =
       faabric::util::getDirtyPageTracker();
     std::vector<std::pair<uint32_t, uint32_t>> regions =

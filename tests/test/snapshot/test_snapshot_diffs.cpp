@@ -1,9 +1,9 @@
 #include <catch2/catch.hpp>
 
-#include "faabric/util/dirty.h"
 #include "faabric_utils.h"
 
 #include <faabric/snapshot/SnapshotRegistry.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/memory.h>
 
 using namespace faabric::snapshot;

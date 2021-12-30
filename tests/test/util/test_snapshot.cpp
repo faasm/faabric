@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include "faabric/util/dirty.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -978,17 +979,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     SnapshotDiff& diffA = expectedDiffs.at(0);
     SnapshotDiff& diffB = expectedDiffs.at(1);
 
-    REQUIRE(diffA.getData().size() == HOST_PAGE_SIZE);
-    REQUIRE(diffB.getData().size() == HOST_PAGE_SIZE);
+    REQUIRE(diffA.getData().size() == dataA.size());
+    REQUIRE(diffB.getData().size() == dataB.size());
 
-    std::vector<uint8_t> actualA = { diffA.getData().begin(),
-                                     diffA.getData().begin() + dataA.size() };
-    std::vector<uint8_t> actualB = {
-        diffB.getData().begin() + 1, diffB.getData().begin() + 1 + dataB.size()
-    };
-
-    REQUIRE(actualA == dataA);
-    REQUIRE(actualB == dataB);
+    REQUIRE(diffA.getDataCopy() == dataA);
+    REQUIRE(diffB.getDataCopy() == dataB);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
@@ -1446,26 +1441,31 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
                          SnapshotDataType::Raw,
                          SnapshotMergeOperation::Overwrite);
 
-    // Write data to snapshot
+    // Write some initial data to snapshot
     snap->copyInData(dataA);
 
     // Map some memory
     MemoryRegion memA = allocatePrivateMemory(snapSize);
     snap->mapToMemory({ memA.get(), snapSize });
 
-    faabric::util::getDirtyPageTracker().clearAll();
+    // Clear tracking
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.clearAll();
+    snap->resetDirtyTracking();
 
     std::vector<uint8_t> actualSnap = snap->getDataCopy();
-    std::vector<uint8_t> actualA(memA.get(), memA.get() + snapSize);
-    REQUIRE(actualSnap == actualA);
+    std::vector<uint8_t> actualMemA(memA.get(), memA.get() + snapSize);
+    REQUIRE(actualSnap == actualMemA);
 
-    // Write data to snapshot
+    // Write some data to the snapshot
     snap->copyInData(dataB, offsetB);
 
-    // Write data to memory
+    // Write data to the mapped memory
     std::memcpy(memA.get() + offsetC, dataC.data(), dataC.size());
 
-    // Check diffs from memory vs snapshot
+    // Check diff of snapshot with memory only includes the change made to the
+    // memory itself
     std::vector<SnapshotDiff> actualDiffs =
       snap->diffWithMemory({ memA.get(), snapSize });
     REQUIRE(actualDiffs.size() == 1);
@@ -1478,26 +1478,23 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     snap->queueDiffs(actualDiffs);
     snap->writeQueuedDiffs();
 
-    // Check snapshot now shows modified page
+    // Check snapshot now shows both diffs
     std::vector<SnapshotDiff> snapDirtyRegions = snap->getDirtyRegions();
 
-    REQUIRE(snapDirtyRegions.size() == 1);
-    SnapshotDiff& snapDirtyRegion = snapDirtyRegions.at(0);
-    REQUIRE(snapDirtyRegion.getOffset() == HOST_PAGE_SIZE);
+    REQUIRE(snapDirtyRegions.size() == 2);
+
+    SnapshotDiff& diffB = snapDirtyRegions.at(0);
+    SnapshotDiff& diffC = snapDirtyRegions.at(1);
+
+    REQUIRE(diffB.getOffset() == offsetB);
+    REQUIRE(diffC.getOffset() == offsetC);
 
     // Check modified data includes both updates
-    std::vector<uint8_t> dirtyRegionData = snapDirtyRegion.getDataCopy();
-    REQUIRE(dirtyRegionData.size() == HOST_PAGE_SIZE);
+    std::vector<uint8_t> diffDataB = diffB.getDataCopy();
+    std::vector<uint8_t> diffDataC = diffC.getDataCopy();
 
-    std::vector<uint8_t> expectedDirtyRegionData(HOST_PAGE_SIZE, 0);
-    std::memcpy(expectedDirtyRegionData.data() + (offsetB - HOST_PAGE_SIZE),
-                dataB.data(),
-                dataB.size());
-    std::memcpy(expectedDirtyRegionData.data() + (offsetC - HOST_PAGE_SIZE),
-                dataC.data(),
-                dataC.size());
-
-    REQUIRE(dirtyRegionData == expectedDirtyRegionData);
+    REQUIRE(diffDataB == dataB);
+    REQUIRE(diffDataC == dataC);
 
     // Map more memory from the snapshot, check it contains all updates
     MemoryRegion memB = allocatePrivateMemory(snapSize);

@@ -506,7 +506,7 @@ TEST_CASE_METHOD(ConfTestFixture, "Test mprotect tracking", "[.]")
     size_t memSize = 10 * HOST_PAGE_SIZE;
     std::vector<uint8_t> expectedData(memSize, 5);
 
-    MprotectRegionTracker t;
+    SegfaultDirtyTracker t;
     MemoryRegion mem = allocatePrivateMemory(memSize);
 
     std::span<uint8_t> memView(mem.get(), memSize);

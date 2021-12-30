@@ -5,7 +5,7 @@ namespace faabric::util {
 DirtyPageTracker& getDirtyPageTracker()
 {
     static SoftPTEDirtyTracker spte;
-    static MprotectRegionTracker mprot;
+    static SegfaultDirtyTracker mprot;
 
     std::string trackMode = faabric::util::getSystemConfig().dirtyTrackingMode;
     if (trackMode == "softpte") {
@@ -165,7 +165,7 @@ std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyRegions(
 // Mprotect
 // ------------------------------
 
-MprotectRegionTracker::MprotectRegionTracker()
+SegfaultDirtyTracker::SegfaultDirtyTracker()
 {
     // Set up sig handler
     struct sigaction sa;
@@ -178,7 +178,7 @@ MprotectRegionTracker::MprotectRegionTracker()
     }
 }
 
-void MprotectRegionTracker::handler(int sig, siginfo_t* si, void* unused)
+void SegfaultDirtyTracker::handler(int sig, siginfo_t* si, void* unused)
 {
     // TODO - work out the page that's dirtied
 
@@ -187,24 +187,24 @@ void MprotectRegionTracker::handler(int sig, siginfo_t* si, void* unused)
     // TODO - reset mprotect to READ/WRITE
 }
 
-void MprotectRegionTracker::clearAll()
+void SegfaultDirtyTracker::clearAll()
 {
     // TODO
 }
 
-void MprotectRegionTracker::restartTracking(std::span<uint8_t> region)
+void SegfaultDirtyTracker::restartTracking(std::span<uint8_t> region)
 {
     // TODO
 }
 
-void MprotectRegionTracker::startTracking(std::span<uint8_t> region)
+void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 {
     if (::mprotect(region.data(), region.size(), PROT_READ) == -1) {
         throw std::runtime_error("Failed mprotect");
     }
 }
 
-void MprotectRegionTracker::stopTracking(std::span<uint8_t> region)
+void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
     if (::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE) ==
         -1) {
@@ -213,7 +213,7 @@ void MprotectRegionTracker::stopTracking(std::span<uint8_t> region)
 }
 
 std::vector<std::pair<uint32_t, uint32_t>>
-MprotectRegionTracker::getDirtyOffsets(std::span<uint8_t> region)
+SegfaultDirtyTracker::getDirtyOffsets(std::span<uint8_t> region)
 {
     std::vector<std::pair<uint32_t, uint32_t>> dirty;
     return dirty;

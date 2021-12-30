@@ -502,7 +502,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             SnapshotClient& c = getSnapshotClient(host);
 
             // See if we've already pushed this snapshot to the given host,
-            // if so, just push the diffs
+            // if so, just push the diffs that have occurred in this main thread
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
                   snap->getDirtyRegions();
