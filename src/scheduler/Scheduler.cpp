@@ -495,18 +495,17 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // diffs.
     std::string snapshotKey = firstMsg.snapshotkey();
     if (!snapshotKey.empty()) {
+        auto snap =
+          faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+
         for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
-            auto snap =
-              faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
             // See if we've already pushed this snapshot to the given host,
             // if so, just push the diffs
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
-                MemoryView snapMemView({ snap->getDataPtr(), snap->getSize() });
-
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snapMemView.getDirtyRegions();
+                  snap->getDirtyRegions();
 
                 c.pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
             } else {
@@ -514,10 +513,11 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }
-    }
 
-    // Now reset the dirty page tracking just before we start executing
-    faabric::util::resetDirtyTracking();
+        // Now reset the dirty page tracking for the snapshot before we start
+        // executing
+        snap->resetDirtyTracking();
+    }
 
     // -------------------------------------------
     // EXECUTION

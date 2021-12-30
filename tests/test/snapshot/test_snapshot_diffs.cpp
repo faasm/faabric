@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include "faabric/util/dirty.h"
 #include "faabric_utils.h"
 
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -52,7 +53,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
     // Check there are no diffs
     std::vector<SnapshotDiff> changeDiffs =
-      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
+      snap->diffWithMemory({ sharedMem.get(), sharedMemSize });
     REQUIRE(changeDiffs.empty());
 }
 
@@ -74,7 +75,9 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->mapToMemory({ sharedMem.get(), snapSize });
 
     // Reset dirty tracking
-    faabric::util::resetDirtyTracking();
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.clearAll();
 
     // Single change, single merge region
     std::vector<uint8_t> dataA = { 1, 2, 3, 4 };
@@ -149,15 +152,9 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
                 dataNoChange.data(),
                 dataNoChange.size());
 
-    // Check shared memory does have dirty pages (including the non-change)
-    std::vector<int> sharedDirtyPages =
-      getDirtyPageNumbers(sharedMem.get(), sharedMemPages);
-    std::vector<int> expected = { 1, 2, 3, 6 };
-    REQUIRE(sharedDirtyPages == expected);
-
     // Check we have the right number of diffs
     std::vector<SnapshotDiff> changeDiffs =
-      MemoryView({ sharedMem.get(), sharedMemSize }).diffWithSnapshot(snap);
+      snap->diffWithMemory({ sharedMem.get(), sharedMemSize });
 
     REQUIRE(changeDiffs.size() == 6);
 

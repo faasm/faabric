@@ -5,6 +5,7 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>
@@ -133,7 +134,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Note this must be done after the restore has happened.
     bool needsSnapshotSync = false;
     if (isThreads && isSnapshot) {
-        faabric::util::resetDirtyTracking();
+        resetDirtyTracking();
         needsSnapshotSync = true;
     }
 
@@ -289,9 +290,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        faabric::util::MemoryView funcMemory = getMemoryView();
-        if (!funcMemory.getData().empty() && isLastInBatch &&
-            task.needsSnapshotSync) {
+        std::span<uint8_t> funcMemory = getMemoryView();
+        if (!funcMemory.empty() && isLastInBatch && task.needsSnapshotSync) {
             auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
               msg.snapshotkey());
 
@@ -303,7 +303,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Work out the diffs
             std::vector<faabric::util::SnapshotDiff> diffs =
-              funcMemory.diffWithSnapshot(snap);
+              snap->diffWithMemory(funcMemory);
 
             // On master we queue the diffs locally directly, on a remote host
             // we push them back to master
@@ -321,7 +321,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             }
 
             // Reset dirty page tracking
-            faabric::util::resetDirtyTracking();
+            resetDirtyTracking();
 
             // Clear merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
@@ -441,4 +441,19 @@ void Executor::restore(faabric::Message& msg)
 {
     SPDLOG_WARN("Executor has not implemented restore method");
 }
+
+void Executor::resetDirtyTracking()
+{
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.restartTracking(getMemoryView());
+}
+
+std::vector<faabric::util::SnapshotDiff> Executor::getDirtyRegions()
+{
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    return tracker.getDirty(getMemoryView());
+}
+
 }

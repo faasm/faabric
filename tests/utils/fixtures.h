@@ -15,6 +15,7 @@
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
 
@@ -67,7 +68,7 @@ class SchedulerTestFixture
     SchedulerTestFixture()
       : sch(faabric::scheduler::getScheduler())
     {
-        faabric::util::resetDirtyTracking();
+        faabric::util::getDirtyPageTracker().clearAll();
 
         faabric::util::setMockMode(false);
         faabric::util::setTestMode(true);
@@ -90,7 +91,7 @@ class SchedulerTestFixture
         sch.shutdown();
         sch.addHostToGlobalSet();
 
-        faabric::util::resetDirtyTracking();
+        faabric::util::getDirtyPageTracker().clearAll();
     };
 
   protected:
@@ -103,13 +104,13 @@ class SnapshotTestFixture
     SnapshotTestFixture()
       : reg(faabric::snapshot::getSnapshotRegistry())
     {
-        faabric::util::resetDirtyTracking();
+        faabric::util::getDirtyPageTracker().clearAll();
         reg.clear();
     }
 
     ~SnapshotTestFixture()
     {
-        faabric::util::resetDirtyTracking();
+        faabric::util::getDirtyPageTracker().clearAll();
         reg.clear();
     }
 

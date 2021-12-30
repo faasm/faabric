@@ -99,6 +99,8 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     // Register snapshot
     reg.registerSnapshot(snapKey, snap);
 
+    snap->resetDirtyTracking();
+
     // Send response
     return std::make_unique<faabric::EmptyResponse>();
 }

@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include <faabric/util/dirty.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 
@@ -318,11 +319,15 @@ TEST_CASE("Test dirty region checking", "[util]")
         FAIL("Could not provision memory");
     }
 
-    resetDirtyTracking();
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.clearAll();
 
     std::vector<std::pair<uint32_t, uint32_t>> actual =
-      faabric::util::getDirtyRegions(sharedMemory, nPages);
+      tracker.getDirtyOffsets({ sharedMemory, memSize });
     REQUIRE(actual.empty());
+
+    tracker.startTracking({ sharedMemory, memSize });
 
     // Dirty some pages, some adjacent
     uint8_t* pageZero = sharedMemory;
@@ -348,7 +353,7 @@ TEST_CASE("Test dirty region checking", "[util]")
         { 9 * HOST_PAGE_SIZE, 10 * HOST_PAGE_SIZE },
     };
 
-    actual = faabric::util::getDirtyRegions(sharedMemory, nPages);
+    actual = tracker.getDirtyOffsets({ sharedMemory, memSize });
     REQUIRE(actual.size() == expected.size());
     for (int i = 0; i < actual.size(); i++) {
         REQUIRE(actual.at(i).first == expected.at(i).first);
@@ -481,25 +486,19 @@ TEST_CASE("Test remapping memory", "[util]")
     REQUIRE(actualDataAfter == expectedData);
 }
 
-TEST_CASE("Test uffd tracking", "[util]")
+TEST_CASE("Test mprotect tracking", "[util]")
 {
     size_t memSize = 10 * HOST_PAGE_SIZE;
     std::vector<uint8_t> expectedData(memSize, 5);
 
     // In order to close down the region tracker, it has to outlive the
     // unmapping of the memory it's tracking (hence scoping).
-    RegionTracker t;
+    UffdRegionTracker t;
 
     {
         MemoryRegion mem = allocatePrivateMemory(memSize);
 
-        SECTION("No change")
-        {
-            // Expect memory to be zeroed
-            expectedData = std::vector<uint8_t>(memSize, 0);
-        }
-
-        SECTION("Mapped to file descriptor")
+        SECTION("Mapped from fd")
         {
             // Create a file descriptor holding expected data
             int fd = createFd(memSize, "foobar");
@@ -509,7 +508,7 @@ TEST_CASE("Test uffd tracking", "[util]")
             mapMemoryPrivate({ mem.get(), memSize }, fd);
         }
 
-        SECTION("Edited memory")
+        SECTION("Standard alloc")
         {
             // Copy expected data into memory
             std::memcpy(mem.get(), expectedData.data(), memSize);
@@ -518,9 +517,76 @@ TEST_CASE("Test uffd tracking", "[util]")
         // Start tracking
         t.start(std::span<uint8_t>(mem.get(), memSize));
 
-        // Check memory is as expected to start with
-        std::vector<uint8_t> actualMem(mem.get(), mem.get() + memSize);
-        REQUIRE(actualMem == expectedData);
+        // Make a change on one page
+        size_t offsetA = 0;
+        mem[offsetA] = 3;
+        expectedData[offsetA] = 3;
+
+        // Make two changes on same page
+        size_t offsetB1 = HOST_PAGE_SIZE + 10;
+        size_t offsetB2 = HOST_PAGE_SIZE + 50;
+        mem[offsetB1] = 4;
+        mem[offsetB2] = 5;
+        expectedData[offsetB1] = 4;
+        expectedData[offsetB2] = 5;
+
+        // Change another page
+        size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
+        mem[offsetC] = 6;
+        expectedData[offsetC] = 6;
+
+        // Check writes have propagated to the actual memory
+        std::vector<uint8_t> actualMemAfter(mem.get(), mem.get() + memSize);
+        REQUIRE(actualMemAfter == expectedData);
+
+        // Get dirty regions
+        std::vector<std::pair<uint32_t, uint32_t>> actualDirty = t.getDirty();
+
+        // Check dirty regions
+        REQUIRE(actualDirty.size() == 3);
+
+        std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
+            { 0, HOST_PAGE_SIZE },
+            { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
+            { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
+        };
+
+        REQUIRE(actualDirty == expectedDirty);
+    }
+
+    t.stop();
+}
+
+TEST_CASE("Test uffd tracking", "[util]")
+{
+    size_t memSize = 10 * HOST_PAGE_SIZE;
+    std::vector<uint8_t> expectedData(memSize, 5);
+
+    // In order to close down the region tracker, it has to outlive the
+    // unmapping of the memory it's tracking (hence scoping).
+    UffdRegionTracker t;
+
+    {
+        MemoryRegion mem = allocatePrivateMemory(memSize);
+
+        SECTION("Mapped from fd")
+        {
+            // Create a file descriptor holding expected data
+            int fd = createFd(memSize, "foobar");
+            writeToFd(fd, 0, expectedData);
+
+            // Map the memory
+            mapMemoryPrivate({ mem.get(), memSize }, fd);
+        }
+
+        SECTION("Standard alloc")
+        {
+            // Copy expected data into memory
+            std::memcpy(mem.get(), expectedData.data(), memSize);
+        }
+
+        // Start tracking
+        t.start(std::span<uint8_t>(mem.get(), memSize));
 
         // Make a change on one page
         size_t offsetA = 0;

@@ -1,4 +1,5 @@
 #include <faabric/util/bytes.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -255,7 +256,9 @@ void SnapshotData::mapToMemory(std::span<uint8_t> target)
     faabric::util::mapMemoryPrivate(target, fd);
 
     // Reset dirty tracking otherwise whole mapped region is marked dirty
-    faabric::util::resetDirtyTracking();
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.restartTracking(target);
 
     PROF_END(MapSnapshot)
 }
@@ -394,68 +397,46 @@ void SnapshotData::writeQueuedDiffs()
     PROF_END(WriteQueuedDiffs)
 }
 
-MemoryView::MemoryView(std::span<const uint8_t> dataIn)
-  : data(dataIn)
-{}
-
-std::vector<SnapshotDiff> MemoryView::getDirtyRegions()
+void SnapshotData::resetDirtyTracking()
 {
-    PROF_START(GetDirtyRegions)
-    if (data.empty()) {
-        return {};
-    }
-
-    // Get dirty regions
-    int nPages = getRequiredHostPages(data.size());
-    std::vector<int> dirtyPageNumbers =
-      getDirtyPageNumbers(data.data(), nPages);
-
-    SPDLOG_DEBUG(
-      "Memory view has {}/{} dirty pages", dirtyPageNumbers.size(), nPages);
-
-    std::vector<std::pair<uint32_t, uint32_t>> regions =
-      faabric::util::getDirtyRegions(data.data(), nPages);
-
-    // Convert to snapshot diffs
-    std::vector<SnapshotDiff> diffs;
-    diffs.reserve(regions.size());
-    for (auto [regionBegin, regionEnd] : regions) {
-        SPDLOG_TRACE("Memory view dirty {}-{}", regionBegin, regionEnd);
-        diffs.emplace_back(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Overwrite,
-                           regionBegin,
-                           data.subspan(regionBegin, regionEnd - regionBegin));
-    }
-
-    PROF_END(GetDirtyRegions)
-    return diffs;
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.restartTracking({ data.get(), size });
 }
 
-std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
-  std::shared_ptr<SnapshotData> snap)
+std::vector<faabric::util::SnapshotDiff> SnapshotData::getDirtyRegions()
+{
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.getDirty({ data.get(), size });
+}
+
+std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithMemory(
+  std::span<uint8_t> mem)
 {
     PROF_START(DiffWithSnapshot)
-    std::vector<SnapshotDiff> diffs;
-    std::map<uint32_t, SnapshotMergeRegion> mergeRegions =
-      snap->getMergeRegions();
+    std::vector<faabric::util::SnapshotDiff> diffs;
+
     if (mergeRegions.empty()) {
         SPDLOG_DEBUG("No merge regions set, thus no diffs");
         return diffs;
     }
 
     // Work out which regions of memory have changed
-    size_t nThisPages = getRequiredHostPages(data.size());
+    size_t nThisPages = faabric::util::getRequiredHostPages(mem.size());
+
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
     std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-      faabric::util::getDirtyRegions(data.data(), nThisPages);
-    SPDLOG_TRACE("Found {} dirty regions at {} over {} pages",
-                 dirtyRegions.size(),
-                 (void*)data.data(),
-                 nThisPages);
+      tracker.getDirtyOffsets(mem);
+
+    SPDLOG_TRACE(
+      "Found {} dirty regions over {} pages", dirtyRegions.size(), nThisPages);
 
     // Iterate through merge regions, see which ones overlap with dirty memory
     // regions, and add corresponding diffs
     for (auto& mrPair : mergeRegions) {
-        SnapshotMergeRegion& mr = mrPair.second;
+        faabric::util::SnapshotMergeRegion& mr = mrPair.second;
 
         SPDLOG_TRACE("Merge region {} {} at {}-{}",
                      snapshotDataTypeStr(mr.dataType),
@@ -465,10 +446,7 @@ std::vector<SnapshotDiff> MemoryView::diffWithSnapshot(
 
         for (auto& dirtyRegion : dirtyRegions) {
             // Add the diffs
-            mr.addDiffs(diffs,
-                        { snap->getDataPtr(), snap->getSize() },
-                        data,
-                        dirtyRegion);
+            mr.addDiffs(diffs, { data.get(), size }, mem, dirtyRegion);
         }
     }
 

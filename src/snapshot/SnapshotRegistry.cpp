@@ -44,9 +44,6 @@ void SnapshotRegistry::registerSnapshot(
     SPDLOG_TRACE("Registering snapshot {} size {}", key, data->getSize());
 
     snapshotMap.insert_or_assign(key, std::move(data));
-
-    // Reset dirty tracking
-    faabric::util::resetDirtyTracking();
 }
 
 void SnapshotRegistry::deleteSnapshot(const std::string& key)

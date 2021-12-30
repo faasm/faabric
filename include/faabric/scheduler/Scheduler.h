@@ -69,12 +69,16 @@ class Executor
 
     void releaseClaim();
 
-    virtual faabric::util::MemoryView getMemoryView();
+    void resetDirtyTracking();
+
+    std::vector<faabric::util::SnapshotDiff> getDirtyRegions();
 
   protected:
     virtual void restore(faabric::Message& msg);
 
     virtual void postFinish();
+
+    virtual std::span<uint8_t> getMemoryView();
 
     faabric::Message boundMessage;
 

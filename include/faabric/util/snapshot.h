@@ -8,59 +8,12 @@
 #include <string>
 #include <vector>
 
+#include <faabric/util/dirty.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 
 namespace faabric::util {
-
-enum SnapshotDataType
-{
-    Raw,
-    Bool,
-    Int,
-    Long,
-    Float,
-    Double
-};
-
-enum SnapshotMergeOperation
-{
-    Overwrite,
-    Sum,
-    Product,
-    Subtract,
-    Max,
-    Min,
-    Ignore
-};
-
-class SnapshotDiff
-{
-  public:
-    SnapshotDiff() = default;
-
-    SnapshotDiff(SnapshotDataType dataTypeIn,
-                 SnapshotMergeOperation operationIn,
-                 uint32_t offsetIn,
-                 std::span<const uint8_t> dataIn);
-
-    SnapshotDataType getDataType() const { return dataType; }
-
-    SnapshotMergeOperation getOperation() const { return operation; }
-
-    uint32_t getOffset() const { return offset; }
-
-    std::span<const uint8_t> getData() const { return data; }
-
-    std::vector<uint8_t> getDataCopy() const;
-
-  private:
-    SnapshotDataType dataType = SnapshotDataType::Raw;
-    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
-    uint32_t offset = 0;
-    std::vector<uint8_t> data;
-};
 
 class SnapshotMergeRegion
 {
@@ -221,6 +174,13 @@ class SnapshotData
 
     size_t getMaxSize() const { return maxSize; }
 
+    void resetDirtyTracking();
+
+    std::vector<SnapshotDiff> getDirtyRegions();
+
+    std::vector<faabric::util::SnapshotDiff> diffWithMemory(
+      std::span<uint8_t> mem);
+
   private:
     size_t size = 0;
     size_t maxSize = 0;
@@ -242,26 +202,6 @@ class SnapshotData
     void mapToMemory(uint8_t* target, bool shared);
 
     void writeData(std::span<const uint8_t> buffer, uint32_t offset = 0);
-};
-
-class MemoryView
-{
-  public:
-    // Note - this object is just a view of a section of memory, and does not
-    // own the underlying data
-    MemoryView() = default;
-
-    explicit MemoryView(std::span<const uint8_t> dataIn);
-
-    std::vector<SnapshotDiff> getDirtyRegions();
-
-    std::vector<SnapshotDiff> diffWithSnapshot(
-      std::shared_ptr<SnapshotData> snap);
-
-    std::span<const uint8_t> getData() { return data; }
-
-  private:
-    std::span<const uint8_t> data;
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);
