@@ -108,7 +108,5 @@ void FaabricMain::shutdown()
     sch.shutdown();
 
     SPDLOG_INFO("Faabric pool successfully shut down");
-
-    PROF_SUMMARY_END
 }
 }

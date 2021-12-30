@@ -4,7 +4,6 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
-#include <boost/circular_buffer.hpp>
 #include <condition_variable>
 #include <queue>
 #include <readerwriterqueue/readerwritercircularbuffer.h>
@@ -143,6 +142,7 @@ class Queue
 
 // Wrapper around moodycamel's blocking fixed capacity single producer single
 // consumer queue
+// https://github.com/cameron314/readerwriterqueue
 template<typename T>
 class FixedCapacityQueue
 {

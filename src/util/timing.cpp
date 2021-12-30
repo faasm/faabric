@@ -78,12 +78,6 @@ void printTimerTotals()
     printf("Total running time: %.2fs\n\n", totalSeconds);
 }
 
-void clearTimerTotals()
-{
-    timerTotals.clear();
-    timerCounts.clear();
-}
-
 uint64_t timespecToNanos(struct timespec* nativeTimespec)
 {
     uint64_t nanos = nativeTimespec->tv_sec * 1000000000;
