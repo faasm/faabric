@@ -42,6 +42,8 @@ class DirtyPageTracker
     virtual void startTracking(std::span<uint8_t> region) = 0;
 
     virtual void stopTracking(std::span<uint8_t> region) = 0;
+
+    virtual void reinitialise() = 0;
 };
 
 class SoftPTEDirtyTracker final : public DirtyPageTracker
@@ -63,6 +65,8 @@ class SoftPTEDirtyTracker final : public DirtyPageTracker
 
     std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
       std::span<uint8_t> region) override;
+
+    void reinitialise() override;
 
   private:
     FILE* f = nullptr;
@@ -91,12 +95,15 @@ class SegfaultDirtyTracker final : public DirtyPageTracker
 
     void stopTracking(std::span<uint8_t> region) override;
 
+    void reinitialise() override;
+
     std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
       std::span<uint8_t> region) override;
 
     static void handler(int sig, siginfo_t* si, void* unused);
 
-    void stop() {}
+  private:
+    void setUpSignalHandler();
 };
 
 DirtyPageTracker& getDirtyPageTracker();

@@ -248,7 +248,9 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
 {
     SECTION("Soft dirty PTEs") { conf.dirtyTrackingMode = "softpte"; }
 
-    // SECTION("Segfaults") { conf.dirtyTrackingMode = "sigseg"; }
+    SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
+
+    DirtyPageTracker& tracker = getDirtyPageTracker();
 
     // Create several pages of memory
     int nPages = 6;
@@ -256,11 +258,6 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
     MemoryRegion memPtr = allocatePrivateMemory(memSize);
     std::span<uint8_t> memView(memPtr.get(), memSize);
 
-    if (memPtr == nullptr) {
-        FAIL("Could not provision memory");
-    }
-
-    DirtyPageTracker& tracker = getDirtyPageTracker();
     tracker.clearAll();
 
     std::vector<std::pair<uint32_t, uint32_t>> actual =
@@ -279,8 +276,9 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
 
     std::vector<std::pair<uint32_t, uint32_t>> expected = {
         { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
-        { 3 * HOST_PAGE_SIZE, 4* HOST_PAGE_SIZE }
+        { 3 * HOST_PAGE_SIZE, 4 * HOST_PAGE_SIZE }
     };
+
     actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
@@ -316,34 +314,35 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
     REQUIRE(actual == expected);
 
     // Final reset and check
-    tracker.stopTracking(memView);
+    tracker.restartTracking(memView);
     actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual.empty());
+
+    tracker.stopTracking(memView);
 }
 
-TEST_CASE("Test dirty region checking", "[util]")
+TEST_CASE_METHOD(ConfTestFixture, "Test dirty region checking", "[util]")
 {
+    SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
+
+    SECTION("Soft PTEs") { conf.dirtyTrackingMode = "softpte"; }
+
     int nPages = 15;
     size_t memSize = HOST_PAGE_SIZE * nPages;
-    auto* sharedMemory = (uint8_t*)mmap(
-      nullptr, memSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
-    if (sharedMemory == nullptr) {
-        FAIL("Could not provision memory");
-    }
+    MemoryRegion sharedMemory = allocateSharedMemory(memSize);
 
     faabric::util::DirtyPageTracker& tracker =
       faabric::util::getDirtyPageTracker();
     tracker.clearAll();
 
     std::vector<std::pair<uint32_t, uint32_t>> actual =
-      tracker.getDirtyOffsets({ sharedMemory, memSize });
+      tracker.getDirtyOffsets({ sharedMemory.get(), memSize });
     REQUIRE(actual.empty());
 
-    tracker.startTracking({ sharedMemory, memSize });
+    tracker.startTracking({ sharedMemory.get(), memSize });
 
     // Dirty some pages, some adjacent
-    uint8_t* pageZero = sharedMemory;
+    uint8_t* pageZero = sharedMemory.get();
     uint8_t* pageOne = pageZero + HOST_PAGE_SIZE;
     uint8_t* pageThree = pageZero + (3 * HOST_PAGE_SIZE);
     uint8_t* pageFour = pageZero + (4 * HOST_PAGE_SIZE);
@@ -358,6 +357,8 @@ TEST_CASE("Test dirty region checking", "[util]")
     pageSeven[77] = 1;
     pageNine[99] = 1;
 
+    tracker.stopTracking({ sharedMemory.get(), memSize });
+
     // Expect adjacent regions to be merged
     std::vector<std::pair<uint32_t, uint32_t>> expected = {
         { 0, 2 * HOST_PAGE_SIZE },
@@ -366,8 +367,10 @@ TEST_CASE("Test dirty region checking", "[util]")
         { 9 * HOST_PAGE_SIZE, 10 * HOST_PAGE_SIZE },
     };
 
-    actual = tracker.getDirtyOffsets({ sharedMemory, memSize });
+    actual = tracker.getDirtyOffsets({ sharedMemory.get(), memSize });
+
     REQUIRE(actual.size() == expected.size());
+
     for (int i = 0; i < actual.size(); i++) {
         REQUIRE(actual.at(i).first == expected.at(i).first);
         REQUIRE(actual.at(i).second == expected.at(i).second);
@@ -499,7 +502,7 @@ TEST_CASE("Test remapping memory", "[util]")
     REQUIRE(actualDataAfter == expectedData);
 }
 
-TEST_CASE_METHOD(ConfTestFixture, "Test mprotect tracking", "[.]")
+TEST_CASE_METHOD(ConfTestFixture, "Test segfault tracking", "[util]")
 {
     conf.dirtyTrackingMode = "sigseg";
 
@@ -511,6 +514,12 @@ TEST_CASE_METHOD(ConfTestFixture, "Test mprotect tracking", "[.]")
 
     std::span<uint8_t> memView(mem.get(), memSize);
 
+    SECTION("Standard alloc")
+    {
+        // Copy expected data into memory
+        std::memcpy(mem.get(), expectedData.data(), memSize);
+    }
+
     SECTION("Mapped from fd")
     {
         // Create a file descriptor holding expected data
@@ -521,11 +530,9 @@ TEST_CASE_METHOD(ConfTestFixture, "Test mprotect tracking", "[.]")
         mapMemoryPrivate(memView, fd);
     }
 
-    SECTION("Standard alloc")
-    {
-        // Copy expected data into memory
-        std::memcpy(mem.get(), expectedData.data(), memSize);
-    }
+    // Check memory to start with
+    std::vector<uint8_t> actualMemBefore(mem.get(), mem.get() + memSize);
+    REQUIRE(actualMemBefore == expectedData);
 
     // Start tracking
     t.startTracking(memView);
@@ -535,18 +542,22 @@ TEST_CASE_METHOD(ConfTestFixture, "Test mprotect tracking", "[.]")
     mem[offsetA] = 3;
     expectedData[offsetA] = 3;
 
-    // Make two changes on same page
+    // Make two changes on adjacent page
     size_t offsetB1 = HOST_PAGE_SIZE + 10;
     size_t offsetB2 = HOST_PAGE_SIZE + 50;
     mem[offsetB1] = 4;
-    mem[offsetB2] = 5;
+    mem[offsetB2] = 2;
     expectedData[offsetB1] = 4;
-    expectedData[offsetB2] = 5;
+    expectedData[offsetB2] = 2;
 
     // Change another page
     size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
     mem[offsetC] = 6;
     expectedData[offsetC] = 6;
+
+    // Just read from another (should not cause a diff)
+    int readValue = mem[4 * HOST_PAGE_SIZE + 5];
+    REQUIRE(readValue == 5);
 
     // Check writes have propagated to the actual memory
     std::vector<uint8_t> actualMemAfter(mem.get(), mem.get() + memSize);
@@ -557,17 +568,15 @@ TEST_CASE_METHOD(ConfTestFixture, "Test mprotect tracking", "[.]")
       t.getDirtyOffsets(memView);
 
     // Check dirty regions
-    REQUIRE(actualDirty.size() == 3);
+    REQUIRE(actualDirty.size() == 2);
 
     std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
-        { 0, HOST_PAGE_SIZE },
-        { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
-        { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
+        { 0, 2 * HOST_PAGE_SIZE }, { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
     };
 
     REQUIRE(actualDirty == expectedDirty);
 
-    t.stop();
+    t.stopTracking(memView);
 }
 
 }
