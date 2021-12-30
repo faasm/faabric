@@ -1,4 +1,5 @@
 #include "faabric/util/memory.h"
+#include "faabric/util/testing.h"
 #include <faabric/util/dirty.h>
 
 namespace faabric::util {
@@ -296,7 +297,11 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 
 void SegfaultDirtyTracker::reinitialise()
 {
-    setUpSignalHandler();
+    if (faabric::util::isTestMode()) {
+        // This is a hack because catch changes the segfault signal handler
+        // between test cases, so we have to reinisiatlise
+        setUpSignalHandler();
+    }
 }
 
 std::vector<std::pair<uint32_t, uint32_t>>
