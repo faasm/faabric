@@ -32,8 +32,6 @@ class DirtyPageTracker
   public:
     virtual bool isThreadLocal() = 0;
 
-    virtual void restartTracking(std::span<uint8_t> region) = 0;
-
     virtual std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
       std::span<uint8_t> region) = 0;
 
@@ -56,8 +54,6 @@ class SoftPTEDirtyTracker final : public DirtyPageTracker
     bool isThreadLocal() override { return false; }
 
     void clearAll() override;
-
-    void restartTracking(std::span<uint8_t> region) override;
 
     void startTracking(std::span<uint8_t> region) override;
 
@@ -88,8 +84,6 @@ class SegfaultDirtyTracker final : public DirtyPageTracker
     bool isThreadLocal() override { return true; }
 
     void clearAll() override;
-
-    void restartTracking(std::span<uint8_t> region) override;
 
     void startTracking(std::span<uint8_t> region) override;
 

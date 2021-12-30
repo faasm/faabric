@@ -54,11 +54,6 @@ void SoftPTEDirtyTracker::clearAll()
     ::rewind(f);
 }
 
-void SoftPTEDirtyTracker::restartTracking(std::span<uint8_t> region)
-{
-    clearAll();
-}
-
 void SoftPTEDirtyTracker::startTracking(std::span<uint8_t> region)
 {
     clearAll();
@@ -268,12 +263,6 @@ void SegfaultDirtyTracker::handler(int sig, siginfo_t* info, void* ucontext)
 void SegfaultDirtyTracker::clearAll()
 {
     tracking = ThreadTrackingData();
-}
-
-void SegfaultDirtyTracker::restartTracking(std::span<uint8_t> region)
-{
-    stopTracking(region);
-    startTracking(region);
 }
 
 void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)

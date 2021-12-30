@@ -146,7 +146,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
           faabric::util::getDirtyPageTracker();
 
         if (!tracker.isThreadLocal()) {
-            tracker.restartTracking(getMemoryView());
+            tracker.startTracking(getMemoryView());
         }
     }
 

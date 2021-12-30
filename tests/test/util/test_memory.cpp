@@ -291,7 +291,8 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
     REQUIRE(actual == expected);
 
     // Reset
-    tracker.restartTracking(memView);
+    tracker.stopTracking(memView);
+    tracker.startTracking(memView);
 
     actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual.empty());
@@ -314,7 +315,9 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
     REQUIRE(actual == expected);
 
     // Final reset and check
-    tracker.restartTracking(memView);
+    tracker.stopTracking(memView);
+
+    tracker.startTracking(memView);
     actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual.empty());
 
