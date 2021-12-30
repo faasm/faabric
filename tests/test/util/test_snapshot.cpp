@@ -972,7 +972,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->copyInData(dataB, offsetB);
 
     // Check we get the expected diffs
-    std::vector<SnapshotDiff> expectedDiffs = snap->getDirtyRegions();
+    std::vector<SnapshotDiff> expectedDiffs = snap->getTrackedChanges();
 
     REQUIRE(expectedDiffs.size() == 2);
 
@@ -1452,7 +1452,7 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     faabric::util::DirtyPageTracker& tracker =
       faabric::util::getDirtyPageTracker();
     tracker.clearAll();
-    snap->resetDirtyTracking();
+    snap->clearTrackedChanges();
 
     std::vector<uint8_t> actualSnap = snap->getDataCopy();
     std::vector<uint8_t> actualMemA(memA.get(), memA.get() + snapSize);
@@ -1479,7 +1479,7 @@ TEST_CASE("Test snapshot mapped memory diffs", "[snapshot][util]")
     snap->writeQueuedDiffs();
 
     // Check snapshot now shows both diffs
-    std::vector<SnapshotDiff> snapDirtyRegions = snap->getDirtyRegions();
+    std::vector<SnapshotDiff> snapDirtyRegions = snap->getTrackedChanges();
 
     REQUIRE(snapDirtyRegions.size() == 2);
 

@@ -760,7 +760,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
                      2 * faabric::util::HOST_PAGE_SIZE + 1);
 
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-        snap->getDirtyRegions();
+        snap->getTrackedChanges();
 
     REQUIRE(expectedDiffs.size() == 2);
 

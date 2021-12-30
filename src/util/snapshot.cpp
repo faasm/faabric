@@ -399,13 +399,13 @@ void SnapshotData::writeQueuedDiffs()
     PROF_END(WriteQueuedDiffs)
 }
 
-void SnapshotData::resetDirtyTracking()
+void SnapshotData::clearTrackedChanges()
 {
     faabric::util::FullLock lock(snapMx);
     dirtyRegions.clear();
 }
 
-std::vector<faabric::util::SnapshotDiff> SnapshotData::getDirtyRegions()
+std::vector<faabric::util::SnapshotDiff> SnapshotData::getTrackedChanges()
 {
     faabric::util::SharedLock lock(snapMx);
 

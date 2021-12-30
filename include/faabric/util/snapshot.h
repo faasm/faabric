@@ -222,9 +222,9 @@ class SnapshotData
 
     size_t getMaxSize() const { return maxSize; }
 
-    void resetDirtyTracking();
+    void clearTrackedChanges();
 
-    std::vector<SnapshotDiff> getDirtyRegions();
+    std::vector<SnapshotDiff> getTrackedChanges();
 
     std::vector<faabric::util::SnapshotDiff> diffWithMemory(
       std::span<uint8_t> mem);

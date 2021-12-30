@@ -505,7 +505,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             // if so, just push the diffs that have occurred in this main thread
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snap->getDirtyRegions();
+                  snap->getTrackedChanges();
 
                 c.pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
             } else {
@@ -516,7 +516,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
 
         // Now reset the dirty page tracking for the snapshot before we start
         // executing
-        snap->resetDirtyTracking();
+        snap->clearTrackedChanges();
     }
 
     // -------------------------------------------
