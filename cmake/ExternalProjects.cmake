@@ -38,6 +38,7 @@ conan_cmake_configure(
         hiredis/1.0.2@#297f55bf1e66f8b9c1dc0e7d35e705ab
         protobuf/3.17.1@#12f6551f4a57bbd3bf38ff3aad6aaa7e
         rapidjson/cci.20200410@#abe3eeacf36801901f6f6d82d124781a
+        readerwriterqueue/1.0.5@#4232c2ff826eb41e33d8ad8efd3c4c4c
         spdlog/1.9.2@#3724602b7b7e843c5e0a687c45e279c9
         zeromq/4.3.4@#3b9b0de9c4509784dc92629f3aaf2fe4
     GENERATORS
@@ -89,6 +90,7 @@ find_package(cppzmq REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(readerwriterqueue REQUIRED)
 
 # Pistache - Conan version is out of date and doesn't support clang
 FetchContent_Declare(pistache_ext
@@ -142,6 +144,7 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     pistache::pistache
     protobuf::libprotobuf
     RapidJSON::RapidJSON
+    readerwriterqueue::readerwriterqueue
     spdlog::spdlog
     Threads::Threads
     zstd::libzstd_static

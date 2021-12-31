@@ -6,8 +6,10 @@
 
 #include <condition_variable>
 #include <queue>
+#include <readerwriterqueue/readerwritercircularbuffer.h>
 
 #define DEFAULT_QUEUE_TIMEOUT_MS 5000
+#define DEFAULT_QUEUE_SIZE 1024
 
 namespace faabric::util {
 class QueueTimeoutException : public faabric::util::FaabricException
@@ -136,6 +138,81 @@ class Queue
     std::condition_variable enqueueNotifier;
     std::condition_variable emptyNotifier;
     std::mutex mx;
+};
+
+// Wrapper around moodycamel's blocking fixed capacity single producer single
+// consumer queue
+// https://github.com/cameron314/readerwriterqueue
+template<typename T>
+class FixedCapacityQueue
+{
+  public:
+    FixedCapacityQueue(int capacity)
+      : mq(capacity){};
+
+    FixedCapacityQueue()
+      : mq(DEFAULT_QUEUE_SIZE){};
+
+    void enqueue(T value, long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    {
+        if (timeoutMs <= 0) {
+            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
+            throw std::runtime_error("Invalid queue timeout");
+        }
+
+        bool success =
+          mq.wait_enqueue_timed(std::move(value), timeoutMs * 1000);
+        if (!success) {
+            throw QueueTimeoutException("Timeout waiting for enqueue");
+        }
+    }
+
+    void dequeueIfPresent(T* res) { mq.try_dequeue(*res); }
+
+    T dequeue(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    {
+        if (timeoutMs <= 0) {
+            SPDLOG_ERROR("Invalid queue timeout: {} <= 0", timeoutMs);
+            throw std::runtime_error("Invalid queue timeout");
+        }
+
+        T value;
+        bool success = mq.wait_dequeue_timed(value, timeoutMs * 1000);
+        if (!success) {
+            throw QueueTimeoutException("Timeout waiting for dequeue");
+        }
+
+        return value;
+    }
+
+    T* peek(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    {
+        throw std::runtime_error("Peek not implemented");
+    }
+
+    void drain(long timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS)
+    {
+        T value;
+        bool success;
+        while (size() > 0) {
+            success = mq.wait_dequeue_timed(value, timeoutMs * 1000);
+            if (!success) {
+                throw QueueTimeoutException("Timeout waiting to drain");
+            }
+        }
+    }
+
+    long size() { return mq.size_approx(); }
+
+    void reset()
+    {
+        moodycamel::BlockingReaderWriterCircularBuffer<T> empty(
+          mq.max_capacity());
+        std::swap(mq, empty);
+    }
+
+  private:
+    moodycamel::BlockingReaderWriterCircularBuffer<T> mq;
 };
 
 class TokenPool

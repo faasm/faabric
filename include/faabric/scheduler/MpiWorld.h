@@ -31,7 +31,7 @@ std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
   int sendRank);
 
-typedef faabric::util::Queue<std::shared_ptr<faabric::MPIMessage>>
+typedef faabric::util::FixedCapacityQueue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 
 class MpiWorld
@@ -276,7 +276,7 @@ class MpiWorld
     void checkRanksRange(int sendRank, int recvRank);
 
     // Abstraction of the bulk of the recv work, shared among various functions
-    void doRecv(std::shared_ptr<faabric::MPIMessage> m,
+    void doRecv(std::shared_ptr<faabric::MPIMessage>& m,
                 uint8_t* buffer,
                 faabric_datatype_t* dataType,
                 int count,
