@@ -137,11 +137,6 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     if (isThreads && isSnapshot) {
         needsSnapshotSync = true;
 
-        // Fill snapshot gaps with overwrites
-        auto snap =
-          faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
-        snap->fillGapsWithOverwriteRegions();
-
         // Restart dirty tracking if need be
         faabric::util::DirtyPageTracker& tracker =
           faabric::util::getDirtyPageTracker();
@@ -346,6 +341,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Compare snapshot with all dirty regions for this executor
             std::vector<faabric::util::SnapshotDiff> diffs;
             {
+                // Fill snapshot gaps with overwrites
+                snap->fillGapsWithOverwriteRegions();
+
+                // Do the diffing
                 faabric::util::SharedLock lock(dirtyRegionsMutex);
                 diffs = snap->diffWithMemory(dirtyRegions);
             }
