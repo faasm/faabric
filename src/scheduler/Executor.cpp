@@ -37,7 +37,7 @@ ExecutorTask::ExecutorTask(int messageIndexIn,
 Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
   , reg(faabric::snapshot::getSnapshotRegistry())
-  , tracker(faabric::util::getDirtyPageTracker())
+  , tracker(faabric::util::getDirtyTracker())
   , threadPoolSize(faabric::util::getUsableCores())
   , threadPoolThreads(threadPoolSize)
   , threadTaskQueues(threadPoolSize)
@@ -369,6 +369,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
             }
         }
 
+        // Make sure we're definitely not still tracking changes (in case some
+        // other code has switched on tracking outside the executor).
+        tracker.stopTracking(getMemoryView());
+
         // If this batch is finished, reset the executor and release its
         // claim. Note that we have to release the claim _after_ resetting,
         // otherwise the executor won't be ready for reuse.
@@ -420,6 +424,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
             std::shared_ptr<std::thread> thisThread =
               threadPoolThreads.at(threadPoolIdx);
             deadThreads.emplace_back(thisThread);
+
+            // Make sure we're definitely not still tracking changes
+            tracker.stopTracking(getMemoryView());
 
             // Set this thread to nullptr
             threadPoolThreads.at(threadPoolIdx) = nullptr;

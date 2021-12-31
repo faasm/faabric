@@ -83,8 +83,8 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Reset dirty tracking
-    faabric::util::DirtyPageTracker& tracker =
-      faabric::util::getDirtyPageTracker();
+    faabric::util::DirtyTracker& tracker =
+      faabric::util::getDirtyTracker();
     tracker.clearAll();
 
     // Single change, single merge region

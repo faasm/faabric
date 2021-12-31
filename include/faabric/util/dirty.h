@@ -16,7 +16,7 @@
 
 namespace faabric::util {
 
-class DirtyPageTracker
+class DirtyTracker
 {
   public:
     virtual bool isThreadLocal() = 0;
@@ -33,7 +33,7 @@ class DirtyPageTracker
     virtual void reinitialise() = 0;
 };
 
-class SoftPTEDirtyTracker final : public DirtyPageTracker
+class SoftPTEDirtyTracker final : public DirtyTracker
 {
   public:
     SoftPTEDirtyTracker();
@@ -63,7 +63,7 @@ class SoftPTEDirtyTracker final : public DirtyPageTracker
     std::vector<OffsetMemoryRegion> getDirtyRegions(uint8_t* ptr, int nPages);
 };
 
-class SegfaultDirtyTracker final : public DirtyPageTracker
+class SegfaultDirtyTracker final : public DirtyTracker
 {
   public:
     SegfaultDirtyTracker();
@@ -87,5 +87,5 @@ class SegfaultDirtyTracker final : public DirtyPageTracker
     void setUpSignalHandler();
 };
 
-DirtyPageTracker& getDirtyPageTracker();
+DirtyTracker& getDirtyTracker();
 }

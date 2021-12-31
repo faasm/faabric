@@ -19,7 +19,7 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util][dirty]")
 
     SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
 
-    DirtyPageTracker& tracker = getDirtyPageTracker();
+    DirtyTracker& tracker = getDirtyTracker();
 
     // Create several pages of memory
     int nPages = 6;
@@ -110,8 +110,8 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty region checking", "[util][dirty]")
     size_t memSize = HOST_PAGE_SIZE * nPages;
     MemoryRegion mem = allocateSharedMemory(memSize);
 
-    faabric::util::DirtyPageTracker& tracker =
-      faabric::util::getDirtyPageTracker();
+    faabric::util::DirtyTracker& tracker =
+      faabric::util::getDirtyTracker();
     tracker.clearAll();
 
     std::vector<OffsetMemoryRegion> actual =

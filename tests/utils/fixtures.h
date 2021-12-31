@@ -66,13 +66,13 @@ class DirtyTrackingTestFixture
 {
   public:
     DirtyTrackingTestFixture()
-      : tracker(faabric::util::getDirtyPageTracker())
+      : tracker(faabric::util::getDirtyTracker())
     {}
 
     ~DirtyTrackingTestFixture() { tracker.clearAll(); }
 
   protected:
-    faabric::util::DirtyPageTracker& tracker;
+    faabric::util::DirtyTracker& tracker;
 };
 
 class SchedulerTestFixture : public DirtyTrackingTestFixture

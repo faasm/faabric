@@ -82,7 +82,7 @@ class Executor
 
     faabric::snapshot::SnapshotRegistry& reg;
 
-    faabric::util::DirtyPageTracker& tracker;
+    faabric::util::DirtyTracker& tracker;
 
     uint32_t threadPoolSize = 0;
 

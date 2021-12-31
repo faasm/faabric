@@ -17,7 +17,7 @@
 
 namespace faabric::util {
 
-DirtyPageTracker& getDirtyPageTracker()
+DirtyTracker& getDirtyTracker()
 {
     static SoftPTEDirtyTracker softpte;
     static SegfaultDirtyTracker sigseg;
@@ -74,7 +74,8 @@ void SoftPTEDirtyTracker::startTracking(std::span<uint8_t> region)
 
 void SoftPTEDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
-    // Do nothing, don't want to reset the flags
+    // Do nothing, don't want to reset the flags as this means we can't get
+    // dirty regions.
 }
 
 std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyOffsets(
@@ -296,6 +297,10 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 
 void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
+    if(region.empty()) {
+        return;
+    }
+
     if (::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE) ==
         -1) {
         throw std::runtime_error("Failed mprotect to rw");
