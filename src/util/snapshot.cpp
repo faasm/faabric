@@ -595,12 +595,6 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
         uint8_t dirtyByte = *(dirtyRegion.data.data() + dirtyOffset);
         bool isDirtyByte = originalByte != dirtyByte;
 
-        if (isDirtyByte) {
-            SPDLOG_TRACE("DIRTY: {} {}", originalByte, dirtyByte);
-        } else {
-            SPDLOG_TRACE("CLEAN: {} {}", originalByte, dirtyByte);
-        }
-
         if (isDirtyByte && !diffInProgress) {
             // Diff starts here if it's different and diff
             // not in progress
