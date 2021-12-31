@@ -197,72 +197,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(std::vector(memA.get(), memA.get() + snapSize) == expectedSnapMem);
     REQUIRE(std::vector(memB.get(), memB.get() + snapSize) == expectedSnapMem);
 
-    // Reset dirty trackings
-    tracker.clearAll();
-    tracker.startTracking(memViewA);
-    tracker.startThreadLocalTracking(memViewA);
-    tracker.startTracking(memViewB);
-    tracker.startThreadLocalTracking(memViewB);
-
     // Make different edits to both mapped regions, check they are not
     // propagated back to the snapshot
     std::memcpy(memA.get() + offsetA, dataA.data(), dataA.size());
     std::memcpy(memB.get() + offsetB, dataB.data(), dataB.size());
 
     std::vector<uint8_t> actualSnapMem = snap->getDataCopy();
-    REQUIRE(actualSnapMem == expectedSnapMem);
-
-    // Set two separate merge regions to cover both changes
-    snap->addMergeRegion(offsetA,
-                         dataA.size(),
-                         SnapshotDataType::Raw,
-                         SnapshotMergeOperation::Overwrite);
-
-    snap->addMergeRegion(offsetB,
-                         dataB.size(),
-                         SnapshotDataType::Raw,
-                         SnapshotMergeOperation::Overwrite);
-
-    // Apply diffs from both snapshots
-    tracker.stopTracking(memViewA);
-    tracker.stopThreadLocalTracking(memViewA);
-    tracker.stopTracking(memViewB);
-    tracker.stopThreadLocalTracking(memViewB);
-
-    auto dirtyRegionsA = tracker.getBothDirtyOffsets(memViewA);
-    auto dirtyRegionsB = tracker.getBothDirtyOffsets(memViewB);
-
-    REQUIRE(dirtyRegionsA.size() == 1);
-    REQUIRE(dirtyRegionsB.size() == 1);
-
-    std::vector<SnapshotDiff> diffsA =
-      snap->diffWithDirtyRegions(dirtyRegionsA);
-    std::vector<SnapshotDiff> diffsB =
-      snap->diffWithDirtyRegions(dirtyRegionsB);
-
-    REQUIRE(diffsA.size() == 1);
-    SnapshotDiff& diffA = diffsA.front();
-    REQUIRE(diffA.getData().size() == dataA.size());
-    REQUIRE(diffA.getOffset() == offsetA);
-
-    REQUIRE(diffsB.size() == 1);
-    SnapshotDiff& diffB = diffsB.front();
-    REQUIRE(diffB.getData().size() == dataB.size());
-    REQUIRE(diffB.getOffset() == offsetB);
-
-    snap->queueDiffs(diffsA);
-    REQUIRE(snap->getQueuedDiffsCount() == diffsA.size());
-
-    snap->queueDiffs(diffsB);
-    REQUIRE(snap->getQueuedDiffsCount() == diffsA.size() + diffsB.size());
-
-    snap->writeQueuedDiffs();
-
-    // Make sure snapshot now includes both
-    std::memcpy(expectedSnapMem.data() + offsetA, dataA.data(), dataA.size());
-    std::memcpy(expectedSnapMem.data() + offsetB, dataB.data(), dataB.size());
-
-    actualSnapMem = snap->getDataCopy();
     REQUIRE(actualSnapMem == expectedSnapMem);
 }
 
