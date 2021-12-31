@@ -90,6 +90,9 @@ class Executor
 
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
+    std::shared_mutex dirtyRegionsMutex;
+    std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions;
+
     void threadPoolThread(int threadPoolIdx);
 };
 

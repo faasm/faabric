@@ -567,14 +567,15 @@ TEST_CASE_METHOD(ConfTestFixture, "Test segfault tracking", "[util]")
     REQUIRE(actualMemAfter == expectedData);
 
     // Get dirty regions
-    std::vector<std::pair<uint32_t, uint32_t>> actualDirty =
-      t.getDirtyOffsets(memView);
+    std::vector<OffsetMemoryRegion> actualDirty = t.getDirtyOffsets(memView);
 
     // Check dirty regions
     REQUIRE(actualDirty.size() == 2);
 
-    std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
-        { 0, 2 * HOST_PAGE_SIZE }, { 5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE }
+    std::vector<OffsetMemoryRegion> expectedDirty = {
+        { 0, memView.subspan(0, 2 * HOST_PAGE_SIZE) },
+        { (uint32_t)(5 * HOST_PAGE_SIZE),
+          memView.subspan(5 * HOST_PAGE_SIZE, HOST_PAGE_SIZE) }
     };
 
     REQUIRE(actualDirty == expectedDirty);

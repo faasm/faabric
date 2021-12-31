@@ -80,14 +80,12 @@ class SnapshotMergeRegion
 
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
-                  std::span<const uint8_t> updatedData,
-                  std::pair<uint32_t, uint32_t> dirtyRange);
+                  OffsetMemoryRegion dirtyRegion);
 
   private:
     void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                           std::span<const uint8_t> original,
-                          std::span<const uint8_t> updated,
-                          std::pair<uint32_t, uint32_t> dirtyRange);
+                          OffsetMemoryRegion dirtyRegion);
 };
 
 template<typename T>
@@ -214,6 +212,8 @@ class SnapshotData
 
     size_t getQueuedDiffsCount();
 
+    std::vector<SnapshotDiff> getQueuedDiffs();
+
     void queueDiffs(std::span<SnapshotDiff> diffs);
 
     void writeQueuedDiffs();
@@ -227,7 +227,7 @@ class SnapshotData
     std::vector<SnapshotDiff> getTrackedChanges();
 
     std::vector<faabric::util::SnapshotDiff> diffWithMemory(
-      std::span<uint8_t> mem);
+      std::vector<OffsetMemoryRegion> dirtyRegions);
 
   private:
     size_t size = 0;
@@ -239,9 +239,11 @@ class SnapshotData
 
     MemoryRegion data = nullptr;
 
+    std::vector<OffsetMemoryRegion> queuedDirtyRegions;
+
     std::vector<SnapshotDiff> queuedDiffs;
 
-    std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions;
+    std::vector<std::pair<uint32_t, uint32_t>> trackedChanges;
 
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets

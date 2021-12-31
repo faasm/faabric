@@ -10,6 +10,26 @@
 
 namespace faabric::util {
 
+class OffsetMemoryRegion
+{
+  public:
+    OffsetMemoryRegion(uint32_t offsetIn, std::span<uint8_t> dataIn)
+      : offset(offsetIn)
+      , data(dataIn)
+    {}
+
+    bool operator==(const OffsetMemoryRegion& other)
+    {
+        return other.offset == offset && other.data.size() == data.size() &&
+               other.data.data() == data.data();
+    }
+
+    uint32_t offset = 0;
+    std::span<uint8_t> data;
+};
+
+typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
+
 // -------------------------
 // Alignment
 // -------------------------
@@ -39,7 +59,6 @@ AlignedChunk getPageAlignedChunk(long offset, long length);
 // -------------------------
 // Allocation
 // -------------------------
-typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
 MemoryRegion allocatePrivateMemory(size_t size);
 

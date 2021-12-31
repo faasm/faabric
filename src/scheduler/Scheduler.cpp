@@ -514,8 +514,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             }
         }
 
-        // Now reset the dirty page tracking for the snapshot before we start
-        // executing
+        // Now reset the tracking on the snapshot before we start executing
         snap->clearTrackedChanges();
     }
 
