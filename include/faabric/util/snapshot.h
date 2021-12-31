@@ -212,8 +212,6 @@ class SnapshotData
 
     size_t getQueuedDiffsCount();
 
-    std::vector<SnapshotDiff> getQueuedDiffs();
-
     void queueDiffs(std::span<SnapshotDiff> diffs);
 
     void writeQueuedDiffs();
@@ -226,7 +224,7 @@ class SnapshotData
 
     std::vector<SnapshotDiff> getTrackedChanges();
 
-    std::vector<faabric::util::SnapshotDiff> diffWithMemory(
+    std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
       std::vector<OffsetMemoryRegion> dirtyRegions);
 
   private:
@@ -238,8 +236,6 @@ class SnapshotData
     std::shared_mutex snapMx;
 
     MemoryRegion data = nullptr;
-
-    std::vector<OffsetMemoryRegion> queuedDirtyRegions;
 
     std::vector<SnapshotDiff> queuedDiffs;
 

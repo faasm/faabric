@@ -1,4 +1,3 @@
-#include "faabric/util/snapshot.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -15,6 +14,7 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
 
 #define POOL_SHUTDOWN -1
@@ -36,6 +36,8 @@ ExecutorTask::ExecutorTask(int messageIndexIn,
 // TODO - avoid the copy of the message here?
 Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
+  , reg(faabric::snapshot::getSnapshotRegistry())
+  , tracker(faabric::util::getDirtyPageTracker())
   , threadPoolSize(faabric::util::getUsableCores())
   , threadPoolThreads(threadPoolSize)
   , threadTaskQueues(threadPoolSize)
@@ -137,10 +139,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     if (isThreads && isSnapshot) {
         needsSnapshotSync = true;
 
-        // Restart dirty tracking if need be
-        faabric::util::DirtyPageTracker& tracker =
-          faabric::util::getDirtyPageTracker();
-
+        // If tracking is not thread local, start once before executing tasks
         if (!tracker.isThreadLocal()) {
             tracker.startTracking(getMemoryView());
         }
@@ -259,14 +258,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         }
 
         // Start dirty tracking if necessary
-        faabric::snapshot::SnapshotRegistry& reg =
-          faabric::snapshot::getSnapshotRegistry();
         std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
-        faabric::util::DirtyPageTracker& tracker =
-          faabric::util::getDirtyPageTracker();
         if (task.needsSnapshotSync) {
             snap = reg.getSnapshot(msg.snapshotkey());
 
+            // If tracking is thread local, start here as it will happen for
+            // each thread
             if (tracker.isThreadLocal()) {
                 tracker.startTracking(getMemoryView());
             }
@@ -296,8 +293,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             msg.set_outputdata(errorMessage);
         }
 
-        // For thread-local diffs, we need to queue on the snapshot for every
-        // executor
+        // Handle thread-local diffing for every thread
         std::span<uint8_t> funcMemory = getMemoryView();
         if (!funcMemory.empty() && task.needsSnapshotSync &&
             tracker.isThreadLocal()) {
@@ -330,7 +326,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Handle snapshot diffs _before_ we reset the executor
         if (!funcMemory.empty() && isLastInBatch && task.needsSnapshotSync) {
-            // If not thread local, we need to diff the memory here
+            // If not thread local, we need to diff the memory once here
             if (!tracker.isThreadLocal()) {
                 tracker.stopTracking(funcMemory);
 
@@ -338,15 +334,15 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 dirtyRegions = tracker.getDirtyOffsets(funcMemory);
             }
 
+            // Fill snapshot gaps with overwrite regions first
+            snap->fillGapsWithOverwriteRegions();
+
             // Compare snapshot with all dirty regions for this executor
             std::vector<faabric::util::SnapshotDiff> diffs;
             {
-                // Fill snapshot gaps with overwrites
-                snap->fillGapsWithOverwriteRegions();
-
                 // Do the diffing
                 faabric::util::SharedLock lock(dirtyRegionsMutex);
-                diffs = snap->diffWithMemory(dirtyRegions);
+                diffs = snap->diffWithDirtyRegions(dirtyRegions);
             }
 
             SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",

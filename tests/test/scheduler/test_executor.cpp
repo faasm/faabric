@@ -1,6 +1,5 @@
 #include <catch2/catch.hpp>
 
-#include "faabric/util/dirty.h"
 #include "faabric_utils.h"
 
 #include <sys/mman.h>
@@ -13,6 +12,7 @@
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -236,7 +236,6 @@ class TestExecutorFixture
         setExecutorFactory(fac);
 
         dummySnap = setUpSnapshot(snapshotKey, snapshotNPages);
-        faabric::util::getDirtyPageTracker().clearAll();
 
         restoreCount = 0;
         resetCount = 0;
@@ -760,7 +759,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
                      2 * faabric::util::HOST_PAGE_SIZE + 1);
 
     std::vector<faabric::util::SnapshotDiff> expectedDiffs =
-        snap->getTrackedChanges();
+      snap->getTrackedChanges();
 
     REQUIRE(expectedDiffs.size() == 2);
 

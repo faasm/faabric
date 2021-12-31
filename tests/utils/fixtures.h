@@ -62,14 +62,25 @@ class StateTestFixture
     }
 };
 
-class SchedulerTestFixture
+class DirtyTrackingTestFixture
+{
+  public:
+    DirtyTrackingTestFixture()
+      : tracker(faabric::util::getDirtyPageTracker())
+    {}
+
+    ~DirtyTrackingTestFixture() { tracker.clearAll(); }
+
+  protected:
+    faabric::util::DirtyPageTracker& tracker;
+};
+
+class SchedulerTestFixture : public DirtyTrackingTestFixture
 {
   public:
     SchedulerTestFixture()
       : sch(faabric::scheduler::getScheduler())
     {
-        faabric::util::getDirtyPageTracker().clearAll();
-
         faabric::util::setMockMode(false);
         faabric::util::setTestMode(true);
 
@@ -90,25 +101,10 @@ class SchedulerTestFixture
 
         sch.shutdown();
         sch.addHostToGlobalSet();
-
-        faabric::util::getDirtyPageTracker().clearAll();
     };
 
   protected:
     faabric::scheduler::Scheduler& sch;
-};
-
-class DirtyTrackingTestFixture
-{
-  public:
-    DirtyTrackingTestFixture()
-      : tracker(faabric::util::getDirtyPageTracker())
-    {}
-
-    ~DirtyTrackingTestFixture() { tracker.clearAll(); }
-
-  protected:
-    faabric::util::DirtyPageTracker& tracker;
 };
 
 class SnapshotTestFixture : public DirtyTrackingTestFixture

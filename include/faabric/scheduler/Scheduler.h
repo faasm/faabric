@@ -5,8 +5,10 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/config.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/scheduling.h>
@@ -77,6 +79,10 @@ class Executor
     virtual std::span<uint8_t> getMemoryView();
 
     faabric::Message boundMessage;
+
+    faabric::snapshot::SnapshotRegistry& reg;
+
+    faabric::util::DirtyPageTracker& tracker;
 
     uint32_t threadPoolSize = 0;
 

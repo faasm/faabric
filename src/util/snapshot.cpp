@@ -279,12 +279,6 @@ size_t SnapshotData::getQueuedDiffsCount()
     return queuedDiffs.size();
 }
 
-std::vector<SnapshotDiff> SnapshotData::getQueuedDiffs()
-{
-    faabric::util::SharedLock lock(snapMx);
-    return queuedDiffs;
-}
-
 void SnapshotData::queueDiffs(const std::span<SnapshotDiff> diffs)
 {
     faabric::util::FullLock lock(snapMx);
@@ -431,7 +425,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::getTrackedChanges()
     return diffs;
 }
 
-std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithMemory(
+std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
   std::vector<OffsetMemoryRegion> dirtyRegions)
 {
     faabric::util::SharedLock lock(snapMx);

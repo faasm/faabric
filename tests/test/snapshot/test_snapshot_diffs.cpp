@@ -35,34 +35,33 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     auto snap = std::make_shared<SnapshotData>(snapSize);
     reg.registerSnapshot(snapKey, snap);
 
-    int sharedMemPages = 8;
-    size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
+    int memPages = 8;
+    size_t memSize = memPages * HOST_PAGE_SIZE;
+    MemoryRegion mem = allocatePrivateMemory(memSize);
 
     // Check we can write to shared mem
-    sharedMem[0] = 1;
+    mem[0] = 1;
 
     // Map to the snapshot
-    snap->mapToMemory({ sharedMem.get(), snapSize });
+    snap->mapToMemory({ mem.get(), snapSize });
 
-    faabric::util::DirtyPageTracker& tracker =
-      faabric::util::getDirtyPageTracker();
-    tracker.startTracking({ sharedMem.get(), sharedMemSize });
+    // Track changes
+    tracker.startTracking({ mem.get(), memSize });
 
     // Make various changes
-    sharedMem[0] = 1;
-    sharedMem[2 * HOST_PAGE_SIZE] = 1;
-    sharedMem[3 * HOST_PAGE_SIZE + 10] = 1;
-    sharedMem[8 * HOST_PAGE_SIZE - 20] = 1;
+    mem[0] = 1;
+    mem[2 * HOST_PAGE_SIZE] = 1;
+    mem[3 * HOST_PAGE_SIZE + 10] = 1;
+    mem[8 * HOST_PAGE_SIZE - 20] = 1;
 
-    tracker.stopTracking({ sharedMem.get(), sharedMemSize });
+    tracker.stopTracking({ mem.get(), memSize });
 
     // Check there are no diffs even though we have dirty regions
-    auto dirtyRegions =
-      tracker.getDirtyOffsets({ sharedMem.get(), sharedMemSize });
+    auto dirtyRegions = tracker.getDirtyOffsets({ mem.get(), memSize });
     REQUIRE(!dirtyRegions.empty());
 
-    std::vector<SnapshotDiff> changeDiffs = snap->diffWithMemory(dirtyRegions);
+    std::vector<SnapshotDiff> changeDiffs =
+      snap->diffWithDirtyRegions(dirtyRegions);
     REQUIRE(changeDiffs.empty());
 }
 
@@ -76,12 +75,12 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     reg.registerSnapshot(snapKey, snap);
 
     // Make shared memory larger than original snapshot
-    int sharedMemPages = 8;
-    size_t sharedMemSize = sharedMemPages * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocatePrivateMemory(sharedMemSize);
+    int memPages = 8;
+    size_t memSize = memPages * HOST_PAGE_SIZE;
+    MemoryRegion mem = allocatePrivateMemory(memSize);
 
     // Map the snapshot to the start of the memory
-    snap->mapToMemory({ sharedMem.get(), snapSize });
+    snap->mapToMemory({ mem.get(), snapSize });
 
     // Reset dirty tracking
     faabric::util::DirtyPageTracker& tracker =
@@ -91,7 +90,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // Single change, single merge region
     std::vector<uint8_t> dataA = { 1, 2, 3, 4 };
     int offsetA = HOST_PAGE_SIZE;
-    std::memcpy(sharedMem.get() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(mem.get() + offsetA, dataA.data(), dataA.size());
 
     snap->addMergeRegion(offsetA,
                          dataA.size(),
@@ -103,7 +102,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     std::vector<uint8_t> dataC = { 7, 6, 5, 4, 3, 2, 1 };
     std::vector<uint8_t> expectedDataC = { 7, 6, 5, 4 };
     int offsetC = 2 * HOST_PAGE_SIZE;
-    std::memcpy(sharedMem.get() + offsetC, dataC.data(), dataC.size());
+    std::memcpy(mem.get() + offsetC, dataC.data(), dataC.size());
 
     int regionOffsetC = offsetC - 3;
     snap->addMergeRegion(regionOffsetC,
@@ -116,8 +115,8 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     std::vector<uint8_t> dataB2 = { 7, 6, 5 };
     int offsetB1 = HOST_PAGE_SIZE + 10;
     int offsetB2 = HOST_PAGE_SIZE + 16;
-    std::memcpy(sharedMem.get() + offsetB1, dataB1.data(), dataB1.size());
-    std::memcpy(sharedMem.get() + offsetB2, dataB2.data(), dataB2.size());
+    std::memcpy(mem.get() + offsetB1, dataB1.data(), dataB1.size());
+    std::memcpy(mem.get() + offsetB2, dataB2.data(), dataB2.size());
 
     snap->addMergeRegion(offsetB1,
                          (offsetB2 - offsetB1) + dataB2.size() + 10,
@@ -128,7 +127,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     std::vector<uint8_t> dataD = { 1, 1, 2, 2, 3, 3, 4 };
     std::vector<uint8_t> expectedDataD = { 2, 2, 3 };
     int offsetD = 3 * HOST_PAGE_SIZE - dataD.size();
-    std::memcpy(sharedMem.get() + offsetD, dataD.data(), dataD.size());
+    std::memcpy(mem.get() + offsetD, dataD.data(), dataD.size());
 
     int regionOffsetD = offsetD + 2;
     int regionSizeD = dataD.size() - 4;
@@ -143,8 +142,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     std::vector<uint8_t> dataExtra = { 2, 2, 2 };
     std::vector<uint8_t> expectedDataExtra = { 0, 0, 2, 2, 2, 0, 0 };
     int extraOffset = snapSize + HOST_PAGE_SIZE + 10;
-    std::memcpy(
-      sharedMem.get() + extraOffset, dataExtra.data(), dataExtra.size());
+    std::memcpy(mem.get() + extraOffset, dataExtra.data(), dataExtra.size());
 
     int extraRegionOffset = extraOffset - 2;
     int extraRegionSize = dataExtra.size() + 4;
@@ -157,14 +155,13 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     // a dirty page
     std::vector<uint8_t> dataNoChange = { 0, 0, 0 };
     int offsetNoChange = 4 * HOST_PAGE_SIZE - 10;
-    std::memcpy(sharedMem.get() + offsetNoChange,
-                dataNoChange.data(),
-                dataNoChange.size());
+    std::memcpy(
+      mem.get() + offsetNoChange, dataNoChange.data(), dataNoChange.size());
 
     // Check we have the right number of diffs
-    auto dirtyRegions =
-      tracker.getDirtyOffsets({ sharedMem.get(), sharedMemSize });
-    std::vector<SnapshotDiff> changeDiffs = snap->diffWithMemory(dirtyRegions);
+    auto dirtyRegions = tracker.getDirtyOffsets({ mem.get(), memSize });
+    std::vector<SnapshotDiff> changeDiffs =
+      snap->diffWithDirtyRegions(dirtyRegions);
 
     REQUIRE(changeDiffs.size() == 6);
 
