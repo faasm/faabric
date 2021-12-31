@@ -12,6 +12,39 @@
 
 namespace faabric::util {
 
+std::vector<OffsetMemoryRegion> dedupeMemoryRegions(
+  std::vector<OffsetMemoryRegion>& regions)
+{
+    if (regions.empty()) {
+        return {};
+    }
+
+    std::vector<OffsetMemoryRegion> deduped;
+
+    // Sort in place
+    std::sort(std::begin(regions),
+              std::end(regions),
+              [](OffsetMemoryRegion& a, OffsetMemoryRegion& b) {
+                  return a.offset < b.offset;
+              });
+
+    deduped.push_back(regions.front());
+    uint32_t lastOffset = regions.front().offset;
+    for (int i = 1; i < regions.size(); i++) {
+        const auto& r = regions.at(i);
+        assert(r.offset >= lastOffset);
+
+        if (r.offset > lastOffset) {
+            deduped.push_back(r);
+            lastOffset = r.offset;
+        } else if (deduped.back().data.size() < r.data.size()) {
+            deduped.pop_back();
+            deduped.push_back(r);
+        }
+    }
+
+    return deduped;
+}
 // -------------------------
 // Alignment
 // -------------------------

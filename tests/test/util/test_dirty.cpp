@@ -188,7 +188,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                  "Test segfault tracking",
                  "[util][dirty]")
 {
-    conf.dirtyTrackingMode = "sigseg";
+    conf.dirtyTrackingMode = "segfault";
     tracker = getDirtyTracker();
 
     size_t memSize = 10 * HOST_PAGE_SIZE;
@@ -273,7 +273,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 {
     // Here we want to check that faults triggered in a given thread are caught
     // by that thread, and so we can safely just to thread-local diff tracking.
-    conf.dirtyTrackingMode = "sigseg";
+    conf.dirtyTrackingMode = "segfault";
+    tracker = getDirtyTracker();
 
     int nLoops = 20;
 

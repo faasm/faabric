@@ -441,13 +441,16 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
         return diffs;
     }
 
+    // First dedupe the memory regions
+    auto dedupedRegions = dedupeMemoryRegions(dirtyRegions);
+
     // Iterate through merge regions, allow them to add diffs based on the dirty
     // regions
     for (auto& mrPair : mergeRegions) {
         faabric::util::SnapshotMergeRegion& mr = mrPair.second;
 
         // Add the diffs for each dirty region
-        for (auto& dirtyRegion : dirtyRegions) {
+        for (auto& dirtyRegion : dedupedRegions) {
             mr.addDiffs(diffs, { data.get(), size }, dirtyRegion);
         }
     }

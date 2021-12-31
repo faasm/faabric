@@ -14,6 +14,59 @@ using namespace faabric::util;
 
 namespace tests {
 
+TEST_CASE("Test dedupe memory regions", "[util][memory]")
+{
+    std::vector<OffsetMemoryRegion> input;
+    std::vector<OffsetMemoryRegion> expected;
+
+    uint32_t offsetA = 0;
+    uint32_t offsetB = 10;
+    uint32_t offsetC = 20;
+
+    std::vector<uint8_t> dataA = { 0, 1 };
+    std::vector<uint8_t> dataB = { 0, 1, 2 };
+    std::vector<uint8_t> dataC = { 0, 1, 2, 3 };
+    std::vector<uint8_t> dataD = { 0, 1, 2, 3, 4 };
+
+    SECTION("Empty") {}
+
+    SECTION("Nothing to do")
+    {
+        input = { { offsetA, dataA } };
+        expected = input;
+    }
+
+    SECTION("Equal on the same offset")
+    {
+        input = {
+            { offsetB, dataB },
+            { offsetA, dataA },
+            { offsetA, dataA },
+        };
+        expected = {
+            { offsetA, dataA },
+            { offsetB, dataB },
+        };
+    }
+
+    SECTION("Longer on the same offset")
+    {
+        input = {
+            { offsetB, dataB },
+            { offsetA, dataA },
+            { offsetA, dataC },
+            { offsetA, dataB },
+        };
+        expected = {
+            { offsetA, dataC },
+            { offsetB, dataB },
+        };
+    }
+
+    std::vector<OffsetMemoryRegion> actual = dedupeMemoryRegions(input);
+    REQUIRE(actual == expected);
+}
+
 TEST_CASE("Test rounding down offsets to page size", "[util][memory]")
 {
     REQUIRE(faabric::util::alignOffsetDown(2 * faabric::util::HOST_PAGE_SIZE) ==
@@ -243,7 +296,6 @@ TEST_CASE("Test already aligned memory chunk", "[util][memory]")
     REQUIRE(actual.nBytesLength == 5 * faabric::util::HOST_PAGE_SIZE);
     REQUIRE(actual.offsetRemainder == 0);
 }
-
 
 TEST_CASE("Test allocating and claiming memory", "[util][memory]")
 {

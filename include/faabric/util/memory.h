@@ -28,6 +28,9 @@ class OffsetMemoryRegion
     std::span<uint8_t> data;
 };
 
+std::vector<OffsetMemoryRegion> dedupeMemoryRegions(
+  std::vector<OffsetMemoryRegion> &regions);
+
 typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
 // -------------------------

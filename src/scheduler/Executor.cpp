@@ -338,8 +338,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
             std::vector<faabric::util::SnapshotDiff> diffs;
             {
                 // Do the diffing
-                faabric::util::SharedLock lock(dirtyRegionsMutex);
+                faabric::util::FullLock lock(dirtyRegionsMutex);
                 diffs = snap->diffWithDirtyRegions(dirtyRegions);
+                dirtyRegions.clear();
             }
 
             SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
@@ -359,11 +360,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // If last in batch on this host, clear the merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
             snap->clearMergeRegions();
-
-            {
-                faabric::util::FullLock lock(dirtyRegionsMutex);
-                dirtyRegions.clear();
-            }
         }
 
         // If this batch is finished, reset the executor and release its
