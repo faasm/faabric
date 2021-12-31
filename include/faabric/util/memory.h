@@ -18,7 +18,7 @@ class OffsetMemoryRegion
       , data(dataIn)
     {}
 
-    bool operator==(const OffsetMemoryRegion& other)
+    bool operator==(const OffsetMemoryRegion& other) const
     {
         return other.offset == offset && other.data.size() == data.size() &&
                other.data.data() == data.data();

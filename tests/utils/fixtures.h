@@ -13,9 +13,9 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointServer.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
-#include <faabric/util/dirty.h>
 #include <faabric/util/network.h>
 #include <faabric/util/testing.h>
 
@@ -98,21 +98,29 @@ class SchedulerTestFixture
     faabric::scheduler::Scheduler& sch;
 };
 
-class SnapshotTestFixture
+class DirtyTrackingTestFixture
+{
+  public:
+    DirtyTrackingTestFixture()
+      : tracker(faabric::util::getDirtyPageTracker())
+    {}
+
+    ~DirtyTrackingTestFixture() { tracker.clearAll(); }
+
+  protected:
+    faabric::util::DirtyPageTracker& tracker;
+};
+
+class SnapshotTestFixture : public DirtyTrackingTestFixture
 {
   public:
     SnapshotTestFixture()
       : reg(faabric::snapshot::getSnapshotRegistry())
     {
-        faabric::util::getDirtyPageTracker().clearAll();
         reg.clear();
     }
 
-    ~SnapshotTestFixture()
-    {
-        faabric::util::getDirtyPageTracker().clearAll();
-        reg.clear();
-    }
+    ~SnapshotTestFixture() { reg.clear(); }
 
     std::shared_ptr<faabric::util::SnapshotData> setUpSnapshot(
       const std::string& snapKey,

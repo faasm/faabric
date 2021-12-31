@@ -1,19 +1,8 @@
 #pragma once
 
-#include <cstdint>
-#include <cstring>
-#include <fcntl.h>
-#include <inttypes.h>
-#include <memory>
 #include <signal.h>
 #include <span>
 #include <string>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <sys/syscall.h>
-#include <thread>
-#include <unistd.h>
-#include <vector>
 
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
@@ -71,9 +60,7 @@ class SoftPTEDirtyTracker final : public DirtyPageTracker
 
     std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
 
-    std::vector<OffsetMemoryRegion> getDirtyRegions(
-      uint8_t* ptr,
-      int nPages);
+    std::vector<OffsetMemoryRegion> getDirtyRegions(uint8_t* ptr, int nPages);
 };
 
 class SegfaultDirtyTracker final : public DirtyPageTracker

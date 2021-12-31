@@ -1,6 +1,19 @@
-#include "faabric/util/memory.h"
-#include "faabric/util/testing.h"
+#include <cstdint>
+#include <cstring>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <memory>
+#include <signal.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include <thread>
+#include <unistd.h>
+#include <vector>
+
 #include <faabric/util/dirty.h>
+#include <faabric/util/memory.h>
+#include <faabric/util/testing.h>
 
 namespace faabric::util {
 
@@ -75,7 +88,7 @@ std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyOffsets(
     SPDLOG_DEBUG(
       "Region has {}/{} dirty pages", dirtyPageNumbers.size(), nPages);
 
-    std::vector<std::pair<uint32_t, uint32_t>> regions =
+    std::vector<OffsetMemoryRegion> regions =
       getDirtyRegions(region.data(), nPages);
 
     return regions;

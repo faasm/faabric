@@ -45,15 +45,24 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     // Map to the snapshot
     snap->mapToMemory({ sharedMem.get(), snapSize });
 
+    faabric::util::DirtyPageTracker& tracker =
+      faabric::util::getDirtyPageTracker();
+    tracker.startTracking({ sharedMem.get(), sharedMemSize });
+
     // Make various changes
     sharedMem[0] = 1;
     sharedMem[2 * HOST_PAGE_SIZE] = 1;
     sharedMem[3 * HOST_PAGE_SIZE + 10] = 1;
     sharedMem[8 * HOST_PAGE_SIZE - 20] = 1;
 
-    // Check there are no diffs
-    std::vector<SnapshotDiff> changeDiffs =
-      snap->diffWithMemory({ sharedMem.get(), sharedMemSize });
+    tracker.stopTracking({ sharedMem.get(), sharedMemSize });
+
+    // Check there are no diffs even though we have dirty regions
+    auto dirtyRegions =
+      tracker.getDirtyOffsets({ sharedMem.get(), sharedMemSize });
+    REQUIRE(!dirtyRegions.empty());
+
+    std::vector<SnapshotDiff> changeDiffs = snap->diffWithMemory(dirtyRegions);
     REQUIRE(changeDiffs.empty());
 }
 
@@ -153,8 +162,9 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
                 dataNoChange.size());
 
     // Check we have the right number of diffs
-    std::vector<SnapshotDiff> changeDiffs =
-      snap->diffWithMemory({ sharedMem.get(), sharedMemSize });
+    auto dirtyRegions =
+      tracker.getDirtyOffsets({ sharedMem.get(), sharedMemSize });
+    std::vector<SnapshotDiff> changeDiffs = snap->diffWithMemory(dirtyRegions);
 
     REQUIRE(changeDiffs.size() == 6);
 

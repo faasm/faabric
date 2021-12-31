@@ -260,8 +260,7 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
 
     tracker.clearAll();
 
-    std::vector<std::pair<uint32_t, uint32_t>> actual =
-      tracker.getDirtyOffsets(memView);
+    std::vector<OffsetMemoryRegion> actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual.empty());
 
     tracker.startTracking(memView);
@@ -274,9 +273,13 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
     pageOne[10] = 1;
     pageThree[123] = 4;
 
-    std::vector<std::pair<uint32_t, uint32_t>> expected = {
-        { HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE },
-        { 3 * HOST_PAGE_SIZE, 4 * HOST_PAGE_SIZE }
+    std::vector<OffsetMemoryRegion> expected = {
+        OffsetMemoryRegion(
+          HOST_PAGE_SIZE,
+          std::span<uint8_t>(memPtr.get() + HOST_PAGE_SIZE, HOST_PAGE_SIZE)),
+        OffsetMemoryRegion(
+          3 * HOST_PAGE_SIZE,
+          std::span<uint8_t>(memPtr.get() + 3 * HOST_PAGE_SIZE, HOST_PAGE_SIZE))
     };
 
     actual = tracker.getDirtyOffsets(memView);
@@ -286,7 +289,9 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
     uint8_t* pageFive = pageThree + (2 * faabric::util::HOST_PAGE_SIZE);
     pageFive[99] = 3;
 
-    expected.emplace_back(5 * HOST_PAGE_SIZE, 6 * HOST_PAGE_SIZE);
+    expected.emplace_back(
+      5 * HOST_PAGE_SIZE,
+      std::span<uint8_t>(memView.data() + 5 * HOST_PAGE_SIZE, HOST_PAGE_SIZE));
     actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
@@ -309,7 +314,9 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util]")
 
     // As pages are adjacent we get a single region
     expected = {
-        { 3 * HOST_PAGE_SIZE, 5 * HOST_PAGE_SIZE },
+        OffsetMemoryRegion(3 * HOST_PAGE_SIZE,
+                           std::span<uint8_t>(memPtr.get() + 3 * HOST_PAGE_SIZE,
+                                              2 * HOST_PAGE_SIZE)),
     };
     actual = tracker.getDirtyOffsets(memView);
     REQUIRE(actual == expected);
@@ -338,7 +345,7 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty region checking", "[util]")
       faabric::util::getDirtyPageTracker();
     tracker.clearAll();
 
-    std::vector<std::pair<uint32_t, uint32_t>> actual =
+    std::vector<OffsetMemoryRegion> actual =
       tracker.getDirtyOffsets({ sharedMemory.get(), memSize });
     REQUIRE(actual.empty());
 
@@ -363,21 +370,28 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty region checking", "[util]")
     tracker.stopTracking({ sharedMemory.get(), memSize });
 
     // Expect adjacent regions to be merged
-    std::vector<std::pair<uint32_t, uint32_t>> expected = {
-        { 0, 2 * HOST_PAGE_SIZE },
-        { 3 * HOST_PAGE_SIZE, 5 * HOST_PAGE_SIZE },
-        { 7 * HOST_PAGE_SIZE, 8 * HOST_PAGE_SIZE },
-        { 9 * HOST_PAGE_SIZE, 10 * HOST_PAGE_SIZE },
+    std::vector<OffsetMemoryRegion> expected = {
+        OffsetMemoryRegion(
+          0, std::span<uint8_t>(sharedMemory.get(), 2 * HOST_PAGE_SIZE)),
+        OffsetMemoryRegion(
+          3 * HOST_PAGE_SIZE,
+          std::span<uint8_t>(sharedMemory.get() + 3 * HOST_PAGE_SIZE,
+                             2 * HOST_PAGE_SIZE)),
+        OffsetMemoryRegion(
+          7 * HOST_PAGE_SIZE,
+          std::span<uint8_t>(sharedMemory.get() + 7 * HOST_PAGE_SIZE,
+                             HOST_PAGE_SIZE)),
+        OffsetMemoryRegion(
+          9 * HOST_PAGE_SIZE,
+          std::span<uint8_t>(sharedMemory.get() + 9 * HOST_PAGE_SIZE,
+                             HOST_PAGE_SIZE))
     };
 
     actual = tracker.getDirtyOffsets({ sharedMemory.get(), memSize });
 
     REQUIRE(actual.size() == expected.size());
 
-    for (int i = 0; i < actual.size(); i++) {
-        REQUIRE(actual.at(i).first == expected.at(i).first);
-        REQUIRE(actual.at(i).second == expected.at(i).second);
-    }
+    REQUIRE(actual == expected);
 }
 
 TEST_CASE("Test allocating and claiming memory", "[util]")
@@ -582,5 +596,4 @@ TEST_CASE_METHOD(ConfTestFixture, "Test segfault tracking", "[util]")
 
     t.stopTracking(memView);
 }
-
 }
