@@ -522,118 +522,94 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                                            std::span<const uint8_t> original,
                                            OffsetMemoryRegion dirtyRegion)
 {
-    auto operation = SnapshotMergeOperation::Overwrite;
+    // In this function we have two possibilities:
+    // - Dirty region overlaps original and we can compare
+    // - Dirty region is past original, in which case we need to extend
 
-    // Work out bounds of region we're checking
-    uint32_t overlapStart = std::max<uint32_t>(dirtyRegion.offset, offset);
-
-    // Work out the offset into both the dirty region and the original
-    uint32_t dirtyRegionZero = overlapStart - dirtyRegion.offset;
-    uint32_t originalZero = overlapStart;
-
-    // Here we need to make sure we don't overrun the original or the updated
-    // data
+    // First we calculate where the dirty region start and ends. If the merge
+    // region ends before the dirty region, we take that as the limit. If the
+    // merge region is zero length, we take the whole dirty region.
+    uint32_t dirtyRegionStart = std::max<uint32_t>(dirtyRegion.offset, offset);
     uint32_t dirtyRegionEnd = dirtyRegion.offset + dirtyRegion.data.size();
-    uint32_t overlapEnd;
-    if (length == 0) {
-        overlapEnd = dirtyRegionEnd;
-    } else {
-        overlapEnd = std::min<uint32_t>(dirtyRegionEnd, offset + length);
+    if (length > 0) {
+        dirtyRegionEnd = std::min<uint32_t>(dirtyRegionEnd, offset + length);
     }
+    assert(dirtyRegionStart < dirtyRegionEnd);
 
-    uint32_t overlapSize = overlapEnd - overlapStart;
+    // ----- Overlap with original data -----
+    if (original.size() > dirtyRegionStart) {
+        // Work out the end of the overlap
+        uint32_t overlapEnd =
+          std::min<uint32_t>(dirtyRegionEnd, original.size());
 
-    // If the region is outside the original data, automatically add a diff for
-    // the whole region
-    if (overlapStart >= original.size()) {
-        SPDLOG_TRACE("Single extension {} overwrite diff at {}-{}",
-                     snapshotDataTypeStr(dataType),
-                     overlapStart,
-                     overlapEnd - overlapStart);
+        // Iterate through and compare each byte
+        bool diffInProgress = false;
+        uint32_t diffInProgressStart = 0;
+        for (uint32_t i = dirtyRegionStart; i < overlapEnd; i++) {
+            const uint8_t* originalByte = original.data() + i;
+            uint8_t* dirtyByte =
+              dirtyRegion.data.data() + (i - dirtyRegion.offset);
+            bool isDirtyByte = *originalByte != *dirtyByte;
 
-        diffs.emplace_back(
-          dataType,
-          operation,
-          originalZero,
-          dirtyRegion.data.subspan(dirtyRegionZero, overlapSize));
-        return;
-    }
+            if (isDirtyByte && !diffInProgress) {
+                // Diff starts here if it's different and diff
+                // not in progress
+                diffInProgress = true;
+                diffInProgressStart = i;
+                SPDLOG_TRACE("Staring {} overwrite diff at {}",
+                             snapshotDataTypeStr(dataType),
+                             diffInProgressStart);
+            } else if (!isDirtyByte && diffInProgress) {
+                // Diff ends at byte before thie one if it's not different and
+                // diff is in progress
+                uint32_t diffLength = i - diffInProgressStart;
+                SPDLOG_TRACE("Adding {} overwrite diff at {}-{}",
+                             snapshotDataTypeStr(dataType),
+                             diffInProgressStart,
+                             diffInProgressStart + diffLength);
 
-    bool diffInProgress = false;
-    uint32_t diffInProgressStart = 0;
-    for (uint32_t i = 0; i <= overlapSize; i++) {
-        // If this byte is outside the original region, everything from here on
-        // is dirty, so we can add a single region to go from here to the end
-        uint32_t originalOffset = originalZero + i;
-        uint32_t dirtyOffset = dirtyRegionZero + i;
-
-        if (originalOffset >= original.size()) {
-            if (diffInProgress) {
-                originalOffset = originalZero + diffInProgressStart;
-                dirtyOffset = dirtyRegionZero + diffInProgressStart;
+                diffInProgress = false;
+                diffs.emplace_back(
+                  dataType,
+                  operation,
+                  diffInProgressStart,
+                  dirtyRegion.data.subspan(
+                    (diffInProgressStart - dirtyRegion.offset), diffLength));
             }
-
-            uint32_t diffLength = overlapSize - diffInProgressStart;
-
-            SPDLOG_TRACE("Extension {} overwrite diff at {}-{}",
-                         snapshotDataTypeStr(dataType),
-                         originalOffset,
-                         originalOffset + diffLength);
-
-            diffs.emplace_back(
-              dataType,
-              operation,
-              originalOffset,
-              dirtyRegion.data.subspan(dirtyOffset, diffLength));
-            return;
         }
 
-        const uint8_t originalByte = *(original.data() + originalOffset);
-        uint8_t dirtyByte = *(dirtyRegion.data.data() + dirtyOffset);
-        bool isDirtyByte = originalByte != dirtyByte;
-
-        if (isDirtyByte && !diffInProgress) {
-            // Diff starts here if it's different and diff
-            // not in progress
-            diffInProgress = true;
-            diffInProgressStart = i;
-        } else if (!isDirtyByte && diffInProgress) {
-            // Diff ends at byte before thie one if it's not different and diff
-            // is in progress
-            uint32_t diffLength = i - diffInProgressStart;
-            uint32_t originalDiffStart = originalZero + diffInProgressStart;
-            uint32_t dirtyDiffStart = dirtyRegionZero + diffInProgressStart;
-            SPDLOG_TRACE("Found {} overwrite diff at {}-{}",
+        // If we've finished with a diff in progress, add a diff for the last
+        // part
+        if (diffInProgress) {
+            uint32_t diffLength = overlapEnd - diffInProgressStart;
+            SPDLOG_TRACE("Adding final {} overwrite diff at {}-{}",
                          snapshotDataTypeStr(dataType),
-                         originalDiffStart,
-                         originalDiffStart + diffLength);
-
-            diffInProgress = false;
+                         diffInProgressStart,
+                         diffInProgressStart + diffLength);
             diffs.emplace_back(
               dataType,
               operation,
-              originalDiffStart,
-              dirtyRegion.data.subspan(dirtyDiffStart, diffLength));
+              diffInProgressStart,
+              dirtyRegion.data.subspan(
+                (diffInProgressStart - dirtyRegion.offset), diffLength));
         }
     }
 
-    // If we've reached the end of this region with a diff
-    // in progress, we need to close it off
-    if (diffInProgress) {
-        uint32_t originalOffset = originalZero + diffInProgressStart;
-        uint32_t dirtyOffset = dirtyRegionZero + diffInProgressStart;
-        uint32_t diffLength = overlapSize - diffInProgressStart;
+    // ----- Overlap with original data -----
+    if (dirtyRegionEnd > original.size()) {
+        uint32_t diffStart =
+          std::max<uint32_t>(original.size(), dirtyRegionStart);
+        uint32_t diffLength = dirtyRegionEnd - diffStart;
 
-        SPDLOG_TRACE("Adding {} {} diff at {}-{} (end of region)",
+        SPDLOG_TRACE("Adding extension {} overwrite diff at {}-{}",
                      snapshotDataTypeStr(dataType),
-                     snapshotMergeOpStr(operation),
-                     originalOffset,
-                     diffInProgressStart + diffLength);
-
+                     diffStart,
+                     diffStart + diffLength);
         diffs.emplace_back(dataType,
                            operation,
-                           originalOffset,
-                           dirtyRegion.data.subspan(dirtyOffset, diffLength));
+                           diffStart,
+                           dirtyRegion.data.subspan(
+                             (diffStart - dirtyRegion.offset), diffLength));
     }
 }
 
@@ -652,9 +628,9 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                    OffsetMemoryRegion dirtyRegion)
 {
     // If the region has zero length, it signifies that it goes to the
-    // end of the memory, so we go all the way to the end of the dirty region.
-    // For all other regions, we just check if the dirty range is within the
-    // merge region.
+    // end of the memory, so we go all the way to the end of the dirty
+    // region. For all other regions, we just check if the dirty range is
+    // within the merge region.
 
     uint32_t dirtyRangeStart = dirtyRegion.offset;
     uint32_t dirtyRangeEnd = dirtyRegion.offset + dirtyRegion.data.size();
@@ -693,8 +669,8 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     }
 
     if (originalData.size() < offset) {
-        throw std::runtime_error(
-          "Do not support non-overwrite operations outside original snapshot");
+        throw std::runtime_error("Do not support non-overwrite operations "
+                                 "outside original snapshot");
     }
 
     uint32_t dirtyRegionOffset = offset - dirtyRegion.offset;
