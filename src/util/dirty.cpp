@@ -72,10 +72,19 @@ void SoftPTEDirtyTracker::startTracking(std::span<uint8_t> region)
     clearAll();
 }
 
+void SoftPTEDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
+{
+    // Do nothing
+}
+
 void SoftPTEDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
-    // Do nothing, don't want to reset the flags as this means we can't get
-    // dirty regions.
+    // Do nothing
+}
+
+void SoftPTEDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
+{
+    // Do nothing
 }
 
 std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyOffsets(
@@ -93,6 +102,18 @@ std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyOffsets(
       getDirtyRegions(region.data(), nPages);
 
     return regions;
+}
+
+std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getBothDirtyOffsets(
+  std::span<uint8_t> region)
+{
+    return getDirtyOffsets(region);
+}
+
+std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getThreadLocalDirtyOffsets(
+  std::span<uint8_t> region)
+{
+    return {};
 }
 
 std::vector<uint64_t> SoftPTEDirtyTracker::readPagemapEntries(uintptr_t ptr,
@@ -200,7 +221,7 @@ class ThreadTrackingData
     {
         assert(regionTop != nullptr);
 
-        ptrdiff_t offset = (uint8_t*)addr - regionBase;
+        ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
         long pageNum = offset / HOST_PAGE_SIZE;
         pageFlags[pageNum] = true;
 
@@ -256,7 +277,9 @@ void SegfaultDirtyTracker::setUpSignalHandler()
     // Set up sig handler
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO;
+
     sigemptyset(&sa.sa_mask);
+    sigaddset(&sa.sa_mask, SIGSEGV);
 
     sa.sa_sigaction = SegfaultDirtyTracker::handler;
     if (sigaction(SIGSEGV, &sa, NULL) == -1) {
@@ -273,7 +296,9 @@ void SegfaultDirtyTracker::handler(int sig, siginfo_t* info, void* ucontext)
     tracking.markDirtyPage(faultAddr);
 
     // Align down to nearest page boundary
-    auto* alignedAddr = (void*)((uint64_t)faultAddr & ~(HOST_PAGE_SIZE - 1));
+    uintptr_t addr = (uintptr_t)faultAddr;
+    addr &= -HOST_PAGE_SIZE;
+    auto* alignedAddr = (void*)addr;
 
     // Remove write protection from page
     if (::mprotect(alignedAddr, HOST_PAGE_SIZE, PROT_READ | PROT_WRITE) == -1) {
@@ -286,10 +311,15 @@ void SegfaultDirtyTracker::clearAll()
     tracking = ThreadTrackingData();
 }
 
-void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
+void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 {
     tracking = ThreadTrackingData(region);
+}
 
+void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
+{
+    // Note that here we want to mark the memory read-only, this is to ensure
+    // that only writes are counted as dirtying a page.
     if (::mprotect(region.data(), region.size(), PROT_READ) == -1) {
         throw std::runtime_error("Failed mprotect to none");
     }
@@ -297,7 +327,7 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 
 void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
-    if(region.empty()) {
+    if (region.empty()) {
         return;
     }
 
@@ -305,8 +335,11 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
         -1) {
         throw std::runtime_error("Failed mprotect to rw");
     }
+}
 
-    SPDLOG_TRACE("Stopped tracking");
+void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
+{
+    // Do nothing - need to preserve thread-local data for getting dirty regions
 }
 
 void SegfaultDirtyTracker::reinitialise()
@@ -318,9 +351,21 @@ void SegfaultDirtyTracker::reinitialise()
     }
 }
 
+std::vector<OffsetMemoryRegion>
+SegfaultDirtyTracker::getThreadLocalDirtyOffsets(std::span<uint8_t> region)
+{
+    return tracking.getDirtyRegions();
+}
+
 std::vector<OffsetMemoryRegion> SegfaultDirtyTracker::getDirtyOffsets(
   std::span<uint8_t> region)
 {
-    return tracking.getDirtyRegions();
+    return {};
+}
+
+std::vector<OffsetMemoryRegion> SegfaultDirtyTracker::getBothDirtyOffsets(
+  std::span<uint8_t> region)
+{
+    return getThreadLocalDirtyOffsets(region);
 }
 }

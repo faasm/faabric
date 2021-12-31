@@ -139,10 +139,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     if (isThreads && isSnapshot) {
         needsSnapshotSync = true;
 
-        // If tracking is not thread local, start once before executing tasks
-        if (!tracker.isThreadLocal()) {
-            tracker.startTracking(getMemoryView());
-        }
+        // Start global tracking of memory
+        tracker.startTracking(getMemoryView());
     }
 
     // Set up shared counter for this batch of tasks
@@ -264,9 +262,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // If tracking is thread local, start here as it will happen for
             // each thread
-            if (tracker.isThreadLocal()) {
-                tracker.startTracking(getMemoryView());
-            }
+            tracker.startThreadLocalTracking(getMemoryView());
         }
 
         bool isMaster = msg.masterhost() == conf.endpointHost;
@@ -295,12 +291,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Handle thread-local diffing for every thread
         std::span<uint8_t> funcMemory = getMemoryView();
-        if (!funcMemory.empty() && task.needsSnapshotSync &&
-            tracker.isThreadLocal()) {
-
-            tracker.stopTracking(getMemoryView());
+        if (!funcMemory.empty() && task.needsSnapshotSync) {
             auto thisThreadDirtyRegions =
-              tracker.getDirtyOffsets(getMemoryView());
+              tracker.getThreadLocalDirtyOffsets(getMemoryView());
 
             // Add to executor-wide list of dirty regions
             faabric::util::FullLock lock(dirtyRegionsMutex);
@@ -326,12 +319,16 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Handle snapshot diffs _before_ we reset the executor
         if (!funcMemory.empty() && isLastInBatch && task.needsSnapshotSync) {
-            // If not thread local, we need to diff the memory once here
-            if (!tracker.isThreadLocal()) {
-                tracker.stopTracking(funcMemory);
+            // Stop non-thread-local tracking as we're the last in the batch
+            tracker.stopTracking(getMemoryView());
 
+            // Add non-thread-local dirty regions
+            {
                 faabric::util::FullLock lock(dirtyRegionsMutex);
-                dirtyRegions = tracker.getDirtyOffsets(funcMemory);
+                std::vector<faabric::util::OffsetMemoryRegion> r =
+                  tracker.getDirtyOffsets(funcMemory);
+
+                dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
             }
 
             // Fill snapshot gaps with overwrite regions first
@@ -368,10 +365,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 dirtyRegions.clear();
             }
         }
-
-        // Make sure we're definitely not still tracking changes (in case some
-        // other code has switched on tracking outside the executor).
-        tracker.stopTracking(getMemoryView());
 
         // If this batch is finished, reset the executor and release its
         // claim. Note that we have to release the claim _after_ resetting,

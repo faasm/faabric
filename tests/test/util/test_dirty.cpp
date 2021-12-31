@@ -13,7 +13,18 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util][dirty]")
+class DirtyConfTestFixture
+  : public ConfTestFixture
+  , public DirtyTrackingTestFixture
+{
+  public:
+    DirtyConfTestFixture() = default;
+    ~DirtyConfTestFixture() = default;
+};
+
+TEST_CASE_METHOD(DirtyConfTestFixture,
+                 "Test dirty page checking",
+                 "[util][dirty]")
 {
     SECTION("Soft dirty PTEs") { conf.dirtyTrackingMode = "softpte"; }
 
@@ -23,21 +34,23 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util][dirty]")
 
     // Create several pages of memory
     int nPages = 6;
-    size_t memSize = faabric::util::HOST_PAGE_SIZE * nPages;
+    size_t memSize = HOST_PAGE_SIZE * nPages;
     MemoryRegion memPtr = allocatePrivateMemory(memSize);
     std::span<uint8_t> memView(memPtr.get(), memSize);
 
     tracker.clearAll();
 
-    std::vector<OffsetMemoryRegion> actual = tracker.getDirtyOffsets(memView);
+    std::vector<OffsetMemoryRegion> actual =
+      tracker.getBothDirtyOffsets(memView);
     REQUIRE(actual.empty());
 
     tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
 
     // Dirty two of the pages
     uint8_t* pageZero = memPtr.get();
-    uint8_t* pageOne = pageZero + faabric::util::HOST_PAGE_SIZE;
-    uint8_t* pageThree = pageOne + (2 * faabric::util::HOST_PAGE_SIZE);
+    uint8_t* pageOne = pageZero + HOST_PAGE_SIZE;
+    uint8_t* pageThree = pageOne + (2 * HOST_PAGE_SIZE);
 
     pageOne[10] = 1;
     pageThree[123] = 4;
@@ -51,24 +64,26 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util][dirty]")
           std::span<uint8_t>(memPtr.get() + 3 * HOST_PAGE_SIZE, HOST_PAGE_SIZE))
     };
 
-    actual = tracker.getDirtyOffsets(memView);
+    actual = tracker.getBothDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
     // And another
-    uint8_t* pageFive = pageThree + (2 * faabric::util::HOST_PAGE_SIZE);
+    uint8_t* pageFive = pageThree + (2 * HOST_PAGE_SIZE);
     pageFive[99] = 3;
 
     expected.emplace_back(
       5 * HOST_PAGE_SIZE,
       std::span<uint8_t>(memView.data() + 5 * HOST_PAGE_SIZE, HOST_PAGE_SIZE));
-    actual = tracker.getDirtyOffsets(memView);
+    actual = tracker.getBothDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
     // Reset
     tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
     tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
 
-    actual = tracker.getDirtyOffsets(memView);
+    actual = tracker.getBothDirtyOffsets(memView);
     REQUIRE(actual.empty());
 
     // Check the data hasn't changed
@@ -77,7 +92,7 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util][dirty]")
     REQUIRE(pageFive[99] == 3);
 
     // Set some other data
-    uint8_t* pageFour = pageThree + faabric::util::HOST_PAGE_SIZE;
+    uint8_t* pageFour = pageThree + HOST_PAGE_SIZE;
     pageThree[100] = 2;
     pageFour[22] = 5;
 
@@ -87,38 +102,46 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty page checking", "[util][dirty]")
                            std::span<uint8_t>(memPtr.get() + 3 * HOST_PAGE_SIZE,
                                               2 * HOST_PAGE_SIZE)),
     };
-    actual = tracker.getDirtyOffsets(memView);
+    actual = tracker.getBothDirtyOffsets(memView);
     REQUIRE(actual == expected);
 
     // Final reset and check
     tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
 
     tracker.startTracking(memView);
-    actual = tracker.getDirtyOffsets(memView);
+    tracker.startThreadLocalTracking(memView);
+    actual = tracker.getBothDirtyOffsets(memView);
     REQUIRE(actual.empty());
 
     tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
 }
 
-TEST_CASE_METHOD(ConfTestFixture, "Test dirty region checking", "[util][dirty]")
+TEST_CASE_METHOD(DirtyConfTestFixture,
+                 "Test dirty region checking",
+                 "[util][dirty]")
 {
     SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
 
     SECTION("Soft PTEs") { conf.dirtyTrackingMode = "softpte"; }
 
+    tracker = getDirtyTracker();
+
     int nPages = 15;
     size_t memSize = HOST_PAGE_SIZE * nPages;
     MemoryRegion mem = allocateSharedMemory(memSize);
+    std::span<uint8_t> memView(mem.get(), memSize);
 
-    faabric::util::DirtyTracker& tracker =
-      faabric::util::getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
     tracker.clearAll();
 
     std::vector<OffsetMemoryRegion> actual =
-      tracker.getDirtyOffsets({ mem.get(), memSize });
+      tracker.getBothDirtyOffsets({ mem.get(), memSize });
     REQUIRE(actual.empty());
 
-    tracker.startTracking({ mem.get(), memSize });
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
 
     // Dirty some pages, some adjacent
     uint8_t* pageZero = mem.get();
@@ -137,6 +160,7 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty region checking", "[util][dirty]")
     pageNine[99] = 1;
 
     tracker.stopTracking({ mem.get(), memSize });
+    tracker.stopThreadLocalTracking({ mem.get(), memSize });
 
     // Expect adjacent regions to be merged
     std::vector<OffsetMemoryRegion> expected = {
@@ -153,21 +177,23 @@ TEST_CASE_METHOD(ConfTestFixture, "Test dirty region checking", "[util][dirty]")
           std::span<uint8_t>(mem.get() + 9 * HOST_PAGE_SIZE, HOST_PAGE_SIZE))
     };
 
-    actual = tracker.getDirtyOffsets({ mem.get(), memSize });
+    actual = tracker.getBothDirtyOffsets({ mem.get(), memSize });
 
     REQUIRE(actual.size() == expected.size());
 
     REQUIRE(actual == expected);
 }
 
-TEST_CASE_METHOD(ConfTestFixture, "Test segfault tracking", "[util][dirty]")
+TEST_CASE_METHOD(DirtyConfTestFixture,
+                 "Test segfault tracking",
+                 "[util][dirty]")
 {
     conf.dirtyTrackingMode = "sigseg";
+    tracker = getDirtyTracker();
 
     size_t memSize = 10 * HOST_PAGE_SIZE;
     std::vector<uint8_t> expectedData(memSize, 5);
 
-    SegfaultDirtyTracker t;
     MemoryRegion mem = allocatePrivateMemory(memSize);
 
     std::span<uint8_t> memView(mem.get(), memSize);
@@ -193,7 +219,8 @@ TEST_CASE_METHOD(ConfTestFixture, "Test segfault tracking", "[util][dirty]")
     REQUIRE(actualMemBefore == expectedData);
 
     // Start tracking
-    t.startTracking(memView);
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
 
     // Make a change on one page
     size_t offsetA = 0;
@@ -222,7 +249,8 @@ TEST_CASE_METHOD(ConfTestFixture, "Test segfault tracking", "[util][dirty]")
     REQUIRE(actualMemAfter == expectedData);
 
     // Get dirty regions
-    std::vector<OffsetMemoryRegion> actualDirty = t.getDirtyOffsets(memView);
+    std::vector<OffsetMemoryRegion> actualDirty =
+      tracker.getBothDirtyOffsets(memView);
 
     // Check dirty regions
     REQUIRE(actualDirty.size() == 2);
@@ -235,11 +263,111 @@ TEST_CASE_METHOD(ConfTestFixture, "Test segfault tracking", "[util][dirty]")
 
     REQUIRE(actualDirty == expectedDirty);
 
-    t.stopTracking(memView);
+    tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
 }
 
-TEST_CASE_METHOD(ConfTestFixture,
-                 "Stress test segfault tracking",
+TEST_CASE_METHOD(DirtyConfTestFixture,
+                 "Test multi-threaded segfault tracking",
                  "[util][dirty]")
-{}
+{
+    // Here we want to check that faults triggered in a given thread are caught
+    // by that thread, and so we can safely just to thread-local diff tracking.
+    conf.dirtyTrackingMode = "sigseg";
+
+    int nLoops = 20;
+
+    // Deliberately cause contention
+    int nThreads = 100;
+    size_t memSize = 2 * nThreads * HOST_PAGE_SIZE;
+
+    MemoryRegion mem = allocatePrivateMemory(memSize);
+    std::span<uint8_t> memView(mem.get(), memSize);
+
+    for (int loop = 0; loop < nLoops; loop++) {
+        std::vector<std::shared_ptr<std::atomic<bool>>> success;
+        success.resize(nThreads);
+
+        // Start global tracking
+        tracker.startTracking(memView);
+
+        std::vector<std::thread> threads;
+        threads.reserve(nThreads);
+        for (int i = 0; i < nThreads; i++) {
+            threads.emplace_back([this, &success, &memView, i, loop] {
+                success.at(i) = std::make_shared<std::atomic<bool>>();
+
+                // Start thread-local tracking
+                tracker.startThreadLocalTracking(memView);
+
+                // Modify a couple of pages specific to this thread
+                size_t pageOffset = i * 2 * HOST_PAGE_SIZE;
+                uint8_t* pageOne = memView.data() + pageOffset;
+                uint8_t* pageTwo = memView.data() + pageOffset + HOST_PAGE_SIZE;
+
+                pageOne[20] = 3;
+                pageOne[250] = 5;
+                pageOne[HOST_PAGE_SIZE - 20] = 6;
+
+                pageTwo[35] = 2;
+                pageTwo[HOST_PAGE_SIZE - 100] = 3;
+
+                tracker.stopThreadLocalTracking(memView);
+
+                // Check we get the right number of dirty regions
+                std::vector<OffsetMemoryRegion> regions =
+                  tracker.getThreadLocalDirtyOffsets(memView);
+                if (regions.size() != 1) {
+                    SPDLOG_ERROR("Segfault thread {} failed on loop {}. Got {} "
+                                 "regions instead of {}",
+                                 i,
+                                 loop,
+                                 regions.size(),
+                                 1);
+                    return;
+                }
+
+                std::vector<OffsetMemoryRegion> expected = {
+                    OffsetMemoryRegion(
+                      pageOffset,
+                      std::span<uint8_t>(memView.data() + pageOffset,
+                                         2 * HOST_PAGE_SIZE)),
+                };
+
+                if (regions != expected) {
+                    SPDLOG_ERROR(
+                      "Segfault thread {} failed on loop {}. Regions not equal",
+                      i,
+                      loop);
+                    success.at(i)->store(false);
+                } else {
+                    success.at(i)->store(true);
+                }
+            });
+        }
+
+        for (auto& t : threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+
+        // Stop tracking
+        tracker.stopTracking(memView);
+
+        // Check no global offsets
+        REQUIRE(tracker.getDirtyOffsets(memView).empty());
+
+        bool thisLoopSuccess = true;
+        for (int i = 0; i < nThreads; i++) {
+            if (!success.at(i)->load()) {
+                SPDLOG_ERROR(
+                  "Segfault thread test thread {} on loop {} failed", i, loop);
+                thisLoopSuccess = false;
+            }
+        }
+
+        REQUIRE(thisLoopSuccess);
+    }
+}
 }

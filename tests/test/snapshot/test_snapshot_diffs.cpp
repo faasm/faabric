@@ -46,7 +46,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Track changes
-    tracker.startTracking({ mem.get(), memSize });
+    std::span<uint8_t> memView(mem.get(), memSize);
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
 
     // Make various changes
     mem[0] = 1;
@@ -55,6 +57,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     mem[8 * HOST_PAGE_SIZE - 20] = 1;
 
     tracker.stopTracking({ mem.get(), memSize });
+    tracker.stopThreadLocalTracking({ mem.get(), memSize });
 
     // Check there are no diffs even though we have dirty regions
     auto dirtyRegions = tracker.getDirtyOffsets({ mem.get(), memSize });
@@ -83,8 +86,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Reset dirty tracking
-    faabric::util::DirtyTracker& tracker =
-      faabric::util::getDirtyTracker();
+    faabric::util::DirtyTracker& tracker = faabric::util::getDirtyTracker();
     tracker.clearAll();
 
     // Single change, single merge region
