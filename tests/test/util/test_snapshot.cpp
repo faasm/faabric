@@ -1350,17 +1350,21 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         mergeRegionStart = (snapPages - 2) * HOST_PAGE_SIZE;
 
         // Change goes from inside original data to overshoot the end
-        diffData = std::vector<uint8_t>(2 * HOST_PAGE_SIZE, 2);
+        size_t dataSize = 2 * HOST_PAGE_SIZE;
+        size_t overlapSize = HOST_PAGE_SIZE - 100;
+        size_t overshootSize = dataSize - overlapSize;
 
+        diffData = std::vector<uint8_t>(dataSize, 2);
+
+        // One diff will cover the overlap with last part of original data, and
+        // another will be rounded up to the nearest page for the extension
         std::vector<uint8_t> expectedDataTwo(2 * HOST_PAGE_SIZE, 0);
-        std::memset(expectedDataTwo.data(), 2, 2 * HOST_PAGE_SIZE - 100);
+        std::memset(expectedDataTwo.data(), 2, overshootSize);
 
-        // One diff to cover overlap with last part of oroginal data, and
-        // another rounded up to the nearest page for the extension
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Overwrite,
                             changeOffset,
-                            std::vector<uint8_t>(100, 2) },
+                            std::vector<uint8_t>(HOST_PAGE_SIZE - 100, 2) },
                           { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Overwrite,
                             (uint32_t)snapSize,
