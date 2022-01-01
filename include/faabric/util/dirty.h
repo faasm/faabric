@@ -68,6 +68,7 @@ class SoftPTEDirtyTracker final : public DirtyTracker
 
     std::vector<OffsetMemoryRegion> getBothDirtyOffsets(
       std::span<uint8_t> region) override;
+
   private:
     FILE* f = nullptr;
 
@@ -105,6 +106,7 @@ class SegfaultDirtyTracker final : public DirtyTracker
       std::span<uint8_t> region) override;
 
     static void handler(int sig, siginfo_t* si, void* unused);
+
   private:
     void setUpSignalHandler();
 };
