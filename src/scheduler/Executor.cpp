@@ -116,7 +116,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Note that this lock is specific to this executor, so will only block when
     // multiple threads are trying to schedule tasks.
     // This will only happen when child threads of the same function are
-    // competing, hence is rare so we can afford to be conservative here.
+    // competing to schedule more threads, hence is rare so we can afford to be
+    // conservative here.
     faabric::util::UniqueLock lock(threadsMutex);
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
@@ -207,6 +208,92 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 }
 
+std::string Executor::createMainThreadSnapshot(const faabric::Message& msg)
+{
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    SPDLOG_DEBUG("Creating main thread snapshot: {} for {}",
+                 snapshotKey,
+                 faabric::util::funcToString(msg, false));
+
+    std::shared_ptr<faabric::util::SnapshotData> data =
+      std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+    reg.registerSnapshot(snapshotKey, data);
+
+    return snapshotKey;
+}
+
+void Executor::writeChangesToMainThreadSnapshot(const faabric::Message& msg)
+{
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    if (!reg.snapshotExists(snapshotKey)) {
+        SPDLOG_ERROR(
+          "No main thread snapshot for {}, must have threading enabled",
+          faabric::util::funcToString(msg, false));
+    }
+
+    std::shared_ptr<faabric::util::SnapshotData> snap =
+      reg.getSnapshot(snapshotKey);
+
+    SPDLOG_DEBUG("Updating main thread snapshot: {} for {}",
+                 snapshotKey,
+                 faabric::util::funcToString(msg, false));
+
+    std::span<uint8_t> funcMemory = getMemoryView();
+    tracker.stopTracking(funcMemory);
+    tracker.stopThreadLocalTracking(funcMemory);
+
+    std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions =
+      tracker.getDirtyOffsets(funcMemory);
+
+    std::vector<faabric::util::SnapshotDiff> updates =
+      snap->diffWithDirtyRegions(dirtyRegions);
+
+    snap->queueDiffs(updates);
+    snap->writeQueuedDiffs();
+}
+
+void Executor::readChangesFromMainThreadSnapshot(faabric::Message& msg)
+{
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    if (!reg.snapshotExists(snapshotKey)) {
+        SPDLOG_ERROR(
+          "No main thread snapshot for {}, must have threading enabled",
+          faabric::util::funcToString(msg, false));
+    }
+
+    SPDLOG_DEBUG("Reading changes to main thread snapshot {} for {}",
+                 snapshotKey,
+                 faabric::util::funcToString(msg, false));
+
+    std::shared_ptr<faabric::util::SnapshotData> snap =
+      reg.getSnapshot(snapshotKey);
+
+    // Remap the memory
+    snap->mapToMemory(getMemoryView());
+
+    // Start tracking again
+    std::span<uint8_t> funcMemory = getMemoryView();
+    tracker.startTracking(funcMemory);
+    tracker.startThreadLocalTracking(funcMemory);
+}
+
+void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
+{
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    if (reg.snapshotExists(snapshotKey)) {
+        // Broadcast the deletion
+        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        sch.broadcastSnapshotDelete(msg, snapshotKey);
+
+        // Delete locally
+        reg.deleteSnapshot(snapshotKey);
+    }
+}
+
 void Executor::threadPoolThread(int threadPoolIdx)
 {
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
@@ -247,6 +334,20 @@ void Executor::threadPoolThread(int threadPoolIdx)
         assert(task.req->messages_size() >= task.messageIndex + 1);
         faabric::Message& msg =
           task.req->mutable_messages()->at(task.messageIndex);
+
+        // If the incoming message has threading set, we know this is the
+        // top-level main task for a threaded application
+        bool isMainThread = false;
+        if (msg.isthreaded()) {
+            isMainThread = true;
+
+            // Start tracking main thread memory
+            tracker.startTracking(getMemoryView());
+            tracker.startThreadLocalTracking(getMemoryView());
+
+            // Set up the main snapshot for the threaded application
+            createMainThreadSnapshot(msg);
+        }
 
         // Check ptp group
         std::shared_ptr<faabric::transport::PointToPointGroup> group = nullptr;
@@ -360,6 +461,18 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // If last in batch on this host, clear the merge regions
             SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
             snap->clearMergeRegions();
+        }
+
+        // If this is the last in the app itself, delete the main thread
+        // snapshot, and stop tracking
+        if(isLastInBatch && isMainThread) {
+            // Stop tracking main thread memory
+            std::span<uint8_t> funcMemory = getMemoryView();
+            tracker.stopTracking(funcMemory);
+            tracker.stopThreadLocalTracking(funcMemory);
+
+            // Delete the main thread snapshot
+            deleteMainThreadSnapshot(msg);
         }
 
         // If this batch is finished, reset the executor and release its

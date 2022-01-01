@@ -130,40 +130,41 @@ message Message {
     int64 finishTimestamp = 19;
 
     bool isAsync = 20;
-    bool isPython = 21;
-    bool isStatusRequest = 22;
+    bool isStatusRequest = 21;
+    bool isThreaded = 22;
     bool isExecGraphRequest = 23;
 
-    string pythonUser = 24;
-    string pythonFunction = 25;
-    string pythonEntry = 26;
+    bool isPython = 24;
+    string pythonUser = 25;
+    string pythonFunction = 26;
+    string pythonEntry = 27;
 
     // Function groups
-    int32 groupId = 27;
-    int32 groupIdx = 28;
-    int32 groupSize = 29;
+    int32 groupId = 28;
+    int32 groupIdx = 29;
+    int32 groupSize = 30;
 
     // MPI
-    bool isMpi = 30;
-    int32 mpiWorldId = 31;
-    int32 mpiRank = 32;
-    int32 mpiWorldSize = 33;
+    bool isMpi = 31;
+    int32 mpiWorldId = 32;
+    int32 mpiRank = 33;
+    int32 mpiWorldSize = 34;
 
-    string cmdline = 34;
+    string cmdline = 35;
 
     // SGX
-    bool isSgx = 35;
+    bool isSgx = 36;
 
-    string sgxSid = 36;
-    string sgxNonce = 37;
-    string sgxTag = 38;
-    bytes sgxPolicy = 39;
-    bytes sgxResult = 40;
+    string sgxSid = 37;
+    string sgxNonce = 38;
+    string sgxTag = 39;
+    bytes sgxPolicy = 40;
+    bytes sgxResult = 41;
 
     // Exec-graph utils
-    bool recordExecGraph = 41;
-    map<string, int32> intExecGraphDetails = 42;
-    map<string, string> execGraphDetails = 43;
+    bool recordExecGraph = 42;
+    map<string, int32> intExecGraphDetails = 43;
+    map<string, string> execGraphDetails = 44;
 }
 
 // ---------------------------------------------

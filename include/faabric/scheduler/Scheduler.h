@@ -100,6 +100,15 @@ class Executor
     std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions;
 
     void threadPoolThread(int threadPoolIdx);
+
+    std::string createMainThreadSnapshot(const faabric::Message& msg);
+
+    void writeChangesToMainThreadSnapshot(const faabric::Message& msg);
+
+    void readChangesFromMainThreadSnapshot(faabric::Message& msg);
+
+    void deleteMainThreadSnapshot(const faabric::Message &msg);
+
 };
 
 class Scheduler

@@ -37,4 +37,7 @@ std::string statusKeyFromMessageId(unsigned int mid);
 std::vector<uint8_t> messageToBytes(const faabric::Message& msg);
 
 std::vector<std::string> getArgvForMessage(const faabric::Message& msg);
+
+std::string getMainThreadSnapshotKey(const faabric::Message& msg);
+
 }

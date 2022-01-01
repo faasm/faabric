@@ -493,7 +493,14 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // *all* hosts, regardless of whether they will be executing functions.
     // This greatly simplifies the reasoning about which hosts hold which
     // diffs.
-    std::string snapshotKey = firstMsg.snapshotkey();
+
+    std::string snapshotKey;
+    if(isThreads) {
+        snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+    } else {
+        snapshotKey = firstMsg.snapshotkey();
+    }
+
     if (!snapshotKey.empty()) {
         auto snap =
           faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
