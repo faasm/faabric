@@ -40,14 +40,12 @@ void TestExecutor::reset(faabric::Message& msg)
     resetCount += 1;
 }
 
-void TestExecutor::restore(faabric::Message& msg)
+void TestExecutor::restore(const std::string& snapshotKey)
 {
     SPDLOG_DEBUG("Restoring TestExecutor");
     restoreCount += 1;
 
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-    auto snap = reg.getSnapshot(msg.snapshotkey());
+    auto snap = reg.getSnapshot(snapshotKey);
 
     dummyMemorySize = snap->getSize();
     dummyMemory = faabric::util::allocatePrivateMemory(snap->getSize());
@@ -254,6 +252,15 @@ class TestExecutorFixture
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       bool forceLocal)
     {
+        // Create the main thread snapshot if we're executing threads directly
+        if (req->type() == faabric::BatchExecuteRequest::THREADS) {
+            faabric::Message& msg = req->mutable_messages()->at(0);
+            std::string snapKey = faabric::util::getMainThreadSnapshotKey(msg);
+            auto snap =
+              std::make_shared<faabric::util::SnapshotData>(snapshotSize);
+            reg.registerSnapshot(snapKey, snap);
+        }
+
         conf.overrideCpuCount = 10;
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
         faabric::util::SchedulingTopologyHint topologyHint =
@@ -356,7 +363,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_snapshotkey(snapshotKey);
         msg.set_appidx(i);
 
         messageIds.emplace_back(req->messages().at(i).id());

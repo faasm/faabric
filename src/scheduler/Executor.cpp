@@ -36,12 +36,10 @@ void setExecutingExecutor(Executor* exec)
 ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                            std::shared_ptr<std::atomic<int>> batchCounterIn,
-                           bool needsSnapshotSyncIn,
                            bool skipResetIn)
   : req(std::move(reqIn))
   , batchCounter(std::move(batchCounterIn))
   , messageIndex(messageIndexIn)
-  , needsSnapshotSync(needsSnapshotSyncIn)
   , skipReset(skipResetIn)
 {}
 
@@ -78,7 +76,7 @@ void Executor::finish()
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
         threadTaskQueues[i].enqueue(
-          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false, false));
+          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false));
 
         faabric::util::UniqueLock threadsLock(threadsMutex);
         // Copy shared_ptr to avoid racing
@@ -133,25 +131,26 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     faabric::util::UniqueLock lock(threadsMutex);
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string snapshotKey = firstMsg.snapshotkey();
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    bool isSnapshot = !snapshotKey.empty();
 
     // Restore if we have a snapshot
-    if (isSnapshot) {
+    if (isThreads) {
+        std::string snapKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+        SPDLOG_DEBUG(
+          "Restoring thread of {} from snapshot {}", funcStr, snapKey);
+        restore(snapKey);
+    } else if (!firstMsg.snapshotkey().empty()) {
+        std::string snapshotKey = firstMsg.snapshotkey();
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
-        restore(firstMsg);
+        restore(snapshotKey);
     }
 
     // Reset dirty page tracking if we're executing threads.
     // Note this must be done after the restore has happened.
-    bool needsSnapshotSync = false;
-    if (isThreads && isSnapshot) {
-        needsSnapshotSync = true;
-
+    if (isThreads) {
         // Start global tracking of memory
         tracker.startTracking(getMemoryView());
     }
@@ -209,8 +208,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         }
 
         // Enqueue the task
-        threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(
-          msgIdx, req, batchCounter, needsSnapshotSync, skipReset));
+        threadTaskQueues[threadPoolIdx].enqueue(
+          ExecutorTask(msgIdx, req, batchCounter, skipReset));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -328,8 +327,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         try {
             task = threadTaskQueues[threadPoolIdx].dequeue(conf.boundTimeout);
         } catch (faabric::util::QueueTimeoutException& ex) {
-            // If the thread has had no messages, it needs to
-            // remove itself
+            // If the thread has had no messages, it needs to remove itself
             SPDLOG_TRACE("Thread {}:{} got no messages in timeout {}ms",
                          id,
                          threadPoolIdx,
@@ -353,6 +351,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // If the incoming message has threading set, we know this is the
         // top-level main task for a threaded application
         bool isMainThread = false;
+        bool isThreads =
+          task.req->type() == faabric::BatchExecuteRequest::THREADS;
         if (msg.isthreaded()) {
             isMainThread = true;
 
@@ -372,18 +372,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
         }
 
         // Start dirty tracking if necessary
-        std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
-        if (task.needsSnapshotSync) {
-            snap = reg.getSnapshot(msg.snapshotkey());
-
+        if (isThreads) {
             // If tracking is thread local, start here as it will happen for
             // each thread
             tracker.startThreadLocalTracking(getMemoryView());
         }
 
         bool isMaster = msg.masterhost() == conf.endpointHost;
-        bool isThreads =
-          task.req->type() == faabric::BatchExecuteRequest::THREADS;
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
@@ -395,6 +390,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // Set executing executor
         setExecutingExecutor(this);
 
+        // Execute the task
         int32_t returnValue;
         try {
             returnValue =
@@ -410,7 +406,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Handle thread-local diffing for every thread
         std::span<uint8_t> funcMemory = getMemoryView();
-        if (!funcMemory.empty() && task.needsSnapshotSync) {
+        if (!funcMemory.empty() && isThreads) {
             auto thisThreadDirtyRegions =
               tracker.getThreadLocalDirtyOffsets(getMemoryView());
 
@@ -437,7 +433,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        if (!funcMemory.empty() && isLastInBatch && task.needsSnapshotSync) {
+        if (!funcMemory.empty() && isLastInBatch && isThreads) {
             // Stop non-thread-local tracking as we're the last in the batch
             tracker.stopTracking(getMemoryView());
 
@@ -451,6 +447,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
             }
 
             // Fill snapshot gaps with overwrite regions first
+            auto snap =
+              reg.getSnapshot(faabric::util::getMainThreadSnapshotKey(msg));
             snap->fillGapsWithOverwriteRegions();
 
             // Compare snapshot with all dirty regions for this executor
@@ -611,7 +609,7 @@ void Executor::setMemorySize(size_t newSize)
     SPDLOG_WARN("Executor has not implemented set memory size method");
 }
 
-void Executor::restore(faabric::Message& msg)
+void Executor::restore(const std::string& snapshotKey)
 {
     SPDLOG_WARN("Executor has not implemented restore method");
 }

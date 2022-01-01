@@ -21,7 +21,6 @@ TEST_CASE("Test dedupe memory regions", "[util][memory]")
 
     uint32_t offsetA = 0;
     uint32_t offsetB = 10;
-    uint32_t offsetC = 20;
 
     std::vector<uint8_t> dataA = { 0, 1 };
     std::vector<uint8_t> dataB = { 0, 1, 2 };

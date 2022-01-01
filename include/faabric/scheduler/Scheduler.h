@@ -34,13 +34,11 @@ class ExecutorTask
     ExecutorTask(int messageIndexIn,
                  std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                  std::shared_ptr<std::atomic<int>> batchCounterIn,
-                 bool needsSnapshotSyncIn,
                  bool skipResetIn);
 
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
     int messageIndex = 0;
-    bool needsSnapshotSync = false;
     bool skipReset = false;
 };
 
@@ -76,7 +74,7 @@ class Executor
     void readChangesFromMainThreadSnapshot(faabric::Message& msg);
 
   protected:
-    virtual void restore(faabric::Message& msg);
+    virtual void restore(const std::string& snapshotKey);
 
     virtual void postFinish();
 
@@ -109,8 +107,7 @@ class Executor
 
     std::string createMainThreadSnapshot(const faabric::Message& msg);
 
-    void deleteMainThreadSnapshot(const faabric::Message &msg);
-
+    void deleteMainThreadSnapshot(const faabric::Message& msg);
 };
 
 Executor* getExecutingExecutor();

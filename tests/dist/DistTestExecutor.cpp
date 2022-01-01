@@ -60,15 +60,11 @@ void DistTestExecutor::reset(faabric::Message& msg)
                  faabric::util::funcToString(msg, false));
 }
 
-void DistTestExecutor::restore(faabric::Message& msg)
+void DistTestExecutor::restore(const std::string& snapshotKey)
 {
-    SPDLOG_DEBUG("Dist test executor restoring for {}",
-                 faabric::util::funcToString(msg, false));
+    SPDLOG_DEBUG("Dist test executor restoring from {}", snapshotKey);
 
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-
-    auto snap = reg.getSnapshot(msg.snapshotkey());
+    auto snap = reg.getSnapshot(snapshotKey);
 
     setUpDummyMemory(snap->getSize());
 

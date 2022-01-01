@@ -495,7 +495,15 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // diffs.
 
     std::string snapshotKey;
-    if(isThreads) {
+    if (isThreads) {
+        if (!firstMsg.snapshotkey().empty()) {
+            SPDLOG_ERROR("{} should not provide snapshot key for {} threads",
+                         funcStr,
+                         req->messages().size());
+
+            std::runtime_error("Should not provide snapshot key for threads");
+        }
+
         snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
     } else {
         snapshotKey = firstMsg.snapshotkey();
@@ -617,7 +625,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             // -------------------------------------------
             // REMOTE EXECTUION
             // -------------------------------------------
-
             SPDLOG_DEBUG("Scheduling {}/{} calls to {} on {}",
                          thisHostIdxs.size(),
                          nMessages,

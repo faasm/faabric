@@ -21,7 +21,7 @@ class DistTestExecutor final : public faabric::scheduler::Executor
 
     void reset(faabric::Message& msg) override;
 
-    void restore(faabric::Message& msg) override;
+    void restore(const std::string& snapshotKey) override;
 
     std::span<uint8_t> getMemoryView() override;
 
