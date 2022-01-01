@@ -38,7 +38,9 @@ ExecutorFunction getDistTestExecutorCallback(const faabric::Message& msg)
 
 DistTestExecutor::DistTestExecutor(faabric::Message& msg)
   : Executor(msg)
-{}
+{
+    setUpDummyMemory(dummyMemorySize);
+}
 
 DistTestExecutor::~DistTestExecutor() {}
 
@@ -83,11 +85,9 @@ std::span<uint8_t> DistTestExecutor::getDummyMemory()
 
 void DistTestExecutor::setUpDummyMemory(size_t memSize)
 {
-    if (dummyMemory.get() == nullptr) {
-        SPDLOG_DEBUG("Dist test executor initialising memory size {}", memSize);
-        dummyMemory = faabric::util::allocatePrivateMemory(memSize);
-        dummyMemorySize = memSize;
-    }
+    SPDLOG_DEBUG("Dist test executor initialising memory size {}", memSize);
+    dummyMemory = faabric::util::allocatePrivateMemory(memSize);
+    dummyMemorySize = memSize;
 }
 
 std::shared_ptr<Executor> DistTestExecutorFactory::createExecutor(

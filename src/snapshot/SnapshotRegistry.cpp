@@ -20,7 +20,7 @@ std::shared_ptr<faabric::util::SnapshotData> SnapshotRegistry::getSnapshot(
         throw std::runtime_error("Getting snapshot with empty key");
     }
 
-    if (snapshotMap.count(key) == 0) {
+    if (snapshotMap.find(key) == snapshotMap.end()) {
         SPDLOG_ERROR("Snapshot for {} does not exist", key);
         throw std::runtime_error("Snapshot doesn't exist");
     }
@@ -41,7 +41,7 @@ void SnapshotRegistry::registerSnapshot(
 {
     faabric::util::FullLock lock(snapshotsMx);
 
-    SPDLOG_TRACE("Registering snapshot {} size {}", key, data->getSize());
+    SPDLOG_DEBUG("Registering snapshot {} size {}", key, data->getSize());
 
     snapshotMap.insert_or_assign(key, std::move(data));
 }

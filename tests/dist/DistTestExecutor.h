@@ -32,7 +32,7 @@ class DistTestExecutor final : public faabric::scheduler::Executor
   private:
     faabric::util::MemoryRegion dummyMemory = nullptr;
 
-    size_t dummyMemorySize = 0;
+    size_t dummyMemorySize = 2 * faabric::util::HOST_PAGE_SIZE;
 };
 
 class DistTestExecutorFactory : public faabric::scheduler::ExecutorFactory

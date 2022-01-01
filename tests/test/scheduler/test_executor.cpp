@@ -32,12 +32,21 @@ std::atomic<int> resetCount = 0;
 
 TestExecutor::TestExecutor(faabric::Message& msg)
   : Executor(msg)
-{}
+{
+    setUpDummyMemory(dummyMemorySize);
+}
 
 void TestExecutor::reset(faabric::Message& msg)
 {
     SPDLOG_DEBUG("Resetting TestExecutor");
     resetCount += 1;
+}
+
+void TestExecutor::setUpDummyMemory(size_t memSize)
+{
+    SPDLOG_DEBUG("Test executor initialising memory size {}", memSize);
+    dummyMemory = faabric::util::allocatePrivateMemory(memSize);
+    dummyMemorySize = memSize;
 }
 
 void TestExecutor::restore(const std::string& snapshotKey)
@@ -46,9 +55,8 @@ void TestExecutor::restore(const std::string& snapshotKey)
     restoreCount += 1;
 
     auto snap = reg.getSnapshot(snapshotKey);
+    setUpDummyMemory(snap->getSize());
 
-    dummyMemorySize = snap->getSize();
-    dummyMemory = faabric::util::allocatePrivateMemory(snap->getSize());
     snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
 }
 
@@ -90,6 +98,7 @@ int32_t TestExecutor::executeTask(
 
         for (int i = 0; i < chainedReq->messages_size(); i++) {
             faabric::Message& m = chainedReq->mutable_messages()->at(i);
+            m.set_appid(msg.appid());
             m.set_appidx(i + 1);
         }
 
@@ -109,9 +118,6 @@ int32_t TestExecutor::executeTask(
                 return 1;
             }
         }
-
-        // Delete the snapshot
-        reg.deleteSnapshot(snapKey);
 
         SPDLOG_TRACE("TestExecutor got {} thread results",
                      chainedReq->messages_size());
@@ -165,8 +171,9 @@ int32_t TestExecutor::executeTask(
         // Modify a page of the dummy memory
         uint8_t pageIdx = threadPoolIdx;
 
+        std::string mainThreadSnapKey = getMainThreadSnapshotKey(msg);
         auto snapData = faabric::snapshot::getSnapshotRegistry().getSnapshot(
-          msg.snapshotkey());
+          mainThreadSnapKey);
 
         // Set up the data.
         // Note, avoid writing a zero here as the memory is already zeroed hence
@@ -224,8 +231,6 @@ class TestExecutorFixture
           std::make_shared<TestExecutorFactory>();
         setExecutorFactory(fac);
 
-        dummySnap = setUpSnapshot(snapshotKey, snapshotNPages);
-
         restoreCount = 0;
         resetCount = 0;
     }
@@ -233,11 +238,10 @@ class TestExecutorFixture
     ~TestExecutorFixture() = default;
 
   protected:
-    std::string snapshotKey = "foobar";
     int snapshotNPages = 10;
     size_t snapshotSize = snapshotNPages * faabric::util::HOST_PAGE_SIZE;
 
-    std::shared_ptr<faabric::util::SnapshotData> dummySnap;
+    MemoryRegion dummyMemory;
 
     std::vector<std::string> executeWithTestExecutor(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -451,7 +455,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_snapshotkey(snapshotKey);
         msg.set_masterhost(otherHost);
 
         messageIds.emplace_back(msg.id());
@@ -516,7 +519,6 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test erroring thread", "[executor]")
     faabric::Message& msg = req->mutable_messages()->at(0);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
-    msg.set_snapshotkey(snapshotKey);
     executeWithTestExecutor(req, false);
 
     int32_t res = sch.awaitThreadResult(msg.id());
@@ -636,11 +638,13 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::util::setMockMode(true);
     std::string otherHost = "other";
 
+    std::string mainThreadSnapshotKey =
+      faabric::util::getMainThreadSnapshotKey(req->mutable_messages()->at(0));
+
     // Set up some messages executing with a different master host
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_snapshotkey(snapshotKey);
         msg.set_masterhost(otherHost);
         msg.set_appidx(i);
 
@@ -681,7 +685,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Check no merge regions left on the snapshot
-    REQUIRE(reg.getSnapshot(snapshotKey)->getMergeRegions().empty());
+    REQUIRE(reg.getSnapshot(mainThreadSnapshotKey)->getMergeRegions().empty());
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -715,7 +719,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_snapshotkey(snapshotKey);
         messageIds.emplace_back(msg.id());
     }
 
@@ -751,7 +754,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     faabric::snapshot::clearMockSnapshotRequests();
 
     // Update the snapshot and check we get expected diffs
-    auto snap = reg.getSnapshot(snapshotKey);
+    std::string mainThreadSnapshotKey =
+      faabric::util::getMainThreadSnapshotKey(msg);
+    auto snap = reg.getSnapshot(mainThreadSnapshotKey);
     int newValue = 8;
     snap->copyInData({ BYTES(&newValue), sizeof(int) });
     snap->copyInData({ BYTES(&newValue), sizeof(int) },
@@ -762,11 +767,16 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     REQUIRE(expectedDiffs.size() == 2);
 
-    // Set up another function
+    // Set up another function, make sure they have the same app ID
     std::shared_ptr<BatchExecuteRequest> reqB =
       faabric::util::batchExecFactory("dummy", "blah", 1);
     reqB->set_type(faabric::BatchExecuteRequest::THREADS);
-    reqB->mutable_messages()->at(0).set_snapshotkey(snapshotKey);
+
+    faabric::Message& msgB = reqB->mutable_messages()->at(0);
+    msgB.set_appid(msg.appid());
+
+    REQUIRE(faabric::util::getMainThreadSnapshotKey(msgB) ==
+            mainThreadSnapshotKey);
 
     // Invoke the function
     std::vector<std::string> expectedHostsB = { thisHost };
@@ -775,7 +785,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(actualHostsB == expectedHostsB);
 
     // Wait for it to finish locally
-    sch.awaitThreadResult(reqB->mutable_messages()->at(0).id());
+    sch.awaitThreadResult(msgB.id());
 
     // Check the full snapshot hasn't been pushed
     REQUIRE(faabric::snapshot::getSnapshotPushes().empty());
@@ -796,7 +806,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test reset not called on threads",
+                 "Test reset called for functions not threads",
                  "[executor]")
 {
     faabric::util::setMockMode(true);
@@ -810,40 +820,46 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     int expectedResets = 1;
 
-    SECTION("Non-master threads")
-    {
-        hostOverride = "foobar";
-        nMessages = 3;
-        requestType = faabric::BatchExecuteRequest::THREADS;
-        expectedResets = 0;
-    }
-
-    SECTION("Master threads")
+    SECTION("Threads")
     {
         requestType = faabric::BatchExecuteRequest::THREADS;
         nMessages = 3;
         expectedResets = 0;
     }
 
-    SECTION("Non-master function") { hostOverride = "foobar"; }
-
-    SECTION("Master function") {}
+    SECTION("Function") {}
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nMessages);
     req->set_type(requestType);
 
-    std::vector<uint32_t> mids;
+    faabric::Message& msg = req->mutable_messages()->at(0);
+
+    if (requestType == faabric::BatchExecuteRequest::THREADS) {
+        // Set up main thread snapshot
+        size_t snapSize = HOST_PAGE_SIZE;
+        auto snap = std::make_shared<SnapshotData>(snapSize);
+        std::string snapKey = getMainThreadSnapshotKey(msg);
+
+        reg.registerSnapshot(snapKey, snap);
+    }
+
     for (auto& m : *req->mutable_messages()) {
         m.set_masterhost(hostOverride);
-        mids.push_back(m.id());
     }
 
     // Call functions and force to execute locally
     sch.callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
 
-    // As we're faking a non-master execution results will be sent back to
-    // the fake master so we can't wait on them, thus have to sleep
-    REQUIRE_RETRY({}, resetCount == expectedResets);
+    // Await execution
+    for (auto& m : *req->mutable_messages()) {
+        if (requestType == faabric::BatchExecuteRequest::THREADS) {
+            sch.awaitThreadResult(m.id());
+        } else {
+            sch.getFunctionResult(m.id(), 2000);
+        }
+    }
+
+    REQUIRE(resetCount == expectedResets);
 }
 }

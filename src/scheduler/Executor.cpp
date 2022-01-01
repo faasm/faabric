@@ -219,13 +219,34 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 }
 
+std::shared_ptr<faabric::util::SnapshotData> Executor::getMainThreadSnapshot(
+  faabric::Message& msg)
+{
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    if (!reg.snapshotExists(snapshotKey)) {
+        SPDLOG_ERROR(
+          "No main thread snapshot for {}, must have threading enabled",
+          faabric::util::funcToString(msg, false));
+    }
+
+    return reg.getSnapshot(snapshotKey);
+}
+
 std::string Executor::createMainThreadSnapshot(const faabric::Message& msg)
 {
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
 
-    SPDLOG_DEBUG("Creating main thread snapshot: {} for {}",
-                 snapshotKey,
-                 faabric::util::funcToString(msg, false));
+    std::string funcStr = faabric::util::funcToString(msg, false);
+    SPDLOG_DEBUG(
+      "Creating main thread snapshot: {} for {}", snapshotKey, funcStr);
+
+    std::span<uint8_t> memView = getMemoryView();
+    if (memView.empty()) {
+        SPDLOG_ERROR("Cannot create main thread snapshot for {}, empty memory",
+                     funcStr);
+        throw std::runtime_error("Cannot create main thread snapshot");
+    }
 
     std::shared_ptr<faabric::util::SnapshotData> data =
       std::make_shared<faabric::util::SnapshotData>(getMemoryView());
@@ -236,19 +257,10 @@ std::string Executor::createMainThreadSnapshot(const faabric::Message& msg)
 
 void Executor::writeChangesToMainThreadSnapshot(faabric::Message& msg)
 {
-    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
-
-    if (!reg.snapshotExists(snapshotKey)) {
-        SPDLOG_ERROR(
-          "No main thread snapshot for {}, must have threading enabled",
-          faabric::util::funcToString(msg, false));
-    }
-
     std::shared_ptr<faabric::util::SnapshotData> snap =
-      reg.getSnapshot(snapshotKey);
+      getMainThreadSnapshot(msg);
 
-    SPDLOG_DEBUG("Updating main thread snapshot: {} for {}",
-                 snapshotKey,
+    SPDLOG_DEBUG("Updating main thread snapshot for {}",
                  faabric::util::funcToString(msg, false));
 
     std::span<uint8_t> funcMemory = getMemoryView();
@@ -267,20 +279,10 @@ void Executor::writeChangesToMainThreadSnapshot(faabric::Message& msg)
 
 void Executor::readChangesFromMainThreadSnapshot(faabric::Message& msg)
 {
-    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
-
-    if (!reg.snapshotExists(snapshotKey)) {
-        SPDLOG_ERROR(
-          "No main thread snapshot for {}, must have threading enabled",
-          faabric::util::funcToString(msg, false));
-    }
-
-    SPDLOG_DEBUG("Reading changes to main thread snapshot {} for {}",
-                 snapshotKey,
-                 faabric::util::funcToString(msg, false));
-
     std::shared_ptr<faabric::util::SnapshotData> snap =
-      reg.getSnapshot(snapshotKey);
+      getMainThreadSnapshot(msg);
+    SPDLOG_DEBUG("Reading changes from main thread snapshot for {}",
+                 faabric::util::funcToString(msg, false));
 
     // Set the memory size
     setMemorySize(snap->getSize());
@@ -297,6 +299,9 @@ void Executor::readChangesFromMainThreadSnapshot(faabric::Message& msg)
 void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
 {
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    SPDLOG_DEBUG("Deleting main thread snapshot for {}",
+                 faabric::util::funcToString(msg, false));
 
     if (reg.snapshotExists(snapshotKey)) {
         // Broadcast the deletion
@@ -447,8 +452,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
             }
 
             // Fill snapshot gaps with overwrite regions first
-            auto snap =
-              reg.getSnapshot(faabric::util::getMainThreadSnapshotKey(msg));
+
+            std::string mainThreadSnapKey =
+              faabric::util::getMainThreadSnapshotKey(msg);
+            auto snap = reg.getSnapshot(mainThreadSnapKey);
             snap->fillGapsWithOverwriteRegions();
 
             // Compare snapshot with all dirty regions for this executor
@@ -463,7 +470,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
                          diffs.size(),
                          faabric::util::funcToString(msg, false),
-                         msg.snapshotkey(),
+                         mainThreadSnapKey,
                          msg.groupid());
 
             // On master we queue the diffs locally directly, on a remote
@@ -471,11 +478,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
             if (isMaster) {
                 snap->queueDiffs(diffs);
             } else if (isLastInBatch) {
-                sch.pushSnapshotDiffs(msg, diffs);
+                sch.pushSnapshotDiffs(msg, mainThreadSnapKey, diffs);
             }
 
             // If last in batch on this host, clear the merge regions
-            SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
+            SPDLOG_DEBUG("Clearing merge regions for {}", mainThreadSnapKey);
             snap->clearMergeRegions();
         }
 

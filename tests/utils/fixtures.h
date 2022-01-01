@@ -304,13 +304,15 @@ class TestExecutor final : public faabric::scheduler::Executor
     TestExecutor(faabric::Message& msg);
 
     faabric::util::MemoryRegion dummyMemory = nullptr;
-    size_t dummyMemorySize = 0;
+    size_t dummyMemorySize = 2 * faabric::util::HOST_PAGE_SIZE;
 
     void reset(faabric::Message& msg) override;
 
-    void restore(const std::string &snapshotKey) override;
+    void restore(const std::string& snapshotKey) override;
 
     std::span<uint8_t> getMemoryView() override;
+
+    void setUpDummyMemory(size_t memSize);
 
     int32_t executeTask(
       int threadPoolIdx,

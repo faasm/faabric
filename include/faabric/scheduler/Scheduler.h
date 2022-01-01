@@ -69,6 +69,9 @@ class Executor
 
     void releaseClaim();
 
+    std::shared_ptr<faabric::util::SnapshotData> getMainThreadSnapshot(
+      faabric::Message& msg);
+
     void writeChangesToMainThreadSnapshot(faabric::Message& msg);
 
     void readChangesFromMainThreadSnapshot(faabric::Message& msg);
@@ -159,6 +162,7 @@ class Scheduler
 
     void pushSnapshotDiffs(
       const faabric::Message& msg,
+      const std::string &snapshotKey,
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void setThreadResultLocally(uint32_t msgId, int32_t returnValue);

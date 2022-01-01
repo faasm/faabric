@@ -67,18 +67,13 @@ int handleFakeDiffsFunction(tests::DistTestExecutor* exec,
     std::string msgInput = msg.inputdata();
     std::string snapshotKey = msg.snapshotkey();
 
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-
-    auto originalSnap = reg.getSnapshot(snapshotKey);
-
     std::vector<uint8_t> inputBytes = faabric::util::stringToBytes(msgInput);
 
     // Modify the executor's memory
     std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
 
     int offsetA = 10;
-    int offsetB = 100;
+    int offsetB = HOST_PAGE_SIZE + 10;
     std::memcpy(exec->getDummyMemory().data() + offsetA,
                 keyBytes.data(),
                 keyBytes.size());
@@ -97,22 +92,16 @@ int handleFakeDiffsThreadedFunction(
 {
     bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
-    std::string snapshotKey = "fake-diffs-threaded-snap";
+    std::string snapshotKey = getMainThreadSnapshotKey(msg);
     std::string msgInput = msg.inputdata();
 
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-
-    // This function creates a snapshot, then spawns some child threads that
-    // will modify the shared memory. It then awaits the results and checks that
-    // the modifications are synced back to the original host.
+    // This function spawns some child threads that will modify the shared
+    // memory. It then awaits the results and checks that the modifications are
+    // synced back to the original host.
     if (!isThread) {
         int nThreads = std::stoi(msgInput);
-
-        // Set up the snapshot
         size_t snapSize = (nThreads * 4) * faabric::util::HOST_PAGE_SIZE;
-        auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
-        reg.registerSnapshot(snapshotKey, snap);
+        exec->setUpDummyMemory(snapSize);
 
         auto req =
           faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
@@ -122,13 +111,14 @@ int handleFakeDiffsThreadedFunction(
             auto& m = req->mutable_messages()->at(i);
             m.set_appidx(i);
             m.set_inputdata(std::string("thread_" + std::to_string(i)));
-            m.set_snapshotkey(snapshotKey);
 
             // Make a small modification to a page that will also be edited by
             // the child thread to make sure it's not overwritten
             std::vector<uint8_t> localChange(3, i);
             int offset = 2 * i * faabric::util::HOST_PAGE_SIZE;
-            snap->copyInData(localChange, offset);
+            std::memcpy(exec->getDummyMemory().data() + offset,
+                        localChange.data(),
+                        localChange.size());
         }
 
         // Dispatch the message, expecting them all to execute on other hosts
@@ -157,7 +147,8 @@ int handleFakeDiffsThreadedFunction(
             sch.awaitThreadResult(m.id());
         }
 
-        // Write queued diffs
+        // Write queued diffs from all the threads
+        auto snap = exec->getMainThreadSnapshot(msg);
         snap->writeQueuedDiffs();
 
         // Check changes have been applied
@@ -224,14 +215,13 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
                             int msgIdx,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
+    size_t snapSize = 4 * HOST_PAGE_SIZE;
+    exec->setUpDummyMemory(snapSize);
 
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
     int nThreads = 4;
     int nRepeats = 20;
-    size_t snapSize = 4 * HOST_PAGE_SIZE;
     int groupId = 1234;
 
     // Perform two reductions and one array modification. One reduction on same
@@ -245,11 +235,12 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
     // Main function will set up the snapshot and merge regions, while the child
     // threads will modify an array and perform a reduction operation
     if (!isThread) {
+        std::string snapKey = faabric::util::getMainThreadSnapshotKey(msg);
+        faabric::snapshot::SnapshotRegistry& reg =
+          faabric::snapshot::getSnapshotRegistry();
+
         // Set up snapshot
-        std::string snapKey = "dist-reduction-" + std::to_string(generateGid());
-        std::shared_ptr<SnapshotData> snap =
-          std::make_shared<faabric::util::SnapshotData>(snapSize);
-        reg.registerSnapshot(snapKey, snap);
+        std::shared_ptr<SnapshotData> snap = reg.getSnapshot(snapKey);
 
         // Perform operations in a loop
         for (int r = 0; r < nRepeats; r++) {
@@ -259,7 +250,6 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             req->set_type(faabric::BatchExecuteRequest::THREADS);
             for (int i = 0; i < nThreads; i++) {
                 auto& m = req->mutable_messages()->at(i);
-                m.set_snapshotkey(snapKey);
 
                 // Set app/ group info
                 m.set_groupid(groupId);
@@ -322,8 +312,8 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             // Write queued snapshot diffs
             snap->writeQueuedDiffs();
 
-            // Remap memory to snapshot
-            snap->mapToMemory(exec->getDummyMemory());
+            // Read changes into memory
+            exec->readChangesFromMainThreadSnapshot(msg);
 
             uint8_t* reductionAPtr =
               exec->getDummyMemory().data() + reductionAOffset;
