@@ -71,12 +71,18 @@ class Executor
 
     void releaseClaim();
 
+    void writeChangesToMainThreadSnapshot(faabric::Message& msg);
+
+    void readChangesFromMainThreadSnapshot(faabric::Message& msg);
+
   protected:
     virtual void restore(faabric::Message& msg);
 
     virtual void postFinish();
 
     virtual std::span<uint8_t> getMemoryView();
+
+    virtual void setMemorySize(size_t newSize);
 
     faabric::Message boundMessage;
 
@@ -103,13 +109,13 @@ class Executor
 
     std::string createMainThreadSnapshot(const faabric::Message& msg);
 
-    void writeChangesToMainThreadSnapshot(const faabric::Message& msg);
-
-    void readChangesFromMainThreadSnapshot(faabric::Message& msg);
-
     void deleteMainThreadSnapshot(const faabric::Message &msg);
 
 };
+
+Executor* getExecutingExecutor();
+
+void setExecutingExecutor(Executor* exec);
 
 class Scheduler
 {

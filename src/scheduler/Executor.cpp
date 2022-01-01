@@ -21,6 +21,18 @@
 
 namespace faabric::scheduler {
 
+static thread_local Executor* executingExecutor = nullptr;
+
+Executor* getExecutingExecutor()
+{
+    return executingExecutor;
+}
+
+void setExecutingExecutor(Executor* exec)
+{
+    executingExecutor = exec;
+}
+
 ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                            std::shared_ptr<std::atomic<int>> batchCounterIn,
@@ -223,7 +235,7 @@ std::string Executor::createMainThreadSnapshot(const faabric::Message& msg)
     return snapshotKey;
 }
 
-void Executor::writeChangesToMainThreadSnapshot(const faabric::Message& msg)
+void Executor::writeChangesToMainThreadSnapshot(faabric::Message& msg)
 {
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
 
@@ -270,6 +282,9 @@ void Executor::readChangesFromMainThreadSnapshot(faabric::Message& msg)
 
     std::shared_ptr<faabric::util::SnapshotData> snap =
       reg.getSnapshot(snapshotKey);
+
+    // Set the memory size
+    setMemorySize(snap->getSize());
 
     // Remap the memory
     snap->mapToMemory(getMemoryView());
@@ -377,6 +392,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      isThreads,
                      msg.groupid());
 
+        // Set executing executor
+        setExecutingExecutor(this);
+
         int32_t returnValue;
         try {
             returnValue =
@@ -465,7 +483,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // If this is the last in the app itself, delete the main thread
         // snapshot, and stop tracking
-        if(isLastInBatch && isMainThread) {
+        if (isLastInBatch && isMainThread) {
             // Stop tracking main thread memory
             std::span<uint8_t> funcMemory = getMemoryView();
             tracker.stopTracking(funcMemory);
@@ -586,6 +604,11 @@ std::span<uint8_t> Executor::getMemoryView()
     SPDLOG_WARN("Executor for {} has not implemented memory view method",
                 faabric::util::funcToString(boundMessage, false));
     return {};
+}
+
+void Executor::setMemorySize(size_t newSize)
+{
+    SPDLOG_WARN("Executor has not implemented set memory size method");
 }
 
 void Executor::restore(faabric::Message& msg)
