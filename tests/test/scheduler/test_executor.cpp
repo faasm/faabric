@@ -88,17 +88,8 @@ int32_t TestExecutor::executeTask(
           faabric::util::batchExecFactory("dummy", "thread-check", nThreads);
         chainedReq->set_type(faabric::BatchExecuteRequest::THREADS);
 
-        // Create a dummy snapshot
-        std::string snapKey = funcStr + "-snap";
-        faabric::snapshot::SnapshotRegistry& reg =
-          faabric::snapshot::getSnapshotRegistry();
-        size_t snapSize = 10;
-        auto snap = std::make_shared<SnapshotData>(snapSize);
-        reg.registerSnapshot(snapKey, snap);
-
         for (int i = 0; i < chainedReq->messages_size(); i++) {
             faabric::Message& m = chainedReq->mutable_messages()->at(i);
-            m.set_snapshotkey(snapKey);
             m.set_appidx(i + 1);
         }
 
@@ -395,6 +386,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
       faabric::util::batchExecFactory("dummy", "thread-check", 1);
     faabric::Message& msg = req->mutable_messages()->at(0);
     msg.set_inputdata(std::to_string(nThreads));
+    msg.set_isthreaded(true);
 
     std::vector<std::string> actualHosts = executeWithTestExecutor(req, false);
     std::vector<std::string> expectedHosts = { conf.endpointHost };
@@ -429,6 +421,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
           faabric::util::batchExecFactory("dummy", "thread-check", 1);
         faabric::Message& msg = req->mutable_messages()->at(0);
         msg.set_inputdata(std::to_string(nThreads));
+        msg.set_isthreaded(true);
 
         std::vector<std::string> actualHosts =
           executeWithTestExecutor(req, false);
