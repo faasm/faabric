@@ -92,7 +92,6 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     faabric::Message& msg = req->mutable_messages()->at(0);
     msg.set_inputdata(std::to_string(nThreads));
-    msg.set_isthreaded(true);
 
     // Force the function itself to be executed on this host, but its child
     // threads on another host
@@ -117,7 +116,6 @@ TEST_CASE_METHOD(DistTestsFixture, "Check repeated reduction", "[snapshots]")
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, 1);
     faabric::Message& msg = req->mutable_messages()->at(0);
-    msg.set_isthreaded(true);
 
     // Main function and one thread execute on this host, others on another
     faabric::HostResources res;

@@ -51,6 +51,9 @@ class Executor
 
     virtual ~Executor() = default;
 
+    std::vector<std::pair<uint32_t, int32_t>> executeThreads(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
@@ -72,10 +75,6 @@ class Executor
     std::shared_ptr<faabric::util::SnapshotData> getMainThreadSnapshot(
       faabric::Message& msg);
 
-    void writeChangesToMainThreadSnapshot(faabric::Message& msg);
-
-    void readChangesFromMainThreadSnapshot(faabric::Message& msg);
-
   protected:
     virtual void restore(const std::string& snapshotKey);
 
@@ -87,6 +86,8 @@ class Executor
 
     faabric::Message boundMessage;
 
+    Scheduler& sch;
+
     faabric::snapshot::SnapshotRegistry& reg;
 
     faabric::util::DirtyTracker& tracker;
@@ -95,6 +96,11 @@ class Executor
 
   private:
     std::atomic<bool> claimed = false;
+
+    std::shared_mutex cachedSchedulingMutex;
+    std::unordered_map<std::string, int> cachedGroupIds;
+    std::unordered_map<std::string, std::vector<std::string>>
+      cachedDecisionHosts;
 
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;

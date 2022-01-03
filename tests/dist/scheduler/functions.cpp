@@ -119,36 +119,20 @@ int handleFakeDiffsThreadedFunction(
         }
 
         // Dispatch the message, expecting them all to execute on other hosts
-        std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-        faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
+        std::vector<std::pair<uint32_t, int32_t>> results =
+          exec->executeThreads(req);
 
-        std::vector<std::string> executedHosts = sch.callFunctions(req).hosts;
-
-        bool rightHosts = true;
-        for (auto& h : executedHosts) {
-            if (h == thisHost) {
-                SPDLOG_ERROR("Expected child threads to be executed on other "
-                             "hosts (this host {}, actual host {})",
-                             thisHost,
-                             h);
-                rightHosts = false;
+        // Check results
+        for (auto [mid, res] : results) {
+            if (res != 0) {
+                SPDLOG_ERROR(
+                  "Thread diffs test thread {} failed with value {}", mid, res);
+                throw std::runtime_error("Thread diffs check failed");
             }
         }
 
-        if (!rightHosts) {
-            return 111;
-        }
-
-        // Wait for the threads
-        for (auto& m : req->messages()) {
-            sch.awaitThreadResult(m.id());
-        }
-
-        // Write queued diffs from all the threads
-        auto snap = exec->getMainThreadSnapshot(msg);
-        snap->writeQueuedDiffs();
-
         // Check changes have been applied
+        auto snap = exec->getMainThreadSnapshot(msg);
         bool success = true;
         for (int i = 0; i < nThreads; i++) {
             // Check local modifications
@@ -232,12 +216,8 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
     // Main function will set up the snapshot and merge regions, while the child
     // threads will modify an array and perform a reduction operation
     if (!isThread) {
-        std::string snapKey = faabric::util::getMainThreadSnapshotKey(msg);
-        faabric::snapshot::SnapshotRegistry& reg =
-          faabric::snapshot::getSnapshotRegistry();
-
-        // Set up snapshot
-        std::shared_ptr<SnapshotData> snap = reg.getSnapshot(snapKey);
+        // Get the main thread snapshot
+        auto snap = exec->getMainThreadSnapshot(msg);
 
         // Perform operations in a loop
         for (int r = 0; r < nRepeats; r++) {
@@ -267,50 +247,23 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
                                  SnapshotMergeOperation::Sum,
                                  true);
 
-            // Make the request
-            faabric::scheduler::Scheduler& sch =
-              faabric::scheduler::getScheduler();
-            std::vector<std::string> actualHosts = sch.callFunctions(req).hosts;
+            // Execute the threads
+            std::vector<std::pair<uint32_t, int32_t>> results =
+              exec->executeThreads(req);
 
-            // Check hosts
-            std::string thisHost = getSystemConfig().endpointHost;
-            int nThisHost = 0;
-            int nOtherHost = 0;
-            for (const auto& h : actualHosts) {
-                if (h == thisHost) {
-                    nThisHost++;
-                } else {
-                    nOtherHost++;
-                }
-            }
-
-            if (nThisHost != 2 || nOtherHost != 2) {
-                SPDLOG_ERROR("Threads not scheduled as expected: {} {}",
-                             nThisHost,
-                             nOtherHost);
-                return 1;
-            }
-
-            // Wait for the threads
-            for (const auto& m : req->messages()) {
-                int32_t thisRes = sch.awaitThreadResult(m.id());
-                if (thisRes != 0) {
+            // Check thread results
+            for (auto [mid, res] : results) {
+                if (res != 0) {
                     SPDLOG_ERROR(
                       "Distributed reduction test thread {} failed: {}",
-                      m.id(),
-                      thisRes);
+                      mid,
+                      res);
 
                     return 1;
                 }
             }
 
             SPDLOG_DEBUG("Reduce test threads finished");
-
-            // Write queued snapshot diffs
-            snap->writeQueuedDiffs();
-
-            // Read changes into memory
-            exec->readChangesFromMainThreadSnapshot(msg);
 
             uint8_t* reductionAPtr =
               exec->getDummyMemory().data() + reductionAOffset;

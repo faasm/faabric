@@ -390,7 +390,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
       faabric::util::batchExecFactory("dummy", "thread-check", 1);
     faabric::Message& msg = req->mutable_messages()->at(0);
     msg.set_inputdata(std::to_string(nThreads));
-    msg.set_isthreaded(true);
 
     std::vector<std::string> actualHosts = executeWithTestExecutor(req, false);
     std::vector<std::string> expectedHosts = { conf.endpointHost };
@@ -425,7 +424,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
           faabric::util::batchExecFactory("dummy", "thread-check", 1);
         faabric::Message& msg = req->mutable_messages()->at(0);
         msg.set_inputdata(std::to_string(nThreads));
-        msg.set_isthreaded(true);
 
         std::vector<std::string> actualHosts =
           executeWithTestExecutor(req, false);
