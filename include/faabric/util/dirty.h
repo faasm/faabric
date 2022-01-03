@@ -70,7 +70,7 @@ class SoftPTEDirtyTracker final : public DirtyTracker
       std::span<uint8_t> region) override;
 
   private:
-    FILE* f = nullptr;
+    FILE* clearRefsFile = nullptr;
 
     std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries);
 

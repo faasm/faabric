@@ -29,6 +29,9 @@ class DistTestExecutor final : public faabric::scheduler::Executor
 
     void setUpDummyMemory(size_t memSize);
 
+  protected:
+    void setMemorySize(size_t newSize) override;
+
   private:
     faabric::util::MemoryRegion dummyMemory = nullptr;
 

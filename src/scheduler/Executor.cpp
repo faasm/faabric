@@ -136,23 +136,28 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
 
-    // Restore if we have a snapshot
     if (isThreads) {
+        // Check we get a valid memory view
+        std::span<uint8_t> memView = getMemoryView();
+        if (memView.empty()) {
+            SPDLOG_ERROR("Can't execute threads for {}, empty memory view",
+                         funcStr);
+            throw std::runtime_error("Empty memory view for threaded function");
+        }
+
+        // Restore threads from main thread snapshot
         std::string snapKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
         SPDLOG_DEBUG(
           "Restoring thread of {} from snapshot {}", funcStr, snapKey);
         restore(snapKey);
+
+        // Start global tracking of memory
+        tracker.startTracking(memView);
     } else if (!firstMsg.snapshotkey().empty()) {
+        // Restore from snapshot if provided
         std::string snapshotKey = firstMsg.snapshotkey();
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
         restore(snapshotKey);
-    }
-
-    // Reset dirty page tracking if we're executing threads.
-    // Note this must be done after the restore has happened.
-    if (isThreads) {
-        // Start global tracking of memory
-        tracker.startTracking(getMemoryView());
     }
 
     // Set up shared counter for this batch of tasks
@@ -241,13 +246,6 @@ std::string Executor::createMainThreadSnapshot(const faabric::Message& msg)
     SPDLOG_DEBUG(
       "Creating main thread snapshot: {} for {}", snapshotKey, funcStr);
 
-    std::span<uint8_t> memView = getMemoryView();
-    if (memView.empty()) {
-        SPDLOG_ERROR("Cannot create main thread snapshot for {}, empty memory",
-                     funcStr);
-        throw std::runtime_error("Cannot create main thread snapshot");
-    }
-
     std::shared_ptr<faabric::util::SnapshotData> data =
       std::make_shared<faabric::util::SnapshotData>(getMemoryView());
     reg.registerSnapshot(snapshotKey, data);
@@ -263,12 +261,13 @@ void Executor::writeChangesToMainThreadSnapshot(faabric::Message& msg)
     SPDLOG_DEBUG("Updating main thread snapshot for {}",
                  faabric::util::funcToString(msg, false));
 
-    std::span<uint8_t> funcMemory = getMemoryView();
-    tracker.stopTracking(funcMemory);
-    tracker.stopThreadLocalTracking(funcMemory);
+    std::span<uint8_t> memView = getMemoryView();
+
+    tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
 
     std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions =
-      tracker.getDirtyOffsets(funcMemory);
+      tracker.getDirtyOffsets(memView);
 
     std::vector<faabric::util::SnapshotDiff> updates =
       snap->diffWithDirtyRegions(dirtyRegions);
@@ -288,12 +287,12 @@ void Executor::readChangesFromMainThreadSnapshot(faabric::Message& msg)
     setMemorySize(snap->getSize());
 
     // Remap the memory
-    snap->mapToMemory(getMemoryView());
+    std::span<uint8_t> memView = getMemoryView();
+    snap->mapToMemory(memView);
 
     // Start tracking again
-    std::span<uint8_t> funcMemory = getMemoryView();
-    tracker.startTracking(funcMemory);
-    tracker.startThreadLocalTracking(funcMemory);
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
 }
 
 void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
@@ -362,18 +361,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
             isMainThread = true;
 
             // Start tracking main thread memory
-            tracker.startTracking(getMemoryView());
-            tracker.startThreadLocalTracking(getMemoryView());
+            std::span<uint8_t> memView = getMemoryView();
+            tracker.startTracking(memView);
+            tracker.startThreadLocalTracking(memView);
 
             // Set up the main snapshot for the threaded application
             createMainThreadSnapshot(msg);
-        }
-
-        // Check ptp group
-        std::shared_ptr<faabric::transport::PointToPointGroup> group = nullptr;
-        if (msg.groupid() > 0) {
-            group =
-              faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
         // Start dirty tracking if necessary
@@ -381,6 +374,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // If tracking is thread local, start here as it will happen for
             // each thread
             tracker.startThreadLocalTracking(getMemoryView());
+        }
+
+        // Check ptp group
+        std::shared_ptr<faabric::transport::PointToPointGroup> group = nullptr;
+        if (msg.groupid() > 0) {
+            group =
+              faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
         bool isMaster = msg.masterhost() == conf.endpointHost;
@@ -410,10 +410,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
         }
 
         // Handle thread-local diffing for every thread
-        std::span<uint8_t> funcMemory = getMemoryView();
-        if (!funcMemory.empty() && isThreads) {
+        if (isThreads) {
+            std::span<uint8_t> memView = getMemoryView();
             auto thisThreadDirtyRegions =
-              tracker.getThreadLocalDirtyOffsets(getMemoryView());
+              tracker.getThreadLocalDirtyOffsets(memView);
 
             // Add to executor-wide list of dirty regions
             faabric::util::FullLock lock(dirtyRegionsMutex);
@@ -438,21 +438,21 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        if (!funcMemory.empty() && isLastInBatch && isThreads) {
+        if (isLastInBatch && isThreads) {
             // Stop non-thread-local tracking as we're the last in the batch
-            tracker.stopTracking(getMemoryView());
+            std::span<uint8_t> memView = getMemoryView();
+            tracker.stopTracking(memView);
 
             // Add non-thread-local dirty regions
             {
                 faabric::util::FullLock lock(dirtyRegionsMutex);
                 std::vector<faabric::util::OffsetMemoryRegion> r =
-                  tracker.getDirtyOffsets(funcMemory);
+                  tracker.getDirtyOffsets(memView);
 
                 dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
             }
 
             // Fill snapshot gaps with overwrite regions first
-
             std::string mainThreadSnapKey =
               faabric::util::getMainThreadSnapshotKey(msg);
             auto snap = reg.getSnapshot(mainThreadSnapKey);
@@ -490,9 +490,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // snapshot, and stop tracking
         if (isLastInBatch && isMainThread) {
             // Stop tracking main thread memory
-            std::span<uint8_t> funcMemory = getMemoryView();
-            tracker.stopTracking(funcMemory);
-            tracker.stopThreadLocalTracking(funcMemory);
+            std::span<uint8_t> memView = getMemoryView();
+            tracker.stopTracking(memView);
+            tracker.stopThreadLocalTracking(memView);
 
             // Delete the main thread snapshot
             deleteMainThreadSnapshot(msg);

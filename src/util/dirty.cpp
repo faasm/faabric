@@ -39,8 +39,8 @@ DirtyTracker& getDirtyTracker()
 
 SoftPTEDirtyTracker::SoftPTEDirtyTracker()
 {
-    f = ::fopen(CLEAR_REFS, "w");
-    if (f == nullptr) {
+    clearRefsFile = ::fopen(CLEAR_REFS, "w");
+    if (clearRefsFile == nullptr) {
         SPDLOG_ERROR("Could not open clear_refs ({})", strerror(errno));
         throw std::runtime_error("Could not open clear_refs");
     }
@@ -48,7 +48,7 @@ SoftPTEDirtyTracker::SoftPTEDirtyTracker()
 
 SoftPTEDirtyTracker::~SoftPTEDirtyTracker()
 {
-    ::fclose(f);
+    ::fclose(clearRefsFile);
 }
 
 void SoftPTEDirtyTracker::clearAll()
@@ -56,15 +56,15 @@ void SoftPTEDirtyTracker::clearAll()
     // Write 4 to the file to reset and start tracking
     // https://www.kernel.org/doc/html/v5.4/admin-guide/mm/soft-dirty.html
     char value[] = "4";
-    size_t nWritten = ::fwrite(value, sizeof(char), 1, f);
+    size_t nWritten = ::fwrite(value, sizeof(char), 1, clearRefsFile);
 
     if (nWritten != 1) {
         SPDLOG_ERROR("Failed to write to clear_refs ({})", nWritten);
-        ::fclose(f);
+        ::fclose(clearRefsFile);
         throw std::runtime_error("Failed to write to clear_refs");
     }
 
-    ::rewind(f);
+    ::rewind(clearRefsFile);
 }
 
 void SoftPTEDirtyTracker::startTracking(std::span<uint8_t> region)
