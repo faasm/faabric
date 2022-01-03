@@ -35,7 +35,7 @@ services:
       - ./conan-cache/:/root/.conan
     working_dir: /build/faabric/static
     environment:
-      - LOG_LEVEL=trace
+      - LOG_LEVEL=debug
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
       - OVERRIDE_CPU_COUNT=${OVERRIDE_CPU_COUNT:-0}
