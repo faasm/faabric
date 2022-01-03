@@ -44,7 +44,7 @@ void TestExecutor::reset(faabric::Message& msg)
 
 void TestExecutor::setUpDummyMemory(size_t memSize)
 {
-    SPDLOG_DEBUG("Test executor initialising memory size {}", memSize);
+    SPDLOG_DEBUG("TestExecutor initialising memory size {}", memSize);
     dummyMemory = faabric::util::allocatePrivateMemory(memSize);
     dummyMemorySize = memSize;
 }

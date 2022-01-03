@@ -78,8 +78,9 @@ std::span<uint8_t> DistTestExecutor::getMemoryView()
     return { dummyMemory.get(), dummyMemorySize };
 }
 
-void DistTestExecutor::setMemorySize(size_t newSize) {
-setUpDummyMemory(newSize);
+void DistTestExecutor::setMemorySize(size_t newSize)
+{
+    setUpDummyMemory(newSize);
 }
 
 std::span<uint8_t> DistTestExecutor::getDummyMemory()

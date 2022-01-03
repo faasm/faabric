@@ -151,7 +151,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
           "Restoring thread of {} from snapshot {}", funcStr, snapKey);
         restore(snapKey);
 
-        // Start global tracking of memory
+        // Get updated memory view and start global tracking of memory
+        memView = getMemoryView();
         tracker.startTracking(memView);
     } else if (!firstMsg.snapshotkey().empty()) {
         // Restore from snapshot if provided
@@ -551,7 +552,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
             deadThreads.emplace_back(thisThread);
 
             // Make sure we're definitely not still tracking changes
-            tracker.stopTracking(getMemoryView());
+            std::span<uint8_t> memView = getMemoryView();
+            if (!memView.empty()) {
+                tracker.stopTracking(memView);
+            }
 
             // Set this thread to nullptr
             threadPoolThreads.at(threadPoolIdx) = nullptr;

@@ -321,7 +321,10 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
     // Note that here we want to mark the memory read-only, this is to ensure
     // that only writes are counted as dirtying a page.
     if (::mprotect(region.data(), region.size(), PROT_READ) == -1) {
-        throw std::runtime_error("Failed mprotect to none");
+        SPDLOG_ERROR("Failed to start tracking with mprotect: {} ({})",
+                     errno,
+                     strerror(errno));
+        throw std::runtime_error("Failed mprotect to start tracking");
     }
 }
 
@@ -333,7 +336,10 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 
     if (::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE) ==
         -1) {
-        throw std::runtime_error("Failed mprotect to rw");
+        SPDLOG_ERROR("Failed to stop tracking with mprotect: {} ({})",
+                     errno,
+                     strerror(errno));
+        throw std::runtime_error("Failed mprotect to stop tracking");
     }
 }
 
