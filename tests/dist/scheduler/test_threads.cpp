@@ -19,7 +19,7 @@ namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture,
                  "Test executing threads on multiple hosts",
-                 "[threads]")
+                 "[snapshots][threads]")
 {
     // Set up this host's resources
     int nLocalSlots = 2;
@@ -43,9 +43,9 @@ TEST_CASE_METHOD(DistTestsFixture,
       faabric::snapshot::getSnapshotRegistry();
     faabric::Message& msg = req->mutable_messages()->at(0);
 
-    size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
-    auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
+    auto snap = std::make_shared<faabric::util::SnapshotData>(
+      DIST_TEST_EXECUTOR_MEMORY_SIZE);
     reg.registerSnapshot(snapshotKey, snap);
 
     // Call the functions

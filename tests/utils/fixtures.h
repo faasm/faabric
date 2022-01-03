@@ -298,13 +298,15 @@ class PointToPointClientServerFixture
     faabric::transport::PointToPointServer server;
 };
 
+#define TEST_EXECUTOR_DEFAULT_MEMORY_SIZE (10 * faabric::util::HOST_PAGE_SIZE)
+
 class TestExecutor final : public faabric::scheduler::Executor
 {
   public:
     TestExecutor(faabric::Message& msg);
 
     faabric::util::MemoryRegion dummyMemory = nullptr;
-    size_t dummyMemorySize = 2 * faabric::util::HOST_PAGE_SIZE;
+    size_t dummyMemorySize = TEST_EXECUTOR_DEFAULT_MEMORY_SIZE;
 
     void reset(faabric::Message& msg) override;
 

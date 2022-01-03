@@ -125,7 +125,7 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
 
     SPDLOG_DEBUG(
-      "Applying {} diffs to snapshot {}", r->diffs()->size(), r->key()->str());
+      "Queueing {} diffs for snapshot {}", r->diffs()->size(), r->key()->str());
 
     // Get the snapshot
     faabric::snapshot::SnapshotRegistry& reg =
@@ -148,6 +148,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Write diffs and set merge regions if necessary
     if (r->force()) {
+        SPDLOG_DEBUG("Forcing write queued diffs to snapshot {}",
+                     r->key()->str());
+
         // Write queued diffs
         snap->writeQueuedDiffs();
 

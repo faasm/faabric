@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <vector>
 
+#include <faabric/util/crash.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
@@ -214,13 +215,10 @@ class ThreadTrackingData
       , nPages(faabric::util::getRequiredHostPages(region.size()))
     {
         pageFlags = std::vector<bool>(nPages, false);
-        SPDLOG_TRACE("Tracking {} pages via segfaults", nPages);
     }
 
     void markDirtyPage(void* addr)
     {
-        assert(regionTop != nullptr);
-
         ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
         long pageNum = offset / HOST_PAGE_SIZE;
         pageFlags[pageNum] = true;
@@ -258,6 +256,8 @@ class ThreadTrackingData
         return dirty;
     }
 
+    bool isInitialised() { return regionTop != nullptr; }
+
   private:
     uint8_t* regionBase = nullptr;
     uint8_t* regionTop = nullptr;
@@ -293,6 +293,12 @@ void SegfaultDirtyTracker::handler(int sig, siginfo_t* info, void* ucontext)
 {
     void* faultAddr = info->si_addr;
 
+    if (!tracking.isInitialised()) {
+        SPDLOG_ERROR("Unexpected segfault, reraising");
+        faabric::util::setUpCrashHandler(SIGSEGV);
+        raise(sig);
+    }
+
     tracking.markDirtyPage(faultAddr);
 
     // Align down to nearest page boundary
@@ -313,11 +319,15 @@ void SegfaultDirtyTracker::clearAll()
 
 void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 {
+    SPDLOG_TRACE("Starting thread-local tracking on region size {}",
+                 region.size());
     tracking = ThreadTrackingData(region);
 }
 
 void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 {
+    SPDLOG_TRACE("Starting tracking on region size {}", region.size());
+
     // Note that here we want to mark the memory read-only, this is to ensure
     // that only writes are counted as dirtying a page.
     if (::mprotect(region.data(), region.size(), PROT_READ) == -1) {
@@ -334,6 +344,8 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
         return;
     }
 
+    SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
+
     if (::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE) ==
         -1) {
         SPDLOG_ERROR("Failed to stop tracking with mprotect: {} ({})",
@@ -346,6 +358,8 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
 {
     // Do nothing - need to preserve thread-local data for getting dirty regions
+    SPDLOG_TRACE("Stopping thread-local tracking on region size {}",
+                 region.size());
 }
 
 void SegfaultDirtyTracker::reinitialise()

@@ -28,18 +28,24 @@ void crashHandler(int sig) noexcept
         raise(sig);
         exit(1);
     }
-    return;
 }
 
 namespace faabric::util {
 
-void setUpCrashHandler()
+void setUpCrashHandler(int sig)
 {
-    fputs("Testing crash handler backtrace:\n", stderr);
-    fflush(stderr);
-    crashHandler(TEST_SIGNAL);
-    SPDLOG_INFO("Installing crash handler");
-    for (auto signo : { SIGSEGV, SIGABRT, SIGILL, SIGFPE }) {
+    std::vector<int> sigs;
+    if (sig >= 0) {
+        sigs = { sig };
+    } else {
+        fputs("Testing crash handler backtrace:\n", stderr);
+        fflush(stderr);
+        crashHandler(TEST_SIGNAL);
+        SPDLOG_INFO("Installing crash handler");
+        sigs = { SIGSEGV, SIGABRT, SIGILL, SIGFPE };
+    }
+
+    for (auto signo : sigs) {
         if (signal(signo, &crashHandler) == SIG_ERR) {
             SPDLOG_WARN("Couldn't install handler for signal {}", signo);
         } else {

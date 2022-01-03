@@ -66,10 +66,13 @@ void DistTestExecutor::restore(const std::string& snapshotKey)
 {
     SPDLOG_DEBUG("Dist test executor restoring from {}", snapshotKey);
 
+    if (dummyMemory.get() == nullptr) {
+        SPDLOG_ERROR("No memory for dist test executor to restore {}",
+                     snapshotKey);
+        throw std::runtime_error("No memory to restore dist test executor");
+    }
+
     auto snap = reg.getSnapshot(snapshotKey);
-
-    setUpDummyMemory(snap->getSize());
-
     snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
 }
 
@@ -80,7 +83,13 @@ std::span<uint8_t> DistTestExecutor::getMemoryView()
 
 void DistTestExecutor::setMemorySize(size_t newSize)
 {
-    setUpDummyMemory(newSize);
+    if (newSize != dummyMemorySize) {
+        SPDLOG_ERROR("DistTestExecutor cannot change memory size ({} != {})",
+                     newSize,
+                     dummyMemorySize);
+        throw std::runtime_error(
+          "DistTestExecutor does not support changing memory size");
+    }
 }
 
 std::span<uint8_t> DistTestExecutor::getDummyMemory()

@@ -7,6 +7,8 @@
 
 namespace tests {
 
+#define DIST_TEST_EXECUTOR_MEMORY_SIZE (30 * faabric::util::HOST_PAGE_SIZE)
+
 class DistTestExecutor final : public faabric::scheduler::Executor
 {
   public:
@@ -27,15 +29,15 @@ class DistTestExecutor final : public faabric::scheduler::Executor
 
     std::span<uint8_t> getDummyMemory();
 
-    void setUpDummyMemory(size_t memSize);
-
   protected:
     void setMemorySize(size_t newSize) override;
 
   private:
     faabric::util::MemoryRegion dummyMemory = nullptr;
 
-    size_t dummyMemorySize = 2 * faabric::util::HOST_PAGE_SIZE;
+    size_t dummyMemorySize = DIST_TEST_EXECUTOR_MEMORY_SIZE;
+
+    void setUpDummyMemory(size_t memSize);
 };
 
 class DistTestExecutorFactory : public faabric::scheduler::ExecutorFactory

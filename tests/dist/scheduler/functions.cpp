@@ -97,8 +97,6 @@ int handleFakeDiffsThreadedFunction(
     // synced back to the original host.
     if (!isThread) {
         int nThreads = std::stoi(msgInput);
-        size_t snapSize = (nThreads * 4) * faabric::util::HOST_PAGE_SIZE;
-        exec->setUpDummyMemory(snapSize);
 
         auto req =
           faabric::util::batchExecFactory(msg.user(), msg.function(), nThreads);
@@ -106,6 +104,7 @@ int handleFakeDiffsThreadedFunction(
 
         for (int i = 0; i < nThreads; i++) {
             auto& m = req->mutable_messages()->at(i);
+            m.set_appid(msg.appid());
             m.set_appidx(i);
             m.set_inputdata(std::string("thread_" + std::to_string(i)));
 
@@ -118,7 +117,7 @@ int handleFakeDiffsThreadedFunction(
                         localChange.size());
         }
 
-        // Dispatch the message, expecting them all to execute on other hosts
+        // Dispatch the message
         std::vector<std::pair<uint32_t, int32_t>> results =
           exec->executeThreads(req);
 
@@ -171,6 +170,15 @@ int handleFakeDiffsThreadedFunction(
         int regionOffset = 2 * idx * faabric::util::HOST_PAGE_SIZE;
         int changeOffset = regionOffset + 10;
 
+        if (regionOffset > exec->getDummyMemory().size()) {
+            SPDLOG_ERROR(
+              "Dummy memory not large enough for function {} ({} > {})",
+              faabric::util::funcToString(msg, false),
+              regionOffset,
+              exec->getDummyMemory().size());
+            throw std::runtime_error("Dummy memory not large enough");
+        }
+
         // Get the input data
         std::vector<uint8_t> inputBytes =
           faabric::util::stringToBytes(msgInput);
@@ -196,14 +204,10 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
                             int msgIdx,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    size_t snapSize = 4 * HOST_PAGE_SIZE;
-    exec->setUpDummyMemory(snapSize);
-
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
     int nThreads = 4;
     int nRepeats = 20;
-    int groupId = 1234;
 
     // Perform two reductions and one array modification. One reduction on same
     // page as array change
@@ -216,8 +220,8 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
     // Main function will set up the snapshot and merge regions, while the child
     // threads will modify an array and perform a reduction operation
     if (!isThread) {
-        // Get the main thread snapshot
-        auto snap = exec->getMainThreadSnapshot(msg);
+        // Get the main thread snapshot, creating if doesn't already exist
+        auto snap = exec->getMainThreadSnapshot(msg, true);
 
         // Perform operations in a loop
         for (int r = 0; r < nRepeats; r++) {
@@ -229,9 +233,9 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
                 auto& m = req->mutable_messages()->at(i);
 
                 // Set app/ group info
-                m.set_groupid(groupId);
-                m.set_groupidx(i);
+                m.set_appid(msg.appid());
                 m.set_appidx(i);
+                m.set_groupidx(i);
             }
 
             // Set merge regions
@@ -322,6 +326,7 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
         uint8_t* thisArrayPtr = arrayPtr + (sizeof(int32_t) * thisIdx);
 
         // Lock group locally while doing reduction
+        int groupId = msg.groupid();
         std::shared_ptr<faabric::transport::PointToPointGroup> group =
           faabric::transport::PointToPointGroup::getGroup(groupId);
         group->localLock();

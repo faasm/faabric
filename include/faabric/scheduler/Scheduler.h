@@ -73,7 +73,7 @@ class Executor
     void releaseClaim();
 
     std::shared_ptr<faabric::util::SnapshotData> getMainThreadSnapshot(
-      faabric::Message& msg);
+      faabric::Message& msg, bool createIfNotExists = false);
 
   protected:
     virtual void restore(const std::string& snapshotKey);
@@ -97,11 +97,16 @@ class Executor
   private:
     std::atomic<bool> claimed = false;
 
-    std::shared_mutex cachedSchedulingMutex;
+    // ---- Application threads ----
+    std::shared_mutex threadExecutionMutex;
     std::unordered_map<std::string, int> cachedGroupIds;
     std::unordered_map<std::string, std::vector<std::string>>
       cachedDecisionHosts;
+    std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions;
 
+    void deleteMainThreadSnapshot(const faabric::Message& msg);
+
+    // ---- Function execution thread pool ----
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<std::shared_ptr<std::thread>> deadThreads;
@@ -109,14 +114,7 @@ class Executor
 
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
-    std::shared_mutex dirtyRegionsMutex;
-    std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions;
-
     void threadPoolThread(int threadPoolIdx);
-
-    std::string createMainThreadSnapshot(const faabric::Message& msg);
-
-    void deleteMainThreadSnapshot(const faabric::Message& msg);
 };
 
 Executor* getExecutingExecutor();

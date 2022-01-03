@@ -51,11 +51,13 @@ void TestExecutor::setUpDummyMemory(size_t memSize)
 
 void TestExecutor::restore(const std::string& snapshotKey)
 {
-    SPDLOG_DEBUG("Restoring TestExecutor");
     restoreCount += 1;
 
     auto snap = reg.getSnapshot(snapshotKey);
-    setUpDummyMemory(snap->getSize());
+    if (dummyMemory == nullptr) {
+        throw std::runtime_error(
+          "Attempting to restore test executor with no memory set up");
+    }
 
     snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
 }
@@ -103,17 +105,14 @@ int32_t TestExecutor::executeTask(
         }
 
         // Call the threads
-        Scheduler& sch = getScheduler();
-        sch.callFunctions(chainedReq);
+        std::vector<std::pair<uint32_t, int32_t>> results =
+          executeThreads(chainedReq);
 
         // Await the results
-        for (const auto& msg : chainedReq->messages()) {
-            uint32_t mid = msg.id();
-            int threadRes = sch.awaitThreadResult(mid);
-
-            if (threadRes != mid / 100) {
+        for (auto [mid, result] : results) {
+            if (result != mid / 100) {
                 SPDLOG_ERROR("TestExecutor got invalid thread result, {} != {}",
-                             threadRes,
+                             result,
                              mid / 100);
                 return 1;
             }
@@ -171,10 +170,6 @@ int32_t TestExecutor::executeTask(
         // Modify a page of the dummy memory
         uint8_t pageIdx = threadPoolIdx;
 
-        std::string mainThreadSnapKey = getMainThreadSnapshotKey(msg);
-        auto snapData = faabric::snapshot::getSnapshotRegistry().getSnapshot(
-          mainThreadSnapKey);
-
         // Set up the data.
         // Note, avoid writing a zero here as the memory is already zeroed hence
         // it's not a change
@@ -188,6 +183,11 @@ int32_t TestExecutor::executeTask(
                      pageIdx,
                      offset,
                      offset + data.size());
+
+        if (dummyMemorySize < offset + data.size()) {
+            throw std::runtime_error(
+              "TestExecutor memory not large enough for test");
+        }
 
         ::memcpy(dummyMemory.get() + offset, data.data(), data.size());
     }
@@ -299,7 +299,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Set the bound timeout to something short so the test runs fast
     conf.boundTimeout = 100;
 
-    int numRepeats = 20;
+    int numRepeats = 10;
     for (int i = 0; i < numRepeats; i++) {
         std::shared_ptr<BatchExecuteRequest> req =
           faabric::util::batchExecFactory("dummy", "simple", 1);
@@ -629,6 +629,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
                  "[executor]")
 {
     int nThreads = 4;
+
+    // Sanity check memory size
+    REQUIRE(TEST_EXECUTOR_DEFAULT_MEMORY_SIZE > nThreads * HOST_PAGE_SIZE);
+
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "snap-check", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
@@ -835,7 +839,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     if (requestType == faabric::BatchExecuteRequest::THREADS) {
         // Set up main thread snapshot
-        size_t snapSize = HOST_PAGE_SIZE;
+        size_t snapSize = TEST_EXECUTOR_DEFAULT_MEMORY_SIZE;
         auto snap = std::make_shared<SnapshotData>(snapSize);
         std::string snapKey = getMainThreadSnapshotKey(msg);
 

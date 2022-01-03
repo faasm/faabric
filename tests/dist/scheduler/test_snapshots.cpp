@@ -21,7 +21,7 @@ namespace tests {
 
 TEST_CASE_METHOD(DistTestsFixture,
                  "Check snapshots sent back from worker are queued",
-                 "[snapshots]")
+                 "[snapshots][threads]")
 {
     std::string user = "snapshots";
     std::string function = "fake-diffs";
@@ -40,7 +40,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     faabric::snapshot::SnapshotRegistry& reg =
       faabric::snapshot::getSnapshotRegistry();
 
-    size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
+    size_t snapSize = DIST_TEST_EXECUTOR_MEMORY_SIZE;
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
     auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
     reg.registerSnapshot(snapshotKey, snap);
@@ -81,7 +81,7 @@ TEST_CASE_METHOD(DistTestsFixture,
 
 TEST_CASE_METHOD(DistTestsFixture,
                  "Check snapshot diffs sent back from child threads",
-                 "[snapshots]")
+                 "[snapshots][threads]")
 {
     std::string user = "snapshots";
     std::string function = "fake-diffs-threaded";
@@ -108,7 +108,9 @@ TEST_CASE_METHOD(DistTestsFixture,
     REQUIRE(actualResult.returnvalue() == 333);
 }
 
-TEST_CASE_METHOD(DistTestsFixture, "Check repeated reduction", "[snapshots]")
+TEST_CASE_METHOD(DistTestsFixture,
+                 "Check repeated reduction",
+                 "[snapshots][threads]")
 {
     std::string user = "snapshots";
     std::string function = "reduction";

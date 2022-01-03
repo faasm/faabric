@@ -433,13 +433,13 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
     PROF_START(DiffWithSnapshot)
     std::vector<faabric::util::SnapshotDiff> diffs;
 
-    SPDLOG_TRACE("Diffing {} merge regions vs {} dirty regions",
-                 mergeRegions.size(),
-                 dirtyRegions.size());
-
     if (mergeRegions.empty() || dirtyRegions.empty()) {
         return diffs;
     }
+
+    SPDLOG_TRACE("Diffing {} merge regions vs {} dirty regions",
+                 mergeRegions.size(),
+                 dirtyRegions.size());
 
     // First dedupe the memory regions
     auto dedupedRegions = dedupeMemoryRegions(dirtyRegions);
