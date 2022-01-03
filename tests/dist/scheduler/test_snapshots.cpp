@@ -62,16 +62,18 @@ TEST_CASE_METHOD(DistTestsFixture,
     REQUIRE(snap->getQueuedDiffsCount() == 2);
     snap->writeQueuedDiffs();
 
-    size_t sizeA = snapshotKey.size();
-    size_t sizeB = inputData.size();
+    size_t expectedOffsetA = 10;
+    size_t expectedOffsetB = faabric::util::HOST_PAGE_SIZE + 10;
+    std::vector<uint8_t> expectedA = { 1, 2, 3, 4 };
+    std::vector<uint8_t> expectedB = inputData;
 
-    const uint8_t* startA = snap->getDataPtr() + 10;
-    const uint8_t* startB = snap->getDataPtr() + 100;
+    size_t sizeA = expectedA.size();
+    size_t sizeB = expectedB.size();
+
+    const uint8_t* startA = snap->getDataPtr() + expectedOffsetA;
+    const uint8_t* startB = snap->getDataPtr() + expectedOffsetB;
     std::vector<uint8_t> actualA(startA, startA + sizeA);
     std::vector<uint8_t> actualB(startB, startB + sizeB);
-
-    std::vector<uint8_t> expectedA = faabric::util::stringToBytes(snapshotKey);
-    std::vector<uint8_t> expectedB = inputData;
 
     REQUIRE(actualA == expectedA);
     REQUIRE(actualB == expectedB);

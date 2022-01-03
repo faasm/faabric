@@ -6,7 +6,7 @@ namespace faabric::util {
 void initLogging()
 {
     // Docs: https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
-    spdlog::set_pattern("[%H:%M:%S] [%t] %^[%L]%$ %v");
+    spdlog::set_pattern("%^[%H:%M:%S] [%t] [%L]%$ %v");
 
     // Set the current level for the level for the default logger (note that the
     // minimum log level is determined in the header).

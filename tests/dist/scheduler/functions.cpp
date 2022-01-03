@@ -65,18 +65,15 @@ int handleFakeDiffsFunction(tests::DistTestExecutor* exec,
     faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
     std::string msgInput = msg.inputdata();
-    std::string snapshotKey = msg.snapshotkey();
-
     std::vector<uint8_t> inputBytes = faabric::util::stringToBytes(msgInput);
+    std::vector<uint8_t> otherData = { 1, 2, 3, 4 };
 
     // Modify the executor's memory
-    std::vector<uint8_t> keyBytes = faabric::util::stringToBytes(snapshotKey);
-
     int offsetA = 10;
     int offsetB = HOST_PAGE_SIZE + 10;
     std::memcpy(exec->getDummyMemory().data() + offsetA,
-                keyBytes.data(),
-                keyBytes.size());
+                otherData.data(),
+                otherData.size());
     std::memcpy(exec->getDummyMemory().data() + offsetB,
                 inputBytes.data(),
                 inputBytes.size());

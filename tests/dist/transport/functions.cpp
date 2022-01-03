@@ -1,16 +1,16 @@
 #include <catch2/catch.hpp>
 
 #include "DistTestExecutor.h"
-#include "faabric/scheduler/Scheduler.h"
-#include "faabric/util/func.h"
-#include "faabric/util/gids.h"
-#include "faabric/util/scheduling.h"
 #include "faabric_utils.h"
 #include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/func.h>
+#include <faabric/util/gids.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/string_tools.h>
 
 using namespace faabric::transport;
