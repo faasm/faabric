@@ -1,6 +1,6 @@
 
 namespace faabric::util {
 
-void setUpCrashHandler(int sig=-1);
+void setUpCrashHandler(int sig = -1);
 
 }

@@ -73,7 +73,8 @@ class Executor
     void releaseClaim();
 
     std::shared_ptr<faabric::util::SnapshotData> getMainThreadSnapshot(
-      faabric::Message& msg, bool createIfNotExists = false);
+      faabric::Message& msg,
+      bool createIfNotExists = false);
 
   protected:
     virtual void restore(const std::string& snapshotKey);
