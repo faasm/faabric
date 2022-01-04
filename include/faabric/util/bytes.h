@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -24,6 +25,9 @@ int safeCopyToBuffer(const uint8_t* dataIn,
                      int dataLen,
                      uint8_t* buffer,
                      int bufferLen);
+
+bool* diffArrays(std::span<const uint8_t> a,
+                             std::span<const uint8_t> b);
 
 template<class T>
 T unalignedRead(const uint8_t* bytes)

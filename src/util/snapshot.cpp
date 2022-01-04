@@ -541,21 +541,27 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
         // Work out the end of the overlap
         uint32_t overlapEnd =
           std::min<uint32_t>(dirtyRegionEnd, original.size());
+        uint32_t overlapLen = overlapEnd - dirtyRegionStart;
+
+        std::span<const uint8_t> originalSub =
+          original.subspan(dirtyRegionStart, overlapLen);
+
+        uint32_t dirtyOffset = dirtyRegionStart - dirtyRegion.offset;
+        std::span<const uint8_t> dirtySub =
+          dirtyRegion.data.subspan(dirtyOffset, overlapLen);
+
+        bool* deltas = diffArrays(originalSub, dirtySub);
 
         // Iterate through and compare each byte
         bool diffInProgress = false;
         uint32_t diffInProgressStart = 0;
-        for (uint32_t i = dirtyRegionStart; i < overlapEnd; i++) {
-            const uint8_t* originalByte = original.data() + i;
-            uint8_t* dirtyByte =
-              dirtyRegion.data.data() + (i - dirtyRegion.offset);
-            bool isDirtyByte = *originalByte != *dirtyByte;
-
+        for (int i = 0; i < overlapLen; i++) {
+            bool isDirtyByte = deltas[i];
             if (isDirtyByte && !diffInProgress) {
                 // Diff starts here if it's different and diff
                 // not in progress
                 diffInProgress = true;
-                diffInProgressStart = i;
+                diffInProgressStart = dirtyRegionStart + i;
             } else if (!isDirtyByte && diffInProgress) {
                 // Diff ends at byte before thie one if it's not different and
                 // diff is in progress
@@ -574,6 +580,8 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                     (diffInProgressStart - dirtyRegion.offset), diffLength));
             }
         }
+
+        delete[] deltas;
 
         // If we've finished with a diff in progress, add a diff for the last
         // part

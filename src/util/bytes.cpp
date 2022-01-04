@@ -1,4 +1,5 @@
 #include <faabric/util/bytes.h>
+#include <faabric/util/logging.h>
 
 #include <sstream>
 #include <vector>
@@ -90,4 +91,23 @@ std::string formatByteArrayToIntString(const std::vector<uint8_t>& bytes)
 
     return ss.str();
 }
+
+bool* diffArrays(std::span<const uint8_t> a, std::span<const uint8_t> b)
+{
+    if (a.size() != b.size()) {
+        SPDLOG_ERROR(
+          "Cannot diff arrays of different sizes {} != {}", a.size(), b.size());
+        throw std::runtime_error("Cannot diff arrays of different sizes");
+    }
+
+    bool* diffs = new bool[a.size()];
+    const uint8_t* aPtr = a.data();
+    const uint8_t* bPtr = b.data();
+    for (int i = 0; i < a.size(); i++) {
+        diffs[i] = aPtr[i] != bPtr[i];
+    }
+
+    return diffs;
+}
+
 }
