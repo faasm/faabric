@@ -189,6 +189,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             int groupId = faabric::util::generateGid();
             for (auto& m : *req->mutable_messages()) {
                 m.set_groupid(groupId);
+                m.set_groupsize(req->messages_size());
             }
 
             // Invoke the functions

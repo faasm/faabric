@@ -319,6 +319,10 @@ void SegfaultDirtyTracker::clearAll()
 
 void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 {
+    if (region.empty() || region.data() == nullptr) {
+        return;
+    }
+
     SPDLOG_TRACE("Starting thread-local tracking on region size {}",
                  region.size());
     tracking = ThreadTrackingData(region);
@@ -327,6 +331,10 @@ void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 {
     SPDLOG_TRACE("Starting tracking on region size {}", region.size());
+
+    if (region.empty() || region.data() == nullptr) {
+        return;
+    }
 
     // Note that here we want to mark the memory read-only, this is to ensure
     // that only writes are counted as dirtying a page.
@@ -340,7 +348,7 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 
 void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
-    if (region.empty()) {
+    if (region.empty() || region.data() == nullptr) {
         return;
     }
 
