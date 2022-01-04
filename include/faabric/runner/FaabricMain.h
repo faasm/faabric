@@ -2,6 +2,7 @@
 
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
+#include <faabric/scheduler/FunctionMigrationServer.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotServer.h>
 #include <faabric/state/StateServer.h>
@@ -26,6 +27,8 @@ class FaabricMain
 
     void startPointToPointServer();
 
+    void startFunctionMigrationServer();
+
     void shutdown();
 
   private:
@@ -33,5 +36,6 @@ class FaabricMain
     faabric::scheduler::FunctionCallServer functionServer;
     faabric::snapshot::SnapshotServer snapshotServer;
     faabric::transport::PointToPointServer pointToPointServer;
+    faabric::scheduler::FunctionMigrationServer functionMigrationServer;
 };
 }

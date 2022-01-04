@@ -88,9 +88,18 @@ void FaabricMain::startStateServer()
     stateServer.start();
 }
 
+void FaabricMain::startFunctionMigrationServer()
+{
+    SPDLOG_INFO("Starting function migration server");
+    functionMigrationServer.start();
+}
+
 void FaabricMain::shutdown()
 {
     SPDLOG_INFO("Removing from global working set");
+
+    SPDLOG_INFO("Waiting for the function mgiration server to stop");
+    functionMigrationServer.stop();
 
     SPDLOG_INFO("Waiting for the state server to finish");
     stateServer.stop();
