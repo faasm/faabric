@@ -216,11 +216,12 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     conf.overrideCpuCount = thisCores;
 
     int nCallsOne = 10;
-    int nCallsTwo = 5;
+    int nCallsTwo = 20;
 
     std::shared_ptr<faabric::BatchExecuteRequest> reqOne =
       faabric::util::batchExecFactory("foo", "bar", nCallsOne);
     const faabric::Message firstMsg = reqOne->messages().at(0);
+    int appId = firstMsg.appid();
 
     size_t snapSize = 2 * faabric::util::HOST_PAGE_SIZE;
     auto snap = std::make_shared<faabric::util::SnapshotData>(snapSize);
@@ -265,7 +266,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     std::string otherHost = "beta";
     sch.addHostToGlobalSet(otherHost);
 
-    int otherCores = 11;
+    int otherCores = 15;
     int nCallsOffloadedOne = nCallsOne - thisCores;
 
     faabric::HostResources thisResources;
@@ -293,12 +294,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         msg.set_appidx(i);
 
         // Expect this host to handle up to its number of cores
-        bool isThisHost = i < thisCores;
-        if (isThisHost) {
-            expectedDecisionOne.addMessage(thisHost, msg);
-        } else {
-            expectedDecisionOne.addMessage(otherHost, msg);
-        }
+        std::string host = i < thisCores ? thisHost : otherHost;
+        expectedDecisionOne.addMessage(host, msg);
     }
 
     // Schedule the functions
@@ -311,6 +308,16 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
     // Check decision is as expected
     checkSchedulingDecisionEquality(actualDecisionOne, expectedDecisionOne);
+
+    // Await the results
+    for (int i = 0; i < thisCores; i++) {
+        faabric::Message& m = reqOne->mutable_messages()->at(i);
+        if (isThreads) {
+            sch.awaitThreadResult(m.id());
+        } else {
+            sch.getFunctionResult(m.id(), 10000);
+        }
+    }
 
     // Check resource requests have been made to other host
     auto resRequestsOne = faabric::scheduler::getResourceRequests();
@@ -344,7 +351,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     }
 
     REQUIRE(res.slots() == thisCores);
-    REQUIRE(res.usedslots() == thisCores);
+    REQUIRE(res.usedslots() == 0);
 
     // Check the number of messages executed locally and remotely
     REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
@@ -367,48 +374,56 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     // Set up resource response again
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
-    // Now schedule a second batch and check they're all sent to the other host
+    // Now schedule a second batch and check the decision
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
       faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
 
     const faabric::Message& firstMsg2 = reqTwo->messages().at(0);
-    faabric::util::SchedulingDecision expectedDecisionTwo(firstMsg2.appid(),
+    faabric::util::SchedulingDecision expectedDecisionTwo(appId,
                                                           firstMsg2.groupid());
     for (int i = 0; i < nCallsTwo; i++) {
         faabric::Message& msg = reqTwo->mutable_messages()->at(i);
+
+        msg.set_appid(appId);
+        msg.set_appidx(i);
 
         if (!isThreads) {
             msg.set_snapshotkey(expectedSnapshot);
         }
 
-        expectedDecisionTwo.addMessage(otherHost, msg);
+        std::string host = i < thisCores ? thisHost : otherHost;
+        expectedDecisionTwo.addMessage(host, msg);
     }
 
     // Create the batch request
     reqTwo->set_type(execMode);
 
-    // Re-register the snapshot if executing threads
-    if (isThreads) {
-        expectedSnapshot = faabric::util::getMainThreadSnapshotKey(firstMsg2);
-        reg.registerSnapshot(expectedSnapshot, snap);
-    }
-
     // Schedule the functions
     faabric::util::SchedulingDecision actualDecisionTwo =
       sch.callFunctions(reqTwo);
+
+    // Check scheduling decision
+    checkSchedulingDecisionEquality(actualDecisionTwo, expectedDecisionTwo);
+
+    // Await the results
+    for (int i = 0; i < thisCores; i++) {
+        faabric::Message& m = reqTwo->mutable_messages()->at(i);
+        if (isThreads) {
+            sch.awaitThreadResult(m.id());
+        } else {
+            sch.getFunctionResult(m.id(), 10000);
+        }
+    }
 
     // Check resource request made again
     auto resRequestsTwo = faabric::scheduler::getResourceRequests();
     REQUIRE(resRequestsTwo.size() == 1);
     REQUIRE(resRequestsTwo.at(0).first == otherHost);
 
-    // Check scheduling decision
-    checkSchedulingDecisionEquality(actualDecisionTwo, expectedDecisionTwo);
-
     // Check no other functions have been scheduled on this host
-    REQUIRE(sch.getRecordedMessagesLocal().size() == thisCores);
+    REQUIRE(sch.getRecordedMessagesLocal().size() == (2 * thisCores));
     REQUIRE(sch.getRecordedMessagesShared().size() ==
-            nCallsOffloadedOne + nCallsTwo);
+            (nCallsOne + nCallsTwo) - (2 * thisCores));
 
     if (isThreads) {
         REQUIRE(sch.getFunctionExecutorCount(m) == 1);
@@ -423,22 +438,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     REQUIRE(pTwo.first == otherHost);
 
     // Check the request to the other host
-    REQUIRE(pTwo.second->messages_size() == nCallsTwo);
-
-    // Finally, await the results for messages executing on this host
-    for (int i = 0; i < reqOne->messages_size(); i++) {
-        bool isThisHost = i < thisCores;
-        if (!isThisHost) {
-            continue;
-        }
-
-        faabric::Message& m = reqOne->mutable_messages()->at(i);
-        if (isThreads) {
-            sch.awaitThreadResult(m.id());
-        } else {
-            sch.getFunctionResult(m.id(), 10000);
-        }
-    }
+    REQUIRE(pTwo.second->messages_size() == nCallsTwo - thisCores);
 }
 
 TEST_CASE_METHOD(SlowExecutorFixture,

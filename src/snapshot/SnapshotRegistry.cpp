@@ -12,7 +12,6 @@ namespace faabric::snapshot {
 std::shared_ptr<faabric::util::SnapshotData> SnapshotRegistry::getSnapshot(
   const std::string& key)
 {
-    PROF_START(GetSnapshot)
     faabric::util::SharedLock lock(snapshotsMx);
 
     if (key.empty()) {
@@ -25,7 +24,6 @@ std::shared_ptr<faabric::util::SnapshotData> SnapshotRegistry::getSnapshot(
         throw std::runtime_error("Snapshot doesn't exist");
     }
 
-    PROF_END(GetSnapshot)
     return snapshotMap[key];
 }
 
@@ -49,6 +47,7 @@ void SnapshotRegistry::registerSnapshot(
 void SnapshotRegistry::deleteSnapshot(const std::string& key)
 {
     faabric::util::FullLock lock(snapshotsMx);
+    SPDLOG_DEBUG("Deleting snapshot {}", key);
     snapshotMap.erase(key);
 }
 
@@ -67,6 +66,7 @@ SnapshotRegistry& getSnapshotRegistry()
 void SnapshotRegistry::clear()
 {
     faabric::util::FullLock lock(snapshotsMx);
+    SPDLOG_DEBUG("Deleting all snapshots");
     snapshotMap.clear();
 }
 }
