@@ -167,12 +167,12 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         std::vector<faabric::util::SnapshotDiff> updates =
           snap->diffWithDirtyRegions(dirtyRegions);
 
-        SPDLOG_TRACE(
-          "Found {} dirty regions in main thread snapshot and {} updates",
-          dirtyRegions.size(),
-          updates.size());
-
-        if (!updates.empty()) {
+        if (updates.empty()) {
+            SPDLOG_TRACE(
+              "No updates to main thread snapshot for {} from {} dirty regions",
+              faabric::util::funcToString(msg, false),
+              dirtyRegions.size());
+        } else {
             SPDLOG_DEBUG("Updating main thread snapshot for {} with {} diffs",
                          faabric::util::funcToString(msg, false),
                          updates.size());
@@ -191,8 +191,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     // TODO - here the main thread will wait, so technically frees up a slot
     // that could be used.
-    std::string cacheKey = std::to_string(req->messages().at(0).appid()) + "_" +
-                           std::to_string(req->messages_size());
+    std::string cacheKey =
+      std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
     bool hasCachedDecision = false;
     {
         faabric::util::SharedLock lock(threadExecutionMutex);
@@ -252,6 +252,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             // Reuse the group id
             faabric::Message& m = req->mutable_messages()->at(i);
             m.set_groupid(groupId);
+            m.set_groupsize(req->messages_size());
 
             // Add to the decision
             hint.addMessage(hosts.at(i), m);
