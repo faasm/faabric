@@ -13,7 +13,8 @@ const std::string_view ABORT_MSG = "Caught stack backtrace:\n";
 constexpr int TEST_SIGNAL = 12341234;
 
 // Must be async-signal-safe - don't call allocating functions
-void crashHandler(int sig) noexcept {
+void crashHandler(int sig) noexcept
+{
     faabric::util::handleCrash(sig);
 }
 
