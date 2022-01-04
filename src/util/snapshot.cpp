@@ -536,7 +536,7 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
     }
     assert(dirtyRegionStart < dirtyRegionEnd);
 
-    // ----- Overlap with original data -----
+    // Overlap with original data
     if (original.size() > dirtyRegionStart) {
         // Work out the end of the overlap
         uint32_t overlapEnd =
@@ -595,7 +595,7 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
         }
     }
 
-    // ----- Overlap with original data -----
+    // Extension past original data
     if (dirtyRegionEnd > original.size()) {
         uint32_t diffStart =
           std::max<uint32_t>(original.size(), dirtyRegionStart);

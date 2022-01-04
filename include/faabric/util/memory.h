@@ -10,6 +10,10 @@
 
 namespace faabric::util {
 
+/*
+ * Represents a view of a segment of memory that's offset from the base of a
+ * larger linear memory region.
+ */
 class OffsetMemoryRegion
 {
   public:

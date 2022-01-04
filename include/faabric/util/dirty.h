@@ -16,6 +16,10 @@
 
 namespace faabric::util {
 
+/*
+ * Interface to all dirty page tracking. Implementation-specific boilerplate
+ * held in subclasses.
+ */
 class DirtyTracker
 {
   public:
@@ -41,6 +45,10 @@ class DirtyTracker
       std::span<uint8_t> region) = 0;
 };
 
+/*
+ * Dirty tracking implementation using soft-dirty PTEs
+ * https://www.kernel.org/doc/html/latest/admin-guide/mm/soft-dirty.html
+ */
 class SoftPTEDirtyTracker final : public DirtyTracker
 {
   public:
@@ -79,6 +87,10 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     std::vector<OffsetMemoryRegion> getDirtyRegions(uint8_t* ptr, int nPages);
 };
 
+/*
+ * Dirty tracking implementation using mprotect to make pages read-only and
+ * use segfaults resulting from writes to mark them as dirty.
+ */
 class SegfaultDirtyTracker final : public DirtyTracker
 {
   public:
@@ -105,7 +117,8 @@ class SegfaultDirtyTracker final : public DirtyTracker
     std::vector<OffsetMemoryRegion> getBothDirtyOffsets(
       std::span<uint8_t> region) override;
 
-    static void handler(int sig, siginfo_t* si, void* unused);
+    // Signal handler for the resulting segfaults
+    static void handler(int sig, siginfo_t* info, void* ucontext) noexcept;
 
   private:
     void setUpSignalHandler();

@@ -88,9 +88,11 @@ class SnapshotMergeRegion
                           OffsetMemoryRegion dirtyRegion);
 };
 
-// This function is called to calculate a diff value that can later be merged
-// into the master copy of the given snapshot. It will be used on remote hosts
-// to calculate the diffs that are to be sent back to the master host.
+/*
+ * Calculates a diff value that can later be merged into the master copy of the
+ * given snapshot. It will be used on remote hosts to calculate the diffs that
+ * are to be sent back to the master host.
+ */
 template<typename T>
 inline bool calculateDiffValue(const uint8_t* original,
                                uint8_t* updated,
@@ -140,9 +142,10 @@ inline bool calculateDiffValue(const uint8_t* original,
     return true;
 }
 
-// This function is called to apply a diff value to the master copy of a
-// snapshot, where the diff has been calculated based on a change made to
-// another copy of the same snapshot.
+/*
+ * Applies a diff value to the master copy of a snapshot, where the diff has
+ * been calculated based on a change made to another copy of the same snapshot.
+ */
 template<typename T>
 inline T applyDiffValue(const uint8_t* original,
                         const uint8_t* diff,
@@ -226,10 +229,16 @@ class SnapshotData
 
     size_t getMaxSize() const { return maxSize; }
 
-    void clearTrackedChanges();
-
+    // Returns a list of changes that have been made to the snapshot since the
+    // last time the list was cleared.
     std::vector<SnapshotDiff> getTrackedChanges();
 
+    // Clears the list of tracked changes.
+    void clearTrackedChanges();
+
+    // Returns the list of changes in the given dirty regions versus their
+    // original value in the snapshot, based on the memory regions set on this
+    // snapshot.
     std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
       std::vector<OffsetMemoryRegion> dirtyRegions);
 

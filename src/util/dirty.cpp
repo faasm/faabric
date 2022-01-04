@@ -274,7 +274,6 @@ SegfaultDirtyTracker::SegfaultDirtyTracker()
 
 void SegfaultDirtyTracker::setUpSignalHandler()
 {
-    // Set up sig handler
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO;
 
@@ -289,14 +288,15 @@ void SegfaultDirtyTracker::setUpSignalHandler()
     SPDLOG_TRACE("Set up dirty tracking signal handler");
 }
 
-void SegfaultDirtyTracker::handler(int sig, siginfo_t* info, void* ucontext)
+void SegfaultDirtyTracker::handler(int sig,
+                                   siginfo_t* info,
+                                   void* ucontext) noexcept
 {
     void* faultAddr = info->si_addr;
 
     if (!tracking.isInitialised()) {
         SPDLOG_ERROR("Unexpected segfault, reraising");
-        faabric::util::setUpCrashHandler(SIGSEGV);
-        raise(sig);
+        faabric::util::handleCrash(sig);
     }
 
     tracking.markDirtyPage(faultAddr);
