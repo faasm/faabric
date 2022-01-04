@@ -117,7 +117,8 @@ void Executor::finish()
 }
 
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions)
 {
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
@@ -159,9 +160,10 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker.stopThreadLocalTracking(memView);
 
         std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions =
-          tracker.getDirtyOffsets(memView);
+          tracker.getBothDirtyOffsets(memView);
 
         // Apply changes to snapshot
+        snap->fillGapsWithOverwriteRegions();
         std::vector<faabric::util::SnapshotDiff> updates =
           snap->diffWithDirtyRegions(dirtyRegions);
 
@@ -177,6 +179,14 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             snap->queueDiffs(updates);
             snap->writeQueuedDiffs();
         }
+
+        snap->clearMergeRegions();
+    }
+
+    // Now we have to apply the merge regions for this parallel section
+    for (const auto& mr : mergeRegions) {
+        snap->addMergeRegion(
+          mr.offset, mr.length, mr.dataType, mr.operation, true);
     }
 
     // TODO - here the main thread will wait, so technically frees up a slot
@@ -273,6 +283,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     snap->mapToMemory(memView);
 
     // Start tracking again
+    memView = getMemoryView();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 

@@ -119,7 +119,7 @@ int handleFakeDiffsThreadedFunction(
 
         // Dispatch the message
         std::vector<std::pair<uint32_t, int32_t>> results =
-          exec->executeThreads(req);
+          exec->executeThreads(req, {});
 
         // Check results
         for (auto [mid, res] : results) {
@@ -239,21 +239,21 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
             }
 
             // Set merge regions
-            snap->addMergeRegion(reductionAOffset,
-                                 sizeof(int32_t),
-                                 SnapshotDataType::Int,
-                                 SnapshotMergeOperation::Sum,
-                                 true);
+            std::vector<faabric::util::SnapshotMergeRegion> mergeRegions = {
+                { reductionAOffset,
+                  sizeof(int32_t),
+                  SnapshotDataType::Int,
+                  SnapshotMergeOperation::Sum },
 
-            snap->addMergeRegion(reductionBOffset,
-                                 sizeof(int32_t),
-                                 SnapshotDataType::Int,
-                                 SnapshotMergeOperation::Sum,
-                                 true);
+                { reductionBOffset,
+                  sizeof(int32_t),
+                  SnapshotDataType::Int,
+                  SnapshotMergeOperation::Sum }
+            };
 
             // Execute the threads
             std::vector<std::pair<uint32_t, int32_t>> results =
-              exec->executeThreads(req);
+              exec->executeThreads(req, mergeRegions);
 
             // Check thread results
             for (auto [mid, res] : results) {

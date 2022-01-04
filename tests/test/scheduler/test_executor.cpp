@@ -106,7 +106,7 @@ int32_t TestExecutor::executeTask(
 
         // Call the threads
         std::vector<std::pair<uint32_t, int32_t>> results =
-          executeThreads(chainedReq);
+          executeThreads(chainedReq, {});
 
         // Await the results
         for (auto [mid, result] : results) {

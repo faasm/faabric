@@ -15,6 +15,7 @@
 #include <faabric/util/dirty.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
+#include <faabric/util/timing.h>
 
 namespace faabric::util {
 
@@ -54,6 +55,7 @@ SoftPTEDirtyTracker::~SoftPTEDirtyTracker()
 
 void SoftPTEDirtyTracker::clearAll()
 {
+    PROF_START(ClearSoftPTE)
     // Write 4 to the file to reset and start tracking
     // https://www.kernel.org/doc/html/v5.4/admin-guide/mm/soft-dirty.html
     char value[] = "4";
@@ -66,6 +68,7 @@ void SoftPTEDirtyTracker::clearAll()
     }
 
     ::rewind(clearRefsFile);
+    PROF_END(ClearSoftPTE)
 }
 
 void SoftPTEDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -222,8 +225,6 @@ class ThreadTrackingData
         ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
         long pageNum = offset / HOST_PAGE_SIZE;
         pageFlags[pageNum] = true;
-
-        SPDLOG_TRACE("Segfault offset {}, dirty page: {}", offset, pageNum);
     }
 
     std::vector<OffsetMemoryRegion> getDirtyRegions()
@@ -274,8 +275,10 @@ SegfaultDirtyTracker::SegfaultDirtyTracker()
 
 void SegfaultDirtyTracker::setUpSignalHandler()
 {
+    // See sigaction docs
+    // https://www.man7.org/linux/man-pages/man2/sigaction.2.html
     struct sigaction sa;
-    sa.sa_flags = SA_SIGINFO;
+    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
 
     sigemptyset(&sa.sa_mask);
     sigaddset(&sa.sa_mask, SIGSEGV);
@@ -295,7 +298,7 @@ void SegfaultDirtyTracker::handler(int sig,
     void* faultAddr = info->si_addr;
 
     if (!tracking.isInitialised()) {
-        SPDLOG_ERROR("Unexpected segfault, reraising");
+        // Unexpected segfault, treat as normal
         faabric::util::handleCrash(sig);
     }
 
@@ -336,6 +339,8 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
         return;
     }
 
+    PROF_START(MprotectStart)
+
     // Note that here we want to mark the memory read-only, this is to ensure
     // that only writes are counted as dirtying a page.
     if (::mprotect(region.data(), region.size(), PROT_READ) == -1) {
@@ -344,6 +349,8 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
                      strerror(errno));
         throw std::runtime_error("Failed mprotect to start tracking");
     }
+
+    PROF_END(MprotectStart)
 }
 
 void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
@@ -354,6 +361,8 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 
     SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
 
+    PROF_START(MprotectEnd)
+
     if (::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE) ==
         -1) {
         SPDLOG_ERROR("Failed to stop tracking with mprotect: {} ({})",
@@ -361,6 +370,8 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
                      strerror(errno));
         throw std::runtime_error("Failed mprotect to stop tracking");
     }
+
+    PROF_END(MprotectEnd)
 }
 
 void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)

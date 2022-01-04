@@ -52,7 +52,8 @@ class Executor
     virtual ~Executor() = default;
 
     std::vector<std::pair<uint32_t, int32_t>> executeThreads(
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions);
 
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
