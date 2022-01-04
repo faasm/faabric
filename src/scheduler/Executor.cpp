@@ -147,6 +147,9 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     if (exists) {
+        SPDLOG_DEBUG(
+          "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
+
         // Get main snapshot
         snap = reg.getSnapshot(snapshotKey);
         std::span<uint8_t> memView = getMemoryView();
@@ -161,6 +164,11 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         // Apply changes to snapshot
         std::vector<faabric::util::SnapshotDiff> updates =
           snap->diffWithDirtyRegions(dirtyRegions);
+
+        SPDLOG_TRACE(
+          "Found {} dirty regions in main thread snapshot and {} updates",
+          dirtyRegions.size(),
+          updates.size());
 
         if (!updates.empty()) {
             SPDLOG_DEBUG("Updating main thread snapshot for {} with {} diffs",

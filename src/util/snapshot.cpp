@@ -556,9 +556,6 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                 // not in progress
                 diffInProgress = true;
                 diffInProgressStart = i;
-                SPDLOG_TRACE("Staring {} overwrite diff at {}",
-                             snapshotDataTypeStr(dataType),
-                             diffInProgressStart);
             } else if (!isDirtyByte && diffInProgress) {
                 // Diff ends at byte before thie one if it's not different and
                 // diff is in progress
