@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <list>
 #include <span>
 #include <stdexcept>
 #include <string>

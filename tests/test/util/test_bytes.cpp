@@ -185,31 +185,23 @@ TEST_CASE("Test diffing byte array regions", "[util]")
 
     SECTION("Single length")
     {
-        a = {0, 1, 2, 3, 4};
-        b = {0, 1, 3, 3, 4};
-        expected = {
-            {2, 1}
-        };
+        a = { 0, 1, 2, 3, 4 };
+        b = { 0, 1, 3, 3, 4 };
+        expected = { { 2, 1 } };
     }
 
     SECTION("Difference at start")
     {
-        a = {0, 1, 2, 3, 4, 5, 6};
-        b = {1, 2, 3, 3, 3, 4, 6};
-        expected = {
-            {0, 3},
-            {4, 2}
-        };
+        a = { 0, 1, 2, 3, 4, 5, 6 };
+        b = { 1, 2, 3, 3, 3, 4, 6 };
+        expected = { { 0, 3 }, { 4, 2 } };
     }
 
     SECTION("Difference at end")
     {
-        a = {0, 1, 2, 3, 4, 5, 6};
-        b = {0, 1, 1, 3, 3, 4, 5};
-        expected = {
-            {2, 1},
-            {4, 3}
-        };
+        a = { 0, 1, 2, 3, 4, 5, 6 };
+        b = { 0, 1, 1, 3, 3, 4, 5 };
+        expected = { { 2, 1 }, { 4, 3 } };
     }
 
     std::vector<std::pair<uint32_t, uint32_t>> actual =

@@ -1,7 +1,9 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
 
 #include <sstream>
+#include <stack>
 #include <vector>
 
 namespace faabric::util {
@@ -98,7 +100,7 @@ std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
   std::span<const uint8_t> a,
   std::span<const uint8_t> b)
 {
-    std::vector<bool> diffs = diffArrays(a, b);
+    PROF_START(ByteArrayDiff)
     std::vector<std::pair<uint32_t, uint32_t>> regions;
 
     // Iterate through diffs and work out start and finish offsets of each dirty
@@ -106,11 +108,12 @@ std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
     uint32_t diffStart = 0;
     bool diffInProgress = false;
     for (uint32_t i = 0; i < a.size(); i++) {
-        if (diffs.at(i) && !diffInProgress) {
+        bool dirty = a.data()[i] != b.data()[i];
+        if (dirty && !diffInProgress) {
             // Starts at this byte
-            diffStart = i;
             diffInProgress = true;
-        } else if (!diffs.at(i) && diffInProgress) {
+            diffStart = i;
+        } else if (!dirty && diffInProgress) {
             // Finished on byte before
             diffInProgress = false;
             regions.emplace_back(diffStart, i - diffStart);
@@ -122,6 +125,7 @@ std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
         regions.emplace_back(diffStart, a.size() - diffStart);
     }
 
+    PROF_END(ByteArrayDiff)
     return regions;
 }
 
@@ -135,10 +139,8 @@ std::vector<bool> diffArrays(std::span<const uint8_t> a,
     }
 
     std::vector<bool> diffs(a.size(), false);
-    const uint8_t* aPtr = a.data();
-    const uint8_t* bPtr = b.data();
     for (int i = 0; i < a.size(); i++) {
-        diffs[i] = aPtr[i] != bPtr[i];
+        diffs[i] = a.data()[i] != b.data()[i];
     }
 
     return diffs;
