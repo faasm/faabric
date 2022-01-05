@@ -11,7 +11,7 @@
 #define CLEAR_REFS "/proc/self/clear_refs"
 #define PAGEMAP "/proc/self/pagemap"
 
-#define PAGEMAP_ENTRY_BYTES 8
+#define PAGEMAP_ENTRY_BYTES sizeof(uint64_t)
 #define PAGEMAP_SOFT_DIRTY (1Ull << 55)
 
 namespace faabric::util {
@@ -81,13 +81,6 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     FILE* clearRefsFile = nullptr;
 
     FILE* pagemapFile = nullptr;
-
-    std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries);
-
-    std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
-
-    std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(uint8_t* ptr,
-                                                               int nPages);
 };
 
 /*

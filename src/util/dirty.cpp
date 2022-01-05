@@ -52,6 +52,9 @@ SoftPTEDirtyTracker::SoftPTEDirtyTracker()
         SPDLOG_ERROR("Could not open pagemap ({})", strerror(errno));
         throw std::runtime_error("Could not open pagemap");
     }
+
+    // Disable buffering, we want to repeatedly read updates to the same file
+    setbuf(pagemapFile, nullptr);
 }
 
 SoftPTEDirtyTracker::~SoftPTEDirtyTracker()
@@ -101,17 +104,58 @@ void SoftPTEDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
 std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyOffsets(
   std::span<uint8_t> region)
 {
-    // Get dirty regions
+    PROF_START(GetDirtyRegions)
+
     int nPages = getRequiredHostPages(region.size());
-    std::vector<int> dirtyPageNumbers =
-      getDirtyPageNumbers(region.data(), nPages);
+    uint8_t* ptr = region.data();
+    uintptr_t vptr = (uintptr_t)ptr;
 
-    SPDLOG_DEBUG(
-      "Region has {}/{} dirty pages", dirtyPageNumbers.size(), nPages);
+    // Work out offset for this pointer in the pagemap
+    off_t offset = (vptr / HOST_PAGE_SIZE) * PAGEMAP_ENTRY_BYTES;
 
-    std::vector<std::pair<uint32_t, uint32_t>> regions =
-      getDirtyRegions(region.data(), nPages);
+    // Skip to location of this page (note that fd is open in binary mode)
+    int r = ::fseek(pagemapFile, offset, 0);
+    if (r != 0) {
+        SPDLOG_ERROR("Could not seek pagemap to {}, returned {}", offset, r);
+        throw std::runtime_error("Could not seek pagemap");
+    }
 
+    // Read the entries
+    std::vector<uint64_t> entries(nPages, 0);
+    int nRead =
+      ::fread(entries.data(), PAGEMAP_ENTRY_BYTES, nPages, pagemapFile);
+    if (nRead != nPages) {
+        SPDLOG_ERROR("Could not read pagemap ({} != {})", nRead, nPages);
+        throw std::runtime_error("Could not read pagemap");
+    }
+
+    // Iterate through the pagemap entries to work out which are dirty
+    std::vector<std::pair<uint32_t, uint32_t>> regions;
+    std::vector<int> dirtyPages;
+    bool isRegionInProgress = false;
+    int pageStart = 0;
+    for (int i = 0; i < nPages; i++) {
+        bool isDirty = entries.at(i) & PAGEMAP_SOFT_DIRTY;
+
+        if (isDirty && !isRegionInProgress) {
+            isRegionInProgress = true;
+            pageStart = i;
+        } else if (!isDirty && isRegionInProgress) {
+            isRegionInProgress = false;
+            regions.emplace_back(pageStart * HOST_PAGE_SIZE,
+                                 (i - pageStart) * HOST_PAGE_SIZE);
+        }
+    }
+
+    if (isRegionInProgress) {
+        regions.emplace_back(pageStart * HOST_PAGE_SIZE,
+                             (nPages - pageStart) * HOST_PAGE_SIZE);
+    }
+
+    SPDLOG_TRACE(
+      "Out of {} pages, found {} dirty regions", nPages, regions.size());
+
+    PROF_END(GetDirtyRegions)
     return regions;
 }
 
@@ -125,77 +169,6 @@ std::vector<std::pair<uint32_t, uint32_t>>
 SoftPTEDirtyTracker::getThreadLocalDirtyOffsets(std::span<uint8_t> region)
 {
     return {};
-}
-
-std::vector<uint64_t> SoftPTEDirtyTracker::readPagemapEntries(uintptr_t ptr,
-                                                              int nEntries)
-{
-    // Work out offset for this pointer in the pagemap
-    off_t offset = (ptr / getpagesize()) * PAGEMAP_ENTRY_BYTES;
-
-    // Skip to location of this page
-    int r = fseek(pagemapFile, offset, SEEK_SET);
-    if (r < 0) {
-        SPDLOG_ERROR("Could not seek pagemap ({})", r);
-        throw std::runtime_error("Could not seek pagemap");
-    }
-
-    // Read the entries
-    std::vector<uint64_t> entries(nEntries, 0);
-    int nRead =
-      fread(entries.data(), PAGEMAP_ENTRY_BYTES, nEntries, pagemapFile);
-    if (nRead != nEntries) {
-        SPDLOG_ERROR("Could not read pagemap ({} != {})", nRead, nEntries);
-        throw std::runtime_error("Could not read pagemap");
-    }
-
-    return entries;
-}
-
-std::vector<int> SoftPTEDirtyTracker::getDirtyPageNumbers(const uint8_t* ptr,
-                                                          int nPages)
-{
-    uintptr_t vptr = (uintptr_t)ptr;
-
-    // Get the pagemap entries
-    std::vector<uint64_t> entries = readPagemapEntries(vptr, nPages);
-
-    // Iterate through to get boolean flags
-    std::vector<int> pageNumbers;
-    for (int i = 0; i < nPages; i++) {
-        if (entries.at(i) & PAGEMAP_SOFT_DIRTY) {
-            pageNumbers.emplace_back(i);
-        }
-    }
-
-    return pageNumbers;
-}
-
-std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyRegions(
-  uint8_t* ptr,
-  int nPages)
-{
-    PROF_START(GetDirtyRegions)
-    std::vector<int> dirtyPages = getDirtyPageNumbers(ptr, nPages);
-
-    // Add a new region for each page, unless the one before it was also
-    // dirty, in which case we extend the previous one
-    std::vector<std::pair<uint32_t, uint32_t>> regions;
-    for (int p = 0; p < dirtyPages.size(); p++) {
-        int thisPageNum = dirtyPages.at(p);
-
-        if (p > 0 && dirtyPages.at(p - 1) == thisPageNum - 1) {
-            // Previous page was also dirty, update previous region
-            regions.back().second += HOST_PAGE_SIZE;
-        } else {
-            // Previous page wasn't dirty, add new region
-            uint32_t thisPageStart = thisPageNum * HOST_PAGE_SIZE;
-            regions.emplace_back(thisPageStart, HOST_PAGE_SIZE);
-        }
-    }
-
-    PROF_END(GetDirtyRegions)
-    return regions;
 }
 
 void SoftPTEDirtyTracker::reinitialise() {}
