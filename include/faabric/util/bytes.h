@@ -26,7 +26,18 @@ int safeCopyToBuffer(const uint8_t* dataIn,
                      uint8_t* buffer,
                      int bufferLen);
 
-bool* diffArrays(std::span<const uint8_t> a,
+/*
+ * Returns a list of pairs of <start, length> for any bytes differing between
+ * the two arrays.
+ */
+std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
+  std::span<const uint8_t> a,
+  std::span<const uint8_t> b);
+
+/*
+ * Returns a list of flags marking which bytes differ between the two arrays.
+ */
+std::vector<bool> diffArrays(std::span<const uint8_t> a,
                              std::span<const uint8_t> b);
 
 template<class T>

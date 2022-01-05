@@ -526,7 +526,7 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
     // - Dirty region overlaps original and we can compare
     // - Dirty region is past original, in which case we need to extend
 
-    // First we calculate where the dirty region start and ends. If the merge
+    // First we calculate where the dirty region starts and ends. If the merge
     // region ends before the dirty region, we take that as the limit. If the
     // merge region is zero length, we take the whole dirty region.
     uint32_t dirtyRegionStart = std::max<uint32_t>(dirtyRegion.offset, offset);
@@ -543,6 +543,8 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
           std::min<uint32_t>(dirtyRegionEnd, original.size());
         uint32_t overlapLen = overlapEnd - dirtyRegionStart;
 
+        // Get the subsections of both the original data and dirty region to
+        // compare
         std::span<const uint8_t> originalSub =
           original.subspan(dirtyRegionStart, overlapLen);
 
@@ -550,53 +552,22 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
         std::span<const uint8_t> dirtySub =
           dirtyRegion.data.subspan(dirtyOffset, overlapLen);
 
-        bool* deltas = diffArrays(originalSub, dirtySub);
+        std::vector<std::pair<uint32_t, uint32_t>> regions =
+          diffArrayRegions(originalSub, dirtySub);
 
-        // Iterate through and compare each byte
-        bool diffInProgress = false;
-        uint32_t diffInProgressStart = 0;
-        for (int i = 0; i < overlapLen; i++) {
-            bool isDirtyByte = deltas[i];
-            if (isDirtyByte && !diffInProgress) {
-                // Diff starts here if it's different and diff
-                // not in progress
-                diffInProgress = true;
-                diffInProgressStart = dirtyRegionStart + i;
-            } else if (!isDirtyByte && diffInProgress) {
-                // Diff ends at byte before thie one if it's not different and
-                // diff is in progress
-                uint32_t diffLength = i - diffInProgressStart;
-                SPDLOG_TRACE("Adding {} overwrite diff at {}-{}",
-                             snapshotDataTypeStr(dataType),
-                             diffInProgressStart,
-                             diffInProgressStart + diffLength);
-
-                diffInProgress = false;
-                diffs.emplace_back(
-                  dataType,
-                  operation,
-                  diffInProgressStart,
-                  dirtyRegion.data.subspan(
-                    (diffInProgressStart - dirtyRegion.offset), diffLength));
-            }
-        }
-
-        delete[] deltas;
-
-        // If we've finished with a diff in progress, add a diff for the last
-        // part
-        if (diffInProgress) {
-            uint32_t diffLength = overlapEnd - diffInProgressStart;
-            SPDLOG_TRACE("Adding final {} overwrite diff at {}-{}",
+        // Iterate through and build diffs
+        for (auto [start, len] : regions) {
+            uint32_t diffStart = dirtyRegionStart + start;
+            SPDLOG_TRACE("Adding {} overwrite diff at {}-{}",
                          snapshotDataTypeStr(dataType),
-                         diffInProgressStart,
-                         diffInProgressStart + diffLength);
+                         diffStart,
+                         diffStart + len);
+
             diffs.emplace_back(
               dataType,
               operation,
-              diffInProgressStart,
-              dirtyRegion.data.subspan(
-                (diffInProgressStart - dirtyRegion.offset), diffLength));
+              diffStart,
+              dirtyRegion.data.subspan(dirtyOffset + start, len));
         }
     }
 

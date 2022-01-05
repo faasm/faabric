@@ -92,7 +92,41 @@ std::string formatByteArrayToIntString(const std::vector<uint8_t>& bytes)
     return ss.str();
 }
 
-bool* diffArrays(std::span<const uint8_t> a, std::span<const uint8_t> b)
+// This function is called in a tight loop over large regions of data so
+// make sure it stays efficient.
+std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
+  std::span<const uint8_t> a,
+  std::span<const uint8_t> b)
+{
+    std::vector<bool> diffs = diffArrays(a, b);
+    std::vector<std::pair<uint32_t, uint32_t>> regions;
+
+    // Iterate through diffs and work out start and finish offsets of each dirty
+    // region
+    uint32_t diffStart = 0;
+    bool diffInProgress = false;
+    for (uint32_t i = 0; i < a.size(); i++) {
+        if (diffs.at(i) && !diffInProgress) {
+            // Starts at this byte
+            diffStart = i;
+            diffInProgress = true;
+        } else if (!diffs.at(i) && diffInProgress) {
+            // Finished on byte before
+            diffInProgress = false;
+            regions.emplace_back(diffStart, i - diffStart);
+        }
+    }
+
+    // If we finish with a diff in progress, add it
+    if (diffInProgress) {
+        regions.emplace_back(diffStart, a.size() - diffStart);
+    }
+
+    return regions;
+}
+
+std::vector<bool> diffArrays(std::span<const uint8_t> a,
+                             std::span<const uint8_t> b)
 {
     if (a.size() != b.size()) {
         SPDLOG_ERROR(
@@ -100,7 +134,7 @@ bool* diffArrays(std::span<const uint8_t> a, std::span<const uint8_t> b)
         throw std::runtime_error("Cannot diff arrays of different sizes");
     }
 
-    bool* diffs = new bool[a.size()];
+    std::vector<bool> diffs(a.size(), false);
     const uint8_t* aPtr = a.data();
     const uint8_t* bPtr = b.data();
     for (int i = 0; i < a.size(); i++) {
