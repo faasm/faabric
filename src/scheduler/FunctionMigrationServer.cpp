@@ -41,6 +41,8 @@ void FunctionMigrationServer::start()
             // stop. Thus we check for migration oportunities.
             if (returnVal == std::cv_status::timeout) {
                 SPDLOG_INFO("Checking for migration oportunities");
+                faabric::scheduler::getScheduler()
+                  .checkForMigrationOpportunities();
             }
         };
 

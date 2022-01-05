@@ -20,6 +20,10 @@
 
 namespace faabric::scheduler {
 
+typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
+                  std::shared_ptr<faabric::util::SchedulingDecision>>
+  InFlightPair;
+
 class Scheduler;
 
 Scheduler& getScheduler();
@@ -189,6 +193,16 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    // ----------------------------------
+    // Function migration
+    // ----------------------------------
+    void checkForMigrationOpportunities(
+      faabric::util::MigrationStrategy =
+        faabric::util::MigrationStrategy::BIN_PACK);
+
+    std::shared_ptr<faabric::PendingMigrations> canAppBeMigrated(
+      uint32_t appId);
+
   private:
     std::string thisHost;
 
@@ -259,6 +273,11 @@ class Scheduler
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;
+
+    // --- Function migration ---
+    std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
+    std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
+      pendingMigrations;
 };
 
 }

@@ -242,3 +242,20 @@ message PointToPointMappings {
 
     repeated PointToPointMapping mappings = 3;
 }
+
+// ---------------------------------------------
+// FUNCTION MIGRATIONS
+// ---------------------------------------------
+
+message PendingMigrations {
+    int32 appId = 1;
+    int32 groupId = 2;
+
+    message PendingMigration {
+        int32 messageId = 1;
+        string srcHost = 2;
+        string dstHost = 3;
+    }
+
+    repeated PendingMigration migrations = 3;
+}

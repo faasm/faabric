@@ -8,6 +8,31 @@
 
 namespace faabric::util {
 
+// Scheduling topology hints help the scheduler decide which host to assign new
+// requests in a batch.
+//  - NORMAL: bin-packs requests to slots in hosts starting from the master
+//            host, and overloadds the master if it runs out of resources.
+//  - NEVER_ALONE: never allocates a single (non-master) request to a host
+//                 without other requests of the batch.
+enum SchedulingTopologyHint
+{
+    NORMAL,
+    FORCE_LOCAL,
+    NEVER_ALONE
+};
+
+// Migration strategies help the scheduler decide wether the scheduling decision
+// for a batch request could be changed with the new set of available resources.
+// - BIN_PACK: sort hosts by the number of functions from the batch they are
+//             running. Bin-pack batches in increasing order to hosts in
+//             decreasing order.
+// - EMPTY_HOSTS: pack batches in increasing order to empty hosts.
+enum MigrationStrategy
+{
+    BIN_PACK,
+    EMPTY_HOSTS
+};
+
 class SchedulingDecision
 {
   public:
@@ -32,6 +57,8 @@ class SchedulingDecision
 
     std::string returnHost;
 
+    SchedulingTopologyHint topologyHint = SchedulingTopologyHint::NORMAL;
+
     void addMessage(const std::string& host, const faabric::Message& msg);
 
     void addMessage(const std::string& host, int32_t messageId, int32_t appIdx);
@@ -40,18 +67,5 @@ class SchedulingDecision
                     int32_t messageId,
                     int32_t appIdx,
                     int32_t groupIdx);
-};
-
-// Scheduling topology hints help the scheduler decide which host to assign new
-// requests in a batch.
-//  - NORMAL: bin-packs requests to slots in hosts starting from the master
-//            host, and overloadds the master if it runs out of resources.
-//  - NEVER_ALONE: never allocates a single (non-master) request to a host
-//                 without other requests of the batch.
-enum SchedulingTopologyHint
-{
-    NORMAL,
-    FORCE_LOCAL,
-    NEVER_ALONE
 };
 }

@@ -137,6 +137,10 @@ void Scheduler::reset()
     threadResults.clear();
     pushedSnapshotsMap.clear();
 
+    // Reset function migration tracking
+    inFlightRequests.clear();
+    pendingMigrations.clear();
+
     // Records
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
@@ -422,6 +426,8 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
     for (int i = 0; i < hosts.size(); i++) {
         decision.addMessage(hosts.at(i), req->messages().at(i));
     }
+    // Cache the topology hint used for the decision in the actual decision
+    decision.topologyHint = topologyHint;
 
     return decision;
 }
@@ -442,6 +448,13 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
+
+    // Record in-flight request
+    // TODO - when we delete them
+    std::string funcStrWithId = faabric::util::funcToString(firstMsg, true);
+    auto decisionPtr =
+      std::make_shared<faabric::util::SchedulingDecision>(decision);
+    inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
 
     if (decision.hosts.size() != nMessages) {
         SPDLOG_ERROR(
@@ -1025,6 +1038,10 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
+    if (host == thisHost) {
+        return thisHostResources;
+    }
+
     return getFunctionCallClient(host).getResources();
 }
 
@@ -1114,5 +1131,112 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
     ExecGraphNode node{ .msg = result, .children = children };
 
     return node;
+}
+
+void Scheduler::checkForMigrationOpportunities(
+  faabric::util::MigrationStrategy migrationStrategy)
+{
+    SharedLock lock(mx);
+
+    // For each in-flight request, check if there is an opportunity to migrate
+    for (const auto& app : inFlightRequests) {
+        auto req = app.second.first;
+        auto originalDecision = *app.second.second;
+
+        // If we have already recorded a pending migration for this req, skip
+        if (pendingMigrations.find(app.first) != pendingMigrations.end()) {
+            continue;
+        }
+
+        faabric::PendingMigrations msg;
+        msg.set_appid(originalDecision.appId);
+        // TODO - generate a new groupId here for processes to wait on during
+        // the migration?
+        // msg.set_groupid();
+
+        if (migrationStrategy == faabric::util::MigrationStrategy::BIN_PACK) {
+            // We assume the batch was originally scheduled using bin-packing,
+            // thus the scheduling decision has at the begining (left) the hosts
+            // with the most allocated requests, and at the end (right) the
+            // hosts with the fewest.
+            // To check for migration oportunities, we compare a pointer to
+            // the possible destination of the migration (left), with one to the
+            // possible source of the migration (right).
+            // NOTE - this is a slight simplification, but makes the code
+            // simpler.
+            auto left = originalDecision.hosts.begin();
+            auto right = originalDecision.hosts.end() - 1;
+            faabric::HostResources r = getHostResources(*left);
+            auto nAvailable = [&r]() -> int {
+                return r.slots() - r.usedslots();
+            };
+            auto claimSlot = [&r]() {
+                int currentUsedSlots = r.usedslots();
+                r.set_usedslots(currentUsedSlots + 1);
+            };
+            while (left < right) {
+                // If both pointers point to the same host, no migration
+                // opportunity, and must check another possible source of
+                // the migration
+                if (*left == *right) {
+                    --right;
+                    continue;
+                }
+
+                // If the left pointer (possible destination of the migration)
+                // is out of available resources, no migration opportunity, and
+                // must check another possible destination of migration
+                if (nAvailable() == 0) {
+                    auto oldHost = *left;
+                    ++left;
+                    if (*left != oldHost) {
+                        r = getHostResources(*left);
+                    }
+                    continue;
+                }
+
+                // If each pointer points to a request scheduled in a different
+                // host, and the possible destination has slots, there is a
+                // migration opportunity
+                auto* migration = msg.add_migrations();
+                auto msgIdPtr =
+                  originalDecision.messageIds.begin() +
+                  std::distance(originalDecision.hosts.begin(), right);
+                migration->set_messageid(*msgIdPtr);
+                migration->set_srchost(*right);
+                migration->set_dsthost(*left);
+                // Decrement by one the availability, and check for more
+                // possible sources of migration
+                claimSlot();
+                --right;
+            }
+        } else {
+            SPDLOG_ERROR("Unrecognised migration strategy: {}",
+                         migrationStrategy);
+            throw std::runtime_error("Unrecognised migration strategy.");
+        }
+
+        if (msg.migrations_size() > 0) {
+            pendingMigrations[msg.appid()] =
+              std::make_shared<faabric::PendingMigrations>(msg);
+            SPDLOG_DEBUG("Detected migration opportunity for app: {}",
+                         msg.appid());
+        } else {
+            SPDLOG_DEBUG("No migration opportunity detected for app: {}",
+                         msg.appid());
+        }
+    }
+}
+
+std::shared_ptr<faabric::PendingMigrations> Scheduler::canAppBeMigrated(
+  uint32_t appId)
+{
+    SharedLock lock(mx);
+
+    if (pendingMigrations.find(appId) == pendingMigrations.end()) {
+        return nullptr;
+    }
+
+    return pendingMigrations[appId];
 }
 }

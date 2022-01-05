@@ -42,6 +42,9 @@ void FaabricMain::startBackground()
     // Work sharing
     startFunctionCallServer();
 
+    // Start function migration server
+    startFunctionMigrationServer();
+
     PROF_SUMMARY
 }
 
