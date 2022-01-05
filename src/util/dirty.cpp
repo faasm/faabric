@@ -209,12 +209,14 @@ class ThreadTrackingData
   public:
     ThreadTrackingData() = default;
 
+    ~ThreadTrackingData() { delete[] pageFlags; }
+
     ThreadTrackingData(std::span<uint8_t> region)
       : regionBase(region.data())
       , regionTop(region.data() + region.size())
       , nPages(faabric::util::getRequiredHostPages(region.size()))
     {
-        pageFlags = std::vector<bool>(nPages, false);
+        pageFlags = new bool[nPages];
     }
 
     void markDirtyPage(void* addr)
@@ -234,11 +236,12 @@ class ThreadTrackingData
 
         uint32_t diffPageStart = 0;
         bool diffInProgress = false;
-        for (int i = 0; i < pageFlags.size(); i++) {
-            if (pageFlags.at(i) && !diffInProgress) {
+        for (int i = 0; i < nPages; i++) {
+            bool isDirty = pageFlags[i];
+            if (isDirty && !diffInProgress) {
                 diffInProgress = true;
                 diffPageStart = i;
-            } else if (!pageFlags.at(i) && diffInProgress) {
+            } else if (!isDirty && diffInProgress) {
                 diffInProgress = false;
                 dirty.emplace_back(diffPageStart * HOST_PAGE_SIZE,
                                    (i - diffPageStart) * HOST_PAGE_SIZE);
@@ -247,8 +250,7 @@ class ThreadTrackingData
 
         if (diffInProgress) {
             dirty.emplace_back(diffPageStart * HOST_PAGE_SIZE,
-                               (pageFlags.size() - diffPageStart) *
-                                 HOST_PAGE_SIZE);
+                               (nPages - diffPageStart) * HOST_PAGE_SIZE);
         }
 
         PROF_END(GetDirtyRegions)
@@ -261,7 +263,10 @@ class ThreadTrackingData
     uint8_t* regionBase = nullptr;
     uint8_t* regionTop = nullptr;
     int nPages = 0;
-    std::vector<bool> pageFlags;
+
+    // Do not use a std::vector<bool> here as it's an order of magnitude slower
+    // in the tight loop
+    bool* pageFlags;
 };
 
 static thread_local ThreadTrackingData tracking;
