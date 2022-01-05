@@ -46,11 +46,18 @@ SoftPTEDirtyTracker::SoftPTEDirtyTracker()
         SPDLOG_ERROR("Could not open clear_refs ({})", strerror(errno));
         throw std::runtime_error("Could not open clear_refs");
     }
+
+    pagemapFile = ::fopen(PAGEMAP, "rb");
+    if (pagemapFile == nullptr) {
+        SPDLOG_ERROR("Could not open pagemap ({})", strerror(errno));
+        throw std::runtime_error("Could not open pagemap");
+    }
 }
 
 SoftPTEDirtyTracker::~SoftPTEDirtyTracker()
 {
     ::fclose(clearRefsFile);
+    ::fclose(pagemapFile);
 }
 
 void SoftPTEDirtyTracker::clearAll()
@@ -126,15 +133,8 @@ std::vector<uint64_t> SoftPTEDirtyTracker::readPagemapEntries(uintptr_t ptr,
     // Work out offset for this pointer in the pagemap
     off_t offset = (ptr / getpagesize()) * PAGEMAP_ENTRY_BYTES;
 
-    // Open the pagemap
-    FILE* fd = fopen(PAGEMAP, "rb");
-    if (fd == nullptr) {
-        SPDLOG_ERROR("Could not open pagemap ({})", strerror(errno));
-        throw std::runtime_error("Could not open pagemap");
-    }
-
     // Skip to location of this page
-    int r = fseek(fd, offset, SEEK_SET);
+    int r = fseek(pagemapFile, offset, SEEK_SET);
     if (r < 0) {
         SPDLOG_ERROR("Could not seek pagemap ({})", r);
         throw std::runtime_error("Could not seek pagemap");
@@ -142,13 +142,12 @@ std::vector<uint64_t> SoftPTEDirtyTracker::readPagemapEntries(uintptr_t ptr,
 
     // Read the entries
     std::vector<uint64_t> entries(nEntries, 0);
-    int nRead = fread(entries.data(), PAGEMAP_ENTRY_BYTES, nEntries, fd);
+    int nRead =
+      fread(entries.data(), PAGEMAP_ENTRY_BYTES, nEntries, pagemapFile);
     if (nRead != nEntries) {
         SPDLOG_ERROR("Could not read pagemap ({} != {})", nRead, nEntries);
         throw std::runtime_error("Could not read pagemap");
     }
-
-    fclose(fd);
 
     return entries;
 }
@@ -176,7 +175,7 @@ std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyRegions(
   uint8_t* ptr,
   int nPages)
 {
-    std::span<uint8_t> memView(ptr, nPages * HOST_PAGE_SIZE);
+    PROF_START(GetDirtyRegions)
     std::vector<int> dirtyPages = getDirtyPageNumbers(ptr, nPages);
 
     // Add a new region for each page, unless the one before it was also
@@ -184,17 +183,18 @@ std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyRegions(
     std::vector<std::pair<uint32_t, uint32_t>> regions;
     for (int p = 0; p < dirtyPages.size(); p++) {
         int thisPageNum = dirtyPages.at(p);
-        uint32_t thisPageStart = thisPageNum * HOST_PAGE_SIZE;
 
         if (p > 0 && dirtyPages.at(p - 1) == thisPageNum - 1) {
             // Previous page was also dirty, update previous region
             regions.back().second += HOST_PAGE_SIZE;
         } else {
             // Previous page wasn't dirty, add new region
+            uint32_t thisPageStart = thisPageNum * HOST_PAGE_SIZE;
             regions.emplace_back(thisPageStart, HOST_PAGE_SIZE);
         }
     }
 
+    PROF_END(GetDirtyRegions)
     return regions;
 }
 
@@ -209,21 +209,18 @@ class ThreadTrackingData
   public:
     ThreadTrackingData() = default;
 
-    ~ThreadTrackingData() { delete[] pageFlags; }
-
     ThreadTrackingData(std::span<uint8_t> region)
       : regionBase(region.data())
       , regionTop(region.data() + region.size())
       , nPages(faabric::util::getRequiredHostPages(region.size()))
-    {
-        pageFlags = new bool[nPages];
-    }
+      , pageFlags(nPages, '0')
+    {}
 
     void markDirtyPage(void* addr)
     {
         ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
         long pageNum = offset / HOST_PAGE_SIZE;
-        pageFlags[pageNum] = true;
+        pageFlags[pageNum] = '1';
     }
 
     std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions()
@@ -237,7 +234,7 @@ class ThreadTrackingData
         uint32_t diffPageStart = 0;
         bool diffInProgress = false;
         for (int i = 0; i < nPages; i++) {
-            bool isDirty = pageFlags[i];
+            bool isDirty = pageFlags[i] == '1';
             if (isDirty && !diffInProgress) {
                 diffInProgress = true;
                 diffPageStart = i;
@@ -264,9 +261,8 @@ class ThreadTrackingData
     uint8_t* regionTop = nullptr;
     int nPages = 0;
 
-    // Do not use a std::vector<bool> here as it's an order of magnitude slower
-    // in the tight loop
-    bool* pageFlags;
+    // Note - std::vector<bool> here seems to worsen performance by >4x
+    std::vector<char> pageFlags;
 };
 
 static thread_local ThreadTrackingData tracking;

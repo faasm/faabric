@@ -80,6 +80,8 @@ class SoftPTEDirtyTracker final : public DirtyTracker
   private:
     FILE* clearRefsFile = nullptr;
 
+    FILE* pagemapFile = nullptr;
+
     std::vector<uint64_t> readPagemapEntries(uintptr_t ptr, int nEntries);
 
     std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
