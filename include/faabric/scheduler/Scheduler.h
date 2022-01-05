@@ -104,7 +104,7 @@ class Executor
     std::unordered_map<std::string, int> cachedGroupIds;
     std::unordered_map<std::string, std::vector<std::string>>
       cachedDecisionHosts;
-    std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions;
+    std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions;
 
     void deleteMainThreadSnapshot(const faabric::Message& msg);
 

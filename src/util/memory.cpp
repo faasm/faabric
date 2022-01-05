@@ -12,32 +12,33 @@
 
 namespace faabric::util {
 
-std::vector<OffsetMemoryRegion> dedupeMemoryRegions(
-  std::vector<OffsetMemoryRegion>& regions)
+std::vector<std::pair<uint32_t, uint32_t>> dedupeMemoryRegions(
+  std::vector<std::pair<uint32_t, uint32_t>>& regions)
 {
     if (regions.empty()) {
         return {};
     }
 
-    std::vector<OffsetMemoryRegion> deduped;
+    std::vector<std::pair<uint32_t, uint32_t>> deduped;
 
     // Sort in place
-    std::sort(std::begin(regions),
-              std::end(regions),
-              [](OffsetMemoryRegion& a, OffsetMemoryRegion& b) {
-                  return a.offset < b.offset;
-              });
+    std::sort(
+      std::begin(regions),
+      std::end(regions),
+      [](std::pair<uint32_t, uint32_t>& a, std::pair<uint32_t, uint32_t>& b) {
+          return a.first < b.first;
+      });
 
     deduped.push_back(regions.front());
-    uint32_t lastOffset = regions.front().offset;
+    uint32_t lastOffset = regions.front().first;
     for (int i = 1; i < regions.size(); i++) {
         const auto& r = regions.at(i);
-        assert(r.offset >= lastOffset);
+        assert(r.first >= lastOffset);
 
-        if (r.offset > lastOffset) {
+        if (r.first > lastOffset) {
             deduped.push_back(r);
-            lastOffset = r.offset;
-        } else if (deduped.back().data.size() < r.data.size()) {
+            lastOffset = r.first;
+        } else if (deduped.back().second < r.second) {
             deduped.pop_back();
             deduped.push_back(r);
         }

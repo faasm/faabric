@@ -38,6 +38,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     int memPages = 8;
     size_t memSize = memPages * HOST_PAGE_SIZE;
     MemoryRegion mem = allocatePrivateMemory(memSize);
+    std::span<uint8_t> memView(mem.get(), memSize);
 
     // Check we can write to shared mem
     mem[0] = 1;
@@ -46,7 +47,6 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Track changes
-    std::span<uint8_t> memView(mem.get(), memSize);
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -56,15 +56,15 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     mem[3 * HOST_PAGE_SIZE + 10] = 1;
     mem[8 * HOST_PAGE_SIZE - 20] = 1;
 
-    tracker.stopTracking({ mem.get(), memSize });
-    tracker.stopThreadLocalTracking({ mem.get(), memSize });
+    tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
 
     // Check there are no diffs even though we have dirty regions
-    auto dirtyRegions = tracker.getBothDirtyOffsets({ mem.get(), memSize });
+    auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     REQUIRE(!dirtyRegions.empty());
 
     std::vector<SnapshotDiff> changeDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
     REQUIRE(changeDiffs.empty());
 }
 
@@ -168,9 +168,9 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     tracker.stopThreadLocalTracking(memView);
 
     // Check we have the right number of diffs
-    auto dirtyRegions = tracker.getBothDirtyOffsets({ mem.get(), memSize });
+    auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     std::vector<SnapshotDiff> changeDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
 
     REQUIRE(changeDiffs.size() == 6);
 

@@ -159,13 +159,13 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker.stopTracking(memView);
         tracker.stopThreadLocalTracking(memView);
 
-        std::vector<faabric::util::OffsetMemoryRegion> dirtyRegions =
+        std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
           tracker.getBothDirtyOffsets(memView);
 
         // Apply changes to snapshot
         snap->fillGapsWithOverwriteRegions();
         std::vector<faabric::util::SnapshotDiff> updates =
-          snap->diffWithDirtyRegions(dirtyRegions);
+          snap->diffWithDirtyRegions(memView, dirtyRegions);
 
         if (updates.empty()) {
             SPDLOG_TRACE(
@@ -572,7 +572,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Add non-thread-local dirty regions
             {
                 faabric::util::FullLock lock(threadExecutionMutex);
-                std::vector<faabric::util::OffsetMemoryRegion> r =
+                std::vector<std::pair<uint32_t, uint32_t>> r =
                   tracker.getDirtyOffsets(memView);
 
                 dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
@@ -589,7 +589,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             {
                 // Do the diffing
                 faabric::util::FullLock lock(threadExecutionMutex);
-                diffs = snap->diffWithDirtyRegions(dirtyRegions);
+                diffs = snap->diffWithDirtyRegions(memView, dirtyRegions);
                 dirtyRegions.clear();
             }
 

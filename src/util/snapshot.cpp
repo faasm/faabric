@@ -426,7 +426,8 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::getTrackedChanges()
 }
 
 std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
-  std::vector<OffsetMemoryRegion> dirtyRegions)
+  std::span<uint8_t> updated,
+  std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions)
 {
     faabric::util::SharedLock lock(snapMx);
 
@@ -446,12 +447,13 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
 
     // Iterate through merge regions, allow them to add diffs based on the dirty
     // regions
+    std::span<uint8_t> original(data.get(), size);
     for (auto& mrPair : mergeRegions) {
         faabric::util::SnapshotMergeRegion& mr = mrPair.second;
 
         // Add the diffs for each dirty region
         for (auto& dirtyRegion : dedupedRegions) {
-            mr.addDiffs(diffs, { data.get(), size }, dirtyRegion);
+            mr.addDiffs(diffs, original, updated, dirtyRegion);
         }
     }
 
@@ -518,9 +520,11 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
     }
 }
 
-void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
-                                           std::span<const uint8_t> original,
-                                           OffsetMemoryRegion dirtyRegion)
+void SnapshotMergeRegion::addOverwriteDiff(
+  std::vector<SnapshotDiff>& diffs,
+  std::span<const uint8_t> original,
+  std::span<const uint8_t> updated,
+  std::pair<uint32_t, uint32_t> dirtyRegion)
 {
     // In this function we have two possibilities:
     // - Dirty region overlaps original and we can compare
@@ -529,8 +533,8 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
     // First we calculate where the dirty region starts and ends. If the merge
     // region ends before the dirty region, we take that as the limit. If the
     // merge region is zero length, we take the whole dirty region.
-    uint32_t dirtyRegionStart = std::max<uint32_t>(dirtyRegion.offset, offset);
-    uint32_t dirtyRegionEnd = dirtyRegion.offset + dirtyRegion.data.size();
+    uint32_t dirtyRegionStart = std::max<uint32_t>(dirtyRegion.first, offset);
+    uint32_t dirtyRegionEnd = dirtyRegion.first + dirtyRegion.second;
     if (length > 0) {
         dirtyRegionEnd = std::min<uint32_t>(dirtyRegionEnd, offset + length);
     }
@@ -548,9 +552,8 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
         std::span<const uint8_t> originalSub =
           original.subspan(dirtyRegionStart, overlapLen);
 
-        uint32_t dirtyOffset = dirtyRegionStart - dirtyRegion.offset;
         std::span<const uint8_t> dirtySub =
-          dirtyRegion.data.subspan(dirtyOffset, overlapLen);
+          updated.subspan(dirtyRegionStart, overlapLen);
 
         std::vector<std::pair<uint32_t, uint32_t>> regions =
           diffArrayRegions(originalSub, dirtySub);
@@ -564,10 +567,7 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                          diffStart + len);
 
             diffs.emplace_back(
-              dataType,
-              operation,
-              diffStart,
-              dirtyRegion.data.subspan(dirtyOffset + start, len));
+              dataType, operation, diffStart, updated.subspan(diffStart, len));
         }
     }
 
@@ -584,8 +584,7 @@ void SnapshotMergeRegion::addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
         diffs.emplace_back(dataType,
                            operation,
                            diffStart,
-                           dirtyRegion.data.subspan(
-                             (diffStart - dirtyRegion.offset), diffLength));
+                           updated.subspan(diffStart, diffLength));
     }
 }
 
@@ -601,15 +600,16 @@ SnapshotMergeRegion::SnapshotMergeRegion(uint32_t offsetIn,
 
 void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                    std::span<const uint8_t> originalData,
-                                   OffsetMemoryRegion dirtyRegion)
+                                   std::span<uint8_t> updatedData,
+                                   std::pair<uint32_t, uint32_t> dirtyRegion)
 {
     // If the region has zero length, it signifies that it goes to the
     // end of the memory, so we go all the way to the end of the dirty
     // region. For all other regions, we just check if the dirty range is
     // within the merge region.
 
-    uint32_t dirtyRangeStart = dirtyRegion.offset;
-    uint32_t dirtyRangeEnd = dirtyRegion.offset + dirtyRegion.data.size();
+    uint32_t dirtyRangeStart = dirtyRegion.first;
+    uint32_t dirtyRangeEnd = dirtyRegion.first + dirtyRegion.second;
 
     bool isInRange = (dirtyRangeEnd > offset) &&
                      ((length == 0) || (dirtyRangeStart < offset + length));
@@ -636,7 +636,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
       originalData.size());
 
     if (operation == SnapshotMergeOperation::Overwrite) {
-        addOverwriteDiff(diffs, originalData, dirtyRegion);
+        addOverwriteDiff(diffs, originalData, updatedData, dirtyRegion);
         return;
     }
 
@@ -649,8 +649,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                  "outside original snapshot");
     }
 
-    uint32_t dirtyRegionOffset = offset - dirtyRegion.offset;
-    uint8_t* updated = dirtyRegion.data.data() + dirtyRegionOffset;
+    uint8_t* updated = updatedData.data() + offset;
     const uint8_t* original = originalData.data() + offset;
 
     bool changed = false;

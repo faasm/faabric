@@ -31,17 +31,17 @@ class DirtyTracker
 
     virtual void stopTracking(std::span<uint8_t> region) = 0;
 
-    virtual std::vector<OffsetMemoryRegion> getDirtyOffsets(
+    virtual std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
       std::span<uint8_t> region) = 0;
 
     virtual void startThreadLocalTracking(std::span<uint8_t> region) = 0;
 
     virtual void stopThreadLocalTracking(std::span<uint8_t> region) = 0;
 
-    virtual std::vector<OffsetMemoryRegion> getThreadLocalDirtyOffsets(
-      std::span<uint8_t> region) = 0;
+    virtual std::vector<std::pair<uint32_t, uint32_t>>
+    getThreadLocalDirtyOffsets(std::span<uint8_t> region) = 0;
 
-    virtual std::vector<OffsetMemoryRegion> getBothDirtyOffsets(
+    virtual std::vector<std::pair<uint32_t, uint32_t>> getBothDirtyOffsets(
       std::span<uint8_t> region) = 0;
 };
 
@@ -64,17 +64,17 @@ class SoftPTEDirtyTracker final : public DirtyTracker
 
     void stopTracking(std::span<uint8_t> region) override;
 
-    std::vector<OffsetMemoryRegion> getDirtyOffsets(
+    std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
       std::span<uint8_t> region) override;
 
     void startThreadLocalTracking(std::span<uint8_t> region) override;
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
 
-    std::vector<OffsetMemoryRegion> getThreadLocalDirtyOffsets(
+    std::vector<std::pair<uint32_t, uint32_t>> getThreadLocalDirtyOffsets(
       std::span<uint8_t> region) override;
 
-    std::vector<OffsetMemoryRegion> getBothDirtyOffsets(
+    std::vector<std::pair<uint32_t, uint32_t>> getBothDirtyOffsets(
       std::span<uint8_t> region) override;
 
   private:
@@ -84,7 +84,8 @@ class SoftPTEDirtyTracker final : public DirtyTracker
 
     std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
 
-    std::vector<OffsetMemoryRegion> getDirtyRegions(uint8_t* ptr, int nPages);
+    std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(uint8_t* ptr,
+                                                               int nPages);
 };
 
 /*
@@ -104,17 +105,17 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
     void stopTracking(std::span<uint8_t> region) override;
 
-    std::vector<OffsetMemoryRegion> getDirtyOffsets(
+    std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
       std::span<uint8_t> region) override;
 
     void startThreadLocalTracking(std::span<uint8_t> region) override;
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
 
-    std::vector<OffsetMemoryRegion> getThreadLocalDirtyOffsets(
+    std::vector<std::pair<uint32_t, uint32_t>> getThreadLocalDirtyOffsets(
       std::span<uint8_t> region) override;
 
-    std::vector<OffsetMemoryRegion> getBothDirtyOffsets(
+    std::vector<std::pair<uint32_t, uint32_t>> getBothDirtyOffsets(
       std::span<uint8_t> region) override;
 
     // Signal handler for the resulting segfaults

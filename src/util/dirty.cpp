@@ -91,7 +91,7 @@ void SoftPTEDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
     // Do nothing
 }
 
-std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyOffsets(
+std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyOffsets(
   std::span<uint8_t> region)
 {
     // Get dirty regions
@@ -102,20 +102,20 @@ std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyOffsets(
     SPDLOG_DEBUG(
       "Region has {}/{} dirty pages", dirtyPageNumbers.size(), nPages);
 
-    std::vector<OffsetMemoryRegion> regions =
+    std::vector<std::pair<uint32_t, uint32_t>> regions =
       getDirtyRegions(region.data(), nPages);
 
     return regions;
 }
 
-std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getBothDirtyOffsets(
-  std::span<uint8_t> region)
+std::vector<std::pair<uint32_t, uint32_t>>
+SoftPTEDirtyTracker::getBothDirtyOffsets(std::span<uint8_t> region)
 {
     return getDirtyOffsets(region);
 }
 
-std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getThreadLocalDirtyOffsets(
-  std::span<uint8_t> region)
+std::vector<std::pair<uint32_t, uint32_t>>
+SoftPTEDirtyTracker::getThreadLocalDirtyOffsets(std::span<uint8_t> region)
 {
     return {};
 }
@@ -172,7 +172,7 @@ std::vector<int> SoftPTEDirtyTracker::getDirtyPageNumbers(const uint8_t* ptr,
     return pageNumbers;
 }
 
-std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyRegions(
+std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyRegions(
   uint8_t* ptr,
   int nPages)
 {
@@ -181,20 +181,17 @@ std::vector<OffsetMemoryRegion> SoftPTEDirtyTracker::getDirtyRegions(
 
     // Add a new region for each page, unless the one before it was also
     // dirty, in which case we extend the previous one
-    std::vector<OffsetMemoryRegion> regions;
+    std::vector<std::pair<uint32_t, uint32_t>> regions;
     for (int p = 0; p < dirtyPages.size(); p++) {
         int thisPageNum = dirtyPages.at(p);
         uint32_t thisPageStart = thisPageNum * HOST_PAGE_SIZE;
 
         if (p > 0 && dirtyPages.at(p - 1) == thisPageNum - 1) {
             // Previous page was also dirty, update previous region
-            regions.back().data =
-              memView.subspan(regions.back().offset,
-                              regions.back().data.size() + HOST_PAGE_SIZE);
+            regions.back().second += HOST_PAGE_SIZE;
         } else {
             // Previous page wasn't dirty, add new region
-            regions.emplace_back(
-              thisPageStart, memView.subspan(thisPageStart, HOST_PAGE_SIZE));
+            regions.emplace_back(thisPageStart, HOST_PAGE_SIZE);
         }
     }
 
@@ -227,33 +224,34 @@ class ThreadTrackingData
         pageFlags[pageNum] = true;
     }
 
-    std::vector<OffsetMemoryRegion> getDirtyRegions()
+    std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions()
     {
+        PROF_START(GetDirtyRegions)
+        std::vector<std::pair<uint32_t, uint32_t>> dirty;
         if (regionBase == nullptr) {
-            return {};
+            return dirty;
         }
 
-        std::span<uint8_t> regionView(regionBase, nPages * HOST_PAGE_SIZE);
-        std::vector<OffsetMemoryRegion> dirty;
-        for (int i = 0; i < nPages; i++) {
-            if (!pageFlags.at(i)) {
-                continue;
-            }
-
-            size_t thisRegionStart = i * HOST_PAGE_SIZE;
-
-            // If last page was dirty, just update last region
-            if (i > 0 && pageFlags.at(i - 1)) {
-                dirty.back().data =
-                  regionView.subspan(dirty.back().offset,
-                                     dirty.back().data.size() + HOST_PAGE_SIZE);
-            } else if (pageFlags.at(i)) {
-                dirty.emplace_back(
-                  thisRegionStart,
-                  regionView.subspan(thisRegionStart, HOST_PAGE_SIZE));
+        uint32_t diffPageStart = 0;
+        bool diffInProgress = false;
+        for (int i = 0; i < pageFlags.size(); i++) {
+            if (pageFlags.at(i) && !diffInProgress) {
+                diffInProgress = true;
+                diffPageStart = i;
+            } else if (!pageFlags.at(i) && diffInProgress) {
+                diffInProgress = false;
+                dirty.emplace_back(diffPageStart * HOST_PAGE_SIZE,
+                                   (i - diffPageStart) * HOST_PAGE_SIZE);
             }
         }
 
+        if (diffInProgress) {
+            dirty.emplace_back(diffPageStart * HOST_PAGE_SIZE,
+                               (pageFlags.size() - diffPageStart) *
+                                 HOST_PAGE_SIZE);
+        }
+
+        PROF_END(GetDirtyRegions)
         return dirty;
     }
 
@@ -390,20 +388,20 @@ void SegfaultDirtyTracker::reinitialise()
     }
 }
 
-std::vector<OffsetMemoryRegion>
+std::vector<std::pair<uint32_t, uint32_t>>
 SegfaultDirtyTracker::getThreadLocalDirtyOffsets(std::span<uint8_t> region)
 {
     return tracking.getDirtyRegions();
 }
 
-std::vector<OffsetMemoryRegion> SegfaultDirtyTracker::getDirtyOffsets(
-  std::span<uint8_t> region)
+std::vector<std::pair<uint32_t, uint32_t>>
+SegfaultDirtyTracker::getDirtyOffsets(std::span<uint8_t> region)
 {
     return {};
 }
 
-std::vector<OffsetMemoryRegion> SegfaultDirtyTracker::getBothDirtyOffsets(
-  std::span<uint8_t> region)
+std::vector<std::pair<uint32_t, uint32_t>>
+SegfaultDirtyTracker::getBothDirtyOffsets(std::span<uint8_t> region)
 {
     return getThreadLocalDirtyOffsets(region);
 }

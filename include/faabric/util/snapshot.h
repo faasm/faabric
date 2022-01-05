@@ -80,12 +80,14 @@ class SnapshotMergeRegion
 
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
-                  OffsetMemoryRegion dirtyRegion);
+                  std::span<uint8_t> updatedData,
+                  std::pair<uint32_t, uint32_t> dirtyRegion);
 
   private:
     void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                           std::span<const uint8_t> original,
-                          OffsetMemoryRegion dirtyRegion);
+                          std::span<const uint8_t> updatedData,
+                          std::pair<uint32_t, uint32_t> dirtyRegion);
 };
 
 /*
@@ -237,10 +239,11 @@ class SnapshotData
     void clearTrackedChanges();
 
     // Returns the list of changes in the given dirty regions versus their
-    // original value in the snapshot, based on the memory regions set on this
+    // original value in the snapshot, based on the merge regions set on this
     // snapshot.
     std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
-      std::vector<OffsetMemoryRegion> dirtyRegions);
+      std::span<uint8_t> updated,
+      std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions);
 
   private:
     size_t size = 0;

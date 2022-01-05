@@ -333,7 +333,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.stopThreadLocalTracking(memView);
     auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
 
     // Check original hasn't changed
     const uint8_t* rawSnapData = snap->getDataPtr();
@@ -471,7 +471,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.stopThreadLocalTracking(memView);
     auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
     REQUIRE(actualDiffs.size() == 4);
 
     checkDiffs(actualDiffs, expectedDiffs);
@@ -831,7 +831,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.stopThreadLocalTracking(memView);
     auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
 
     if (expectNoDiff) {
         REQUIRE(actualDiffs.empty());
@@ -911,7 +911,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     bool failed = false;
     try {
-        snap->diffWithDirtyRegions(dirtyRegions);
+        snap->diffWithDirtyRegions(memView, dirtyRegions);
     } catch (std::runtime_error& ex) {
         failed = true;
         REQUIRE(ex.what() == expectedMsg);
@@ -1034,7 +1034,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.stopThreadLocalTracking(memView);
     auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -1245,7 +1245,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -1385,7 +1385,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memView, dirtyRegions);
 
     checkDiffs(actualDiffs, expectedDiffs);
 }
@@ -1512,7 +1512,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     auto dirtyRegions = tracker.getBothDirtyOffsets(memViewA);
 
     std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(dirtyRegions);
+      snap->diffWithDirtyRegions(memViewA, dirtyRegions);
     REQUIRE(actualDiffs.size() == 1);
 
     SnapshotDiff& actualDiff = actualDiffs.at(0);

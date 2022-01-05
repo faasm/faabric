@@ -16,53 +16,53 @@ namespace tests {
 
 TEST_CASE("Test dedupe memory regions", "[util][memory]")
 {
-    std::vector<OffsetMemoryRegion> input;
-    std::vector<OffsetMemoryRegion> expected;
+    std::vector<std::pair<uint32_t, uint32_t>> input;
+    std::vector<std::pair<uint32_t, uint32_t>> expected;
 
     uint32_t offsetA = 0;
     uint32_t offsetB = 10;
 
-    std::vector<uint8_t> dataA = { 0, 1 };
-    std::vector<uint8_t> dataB = { 0, 1, 2 };
-    std::vector<uint8_t> dataC = { 0, 1, 2, 3 };
-    std::vector<uint8_t> dataD = { 0, 1, 2, 3, 4 };
+    uint32_t sizeA = 2;
+    uint32_t sizeB = 3;
+    uint32_t sizeC = 4;
 
     SECTION("Empty") {}
 
     SECTION("Nothing to do")
     {
-        input = { { offsetA, dataA } };
+        input = { { offsetA, sizeA } };
         expected = input;
     }
 
     SECTION("Equal on the same offset")
     {
         input = {
-            { offsetB, dataB },
-            { offsetA, dataA },
-            { offsetA, dataA },
+            { offsetB, sizeB },
+            { offsetA, sizeA },
+            { offsetA, sizeA },
         };
         expected = {
-            { offsetA, dataA },
-            { offsetB, dataB },
+            { offsetA, sizeA },
+            { offsetB, sizeB },
         };
     }
 
     SECTION("Longer on the same offset")
     {
         input = {
-            { offsetB, dataB },
-            { offsetA, dataA },
-            { offsetA, dataC },
-            { offsetA, dataB },
+            { offsetB, sizeB },
+            { offsetA, sizeA },
+            { offsetA, sizeC },
+            { offsetA, sizeB },
         };
         expected = {
-            { offsetA, dataC },
-            { offsetB, dataB },
+            { offsetA, sizeC },
+            { offsetB, sizeB },
         };
     }
 
-    std::vector<OffsetMemoryRegion> actual = dedupeMemoryRegions(input);
+    std::vector<std::pair<uint32_t, uint32_t>> actual =
+      dedupeMemoryRegions(input);
     REQUIRE(actual == expected);
 }
 

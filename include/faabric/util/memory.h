@@ -11,30 +11,14 @@
 namespace faabric::util {
 
 /*
- * Represents a view of a segment of memory that's offset from the base of a
- * larger linear memory region.
+ * Dedupes a list of dirty regions specified by offset and length
  */
-class OffsetMemoryRegion
-{
-  public:
-    OffsetMemoryRegion(uint32_t offsetIn, std::span<uint8_t> dataIn)
-      : offset(offsetIn)
-      , data(dataIn)
-    {}
+std::vector<std::pair<uint32_t, uint32_t>> dedupeMemoryRegions(
+  std::vector<std::pair<uint32_t, uint32_t>>& regions);
 
-    bool operator==(const OffsetMemoryRegion& other) const
-    {
-        return other.offset == offset && other.data.size() == data.size() &&
-               other.data.data() == data.data();
-    }
-
-    uint32_t offset = 0;
-    std::span<uint8_t> data;
-};
-
-std::vector<OffsetMemoryRegion> dedupeMemoryRegions(
-  std::vector<OffsetMemoryRegion>& regions);
-
+/*
+ * Typedef used to enforce RAII on mmapped memory regions
+ */
 typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
 // -------------------------
