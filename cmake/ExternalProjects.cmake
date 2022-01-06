@@ -29,18 +29,18 @@ endif()
 
 conan_cmake_configure(
     REQUIRES
-        boost/1.77.0@#d0be0b4b04a551f5d49ac540e59f51bd
-        catch2/2.13.7@#31c8cd08e3c957a9eac8cb1377cf5863
-        cppcodec/0.2@#f6385611ce2f7cff954ac8b16e25c4fa
-        cpprestsdk/2.10.18@#36e30936126a3da485ce05d619fb1249
-        cppzmq/4.8.1@#e0f26b0614b3d812815edc102ce0d881
-        flatbuffers/2.0.0@#82f5d13594b370c3668bb8abccffc706
-        hiredis/1.0.2@#297f55bf1e66f8b9c1dc0e7d35e705ab
-        protobuf/3.17.1@#12f6551f4a57bbd3bf38ff3aad6aaa7e
-        rapidjson/cci.20200410@#abe3eeacf36801901f6f6d82d124781a
-        readerwriterqueue/1.0.5@#4232c2ff826eb41e33d8ad8efd3c4c4c
-        spdlog/1.9.2@#3724602b7b7e843c5e0a687c45e279c9
-        zeromq/4.3.4@#3b9b0de9c4509784dc92629f3aaf2fe4
+        "boost/1.77.0@#d0be0b4b04a551f5d49ac540e59f51bd"
+        "catch2/2.13.7@#31c8cd08e3c957a9eac8cb1377cf5863"
+        "cppcodec/0.2@#f6385611ce2f7cff954ac8b16e25c4fa"
+        "cpprestsdk/2.10.18@#36e30936126a3da485ce05d619fb1249"
+        "cppzmq/4.8.1@#e0f26b0614b3d812815edc102ce0d881"
+        "flatbuffers/2.0.0@#82f5d13594b370c3668bb8abccffc706"
+        "hiredis/1.0.2@#297f55bf1e66f8b9c1dc0e7d35e705ab"
+        "protobuf/3.17.1@#12f6551f4a57bbd3bf38ff3aad6aaa7e"
+        "rapidjson/cci.20200410@#abe3eeacf36801901f6f6d82d124781a"
+        "readerwriterqueue/1.0.5@#4232c2ff826eb41e33d8ad8efd3c4c4c"
+        "spdlog/1.9.2@#3724602b7b7e843c5e0a687c45e279c9"
+        "zeromq/4.3.4@#3b9b0de9c4509784dc92629f3aaf2fe4"
     GENERATORS
         cmake_find_package
         cmake_paths
