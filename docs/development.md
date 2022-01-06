@@ -129,7 +129,6 @@ bumped version. It should appear in:
 
 - `VERSION`
 - `.env`
-- `.github/workflows/sanitisers.yml`.
 - `.github/workflows/tests.yml`.
 - `mpi-native/mpi-native.env`
 
