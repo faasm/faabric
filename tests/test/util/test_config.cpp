@@ -29,6 +29,8 @@ TEST_CASE("Test default system config initialisation", "[util]")
 
     REQUIRE(conf.defaultMpiWorldSize == 5);
     REQUIRE(conf.mpiBasePort == 10800);
+
+    REQUIRE(conf.dirtyTrackingMode == "segfault");
 }
 
 TEST_CASE("Test overriding system config initialisation", "[util]")
@@ -59,6 +61,8 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string mpiSize = setEnvVar("DEFAULT_MPI_WORLD_SIZE", "2468");
     std::string mpiPort = setEnvVar("MPI_BASE_PORT", "9999");
 
+    std::string dirtyMode = setEnvVar("DIRTY_TRACKING_MODE", "dummy-track");
+
     // Create new conf for test
     SystemConfig conf;
 
@@ -85,6 +89,8 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.defaultMpiWorldSize == 2468);
     REQUIRE(conf.mpiBasePort == 9999);
 
+    REQUIRE(conf.dirtyTrackingMode == "dummy-track");
+
     // Be careful with host type
     setEnvVar("LOG_LEVEL", logLevel);
     setEnvVar("LOG_FILE", logFile);
@@ -110,6 +116,8 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
 
     setEnvVar("DEFAULT_MPI_WORLD_SIZE", mpiSize);
     setEnvVar("MPI_BASE_PORT", mpiPort);
+
+    setEnvVar("DIRTY_TRACKING_MODE", dirtyMode);
 }
 
 }
