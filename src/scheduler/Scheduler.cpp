@@ -952,21 +952,6 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
     return it->second.get_future().get();
 }
 
-std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    std::vector<std::pair<uint32_t, int32_t>> results;
-    results.reserve(req->messages_size());
-    for (int i = 0; i < req->messages_size(); i++) {
-        uint32_t messageId = req->messages().at(i).id();
-
-        int result = awaitThreadResult(messageId);
-        results.emplace_back(messageId, result);
-    }
-
-    return results;
-}
-
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
                                               int timeoutMs)
 {

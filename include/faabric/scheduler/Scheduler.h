@@ -175,9 +175,6 @@ class Scheduler
 
     int32_t awaitThreadResult(uint32_t messageId);
 
-    std::vector<std::pair<uint32_t, int32_t>> awaitThreadResults(
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
-
     void registerThread(uint32_t msgId);
 
     void vacateSlot();

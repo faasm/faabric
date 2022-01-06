@@ -269,7 +269,15 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Await all child threads
-    std::vector<std::pair<uint32_t, int>> results = sch.awaitThreadResults(req);
+    std::vector<std::pair<uint32_t, int32_t>> results;
+    results.reserve(req->messages_size());
+    for (int i = 0; i < req->messages_size(); i++) {
+        uint32_t messageId = req->messages().at(i).id();
+
+        int result = sch.awaitThreadResult(messageId);
+        results.emplace_back(messageId, result);
+    }
+
     SPDLOG_DEBUG(
       "Executor {} got results for {} threads", id, req->messages_size());
 
