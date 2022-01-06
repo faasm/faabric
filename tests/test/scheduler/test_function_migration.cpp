@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include <faabric_utils.h>
 #include <fixtures.h>
 
 #include <faabric/proto/faabric.pb.h>
@@ -66,7 +67,7 @@ TEST_CASE_METHOD(
     std::vector<int> slots = { 1, 1 };
     setHostResources(hosts, slots);
 
-    auto req = faabric::util::batchExecFactory("foo", "bar", 2);
+    auto req = faabric::util::batchExecFactory("foo", "migration", 2);
     auto decision = sch.callFunctions(req);
     uint32_t appId = req->messages().at(0).appid();
 
@@ -121,5 +122,13 @@ TEST_CASE_METHOD(
             REQUIRE(actual.dsthost() == expected.dsthost());
         }
     }
+
+    faabric::Message res = sch.getFunctionResult(req->messages().at(0).id(),
+                                                 2 * SHORT_TEST_TIMEOUT_MS);
+    REQUIRE(res.returnvalue() == 0);
+
+    // Check that after the result is set, the app can't be migrated no more
+    sch.checkForMigrationOpportunities();
+    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
 }
 }

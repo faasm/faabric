@@ -450,8 +450,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     int nMessages = req->messages_size();
 
     // Record in-flight request
-    // TODO - when we delete them
-    std::string funcStrWithId = faabric::util::funcToString(firstMsg, true);
     auto decisionPtr =
       std::make_shared<faabric::util::SchedulingDecision>(decision);
     inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
@@ -889,6 +887,15 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Write the successful result to the result queue
     std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
     redis.publishSchedulerResult(key, msg.statuskey(), inputData);
+
+    // Remove the app from in-flight map if still there, and this host is the
+    // master host for the message
+    if (msg.masterhost() == thisHost) {
+        faabric::util::FullLock lock(mx);
+
+        inFlightRequests.erase(msg.appid());
+        pendingMigrations.erase(msg.appid());
+    }
 }
 
 void Scheduler::registerThread(uint32_t msgId)
@@ -1038,9 +1045,11 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
+    /*
     if (host == thisHost) {
         return thisHostResources;
     }
+    */
 
     return getFunctionCallClient(host).getResources();
 }
@@ -1136,7 +1145,7 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
 void Scheduler::checkForMigrationOpportunities(
   faabric::util::MigrationStrategy migrationStrategy)
 {
-    SharedLock lock(mx);
+    faabric::util::SharedLock lock(mx);
 
     // For each in-flight request, check if there is an opportunity to migrate
     for (const auto& app : inFlightRequests) {
@@ -1166,7 +1175,9 @@ void Scheduler::checkForMigrationOpportunities(
             // simpler.
             auto left = originalDecision.hosts.begin();
             auto right = originalDecision.hosts.end() - 1;
-            faabric::HostResources r = getHostResources(*left);
+            faabric::HostResources r = (*left == thisHost)
+                                         ? getThisHostResources()
+                                         : getHostResources(*left);
             auto nAvailable = [&r]() -> int {
                 return r.slots() - r.usedslots();
             };
@@ -1190,7 +1201,8 @@ void Scheduler::checkForMigrationOpportunities(
                     auto oldHost = *left;
                     ++left;
                     if (*left != oldHost) {
-                        r = getHostResources(*left);
+                        r = (*left == thisHost) ? getThisHostResources()
+                                                : getHostResources(*left);
                     }
                     continue;
                 }

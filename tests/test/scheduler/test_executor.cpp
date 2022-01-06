@@ -209,6 +209,18 @@ int32_t TestExecutor::executeTask(
         return msg.id() / 100;
     }
 
+    if (msg.function() == "migration") {
+        // Sleep for sufficiently more than the check period
+        SPDLOG_DEBUG("Migration test function going to sleep");
+        SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
+        SPDLOG_DEBUG("Migration test function waking up");
+
+        msg.set_outputdata(
+          fmt::format("Migration test function {} executed", msg.id()));
+
+        return 0;
+    }
+
     // Default
     msg.set_outputdata(fmt::format("Simple function {} executed", msg.id()));
 
