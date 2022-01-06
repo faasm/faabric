@@ -935,7 +935,7 @@ void Scheduler::pushSnapshotDiffs(
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
-    faabric::util::SharedLock lock(mx);
+    faabric::util::FullLock lock(mx);
     SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
     threadResults.at(msgId).set_value(returnValue);
 }
