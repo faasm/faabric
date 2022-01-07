@@ -9,7 +9,8 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/testing.h>
 
-#define CATCH_CONFIG_NO_POSIX_SIGNALS
+// Disable catch signal catching to avoid interfering with dirty tracking
+#define CATCH_CONFIG_NO_POSIX_SIGNALS 1
 
 FAABRIC_CATCH_LOGGER
 

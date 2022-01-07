@@ -68,6 +68,15 @@ pip install -r requirements.txt
 inv dev.cc faabric
 ```
 
+## Debugging
+
+Note that Faabric uses segfaults to track dirty pages, and as such when using
+`gdb` you must stop it from stopping and printing on every segfault:
+
+```
+handle SIGSEGV nostop noprint
+```
+
 ## Testing
 
 We have some standard tests using [Catch2](https://github.com/catchorg/Catch2)
