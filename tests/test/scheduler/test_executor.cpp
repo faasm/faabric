@@ -201,6 +201,23 @@ int32_t TestExecutor::executeTask(
         throw std::runtime_error("This is a test error");
     }
 
+    if (msg.function() == "sleep") {
+        // Sleep for sufficiently more than the check period
+        int timeToSleepMs = SHORT_TEST_TIMEOUT_MS;
+        if (!msg.inputdata().empty()) {
+            timeToSleepMs = std::stoi(msg.inputdata());
+        }
+        SPDLOG_DEBUG("Sleep test function going to sleep for {} ms",
+                     timeToSleepMs);
+        SLEEP_MS(timeToSleepMs);
+        SPDLOG_DEBUG("Sleep test function waking up");
+
+        msg.set_outputdata(
+          fmt::format("Migration test function {} executed", msg.id()));
+
+        return 0;
+    }
+
     if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
         SPDLOG_DEBUG("TestExecutor executing simple thread {}", msg.id());
         return msg.id() / 100;

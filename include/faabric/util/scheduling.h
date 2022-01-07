@@ -54,4 +54,16 @@ enum SchedulingTopologyHint
     FORCE_LOCAL,
     NEVER_ALONE
 };
+
+// Migration strategies help the scheduler decide wether the scheduling decision
+// for a batch request could be changed with the new set of available resources.
+// - BIN_PACK: sort hosts by the number of functions from the batch they are
+//             running. Bin-pack batches in increasing order to hosts in
+//             decreasing order.
+// - EMPTY_HOSTS: pack batches in increasing order to empty hosts.
+enum MigrationStrategy
+{
+    BIN_PACK,
+    EMPTY_HOSTS
+};
 }
