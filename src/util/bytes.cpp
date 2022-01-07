@@ -100,7 +100,6 @@ std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
   std::span<const uint8_t> a,
   std::span<const uint8_t> b)
 {
-    PROF_START(ByteArrayDiff)
     std::vector<std::pair<uint32_t, uint32_t>> regions;
 
     // Iterate through diffs and work out start and finish offsets of each dirty
@@ -125,25 +124,6 @@ std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
         regions.emplace_back(diffStart, a.size() - diffStart);
     }
 
-    PROF_END(ByteArrayDiff)
     return regions;
 }
-
-std::vector<bool> diffArrays(std::span<const uint8_t> a,
-                             std::span<const uint8_t> b)
-{
-    if (a.size() != b.size()) {
-        SPDLOG_ERROR(
-          "Cannot diff arrays of different sizes {} != {}", a.size(), b.size());
-        throw std::runtime_error("Cannot diff arrays of different sizes");
-    }
-
-    std::vector<bool> diffs(a.size(), false);
-    for (int i = 0; i < a.size(); i++) {
-        diffs[i] = a.data()[i] != b.data()[i];
-    }
-
-    return diffs;
-}
-
 }

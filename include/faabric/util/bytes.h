@@ -35,12 +35,6 @@ std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
   std::span<const uint8_t> a,
   std::span<const uint8_t> b);
 
-/*
- * Returns a list of flags marking which bytes differ between the two arrays.
- */
-std::vector<bool> diffArrays(std::span<const uint8_t> a,
-                             std::span<const uint8_t> b);
-
 template<class T>
 T unalignedRead(const uint8_t* bytes)
 {

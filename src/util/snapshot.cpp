@@ -526,6 +526,7 @@ void SnapshotMergeRegion::addOverwriteDiff(
   std::span<const uint8_t> updated,
   std::pair<uint32_t, uint32_t> dirtyRegion)
 {
+    PROF_START(OverwriteDiff)
     // In this function we have two possibilities:
     // - Dirty region overlaps original and we can compare
     // - Dirty region is past original, in which case we need to extend
@@ -586,6 +587,7 @@ void SnapshotMergeRegion::addOverwriteDiff(
                            diffStart,
                            updated.subspan(diffStart, diffLength));
     }
+    PROF_END(OverwriteDiff)
 }
 
 SnapshotMergeRegion::SnapshotMergeRegion(uint32_t offsetIn,
@@ -649,6 +651,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                                  "outside original snapshot");
     }
 
+    PROF_START(NonOverwriteDiff)
     uint8_t* updated = updatedData.data() + offset;
     const uint8_t* original = originalData.data() + offset;
 
@@ -713,5 +716,6 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                            offset,
                            std::span<const uint8_t>(updated, length));
     }
+    PROF_END(NonOverwriteDiff)
 }
 }

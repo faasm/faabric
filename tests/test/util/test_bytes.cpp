@@ -213,33 +213,4 @@ TEST_CASE("Test diffing byte array regions", "[util]")
         REQUIRE(actual.at(i).second == expected.at(i).second);
     }
 }
-
-TEST_CASE("Test diffing byte arrays", "[util]")
-{
-    std::vector<uint8_t> a;
-    std::vector<uint8_t> b;
-    std::vector<bool> expected;
-
-    SECTION("Equal")
-    {
-        a = { 0, 1, 2, 3 };
-        b = { 0, 1, 2, 3 };
-        expected = std::vector<bool>(a.size(), false);
-    }
-
-    SECTION("Empty") {}
-
-    SECTION("Not equal")
-    {
-        a = { 0, 0, 2, 2, 3, 3, 4, 4, 5, 5 };
-        b = { 0, 1, 1, 2, 3, 6, 6, 6, 5, 5 };
-        expected = { false, true, true, false, false,
-                     true,  true, true, false, false };
-    }
-
-    std::vector<bool> actual =
-      diffArrays({ a.data(), a.size() }, { b.data(), b.size() });
-
-    REQUIRE(actual == expected);
-}
 }

@@ -4,59 +4,61 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/timing.h>
 
-#define MEM_SIZE (4 * 1024 * 1024)
+#define MEM_SIZE (100 * 1024 * 1024)
 
 using namespace faabric::util;
 
 void doRun()
 {
-    std::vector<uint8_t> dataA(MEM_SIZE, 0);
-    std::vector<uint8_t> dataB(MEM_SIZE, 0);
+    MemoryRegion dataA = allocatePrivateMemory(MEM_SIZE);
+    MemoryRegion dataB = allocatePrivateMemory(MEM_SIZE);
 
     // Start tracking one of the bits of memory
     DirtyTracker& tracker = getDirtyTracker();
-    tracker.startTracking(dataA);
-    tracker.startThreadLocalTracking(dataA);
+    std::span<uint8_t> memView(dataA.get(), MEM_SIZE);
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
 
     // Write some data with certain pages containing changes
-    bool modifyPages = false;
-    bool smallChanges = false;
+    bool modifyPage = false;
+    bool addDiff = false;
     for (int i = 0; i < MEM_SIZE; i++) {
         if (i % HOST_PAGE_SIZE == 0) {
-            modifyPages = !modifyPages;
+            modifyPage = !modifyPage;
         }
 
-        if (modifyPages) {
+        if (modifyPage) {
             if (i % 200 == 0) {
-                smallChanges = !smallChanges;
+                addDiff = !addDiff;
             }
 
-            if (smallChanges) {
-                dataA.at(i) = 3;
-                dataB.at(i) = 4;
+            if (addDiff) {
+                dataA.get()[i] = 3;
+                dataB.get()[i] = 4;
             } else {
-                dataA.at(i) = 1;
-                dataB.at(i) = 1;
+                dataA.get()[i] = 1;
+                dataB.get()[i] = 1;
             }
         }
     }
 
     // Create a snapshot from the other
-    auto snap = std::make_shared<SnapshotData>(dataB);
+    auto snap =
+      std::make_shared<SnapshotData>(std::span<uint8_t>(dataB.get(), MEM_SIZE));
+    snap->fillGapsWithOverwriteRegions();
 
-    tracker.stopTracking(dataA);
-    tracker.stopThreadLocalTracking(dataA);
+    tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
 
-    auto dirtyRegions = tracker.getBothDirtyOffsets(dataA);
+    auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
     SPDLOG_INFO("Got {} dirty regions", dirtyRegions.size());
 
-    auto diffs = snap->diffWithDirtyRegions(dataA, dirtyRegions);
+    auto diffs = snap->diffWithDirtyRegions(memView, dirtyRegions);
     SPDLOG_INFO("Got {} diffs", diffs.size());
 }
 
 int main()
 {
-
     PROF_BEGIN
 
     doRun();
