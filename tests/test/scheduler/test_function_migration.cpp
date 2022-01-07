@@ -27,7 +27,8 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
                  "Test starting and stopping the function migration thread",
                  "[scheduler]")
 {
-    migrationThread.start();
+    int wakeUpPeriodSeconds = 2;
+    migrationThread.start(wakeUpPeriodSeconds);
 
     SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 

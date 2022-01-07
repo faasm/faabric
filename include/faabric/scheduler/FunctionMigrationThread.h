@@ -8,9 +8,14 @@ namespace faabric::scheduler {
 class FunctionMigrationThread
 {
   public:
-    void start();
+    // Start a background thread that, every wake up period, will check if there
+    // are migration opportunities for in-flight apps that have opted in to
+    // being checked for migrations.
+    void start(int wakeUpPeriodSecondsIn);
 
     void stop();
+
+    int wakeUpPeriodSeconds;
 
   private:
     std::unique_ptr<std::thread> workThread = nullptr;

@@ -138,7 +138,7 @@ void Scheduler::reset()
     pushedSnapshotsMap.clear();
 
     // Reset function migration tracking
-    wakeUpPeriod = LONG_FUNCTION_MIGRATION_SLEEP_TIME_SECONDS;
+    functionMigrationThread.stop();
     inFlightRequests.clear();
     pendingMigrations.clear();
 
@@ -455,12 +455,15 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         auto decisionPtr =
           std::make_shared<faabric::util::SchedulingDecision>(decision);
         inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
-        wakeUpPeriod =
-          std::min<int>(wakeUpPeriod, firstMsg.migrationcheckperiod());
-        // If this is the first recorded in-flight request to be checked for
-        // migration opportunities, start the migration thread
         if (inFlightRequests.size() == 1) {
-            functionMigrationThread.start();
+            functionMigrationThread.start(firstMsg.migrationcheckperiod());
+        } else if (firstMsg.migrationcheckperiod() !=
+                   functionMigrationThread.wakeUpPeriodSeconds) {
+            SPDLOG_WARN("Ignoring migration check period as the migration"
+                        "thread was initialised with a different one."
+                        "(provided: {}, current: {})",
+                        firstMsg.migrationcheckperiod(),
+                        functionMigrationThread.wakeUpPeriodSeconds);
         }
     }
 
@@ -1169,10 +1172,6 @@ void Scheduler::checkForMigrationOpportunities(
     std::vector<std::shared_ptr<faabric::PendingMigrations>>
       tmpPendingMigrations;
 
-    // If the application with the shortest check period is not in-flight
-    // anymore, update the wake up period to the new minimum check period.
-    int newWakeUpPeriod = LONG_FUNCTION_MIGRATION_SLEEP_TIME_SECONDS;
-
     {
         faabric::util::SharedLock lock(mx);
 
@@ -1186,13 +1185,6 @@ void Scheduler::checkForMigrationOpportunities(
             // skip
             if (canAppBeMigrated(originalDecision.appId) != nullptr) {
                 continue;
-            }
-
-            // Check if the wake up period ought to be corrected
-            int checkPeriodInSeconds =
-              req->messages().at(0).migrationcheckperiod();
-            if (checkPeriodInSeconds < newWakeUpPeriod) {
-                newWakeUpPeriod = checkPeriodInSeconds;
             }
 
             faabric::PendingMigrations msg;
@@ -1278,13 +1270,9 @@ void Scheduler::checkForMigrationOpportunities(
         }
     }
 
-    // We could check first if the new wake up period is greater than the
-    // existing one, but by always overwriting it we save one atomic operation.
-    wakeUpPeriod.store(newWakeUpPeriod, std::memory_order_release);
-
     // Finally, store all the pending migrations in the shared map acquiring
     // a unique lock.
-    {
+    if (tmpPendingMigrations.size() > 0) {
         faabric::util::FullLock lock(mx);
         for (auto msgPtr : tmpPendingMigrations) {
             SPDLOG_INFO("Adding app: {}", msgPtr->appid());
@@ -1303,16 +1291,5 @@ std::shared_ptr<faabric::PendingMigrations> Scheduler::canAppBeMigrated(
     }
 
     return pendingMigrations[appId];
-}
-
-// This function returns the time to sleep in seconds
-// 06/01/22 - The current mechanism to wake up the migration server thread is
-// naive: we wake it as often as the application with the strongest frequency
-// requirements wants to. This means that the user supplied message parameter
-// to set the migration check period is an upper bound: we could check more
-// often. This reasoning simplifies the code greatly.
-int Scheduler::getFunctionMigrationServerSleepTime()
-{
-    return wakeUpPeriod.load(std::memory_order_acquire);
 }
 }

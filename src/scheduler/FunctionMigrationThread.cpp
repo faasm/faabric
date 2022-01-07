@@ -4,24 +4,9 @@
 #include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
-void FunctionMigrationThread::start()
+void FunctionMigrationThread::start(int wakeUpPeriodSecondsIn)
 {
-    /*
-    auto& conf = faabric::util::getSystemConfig();
-    if (conf.funcMigration == "off") {
-        SPDLOG_INFO(
-          "Not starting migration thread as it is not enabled in the config");
-        return;
-    }
-
-    if (conf.migrationCheckPeriod <= 0) {
-        SPDLOG_ERROR("Starting function migration server with non-positive "
-                     "check period: {}",
-                     conf.migrationCheckPeriod);
-        throw std::runtime_error(
-          "Migration server received wrong check period");
-    }
-    */
+    wakeUpPeriodSeconds = wakeUpPeriodSecondsIn;
 
     // Main work loop
     workThread = std::make_unique<std::thread>([&] {
@@ -35,18 +20,13 @@ void FunctionMigrationThread::start()
                 break;
             }
 
-            // Work out how much we need to sleep for. Note that the scheduler
-            // returns the time in seconds.
-            int timeToSleep = faabric::scheduler::getScheduler()
-                                .getFunctionMigrationServerSleepTime();
-
             std::cv_status returnVal = mustStopCv.wait_for(
-              lock, std::chrono::milliseconds(timeToSleep * 1000));
+              lock, std::chrono::milliseconds(wakeUpPeriodSeconds * 1000));
 
             // If we hit the timeout it means we have not been notified to
             // reset or stop. Thus we check for migration oportunities.
             if (returnVal == std::cv_status::timeout) {
-                SPDLOG_INFO("Checking for migration oportunities");
+                SPDLOG_DEBUG("Checking for migration oportunities");
                 faabric::scheduler::getScheduler()
                   .checkForMigrationOpportunities();
             }
@@ -58,12 +38,6 @@ void FunctionMigrationThread::start()
 
 void FunctionMigrationThread::stop()
 {
-    /*
-    auto& conf = faabric::util::getSystemConfig();
-    if (conf.funcMigration == "off") {
-        return;
-    }
-    */
     if (workThread == nullptr) {
         return;
     }

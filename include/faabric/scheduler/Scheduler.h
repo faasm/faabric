@@ -18,7 +18,6 @@
 #include <shared_mutex>
 
 #define AVAILABLE_HOST_SET "available_hosts"
-#define LONG_FUNCTION_MIGRATION_SLEEP_TIME_SECONDS 60
 
 namespace faabric::scheduler {
 
@@ -205,8 +204,6 @@ class Scheduler
     std::shared_ptr<faabric::PendingMigrations> canAppBeMigrated(
       uint32_t appId);
 
-    int getFunctionMigrationServerSleepTime();
-
   private:
     std::string thisHost;
 
@@ -279,7 +276,6 @@ class Scheduler
     faabric::transport::PointToPointBroker& broker;
 
     // --- Function migration ---
-    std::atomic<int> wakeUpPeriod = LONG_FUNCTION_MIGRATION_SLEEP_TIME_SECONDS;
     FunctionMigrationThread functionMigrationThread;
     std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
     std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
