@@ -5,7 +5,7 @@
 #include <thread>
 
 namespace faabric::scheduler {
-class FunctionMigrationServer
+class FunctionMigrationThread
 {
   public:
     void start();

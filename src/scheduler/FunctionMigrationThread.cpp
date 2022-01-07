@@ -1,11 +1,12 @@
-#include <faabric/scheduler/FunctionMigrationServer.h>
+#include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::scheduler {
-void FunctionMigrationServer::start()
+void FunctionMigrationThread::start()
 {
+    /*
     auto& conf = faabric::util::getSystemConfig();
     if (conf.funcMigration == "off") {
         SPDLOG_INFO(
@@ -20,6 +21,7 @@ void FunctionMigrationServer::start()
         throw std::runtime_error(
           "Migration server received wrong check period");
     }
+    */
 
     // Main work loop
     workThread = std::make_unique<std::thread>([&] {
@@ -33,12 +35,16 @@ void FunctionMigrationServer::start()
                 break;
             }
 
+            // Work out how much we need to sleep for. Note that the scheduler
+            // returns the time in seconds.
+            int timeToSleep = faabric::scheduler::getScheduler()
+                                .getFunctionMigrationServerSleepTime();
+
             std::cv_status returnVal = mustStopCv.wait_for(
-              lock,
-              std::chrono::milliseconds(conf.migrationCheckPeriod * 1000));
+              lock, std::chrono::milliseconds(timeToSleep * 1000));
 
             // If we hit the timeout it means we have not been notified to
-            // stop. Thus we check for migration oportunities.
+            // reset or stop. Thus we check for migration oportunities.
             if (returnVal == std::cv_status::timeout) {
                 SPDLOG_INFO("Checking for migration oportunities");
                 faabric::scheduler::getScheduler()
@@ -50,10 +56,15 @@ void FunctionMigrationServer::start()
     });
 }
 
-void FunctionMigrationServer::stop()
+void FunctionMigrationThread::stop()
 {
+    /*
     auto& conf = faabric::util::getSystemConfig();
     if (conf.funcMigration == "off") {
+        return;
+    }
+    */
+    if (workThread == nullptr) {
         return;
     }
 

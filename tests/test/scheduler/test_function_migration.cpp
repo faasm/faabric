@@ -6,7 +6,7 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
-#include <faabric/scheduler/FunctionMigrationServer.h>
+#include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
@@ -17,48 +17,26 @@ class FunctionMigrationTestFixture
   , public ConfTestFixture
 {
   protected:
-    FunctionMigrationServer server;
+    FunctionMigrationThread migrationThread;
 
   public:
-    FunctionMigrationTestFixture()
-    {
-        conf.funcMigration = "on";
-        conf.migrationCheckPeriod = 2;
-    }
+    FunctionMigrationTestFixture() {}
 };
 
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
-                 "Test starting and stopping the function migration server",
+                 "Test starting and stopping the function migration thread",
                  "[scheduler]")
 {
-    SECTION("Disable function migration")
-    {
-        // No-ops the start and stop calls
-        conf.funcMigration = "off";
-    }
+    migrationThread.start();
 
-    SECTION("Enable function migration") { conf.funcMigration = "on"; }
+    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
 
-    server.start();
-
-    SLEEP_MS(conf.migrationCheckPeriod * 1000);
-
-    server.stop();
+    migrationThread.stop();
 }
 
 TEST_CASE_METHOD(
   FunctionMigrationTestFixture,
-  "Test can't run function migration server with non-positive check period",
-  "[scheduler]")
-{
-    conf.migrationCheckPeriod = 0;
-
-    REQUIRE_THROWS(server.start());
-}
-
-TEST_CASE_METHOD(
-  FunctionMigrationTestFixture,
-  "Test function migration server detects migration opportunities",
+  "Test function migration thread only works if set in the message",
   "[scheduler]")
 {
     // First set resources before calling the functions: one will be allocated
@@ -68,11 +46,82 @@ TEST_CASE_METHOD(
     setHostResources(hosts, slots);
 
     auto req = faabric::util::batchExecFactory("foo", "migration", 2);
+    uint32_t appId = req->messages().at(0).appid();
+    std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
+    SECTION("Migration not enabled") { expectedMigrations = nullptr; }
+
+    SECTION("Migration enabled")
+    {
+        req->mutable_messages()->at(0).set_migrationcheckperiod(2);
+
+        // Build expected result
+        faabric::PendingMigrations expected;
+        expected.set_appid(appId);
+        auto* migration = expected.add_migrations();
+        migration->set_messageid(req->messages().at(1).id());
+        migration->set_srchost(hosts.at(1));
+        migration->set_dsthost(hosts.at(0));
+        expectedMigrations =
+          std::make_shared<faabric::PendingMigrations>(expected);
+    }
+
     auto decision = sch.callFunctions(req);
+
+    // Update host resources so that a migration opportunity appears, but will
+    // only be detected if migration check period is set.
+    faabric::HostResources r;
+    r.set_slots(2);
+    r.set_usedslots(1);
+    sch.setThisHostResources(r);
+
+    sch.checkForMigrationOpportunities();
+
+    auto actualMigrations = sch.canAppBeMigrated(appId);
+    if (expectedMigrations == nullptr) {
+        REQUIRE(actualMigrations == expectedMigrations);
+    } else {
+        REQUIRE(actualMigrations->appid() == expectedMigrations->appid());
+        REQUIRE(actualMigrations->migrations_size() ==
+                expectedMigrations->migrations_size());
+        for (int i = 0; i < actualMigrations->migrations_size(); i++) {
+            auto actual = actualMigrations->mutable_migrations()->at(i);
+            auto expected = expectedMigrations->mutable_migrations()->at(i);
+            REQUIRE(actual.messageid() == expected.messageid());
+            REQUIRE(actual.srchost() == expected.srchost());
+            REQUIRE(actual.dsthost() == expected.dsthost());
+        }
+    }
+
+    faabric::Message res = sch.getFunctionResult(req->messages().at(0).id(),
+                                                 2 * SHORT_TEST_TIMEOUT_MS);
+    REQUIRE(res.returnvalue() == 0);
+
+    // Check that after the result is set, the app can't be migrated no more
+    sch.checkForMigrationOpportunities();
+    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+}
+
+TEST_CASE_METHOD(
+  FunctionMigrationTestFixture,
+  "Test function migration thread detects migration opportunities",
+  "[scheduler]")
+{
+    // First set resources before calling the functions: one will be allocated
+    // locally, another one in the remote host
+    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<int> slots = { 1, 1 };
+    setHostResources(hosts, slots);
+
+    auto req = faabric::util::batchExecFactory("foo", "migration", 2);
+    req->mutable_messages()->at(0).set_migrationcheckperiod(2);
     uint32_t appId = req->messages().at(0).appid();
 
-    // Set up expectations
+    auto decision = sch.callFunctions(req);
+
     std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
+
+    // As we don't update the available resources, no migration opportunities
+    // will appear, even though we are checking for them
     SECTION("Can not migrate") { expectedMigrations = nullptr; }
 
     SECTION("Can migrate")
@@ -133,6 +182,7 @@ TEST_CASE_METHOD(
     setHostResources(hosts, slots);
 
     auto req = faabric::util::batchExecFactory("foo", "migration", 4);
+    req->mutable_messages()->at(0).set_migrationcheckperiod(2);
     auto decision = sch.callFunctions(req);
     uint32_t appId = req->messages().at(0).appid();
 

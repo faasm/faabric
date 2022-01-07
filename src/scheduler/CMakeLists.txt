@@ -4,7 +4,7 @@ faabric_lib(scheduler
     Executor.cpp
     FunctionCallClient.cpp
     FunctionCallServer.cpp
-    FunctionMigrationServer.cpp
+    FunctionMigrationThread.cpp
     MpiContext.cpp
     MpiMessageBuffer.cpp
     MpiWorld.cpp
