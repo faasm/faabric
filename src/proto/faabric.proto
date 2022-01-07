@@ -164,6 +164,9 @@ message Message {
     bool recordExecGraph = 41;
     map<string, int32> intExecGraphDetails = 42;
     map<string, string> execGraphDetails = 43;
+
+    // Function migration
+    int32 migrationCheckPeriod = 44;
 }
 
 // ---------------------------------------------

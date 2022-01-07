@@ -47,6 +47,8 @@ TEST_CASE("Test message to JSON round trip", "[util]")
     auto& intMap = *msg.mutable_intexecgraphdetails();
     intMap["foo"] = 0;
 
+    msg.set_migrationcheckperiod(33);
+
     SECTION("Dodgy characters") { msg.set_inputdata("[0], %$ 2233 9"); }
 
     SECTION("Bytes")
