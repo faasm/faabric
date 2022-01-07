@@ -13,6 +13,7 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointServer.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
@@ -61,14 +62,25 @@ class StateTestFixture
     }
 };
 
-class SchedulerTestFixture
+class DirtyTrackingTestFixture
+{
+  public:
+    DirtyTrackingTestFixture()
+      : tracker(faabric::util::getDirtyTracker())
+    {}
+
+    ~DirtyTrackingTestFixture() { tracker.clearAll(); }
+
+  protected:
+    faabric::util::DirtyTracker& tracker;
+};
+
+class SchedulerTestFixture : public DirtyTrackingTestFixture
 {
   public:
     SchedulerTestFixture()
       : sch(faabric::scheduler::getScheduler())
     {
-        faabric::util::resetDirtyTracking();
-
         faabric::util::setMockMode(false);
         faabric::util::setTestMode(true);
 
@@ -89,29 +101,22 @@ class SchedulerTestFixture
 
         sch.shutdown();
         sch.addHostToGlobalSet();
-
-        faabric::util::resetDirtyTracking();
     };
 
   protected:
     faabric::scheduler::Scheduler& sch;
 };
 
-class SnapshotTestFixture
+class SnapshotTestFixture : public DirtyTrackingTestFixture
 {
   public:
     SnapshotTestFixture()
       : reg(faabric::snapshot::getSnapshotRegistry())
     {
-        faabric::util::resetDirtyTracking();
         reg.clear();
     }
 
-    ~SnapshotTestFixture()
-    {
-        faabric::util::resetDirtyTracking();
-        reg.clear();
-    }
+    ~SnapshotTestFixture() { reg.clear(); }
 
     std::shared_ptr<faabric::util::SnapshotData> setUpSnapshot(
       const std::string& snapKey,
@@ -293,19 +298,23 @@ class PointToPointClientServerFixture
     faabric::transport::PointToPointServer server;
 };
 
+#define TEST_EXECUTOR_DEFAULT_MEMORY_SIZE (10 * faabric::util::HOST_PAGE_SIZE)
+
 class TestExecutor final : public faabric::scheduler::Executor
 {
   public:
     TestExecutor(faabric::Message& msg);
 
     faabric::util::MemoryRegion dummyMemory = nullptr;
-    size_t dummyMemorySize = 0;
+    size_t dummyMemorySize = TEST_EXECUTOR_DEFAULT_MEMORY_SIZE;
 
     void reset(faabric::Message& msg) override;
 
-    void restore(faabric::Message& msg) override;
+    void restore(const std::string& snapshotKey) override;
 
-    faabric::util::MemoryView getMemoryView() override;
+    std::span<uint8_t> getMemoryView() override;
+
+    void setUpDummyMemory(size_t memSize);
 
     int32_t executeTask(
       int threadPoolIdx,

@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include <faabric/util/dirty.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
@@ -79,16 +80,21 @@ class SnapshotMergeRegion
 
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
-                  std::span<const uint8_t> updatedData,
-                  std::pair<uint32_t, uint32_t> dirtyRange);
+                  std::span<uint8_t> updatedData,
+                  std::pair<uint32_t, uint32_t> dirtyRegion);
 
   private:
     void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
                           std::span<const uint8_t> original,
-                          std::span<const uint8_t> updated,
-                          std::pair<uint32_t, uint32_t> dirtyRange);
+                          std::span<const uint8_t> updatedData,
+                          std::pair<uint32_t, uint32_t> dirtyRegion);
 };
 
+/*
+ * Calculates a diff value that can later be merged into the master copy of the
+ * given snapshot. It will be used on remote hosts to calculate the diffs that
+ * are to be sent back to the master host.
+ */
 template<typename T>
 inline bool calculateDiffValue(const uint8_t* original,
                                uint8_t* updated,
@@ -138,6 +144,10 @@ inline bool calculateDiffValue(const uint8_t* original,
     return true;
 }
 
+/*
+ * Applies a diff value to the master copy of a snapshot, where the diff has
+ * been calculated based on a change made to another copy of the same snapshot.
+ */
 template<typename T>
 inline T applyDiffValue(const uint8_t* original,
                         const uint8_t* diff,
@@ -221,6 +231,20 @@ class SnapshotData
 
     size_t getMaxSize() const { return maxSize; }
 
+    // Returns a list of changes that have been made to the snapshot since the
+    // last time the list was cleared.
+    std::vector<SnapshotDiff> getTrackedChanges();
+
+    // Clears the list of tracked changes.
+    void clearTrackedChanges();
+
+    // Returns the list of changes in the given dirty regions versus their
+    // original value in the snapshot, based on the merge regions set on this
+    // snapshot.
+    std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
+      std::span<uint8_t> updated,
+      std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions);
+
   private:
     size_t size = 0;
     size_t maxSize = 0;
@@ -233,6 +257,8 @@ class SnapshotData
 
     std::vector<SnapshotDiff> queuedDiffs;
 
+    std::vector<std::pair<uint32_t, uint32_t>> trackedChanges;
+
     // Note - we care about the order of this map, as we iterate through it
     // in order of offsets
     std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
@@ -242,26 +268,6 @@ class SnapshotData
     void mapToMemory(uint8_t* target, bool shared);
 
     void writeData(std::span<const uint8_t> buffer, uint32_t offset = 0);
-};
-
-class MemoryView
-{
-  public:
-    // Note - this object is just a view of a section of memory, and does not
-    // own the underlying data
-    MemoryView() = default;
-
-    explicit MemoryView(std::span<const uint8_t> dataIn);
-
-    std::vector<SnapshotDiff> getDirtyRegions();
-
-    std::vector<SnapshotDiff> diffWithSnapshot(
-      std::shared_ptr<SnapshotData> snap);
-
-    std::span<const uint8_t> getData() { return data; }
-
-  private:
-    std::span<const uint8_t> data;
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);

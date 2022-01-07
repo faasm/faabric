@@ -5,8 +5,10 @@
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/config.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/scheduling.h>
@@ -32,13 +34,11 @@ class ExecutorTask
     ExecutorTask(int messageIndexIn,
                  std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                  std::shared_ptr<std::atomic<int>> batchCounterIn,
-                 bool needsSnapshotSyncIn,
                  bool skipResetIn);
 
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
     int messageIndex = 0;
-    bool needsSnapshotSync = false;
     bool skipReset = false;
 };
 
@@ -50,6 +50,10 @@ class Executor
     explicit Executor(faabric::Message& msg);
 
     virtual ~Executor() = default;
+
+    std::vector<std::pair<uint32_t, int32_t>> executeThreads(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions);
 
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -69,20 +73,42 @@ class Executor
 
     void releaseClaim();
 
-    virtual faabric::util::MemoryView getMemoryView();
+    std::shared_ptr<faabric::util::SnapshotData> getMainThreadSnapshot(
+      faabric::Message& msg,
+      bool createIfNotExists = false);
 
   protected:
-    virtual void restore(faabric::Message& msg);
+    virtual void restore(const std::string& snapshotKey);
 
     virtual void postFinish();
 
+    virtual std::span<uint8_t> getMemoryView();
+
+    virtual void setMemorySize(size_t newSize);
+
     faabric::Message boundMessage;
+
+    Scheduler& sch;
+
+    faabric::snapshot::SnapshotRegistry& reg;
+
+    faabric::util::DirtyTracker& tracker;
 
     uint32_t threadPoolSize = 0;
 
   private:
     std::atomic<bool> claimed = false;
 
+    // ---- Application threads ----
+    std::shared_mutex threadExecutionMutex;
+    std::unordered_map<std::string, int> cachedGroupIds;
+    std::unordered_map<std::string, std::vector<std::string>>
+      cachedDecisionHosts;
+    std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions;
+
+    void deleteMainThreadSnapshot(const faabric::Message& msg);
+
+    // ---- Function execution thread pool ----
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::thread>> threadPoolThreads;
     std::vector<std::shared_ptr<std::thread>> deadThreads;
@@ -92,6 +118,10 @@ class Executor
 
     void threadPoolThread(int threadPoolIdx);
 };
+
+Executor* getExecutingExecutor();
+
+void setExecutingExecutor(Executor* exec);
 
 class Scheduler
 {
@@ -138,6 +168,7 @@ class Scheduler
 
     void pushSnapshotDiffs(
       const faabric::Message& msg,
+      const std::string& snapshotKey,
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void setThreadResultLocally(uint32_t msgId, int32_t returnValue);

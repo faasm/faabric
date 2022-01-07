@@ -68,6 +68,9 @@ void SystemConfig::initialise()
       this->getSystemConfIntParam("SNAPSHOT_SERVER_THREADS", "2");
     pointToPointServerThreads =
       this->getSystemConfIntParam("POINT_TO_POINT_SERVER_THREADS", "2");
+
+    // Dirty tracking
+    dirtyTrackingMode = getEnvVar("DIRTY_TRACKING_MODE", "segfault");
 }
 
 int SystemConfig::getSystemConfIntParam(const char* name,

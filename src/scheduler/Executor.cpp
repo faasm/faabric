@@ -5,35 +5,52 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
+#include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/snapshot.h>
+#include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
 
 #define POOL_SHUTDOWN -1
 
 namespace faabric::scheduler {
 
+static thread_local Executor* executingExecutor = nullptr;
+
+Executor* getExecutingExecutor()
+{
+    return executingExecutor;
+}
+
+void setExecutingExecutor(Executor* exec)
+{
+    executingExecutor = exec;
+}
+
 ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                            std::shared_ptr<std::atomic<int>> batchCounterIn,
-                           bool needsSnapshotSyncIn,
                            bool skipResetIn)
   : req(std::move(reqIn))
   , batchCounter(std::move(batchCounterIn))
   , messageIndex(messageIndexIn)
-  , needsSnapshotSync(needsSnapshotSyncIn)
   , skipReset(skipResetIn)
 {}
 
 // TODO - avoid the copy of the message here?
 Executor::Executor(faabric::Message& msg)
   : boundMessage(msg)
+  , sch(getScheduler())
+  , reg(faabric::snapshot::getSnapshotRegistry())
+  , tracker(faabric::util::getDirtyTracker())
   , threadPoolSize(faabric::util::getUsableCores())
   , threadPoolThreads(threadPoolSize)
   , threadTaskQueues(threadPoolSize)
@@ -62,7 +79,7 @@ void Executor::finish()
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
         threadTaskQueues[i].enqueue(
-          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false, false));
+          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false));
 
         faabric::util::UniqueLock threadsLock(threadsMutex);
         // Copy shared_ptr to avoid racing
@@ -99,6 +116,189 @@ void Executor::finish()
     deadThreads.clear();
 }
 
+std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions)
+{
+    SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
+
+    faabric::Message& msg = req->mutable_messages()->at(0);
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+    std::string funcStr = faabric::util::funcToString(msg, false);
+
+    std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
+    bool exists = false;
+    {
+        faabric::util::SharedLock lock(threadExecutionMutex);
+        exists = reg.snapshotExists(snapshotKey);
+    }
+
+    if (!exists) {
+        faabric::util::FullLock lock(threadExecutionMutex);
+        if (!reg.snapshotExists(snapshotKey)) {
+            SPDLOG_DEBUG(
+              "Creating main thread snapshot: {} for {}", snapshotKey, funcStr);
+
+            snap =
+              std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+            reg.registerSnapshot(snapshotKey, snap);
+        } else {
+            exists = true;
+        }
+    }
+
+    if (exists) {
+        SPDLOG_DEBUG(
+          "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
+
+        // Get main snapshot
+        snap = reg.getSnapshot(snapshotKey);
+        std::span<uint8_t> memView = getMemoryView();
+
+        // Get dirty regions since last batch of threads
+        tracker.stopTracking(memView);
+        tracker.stopThreadLocalTracking(memView);
+
+        std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
+          tracker.getBothDirtyOffsets(memView);
+
+        // Apply changes to snapshot
+        snap->fillGapsWithOverwriteRegions();
+        std::vector<faabric::util::SnapshotDiff> updates =
+          snap->diffWithDirtyRegions(memView, dirtyRegions);
+
+        if (updates.empty()) {
+            SPDLOG_TRACE(
+              "No updates to main thread snapshot for {} from {} dirty regions",
+              faabric::util::funcToString(msg, false),
+              dirtyRegions.size());
+        } else {
+            SPDLOG_DEBUG("Updating main thread snapshot for {} with {} diffs",
+                         faabric::util::funcToString(msg, false),
+                         updates.size());
+            snap->queueDiffs(updates);
+            snap->writeQueuedDiffs();
+        }
+
+        snap->clearMergeRegions();
+    }
+
+    // Now we have to apply the merge regions for this parallel section
+    for (const auto& mr : mergeRegions) {
+        snap->addMergeRegion(
+          mr.offset, mr.length, mr.dataType, mr.operation, true);
+    }
+
+    // TODO - here the main thread will wait, so technically frees up a slot
+    // that could be used.
+    std::string cacheKey =
+      std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
+    bool hasCachedDecision = false;
+    {
+        faabric::util::SharedLock lock(threadExecutionMutex);
+        hasCachedDecision =
+          cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
+    }
+
+    if (!hasCachedDecision) {
+        faabric::util::FullLock lock(threadExecutionMutex);
+        if (cachedDecisionHosts.find(cacheKey) == cachedDecisionHosts.end()) {
+            // Set up a new group
+            int groupId = faabric::util::generateGid();
+            for (auto& m : *req->mutable_messages()) {
+                m.set_groupid(groupId);
+                m.set_groupsize(req->messages_size());
+            }
+
+            // Invoke the functions
+            faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+
+            // Cache the decision for next time
+            SPDLOG_DEBUG(
+              "No cached decision for {} x {}/{}, caching group {}, hosts: {}",
+              req->messages().size(),
+              msg.user(),
+              msg.function(),
+              groupId,
+              faabric::util::vectorToString<std::string>(decision.hosts));
+
+            cachedGroupIds[cacheKey] = groupId;
+            cachedDecisionHosts[cacheKey] = decision.hosts;
+        } else {
+            hasCachedDecision = true;
+        }
+    }
+
+    if (hasCachedDecision) {
+        // Get the cached group ID and hosts
+        int groupId = cachedGroupIds[cacheKey];
+        std::vector<std::string> hosts = cachedDecisionHosts[cacheKey];
+
+        // Sanity check we've got something the right size
+        if (hosts.size() != req->messages().size()) {
+            SPDLOG_ERROR("Cached decision for {}/{} has {} hosts, expected {}",
+                         msg.user(),
+                         msg.function(),
+                         hosts.size(),
+                         req->messages().size());
+
+            throw std::runtime_error(
+              "Cached threads scheduling decision invalid");
+        }
+
+        // Create the scheduling hint
+        faabric::util::SchedulingDecision hint(msg.appid(), groupId);
+        for (int i = 0; i < hosts.size(); i++) {
+            // Reuse the group id
+            faabric::Message& m = req->mutable_messages()->at(i);
+            m.set_groupid(groupId);
+            m.set_groupsize(req->messages_size());
+
+            // Add to the decision
+            hint.addMessage(hosts.at(i), m);
+        }
+
+        SPDLOG_DEBUG("Using cached decision for {}/{} {}, group {}",
+                     msg.user(),
+                     msg.function(),
+                     msg.appid(),
+                     hint.groupId);
+
+        // Invoke the functions
+        sch.callFunctions(req, hint);
+    }
+
+    // Await all child threads
+    std::vector<std::pair<uint32_t, int32_t>> results;
+    results.reserve(req->messages_size());
+    for (int i = 0; i < req->messages_size(); i++) {
+        uint32_t messageId = req->messages().at(i).id();
+
+        int result = sch.awaitThreadResult(messageId);
+        results.emplace_back(messageId, result);
+    }
+
+    SPDLOG_DEBUG(
+      "Executor {} got results for {} threads", id, req->messages_size());
+
+    // Write queued changes to snapshot
+    snap->writeQueuedDiffs();
+
+    // Set memory size to fit new snapshot
+    setMemorySize(snap->getSize());
+
+    // Remap the memory
+    std::span<uint8_t> memView = getMemoryView();
+    snap->mapToMemory(memView);
+
+    // Start tracking again
+    memView = getMemoryView();
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
+
+    return results;
+}
+
 void Executor::executeTasks(std::vector<int> msgIdxs,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -109,64 +309,74 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                  req->messages_size(),
                  funcStr);
 
-    // Note that this lock is specific to this executor, so will only block when
-    // multiple threads are trying to schedule tasks.
-    // This will only happen when child threads of the same function are
-    // competing, hence is rare so we can afford to be conservative here.
+    // Note that this lock is specific to this executor, so will only block
+    // when multiple threads are trying to schedule tasks. This will only
+    // happen when child threads of the same function are competing to
+    // schedule more threads, hence is rare so we can afford to be
+    // conservative here.
     faabric::util::UniqueLock lock(threadsMutex);
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string snapshotKey = firstMsg.snapshotkey();
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    bool isSnapshot = !snapshotKey.empty();
 
-    // Restore if we have a snapshot
-    if (isSnapshot) {
+    if (isThreads) {
+        // Check we get a valid memory view
+        std::span<uint8_t> memView = getMemoryView();
+        if (memView.empty()) {
+            SPDLOG_ERROR("Can't execute threads for {}, empty memory view",
+                         funcStr);
+            throw std::runtime_error("Empty memory view for threaded function");
+        }
+
+        // Restore threads from main thread snapshot
+        std::string snapKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+        SPDLOG_DEBUG(
+          "Restoring thread of {} from snapshot {}", funcStr, snapKey);
+        restore(snapKey);
+
+        // Get updated memory view and start global tracking of memory
+        memView = getMemoryView();
+        tracker.startTracking(memView);
+    } else if (!firstMsg.snapshotkey().empty()) {
+        // Restore from snapshot if provided
+        std::string snapshotKey = firstMsg.snapshotkey();
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
-        restore(firstMsg);
-    }
-
-    // Reset dirty page tracking if we're executing threads.
-    // Note this must be done after the restore has happened.
-    bool needsSnapshotSync = false;
-    if (isThreads && isSnapshot) {
-        faabric::util::resetDirtyTracking();
-        needsSnapshotSync = true;
+        restore(snapshotKey);
     }
 
     // Set up shared counter for this batch of tasks
     auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
 
-    // Work out if we should skip the reset after this batch. This happens for
-    // threads, as they will be restored from their respective snapshot on the
-    // next execution.
+    // Work out if we should skip the reset after this batch. This happens
+    // for threads, as they will be restored from their respective snapshot
+    // on the next execution.
     bool skipReset = isThreads;
 
     // Iterate through and invoke tasks. By default, we allocate tasks
-    // one-to-one with thread pool threads. Only once the pool is exhausted do
-    // we start overloading
+    // one-to-one with thread pool threads. Only once the pool is exhausted
+    // do we start overloading
     for (int msgIdx : msgIdxs) {
         const faabric::Message& msg = req->messages().at(msgIdx);
 
         int threadPoolIdx = -1;
         if (availablePoolThreads.empty()) {
             // Here all threads are still executing, so we have to overload.
-            // If any tasks are blocking we risk a deadlock, and can no longer
-            // guarantee the application will finish.
-            // In general if we're on the master host and this is a thread, we
-            // should avoid the zeroth and first pool threads as they are likely
-            // to be the main thread and the zeroth in the communication group,
+            // If any tasks are blocking we risk a deadlock, and can no
+            // longer guarantee the application will finish. In general if
+            // we're on the master host and this is a thread, we should
+            // avoid the zeroth and first pool threads as they are likely to
+            // be the main thread and the zeroth in the communication group,
             // so will be blocking.
             if (isThreads && isMaster) {
                 if (threadPoolSize <= 2) {
-                    SPDLOG_ERROR(
-                      "Insufficient pool threads ({}) to overload {} idx {}",
-                      threadPoolSize,
-                      funcStr,
-                      msg.appidx());
+                    SPDLOG_ERROR("Insufficient pool threads ({}) to "
+                                 "overload {} idx {}",
+                                 threadPoolSize,
+                                 funcStr,
+                                 msg.appidx());
 
                     throw std::runtime_error("Insufficient pool threads");
                 }
@@ -190,8 +400,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         }
 
         // Enqueue the task
-        threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(
-          msgIdx, req, batchCounter, needsSnapshotSync, skipReset));
+        threadTaskQueues[threadPoolIdx].enqueue(
+          ExecutorTask(msgIdx, req, batchCounter, skipReset));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -201,11 +411,58 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 }
 
+std::shared_ptr<faabric::util::SnapshotData> Executor::getMainThreadSnapshot(
+  faabric::Message& msg,
+  bool createIfNotExists)
+{
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+    bool exists = false;
+    {
+        faabric::util::SharedLock lock(threadExecutionMutex);
+        exists = reg.snapshotExists(snapshotKey);
+    }
+
+    if (!exists && createIfNotExists) {
+        faabric::util::FullLock lock(threadExecutionMutex);
+        if (!reg.snapshotExists(snapshotKey)) {
+            SPDLOG_DEBUG("Creating main thread snapshot: {} for {}",
+                         snapshotKey,
+                         faabric::util::funcToString(msg, false));
+
+            std::shared_ptr<faabric::util::SnapshotData> snap =
+              std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+            reg.registerSnapshot(snapshotKey, snap);
+        } else {
+            return reg.getSnapshot(snapshotKey);
+        }
+    } else if (!exists) {
+        SPDLOG_ERROR("No main thread snapshot {}", snapshotKey);
+        throw std::runtime_error("No main thread snapshot");
+    }
+
+    return reg.getSnapshot(snapshotKey);
+}
+
+void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
+{
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    if (reg.snapshotExists(snapshotKey)) {
+        SPDLOG_DEBUG("Deleting main thread snapshot for {}",
+                     faabric::util::funcToString(msg, false));
+
+        // Broadcast the deletion
+        sch.broadcastSnapshotDelete(msg, snapshotKey);
+
+        // Delete locally
+        reg.deleteSnapshot(snapshotKey);
+    }
+}
+
 void Executor::threadPoolThread(int threadPoolIdx)
 {
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
-    auto& sch = faabric::scheduler::getScheduler();
     faabric::transport::PointToPointBroker& broker =
       faabric::transport::getPointToPointBroker();
     const auto& conf = faabric::util::getSystemConfig();
@@ -220,8 +477,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         try {
             task = threadTaskQueues[threadPoolIdx].dequeue(conf.boundTimeout);
         } catch (faabric::util::QueueTimeoutException& ex) {
-            // If the thread has had no messages, it needs to
-            // remove itself
+            // If the thread has had no messages, it needs to remove itself
             SPDLOG_TRACE("Thread {}:{} got no messages in timeout {}ms",
                          id,
                          threadPoolIdx,
@@ -242,6 +498,15 @@ void Executor::threadPoolThread(int threadPoolIdx)
         faabric::Message& msg =
           task.req->mutable_messages()->at(task.messageIndex);
 
+        // Start dirty tracking if executing threads
+        bool isThreads =
+          task.req->type() == faabric::BatchExecuteRequest::THREADS;
+        if (isThreads) {
+            // If tracking is thread local, start here as it will happen for
+            // each thread
+            tracker.startThreadLocalTracking(getMemoryView());
+        }
+
         // Check ptp group
         std::shared_ptr<faabric::transport::PointToPointGroup> group = nullptr;
         if (msg.groupid() > 0) {
@@ -250,8 +515,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
         }
 
         bool isMaster = msg.masterhost() == conf.endpointHost;
-        bool isThreads =
-          task.req->type() == faabric::BatchExecuteRequest::THREADS;
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
@@ -260,6 +523,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      isThreads,
                      msg.groupid());
 
+        // Set executing executor
+        setExecutingExecutor(this);
+
+        // Execute the task
         int32_t returnValue;
         try {
             returnValue =
@@ -271,6 +538,22 @@ void Executor::threadPoolThread(int threadPoolIdx)
               "Task {} threw exception. What: {}", msg.id(), ex.what());
             SPDLOG_ERROR(errorMessage);
             msg.set_outputdata(errorMessage);
+        }
+
+        // Handle thread-local diffing for every thread
+        if (isThreads) {
+            // Stop dirty tracking
+            std::span<uint8_t> memView = getMemoryView();
+            tracker.stopThreadLocalTracking(memView);
+
+            // Add this thread's changes to executor-wide list of dirty regions
+            auto thisThreadDirtyRegions =
+              tracker.getThreadLocalDirtyOffsets(memView);
+
+            faabric::util::FullLock lock(threadExecutionMutex);
+            dirtyRegions.insert(dirtyRegions.end(),
+                                thisThreadDirtyRegions.begin(),
+                                thisThreadDirtyRegions.end());
         }
 
         // Set the return value
@@ -289,48 +572,78 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle snapshot diffs _before_ we reset the executor
-        faabric::util::MemoryView funcMemory = getMemoryView();
-        if (!funcMemory.getData().empty() && isLastInBatch &&
-            task.needsSnapshotSync) {
-            auto snap = faabric::snapshot::getSnapshotRegistry().getSnapshot(
-              msg.snapshotkey());
+        if (isLastInBatch && isThreads) {
+            // Stop non-thread-local tracking as we're the last in the batch
+            std::span<uint8_t> memView = getMemoryView();
+            tracker.stopTracking(memView);
 
-            SPDLOG_TRACE("Diffing memory with pre-execution snapshot for {}",
-                         msg.snapshotkey());
+            // Add non-thread-local dirty regions
+            {
+                faabric::util::FullLock lock(threadExecutionMutex);
+                std::vector<std::pair<uint32_t, uint32_t>> r =
+                  tracker.getDirtyOffsets(memView);
 
-            // Fill gaps with overwrites
-            snap->fillGapsWithOverwriteRegions();
-
-            // Work out the diffs
-            std::vector<faabric::util::SnapshotDiff> diffs =
-              funcMemory.diffWithSnapshot(snap);
-
-            // On master we queue the diffs locally directly, on a remote host
-            // we push them back to master
-            if (isMaster) {
-                SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} on "
-                             "master (group {})",
-                             diffs.size(),
-                             faabric::util::funcToString(msg, false),
-                             msg.snapshotkey(),
-                             msg.groupid());
-
-                snap->queueDiffs(diffs);
-            } else {
-                sch.pushSnapshotDiffs(msg, diffs);
+                dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
             }
 
-            // Reset dirty page tracking
-            faabric::util::resetDirtyTracking();
+            // Fill snapshot gaps with overwrite regions first
+            std::string mainThreadSnapKey =
+              faabric::util::getMainThreadSnapshotKey(msg);
+            auto snap = reg.getSnapshot(mainThreadSnapKey);
+            snap->fillGapsWithOverwriteRegions();
 
-            // Clear merge regions
-            SPDLOG_DEBUG("Clearing merge regions for {}", msg.snapshotkey());
+            // Compare snapshot with all dirty regions for this executor
+            std::vector<faabric::util::SnapshotDiff> diffs;
+            {
+                // Do the diffing
+                faabric::util::FullLock lock(threadExecutionMutex);
+                diffs = snap->diffWithDirtyRegions(memView, dirtyRegions);
+                dirtyRegions.clear();
+            }
+
+            if (diffs.empty()) {
+                SPDLOG_DEBUG("No diffs for {}", mainThreadSnapKey);
+            } else {
+                SPDLOG_DEBUG(
+                  "Queueing {} diffs for {} to snapshot {} (group {})",
+                  diffs.size(),
+                  faabric::util::funcToString(msg, false),
+                  mainThreadSnapKey,
+                  msg.groupid());
+
+                // On master we queue the diffs locally directly, on a remote
+                // host we push them back to master
+                if (isMaster) {
+                    snap->queueDiffs(diffs);
+                } else if (isLastInBatch) {
+                    sch.pushSnapshotDiffs(msg, mainThreadSnapKey, diffs);
+                }
+            }
+
+            // If last in batch on this host, clear the merge regions
+            SPDLOG_DEBUG("Clearing merge regions for {}", mainThreadSnapKey);
             snap->clearMergeRegions();
         }
 
-        // If this batch is finished, reset the executor and release its claim.
-        // Note that we have to release the claim _after_ resetting, otherwise
-        // the executor won't be ready for reuse.
+        // If this is not a threads request and last in its batch, it may be
+        // the main function in a threaded application, in which case we
+        // want to stop any tracking and delete the main thread snapshot
+        if (!isThreads && isLastInBatch) {
+            // Stop tracking memory
+            std::span<uint8_t> memView = getMemoryView();
+            if (!memView.empty()) {
+                tracker.stopTracking(memView);
+                tracker.stopThreadLocalTracking(memView);
+
+                // Delete the main thread snapshot (implicitly does nothing if
+                // doesn't exist)
+                deleteMainThreadSnapshot(msg);
+            }
+        }
+
+        // If this batch is finished, reset the executor and release its
+        // claim. Note that we have to release the claim _after_ resetting,
+        // otherwise the executor won't be ready for reuse
         if (isLastInBatch) {
             if (task.skipReset) {
                 SPDLOG_TRACE("Skipping reset for {}",
@@ -349,14 +662,15 @@ void Executor::threadPoolThread(int threadPoolIdx)
         }
 
         // Vacate the slot occupied by this task. This must be done after
-        // releasing the claim on this executor, otherwise the scheduler may try
-        // to schedule another function and be unable to reuse this executor.
+        // releasing the claim on this executor, otherwise the scheduler may
+        // try to schedule another function and be unable to reuse this
+        // executor.
         sch.vacateSlot();
 
-        // Finally set the result of the task, this will allow anything waiting
-        // on its result to continue execution, therefore must be done once the
-        // executor has been reset, otherwise the executor may not be reused for
-        // a repeat invocation.
+        // Finally set the result of the task, this will allow anything
+        // waiting on its result to continue execution, therefore must be
+        // done once the executor has been reset, otherwise the executor may
+        // not be reused for a repeat invocation.
         if (isThreads) {
             // Set non-final thread result
             sch.setThreadResult(msg, returnValue);
@@ -370,14 +684,20 @@ void Executor::threadPoolThread(int threadPoolIdx)
         SPDLOG_DEBUG(
           "Shutting down thread pool thread {}:{}", id, threadPoolIdx);
 
-        // Note - we have to keep a record of dead threads so we can join them
-        // all when the executor shuts down
+        // Note - we have to keep a record of dead threads so we can join
+        // them all when the executor shuts down
         bool isFinished = true;
         {
             faabric::util::UniqueLock threadsLock(threadsMutex);
             std::shared_ptr<std::thread> thisThread =
               threadPoolThreads.at(threadPoolIdx);
             deadThreads.emplace_back(thisThread);
+
+            // Make sure we're definitely not still tracking changes
+            std::span<uint8_t> memView = getMemoryView();
+            if (!memView.empty()) {
+                tracker.stopTracking(memView);
+            }
 
             // Set this thread to nullptr
             threadPoolThreads.at(threadPoolIdx) = nullptr;
@@ -430,14 +750,19 @@ void Executor::postFinish() {}
 
 void Executor::reset(faabric::Message& msg) {}
 
-faabric::util::MemoryView Executor::getMemoryView()
+std::span<uint8_t> Executor::getMemoryView()
 {
     SPDLOG_WARN("Executor for {} has not implemented memory view method",
                 faabric::util::funcToString(boundMessage, false));
-    return faabric::util::MemoryView();
+    return {};
 }
 
-void Executor::restore(faabric::Message& msg)
+void Executor::setMemorySize(size_t newSize)
+{
+    SPDLOG_WARN("Executor has not implemented set memory size method");
+}
+
+void Executor::restore(const std::string& snapshotKey)
 {
     SPDLOG_WARN("Executor has not implemented restore method");
 }

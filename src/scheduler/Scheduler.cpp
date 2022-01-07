@@ -493,20 +493,34 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // *all* hosts, regardless of whether they will be executing functions.
     // This greatly simplifies the reasoning about which hosts hold which
     // diffs.
-    std::string snapshotKey = firstMsg.snapshotkey();
+
+    std::string snapshotKey;
+    if (isThreads) {
+        if (!firstMsg.snapshotkey().empty()) {
+            SPDLOG_ERROR("{} should not provide snapshot key for {} threads",
+                         funcStr,
+                         req->messages().size());
+
+            std::runtime_error("Should not provide snapshot key for threads");
+        }
+
+        snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+    } else {
+        snapshotKey = firstMsg.snapshotkey();
+    }
+
     if (!snapshotKey.empty()) {
+        auto snap =
+          faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+
         for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
-            auto snap =
-              faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
             // See if we've already pushed this snapshot to the given host,
-            // if so, just push the diffs
+            // if so, just push the diffs that have occurred in this main thread
             if (pushedSnapshotsMap[snapshotKey].contains(host)) {
-                MemoryView snapMemView({ snap->getDataPtr(), snap->getSize() });
-
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
-                  snapMemView.getDirtyRegions();
+                  snap->getTrackedChanges();
 
                 c.pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
             } else {
@@ -514,10 +528,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }
-    }
 
-    // Now reset the dirty page tracking just before we start executing
-    faabric::util::resetDirtyTracking();
+        // Now reset the tracking on the snapshot before we start executing
+        snap->clearTrackedChanges();
+    }
 
     // -------------------------------------------
     // EXECUTION
@@ -611,7 +625,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             // -------------------------------------------
             // REMOTE EXECTUION
             // -------------------------------------------
-
             SPDLOG_DEBUG("Scheduling {}/{} calls to {} on {}",
                          thisHostIdxs.size(),
                          nMessages,
@@ -900,6 +913,7 @@ void Scheduler::setThreadResult(const faabric::Message& msg,
 
 void Scheduler::pushSnapshotDiffs(
   const faabric::Message& msg,
+  const std::string& snapshotKey,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (diffs.empty()) {
@@ -907,21 +921,21 @@ void Scheduler::pushSnapshotDiffs(
     }
 
     bool isMaster = msg.masterhost() == conf.endpointHost;
-    const std::string& snapKey = msg.snapshotkey();
+
     if (isMaster) {
         SPDLOG_ERROR("{} pushing snapshot diffs for {} on master",
                      faabric::util::funcToString(msg, false),
-                     snapKey);
+                     snapshotKey);
         throw std::runtime_error("Cannot push snapshot diffs on master");
     }
 
     SnapshotClient& c = getSnapshotClient(msg.masterhost());
-    c.pushSnapshotDiffs(snapKey, diffs);
+    c.pushSnapshotDiffs(snapshotKey, diffs);
 }
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
-    faabric::util::SharedLock lock(mx);
+    faabric::util::FullLock lock(mx);
     SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
     threadResults.at(msgId).set_value(returnValue);
 }

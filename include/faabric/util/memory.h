@@ -10,6 +10,17 @@
 
 namespace faabric::util {
 
+/*
+ * Dedupes a list of dirty regions specified by offset and length
+ */
+std::vector<std::pair<uint32_t, uint32_t>> dedupeMemoryRegions(
+  std::vector<std::pair<uint32_t, uint32_t>>& regions);
+
+/*
+ * Typedef used to enforce RAII on mmapped memory regions
+ */
+typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
+
 // -------------------------
 // Alignment
 // -------------------------
@@ -37,19 +48,8 @@ size_t alignOffsetDown(size_t offset);
 AlignedChunk getPageAlignedChunk(long offset, long length);
 
 // -------------------------
-// Dirty pages
-// -------------------------
-void resetDirtyTracking();
-
-std::vector<int> getDirtyPageNumbers(const uint8_t* ptr, int nPages);
-
-std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions(const uint8_t* ptr,
-                                                           int nPages);
-
-// -------------------------
 // Allocation
 // -------------------------
-typedef std::unique_ptr<uint8_t[], std::function<void(uint8_t*)>> MemoryRegion;
 
 MemoryRegion allocatePrivateMemory(size_t size);
 

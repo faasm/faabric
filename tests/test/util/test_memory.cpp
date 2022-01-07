@@ -1,5 +1,8 @@
 #include <catch2/catch.hpp>
 
+#include "fixtures.h"
+
+#include <faabric/util/dirty.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 
@@ -11,7 +14,59 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE("Test rounding down offsets to page size", "[memory]")
+TEST_CASE("Test dedupe memory regions", "[util][memory]")
+{
+    std::vector<std::pair<uint32_t, uint32_t>> input;
+    std::vector<std::pair<uint32_t, uint32_t>> expected;
+
+    uint32_t offsetA = 0;
+    uint32_t offsetB = 10;
+
+    uint32_t sizeA = 2;
+    uint32_t sizeB = 3;
+    uint32_t sizeC = 4;
+
+    SECTION("Empty") {}
+
+    SECTION("Nothing to do")
+    {
+        input = { { offsetA, sizeA } };
+        expected = input;
+    }
+
+    SECTION("Equal on the same offset")
+    {
+        input = {
+            { offsetB, sizeB },
+            { offsetA, sizeA },
+            { offsetA, sizeA },
+        };
+        expected = {
+            { offsetA, sizeA },
+            { offsetB, sizeB },
+        };
+    }
+
+    SECTION("Longer on the same offset")
+    {
+        input = {
+            { offsetB, sizeB },
+            { offsetA, sizeA },
+            { offsetA, sizeC },
+            { offsetA, sizeB },
+        };
+        expected = {
+            { offsetA, sizeC },
+            { offsetB, sizeB },
+        };
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> actual =
+      dedupeMemoryRegions(input);
+    REQUIRE(actual == expected);
+}
+
+TEST_CASE("Test rounding down offsets to page size", "[util][memory]")
 {
     REQUIRE(faabric::util::alignOffsetDown(2 * faabric::util::HOST_PAGE_SIZE) ==
             2 * faabric::util::HOST_PAGE_SIZE);
@@ -30,7 +85,7 @@ TEST_CASE("Test rounding down offsets to page size", "[memory]")
       866 * faabric::util::HOST_PAGE_SIZE);
 }
 
-TEST_CASE("Check CoW memory mapping", "[memory]")
+TEST_CASE("Check CoW memory mapping", "[util][memory]")
 {
     size_t memSize = getpagesize();
 
@@ -96,7 +151,7 @@ TEST_CASE("Check CoW memory mapping", "[memory]")
     munmap(regionBVoid, 3 * memSize);
 }
 
-TEST_CASE("Check shared memory mapping", "[memory]")
+TEST_CASE("Check shared memory mapping", "[util][memory]")
 {
     int pageSize = getpagesize();
     size_t memSize = 4 * pageSize;
@@ -183,7 +238,7 @@ TEST_CASE("Check shared memory mapping", "[memory]")
     munmap(regionBVoid, memSize);
 }
 
-TEST_CASE("Test small aligned memory chunk", "[util]")
+TEST_CASE("Test small aligned memory chunk", "[util][memory]")
 {
     AlignedChunk actual = getPageAlignedChunk(0, 10);
 
@@ -196,7 +251,7 @@ TEST_CASE("Test small aligned memory chunk", "[util]")
     REQUIRE(actual.offsetRemainder == 0);
 }
 
-TEST_CASE("Test aligned memory chunks near page boundaries", "[util]")
+TEST_CASE("Test aligned memory chunks near page boundaries", "[util][memory]")
 {
     long originalOffset = 2 * faabric::util::HOST_PAGE_SIZE - 1;
     long originalLength = 3;
@@ -211,7 +266,7 @@ TEST_CASE("Test aligned memory chunks near page boundaries", "[util]")
     REQUIRE(actual.offsetRemainder == faabric::util::HOST_PAGE_SIZE - 1);
 }
 
-TEST_CASE("Test large offset memory chunk", "[util]")
+TEST_CASE("Test large offset memory chunk", "[util][memory]")
 {
     long originalOffset = 2 * faabric::util::HOST_PAGE_SIZE + 33;
     long originalLength = 5 * faabric::util::HOST_PAGE_SIZE + 123;
@@ -226,7 +281,7 @@ TEST_CASE("Test large offset memory chunk", "[util]")
     REQUIRE(actual.offsetRemainder == 33);
 }
 
-TEST_CASE("Test already aligned memory chunk", "[util]")
+TEST_CASE("Test already aligned memory chunk", "[util][memory]")
 {
     long originalOffset = 10 * faabric::util::HOST_PAGE_SIZE;
     long originalLength = 5 * faabric::util::HOST_PAGE_SIZE;
@@ -241,122 +296,7 @@ TEST_CASE("Test already aligned memory chunk", "[util]")
     REQUIRE(actual.offsetRemainder == 0);
 }
 
-TEST_CASE("Test dirty page checking", "[util]")
-{
-    // Create several pages of memory
-    int nPages = 6;
-    size_t memSize = faabric::util::HOST_PAGE_SIZE * nPages;
-    auto* sharedMemory = (uint8_t*)mmap(
-      nullptr, memSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
-    if (sharedMemory == nullptr) {
-        FAIL("Could not provision memory");
-    }
-
-    resetDirtyTracking();
-
-    std::vector<int> actual =
-      faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
-    REQUIRE(actual.empty());
-
-    // Dirty two of the pages
-    uint8_t* pageZero = sharedMemory;
-    uint8_t* pageOne = pageZero + faabric::util::HOST_PAGE_SIZE;
-    uint8_t* pageThree = pageOne + (2 * faabric::util::HOST_PAGE_SIZE);
-
-    pageOne[10] = 1;
-    pageThree[123] = 4;
-
-    std::vector<int> expected = { 1, 3 };
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
-    REQUIRE(actual == expected);
-
-    // And another
-    uint8_t* pageFive = pageThree + (2 * faabric::util::HOST_PAGE_SIZE);
-    pageFive[99] = 3;
-
-    expected = { 1, 3, 5 };
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
-    REQUIRE(actual == expected);
-
-    // Reset
-    resetDirtyTracking();
-
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
-    REQUIRE(actual.empty());
-
-    // Check the data hasn't changed
-    REQUIRE(pageOne[10] == 1);
-    REQUIRE(pageThree[123] == 4);
-    REQUIRE(pageFive[99] == 3);
-
-    // Set some other data
-    uint8_t* pageFour = pageThree + faabric::util::HOST_PAGE_SIZE;
-    pageThree[100] = 2;
-    pageFour[22] = 5;
-
-    expected = { 3, 4 };
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
-    REQUIRE(actual == expected);
-
-    // Final reset and check
-    resetDirtyTracking();
-    actual = faabric::util::getDirtyPageNumbers(sharedMemory, nPages);
-    REQUIRE(actual.empty());
-
-    munmap(sharedMemory, memSize);
-}
-
-TEST_CASE("Test dirty region checking", "[util]")
-{
-    int nPages = 15;
-    size_t memSize = HOST_PAGE_SIZE * nPages;
-    auto* sharedMemory = (uint8_t*)mmap(
-      nullptr, memSize, PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
-    if (sharedMemory == nullptr) {
-        FAIL("Could not provision memory");
-    }
-
-    resetDirtyTracking();
-
-    std::vector<std::pair<uint32_t, uint32_t>> actual =
-      faabric::util::getDirtyRegions(sharedMemory, nPages);
-    REQUIRE(actual.empty());
-
-    // Dirty some pages, some adjacent
-    uint8_t* pageZero = sharedMemory;
-    uint8_t* pageOne = pageZero + HOST_PAGE_SIZE;
-    uint8_t* pageThree = pageZero + (3 * HOST_PAGE_SIZE);
-    uint8_t* pageFour = pageZero + (4 * HOST_PAGE_SIZE);
-    uint8_t* pageSeven = pageZero + (7 * HOST_PAGE_SIZE);
-    uint8_t* pageNine = pageZero + (9 * HOST_PAGE_SIZE);
-
-    // Set some byte within each page
-    pageZero[1] = 1;
-    pageOne[11] = 1;
-    pageThree[33] = 1;
-    pageFour[44] = 1;
-    pageSeven[77] = 1;
-    pageNine[99] = 1;
-
-    // Expect adjacent regions to be merged
-    std::vector<std::pair<uint32_t, uint32_t>> expected = {
-        { 0, 2 * HOST_PAGE_SIZE },
-        { 3 * HOST_PAGE_SIZE, 5 * HOST_PAGE_SIZE },
-        { 7 * HOST_PAGE_SIZE, 8 * HOST_PAGE_SIZE },
-        { 9 * HOST_PAGE_SIZE, 10 * HOST_PAGE_SIZE },
-    };
-
-    actual = faabric::util::getDirtyRegions(sharedMemory, nPages);
-    REQUIRE(actual.size() == expected.size());
-    for (int i = 0; i < actual.size(); i++) {
-        REQUIRE(actual.at(i).first == expected.at(i).first);
-        REQUIRE(actual.at(i).second == expected.at(i).second);
-    }
-}
-
-TEST_CASE("Test allocating and claiming memory", "[util]")
+TEST_CASE("Test allocating and claiming memory", "[util][memory]")
 {
     // Allocate some virtual memory
     size_t vMemSize = 100 * HOST_PAGE_SIZE;
@@ -387,7 +327,7 @@ TEST_CASE("Test allocating and claiming memory", "[util]")
     REQUIRE(vMem[sizeA + 4 * HOST_PAGE_SIZE + 10] == 6);
 }
 
-TEST_CASE("Test mapping memory", "[util]")
+TEST_CASE("Test mapping memory", "[util][memory]")
 {
     size_t vMemSize = 100 * HOST_PAGE_SIZE;
     MemoryRegion vMem = allocateVirtualMemory(vMemSize);
@@ -430,20 +370,20 @@ TEST_CASE("Test mapping memory", "[util]")
     REQUIRE(memBData == expected);
 }
 
-TEST_CASE("Test mapping memory fails with invalid fd", "[util]")
+TEST_CASE("Test mapping memory fails with invalid fd", "[util][memory]")
 {
     size_t memSize = 10 * HOST_PAGE_SIZE;
-    MemoryRegion sharedMem = allocatePrivateMemory(memSize);
+    MemoryRegion mem = allocatePrivateMemory(memSize);
 
     int fd = 0;
     SECTION("Zero fd") { fd = 0; }
 
     SECTION("Negative fd") { fd = -2; }
 
-    REQUIRE_THROWS(mapMemoryPrivate({ sharedMem.get(), memSize }, fd));
+    REQUIRE_THROWS(mapMemoryPrivate({ mem.get(), memSize }, fd));
 }
 
-TEST_CASE("Test remapping memory", "[util]")
+TEST_CASE("Test remapping memory", "[util][memory]")
 {
     // Set up some data
     size_t dataSize = 10 * HOST_PAGE_SIZE;

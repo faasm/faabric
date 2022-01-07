@@ -50,6 +50,9 @@ class SystemConfig
     int snapshotServerThreads;
     int pointToPointServerThreads;
 
+    // Dirty tracking
+    std::string dirtyTrackingMode;
+
     SystemConfig();
 
     void print();

@@ -6,6 +6,7 @@ faabric_lib(util
     clock.cpp
     crash.cpp
     delta.cpp
+    dirty.cpp
     environment.cpp
     exec_graph.cpp
     files.cpp

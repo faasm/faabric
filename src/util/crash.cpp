@@ -15,6 +15,13 @@ constexpr int TEST_SIGNAL = 12341234;
 // Must be async-signal-safe - don't call allocating functions
 void crashHandler(int sig) noexcept
 {
+    faabric::util::handleCrash(sig);
+}
+
+namespace faabric::util {
+
+void handleCrash(int sig)
+{
     std::array<void*, 32> stackPtrs;
     size_t filledStacks = backtrace(stackPtrs.data(), stackPtrs.size());
     if (sig != TEST_SIGNAL) {
@@ -28,18 +35,22 @@ void crashHandler(int sig) noexcept
         raise(sig);
         exit(1);
     }
-    return;
 }
 
-namespace faabric::util {
-
-void setUpCrashHandler()
+void setUpCrashHandler(int sig)
 {
-    fputs("Testing crash handler backtrace:\n", stderr);
-    fflush(stderr);
-    crashHandler(TEST_SIGNAL);
-    SPDLOG_INFO("Installing crash handler");
-    for (auto signo : { SIGSEGV, SIGABRT, SIGILL, SIGFPE }) {
+    std::vector<int> sigs;
+    if (sig >= 0) {
+        sigs = { sig };
+    } else {
+        fputs("Testing crash handler backtrace:\n", stderr);
+        fflush(stderr);
+        crashHandler(TEST_SIGNAL);
+        SPDLOG_INFO("Installing crash handler");
+        sigs = { SIGSEGV, SIGABRT, SIGILL, SIGFPE };
+    }
+
+    for (auto signo : sigs) {
         if (signal(signo, &crashHandler) == SIG_ERR) {
             SPDLOG_WARN("Couldn't install handler for signal {}", signo);
         } else {
