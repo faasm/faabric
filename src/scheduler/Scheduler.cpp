@@ -1129,4 +1129,9 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
 
     return node;
 }
+
+void Scheduler::checkForMigrationOpportunities()
+{
+    SPDLOG_INFO("Not implemented");
+}
 }

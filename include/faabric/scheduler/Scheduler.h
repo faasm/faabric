@@ -220,6 +220,11 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    // ----------------------------------
+    // Function Migration
+    // ----------------------------------
+    void checkForMigrationOpportunities();
+
   private:
     std::string thisHost;
 
