@@ -25,8 +25,6 @@ class DirtyTracker
   public:
     virtual void clearAll() = 0;
 
-    virtual void reinitialise() = 0;
-
     virtual void startTracking(std::span<uint8_t> region) = 0;
 
     virtual void stopTracking(std::span<uint8_t> region) = 0;
@@ -57,8 +55,6 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     ~SoftPTEDirtyTracker();
 
     void clearAll() override;
-
-    void reinitialise() override;
 
     void startTracking(std::span<uint8_t> region) override;
 
@@ -93,8 +89,6 @@ class SegfaultDirtyTracker final : public DirtyTracker
     SegfaultDirtyTracker();
 
     void clearAll() override;
-
-    void reinitialise() override;
 
     void startTracking(std::span<uint8_t> region) override;
 

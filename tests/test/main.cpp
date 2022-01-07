@@ -9,6 +9,8 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/testing.h>
 
+#define CATCH_CONFIG_NO_POSIX_SIGNALS
+
 FAABRIC_CATCH_LOGGER
 
 int main(int argc, char* argv[])

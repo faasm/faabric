@@ -28,7 +28,6 @@ DirtyTracker& getDirtyTracker()
     if (trackMode == "softpte") {
         return softpte;
     } else if (trackMode == "segfault") {
-        sigseg.reinitialise();
         return sigseg;
     } else {
         throw std::runtime_error("Unrecognised dirty tracking mode");
@@ -170,8 +169,6 @@ SoftPTEDirtyTracker::getThreadLocalDirtyOffsets(std::span<uint8_t> region)
 {
     return {};
 }
-
-void SoftPTEDirtyTracker::reinitialise() {}
 
 // ------------------------------
 // Segfaults
@@ -351,15 +348,6 @@ void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
     // Do nothing - need to preserve thread-local data for getting dirty regions
     SPDLOG_TRACE("Stopping thread-local tracking on region size {}",
                  region.size());
-}
-
-void SegfaultDirtyTracker::reinitialise()
-{
-    if (faabric::util::isTestMode()) {
-        // This is a hack because catch changes the segfault signal handler
-        // between test cases, so we have to reinisiatlise
-        setUpSignalHandler();
-    }
 }
 
 std::vector<std::pair<uint32_t, uint32_t>>
