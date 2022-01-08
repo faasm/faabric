@@ -138,6 +138,7 @@ void Scheduler::reset()
     pushedSnapshotsMap.clear();
 
     // Reset function migration tracking
+    functionMigrationThread.stop();
     inFlightRequests.clear();
     pendingMigrations.clear();
 
@@ -461,18 +462,17 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         auto decisionPtr =
           std::make_shared<faabric::util::SchedulingDecision>(decision);
         inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
-        /*
         if (inFlightRequests.size() == 1) {
             functionMigrationThread.start(firstMsg.migrationcheckperiod());
         } else if (firstMsg.migrationcheckperiod() !=
                    functionMigrationThread.wakeUpPeriodSeconds) {
-            SPDLOG_WARN("Ignoring migration check period as the migration"
-                        "thread was initialised with a different one."
-                        "(provided: {}, current: {})",
+            SPDLOG_WARN("Ignoring migration check period for app {} as the"
+                        "migration thread is already running with a different"
+                        " check period (provided: {}, current: {})",
+                        firstMsg.appid(),
                         firstMsg.migrationcheckperiod(),
                         functionMigrationThread.wakeUpPeriodSeconds);
         }
-        */
     }
 
     // NOTE: we want to schedule things on this host _last_, otherwise functions
@@ -909,10 +909,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
         throw std::runtime_error("Result key empty. Cannot publish result");
     }
 
-    // Write the successful result to the result queue
-    std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
-    redis.publishSchedulerResult(key, msg.statuskey(), inputData);
-
     // Remove the app from in-flight map if still there, and this host is the
     // master host for the message
     if (msg.masterhost() == thisHost) {
@@ -923,9 +919,13 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
         // If there are no more apps to track, stop the thread checking for
         // migration opportunities
         if (inFlightRequests.size() == 0) {
-            // functionMigrationThread.stop();
+            functionMigrationThread.stop();
         }
     }
+
+    // Write the successful result to the result queue
+    std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
+    redis.publishSchedulerResult(key, msg.statuskey(), inputData);
 }
 
 void Scheduler::registerThread(uint32_t msgId)

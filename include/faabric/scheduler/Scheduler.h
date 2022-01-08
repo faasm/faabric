@@ -3,6 +3,7 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -306,6 +307,7 @@ class Scheduler
     faabric::transport::PointToPointBroker& broker;
 
     // ---- Function migration ----
+    FunctionMigrationThread functionMigrationThread;
     std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
     std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
       pendingMigrations;
