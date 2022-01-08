@@ -228,7 +228,7 @@ class Scheduler
     // ----------------------------------
     // Function Migration
     // ----------------------------------
-    void checkForMigrationOpportunities(
+    bool checkForMigrationOpportunities(
       faabric::util::MigrationStrategy =
         faabric::util::MigrationStrategy::BIN_PACK);
 

@@ -916,11 +916,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
         inFlightRequests.erase(msg.appid());
         pendingMigrations.erase(msg.appid());
-        // If there are no more apps to track, stop the thread checking for
-        // migration opportunities
-        if (inFlightRequests.size() == 0) {
-            functionMigrationThread.stop();
-        }
     }
 
     // Write the successful result to the result queue
@@ -1167,7 +1162,7 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
     return node;
 }
 
-void Scheduler::checkForMigrationOpportunities(
+bool Scheduler::checkForMigrationOpportunities(
   faabric::util::MigrationStrategy migrationStrategy)
 {
     // Vector to cache all migrations we have to do, and update the shared map
@@ -1179,6 +1174,11 @@ void Scheduler::checkForMigrationOpportunities(
     {
         faabric::util::SharedLock lock(mx);
 
+        // If no in-flight requests, stop the background thread
+        if (inFlightRequests.size() == 0) {
+            return true;
+        }
+
         // For each in-flight request that has opted in to be migrated,
         // check if there is an opportunity to migrate
         for (const auto& app : inFlightRequests) {
@@ -1188,6 +1188,9 @@ void Scheduler::checkForMigrationOpportunities(
             // If we have already recorded a pending migration for this req,
             // skip
             if (canAppBeMigrated(originalDecision.appId) != nullptr) {
+                SPDLOG_TRACE("Skipping app {} as migration opportunity has "
+                             "already been recorded",
+                             originalDecision.appId);
                 continue;
             }
 
@@ -1216,9 +1219,6 @@ void Scheduler::checkForMigrationOpportunities(
                 };
                 auto claimSlot = [&r]() {
                     int currentUsedSlots = r.usedslots();
-                    SPDLOG_INFO("Old slots: {} - New slots: {}",
-                                currentUsedSlots,
-                                currentUsedSlots + 1);
                     r.set_usedslots(currentUsedSlots + 1);
                 };
                 while (left < right) {
@@ -1282,10 +1282,11 @@ void Scheduler::checkForMigrationOpportunities(
     if (tmpPendingMigrations.size() > 0) {
         faabric::util::FullLock lock(mx);
         for (auto msgPtr : tmpPendingMigrations) {
-            SPDLOG_INFO("Adding app: {}", msgPtr->appid());
             pendingMigrations[msgPtr->appid()] = std::move(msgPtr);
         }
     }
+
+    return false;
 }
 
 std::shared_ptr<faabric::PendingMigrations> Scheduler::canAppBeMigrated(

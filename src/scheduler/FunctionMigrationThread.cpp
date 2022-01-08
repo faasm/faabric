@@ -6,7 +6,9 @@
 namespace faabric::scheduler {
 void FunctionMigrationThread::start(int wakeUpPeriodSecondsIn)
 {
+    // Initialise wake up period and shutdown variable
     wakeUpPeriodSeconds = wakeUpPeriodSecondsIn;
+    isShutdown.store(false, std::memory_order_release);
 
     // Main work loop
     workThread = std::make_unique<std::thread>([&] {
@@ -24,11 +26,17 @@ void FunctionMigrationThread::start(int wakeUpPeriodSecondsIn)
               lock, std::chrono::milliseconds(wakeUpPeriodSeconds * 1000));
 
             // If we hit the timeout it means we have not been notified to
-            // reset or stop. Thus we check for migration oportunities.
+            // stop. Thus we check for migration opportunities.
             if (returnVal == std::cv_status::timeout) {
-                SPDLOG_DEBUG("Checking for migration oportunities");
-                faabric::scheduler::getScheduler()
-                  .checkForMigrationOpportunities();
+                SPDLOG_DEBUG(
+                  "Migration thread checking for migration opportunities");
+                // If there are no more apps in-flight to be checked-for, the
+                // scheduler will return false, so we can shut down
+                bool shutdown = faabric::scheduler::getScheduler()
+                                  .checkForMigrationOpportunities();
+                if (shutdown) {
+                    isShutdown.store(true, std::memory_order_release);
+                }
             }
         };
 
@@ -42,7 +50,7 @@ void FunctionMigrationThread::stop()
         return;
     }
 
-    {
+    if (!isShutdown.load(std::memory_order_acquire)) {
         faabric::util::UniqueLock lock(mx);
 
         // We set the flag _before_ we notify and after we acquire the lock.
@@ -55,5 +63,7 @@ void FunctionMigrationThread::stop()
     if (workThread->joinable()) {
         workThread->join();
     }
+
+    workThread = nullptr;
 }
 }

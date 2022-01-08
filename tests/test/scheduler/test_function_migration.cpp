@@ -25,7 +25,6 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
 
     ~FunctionMigrationTestFixture()
     {
-        sch.clearRecordedMessages();
         faabric::util::setMockMode(false);
 
         // Remove all hosts from global set
@@ -89,7 +88,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
 TEST_CASE_METHOD(
   FunctionMigrationTestFixture,
-  "Test function migration thread only works if set in the message",
+  "Test migration oportunities are only detected if set in the message",
   "[scheduler]")
 {
     // First set resources before calling the functions: one will be allocated
@@ -105,6 +104,7 @@ TEST_CASE_METHOD(
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
     uint32_t appId = req->messages().at(0).appid();
 
+    // Build expected pending migrations
     std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
     SECTION("Migration not enabled") { expectedMigrations = nullptr; }
 
@@ -157,10 +157,9 @@ TEST_CASE_METHOD(
     REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
 }
 
-TEST_CASE_METHOD(
-  FunctionMigrationTestFixture,
-  "Test function migration thread detects migration opportunities",
-  "[scheduler]")
+TEST_CASE_METHOD(FunctionMigrationTestFixture,
+                 "Test checking for migration opportunities",
+                 "[scheduler]")
 {
     std::vector<std::string> hosts = { masterHost, "hostA" };
     std::vector<int> slots = { 1, 1 };
@@ -170,8 +169,11 @@ TEST_CASE_METHOD(
     auto req = faabric::util::batchExecFactory("foo", "sleep", 2);
     int timeToSleep = SHORT_TEST_TIMEOUT_MS;
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
-    req->mutable_messages()->at(0).set_migrationcheckperiod(2);
     uint32_t appId = req->messages().at(0).appid();
+
+    // By setting the check period to a non-zero value, we are effectively
+    // opting in to be considered for migration
+    req->mutable_messages()->at(0).set_migrationcheckperiod(2);
 
     auto decision = sch.callFunctions(req);
 
@@ -226,11 +228,11 @@ TEST_CASE_METHOD(
 
 TEST_CASE_METHOD(
   FunctionMigrationTestFixture,
-  "Test detecting migration opportunities with several hosts and requests",
+  "Test detecting migration opportunities for several messages and hosts",
   "[scheduler]")
 {
-    // First set resources before calling the functions: one will be allocated
-    // locally, another one in the remote host
+    // First set resources before calling the functions: one request will be
+    // allocated to each host
     std::vector<std::string> hosts = { masterHost, "hostA", "hostB", "hostC" };
     std::vector<int> slots = { 1, 1, 1, 1 };
     std::vector<int> usedSlots = { 0, 0, 0, 0 };
@@ -239,8 +241,10 @@ TEST_CASE_METHOD(
     auto req = faabric::util::batchExecFactory("foo", "sleep", 4);
     int timeToSleep = SHORT_TEST_TIMEOUT_MS;
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
-    req->mutable_messages()->at(0).set_migrationcheckperiod(2);
     uint32_t appId = req->messages().at(0).appid();
+
+    // Opt in to be considered for migration
+    req->mutable_messages()->at(0).set_migrationcheckperiod(2);
 
     auto decision = sch.callFunctions(req);
 
@@ -256,17 +260,17 @@ TEST_CASE_METHOD(
         std::vector<int> newUsedSlots = { 1, 1, 1, 1 };
         setHostResources(hosts, newSlots, newUsedSlots);
 
-        // Build expected result
+        // Build expected result: two migrations
         faabric::PendingMigrations expected;
         expected.set_appid(appId);
-        // Migrate last message (scheduled to last host) to first host. This
-        // fills up the first host.
+        // Migration 1: migrate last message (originally scheduled to last host)
+        // to first host. This fills up the first host.
         auto* migration1 = expected.add_migrations();
         migration1->set_messageid(req->messages().at(3).id());
         migration1->set_srchost(hosts.at(3));
         migration1->set_dsthost(hosts.at(0));
-        // Migrate penultimate message (scheduled to penultimate host) to second
-        // host. This fills up the second host.
+        // Migration 2: migrate penultimate message (originally scheduled to
+        // penultimate host) to second host. This fills up the second host.
         auto* migration2 = expected.add_migrations();
         migration2->set_messageid(req->messages().at(2).id());
         migration2->set_srchost(hosts.at(2));
@@ -301,4 +305,78 @@ TEST_CASE_METHOD(
     sch.checkForMigrationOpportunities();
     REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
 }
+
+TEST_CASE_METHOD(
+  FunctionMigrationTestFixture,
+  "Test function migration thread detects migration opportunities",
+  "[scheduler]")
+{
+    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<int> slots = { 1, 1 };
+    std::vector<int> usedSlots = { 0, 0 };
+    setHostResources(hosts, slots, usedSlots);
+
+    auto req = faabric::util::batchExecFactory("foo", "sleep", 2);
+    int checkPeriodSecs = 1;
+    int timeToSleep = 4 * checkPeriodSecs * 1000;
+    req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
+    uint32_t appId = req->messages().at(0).appid();
+
+    // Opt in to be migrated
+    req->mutable_messages()->at(0).set_migrationcheckperiod(checkPeriodSecs);
+
+    auto decision = sch.callFunctions(req);
+
+    std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
+
+    SECTION("Can not migrate") { expectedMigrations = nullptr; }
+
+    // As we don't update the available resources, no migration opportunities
+    // will appear, even though we are checking for them
+    SECTION("Can migrate")
+    {
+        // Update host resources so that a migration opportunity appears
+        updateLocalResources(2, 1);
+
+        // Build expected result
+        faabric::PendingMigrations expected;
+        expected.set_appid(appId);
+        auto* migration = expected.add_migrations();
+        migration->set_messageid(req->messages().at(1).id());
+        migration->set_srchost(hosts.at(1));
+        migration->set_dsthost(hosts.at(0));
+        expectedMigrations =
+          std::make_shared<faabric::PendingMigrations>(expected);
+    }
+
+    // Instead of directly calling the scheduler function to check for migration
+    // opportunites, sleep for enough time (twice the check period) so that a
+    // migration is detected by the background thread.
+    SLEEP_MS(2 * checkPeriodSecs * 1000);
+
+    auto actualMigrations = sch.canAppBeMigrated(appId);
+    if (expectedMigrations == nullptr) {
+        REQUIRE(actualMigrations == expectedMigrations);
+    } else {
+        REQUIRE(actualMigrations->appid() == expectedMigrations->appid());
+        REQUIRE(actualMigrations->migrations_size() ==
+                expectedMigrations->migrations_size());
+        for (int i = 0; i < actualMigrations->migrations_size(); i++) {
+            auto actual = actualMigrations->mutable_migrations()->at(i);
+            auto expected = expectedMigrations->mutable_migrations()->at(i);
+            REQUIRE(actual.messageid() == expected.messageid());
+            REQUIRE(actual.srchost() == expected.srchost());
+            REQUIRE(actual.dsthost() == expected.dsthost());
+        }
+    }
+
+    faabric::Message res =
+      sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
+    REQUIRE(res.returnvalue() == 0);
+
+    // Check that after the result is set, the app can't be migrated no more
+    sch.checkForMigrationOpportunities();
+    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+}
+
 }
