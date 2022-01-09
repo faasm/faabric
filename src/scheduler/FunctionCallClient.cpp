@@ -28,6 +28,10 @@ static std::unordered_map<std::string,
                           faabric::util::Queue<faabric::HostResources>>
   queuedResourceResponses;
 
+static std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
+  addPendingMigrationRequests;
+
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
@@ -57,6 +61,13 @@ std::vector<std::pair<std::string, faabric::EmptyRequest>> getResourceRequests()
     return resourceRequests;
 }
 
+std::vector<std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
+getAddPendingMigrationRequests()
+{
+    faabric::util::UniqueLock lock(mockMutex);
+    return addPendingMigrationRequests;
+}
+
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests()
 {
@@ -76,6 +87,7 @@ void clearMockRequests()
     functionCalls.clear();
     batchMessages.clear();
     resourceRequests.clear();
+    addPendingMigrationRequests.clear();
     unregisterRequests.clear();
 
     for (auto& p : queuedResourceResponses) {
@@ -126,6 +138,22 @@ faabric::HostResources FunctionCallClient::getResources()
     }
 
     return response;
+}
+
+void FunctionCallClient::sendAddPendingMigration(
+  std::shared_ptr<PendingMigrations> req)
+{
+    faabric::PendingMigrations request;
+    faabric::EmptyResponse response;
+
+    if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
+        addPendingMigrationRequests.emplace_back(host, req);
+    } else {
+        syncSend(faabric::scheduler::FunctionCalls::AddPendingMigration,
+                 req.get(),
+                 &response);
+    }
 }
 
 void FunctionCallClient::executeFunctions(

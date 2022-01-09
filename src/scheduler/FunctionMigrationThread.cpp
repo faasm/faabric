@@ -30,13 +30,8 @@ void FunctionMigrationThread::start(int wakeUpPeriodSecondsIn)
             if (returnVal == std::cv_status::timeout) {
                 SPDLOG_DEBUG(
                   "Migration thread checking for migration opportunities");
-                // If there are no more apps in-flight to be checked-for, the
-                // scheduler will return false, so we can shut down
-                bool shutdown = faabric::scheduler::getScheduler()
-                                  .checkForMigrationOpportunities();
-                if (shutdown) {
-                    isShutdown.store(true, std::memory_order_release);
-                }
+                faabric::scheduler::getScheduler()
+                  .checkForMigrationOpportunities();
             }
         };
 

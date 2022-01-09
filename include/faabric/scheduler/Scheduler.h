@@ -228,12 +228,14 @@ class Scheduler
     // ----------------------------------
     // Function Migration
     // ----------------------------------
-    bool checkForMigrationOpportunities(
-      faabric::util::MigrationStrategy =
-        faabric::util::MigrationStrategy::BIN_PACK);
+    void checkForMigrationOpportunities();
 
     std::shared_ptr<faabric::PendingMigrations> canAppBeMigrated(
       uint32_t appId);
+
+    void addPendingMigration(std::shared_ptr<faabric::PendingMigrations> msg);
+
+    void removePendingMigration(uint32_t appId);
 
   private:
     std::string thisHost;
@@ -311,6 +313,14 @@ class Scheduler
     std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
     std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
       pendingMigrations;
+
+    std::vector<std::shared_ptr<faabric::PendingMigrations>>
+    doCheckForMigrationOpportunities(
+      faabric::util::MigrationStrategy migrationStrategy =
+        faabric::util::MigrationStrategy::BIN_PACK);
+
+    void broadcastAddPendingMigration(
+      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 };
 
 }

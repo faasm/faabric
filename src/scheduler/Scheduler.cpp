@@ -11,6 +11,7 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/message.h>
 #include <faabric/util/network.h>
 #include <faabric/util/random.h>
 #include <faabric/util/scheduling.h>
@@ -120,6 +121,8 @@ void Scheduler::reset()
     }
     deadExecutorsList.clear();
 
+    functionMigrationThread.stop();
+
     faabric::util::FullLock lock(mx);
     executors.clear();
     deadExecutors.clear();
@@ -138,7 +141,6 @@ void Scheduler::reset()
     pushedSnapshotsMap.clear();
 
     // Reset function migration tracking
-    functionMigrationThread.stop();
     inFlightRequests.clear();
     pendingMigrations.clear();
 
@@ -458,6 +460,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     }
 
     // Record in-flight request if function desires to be migrated
+    // NOTE: ideally, instead of allowing the applications to specify a check
+    // period, we would have a default one (overwritable through an env.
+    // variable), and apps would just opt in/out of being migrated. We set
+    // the actual check period instead to ease with experiments.
     if (firstMsg.migrationcheckperiod() > 0) {
         auto decisionPtr =
           std::make_shared<faabric::util::SchedulingDecision>(decision);
@@ -912,10 +918,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Remove the app from in-flight map if still there, and this host is the
     // master host for the message
     if (msg.masterhost() == thisHost) {
-        faabric::util::FullLock lock(mx);
-
-        inFlightRequests.erase(msg.appid());
-        pendingMigrations.erase(msg.appid());
+        removePendingMigration(msg.appid());
     }
 
     // Write the successful result to the result queue
@@ -1162,131 +1165,48 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
     return node;
 }
 
-bool Scheduler::checkForMigrationOpportunities(
-  faabric::util::MigrationStrategy migrationStrategy)
+void Scheduler::checkForMigrationOpportunities()
 {
-    // Vector to cache all migrations we have to do, and update the shared map
-    // at the very end just once. This is because we need a unique lock to write
-    // to the shared map, but the rest of this method can do with a shared lock.
     std::vector<std::shared_ptr<faabric::PendingMigrations>>
       tmpPendingMigrations;
 
     {
+        // Acquire a shared lock to read from the in-flight requests map
         faabric::util::SharedLock lock(mx);
 
-        // If no in-flight requests, stop the background thread
-        if (inFlightRequests.size() == 0) {
-            return true;
-        }
-
-        // For each in-flight request that has opted in to be migrated,
-        // check if there is an opportunity to migrate
-        for (const auto& app : inFlightRequests) {
-            auto req = app.second.first;
-            auto originalDecision = *app.second.second;
-
-            // If we have already recorded a pending migration for this req,
-            // skip
-            if (canAppBeMigrated(originalDecision.appId) != nullptr) {
-                SPDLOG_TRACE("Skipping app {} as migration opportunity has "
-                             "already been recorded",
-                             originalDecision.appId);
-                continue;
-            }
-
-            faabric::PendingMigrations msg;
-            msg.set_appid(originalDecision.appId);
-            // TODO - generate a new groupId here for processes to wait on
-            // during the migration? msg.set_groupid();
-
-            if (migrationStrategy ==
-                faabric::util::MigrationStrategy::BIN_PACK) {
-                // We assume the batch was originally scheduled using
-                // bin-packing, thus the scheduling decision has at the begining
-                // (left) the hosts with the most allocated requests, and at the
-                // end (right) the hosts with the fewest. To check for migration
-                // oportunities, we compare a pointer to the possible
-                // destination of the migration (left), with one to the possible
-                // source of the migration (right). NOTE - this is a slight
-                // simplification, but makes the code simpler.
-                auto left = originalDecision.hosts.begin();
-                auto right = originalDecision.hosts.end() - 1;
-                faabric::HostResources r = (*left == thisHost)
-                                             ? getThisHostResources()
-                                             : getHostResources(*left);
-                auto nAvailable = [&r]() -> int {
-                    return r.slots() - r.usedslots();
-                };
-                auto claimSlot = [&r]() {
-                    int currentUsedSlots = r.usedslots();
-                    r.set_usedslots(currentUsedSlots + 1);
-                };
-                while (left < right) {
-                    // If both pointers point to the same host, no migration
-                    // opportunity, and must check another possible source of
-                    // the migration
-                    if (*left == *right) {
-                        --right;
-                        continue;
-                    }
-
-                    // If the left pointer (possible destination of the
-                    // migration) is out of available resources, no migration
-                    // opportunity, and must check another possible destination
-                    // of migration
-                    if (nAvailable() == 0) {
-                        auto oldHost = *left;
-                        ++left;
-                        if (*left != oldHost) {
-                            r = (*left == thisHost) ? getThisHostResources()
-                                                    : getHostResources(*left);
-                        }
-                        continue;
-                    }
-
-                    // If each pointer points to a request scheduled in a
-                    // different host, and the possible destination has slots,
-                    // there is a migration opportunity
-                    auto* migration = msg.add_migrations();
-                    auto msgIdPtr =
-                      originalDecision.messageIds.begin() +
-                      std::distance(originalDecision.hosts.begin(), right);
-                    migration->set_messageid(*msgIdPtr);
-                    migration->set_srchost(*right);
-                    migration->set_dsthost(*left);
-                    // Decrement by one the availability, and check for more
-                    // possible sources of migration
-                    claimSlot();
-                    --right;
-                }
-            } else {
-                SPDLOG_ERROR("Unrecognised migration strategy: {}",
-                             migrationStrategy);
-                throw std::runtime_error("Unrecognised migration strategy.");
-            }
-
-            if (msg.migrations_size() > 0) {
-                tmpPendingMigrations.emplace_back(
-                  std::make_shared<faabric::PendingMigrations>(msg));
-                SPDLOG_DEBUG("Detected migration opportunity for app: {}",
-                             msg.appid());
-            } else {
-                SPDLOG_DEBUG("No migration opportunity detected for app: {}",
-                             msg.appid());
-            }
-        }
+        tmpPendingMigrations = doCheckForMigrationOpportunities();
     }
 
-    // Finally, store all the pending migrations in the shared map acquiring
-    // a unique lock.
+    // If we find migration opportunites
     if (tmpPendingMigrations.size() > 0) {
+        // Acquire full lock to write to the pending migrations map
         faabric::util::FullLock lock(mx);
+
         for (auto msgPtr : tmpPendingMigrations) {
+            // First, broadcast the pending migrations to other hosts
+            broadcastAddPendingMigration(msgPtr);
+            // Second, update our local records
             pendingMigrations[msgPtr->appid()] = std::move(msgPtr);
         }
     }
+}
 
-    return false;
+void Scheduler::broadcastAddPendingMigration(
+  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+{
+    // Get all hosts for the to-be migrated app
+    auto msg = pendingMigrations->migrations().at(0).msg();
+    std::string funcStr = faabric::util::funcToString(msg, false);
+    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+
+    // Remove this host from the set
+    registeredHosts.erase(thisHost);
+
+    // Send pending migrations to all involved hosts
+    for (auto& otherHost : thisRegisteredHosts) {
+        getFunctionCallClient(otherHost).sendAddPendingMigration(
+          pendingMigrations);
+    }
 }
 
 std::shared_ptr<faabric::PendingMigrations> Scheduler::canAppBeMigrated(
@@ -1299,5 +1219,136 @@ std::shared_ptr<faabric::PendingMigrations> Scheduler::canAppBeMigrated(
     }
 
     return pendingMigrations[appId];
+}
+
+void Scheduler::addPendingMigration(
+  std::shared_ptr<faabric::PendingMigrations> pMigration)
+{
+    faabric::util::FullLock lock(mx);
+
+    auto msg = pMigration->migrations().at(0).msg();
+    if (pendingMigrations.find(msg.appid()) != pendingMigrations.end()) {
+        SPDLOG_ERROR("Received remote request to add a pending migration for "
+                     "app {}, but already recorded another migration request"
+                     " for the same app.",
+                     msg.appid());
+        throw std::runtime_error("Remote request for app already there");
+    }
+
+    pendingMigrations[msg.appid()] = pMigration;
+}
+
+void Scheduler::removePendingMigration(uint32_t appId)
+{
+    faabric::util::FullLock lock(mx);
+
+    inFlightRequests.erase(appId);
+    pendingMigrations.erase(appId);
+}
+
+std::vector<std::shared_ptr<faabric::PendingMigrations>>
+Scheduler::doCheckForMigrationOpportunities(
+  faabric::util::MigrationStrategy migrationStrategy)
+{
+    std::vector<std::shared_ptr<faabric::PendingMigrations>>
+      pendingMigrationsVec;
+
+    // For each in-flight request that has opted in to be migrated,
+    // check if there is an opportunity to migrate
+    for (const auto& app : inFlightRequests) {
+        auto req = app.second.first;
+        auto originalDecision = *app.second.second;
+
+        // If we have already recorded a pending migration for this req,
+        // skip
+        if (canAppBeMigrated(originalDecision.appId) != nullptr) {
+            SPDLOG_TRACE("Skipping app {} as migration opportunity has "
+                         "already been recorded",
+                         originalDecision.appId);
+            continue;
+        }
+
+        faabric::PendingMigrations msg;
+        msg.set_appid(originalDecision.appId);
+
+        if (migrationStrategy == faabric::util::MigrationStrategy::BIN_PACK) {
+            // We assume the batch was originally scheduled using
+            // bin-packing, thus the scheduling decision has at the begining
+            // (left) the hosts with the most allocated requests, and at the
+            // end (right) the hosts with the fewest. To check for migration
+            // oportunities, we compare a pointer to the possible
+            // destination of the migration (left), with one to the possible
+            // source of the migration (right). NOTE - this is a slight
+            // simplification, but makes the code simpler.
+            auto left = originalDecision.hosts.begin();
+            auto right = originalDecision.hosts.end() - 1;
+            faabric::HostResources r = (*left == thisHost)
+                                         ? getThisHostResources()
+                                         : getHostResources(*left);
+            auto nAvailable = [&r]() -> int {
+                return r.slots() - r.usedslots();
+            };
+            auto claimSlot = [&r]() {
+                int currentUsedSlots = r.usedslots();
+                r.set_usedslots(currentUsedSlots + 1);
+            };
+            while (left < right) {
+                // If both pointers point to the same host, no migration
+                // opportunity, and must check another possible source of
+                // the migration
+                if (*left == *right) {
+                    --right;
+                    continue;
+                }
+
+                // If the left pointer (possible destination of the
+                // migration) is out of available resources, no migration
+                // opportunity, and must check another possible destination
+                // of migration
+                if (nAvailable() == 0) {
+                    auto oldHost = *left;
+                    ++left;
+                    if (*left != oldHost) {
+                        r = (*left == thisHost) ? getThisHostResources()
+                                                : getHostResources(*left);
+                    }
+                    continue;
+                }
+
+                // If each pointer points to a request scheduled in a
+                // different host, and the possible destination has slots,
+                // there is a migration opportunity
+                auto* migration = msg.add_migrations();
+                migration->set_srchost(*right);
+                migration->set_dsthost(*left);
+
+                faabric::Message* msgPtr =
+                  &(*(req->mutable_messages()->begin() +
+                      std::distance(originalDecision.hosts.begin(), right)));
+                auto* migrationMsgPtr = migration->mutable_msg();
+                faabric::util::copyMessage(msgPtr, migrationMsgPtr);
+                // Decrement by one the availability, and check for more
+                // possible sources of migration
+                claimSlot();
+                --right;
+            }
+        } else {
+            SPDLOG_ERROR("Unrecognised migration strategy: {}",
+                         migrationStrategy);
+            throw std::runtime_error("Unrecognised migration strategy.");
+        }
+
+        if (msg.migrations_size() > 0) {
+            pendingMigrationsVec.emplace_back(
+              std::make_shared<faabric::PendingMigrations>(msg));
+            SPDLOG_DEBUG("Detected migration opportunity for app: {}",
+                         msg.appid());
+        } else {
+            SPDLOG_DEBUG("No migration opportunity detected for app: {}",
+                         msg.appid());
+        }
+    }
+
+    return pendingMigrationsVec;
 }
 }

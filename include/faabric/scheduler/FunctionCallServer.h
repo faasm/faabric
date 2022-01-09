@@ -29,6 +29,10 @@ class FunctionCallServer final
       const uint8_t* buffer,
       size_t bufferSize);
 
+    std::unique_ptr<google::protobuf::Message> recvAddPendingMigration(
+      const uint8_t* buffer,
+      size_t bufferSize);
+
     void recvExecuteFunctions(const uint8_t* buffer, size_t bufferSize);
 
     void recvUnregister(const uint8_t* buffer, size_t bufferSize);

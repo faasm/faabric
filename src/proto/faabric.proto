@@ -255,7 +255,7 @@ message PendingMigrations {
     int32 groupId = 2;
 
     message PendingMigration {
-        int32 messageId = 1;
+        Message msg = 1;
         string srcHost = 2;
         string dstHost = 3;
     }

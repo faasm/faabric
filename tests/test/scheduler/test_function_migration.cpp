@@ -6,6 +6,7 @@
 #include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
+#include <faabric/util/message.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
@@ -72,6 +73,62 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
         r.set_usedslots(usedSlots);
         sch.setThisHostResources(r);
     }
+
+    std::shared_ptr<faabric::PendingMigrations>
+    buildPendingMigrationsExpectation(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      std::vector<std::string> hosts,
+      std::vector<std::pair<int, int>> migrations)
+    {
+        faabric::PendingMigrations expected;
+        expected.set_appid(req->messages().at(0).appid());
+
+        for (auto pair : migrations) {
+            auto* migration = expected.add_migrations();
+            auto* migrationMsg = migration->mutable_msg();
+            faabric::util::copyMessage(&req->mutable_messages()->at(pair.first),
+                                       migrationMsg);
+            migration->set_srchost(hosts.at(pair.first));
+            migration->set_dsthost(hosts.at(pair.second));
+        }
+
+        return std::make_shared<faabric::PendingMigrations>(expected);
+    }
+
+    void checkPendingMigrationsExpectation(
+      std::shared_ptr<faabric::PendingMigrations> expectedMigrations,
+      std::shared_ptr<faabric::PendingMigrations> actualMigrations,
+      std::vector<std::string> hosts)
+    {
+        if (expectedMigrations == nullptr) {
+            REQUIRE(actualMigrations == expectedMigrations);
+        } else {
+            // Check actual migration matches expectation
+            REQUIRE(actualMigrations->appid() == expectedMigrations->appid());
+            REQUIRE(actualMigrations->migrations_size() ==
+                    expectedMigrations->migrations_size());
+            for (int i = 0; i < actualMigrations->migrations_size(); i++) {
+                auto actual = actualMigrations->mutable_migrations()->at(i);
+                auto expected = expectedMigrations->mutable_migrations()->at(i);
+                REQUIRE(actual.msg().id() == expected.msg().id());
+                REQUIRE(actual.srchost() == expected.srchost());
+                REQUIRE(actual.dsthost() == expected.dsthost());
+            }
+
+            // Check we have sent a message to all other hosts with the pending
+            // migration
+            auto pendingRequests = getAddPendingMigrationRequests();
+            REQUIRE(pendingRequests.size() == hosts.size() - 1);
+            for (auto& pendingReq : getAddPendingMigrationRequests()) {
+                std::string host = pendingReq.first;
+                std::shared_ptr<faabric::PendingMigrations> migration =
+                  pendingReq.second;
+                auto it = std::find(hosts.begin(), hosts.end(), host);
+                REQUIRE(it != hosts.end());
+                REQUIRE(migration == actualMigrations);
+            }
+        }
+    }
 };
 
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
@@ -98,7 +155,8 @@ TEST_CASE_METHOD(
     std::vector<int> usedSlots = { 0, 0 };
     setHostResources(hosts, slots, usedSlots);
 
-    // The sleep function sleeps for a set timeout before returning
+    // Second, prepare the request we will migrate in-flight.
+    // NOTE: the sleep function sleeps for a set timeout before returning.
     auto req = faabric::util::batchExecFactory("foo", "sleep", 2);
     int timeToSleep = SHORT_TEST_TIMEOUT_MS;
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
@@ -113,15 +171,10 @@ TEST_CASE_METHOD(
         // Set to a non-zero value so that migration is enabled
         req->mutable_messages()->at(0).set_migrationcheckperiod(2);
 
-        // Build expected result
-        faabric::PendingMigrations expected;
-        expected.set_appid(appId);
-        auto* migration = expected.add_migrations();
-        migration->set_messageid(req->messages().at(1).id());
-        migration->set_srchost(hosts.at(1));
-        migration->set_dsthost(hosts.at(0));
+        // Build expected migrations
+        std::vector<std::pair<int, int>> migrations = { { 1, 0 } };
         expectedMigrations =
-          std::make_shared<faabric::PendingMigrations>(expected);
+          buildPendingMigrationsExpectation(req, hosts, migrations);
     }
 
     auto decision = sch.callFunctions(req);
@@ -133,20 +186,8 @@ TEST_CASE_METHOD(
     sch.checkForMigrationOpportunities();
 
     auto actualMigrations = sch.canAppBeMigrated(appId);
-    if (expectedMigrations == nullptr) {
-        REQUIRE(actualMigrations == expectedMigrations);
-    } else {
-        REQUIRE(actualMigrations->appid() == expectedMigrations->appid());
-        REQUIRE(actualMigrations->migrations_size() ==
-                expectedMigrations->migrations_size());
-        for (int i = 0; i < actualMigrations->migrations_size(); i++) {
-            auto actual = actualMigrations->mutable_migrations()->at(i);
-            auto expected = expectedMigrations->mutable_migrations()->at(i);
-            REQUIRE(actual.messageid() == expected.messageid());
-            REQUIRE(actual.srchost() == expected.srchost());
-            REQUIRE(actual.dsthost() == expected.dsthost());
-        }
-    }
+    checkPendingMigrationsExpectation(
+      expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
       sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
@@ -188,34 +229,17 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
         // Update host resources so that a migration opportunity appears
         updateLocalResources(2, 1);
 
-        // Build expected result
-        faabric::PendingMigrations expected;
-        expected.set_appid(appId);
-        auto* migration = expected.add_migrations();
-        migration->set_messageid(req->messages().at(1).id());
-        migration->set_srchost(hosts.at(1));
-        migration->set_dsthost(hosts.at(0));
+        // Build expected migrations
+        std::vector<std::pair<int, int>> migrations = { { 1, 0 } };
         expectedMigrations =
-          std::make_shared<faabric::PendingMigrations>(expected);
+          buildPendingMigrationsExpectation(req, hosts, migrations);
     }
 
     sch.checkForMigrationOpportunities();
 
     auto actualMigrations = sch.canAppBeMigrated(appId);
-    if (expectedMigrations == nullptr) {
-        REQUIRE(actualMigrations == expectedMigrations);
-    } else {
-        REQUIRE(actualMigrations->appid() == expectedMigrations->appid());
-        REQUIRE(actualMigrations->migrations_size() ==
-                expectedMigrations->migrations_size());
-        for (int i = 0; i < actualMigrations->migrations_size(); i++) {
-            auto actual = actualMigrations->mutable_migrations()->at(i);
-            auto expected = expectedMigrations->mutable_migrations()->at(i);
-            REQUIRE(actual.messageid() == expected.messageid());
-            REQUIRE(actual.srchost() == expected.srchost());
-            REQUIRE(actual.dsthost() == expected.dsthost());
-        }
-    }
+    checkPendingMigrationsExpectation(
+      expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
       sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
@@ -261,41 +285,16 @@ TEST_CASE_METHOD(
         setHostResources(hosts, newSlots, newUsedSlots);
 
         // Build expected result: two migrations
-        faabric::PendingMigrations expected;
-        expected.set_appid(appId);
-        // Migration 1: migrate last message (originally scheduled to last host)
-        // to first host. This fills up the first host.
-        auto* migration1 = expected.add_migrations();
-        migration1->set_messageid(req->messages().at(3).id());
-        migration1->set_srchost(hosts.at(3));
-        migration1->set_dsthost(hosts.at(0));
-        // Migration 2: migrate penultimate message (originally scheduled to
-        // penultimate host) to second host. This fills up the second host.
-        auto* migration2 = expected.add_migrations();
-        migration2->set_messageid(req->messages().at(2).id());
-        migration2->set_srchost(hosts.at(2));
-        migration2->set_dsthost(hosts.at(1));
+        std::vector<std::pair<int, int>> migrations = { { 3, 0 }, { 2, 1 } };
         expectedMigrations =
-          std::make_shared<faabric::PendingMigrations>(expected);
+          buildPendingMigrationsExpectation(req, hosts, migrations);
     }
 
     sch.checkForMigrationOpportunities();
 
     auto actualMigrations = sch.canAppBeMigrated(appId);
-    if (expectedMigrations == nullptr) {
-        REQUIRE(actualMigrations == expectedMigrations);
-    } else {
-        REQUIRE(actualMigrations->appid() == expectedMigrations->appid());
-        REQUIRE(actualMigrations->migrations_size() ==
-                expectedMigrations->migrations_size());
-        for (int i = 0; i < actualMigrations->migrations_size(); i++) {
-            auto actual = actualMigrations->mutable_migrations()->at(i);
-            auto expected = expectedMigrations->mutable_migrations()->at(i);
-            REQUIRE(actual.messageid() == expected.messageid());
-            REQUIRE(actual.srchost() == expected.srchost());
-            REQUIRE(actual.dsthost() == expected.dsthost());
-        }
-    }
+    checkPendingMigrationsExpectation(
+      expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
       sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
@@ -338,15 +337,10 @@ TEST_CASE_METHOD(
         // Update host resources so that a migration opportunity appears
         updateLocalResources(2, 1);
 
-        // Build expected result
-        faabric::PendingMigrations expected;
-        expected.set_appid(appId);
-        auto* migration = expected.add_migrations();
-        migration->set_messageid(req->messages().at(1).id());
-        migration->set_srchost(hosts.at(1));
-        migration->set_dsthost(hosts.at(0));
+        // Build expected migrations
+        std::vector<std::pair<int, int>> migrations = { { 1, 0 } };
         expectedMigrations =
-          std::make_shared<faabric::PendingMigrations>(expected);
+          buildPendingMigrationsExpectation(req, hosts, migrations);
     }
 
     // Instead of directly calling the scheduler function to check for migration
@@ -355,20 +349,8 @@ TEST_CASE_METHOD(
     SLEEP_MS(2 * checkPeriodSecs * 1000);
 
     auto actualMigrations = sch.canAppBeMigrated(appId);
-    if (expectedMigrations == nullptr) {
-        REQUIRE(actualMigrations == expectedMigrations);
-    } else {
-        REQUIRE(actualMigrations->appid() == expectedMigrations->appid());
-        REQUIRE(actualMigrations->migrations_size() ==
-                expectedMigrations->migrations_size());
-        for (int i = 0; i < actualMigrations->migrations_size(); i++) {
-            auto actual = actualMigrations->mutable_migrations()->at(i);
-            auto expected = expectedMigrations->mutable_migrations()->at(i);
-            REQUIRE(actual.messageid() == expected.messageid());
-            REQUIRE(actual.srchost() == expected.srchost());
-            REQUIRE(actual.dsthost() == expected.dsthost());
-        }
-    }
+    checkPendingMigrationsExpectation(
+      expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
       sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
@@ -378,5 +360,4 @@ TEST_CASE_METHOD(
     sch.checkForMigrationOpportunities();
     REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
 }
-
 }
