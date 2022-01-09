@@ -202,7 +202,6 @@ int32_t TestExecutor::executeTask(
     }
 
     if (msg.function() == "sleep") {
-        // Sleep for sufficiently more than the check period
         int timeToSleepMs = SHORT_TEST_TIMEOUT_MS;
         if (!msg.inputdata().empty()) {
             timeToSleepMs = std::stoi(msg.inputdata());

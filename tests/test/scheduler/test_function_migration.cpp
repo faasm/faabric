@@ -328,10 +328,10 @@ TEST_CASE_METHOD(
 
     std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
 
-    SECTION("Can not migrate") { expectedMigrations = nullptr; }
-
     // As we don't update the available resources, no migration opportunities
     // will appear, even though we are checking for them
+    SECTION("Can not migrate") { expectedMigrations = nullptr; }
+
     SECTION("Can migrate")
     {
         // Update host resources so that a migration opportunity appears
@@ -358,6 +358,27 @@ TEST_CASE_METHOD(
 
     // Check that after the result is set, the app can't be migrated no more
     sch.checkForMigrationOpportunities();
+    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+}
+
+TEST_CASE_METHOD(FunctionMigrationTestFixture,
+                 "Test adding and removing pending migrations manually",
+                 "[scheduler]")
+{
+    auto req = faabric::util::batchExecFactory("foo", "sleep", 2);
+    uint32_t appId = req->messages().at(0).appid();
+    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<std::pair<int, int>> migrations = { { 1, 0 } };
+    auto expectedMigrations =
+      buildPendingMigrationsExpectation(req, hosts, migrations);
+
+    // Add migration manually
+    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    sch.addPendingMigration(expectedMigrations);
+    REQUIRE(sch.canAppBeMigrated(appId) == expectedMigrations);
+
+    // Remove migration manually
+    sch.removePendingMigration(appId);
     REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
 }
 }
