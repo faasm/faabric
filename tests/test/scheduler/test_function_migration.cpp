@@ -120,9 +120,9 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
 
             // Check we have sent a message to all other hosts with the pending
             // migration
-            auto pendingRequests = getAddPendingMigrationRequests();
+            auto pendingRequests = getPendingMigrationsRequests();
             REQUIRE(pendingRequests.size() == hosts.size() - 1);
-            for (auto& pendingReq : getAddPendingMigrationRequests()) {
+            for (auto& pendingReq : getPendingMigrationsRequests()) {
                 std::string host = pendingReq.first;
                 std::shared_ptr<faabric::PendingMigrations> migration =
                   pendingReq.second;
@@ -188,7 +188,7 @@ TEST_CASE_METHOD(
 
     sch.checkForMigrationOpportunities();
 
-    auto actualMigrations = sch.canAppBeMigrated(appId);
+    auto actualMigrations = sch.getPendingAppMigrations(appId);
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
@@ -198,7 +198,7 @@ TEST_CASE_METHOD(
 
     // Check that after the result is set, the app can't be migrated no more
     sch.checkForMigrationOpportunities();
-    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
 
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
@@ -240,7 +240,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     sch.checkForMigrationOpportunities();
 
-    auto actualMigrations = sch.canAppBeMigrated(appId);
+    auto actualMigrations = sch.getPendingAppMigrations(appId);
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
@@ -250,7 +250,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     // Check that after the result is set, the app can't be migrated no more
     sch.checkForMigrationOpportunities();
-    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
 
 TEST_CASE_METHOD(
@@ -295,7 +295,7 @@ TEST_CASE_METHOD(
 
     sch.checkForMigrationOpportunities();
 
-    auto actualMigrations = sch.canAppBeMigrated(appId);
+    auto actualMigrations = sch.getPendingAppMigrations(appId);
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
@@ -305,7 +305,7 @@ TEST_CASE_METHOD(
 
     // Check that after the result is set, the app can't be migrated no more
     sch.checkForMigrationOpportunities();
-    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
 
 TEST_CASE_METHOD(
@@ -351,7 +351,7 @@ TEST_CASE_METHOD(
     // migration is detected by the background thread.
     SLEEP_MS(2 * checkPeriodSecs * 1000);
 
-    auto actualMigrations = sch.canAppBeMigrated(appId);
+    auto actualMigrations = sch.getPendingAppMigrations(appId);
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
@@ -361,7 +361,7 @@ TEST_CASE_METHOD(
 
     // Check that after the result is set, the app can't be migrated no more
     sch.checkForMigrationOpportunities();
-    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
 
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
@@ -376,13 +376,13 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
       buildPendingMigrationsExpectation(req, hosts, migrations);
 
     // Add migration manually
-    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
     sch.addPendingMigration(expectedMigrations);
-    REQUIRE(sch.canAppBeMigrated(appId) == expectedMigrations);
+    REQUIRE(sch.getPendingAppMigrations(appId) == expectedMigrations);
 
     // Remove migration manually
     sch.removePendingMigration(appId);
-    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
 
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
@@ -445,7 +445,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     // When checking that a migration has taken place in MPI, we skip the msg
     // id check. Part of the request is build by the runtime, and therefore
     // we don't have access to the actual messages scheduled.
-    auto actualMigrations = sch.canAppBeMigrated(appId);
+    auto actualMigrations = sch.getPendingAppMigrations(appId);
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts, true);
 
@@ -465,7 +465,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     // When performing the migration, MPI will remove it from the pending
     // migrations map
-    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
     checkPendingMigrationsExpectation(
       expectedMigrations, getMpiMockedPendingMigrations().front(), hosts, true);
 

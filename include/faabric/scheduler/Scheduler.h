@@ -235,7 +235,7 @@ class Scheduler
     // ----------------------------------
     void checkForMigrationOpportunities();
 
-    std::shared_ptr<faabric::PendingMigrations> canAppBeMigrated(
+    std::shared_ptr<faabric::PendingMigrations> getPendingAppMigrations(
       uint32_t appId);
 
     void addPendingMigration(std::shared_ptr<faabric::PendingMigrations> msg);
@@ -324,7 +324,7 @@ class Scheduler
       faabric::util::MigrationStrategy migrationStrategy =
         faabric::util::MigrationStrategy::BIN_PACK);
 
-    void broadcastAddPendingMigration(
+    void broadcastPendingMigrations(
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 };
 

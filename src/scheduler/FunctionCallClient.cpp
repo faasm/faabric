@@ -30,7 +30,7 @@ static std::unordered_map<std::string,
 
 static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
-  addPendingMigrationRequests;
+  pendingMigrationsRequests;
 
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
@@ -62,10 +62,10 @@ std::vector<std::pair<std::string, faabric::EmptyRequest>> getResourceRequests()
 }
 
 std::vector<std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
-getAddPendingMigrationRequests()
+getPendingMigrationsRequests()
 {
     faabric::util::UniqueLock lock(mockMutex);
-    return addPendingMigrationRequests;
+    return pendingMigrationsRequests;
 }
 
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
@@ -87,7 +87,7 @@ void clearMockRequests()
     functionCalls.clear();
     batchMessages.clear();
     resourceRequests.clear();
-    addPendingMigrationRequests.clear();
+    pendingMigrationsRequests.clear();
     unregisterRequests.clear();
 
     for (auto& p : queuedResourceResponses) {
@@ -140,17 +140,20 @@ faabric::HostResources FunctionCallClient::getResources()
     return response;
 }
 
-void FunctionCallClient::sendAddPendingMigration(
-  std::shared_ptr<PendingMigrations> req)
+// This function call is used by the master host of an application to let know
+// other hosts running functions of the same application that a migration
+// opportunity has been found.
+void FunctionCallClient::sendPendingMigrations(
+  std::shared_ptr<faabric::PendingMigrations> req)
 {
     faabric::PendingMigrations request;
     faabric::EmptyResponse response;
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
-        addPendingMigrationRequests.emplace_back(host, req);
+        pendingMigrationsRequests.emplace_back(host, req);
     } else {
-        syncSend(faabric::scheduler::FunctionCalls::AddPendingMigration,
+        syncSend(faabric::scheduler::FunctionCalls::PendingMigrations,
                  req.get(),
                  &response);
     }

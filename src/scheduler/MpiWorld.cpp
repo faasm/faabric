@@ -1765,7 +1765,7 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
 void MpiWorld::tryMigrate(int thisRank)
 {
     auto pendingMigrations =
-      getScheduler().canAppBeMigrated(thisRankMsg->appid());
+      getScheduler().getPendingAppMigrations(thisRankMsg->appid());
 
     if (pendingMigrations == nullptr) {
         return;

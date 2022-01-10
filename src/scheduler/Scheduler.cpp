@@ -1217,14 +1217,14 @@ void Scheduler::checkForMigrationOpportunities()
 
         for (auto msgPtr : tmpPendingMigrations) {
             // First, broadcast the pending migrations to other hosts
-            broadcastAddPendingMigration(msgPtr);
+            broadcastPendingMigrations(msgPtr);
             // Second, update our local records
             pendingMigrations[msgPtr->appid()] = std::move(msgPtr);
         }
     }
 }
 
-void Scheduler::broadcastAddPendingMigration(
+void Scheduler::broadcastPendingMigrations(
   std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
 {
     // Get all hosts for the to-be migrated app
@@ -1237,12 +1237,12 @@ void Scheduler::broadcastAddPendingMigration(
 
     // Send pending migrations to all involved hosts
     for (auto& otherHost : thisRegisteredHosts) {
-        getFunctionCallClient(otherHost).sendAddPendingMigration(
+        getFunctionCallClient(otherHost).sendPendingMigrations(
           pendingMigrations);
     }
 }
 
-std::shared_ptr<faabric::PendingMigrations> Scheduler::canAppBeMigrated(
+std::shared_ptr<faabric::PendingMigrations> Scheduler::getPendingAppMigrations(
   uint32_t appId)
 {
     faabric::util::SharedLock lock(mx);
@@ -1294,7 +1294,7 @@ Scheduler::doCheckForMigrationOpportunities(
 
         // If we have already recorded a pending migration for this req,
         // skip
-        if (canAppBeMigrated(originalDecision.appId) != nullptr) {
+        if (getPendingAppMigrations(originalDecision.appId) != nullptr) {
             SPDLOG_TRACE("Skipping app {} as migration opportunity has "
                          "already been recorded",
                          originalDecision.appId);

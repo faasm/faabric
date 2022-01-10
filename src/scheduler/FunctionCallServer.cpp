@@ -49,8 +49,8 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::GetResources: {
             return recvGetResources(buffer, bufferSize);
         }
-        case faabric::scheduler::FunctionCalls::AddPendingMigration: {
-            return recvAddPendingMigration(buffer, bufferSize);
+        case faabric::scheduler::FunctionCalls::PendingMigrations: {
+            return recvPendingMigrations(buffer, bufferSize);
         }
         default: {
             throw std::runtime_error(
@@ -105,8 +105,8 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
 }
 
 std::unique_ptr<google::protobuf::Message>
-FunctionCallServer::recvAddPendingMigration(const uint8_t* buffer,
-                                            size_t bufferSize)
+FunctionCallServer::recvPendingMigrations(const uint8_t* buffer,
+                                          size_t bufferSize)
 {
     PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
 

@@ -23,7 +23,7 @@ std::vector<std::pair<std::string, faabric::EmptyRequest>>
 getResourceRequests();
 
 std::vector<std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
-getAddPendingMigrationRequests();
+getPendingMigrationsRequests();
 
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests();
@@ -45,8 +45,7 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     faabric::HostResources getResources();
 
-    void sendAddPendingMigration(
-      std::shared_ptr<faabric::PendingMigrations> req);
+    void sendPendingMigrations(std::shared_ptr<faabric::PendingMigrations> req);
 
     void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
