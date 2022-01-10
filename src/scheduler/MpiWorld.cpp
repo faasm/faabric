@@ -1772,6 +1772,8 @@ void MpiWorld::tryMigrate(int thisRank)
     }
 
     prepareMigration(thisRank, pendingMigrations);
+
+    bool mustShutdown = false;
     if (faabric::util::isMockMode()) {
         // When mocking in the tests, the call to get the current executing
         // executor may fail
@@ -1782,9 +1784,16 @@ void MpiWorld::tryMigrate(int thisRank)
         // the restored executing thread will know it is an MPI function, its
         // rank, and its world id, and will therefore call the method to finish
         // the migration from the snapshot server.
-        getExecutingExecutor()->doMigration(pendingMigrations);
+        mustShutdown = getExecutingExecutor()->doMigration(pendingMigrations);
     }
-    finishMigration(thisRank);
+
+    if (mustShutdown) {
+        destroy();
+        throw faabric::scheduler::ExecutorMigratedException(
+          "Executor has been migrated");
+    } else {
+        finishMigration(thisRank);
+    }
 }
 
 // Once per host we modify the per-world accounting of rank-to-hosts mappings

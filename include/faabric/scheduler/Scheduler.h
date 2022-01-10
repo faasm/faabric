@@ -23,6 +23,14 @@
 
 namespace faabric::scheduler {
 
+class ExecutorMigratedException : public faabric::util::FaabricException
+{
+  public:
+    explicit ExecutorMigratedException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
+
 typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
                   std::shared_ptr<faabric::util::SchedulingDecision>>
   InFlightPair;
@@ -82,7 +90,7 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
-    void doMigration(
+    bool doMigration(
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 
   protected:

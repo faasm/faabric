@@ -538,6 +538,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
               "Task {} threw exception. What: {}", msg.id(), ex.what());
             SPDLOG_ERROR(errorMessage);
             msg.set_outputdata(errorMessage);
+        } catch (const faabric::scheduler::ExecutorMigratedException& ex) {
+            SPDLOG_TRACE("Task {} has been migrated.", msg.id());
+
+            returnValue = 0;
+            msg.set_outputdata(
+              "The execution of this message has been migrated");
         }
 
         // Handle thread-local diffing for every thread
@@ -735,16 +741,18 @@ void Executor::releaseClaim()
     claimed.store(false);
 }
 
-void Executor::doMigration(
+bool Executor::doMigration(
   std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
 {
     for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
         auto m = pendingMigrations->mutable_migrations()->at(i);
         if (m.msg().id() == boundMessage.id()) {
             migrateFunction(m.msg(), m.dsthost());
-            // TODO: terminate current executing thread
+            return true;
         }
     }
+
+    return false;
 }
 
 void Executor::migrateFunction(const faabric::Message& msg,
