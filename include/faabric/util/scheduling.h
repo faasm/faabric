@@ -46,13 +46,18 @@ class SchedulingDecision
 // requests in a batch.
 //  - NORMAL: bin-packs requests to slots in hosts starting from the master
 //            host, and overloadds the master if it runs out of resources.
+//  - FORCE_LOCAL: force local execution irrespective of the available
+//                 resources.
 //  - NEVER_ALONE: never allocates a single (non-master) request to a host
 //                 without other requests of the batch.
+//  - UNDERFULL: schedule up to 50% of the master hosts' capacity to force
+//               migration opportunities to appear.
 enum SchedulingTopologyHint
 {
     NORMAL,
     FORCE_LOCAL,
-    NEVER_ALONE
+    NEVER_ALONE,
+    UNDERFULL,
 };
 
 // Migration strategies help the scheduler decide wether the scheduling decision

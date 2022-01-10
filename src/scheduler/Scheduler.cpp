@@ -310,6 +310,9 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
 
         // Work out how many we can handle locally
         int slots = thisHostResources.slots();
+        if (topologyHint == faabric::util::SchedulingTopologyHint::UNDERFULL) {
+            slots = slots / 2;
+        }
 
         // Work out available cores, flooring at zero
         int available =

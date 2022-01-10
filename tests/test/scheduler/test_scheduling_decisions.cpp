@@ -390,4 +390,40 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 
     testActualSchedulingDecision(req, config);
 }
+
+TEST_CASE_METHOD(SchedulingDecisionTestFixture,
+                 "Test underfull scheduling topology hint",
+                 "[scheduler]")
+{
+    SchedulingConfig config = {
+        .hosts = { masterHost, "hostA" },
+        .slots = { 2, 2 },
+        .numReqs = 2,
+        .topologyHint = faabric::util::SchedulingTopologyHint::UNDERFULL,
+        .expectedHosts = { masterHost, "hostA" },
+    };
+
+    std::shared_ptr<faabric::BatchExecuteRequest> req;
+
+    SECTION("Test hint's basic functionality")
+    {
+        req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    SECTION("Test hint does not affect other hosts")
+    {
+        config.numReqs = 3;
+        config.expectedHosts = { masterHost, "hostA", "hostA" };
+        req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    SECTION("Test with hint we still overload to master")
+    {
+        config.numReqs = 4;
+        config.expectedHosts = { masterHost, "hostA", "hostA", masterHost };
+        req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    testActualSchedulingDecision(req, config);
+}
 }
