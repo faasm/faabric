@@ -98,7 +98,8 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
     void checkPendingMigrationsExpectation(
       std::shared_ptr<faabric::PendingMigrations> expectedMigrations,
       std::shared_ptr<faabric::PendingMigrations> actualMigrations,
-      std::vector<std::string> hosts)
+      std::vector<std::string> hosts,
+      bool skipMsgIdCheck = false)
     {
         if (expectedMigrations == nullptr) {
             REQUIRE(actualMigrations == expectedMigrations);
@@ -110,7 +111,9 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
             for (int i = 0; i < actualMigrations->migrations_size(); i++) {
                 auto actual = actualMigrations->mutable_migrations()->at(i);
                 auto expected = expectedMigrations->mutable_migrations()->at(i);
-                REQUIRE(actual.msg().id() == expected.msg().id());
+                if (!skipMsgIdCheck) {
+                    REQUIRE(actual.msg().id() == expected.msg().id());
+                }
                 REQUIRE(actual.srchost() == expected.srchost());
                 REQUIRE(actual.dsthost() == expected.dsthost());
             }
@@ -381,4 +384,96 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     sch.removePendingMigration(appId);
     REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
 }
+
+TEST_CASE_METHOD(FunctionMigrationTestFixture,
+                 "Test MPI function migration points",
+                 "[scheduler]")
+{
+    // Set up host resources
+    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<int> slots = { 2, 2 };
+    std::vector<int> usedSlots = { 0, 0 };
+    setHostResources(hosts, slots, usedSlots);
+
+    // Clear MPI registries
+    getMpiWorldRegistry().clear();
+
+    auto req = faabric::util::batchExecFactory("mpi", "sleep", 1);
+    int checkPeriodSecs = 1;
+    int timeToSleep = 4 * checkPeriodSecs * 1000;
+
+    int worldId = 123;
+    int worldSize = 4;
+    auto* firstMsg = req->mutable_messages(0);
+    firstMsg->set_inputdata(std::to_string(timeToSleep));
+    firstMsg->set_ismpi(true);
+    firstMsg->set_mpiworldsize(worldSize);
+    firstMsg->set_mpiworldid(worldId);
+    firstMsg->set_migrationcheckperiod(checkPeriodSecs);
+    uint32_t appId = req->messages().at(0).appid();
+
+    // Call function that wil just sleep
+    auto decision = sch.callFunctions(req);
+
+    // Manually create the world, and trigger a second function invocation in
+    // the remote host
+    MpiWorld world;
+    world.create(*firstMsg, worldId, worldSize);
+
+    // Update host resources so that a migration opportunity appears
+    updateLocalResources(4, 2);
+
+    // Build expected migrations
+    std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
+    // NOTE: we need to add to the original request the ones that will be
+    // chained by MPI (this is only needed to build the expectation).
+    for (int i = 0; i < worldSize - 1; i++) {
+        auto* msg = req->add_messages();
+        msg->set_appid(firstMsg->appid());
+    }
+    std::vector<std::pair<int, int>> migrations = { { 1, 0 }, { 1, 0 } };
+    expectedMigrations =
+      buildPendingMigrationsExpectation(req, hosts, migrations);
+
+    // Instead of directly calling the scheduler function to check for migration
+    // opportunites, sleep for enough time (twice the check period) so that a
+    // migration is detected by the background thread.
+    SLEEP_MS(2 * checkPeriodSecs * 1000);
+
+    // When checking that a migration has taken place in MPI, we skip the msg
+    // id check, as part of the request is build by the runtime, and therefore
+    // we don't have access to the actual messages scheduled (thus can't build
+    // an expectation with the right id)
+    auto actualMigrations = sch.canAppBeMigrated(appId);
+    checkPendingMigrationsExpectation(
+      expectedMigrations, actualMigrations, hosts, true);
+
+    // Check that certain MPI calls actually do the migration
+    SECTION("MPI barrier triggers a migration point") { world.barrier(0); }
+
+    SECTION("MPI all reduce triggers a migration point")
+    {
+        std::vector<int> messageData = { 0, 1, 2 };
+        world.allReduce(0,
+                        BYTES(messageData.data()),
+                        BYTES(messageData.data()),
+                        MPI_INT,
+                        messageData.size(),
+                        MPI_SUM);
+    }
+
+    // When performing the migration, MPI will remove it from the pending
+    // migrations map
+    REQUIRE(sch.canAppBeMigrated(appId) == nullptr);
+    checkPendingMigrationsExpectation(
+      expectedMigrations, getMpiMockedPendingMigrations().front(), hosts, true);
+
+    faabric::Message res =
+      sch.getFunctionResult(firstMsg->id(), 2 * timeToSleep);
+    REQUIRE(res.returnvalue() == 0);
+
+    // Clean up
+    world.destroy();
+}
+
 }

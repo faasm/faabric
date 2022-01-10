@@ -735,6 +735,29 @@ void Executor::releaseClaim()
     claimed.store(false);
 }
 
+void Executor::doMigration(
+  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+{
+    for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
+        auto m = pendingMigrations->mutable_migrations()->at(i);
+        if (m.msg().id() == boundMessage.id()) {
+            migrateFunction(m.msg(), m.dsthost());
+            // TODO: terminate current executing thread
+        }
+    }
+}
+
+void Executor::migrateFunction(const faabric::Message& msg,
+                               const std::string& host)
+{
+    SPDLOG_INFO("Executor received request to migrate message {} from host {}"
+                " to host {}",
+                msg.id(),
+                msg.executedhost(),
+                host);
+    SPDLOG_ERROR("Executor::migrate() not implemented");
+}
+
 // ------------------------------------------
 // HOOKS
 // ------------------------------------------

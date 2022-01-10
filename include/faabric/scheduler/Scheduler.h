@@ -82,6 +82,9 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
+    void doMigration(
+      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
   protected:
     virtual void restore(const std::string& snapshotKey);
 
@@ -100,6 +103,8 @@ class Executor
     faabric::util::DirtyTracker& tracker;
 
     uint32_t threadPoolSize = 0;
+
+    void migrateFunction(const faabric::Message& msg, const std::string& host);
 
   private:
     std::atomic<bool> claimed = false;

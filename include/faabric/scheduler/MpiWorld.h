@@ -31,6 +31,9 @@ std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
   int sendRank);
 
+std::vector<std::shared_ptr<faabric::PendingMigrations>>
+getMpiMockedPendingMigrations();
+
 typedef faabric::util::FixedCapacityQueue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 
@@ -270,6 +273,16 @@ class MpiWorld
     std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
                                                              int recvRank,
                                                              int batchSize = 0);
+
+    /* Function Migration */
+
+    void tryMigrate(int thisRank);
+
+    void prepareMigration(
+      int thisRank,
+      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
+    void finishMigration(int thisRank);
 
     /* Helper methods */
 

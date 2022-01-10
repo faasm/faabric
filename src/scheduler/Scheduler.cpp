@@ -465,10 +465,43 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // variable), and apps would just opt in/out of being migrated. We set
     // the actual check period instead to ease with experiments.
     if (firstMsg.migrationcheckperiod() > 0) {
-        auto decisionPtr =
-          std::make_shared<faabric::util::SchedulingDecision>(decision);
-        inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
-        if (inFlightRequests.size() == 1) {
+        bool startMigrationThread = inFlightRequests.size() == 0;
+
+        if (inFlightRequests.find(decision.appId) != inFlightRequests.end()) {
+            // MPI applications are made up of two different requests: the
+            // original one (with one message) and the second one (with
+            // world size - 1 messages) created during world creation time.
+            // Thus, to correctly track migration opportunities we must merge
+            // both. We append the batch request to the original one (instead
+            // of the other way around) not to affect the rest of this methods
+            // functionality.
+            if (firstMsg.ismpi()) {
+                startMigrationThread = false;
+                auto originalReq = inFlightRequests[decision.appId].first;
+                auto originalDecision = inFlightRequests[decision.appId].second;
+                assert(req->messages_size() == firstMsg.mpiworldsize() - 1);
+                for (int i = 0; i < firstMsg.mpiworldsize() - 1; i++) {
+                    // Append message to original request
+                    auto* newMsgPtr = originalReq->add_messages();
+                    faabric::util::copyMessage(&req->messages().at(i),
+                                               newMsgPtr);
+                    // Append message to original decision
+                    originalDecision->addMessage(decision.hosts.at(i),
+                                                 req->messages().at(i));
+                }
+            } else {
+                SPDLOG_ERROR("There is already an in-flight request for app {}",
+                             firstMsg.appid());
+                throw std::runtime_error("App already in-flight");
+            }
+        } else {
+            auto decisionPtr =
+              std::make_shared<faabric::util::SchedulingDecision>(decision);
+            inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
+        }
+
+        // Decide wether we have to start the migration thread or not
+        if (startMigrationThread) {
             functionMigrationThread.start(firstMsg.migrationcheckperiod());
         } else if (firstMsg.migrationcheckperiod() !=
                    functionMigrationThread.wakeUpPeriodSeconds) {

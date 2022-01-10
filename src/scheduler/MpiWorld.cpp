@@ -53,6 +53,9 @@ static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
 static std::map<int, std::vector<std::shared_ptr<faabric::MPIMessage>>>
   mpiMockedMessages;
 
+static std::vector<std::shared_ptr<faabric::PendingMigrations>>
+  mpiMockedPendingMigrations;
+
 std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages()
 {
     faabric::util::UniqueLock lock(mockMutex);
@@ -64,6 +67,13 @@ std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
 {
     faabric::util::UniqueLock lock(mockMutex);
     return mpiMockedMessages[sendRank];
+}
+
+std::vector<std::shared_ptr<faabric::PendingMigrations>>
+getMpiMockedPendingMigrations()
+{
+    faabric::util::UniqueLock lock(mockMutex);
+    return mpiMockedPendingMigrations;
 }
 
 MpiWorld::MpiWorld()
@@ -222,10 +232,16 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
-        // Log chained functions to generate execution graphs
-        if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
-            sch.logChainedFunction(call.id(), msg.id());
-            msg.set_recordexecgraph(true);
+        if (thisRankMsg != nullptr) {
+            // Set message fields to allow for function migration
+            msg.set_appid(thisRankMsg->appid());
+            msg.set_inputdata(thisRankMsg->inputdata());
+            msg.set_migrationcheckperiod(thisRankMsg->migrationcheckperiod());
+            // Log chained functions to generate execution graphs
+            if (thisRankMsg->recordexecgraph()) {
+                sch.logChainedFunction(call.id(), msg.id());
+                msg.set_recordexecgraph(true);
+            }
         }
     }
 
@@ -329,6 +345,7 @@ void MpiWorld::destroy()
     // Clear structures used for mocking
     rankMessages.clear();
     mpiMockedMessages.clear();
+    mpiMockedPendingMigrations.clear();
 }
 
 void MpiWorld::initialiseFromMsg(faabric::Message& msg)
@@ -1290,6 +1307,11 @@ void MpiWorld::allReduce(int rank,
     // Second, 0 broadcasts the result to all ranks
     broadcast(
       0, rank, recvBuffer, datatype, count, faabric::MPIMessage::ALLREDUCE);
+
+    // All reduce triggers a migration point in MPI
+    if (thisRankMsg != nullptr && thisRankMsg->migrationcheckperiod() > 0) {
+        tryMigrate(rank);
+    }
 }
 
 void MpiWorld::op_reduce(faabric_op_t* operation,
@@ -1537,6 +1559,11 @@ void MpiWorld::barrier(int thisRank)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
+
+    // Barrier triggers a migration point
+    if (thisRankMsg != nullptr && thisRankMsg->migrationcheckperiod() > 0) {
+        tryMigrate(thisRank);
+    }
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
@@ -1731,5 +1758,86 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
           "Recv rank outside range: {} not in [0, {})", recvRank, size);
         throw std::runtime_error("Recv rank outside range");
     }
+}
+
+// This method will either (i) do nothing or (ii) run the whole migration.
+// Note that every rank will call this method.
+void MpiWorld::tryMigrate(int thisRank)
+{
+    auto pendingMigrations =
+      getScheduler().canAppBeMigrated(thisRankMsg->appid());
+
+    if (pendingMigrations == nullptr) {
+        return;
+    }
+
+    prepareMigration(thisRank, pendingMigrations);
+    if (faabric::util::isMockMode()) {
+        // When mocking in the tests, the call to get the current executing
+        // executor may fail
+        faabric::util::UniqueLock lock(mockMutex);
+        mpiMockedPendingMigrations.push_back(pendingMigrations);
+    } else {
+        // An executing thread may never return from the next call. However,
+        // the restored executing thread will know it is an MPI function, its
+        // rank, and its world id, and will therefore call the method to finish
+        // the migration from the snapshot server.
+        getExecutingExecutor()->doMigration(pendingMigrations);
+    }
+    finishMigration(thisRank);
+}
+
+// Once per host we modify the per-world accounting of rank-to-hosts mappings
+// and the corresponding ports for cross-host messaging.
+void MpiWorld::prepareMigration(
+  int thisRank,
+  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+{
+    // Check that there are no pending asynchronous messages to send and receive
+    for (auto umb : unackedMessageBuffers) {
+        if (umb->size() > 0) {
+            SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
+                         " {} has {} pending async messages to receive",
+                         thisRankMsg->appid(),
+                         thisRank,
+                         umb->size());
+            throw std::runtime_error(
+              "Migrating with pending async messages is not supported");
+        }
+    }
+
+    if (!iSendRequests.empty()) {
+        SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
+                     " {} has {} pending async send messages to acknowledge",
+                     thisRankMsg->appid(),
+                     thisRank,
+                     iSendRequests.size());
+        throw std::runtime_error(
+          "Migrating with pending async messages is not supported");
+    }
+
+    if (thisRank == localLeader) {
+        for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
+            auto m = pendingMigrations->mutable_migrations()->at(i);
+            assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
+            hostForRank.at(m.msg().mpirank()) = m.dsthost();
+        }
+
+        // Reset the internal mappings.
+        initLocalBasePorts(hostForRank);
+        initLocalRemoteLeaders();
+    }
+}
+
+// This method will be called from two different points:
+// (i) snapshot server when restoring an MPI function after migration
+// (ii) after running the migration from a rank that is not migrated
+void MpiWorld::finishMigration(int thisRank)
+{
+    if (thisRank == localLeader) {
+        getScheduler().removePendingMigration(thisRankMsg->appid());
+    }
+
+    barrier(thisRank);
 }
 }
