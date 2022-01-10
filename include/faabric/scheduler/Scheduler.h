@@ -250,6 +250,15 @@ class Scheduler
 
     void removePendingMigration(uint32_t appId);
 
+    // ----------------------------------
+    // Clients
+    // ----------------------------------
+    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+      const std::string& otherHost);
+
+    faabric::snapshot::SnapshotClient& getSnapshotClient(
+      const std::string& otherHost);
+
   private:
     std::string thisHost;
 
@@ -273,13 +282,6 @@ class Scheduler
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
     std::mutex localResultsMutex;
-
-    // ---- Clients ----
-    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
-      const std::string& otherHost);
-
-    faabric::snapshot::SnapshotClient& getSnapshotClient(
-      const std::string& otherHost);
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;

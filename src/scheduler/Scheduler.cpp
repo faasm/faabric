@@ -550,6 +550,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // -------------------------------------------
     // SNAPSHOTS
     // -------------------------------------------
+    bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
 
     // Push out snapshot diffs to registered hosts. We have to do this to
     // *all* hosts, regardless of whether they will be executing functions.
@@ -571,7 +572,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         snapshotKey = firstMsg.snapshotkey();
     }
 
-    if (!snapshotKey.empty()) {
+    if (!snapshotKey.empty() && !isMigration) {
         auto snap =
           faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
@@ -590,6 +591,15 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }
+
+        // Now reset the tracking on the snapshot before we start executing
+        snap->clearTrackedChanges();
+    } else if (isMigration) {
+        // If we are executing a migrated function, we don't need to distribute
+        // the snapshot to other hosts, as this snapshot is specific to the
+        // to-be-restored function
+        auto snap =
+          faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
         // Now reset the tracking on the snapshot before we start executing
         snap->clearTrackedChanges();

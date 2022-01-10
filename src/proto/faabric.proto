@@ -25,6 +25,7 @@ message BatchExecuteRequest {
         FUNCTIONS = 0;
         THREADS = 1;
         PROCESSES = 2;
+        MIGRATION = 3;
     }
 
     BatchExecuteType type = 2;

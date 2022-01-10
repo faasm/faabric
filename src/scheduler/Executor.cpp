@@ -14,6 +14,7 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
+#include <faabric/util/message.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/string_tools.h>
@@ -758,12 +759,26 @@ bool Executor::doMigration(
 void Executor::migrateFunction(const faabric::Message& msg,
                                const std::string& host)
 {
-    SPDLOG_INFO("Executor received request to migrate message {} from host {}"
-                " to host {}",
-                msg.id(),
-                msg.executedhost(),
-                host);
-    SPDLOG_ERROR("Executor::migrate() not implemented");
+    SPDLOG_DEBUG("Executor received request to migrate message {} from host {}"
+                 " to host {}",
+                 msg.id(),
+                 msg.executedhost(),
+                 host);
+
+    // Take snapshot and push to recepient host
+    // TODO - could we just push the snapshot diffs here?
+    auto snap = std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+    std::string snapKey = fmt::format("{}:{}",
+                                      faabric::util::funcToString(msg, false),
+                                      faabric::util::generateGid());
+    sch.getSnapshotClient(host).pushSnapshot(snapKey, snap);
+
+    // Create request execution for migrated function
+    auto req = faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
+    faabric::util::copyMessage(&msg, req->mutable_messages(0));
+    req->set_type(faabric::BatchExecuteRequest::MIGRATION);
+    req->mutable_messages(0)->set_snapshotkey(snapKey);
+    sch.getFunctionCallClient(host).executeFunctions(req);
 }
 
 // ------------------------------------------
