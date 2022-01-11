@@ -19,6 +19,9 @@
 #include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
 
+#define ONE_MB (1024L * 1024L)
+#define ONE_GB (1024L * ONE_MB)
+#define DEFAULT_MAX_SNAP_SIZE (4 * ONE_GB)
 #define POOL_SHUTDOWN -1
 
 namespace faabric::scheduler {
@@ -139,8 +142,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             SPDLOG_DEBUG(
               "Creating main thread snapshot: {} for {}", snapshotKey, funcStr);
 
-            snap =
-              std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+            snap = std::make_shared<faabric::util::SnapshotData>(
+              getMemoryView(), DEFAULT_MAX_SNAP_SIZE);
             reg.registerSnapshot(snapshotKey, snap);
         } else {
             exists = true;
@@ -161,6 +164,20 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
         std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
           tracker.getBothDirtyOffsets(memView);
+
+        // If memory has grown bigger than the snapshot, add another dirty
+        // region on top to capture this
+        if (memView.size() > snap->getSize()) {
+            uint32_t newRegionLen = memView.size() - snap->getSize();
+            SPDLOG_TRACE("Memory grown to {} between threads, adding extra "
+                         "dirty region {}-{}",
+                         memView.size(),
+                         snap->getSize(),
+                         snap->getSize() + newRegionLen);
+
+            dirtyRegions.emplace_back(
+              std::pair<uint32_t, uint32_t>(snap->getSize(), newRegionLen));
+        }
 
         // Apply changes to snapshot
         snap->fillGapsWithOverwriteRegions();
@@ -586,10 +603,24 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
             }
 
-            // Fill snapshot gaps with overwrite regions first
+            // If memory has grown bigger than the snapshot, add another dirty
+            // region on top to capture this
             std::string mainThreadSnapKey =
               faabric::util::getMainThreadSnapshotKey(msg);
             auto snap = reg.getSnapshot(mainThreadSnapKey);
+            if (memView.size() > snap->getSize()) {
+                uint32_t newRegionLen = memView.size() - snap->getSize();
+                SPDLOG_TRACE(
+                  "Memory grown to {}, adding extra dirty region {}-{}",
+                  memView.size(),
+                  snap->getSize(),
+                  snap->getSize() + newRegionLen);
+
+                dirtyRegions.emplace_back(
+                  std::pair<uint32_t, uint32_t>(snap->getSize(), newRegionLen));
+            }
+
+            // Fill snapshot gaps with overwrite regions first
             snap->fillGapsWithOverwriteRegions();
 
             // Compare snapshot with all dirty regions for this executor
