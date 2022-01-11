@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21.0)
+cmake_minimum_required(VERSION 3.18.2)
 project(faabric)
 
 option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)

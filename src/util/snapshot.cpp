@@ -294,7 +294,6 @@ void SnapshotData::writeQueuedDiffs()
 
     SPDLOG_DEBUG("Writing {} queued diffs to snapshot", queuedDiffs.size());
 
-    // Iterate through diffs
     for (auto& diff : queuedDiffs) {
         if (diff.getOperation() ==
             faabric::util::SnapshotMergeOperation::Ignore) {
@@ -307,10 +306,6 @@ void SnapshotData::writeQueuedDiffs()
         }
         if (diff.getOperation() ==
             faabric::util::SnapshotMergeOperation::Overwrite) {
-
-            SPDLOG_TRACE("Copying overwrite diff into {}-{}",
-                         diff.getOffset(),
-                         diff.getOffset() + diff.getData().size());
 
             writeData(diff.getData(), diff.getOffset());
 
@@ -562,11 +557,6 @@ void SnapshotMergeRegion::addOverwriteDiff(
         // Iterate through and build diffs
         for (auto [start, len] : regions) {
             uint32_t diffStart = dirtyRegionStart + start;
-            SPDLOG_TRACE("Adding {} overwrite diff at {}-{}",
-                         snapshotDataTypeStr(dataType),
-                         diffStart,
-                         diffStart + len);
-
             diffs.emplace_back(
               dataType, operation, diffStart, updated.subspan(diffStart, len));
         }
