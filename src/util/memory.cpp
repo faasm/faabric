@@ -15,7 +15,7 @@ namespace faabric::util {
 void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b)
 {
     std::transform(
-      a.begin(), a.end(), b.begin(), b.end(), std::logical_or<char>());
+      a.begin(), a.end(), b.begin(), a.begin(), std::logical_or<char>());
 }
 // -------------------------
 // Alignment

@@ -70,12 +70,8 @@ inv dev.cc faabric
 
 ## Debugging
 
-Note that Faabric uses segfaults to track dirty pages, and as such when using
-`gdb` you must stop it from stopping and printing on every segfault:
-
-```
-handle SIGSEGV nostop noprint
-```
+Note that Faabric provides its own `.gdbinit` file which will ensure segfaults
+(used in dirty tracking) aren't caught by gdb by default.
 
 ## Testing
 

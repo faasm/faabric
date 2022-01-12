@@ -11,7 +11,7 @@
 namespace faabric::util {
 
 /*
- * Dedupes a list of dirty regions specified by offset and length
+ * Merges the dirty page flags from b into a in place
  */
 void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b);
 

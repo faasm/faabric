@@ -15,11 +15,20 @@ namespace faabric::util {
 SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
                            SnapshotMergeOperation operationIn,
                            uint32_t offsetIn,
-                           std::span<const uint8_t> dataIn)
+                           std::span<const uint8_t> dataIn,
+                           const std::vector<uint8_t>& ownedDataIn)
   : dataType(dataTypeIn)
   , operation(operationIn)
   , offset(offsetIn)
   , data(dataIn)
+  , ownedData(ownedDataIn)
+{}
+
+SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
+                           SnapshotMergeOperation operationIn,
+                           uint32_t offsetIn,
+                           std::span<const uint8_t> dataIn)
+  : SnapshotDiff(dataTypeIn, operationIn, offsetIn, dataIn, {})
 {}
 
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
@@ -579,7 +588,8 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     // Check if anything dirty in the given region
     auto endIt = dirtyRegions.begin() + endPage;
     auto startIt = dirtyRegions.begin() + startPage;
-    if (std::find(startIt, endIt, 1) == endIt) {
+    auto foundIt = std::find(startIt, endIt, 1);
+    if (foundIt == endIt) {
         SPDLOG_TRACE(
           "No dirty pages for MR {} - {} ({})", offset, offset + length, mrEnd);
         return;
@@ -588,9 +598,12 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     // Overwrites and XORs both deal with overwriting bytes on the master.
     // Overwrites will filter in only the modified bytes, whereas XOR will
     // transmit the XOR of the whole page and the original
+    uint32_t firstDirtyPage = *foundIt;
     if (operation == SnapshotMergeOperation::Overwrite ||
         operation == SnapshotMergeOperation::XOR) {
-        for (int p = startPage; p < endPage; p++) {
+
+        // Iterate through pages
+        for (int p = firstDirtyPage; p < endPage; p++) {
             // Skip if page not dirty
             if (dirtyRegions.at(p) == 0) {
                 continue;
@@ -618,7 +631,6 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                     } else if (!dirty && diffInProgress) {
                         // Finished on byte before
                         diffInProgress = false;
-                        diffs.emplace_back(diffStart, i - diffStart);
                         diffs.emplace_back(
                           dataType,
                           operation,
@@ -653,78 +665,77 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
 
                 PROF_END(XORDiff)
             }
-
-            return;
         }
 
-        PROF_START(NonOverwriteDiff)
-        uint8_t* updated = updatedData.data() + offset;
-        const uint8_t* original = originalData.data() + offset;
-
-        bool changed = false;
-        switch (dataType) {
-            case (SnapshotDataType::Int): {
-                int preUpdate = unalignedRead<int>(updated);
-                changed = calculateDiffValue<int>(original, updated, operation);
-
-                SPDLOG_TRACE("Calculated int {} merge: {} {} -> {}",
-                             snapshotMergeOpStr(operation),
-                             preUpdate,
-                             unalignedRead<int>(original),
-                             unalignedRead<int>(updated));
-                break;
-            }
-            case (SnapshotDataType::Long): {
-                long preUpdate = unalignedRead<long>(updated);
-                changed =
-                  calculateDiffValue<long>(original, updated, operation);
-
-                SPDLOG_TRACE("Calculated long {} merge: {} {} -> {}",
-                             snapshotMergeOpStr(operation),
-                             preUpdate,
-                             unalignedRead<long>(original),
-                             unalignedRead<long>(updated));
-                break;
-            }
-            case (SnapshotDataType::Float): {
-                float preUpdate = unalignedRead<float>(updated);
-                changed =
-                  calculateDiffValue<float>(original, updated, operation);
-
-                SPDLOG_TRACE("Calculated float {} merge: {} {} -> {}",
-                             snapshotMergeOpStr(operation),
-                             preUpdate,
-                             unalignedRead<float>(original),
-                             unalignedRead<float>(updated));
-                break;
-            }
-            case (SnapshotDataType::Double): {
-                double preUpdate = unalignedRead<double>(updated);
-                changed =
-                  calculateDiffValue<double>(original, updated, operation);
-
-                SPDLOG_TRACE("Calculated double {} merge: {} {} -> {}",
-                             snapshotMergeOpStr(operation),
-                             preUpdate,
-                             unalignedRead<double>(original),
-                             unalignedRead<double>(updated));
-                break;
-            }
-            default: {
-                SPDLOG_ERROR("Unsupported merge op combination {} {}",
-                             snapshotDataTypeStr(dataType),
-                             snapshotMergeOpStr(operation));
-                throw std::runtime_error("Unsupported merge op combination");
-            }
-        }
-
-        // Add the diff
-        if (changed) {
-            diffs.emplace_back(dataType,
-                               operation,
-                               offset,
-                               std::span<const uint8_t>(updated, length));
-        }
-        PROF_END(NonOverwriteDiff)
+        // This is the end of the overwrite/ XOR diff
+        return;
     }
+
+    PROF_START(NonOverwriteDiff)
+    uint8_t* updated = updatedData.data() + offset;
+    const uint8_t* original = originalData.data() + offset;
+
+    bool changed = false;
+    switch (dataType) {
+        case (SnapshotDataType::Int): {
+            int preUpdate = unalignedRead<int>(updated);
+            changed = calculateDiffValue<int>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated int {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<int>(original),
+                         unalignedRead<int>(updated));
+            break;
+        }
+        case (SnapshotDataType::Long): {
+            long preUpdate = unalignedRead<long>(updated);
+            changed = calculateDiffValue<long>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated long {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<long>(original),
+                         unalignedRead<long>(updated));
+            break;
+        }
+        case (SnapshotDataType::Float): {
+            float preUpdate = unalignedRead<float>(updated);
+            changed = calculateDiffValue<float>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated float {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<float>(original),
+                         unalignedRead<float>(updated));
+            break;
+        }
+        case (SnapshotDataType::Double): {
+            double preUpdate = unalignedRead<double>(updated);
+            changed = calculateDiffValue<double>(original, updated, operation);
+
+            SPDLOG_TRACE("Calculated double {} merge: {} {} -> {}",
+                         snapshotMergeOpStr(operation),
+                         preUpdate,
+                         unalignedRead<double>(original),
+                         unalignedRead<double>(updated));
+            break;
+        }
+        default: {
+            SPDLOG_ERROR("Unsupported merge op combination {} {}",
+                         snapshotDataTypeStr(dataType),
+                         snapshotMergeOpStr(operation));
+            throw std::runtime_error("Unsupported merge op combination");
+        }
+    }
+
+    // Add the diff
+    if (changed) {
+        diffs.emplace_back(dataType,
+                           operation,
+                           offset,
+                           std::span<const uint8_t>(updated, length));
+    }
+    PROF_END(NonOverwriteDiff)
+}
 }

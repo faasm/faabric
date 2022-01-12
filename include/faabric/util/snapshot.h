@@ -53,6 +53,14 @@ class SnapshotDiff
                  uint32_t offsetIn,
                  std::span<const uint8_t> dataIn);
 
+    // This is a hack for the occasions when the snapshot diff does actually
+    // need to take ownership
+    SnapshotDiff(SnapshotDataType dataTypeIn,
+                 SnapshotMergeOperation operationIn,
+                 uint32_t offsetIn,
+                 std::span<const uint8_t> dataIn,
+                 const std::vector<uint8_t>& ownedDataIn);
+
     SnapshotDataType getDataType() const { return dataType; }
 
     SnapshotMergeOperation getOperation() const { return operation; }
@@ -68,6 +76,7 @@ class SnapshotDiff
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
     uint32_t offset = 0;
     std::span<const uint8_t> data;
+    std::vector<uint8_t> ownedData;
 };
 
 class SnapshotMergeRegion
