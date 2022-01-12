@@ -25,7 +25,7 @@ void checkSnapshotDiff(int offset,
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,
-                 "Test no snapshot diffs if no merge regions",
+                 "Test single extension diff if no merge regions and grown",
                  "[snapshot]")
 {
     std::string snapKey = "foobar123";
@@ -50,22 +50,38 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
+    std::vector<char> expected(memPages, 0);
+
     // Make various changes
     mem[0] = 1;
     mem[2 * HOST_PAGE_SIZE] = 1;
     mem[3 * HOST_PAGE_SIZE + 10] = 1;
+
+    // Outside of original snap size
     mem[8 * HOST_PAGE_SIZE - 20] = 1;
+
+    expected[0] = 1;
+    expected[2] = 1;
+    expected[3] = 1;
+    expected[7] = 1;
 
     tracker.stopTracking(memView);
     tracker.stopThreadLocalTracking(memView);
 
     // Check there are no diffs even though we have dirty regions
     auto dirtyRegions = tracker.getBothDirtyPages(memView);
-    REQUIRE(!dirtyRegions.empty());
+    REQUIRE(dirtyRegions == expected);
 
     std::vector<SnapshotDiff> changeDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
-    REQUIRE(changeDiffs.empty());
+    REQUIRE(changeDiffs.size() == 1);
+
+    SnapshotDiff actual = changeDiffs.at(0);
+    REQUIRE(actual.getOffset() == snapSize);
+
+    std::span<uint8_t> expectedData =
+      memView.subspan(snapSize, 3 * HOST_PAGE_SIZE);
+    REQUIRE(actual.getData().size() == expectedData.size());
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")

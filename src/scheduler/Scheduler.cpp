@@ -914,7 +914,7 @@ void Scheduler::setThreadResult(const faabric::Message& msg,
 void Scheduler::pushSnapshotDiffs(
   const faabric::Message& msg,
   const std::string& snapshotKey,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
+  std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (diffs.empty()) {
         return;

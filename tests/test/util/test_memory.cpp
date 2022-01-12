@@ -16,9 +16,52 @@ namespace tests {
 
 TEST_CASE("Test merge dirty pages", "[util][memory]")
 {
-    std::vector<char> a = { 0, 1, 1, 0, 0, 1 };
-    std::vector<char> b = { 1, 1, 0, 1, 0, 1 };
-    std::vector<char> expected = { 1, 1, 1, 1, 0, 1 };
+    std::vector<char> a;
+    std::vector<char> b;
+    std::vector<char> expected;
+
+    SECTION("First empty")
+    {
+        b = { 1, 0, 1, 1 };
+        expected = { 1, 0, 1, 1 };
+    }
+
+    SECTION("First shorter")
+    {
+        a = { 1, 0, 1, 0 };
+        b = { 0, 0, 1, 1, 1, 0 };
+        expected = { 1, 0, 1, 1, 1, 0 };
+    }
+
+    SECTION("First longer")
+    {
+        a = { 1, 0, 1, 0, 1, 0, 1 };
+        b = { 0, 0, 1, 1 };
+        expected = { 1, 0, 1, 1, 1, 0, 1 };
+    }
+
+    SECTION("Equal sizes")
+    {
+        a = { 0, 1, 1, 0, 0, 1 };
+        b = { 1, 1, 0, 1, 0, 1 };
+        expected = { 1, 1, 1, 1, 0, 1 };
+    }
+
+    SECTION("Empty") {}
+
+    SECTION("No changes")
+    {
+        a = { 0, 1, 1, 0, 0, 1 };
+        b = { 0, 1, 1, 0, 0, 1 };
+        expected = { 0, 1, 1, 0, 0, 1 };
+    }
+
+    SECTION("All zero")
+    {
+        a = { 0, 0, 0, 0 };
+        b = { 0, 0, 0, 0 };
+        expected = { 0, 0, 0, 0 };
+    }
 
     faabric::util::mergeDirtyPages(a, b);
     REQUIRE(a == expected);

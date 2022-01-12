@@ -171,7 +171,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
         if (updates.empty()) {
             SPDLOG_TRACE(
-              "No updates to main thread snapshot for {} from {} dirty regions",
+              "No updates to main thread snapshot for {} over {} pages",
               faabric::util::funcToString(msg, false),
               dirtyRegions.size());
         } else {
@@ -603,16 +603,16 @@ void Executor::threadPoolThread(int threadPoolIdx)
             if (diffs.empty()) {
                 SPDLOG_DEBUG("No diffs for {}", mainThreadSnapKey);
             } else {
-                SPDLOG_DEBUG(
-                  "Queueing {} diffs for {} to snapshot {} (group {})",
-                  diffs.size(),
-                  faabric::util::funcToString(msg, false),
-                  mainThreadSnapKey,
-                  msg.groupid());
-
                 // On master we queue the diffs locally directly, on a remote
                 // host we push them back to master
                 if (isMaster) {
+                    SPDLOG_DEBUG("Queueing {} diffs on master for {} to "
+                                 "snapshot {} (group {})",
+                                 diffs.size(),
+                                 faabric::util::funcToString(msg, false),
+                                 mainThreadSnapKey,
+                                 msg.groupid());
+
                     snap->queueDiffs(diffs);
                 } else if (isLastInBatch) {
                     sch.pushSnapshotDiffs(msg, mainThreadSnapKey, diffs);

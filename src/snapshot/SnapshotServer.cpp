@@ -136,26 +136,17 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     std::vector<SnapshotDiff> diffs;
     diffs.reserve(r->diffs()->size());
     for (const auto* diff : *r->diffs()) {
+        diffs.emplace_back(
+          static_cast<SnapshotDataType>(diff->data_type()),
+          static_cast<SnapshotMergeOperation>(diff->merge_op()),
+          diff->offset(),
+          std::span(diff->data()->data(), diff->data()->size()));
+
         // NOTE if we're forcing, we'll be applying these diffs within the
         // lifespan of the memory, so the snapshot diff doesn't have to take
         // ownership. If not, it does need to take ownership
-        if (r->force()) {
-            // No ownership
-            diffs.emplace_back(
-              static_cast<SnapshotDataType>(diff->data_type()),
-              static_cast<SnapshotMergeOperation>(diff->merge_op()),
-              diff->offset(),
-              std::span(diff->data()->data(), diff->data()->size()));
-        } else {
-            // Ownership
-            diffs.emplace_back(
-              static_cast<SnapshotDataType>(diff->data_type()),
-              static_cast<SnapshotMergeOperation>(diff->merge_op()),
-              diff->offset(),
-              std::span(diff->data()->data(), diff->data()->size()),
-              std::vector<uint8_t>(diff->data()->data(),
-                                   diff->data()->data() +
-                                     diff->data()->size()));
+        if (!r->force()) {
+            diffs.back().takeOwnership();
         }
     }
 

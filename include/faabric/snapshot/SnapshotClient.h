@@ -41,11 +41,11 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
     void pushSnapshotUpdate(
       std::string snapshotKey,
       const std::shared_ptr<faabric::util::SnapshotData>& data,
-      const std::vector<faabric::util::SnapshotDiff>& diffs);
+      std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void pushSnapshotDiffs(
       std::string snapshotKey,
-      const std::vector<faabric::util::SnapshotDiff>& diffs);
+      std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void deleteSnapshot(const std::string& key);
 
@@ -57,6 +57,6 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
     void doPushSnapshotDiffs(
       const std::string& snapshotKey,
       const std::shared_ptr<faabric::util::SnapshotData>& data,
-      const std::vector<faabric::util::SnapshotDiff>& diffs);
+      std::vector<faabric::util::SnapshotDiff>& diffs);
 };
 }

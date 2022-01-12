@@ -308,6 +308,11 @@ void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
 std::vector<char> SegfaultDirtyTracker::getThreadLocalDirtyPages(
   std::span<uint8_t> region)
 {
+    if (!tracking.isInitialised()) {
+        size_t nPages = getRequiredHostPages(region.size());
+        return std::vector<char>(nPages, 0);
+    }
+
     return tracking.pageFlags;
 }
 

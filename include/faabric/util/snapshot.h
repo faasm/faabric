@@ -39,9 +39,8 @@ enum SnapshotMergeOperation
 
 /**
  * A snapshot diff is a view of a segment of memory, and does not take ownership
- * of the underlying data. Snapshot diffs are only meant to be used as markers
- * back to regions of memory that have changed; the executor that owns the
- * memory must outlive the snapshot diff.
+ * of the underlying data unless explicitly asked to. Snapshot diffs are passed
+ * around a fair bit, so we really must avoid copying data wherever possible.
  */
 class SnapshotDiff
 {
@@ -53,14 +52,6 @@ class SnapshotDiff
                  uint32_t offsetIn,
                  std::span<const uint8_t> dataIn);
 
-    // This is a hack for the occasions when the snapshot diff does actually
-    // need to take ownership
-    SnapshotDiff(SnapshotDataType dataTypeIn,
-                 SnapshotMergeOperation operationIn,
-                 uint32_t offsetIn,
-                 std::span<const uint8_t> dataIn,
-                 const std::vector<uint8_t>& ownedDataIn);
-
     SnapshotDataType getDataType() const { return dataType; }
 
     SnapshotMergeOperation getOperation() const { return operation; }
@@ -70,6 +61,8 @@ class SnapshotDiff
     std::span<const uint8_t> getData() const { return data; }
 
     std::vector<uint8_t> getDataCopy() const;
+
+    void takeOwnership();
 
   private:
     SnapshotDataType dataType = SnapshotDataType::Raw;

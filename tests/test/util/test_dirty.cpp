@@ -40,9 +40,9 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     tracker.clearAll();
 
-    std::vector<std::pair<uint32_t, uint32_t>> actual =
-      tracker.getBothDirtyPages(memView);
-    REQUIRE(actual.empty());
+    std::vector<char> actual = tracker.getBothDirtyPages(memView);
+    std::vector<char> expected(nPages, 0);
+    REQUIRE(actual == expected);
 
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
@@ -55,10 +55,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     pageOne[10] = 1;
     pageThree[123] = 4;
 
-    std::vector<std::pair<uint32_t, uint32_t>> expected = {
-        std::pair<uint32_t, uint32_t>(HOST_PAGE_SIZE, HOST_PAGE_SIZE),
-        std::pair<uint32_t, uint32_t>(3 * HOST_PAGE_SIZE, HOST_PAGE_SIZE)
-    };
+    expected = { 0, 1, 0, 1, 0, 0 };
 
     actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual == expected);
@@ -67,7 +64,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     uint8_t* pageFive = pageThree + (2 * HOST_PAGE_SIZE);
     pageFive[99] = 3;
 
-    expected.emplace_back(5 * HOST_PAGE_SIZE, HOST_PAGE_SIZE);
+    expected[5] = 1;
     actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
@@ -78,7 +75,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     tracker.startThreadLocalTracking(memView);
 
     actual = tracker.getBothDirtyPages(memView);
-    REQUIRE(actual.empty());
+    expected = std::vector<char>(nPages, 0);
+    REQUIRE(actual == expected);
 
     // Check the data hasn't changed
     REQUIRE(pageOne[10] == 1);
@@ -91,9 +89,9 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     pageFour[22] = 5;
 
     // As pages are adjacent we get a single region
-    expected = {
-        std::pair<uint32_t, uint32_t>(3 * HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE),
-    };
+    expected = std::vector<char>(nPages, 0);
+    expected[3] = 1;
+    expected[4] = 1;
     actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
@@ -104,7 +102,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
     actual = tracker.getBothDirtyPages(memView);
-    REQUIRE(actual.empty());
+    expected = std::vector<char>(nPages, 0);
+    REQUIRE(actual == expected);
 
     tracker.stopTracking(memView);
     tracker.stopThreadLocalTracking(memView);
@@ -128,9 +127,10 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     DirtyTracker& tracker = getDirtyTracker();
     tracker.clearAll();
 
-    std::vector<std::pair<uint32_t, uint32_t>> actual =
+    std::vector<char> actual =
       tracker.getBothDirtyPages({ mem.get(), memSize });
-    REQUIRE(actual.empty());
+    std::vector<char> expected(nPages, 0);
+    REQUIRE(actual == expected);
 
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
@@ -151,16 +151,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     pageSeven[77] = 1;
     pageNine[99] = 1;
 
+    expected[0] = 1;
+    expected[1] = 1;
+    expected[3] = 1;
+    expected[4] = 1;
+    expected[7] = 1;
+    expected[9] = 1;
+
     tracker.stopTracking({ mem.get(), memSize });
     tracker.stopThreadLocalTracking({ mem.get(), memSize });
-
-    // Expect adjacent regions to be merged
-    std::vector<std::pair<uint32_t, uint32_t>> expected = {
-        std::pair<uint32_t, uint32_t>(0, 2 * HOST_PAGE_SIZE),
-        std::pair<uint32_t, uint32_t>(3 * HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE),
-        std::pair<uint32_t, uint32_t>(7 * HOST_PAGE_SIZE, HOST_PAGE_SIZE),
-        std::pair<uint32_t, uint32_t>(9 * HOST_PAGE_SIZE, HOST_PAGE_SIZE)
-    };
 
     actual = tracker.getBothDirtyPages({ mem.get(), memSize });
 
@@ -176,8 +175,10 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     conf.dirtyTrackingMode = "segfault";
     tracker = getDirtyTracker();
 
-    size_t memSize = 10 * HOST_PAGE_SIZE;
+    int nPages = 10;
+    size_t memSize = nPages * HOST_PAGE_SIZE;
     std::vector<uint8_t> expectedData(memSize, 5);
+    std::vector<char> expectedDirty(nPages, 0);
 
     MemoryRegion mem = allocatePrivateMemory(memSize);
 
@@ -211,6 +212,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     size_t offsetA = 0;
     mem[offsetA] = 3;
     expectedData[offsetA] = 3;
+    expectedDirty[0] = 1;
 
     // Make two changes on adjacent page
     size_t offsetB1 = HOST_PAGE_SIZE + 10;
@@ -219,11 +221,13 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     mem[offsetB2] = 2;
     expectedData[offsetB1] = 4;
     expectedData[offsetB2] = 2;
+    expectedDirty[1] = 1;
 
     // Change another page
     size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
     mem[offsetC] = 6;
     expectedData[offsetC] = 6;
+    expectedDirty[5] = 1;
 
     // Just read from another (should not cause a diff)
     int readValue = mem[4 * HOST_PAGE_SIZE + 5];
@@ -234,17 +238,9 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     REQUIRE(actualMemAfter == expectedData);
 
     // Get dirty regions
-    std::vector<std::pair<uint32_t, uint32_t>> actualDirty =
-      tracker.getBothDirtyPages(memView);
+    std::vector<char> actualDirty = tracker.getBothDirtyPages(memView);
 
     // Check dirty regions
-    REQUIRE(actualDirty.size() == 2);
-
-    std::vector<std::pair<uint32_t, uint32_t>> expectedDirty = {
-        { 0, 2 * HOST_PAGE_SIZE },
-        { (uint32_t)(5 * HOST_PAGE_SIZE), HOST_PAGE_SIZE }
-    };
-
     REQUIRE(actualDirty == expectedDirty);
 
     tracker.stopTracking(memView);
@@ -264,7 +260,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     // Deliberately cause contention
     int nThreads = 100;
-    size_t memSize = 2 * nThreads * HOST_PAGE_SIZE;
+    int nPages = 2 * nThreads;
+    size_t memSize = nPages * HOST_PAGE_SIZE;
 
     MemoryRegion mem = allocatePrivateMemory(memSize);
     std::span<uint8_t> memView(mem.get(), memSize);
@@ -279,16 +276,17 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         std::vector<std::thread> threads;
         threads.reserve(nThreads);
         for (int i = 0; i < nThreads; i++) {
-            threads.emplace_back([this, &success, &memView, i, loop] {
+            threads.emplace_back([this, &success, &memView, &nPages, i, loop] {
                 success.at(i) = std::make_shared<std::atomic<bool>>();
 
                 // Start thread-local tracking
                 tracker.startThreadLocalTracking(memView);
 
                 // Modify a couple of pages specific to this thread
-                size_t pageOffset = i * 2 * HOST_PAGE_SIZE;
-                uint8_t* pageOne = memView.data() + pageOffset;
-                uint8_t* pageTwo = memView.data() + pageOffset + HOST_PAGE_SIZE;
+                size_t pageOffset = i * 2;
+                size_t byteOffset = pageOffset * HOST_PAGE_SIZE;
+                uint8_t* pageOne = memView.data() + byteOffset;
+                uint8_t* pageTwo = memView.data() + byteOffset + HOST_PAGE_SIZE;
 
                 pageOne[20] = 3;
                 pageOne[250] = 5;
@@ -300,9 +298,9 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                 tracker.stopThreadLocalTracking(memView);
 
                 // Check we get the right number of dirty regions
-                std::vector<std::pair<uint32_t, uint32_t>> regions =
+                std::vector<char> regions =
                   tracker.getThreadLocalDirtyPages(memView);
-                if (regions.size() != 1) {
+                if (regions.size() != nPages) {
                     SPDLOG_ERROR("Segfault thread {} failed on loop {}. Got {} "
                                  "regions instead of {}",
                                  i,
@@ -312,10 +310,9 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                     return;
                 }
 
-                std::vector<std::pair<uint32_t, uint32_t>> expected = {
-                    std::pair<uint32_t, uint32_t>(pageOffset,
-                                                  2 * HOST_PAGE_SIZE),
-                };
+                std::vector<char> expected = std::vector<char>(nPages, 0);
+                expected[pageOffset] = 1;
+                expected[pageOffset + 1] = 1;
 
                 if (regions != expected) {
                     SPDLOG_ERROR(

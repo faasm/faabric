@@ -122,7 +122,7 @@ void SnapshotClient::pushSnapshot(
 void SnapshotClient::pushSnapshotUpdate(
   std::string snapshotKey,
   const std::shared_ptr<faabric::util::SnapshotData>& data,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
+  std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     SPDLOG_DEBUG("Pushing update to snapshot {} to {} ({} diffs, {} regions)",
                  snapshotKey,
@@ -135,7 +135,7 @@ void SnapshotClient::pushSnapshotUpdate(
 
 void SnapshotClient::pushSnapshotDiffs(
   std::string snapshotKey,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
+  std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     SPDLOG_DEBUG("Pushing {} diffs for snapshot {} to {}",
                  diffs.size(),
@@ -148,10 +148,18 @@ void SnapshotClient::pushSnapshotDiffs(
 void SnapshotClient::doPushSnapshotDiffs(
   const std::string& snapshotKey,
   const std::shared_ptr<faabric::util::SnapshotData>& data,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
+  std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
+
+        // Note, when mocking, these diffs will need to outlive the life of
+        // their source data, which they don't normally have to do when
+        // pushing
+        for (auto& d : diffs) {
+            d.takeOwnership();
+        }
+
         snapshotDiffPushes.emplace_back(host, diffs);
     } else {
         flatbuffers::FlatBufferBuilder mb;

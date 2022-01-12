@@ -14,8 +14,20 @@ namespace faabric::util {
 
 void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b)
 {
-    std::transform(
-      a.begin(), a.end(), b.begin(), a.begin(), std::logical_or<char>());
+    // Extend a to fit
+    size_t overlap = a.size();
+    if (b.size() > a.size()) {
+        a.reserve(b.size());
+        a.insert(a.end(), b.begin() + a.size(), b.end());
+    } else if (b.size() < a.size()) {
+        overlap = b.size();
+    }
+
+    std::transform(a.begin(),
+                   a.begin() + overlap,
+                   b.begin(),
+                   a.begin(),
+                   std::logical_or<char>());
 }
 // -------------------------
 // Alignment

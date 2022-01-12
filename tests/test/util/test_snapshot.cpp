@@ -484,8 +484,6 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::string snapKey = "foobar123";
     int snapPages = 5;
 
-    uint32_t offset = HOST_PAGE_SIZE + (10 * sizeof(int32_t));
-
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
 
@@ -496,6 +494,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     std::vector<uint8_t> originalData;
     std::vector<uint8_t> updatedData;
     std::vector<uint8_t> expectedData;
+
+    std::vector<char> expectedDirtyPages(snapPages, 0);
+    uint32_t offset = HOST_PAGE_SIZE + (10 * sizeof(int32_t));
+    expectedDirtyPages[1] = 1;
 
     faabric::util::SnapshotDataType dataType =
       faabric::util::SnapshotDataType::Raw;
@@ -829,7 +831,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Get the snapshot diffs
     tracker.stopTracking(memView);
     tracker.stopThreadLocalTracking(memView);
+
     auto dirtyRegions = tracker.getBothDirtyPages(memView);
+    REQUIRE(dirtyRegions == expectedDirtyPages);
+
     std::vector<SnapshotDiff> actualDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
 
@@ -987,10 +992,13 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
+    std::vector<char> expectedDirtyPages(snapPages, 0);
+
     // Add some tightly-packed changes
     uint32_t offsetA = 0;
     std::vector<uint8_t> dataA(10, 1);
     std::memcpy(mem.get() + offsetA, dataA.data(), dataA.size());
+    expectedDirtyPages[0] = 1;
 
     uint32_t offsetB = dataA.size() + 1;
     std::vector<uint8_t> dataB(2, 1);
@@ -1032,7 +1040,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Check number of diffs
     tracker.stopTracking(memView);
     tracker.stopThreadLocalTracking(memView);
+
     auto dirtyRegions = tracker.getBothDirtyPages(memView);
+    REQUIRE(dirtyRegions == expectedDirtyPages);
+
     std::vector<SnapshotDiff> actualDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
 
@@ -1184,17 +1195,19 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
+    std::vector<char> expectedDirtyPages(snapPages, 0);
+
     // Add a couple of merge regions on each page, which should be skipped as
     // they won't overlap any changes
     for (int i = 0; i < snapPages; i++) {
-        // Overwrite
+        // Overwrite region at bottom of page
         int skippedOverwriteOffset = i * HOST_PAGE_SIZE;
         snap->addMergeRegion(skippedOverwriteOffset,
                              10,
                              faabric::util::SnapshotDataType::Raw,
                              faabric::util::SnapshotMergeOperation::Overwrite);
 
-        // Sum
+        // Sum region near top of page
         int skippedSumOffset =
           ((i + 1) * HOST_PAGE_SIZE) - (2 * sizeof(int32_t));
         snap->addMergeRegion(skippedSumOffset,
@@ -1203,7 +1216,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                              faabric::util::SnapshotMergeOperation::Sum);
     }
 
-    // Add an overwrite region that should take effect
+    // Add an overwrite region above the one at the very bottom, and some
+    // modified data that should be caught by it
     uint32_t overwriteAOffset = (2 * HOST_PAGE_SIZE) + 20;
     snap->addMergeRegion(overwriteAOffset,
                          20,
@@ -1211,10 +1225,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                          faabric::util::SnapshotMergeOperation::Overwrite);
 
     std::vector<uint8_t> overwriteData(10, 1);
+    SPDLOG_DEBUG("Mix test writing {} bytes at {}",
+                 overwriteData.size(),
+                 overwriteAOffset);
     std::memcpy(
       mem.get() + overwriteAOffset, overwriteData.data(), overwriteData.size());
+    expectedDirtyPages[2] = 1;
 
-    // Add a sum region and data that should also take effect
+    // Add a sum region and modified data that should also cause a diff
     uint32_t sumOffset = (4 * HOST_PAGE_SIZE) + 100;
     int sumValue = 333;
     int sumOriginal = 111;
@@ -1225,8 +1243,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                          faabric::util::SnapshotDataType::Int,
                          faabric::util::SnapshotMergeOperation::Sum);
 
+    SPDLOG_DEBUG("Mix test writing int at {}", sumOffset);
     snap->copyInData({ BYTES(&sumOriginal), sizeof(int) }, sumOffset);
     *(int*)(mem.get() + sumOffset) = sumValue;
+    expectedDirtyPages[4] = 1;
 
     // Check diffs
     std::vector<SnapshotDiff> expectedDiffs = {
@@ -1242,7 +1262,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     tracker.stopTracking(memView);
     tracker.stopThreadLocalTracking(memView);
+
     auto dirtyRegions = tracker.getBothDirtyPages(memView);
+    REQUIRE(dirtyRegions == expectedDirtyPages);
 
     std::vector<SnapshotDiff> actualDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
@@ -1251,11 +1273,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,
-                 "Test merge regions past end of original memory",
+                 "Test diffing memory larger than snapshot",
                  "[snapshot][util]")
 {
     int snapPages = 6;
     int memPages = 10;
+
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
     size_t memSize = memPages * HOST_PAGE_SIZE;
 
@@ -1274,10 +1297,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
-    uint32_t changeStartPage = 0;
     uint32_t changeOffset = 0;
     uint32_t mergeRegionStart = snapSize;
     size_t changeLength = 123;
+
+    std::vector<uint8_t> overshootData((memPages - snapPages) * HOST_PAGE_SIZE,
+                                       0);
 
     // When memory has changed at or past the end of the original data, the diff
     // will start at the end of the original data and round up to the next page
@@ -1293,15 +1318,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     SECTION("Change on first page past end of original data, overlapping merge "
             "region")
     {
-        changeStartPage = snapSize;
-        changeOffset = changeStartPage + 100;
+        changeOffset = snapSize + 100;
         mergeRegionStart = snapSize;
 
         diffData = std::vector<uint8_t>(100, 2);
-        std::vector<uint8_t> expectedData = zeroedPage;
+        std::vector<uint8_t> expectedData = overshootData;
         std::memset(expectedData.data() + 100, 2, 100);
 
-        // Diff should be the page after the end of the original data
+        // Diff should just be the whole of the updated memory
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Overwrite,
                             (uint32_t)snapSize,
@@ -1310,15 +1334,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     SECTION("Change and merge region aligned at end of original data")
     {
-        changeStartPage = snapSize;
-        changeOffset = changeStartPage;
+        changeOffset = snapSize;
         mergeRegionStart = snapSize;
 
         diffData = std::vector<uint8_t>(100, 2);
-        std::vector<uint8_t> expectedData = zeroedPage;
+        std::vector<uint8_t> expectedData = overshootData;
         std::memset(expectedData.data(), 2, 100);
 
-        // Diff should be the page after the end of the original data
+        // Diff should just be the whole of the updated memory
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Overwrite,
                             (uint32_t)snapSize,
@@ -1327,48 +1350,52 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     SECTION("Change and merge region after end of original data")
     {
-        changeStartPage = (snapPages + 2) * HOST_PAGE_SIZE;
-        changeOffset = changeStartPage + 100;
-        mergeRegionStart = changeStartPage;
+        uint32_t start = (snapPages + 2) * HOST_PAGE_SIZE;
+        changeOffset = start + 100;
+        mergeRegionStart = start;
 
         diffData = std::vector<uint8_t>(100, 2);
-        std::vector<uint8_t> expectedData = zeroedPage;
+        std::vector<uint8_t> expectedData = overshootData;
         std::memset(expectedData.data() + 100, 2, 100);
 
-        // Diff should be the page after the end of the original data,
-        // containing the change (and not those in between)
+        // Diff should be the whole region of updated memory
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Overwrite,
-                            changeStartPage,
+                            (uint32_t)snapSize,
                             expectedData } };
     }
 
     SECTION("Merge region and change both crossing end of original data")
     {
-        changeStartPage = (snapPages - 1) * HOST_PAGE_SIZE;
-        changeOffset = changeStartPage + 100;
+        // Start change one page below the end
+        uint32_t start = (snapPages - 1) * HOST_PAGE_SIZE;
+        changeOffset = start + 100;
+
+        // Add a merge region two pages below
         mergeRegionStart = (snapPages - 2) * HOST_PAGE_SIZE;
 
-        // Change goes from inside original data to overshoot the end
+        // Change will capture the modified bytes within the original region,
+        // and the overshoot
         size_t dataSize = 2 * HOST_PAGE_SIZE;
+        diffData = std::vector<uint8_t>(dataSize, 2);
+
         size_t overlapSize = HOST_PAGE_SIZE - 100;
         size_t overshootSize = dataSize - overlapSize;
 
-        diffData = std::vector<uint8_t>(dataSize, 2);
-
         // One diff will cover the overlap with last part of original data, and
-        // another will be rounded up to the nearest page for the extension
-        std::vector<uint8_t> expectedDataTwo(2 * HOST_PAGE_SIZE, 0);
+        // another will be the rest of the data
+        std::vector<uint8_t> expectedDataOne(HOST_PAGE_SIZE - 100, 2);
+        std::vector<uint8_t> expectedDataTwo = overshootData;
         std::memset(expectedDataTwo.data(), 2, overshootSize);
 
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Overwrite,
-                            changeOffset,
-                            std::vector<uint8_t>(HOST_PAGE_SIZE - 100, 2) },
+                            (uint32_t)snapSize,
+                            expectedDataTwo },
                           { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Overwrite,
-                            (uint32_t)snapSize,
-                            expectedDataTwo } };
+                            changeOffset,
+                            expectedDataOne } };
     }
 
     // Copy in the changed data
@@ -1505,23 +1532,25 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     // Write data to the mapped memory
     std::memcpy(memA.get() + offsetC, dataC.data(), dataC.size());
 
-    // Check diff of snapshot with memory only includes the change made to the
-    // memory itself
+    // Check diff of snapshot with memory only includes the change made to
+    // the memory itself
     tracker.stopTracking(memViewA);
     tracker.stopThreadLocalTracking(memViewA);
     auto dirtyRegions = tracker.getBothDirtyPages(memViewA);
 
-    std::vector<SnapshotDiff> actualDiffs =
-      snap->diffWithDirtyRegions(memViewA, dirtyRegions);
-    REQUIRE(actualDiffs.size() == 1);
+    {
+        std::vector<SnapshotDiff> actualDiffs =
+          snap->diffWithDirtyRegions(memViewA, dirtyRegions);
+        REQUIRE(actualDiffs.size() == 1);
 
-    SnapshotDiff& actualDiff = actualDiffs.at(0);
-    REQUIRE(actualDiff.getData().size() == dataC.size());
-    REQUIRE(actualDiff.getOffset() == offsetC);
+        SnapshotDiff& actualDiff = actualDiffs.at(0);
+        REQUIRE(actualDiff.getData().size() == dataC.size());
+        REQUIRE(actualDiff.getOffset() == offsetC);
 
-    // Apply diffs from memory to the snapshot
-    snap->queueDiffs(actualDiffs);
-    snap->writeQueuedDiffs();
+        // Apply diffs from memory to the snapshot
+        snap->queueDiffs(actualDiffs);
+        snap->writeQueuedDiffs();
+    }
 
     // Check snapshot now shows both diffs
     std::vector<SnapshotDiff> snapDirtyRegions = snap->getTrackedChanges();
