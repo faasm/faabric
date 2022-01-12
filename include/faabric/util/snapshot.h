@@ -269,6 +269,10 @@ class SnapshotData
     void mapToMemory(uint8_t* target, bool shared);
 
     void writeData(std::span<const uint8_t> buffer, uint32_t offset = 0);
+
+    void xorData(std::span<const uint8_t> buffer, uint32_t offset = 0);
+
+    void checkWriteExtension(std::span<const uint8_t> buffer, uint32_t offset);
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);

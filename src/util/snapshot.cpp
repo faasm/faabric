@@ -79,7 +79,8 @@ void SnapshotData::copyInData(std::span<const uint8_t> buffer, uint32_t offset)
     writeData(buffer, offset);
 }
 
-void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
+void SnapshotData::checkWriteExtension(std::span<const uint8_t> buffer,
+                                       uint32_t offset)
 {
     // Try to allocate more memory on top of existing data if necessary.
     // Will throw an exception if not possible
@@ -102,12 +103,34 @@ void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
         // Remap data
         mapMemoryShared({ data.get(), size }, fd);
     }
+}
+
+void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
+{
+    size_t regionEnd = offset + buffer.size();
+    checkWriteExtension(buffer, offset);
 
     // Copy in new data
     uint8_t* copyTarget = validatedOffsetPtr(offset);
     ::memcpy(copyTarget, buffer.data(), buffer.size());
 
     // Record the change
+    trackedChanges.emplace_back(offset, regionEnd);
+}
+
+void SnapshotData::xorData(std::span<const uint8_t> buffer, uint32_t offset)
+{
+    size_t regionEnd = offset + buffer.size();
+    if (regionEnd > size) {
+        SPDLOG_ERROR(
+          "XORing snapshot data exceeding size: {} > {}", regionEnd, size);
+        throw std::runtime_error("XORing data exceeding size");
+    }
+
+    uint8_t* copyTarget = validatedOffsetPtr(offset);
+    std::transform(
+      buffer.begin(), buffer.end(), copyTarget, copyTarget, std::bit_xor());
+
     trackedChanges.emplace_back(offset, regionEnd);
 }
 
@@ -304,11 +327,15 @@ void SnapshotData::writeQueuedDiffs()
 
             continue;
         }
+
         if (diff.getOperation() ==
             faabric::util::SnapshotMergeOperation::Overwrite) {
-
             writeData(diff.getData(), diff.getOffset());
+            continue;
+        }
 
+        if (diff.getOperation() == faabric::util::SnapshotMergeOperation::XOR) {
+            xorData(diff.getData(), diff.getOffset());
             continue;
         }
 
