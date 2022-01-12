@@ -1,3 +1,4 @@
+#include "faabric/scheduler/MpiWorldRegistry.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -543,6 +544,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
             selfShutdown = true;
             returnValue = -99;
 
+            // MPI migration
+            if(msg.ismpi()) {
+                // TODO - call MPI migration stuff here
+            }
+
         } catch (const std::exception& ex) {
             returnValue = 1;
 
@@ -751,18 +757,6 @@ bool Executor::tryClaim()
 void Executor::releaseClaim()
 {
     claimed.store(false);
-}
-
-void Executor::doMigration(
-  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
-{
-    for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
-        auto m = pendingMigrations->mutable_migrations()->at(i);
-        if (m.msg().id() == boundMessage.id()) {
-            migrateFunction(m.msg(), m.dsthost());
-            // TODO: terminate current executing thread
-        }
-    }
 }
 
 void Executor::migrateFunction(const faabric::Message& msg,

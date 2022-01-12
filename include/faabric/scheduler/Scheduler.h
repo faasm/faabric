@@ -82,9 +82,6 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
-    void doMigration(
-      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
-
   protected:
     virtual void restore(const std::string& snapshotKey);
 

@@ -1307,11 +1307,6 @@ void MpiWorld::allReduce(int rank,
     // Second, 0 broadcasts the result to all ranks
     broadcast(
       0, rank, recvBuffer, datatype, count, faabric::MPIMessage::ALLREDUCE);
-
-    // All reduce triggers a migration point in MPI
-    if (thisRankMsg != nullptr && thisRankMsg->migrationcheckperiod() > 0) {
-        tryMigrate(rank);
-    }
 }
 
 void MpiWorld::op_reduce(faabric_op_t* operation,
@@ -1559,11 +1554,6 @@ void MpiWorld::barrier(int thisRank)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
-
-    // Barrier triggers a migration point
-    if (thisRankMsg != nullptr && thisRankMsg->migrationcheckperiod() > 0) {
-        tryMigrate(thisRank);
-    }
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
@@ -1760,33 +1750,6 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
-// This method will either (i) do nothing or (ii) run the whole migration.
-// Note that every rank will call this method.
-void MpiWorld::tryMigrate(int thisRank)
-{
-    auto pendingMigrations =
-      getScheduler().getPendingAppMigrations(thisRankMsg->appid());
-
-    if (pendingMigrations == nullptr) {
-        return;
-    }
-
-    prepareMigration(thisRank, pendingMigrations);
-    if (faabric::util::isMockMode()) {
-        // When mocking in the tests, the call to get the current executing
-        // executor may fail
-        faabric::util::UniqueLock lock(mockMutex);
-        mpiMockedPendingMigrations.push_back(pendingMigrations);
-    } else {
-        // An executing thread may never return from the next call. However,
-        // the restored executing thread will know it is an MPI function, its
-        // rank, and its world id, and will therefore call the method to finish
-        // the migration from the snapshot server.
-        getExecutingExecutor()->doMigration(pendingMigrations);
-    }
-    finishMigration(thisRank);
-}
-
 // Once per host we modify the per-world accounting of rank-to-hosts mappings
 // and the corresponding ports for cross-host messaging.
 void MpiWorld::prepareMigration(
@@ -1837,7 +1800,5 @@ void MpiWorld::finishMigration(int thisRank)
     if (thisRank == localLeader) {
         getScheduler().removePendingMigration(thisRankMsg->appid());
     }
-
-    barrier(thisRank);
 }
 }

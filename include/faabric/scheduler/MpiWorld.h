@@ -275,9 +275,6 @@ class MpiWorld
                                                              int batchSize = 0);
 
     /* Function Migration */
-
-    void tryMigrate(int thisRank);
-
     void prepareMigration(
       int thisRank,
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
