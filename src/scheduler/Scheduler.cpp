@@ -11,7 +11,6 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/memory.h>
-#include <faabric/util/message.h>
 #include <faabric/util/network.h>
 #include <faabric/util/random.h>
 #include <faabric/util/scheduling.h>
@@ -487,8 +486,8 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 for (int i = 0; i < firstMsg.mpiworldsize() - 1; i++) {
                     // Append message to original request
                     auto* newMsgPtr = originalReq->add_messages();
-                    faabric::util::copyMessage(&req->messages().at(i),
-                                               newMsgPtr);
+                    *newMsgPtr = req->messages().at(i);
+
                     // Append message to original decision
                     originalDecision->addMessage(decision.hosts.at(i),
                                                  req->messages().at(i));
@@ -575,7 +574,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         snapshotKey = firstMsg.snapshotkey();
     }
 
-    if (!snapshotKey.empty() && !isMigration) {
+    if (!snapshotKey.empty()) {
         auto snap =
           faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
 
@@ -1372,7 +1371,8 @@ Scheduler::doCheckForMigrationOpportunities(
                   &(*(req->mutable_messages()->begin() +
                       std::distance(originalDecision.hosts.begin(), right)));
                 auto* migrationMsgPtr = migration->mutable_msg();
-                faabric::util::copyMessage(msgPtr, migrationMsgPtr);
+                // faabric::util::copyMessage(msgPtr, migrationMsgPtr);
+                *migrationMsgPtr = *msgPtr;
                 // Decrement by one the availability, and check for more
                 // possible sources of migration
                 claimSlot();

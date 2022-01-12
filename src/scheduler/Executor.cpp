@@ -1,3 +1,4 @@
+#include "faabric/scheduler/MpiWorldRegistry.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -14,7 +15,6 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
-#include <faabric/util/message.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/string_tools.h>
@@ -529,15 +529,28 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Execute the task
         int32_t returnValue;
+        bool migrated = false;
         try {
             returnValue =
               executeTask(threadPoolIdx, task.messageIndex, task.req);
-        } catch (const faabric::scheduler::ExecutorMigratedException& ex) {
-            SPDLOG_TRACE("Task {} has been migrated.", msg.id());
+        } catch (const faabric::util::FunctionMigratedException& ex) {
+            SPDLOG_DEBUG(
+              "Task {} migrated, shutting down executor {}", msg.id(), id);
 
-            returnValue = 0;
-            msg.set_outputdata(
-              "The execution of this message has been migrated");
+            // Note that when a task has been migrated, we need to perform all
+            // the normal executor shutdown, but we must NOT set the result for
+            // the call.
+            migrated = true;
+            selfShutdown = true;
+            returnValue = -99;
+
+            // MPI migration
+            if(msg.ismpi()) {
+                // TODO - when should we delete the pending migration?
+                auto& mpiWorld =
+                  faabric::scheduler::getMpiWorldRegistry().getWorld(msg.mpiworldid());
+                mpiWorld.destroy();
+            }
         } catch (const std::exception& ex) {
             returnValue = 1;
 
@@ -674,6 +687,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // executor.
         sch.vacateSlot();
 
+        // If the function has been migrated, we drop out here and shut down the
+        // executor
+        if (migrated) {
+            break;
+        }
+
         // Finally set the result of the task, this will allow anything
         // waiting on its result to continue execution, therefore must be
         // done once the executor has been reset, otherwise the executor may
@@ -740,45 +759,6 @@ bool Executor::tryClaim()
 void Executor::releaseClaim()
 {
     claimed.store(false);
-}
-
-bool Executor::doMigration(
-  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
-{
-    for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
-        auto m = pendingMigrations->mutable_migrations()->at(i);
-        if (m.msg().id() == boundMessage.id()) {
-            migrateFunction(m.msg(), m.dsthost());
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void Executor::migrateFunction(const faabric::Message& msg,
-                               const std::string& host)
-{
-    SPDLOG_DEBUG("Executor received request to migrate message {} from host {}"
-                 " to host {}",
-                 msg.id(),
-                 msg.executedhost(),
-                 host);
-
-    // Take snapshot and push to recepient host
-    // TODO - could we just push the snapshot diffs here?
-    auto snap = std::make_shared<faabric::util::SnapshotData>(getMemoryView());
-    std::string snapKey = fmt::format("{}_migration_{}",
-                                      faabric::util::funcToString(msg, false),
-                                      faabric::util::generateGid());
-    sch.getSnapshotClient(host).pushSnapshot(snapKey, snap);
-
-    // Create request execution for migrated function
-    auto req = faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
-    faabric::util::copyMessage(&msg, req->mutable_messages(0));
-    req->set_type(faabric::BatchExecuteRequest::MIGRATION);
-    req->mutable_messages(0)->set_snapshotkey(snapKey);
-    sch.getFunctionCallClient(host).executeFunctions(req);
 }
 
 // ------------------------------------------

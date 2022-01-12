@@ -210,6 +210,12 @@ class MpiWorld
 
     void setMsgForRank(faabric::Message& msg);
 
+    /* Function Migration */
+
+    void prepareMigration(
+      int thisRank,
+      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
   private:
     int id = -1;
     int size = -1;
@@ -273,14 +279,6 @@ class MpiWorld
     std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
                                                              int recvRank,
                                                              int batchSize = 0);
-
-    /* Function Migration */
-
-    void tryMigrate(int thisRank);
-
-    void prepareMigration(
-      int thisRank,
-      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 
     void finishMigration(int thisRank);
 

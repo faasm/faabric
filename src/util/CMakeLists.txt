@@ -17,7 +17,6 @@ faabric_lib(util
     locks.cpp
     logging.cpp
     memory.cpp
-    message.cpp
     network.cpp
     queue.cpp
     random.cpp

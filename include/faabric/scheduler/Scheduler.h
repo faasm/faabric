@@ -90,15 +90,16 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
+    // TODO - maybe remove me
     bool doMigration(
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
+    virtual std::span<uint8_t> getMemoryView();
 
   protected:
     virtual void restore(const std::string& snapshotKey);
 
     virtual void postFinish();
-
-    virtual std::span<uint8_t> getMemoryView();
 
     virtual void setMemorySize(size_t newSize);
 

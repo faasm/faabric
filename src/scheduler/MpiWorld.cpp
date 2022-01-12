@@ -235,6 +235,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
             msg.set_appid(thisRankMsg->appid());
+            msg.set_cmdline(thisRankMsg->cmdline());
             msg.set_inputdata(thisRankMsg->inputdata());
             msg.set_migrationcheckperiod(thisRankMsg->migrationcheckperiod());
             // Log chained functions to generate execution graphs
@@ -409,6 +410,9 @@ void MpiWorld::initLocalRemoteLeaders()
 {
     // First, group the ranks per host they belong to for convinience
     assert(hostForRank.size() == size);
+    // Clear the existing map in case we are calling this method during a
+    // migration
+    ranksForHost.clear();
 
     for (int rank = 0; rank < hostForRank.size(); rank++) {
         std::string host = hostForRank.at(rank);
@@ -1311,11 +1315,6 @@ void MpiWorld::allReduce(int rank,
     // Second, 0 broadcasts the result to all ranks
     broadcast(
       0, rank, recvBuffer, datatype, count, faabric::MPIMessage::ALLREDUCE);
-
-    // All reduce triggers a migration point in MPI
-    if (thisRankMsg != nullptr && thisRankMsg->migrationcheckperiod() > 0) {
-        tryMigrate(rank);
-    }
 }
 
 void MpiWorld::op_reduce(faabric_op_t* operation,
@@ -1563,11 +1562,6 @@ void MpiWorld::barrier(int thisRank)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
-
-    // Barrier triggers a migration point
-    if (thisRankMsg != nullptr && thisRankMsg->migrationcheckperiod() > 0) {
-        tryMigrate(thisRank);
-    }
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
@@ -1588,9 +1582,9 @@ void MpiWorld::initLocalQueues()
     // Assert we only allocate queues once
     assert(localQueues.size() == 0);
     localQueues.resize(size * size);
-    for (int recvRank = 0; recvRank < size; recvRank++) {
-        if (getHostForRank(recvRank) == thisHost) {
-            for (int sendRank = 0; sendRank < size; sendRank++) {
+    for (const int sendRank : ranksForHost[thisHost]) {
+        for (const int recvRank : ranksForHost[thisHost]) {
+            if (localQueues[getIndexForRanks(sendRank, recvRank)] == nullptr) {
                 localQueues[getIndexForRanks(sendRank, recvRank)] =
                   std::make_shared<InMemoryMpiQueue>();
             }
@@ -1764,45 +1758,6 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
-// This method will either (i) do nothing or (ii) run the whole migration.
-// Note that every rank will call this method.
-void MpiWorld::tryMigrate(int thisRank)
-{
-    auto pendingMigrations =
-      getScheduler().getPendingAppMigrations(thisRankMsg->appid());
-
-    if (pendingMigrations == nullptr) {
-        return;
-    }
-
-    prepareMigration(thisRank, pendingMigrations);
-
-    bool mustShutdown = false;
-    if (faabric::util::isMockMode()) {
-        // When mocking in the tests, the call to get the current executing
-        // executor may fail
-        faabric::util::UniqueLock lock(mockMutex);
-        mpiMockedPendingMigrations.push_back(pendingMigrations);
-    } else {
-        // An executing thread may never return from the next call. However,
-        // the restored executing thread will know it is an MPI function, its
-        // rank, and its world id, and will therefore call the method to finish
-        // the migration from the snapshot server.
-        mustShutdown = getExecutingExecutor()->doMigration(pendingMigrations);
-    }
-
-    if (mustShutdown) {
-        SPDLOG_INFO("MPI rank {} is being migrated", thisRank);
-        destroy();
-        throw faabric::scheduler::ExecutorMigratedException(
-          "Executor has been migrated");
-    } else {
-        SPDLOG_INFO("MPI rank {} is part of a migration, but not migrated",
-                    thisRank);
-        finishMigration(thisRank);
-    }
-}
-
 // Once per host we modify the per-world accounting of rank-to-hosts mappings
 // and the corresponding ports for cross-host messaging.
 void MpiWorld::prepareMigration(
@@ -1842,18 +1797,21 @@ void MpiWorld::prepareMigration(
         // Reset the internal mappings.
         initLocalBasePorts(hostForRank);
         initLocalRemoteLeaders();
-    }
-}
 
-// This method will be called from two different points:
-// (i) snapshot server when restoring an MPI function after migration
-// (ii) after running the migration from a rank that is not migrated
-void MpiWorld::finishMigration(int thisRank)
-{
-    if (thisRank == localLeader) {
-        getScheduler().removePendingMigration(thisRankMsg->appid());
-    }
+        // Add the necessary new local messaging queues
+        // TODO - merge with initLocalQueues
+        for (const int sendRank : ranksForHost[thisHost]) {
+            for (const int recvRank : ranksForHost[thisHost]) {
+                if (localQueues[getIndexForRanks(sendRank, recvRank)] == nullptr) {
+                    localQueues[getIndexForRanks(sendRank, recvRank)] =
+                      std::make_shared<InMemoryMpiQueue>();
+                }
+            }
+        }
 
-    barrier(thisRank);
+        // Lastly, remove the migrations from the pending migrations map
+        // TODO - when should we remove the pending migration from the map?
+        // getScheduler().removePendingMigration(thisRankMsg->appid());
+    }
 }
 }
