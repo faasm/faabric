@@ -7,6 +7,14 @@
 
 namespace faabric::util {
 
+class FunctionMigratedException : public faabric::util::FaabricException
+{
+  public:
+    explicit FunctionMigratedException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
+
 std::string funcToString(const faabric::Message& msg, bool includeId);
 
 std::string funcToString(
