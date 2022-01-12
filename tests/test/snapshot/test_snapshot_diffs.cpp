@@ -60,7 +60,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     tracker.stopThreadLocalTracking(memView);
 
     // Check there are no diffs even though we have dirty regions
-    auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
+    auto dirtyRegions = tracker.getBothDirtyPages(memView);
     REQUIRE(!dirtyRegions.empty());
 
     std::vector<SnapshotDiff> changeDiffs =
@@ -168,7 +168,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     tracker.stopThreadLocalTracking(memView);
 
     // Check we have the right number of diffs
-    auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
+    auto dirtyRegions = tracker.getBothDirtyPages(memView);
     std::vector<SnapshotDiff> changeDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
 

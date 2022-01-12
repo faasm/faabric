@@ -136,11 +136,14 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     std::vector<SnapshotDiff> diffs;
     diffs.reserve(r->diffs()->size());
     for (const auto* diff : *r->diffs()) {
+        // TODO - does this move work with the lifespan of this diff data? We
+        // need to queue it on the snapshot and ensure that it outlives this
+        // request.
         diffs.emplace_back(
           static_cast<SnapshotDataType>(diff->data_type()),
           static_cast<SnapshotMergeOperation>(diff->merge_op()),
           diff->offset(),
-          std::span<const uint8_t>(diff->data()->data(), diff->data()->size()));
+          std::move(diff->data()));
     }
 
     // Queue on the snapshot
@@ -157,7 +160,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
         // Clear merge regions
         snap->clearMergeRegions();
 
-        // Add merge regions from request
+        // Add merge regions from request. We know that this is not necessary
+        // when not forcing, as non-forcing requests will be returned from
+        // remote hosts to the master
         for (const auto* mr : *r->merge_regions()) {
             snap->addMergeRegion(
               mr->offset(),

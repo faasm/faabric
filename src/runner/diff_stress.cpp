@@ -50,7 +50,7 @@ void doRun()
     tracker.stopTracking(memView);
     tracker.stopThreadLocalTracking(memView);
 
-    auto dirtyRegions = tracker.getBothDirtyOffsets(memView);
+    auto dirtyRegions = tracker.getBothDirtyPages(memView);
     SPDLOG_INFO("Got {} dirty regions", dirtyRegions.size());
 
     auto diffs = snap->diffWithDirtyRegions(memView, dirtyRegions);

@@ -41,7 +41,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     tracker.clearAll();
 
     std::vector<std::pair<uint32_t, uint32_t>> actual =
-      tracker.getBothDirtyOffsets(memView);
+      tracker.getBothDirtyPages(memView);
     REQUIRE(actual.empty());
 
     tracker.startTracking(memView);
@@ -60,7 +60,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         std::pair<uint32_t, uint32_t>(3 * HOST_PAGE_SIZE, HOST_PAGE_SIZE)
     };
 
-    actual = tracker.getBothDirtyOffsets(memView);
+    actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
     // And another
@@ -68,7 +68,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     pageFive[99] = 3;
 
     expected.emplace_back(5 * HOST_PAGE_SIZE, HOST_PAGE_SIZE);
-    actual = tracker.getBothDirtyOffsets(memView);
+    actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
     // Reset
@@ -77,7 +77,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
-    actual = tracker.getBothDirtyOffsets(memView);
+    actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual.empty());
 
     // Check the data hasn't changed
@@ -94,7 +94,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     expected = {
         std::pair<uint32_t, uint32_t>(3 * HOST_PAGE_SIZE, 2 * HOST_PAGE_SIZE),
     };
-    actual = tracker.getBothDirtyOffsets(memView);
+    actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
     // Final reset and check
@@ -103,7 +103,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
-    actual = tracker.getBothDirtyOffsets(memView);
+    actual = tracker.getBothDirtyPages(memView);
     REQUIRE(actual.empty());
 
     tracker.stopTracking(memView);
@@ -129,7 +129,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     tracker.clearAll();
 
     std::vector<std::pair<uint32_t, uint32_t>> actual =
-      tracker.getBothDirtyOffsets({ mem.get(), memSize });
+      tracker.getBothDirtyPages({ mem.get(), memSize });
     REQUIRE(actual.empty());
 
     tracker.startTracking(memView);
@@ -162,7 +162,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         std::pair<uint32_t, uint32_t>(9 * HOST_PAGE_SIZE, HOST_PAGE_SIZE)
     };
 
-    actual = tracker.getBothDirtyOffsets({ mem.get(), memSize });
+    actual = tracker.getBothDirtyPages({ mem.get(), memSize });
 
     REQUIRE(actual.size() == expected.size());
 
@@ -235,7 +235,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     // Get dirty regions
     std::vector<std::pair<uint32_t, uint32_t>> actualDirty =
-      tracker.getBothDirtyOffsets(memView);
+      tracker.getBothDirtyPages(memView);
 
     // Check dirty regions
     REQUIRE(actualDirty.size() == 2);
@@ -301,7 +301,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
                 // Check we get the right number of dirty regions
                 std::vector<std::pair<uint32_t, uint32_t>> regions =
-                  tracker.getThreadLocalDirtyOffsets(memView);
+                  tracker.getThreadLocalDirtyPages(memView);
                 if (regions.size() != 1) {
                     SPDLOG_ERROR("Segfault thread {} failed on loop {}. Got {} "
                                  "regions instead of {}",
@@ -339,7 +339,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         tracker.stopTracking(memView);
 
         // Check no global offsets
-        REQUIRE(tracker.getDirtyOffsets(memView).empty());
+        REQUIRE(tracker.getDirtyPages(memView).empty());
 
         bool thisLoopSuccess = true;
         for (int i = 0; i < nThreads; i++) {

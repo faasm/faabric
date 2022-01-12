@@ -13,8 +13,7 @@ namespace faabric::util {
 /*
  * Dedupes a list of dirty regions specified by offset and length
  */
-std::vector<std::pair<uint32_t, uint32_t>> dedupeMemoryRegions(
-  std::vector<std::pair<uint32_t, uint32_t>>& regions);
+void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b);
 
 /*
  * Typedef used to enforce RAII on mmapped memory regions

@@ -162,22 +162,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker.stopTracking(memView);
         tracker.stopThreadLocalTracking(memView);
 
-        std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-          tracker.getBothDirtyOffsets(memView);
-
-        // If memory has grown bigger than the snapshot, add another dirty
-        // region on top to capture this
-        if (memView.size() > snap->getSize()) {
-            uint32_t newRegionLen = memView.size() - snap->getSize();
-            SPDLOG_TRACE("Memory grown to {} between threads, adding extra "
-                         "dirty region {}-{}",
-                         memView.size(),
-                         snap->getSize(),
-                         snap->getSize() + newRegionLen);
-
-            dirtyRegions.emplace_back(
-              std::pair<uint32_t, uint32_t>(snap->getSize(), newRegionLen));
-        }
+        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
 
         // Apply changes to snapshot
         snap->fillGapsWithOverwriteRegions();
@@ -565,12 +550,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Add this thread's changes to executor-wide list of dirty regions
             auto thisThreadDirtyRegions =
-              tracker.getThreadLocalDirtyOffsets(memView);
+              tracker.getThreadLocalDirtyPages(memView);
 
             faabric::util::FullLock lock(threadExecutionMutex);
-            dirtyRegions.insert(dirtyRegions.end(),
-                                thisThreadDirtyRegions.begin(),
-                                thisThreadDirtyRegions.end());
+            faabric::util::mergeDirtyPages(dirtyRegions,
+                                           thisThreadDirtyRegions);
         }
 
         // Set the return value
@@ -597,30 +581,14 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Add non-thread-local dirty regions
             {
                 faabric::util::FullLock lock(threadExecutionMutex);
-                std::vector<std::pair<uint32_t, uint32_t>> r =
-                  tracker.getDirtyOffsets(memView);
-
-                dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
-            }
-
-            // If memory has grown bigger than the snapshot, add another dirty
-            // region on top to capture this
-            std::string mainThreadSnapKey =
-              faabric::util::getMainThreadSnapshotKey(msg);
-            auto snap = reg.getSnapshot(mainThreadSnapKey);
-            if (memView.size() > snap->getSize()) {
-                uint32_t newRegionLen = memView.size() - snap->getSize();
-                SPDLOG_TRACE(
-                  "Memory grown to {}, adding extra dirty region {}-{}",
-                  memView.size(),
-                  snap->getSize(),
-                  snap->getSize() + newRegionLen);
-
-                dirtyRegions.emplace_back(
-                  std::pair<uint32_t, uint32_t>(snap->getSize(), newRegionLen));
+                std::vector<char> r = tracker.getDirtyPages(memView);
+                faabric::util::mergeDirtyPages(dirtyRegions, r);
             }
 
             // Fill snapshot gaps with overwrite regions first
+            std::string mainThreadSnapKey =
+              faabric::util::getMainThreadSnapshotKey(msg);
+            auto snap = reg.getSnapshot(mainThreadSnapKey);
             snap->fillGapsWithOverwriteRegions();
 
             // Compare snapshot with all dirty regions for this executor

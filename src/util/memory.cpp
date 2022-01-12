@@ -12,39 +12,10 @@
 
 namespace faabric::util {
 
-std::vector<std::pair<uint32_t, uint32_t>> dedupeMemoryRegions(
-  std::vector<std::pair<uint32_t, uint32_t>>& regions)
+void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b)
 {
-    if (regions.empty()) {
-        return {};
-    }
-
-    std::vector<std::pair<uint32_t, uint32_t>> deduped;
-
-    // Sort in place
-    std::sort(
-      std::begin(regions),
-      std::end(regions),
-      [](std::pair<uint32_t, uint32_t>& a, std::pair<uint32_t, uint32_t>& b) {
-          return a.first < b.first;
-      });
-
-    deduped.push_back(regions.front());
-    uint32_t lastOffset = regions.front().first;
-    for (int i = 1; i < regions.size(); i++) {
-        const auto& r = regions.at(i);
-        assert(r.first >= lastOffset);
-
-        if (r.first > lastOffset) {
-            deduped.push_back(r);
-            lastOffset = r.first;
-        } else if (deduped.back().second < r.second) {
-            deduped.pop_back();
-            deduped.push_back(r);
-        }
-    }
-
-    return deduped;
+    std::transform(
+      a.begin(), a.end(), b.begin(), b.end(), std::logical_or<char>());
 }
 // -------------------------
 // Alignment

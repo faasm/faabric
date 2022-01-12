@@ -28,6 +28,7 @@ enum SnapshotDataType
 enum SnapshotMergeOperation
 {
     Overwrite,
+    XOR,
     Sum,
     Product,
     Subtract,
@@ -36,6 +37,12 @@ enum SnapshotMergeOperation
     Ignore
 };
 
+/**
+ * A snapshot diff is a view of a segment of memory, and does not take ownership
+ * of the underlying data. Snapshot diffs are only meant to be used as markers
+ * back to regions of memory that have changed; the executor that owns the
+ * memory must outlive the snapshot diff.
+ */
 class SnapshotDiff
 {
   public:
@@ -60,7 +67,7 @@ class SnapshotDiff
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
     uint32_t offset = 0;
-    std::vector<uint8_t> data;
+    std::span<const uint8_t> data;
 };
 
 class SnapshotMergeRegion
@@ -81,13 +88,7 @@ class SnapshotMergeRegion
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
                   std::span<uint8_t> updatedData,
-                  std::pair<uint32_t, uint32_t> dirtyRegion);
-
-  private:
-    void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
-                          std::span<const uint8_t> original,
-                          std::span<const uint8_t> updatedData,
-                          std::pair<uint32_t, uint32_t> dirtyRegion);
+                  const std::vector<char>& dirtyRegions);
 };
 
 /*
@@ -243,7 +244,7 @@ class SnapshotData
     // snapshot.
     std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
       std::span<uint8_t> updated,
-      std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions);
+      std::vector<char> dirtyRegions);
 
   private:
     size_t size = 0;
