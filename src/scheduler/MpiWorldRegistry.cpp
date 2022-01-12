@@ -52,9 +52,7 @@ MpiWorld& MpiWorldRegistry::getOrInitialiseWorld(faabric::Message& msg)
     {
         faabric::util::SharedLock lock(registryMutex);
         MpiWorld& world = worldMap[worldId];
-        if (msg.recordexecgraph()) {
-            world.setMsgForRank(msg);
-        }
+        world.setMsgForRank(msg);
         return world;
     }
 }

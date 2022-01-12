@@ -28,7 +28,7 @@ void FunctionMigrationThread::start(int wakeUpPeriodSecondsIn)
             // If we hit the timeout it means we have not been notified to
             // stop. Thus we check for migration opportunities.
             if (returnVal == std::cv_status::timeout) {
-                SPDLOG_DEBUG(
+                SPDLOG_TRACE(
                   "Migration thread checking for migration opportunities");
                 faabric::scheduler::getScheduler()
                   .checkForMigrationOpportunities();

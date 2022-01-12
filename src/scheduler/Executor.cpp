@@ -532,6 +532,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         try {
             returnValue =
               executeTask(threadPoolIdx, task.messageIndex, task.req);
+        } catch (const faabric::scheduler::ExecutorMigratedException& ex) {
+            SPDLOG_TRACE("Task {} has been migrated.", msg.id());
+
+            returnValue = 0;
+            msg.set_outputdata(
+              "The execution of this message has been migrated");
         } catch (const std::exception& ex) {
             returnValue = 1;
 
@@ -539,12 +545,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
               "Task {} threw exception. What: {}", msg.id(), ex.what());
             SPDLOG_ERROR(errorMessage);
             msg.set_outputdata(errorMessage);
-        } catch (const faabric::scheduler::ExecutorMigratedException& ex) {
-            SPDLOG_TRACE("Task {} has been migrated.", msg.id());
-
-            returnValue = 0;
-            msg.set_outputdata(
-              "The execution of this message has been migrated");
         }
 
         // Handle thread-local diffing for every thread
@@ -768,7 +768,7 @@ void Executor::migrateFunction(const faabric::Message& msg,
     // Take snapshot and push to recepient host
     // TODO - could we just push the snapshot diffs here?
     auto snap = std::make_shared<faabric::util::SnapshotData>(getMemoryView());
-    std::string snapKey = fmt::format("{}:{}",
+    std::string snapKey = fmt::format("{}_migration_{}",
                                       faabric::util::funcToString(msg, false),
                                       faabric::util::generateGid());
     sch.getSnapshotClient(host).pushSnapshot(snapKey, snap);

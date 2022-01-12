@@ -1792,10 +1792,13 @@ void MpiWorld::tryMigrate(int thisRank)
     }
 
     if (mustShutdown) {
+        SPDLOG_INFO("MPI rank {} is being migrated", thisRank);
         destroy();
         throw faabric::scheduler::ExecutorMigratedException(
           "Executor has been migrated");
     } else {
+        SPDLOG_INFO("MPI rank {} is part of a migration, but not migrated",
+                    thisRank);
         finishMigration(thisRank);
     }
 }
@@ -1808,7 +1811,7 @@ void MpiWorld::prepareMigration(
 {
     // Check that there are no pending asynchronous messages to send and receive
     for (auto umb : unackedMessageBuffers) {
-        if (umb->size() > 0) {
+        if (umb != nullptr && umb->size() > 0) {
             SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
                          " {} has {} pending async messages to receive",
                          thisRankMsg->appid(),

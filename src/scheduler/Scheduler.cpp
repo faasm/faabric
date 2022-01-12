@@ -452,6 +452,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
+    bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
 
     if (decision.hosts.size() != nMessages) {
         SPDLOG_ERROR(
@@ -467,7 +468,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // period, we would have a default one (overwritable through an env.
     // variable), and apps would just opt in/out of being migrated. We set
     // the actual check period instead to ease with experiments.
-    if (firstMsg.migrationcheckperiod() > 0) {
+    if (!isMigration && firstMsg.migrationcheckperiod() > 0) {
         bool startMigrationThread = inFlightRequests.size() == 0;
 
         if (inFlightRequests.find(decision.appId) != inFlightRequests.end()) {
@@ -553,7 +554,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // -------------------------------------------
     // SNAPSHOTS
     // -------------------------------------------
-    bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
 
     // Push out snapshot diffs to registered hosts. We have to do this to
     // *all* hosts, regardless of whether they will be executing functions.
