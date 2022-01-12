@@ -483,8 +483,8 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 for (int i = 0; i < firstMsg.mpiworldsize() - 1; i++) {
                     // Append message to original request
                     auto* newMsgPtr = originalReq->add_messages();
-                    faabric::util::copyMessage(&req->messages().at(i),
-                                               newMsgPtr);
+                    *newMsgPtr = req->messages().at(i);
+
                     // Append message to original decision
                     originalDecision->addMessage(decision.hosts.at(i),
                                                  req->messages().at(i));
