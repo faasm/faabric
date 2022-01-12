@@ -82,12 +82,12 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
+    virtual std::span<uint8_t> getMemoryView();
+
   protected:
     virtual void restore(const std::string& snapshotKey);
 
     virtual void postFinish();
-
-    virtual std::span<uint8_t> getMemoryView();
 
     virtual void setMemorySize(size_t newSize);
 
