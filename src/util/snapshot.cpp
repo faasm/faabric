@@ -45,6 +45,8 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
                       std::span<const uint8_t> a,
                       std::span<const uint8_t> b)
 {
+    PROF_START(DiffRegions)
+
     // Iterate through diffs and work out start and finish offsets of each dirty
     // region
     uint32_t diffStart = 0;
@@ -72,6 +74,8 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
                                    diffStart,
                                    b.subspan(diffStart, endOffset - diffStart));
     }
+
+    PROF_END(DiffRegions)
 }
 
 SnapshotData::SnapshotData(size_t sizeIn)
@@ -691,12 +695,8 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             SPDLOG_TRACE("Checking page {} {}-{}", p, startByte, endByte);
 
             if (operation == SnapshotMergeOperation::Overwrite) {
-                PROF_START(OverwriteDiff)
-
                 diffArrayRegions(
                   diffs, startByte, endByte, originalData, updatedData);
-
-                PROF_END(OverwriteDiff)
             } else {
                 PROF_START(XORDiff)
 

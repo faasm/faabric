@@ -1594,6 +1594,82 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     REQUIRE(remappedMemA == expectedFinal);
 }
 
+TEST_CASE_METHOD(DirtyTrackingTestFixture, "Test XOR diffs", "[util][snapshot]")
+{
+    int nSnapPages = 5;
+    size_t snapSize = nSnapPages * HOST_PAGE_SIZE;
+
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+
+    std::vector<char> expectedDirtyPages(nSnapPages, 0);
+    std::vector<uint8_t> expectedSnapData(snapSize, 0);
+
+    std::vector<uint8_t> dataA(150, 3);
+    std::vector<uint8_t> dataB(200, 4);
+
+    uint32_t offsetA = 0;
+    uint32_t offsetB = 2 * HOST_PAGE_SIZE + 100;
+    expectedDirtyPages[0] = 1;
+    expectedDirtyPages[2] = 1;
+
+    // Add merge regions
+    snap->addMergeRegion(offsetA,
+                         dataA.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::XOR);
+
+    snap->addMergeRegion(offsetB,
+                         dataB.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::XOR);
+
+    // Map some memory
+    MemoryRegion mem = allocatePrivateMemory(snapSize);
+    std::span<uint8_t> memView(mem.get(), snapSize);
+    snap->mapToMemory(memView);
+
+    // Clear tracking
+    tracker.clearAll();
+    snap->clearTrackedChanges();
+
+    // Start tracking
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
+
+    // Copy in data
+    std::memcpy(mem.get() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(mem.get() + offsetB, dataB.data(), dataB.size());
+
+    std::memcpy(expectedSnapData.data() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(expectedSnapData.data() + offsetB, dataB.data(), dataB.size());
+
+    // Stop tracking
+    tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
+
+    // Get diffs
+    std::vector<char> dirtyPages = tracker.getBothDirtyPages(memView);
+    REQUIRE(dirtyPages == expectedDirtyPages);
+
+    // Diff with snapshot
+    std::vector<faabric::util::SnapshotDiff> actual =
+      snap->diffWithDirtyRegions(memView, dirtyPages);
+
+    REQUIRE(actual.size() == 2);
+    SnapshotDiff diffA = actual.at(0);
+    SnapshotDiff diffB = actual.at(1);
+
+    REQUIRE(diffA.getOffset() == offsetA);
+    REQUIRE(diffB.getOffset() == offsetB);
+
+    // Apply the diffs to the snapshot
+    snap->queueDiffs(actual);
+    snap->writeQueuedDiffs();
+
+    // Check snapshot data is now as expected
+    REQUIRE(snap->getDataCopy() == expectedSnapData);
+}
+
 TEST_CASE("Test diffing byte array regions", "[util][snapshot]")
 {
     std::vector<uint8_t> a;
