@@ -1356,7 +1356,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
         diffData = std::vector<uint8_t>(100, 2);
         std::vector<uint8_t> expectedData = overshootData;
-        std::memset(expectedData.data() + 100, 2, 100);
+        std::memset(expectedData.data() + (2 * HOST_PAGE_SIZE) + 100, 2, 100);
 
         // Diff should be the whole region of updated memory
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,

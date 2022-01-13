@@ -245,7 +245,7 @@ class SnapshotData
     // snapshot.
     std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
       std::span<uint8_t> updated,
-      std::vector<char> dirtyRegions);
+      std::vector<char> &dirtyRegions);
 
   private:
     size_t size = 0;

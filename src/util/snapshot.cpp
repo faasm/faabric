@@ -461,7 +461,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::getTrackedChanges()
 
 std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
   std::span<uint8_t> updated,
-  std::vector<char> dirtyRegions)
+  std::vector<char>& dirtyRegions)
 {
     faabric::util::SharedLock lock(snapMx);
 
@@ -588,9 +588,24 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         return;
     }
 
+    // If the region is past the end of the original data, we ignore it
+    if (offset > originalData.size()) {
+        SPDLOG_TRACE("Ignoring {} {} merge {}-{} past end of original at {}",
+                     snapshotDataTypeStr(dataType),
+                     snapshotMergeOpStr(operation),
+                     offset,
+                     offset + length,
+                     originalData.size());
+        return;
+    }
+
     // If the region has zero length, we go all the way to the end of the
-    // original data
+    // original data. We also make sure we don't go over the end of the original
     uint32_t mrEnd = length > 0 ? offset + length : originalData.size();
+    mrEnd = std::min<uint32_t>(mrEnd, originalData.size());
+
+    // Note that this range will be exclusive, i.e. endPage is the page we stop
+    // at the start of
     size_t startPage = getRequiredHostPagesRoundDown(offset);
     size_t endPage = getRequiredHostPages(mrEnd);
 
@@ -600,9 +615,10 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                  offset,
                  offset + length,
                  startPage,
-                 endPage);
+                 endPage - 1);
 
-    // Check if anything dirty in the given region
+    // Check if anything dirty in the given region (std::find range is
+    // exclusive)
     auto startIt = dirtyRegions.begin() + startPage;
     auto endIt = dirtyRegions.begin() + endPage;
     auto foundIt = std::find(startIt, endIt, 1);
@@ -616,9 +632,9 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         return;
     }
 
-    // Overwrites and XORs both deal with overwriting bytes on the master.
-    // Overwrites will filter in only the modified bytes, whereas XOR will
-    // transmit the XOR of the whole page and the original
+    // Overwrites and XORs both deal with overwriting bytes without any other
+    // logic. Overwrites will filter in only the modified bytes, whereas XOR
+    // will transmit the XOR of the whole page and the original
     uint32_t firstDirtyPage = startPage + std::distance(startIt, foundIt);
     if (operation == SnapshotMergeOperation::Overwrite ||
         operation == SnapshotMergeOperation::XOR) {
@@ -633,79 +649,101 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             // Stop at merge region boundaries, making sure we don't start
             // checking before the merge region offset, or go over the merge
             // region end on the final page (may not be page-aligned)
-            uint32_t byteOffset =
-              std::max<uint32_t>(offset, p * HOST_PAGE_SIZE);
-            uint32_t compareSize =
-              std::min<uint32_t>(mrEnd - byteOffset, HOST_PAGE_SIZE);
-            uint32_t byteEnd = byteOffset + compareSize;
-            assert(byteEnd > byteOffset);
+            uint32_t startByte = std::max<uint32_t>(offset, p * HOST_PAGE_SIZE);
+            uint32_t endByte =
+              std::min<uint32_t>(mrEnd, (p + 1) * HOST_PAGE_SIZE);
 
-            SPDLOG_TRACE("Checking page {} {}-{}", p, byteOffset, byteEnd);
+            SPDLOG_TRACE("Checking page {} {}-{}", p, startByte, endByte);
 
+            uint32_t rangeSize = endByte - startByte;
             if (operation == SnapshotMergeOperation::Overwrite) {
                 PROF_START(OverwriteDiff)
-                uint32_t diffStart = 0;
-                bool diffInProgress = false;
 
-                for (uint32_t i = byteOffset; i < byteEnd; i++) {
-                    bool dirty =
-                      originalData.data()[i] != updatedData.data()[i];
+                std::vector<std::pair<uint32_t, uint32_t>> regions =
+                  diffArrayRegions(originalData.subspan(startByte, rangeSize),
+                                   updatedData.subspan(startByte, rangeSize));
 
-                    if (dirty && !diffInProgress) {
-                        // Starts at this byte
-                        diffInProgress = true;
-                        diffStart = i;
-                    } else if (!dirty && diffInProgress) {
-                        // Finished on byte before
-                        diffInProgress = false;
-                        uint32_t diffLen = i - diffStart;
-
-                        SPDLOG_TRACE("Adding {} Overwrite merge: {}-{}",
-                                     snapshotDataTypeStr(dataType),
-                                     diffStart,
-                                     diffStart + diffLen);
-
-                        diffs.emplace_back(
-                          dataType,
-                          operation,
-                          diffStart,
-                          updatedData.subspan(diffStart, diffLen));
-                    }
-                }
-
-                // If we finish with a diff in progress, add it
-                if (diffInProgress) {
-                    uint32_t diffLen = byteEnd - diffStart;
-                    SPDLOG_TRACE("Adding final {} Overwrite merge: {}-{}",
+                // Iterate through and build diffs
+                for (auto [start, len] : regions) {
+                    uint32_t diffStart = startByte + start;
+                    SPDLOG_TRACE("Adding {} overwrite diff at {}-{}",
                                  snapshotDataTypeStr(dataType),
                                  diffStart,
-                                 diffStart + diffLen);
+                                 diffStart + len);
 
                     diffs.emplace_back(dataType,
                                        operation,
                                        diffStart,
-                                       updatedData.subspan(diffStart, diffLen));
+                                       updatedData.subspan(diffStart, len));
                 }
+
+                //                uint32_t diffStart = 0;
+                //                bool diffInProgress = false;
+
+                //                for (uint32_t i = byteOffset; i < byteEnd;
+                //                i++) {
+                //                    bool dirty =
+                //                    originalData.data()[i] !=
+                //                    updatedData.data()[i];
+                //
+                //                    if (dirty && !diffInProgress) {
+                //                        // Starts at this byte
+                //                        diffInProgress = true;
+                //                        diffStart = i;
+                //                    } else if (!dirty && diffInProgress) {
+                //                        // Finished on byte before
+                //                        diffInProgress = false;
+                //                        uint32_t diffLen = i - diffStart;
+                //
+                //                        SPDLOG_TRACE("Adding {} Overwrite
+                //                        merge: {}-{}",
+                //                                     snapshotDataTypeStr(dataType),
+                //                                     diffStart,
+                //                                     diffStart + diffLen);
+                //
+                //                        diffs.emplace_back(
+                //                          dataType,
+                //                          operation,
+                //                          diffStart,
+                //                          updatedData.subspan(diffStart,
+                //                          diffLen));
+                //                    }
+                //               }
+                //
+                // If we finish with a diff in progress, add it
+                //              if (diffInProgress) {
+                //                    uint32_t diffLen = byteEnd - diffStart;
+                //                    SPDLOG_TRACE("Adding final {} Overwrite
+                //                    merge: {}-{}",
+                //                                 snapshotDataTypeStr(dataType),
+                //                                 diffStart,
+                //                                 diffStart + diffLen);
+                //
+                //                    diffs.emplace_back(dataType,
+                //                                       operation,
+                //                                       diffStart,
+                //                                       updatedData.subspan(diffStart,
+                //                                       diffLen));
+                //                }
                 PROF_END(OverwriteDiff)
             } else {
                 PROF_START(XORDiff)
 
-                std::transform(originalData.begin() + byteOffset,
-                               originalData.begin() + byteOffset + compareSize,
-                               updatedData.begin() + byteOffset,
-                               updatedData.begin() + byteOffset,
+                std::transform(originalData.begin() + startByte,
+                               originalData.begin() + startByte + rangeSize,
+                               updatedData.begin() + startByte,
+                               updatedData.begin() + startByte,
                                std::bit_xor<uint8_t>());
 
                 SPDLOG_TRACE("Adding {} XOR merge: {}-{}",
                              snapshotDataTypeStr(dataType),
-                             byteOffset,
-                             byteOffset + compareSize);
+                             startByte,
+                             startByte + rangeSize);
 
-                diffs.emplace_back(
-                  dataType,
-                  operation,
-                  byteOffset,
-                  updatedData.subspan(byteOffset, compareSize));
+                diffs.emplace_back(dataType,
+                                   operation,
+                                   startByte,
+                                   updatedData.subspan(startByte, rangeSize));
 
                 PROF_END(XORDiff)
             }

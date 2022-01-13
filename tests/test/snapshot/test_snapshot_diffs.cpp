@@ -119,7 +119,8 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
                          SnapshotMergeOperation::Overwrite);
 
     // NOTE - deliberately add merge regions out of order
-    // Diff starting in merge region and overlapping the end
+
+    // Merge region across page boudary, capturing only part of a change
     std::vector<uint8_t> dataC = { 7, 6, 5, 4, 3, 2, 1 };
     std::vector<uint8_t> expectedDataC = { 7, 6, 5, 4 };
     int offsetC = 2 * HOST_PAGE_SIZE;
@@ -157,25 +158,24 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
                          SnapshotDataType::Raw,
                          SnapshotMergeOperation::Overwrite);
 
-    // Write some data to the region that exceeds the size of the original, then
-    // add a merge region larger than it. Anything outside the original snapshot
-    // should be marked as changed.
+    // Write some data to the region that exceeds the size of the original.
+    // Anything outside the original snapshot should be marked as changed.
     std::vector<uint8_t> dataExtra = { 2, 2, 2 };
-    std::vector<uint8_t> expectedDataExtra = { 0, 0, 2, 2, 2, 0, 0 };
+    uint32_t extensionPages = memPages - snapPages;
+    std::vector<uint8_t> expectedDataExtra(extensionPages * HOST_PAGE_SIZE, 0);
     int extraOffset = snapSize + HOST_PAGE_SIZE + 10;
+
+    // Copy data into place in the original memory, and update the expectation
     std::memcpy(mem.get() + extraOffset, dataExtra.data(), dataExtra.size());
+    std::memcpy(expectedDataExtra.data() + HOST_PAGE_SIZE + 10,
+                dataExtra.data(),
+                dataExtra.size());
 
-    int extraRegionOffset = extraOffset - 2;
-    int extraRegionSize = dataExtra.size() + 4;
-    snap->addMergeRegion(extraRegionOffset,
-                         extraRegionSize,
-                         SnapshotDataType::Raw,
-                         SnapshotMergeOperation::Overwrite);
-
-    // Include an offset which doesn't change the data.get(), but will register
-    // a dirty page
-    std::vector<uint8_t> dataNoChange = { 0, 0, 0 };
+    // Include an offset which doesn't change the data, but will register
+    // a dirty page (do this by writing bytes from the original)
     int offsetNoChange = 4 * HOST_PAGE_SIZE - 10;
+    std::vector<uint8_t> dataNoChange(mem.get() + offsetNoChange,
+                                      mem.get() + offsetNoChange + 5);
     std::memcpy(
       mem.get() + offsetNoChange, dataNoChange.data(), dataNoChange.size());
 
@@ -190,11 +190,12 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
 
     REQUIRE(changeDiffs.size() == 6);
 
-    checkSnapshotDiff(offsetA, dataA, changeDiffs.at(0));
-    checkSnapshotDiff(offsetB1, dataB1, changeDiffs.at(1));
-    checkSnapshotDiff(offsetB2, dataB2, changeDiffs.at(2));
-    checkSnapshotDiff(offsetC, expectedDataC, changeDiffs.at(3));
-    checkSnapshotDiff(regionOffsetD, expectedDataD, changeDiffs.at(4));
-    checkSnapshotDiff(extraRegionOffset, expectedDataExtra, changeDiffs.at(5));
+    // Diffs are returned increasing order of offset
+    checkSnapshotDiff(snapSize, expectedDataExtra, changeDiffs.at(0));
+    checkSnapshotDiff(offsetA, dataA, changeDiffs.at(1));
+    checkSnapshotDiff(offsetB1, dataB1, changeDiffs.at(2));
+    checkSnapshotDiff(offsetB2, dataB2, changeDiffs.at(3));
+    checkSnapshotDiff(offsetC, expectedDataC, changeDiffs.at(4));
+    checkSnapshotDiff(regionOffsetD, expectedDataD, changeDiffs.at(5));
 }
 }

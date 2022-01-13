@@ -189,6 +189,10 @@ int32_t TestExecutor::executeTask(
               "TestExecutor memory not large enough for test");
         }
 
+        if (dummyMemory == nullptr) {
+            throw std::runtime_error("Trying to set null TestExecutor memory");
+        }
+
         ::memcpy(dummyMemory.get() + offset, data.data(), data.size());
     }
 
