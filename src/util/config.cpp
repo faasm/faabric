@@ -71,7 +71,7 @@ void SystemConfig::initialise()
 
     // Dirty tracking
     dirtyTrackingMode = getEnvVar("DIRTY_TRACKING_MODE", "segfault");
-    diffingMode = getEnvVar("DIFFING_MODE", "overwrite");
+    diffingMode = getEnvVar("DIFFING_MODE", "xor");
 }
 
 int SystemConfig::getSystemConfIntParam(const char* name,
