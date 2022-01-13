@@ -68,8 +68,7 @@ class SnapshotDiff
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
     uint32_t offset = 0;
-    std::span<const uint8_t> data;
-    std::vector<uint8_t> ownedData;
+    std::vector<uint8_t> data;
 };
 
 class SnapshotMergeRegion

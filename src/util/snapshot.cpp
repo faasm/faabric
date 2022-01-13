@@ -19,18 +19,19 @@ SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
   : dataType(dataTypeIn)
   , operation(operationIn)
   , offset(offsetIn)
-  , data(dataIn)
+  , data(dataIn.begin(), dataIn.end())
 {}
 
 void SnapshotDiff::takeOwnership()
 {
-    // Make the copy
-    ownedData.reserve(data.size());
-    std::copy(
-      data.data(), data.data() + data.size(), std::back_inserter(ownedData));
-
-    // Update the view
-    data = std::span<const uint8_t>(ownedData.data(), ownedData.size());
+    //    // Make the copy
+    //    ownedData.reserve(data.size());
+    //    std::copy(
+    //      data.data(), data.data() + data.size(),
+    //      std::back_inserter(ownedData));
+    //
+    //    // Update the view
+    //    data = std::span<const uint8_t>(ownedData.data(), ownedData.size());
 }
 
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
