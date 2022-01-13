@@ -33,17 +33,14 @@ DirtyTracker& getDirtyTracker()
 
     std::string trackMode = faabric::util::getSystemConfig().dirtyTrackingMode;
     if (trackMode == "softpte") {
-        SPDLOG_TRACE("SPTE dirty tracker");
         return dt.softpte;
     }
 
     if (trackMode == "segfault") {
-        SPDLOG_TRACE("segfault dirty tracker");
         return dt.sigseg;
     }
 
     if (trackMode == "none") {
-        SPDLOG_TRACE("none dirty tracker");
         return dt.none;
     }
 

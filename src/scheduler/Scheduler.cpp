@@ -246,10 +246,12 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         throw std::runtime_error("Message with no master host");
     }
 
+    bool isForceLocal =
+      topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+
     // If we're not the master host, we need to forward the request back to the
     // master host. This will only happen if a nested batch execution happens.
-    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
-        masterHost != thisHost) {
+    if (!isForceLocal && masterHost != thisHost) {
         std::string funcStr = faabric::util::funcToString(firstMsg, false);
         SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
 
@@ -266,8 +268,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // Send out point-to-point mappings if necessary (unless being forced to
     // execute locally, in which case they will be transmitted from the
     // master)
-    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
-        (firstMsg.groupid() > 0)) {
+    if (!isForceLocal && (firstMsg.groupid() > 0)) {
         broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
@@ -294,6 +295,11 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
     std::vector<std::string> hosts;
     if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
+        SPDLOG_TRACE("Scheduling {}/{} of {} locally (force local)",
+                     nMessages,
+                     nMessages,
+                     funcStr);
+
         for (int i = 0; i < nMessages; i++) {
             hosts.push_back(thisHost);
         }
@@ -313,6 +319,8 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         int nLocally = std::min<int>(available, nMessages);
 
         // Add those that can be executed locally
+        SPDLOG_TRACE(
+          "Scheduling {}/{} of {} locally", nLocally, nMessages, funcStr);
         for (int i = 0; i < nLocally; i++) {
             hosts.push_back(thisHost);
         }
@@ -337,6 +345,12 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                     nOnThisHost < 2) {
                     continue;
                 }
+
+                SPDLOG_TRACE("Scheduling {}/{} of {} on {} (registered)",
+                             nOnThisHost,
+                             nMessages,
+                             funcStr,
+                             h);
 
                 for (int i = 0; i < nOnThisHost; i++) {
                     hosts.push_back(h);
@@ -370,6 +384,12 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                     nOnThisHost < 2) {
                     continue;
                 }
+
+                SPDLOG_TRACE("Scheduling {}/{} of {} on {} (unregistered)",
+                             nOnThisHost,
+                             nMessages,
+                             funcStr,
+                             h);
 
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
@@ -442,6 +462,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
+    bool isMaster = thisHost == firstMsg.masterhost();
 
     if (decision.hosts.size() != nMessages) {
         SPDLOG_ERROR(
@@ -464,7 +485,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
 
         // Mark the request as being single-host if necessary
         std::set<std::string> thisHostUniset = { thisHost };
-        req->set_singlehost(uniqueHosts == thisHostUniset);
+        req->set_singlehost((uniqueHosts == thisHostUniset) && isMaster);
 
         if (hasFunctionsOnThisHost) {
             uniqueHosts.erase(thisHost);
@@ -1044,6 +1065,7 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
+    SPDLOG_TRACE("Requesting resources from {}", host);
     return getFunctionCallClient(host).getResources();
 }
 

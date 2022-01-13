@@ -53,6 +53,7 @@ class SystemConfig
     // Dirty tracking
     std::string dirtyTrackingMode;
     std::string diffingMode;
+    std::string singleHostOptimise;
 
     SystemConfig();
 

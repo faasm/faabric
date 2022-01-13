@@ -128,7 +128,10 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
     std::string funcStr = faabric::util::funcToString(msg, false);
+
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    bool singleHostOptimise =
+      faabric::util::getSystemConfig().singleHostOptimise == "on";
 
     // Check if we've got a cached decision
     std::string cacheKey =
@@ -148,10 +151,12 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     if (hasCachedDecision) {
         // See if this is a single host batch
         std::vector<std::string> hosts = cachedDecisionHosts[cacheKey];
+
         isSingleHost =
           std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
               return s == thisHost;
           });
+        isSingleHost &= singleHostOptimise;
 
         if (isSingleHost) {
             SPDLOG_TRACE("Cached decision {} marked single-host on {}",
@@ -183,6 +188,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
                   getMemoryView(), DEFAULT_MAX_SNAP_SIZE);
                 reg.registerSnapshot(snapshotKey, snap);
             } else {
+                // This only hits when we realise there is a snapshot when we
+                // thought there wasn't
                 exists = true;
             }
         }
@@ -237,6 +244,10 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     if (!hasCachedDecision) {
         faabric::util::FullLock lock(threadExecutionMutex);
         if (cachedDecisionHosts.find(cacheKey) == cachedDecisionHosts.end()) {
+            SPDLOG_TRACE("Creating new decision for {} threads of {}",
+                         req->messages_size(),
+                         funcStr);
+
             // Set up a new group
             int groupId = faabric::util::generateGid();
             for (auto& m : *req->mutable_messages()) {
@@ -261,7 +272,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
             // See if, now that we've made the decision, we realise that this is
             // actually a single host batch
-            isSingleHost = req->singlehost();
+            isSingleHost = req->singlehost() && singleHostOptimise;
             if (isSingleHost) {
                 SPDLOG_TRACE(
                   "Marking batch as single-host based on fresh decision");
@@ -375,10 +386,12 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    bool singleHostOptimise =
+      faabric::util::getSystemConfig().singleHostOptimise == "on";
 
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    bool isSingleHost = req->singlehost();
+    bool isSingleHost = req->singlehost() && singleHostOptimise;
 
     // Threads on a single host don't need to do anything with snapshots, as
     // they all share a single executor.
@@ -530,6 +543,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
     faabric::transport::PointToPointBroker& broker =
       faabric::transport::getPointToPointBroker();
     const auto& conf = faabric::util::getSystemConfig();
+    bool singleHostOptimise = conf.singleHostOptimise == "on";
 
     bool selfShutdown = false;
 
@@ -563,7 +577,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
           task.req->mutable_messages()->at(task.messageIndex);
 
         // Start dirty tracking if executing threads across hosts
-        bool isSingleHost = task.req->singlehost();
+        bool isSingleHost = task.req->singlehost() && singleHostOptimise;
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
         bool doDirtyTracking = isThreads && !isSingleHost;
