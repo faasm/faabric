@@ -241,7 +241,7 @@ class SnapshotData
 
     void queueDiffs(std::span<SnapshotDiff> diffs);
 
-    void writeQueuedDiffs();
+    int writeQueuedDiffs();
 
     size_t getSize() const { return size; }
 

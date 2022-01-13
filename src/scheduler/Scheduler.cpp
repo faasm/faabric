@@ -462,6 +462,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                                           decision.hosts.end());
         bool hasFunctionsOnThisHost = uniqueHosts.contains(thisHost);
 
+        // Mark the request as being single-host if necessary
+        std::set<std::string> thisHostUniset = { thisHost };
+        req->set_singlehost(uniqueHosts == thisHostUniset);
+
         if (hasFunctionsOnThisHost) {
             uniqueHosts.erase(thisHost);
         }
@@ -493,6 +497,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // *all* hosts, regardless of whether they will be executing functions.
     // This greatly simplifies the reasoning about which hosts hold which
     // diffs.
+    // If the app is only executing on a single host, this won't do anything.
 
     std::string snapshotKey;
     if (isThreads) {

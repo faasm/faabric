@@ -340,13 +340,14 @@ void SnapshotData::queueDiffs(const std::span<SnapshotDiff> diffs)
     }
 }
 
-void SnapshotData::writeQueuedDiffs()
+int SnapshotData::writeQueuedDiffs()
 {
     PROF_START(WriteQueuedDiffs)
     faabric::util::FullLock lock(snapMx);
 
     SPDLOG_DEBUG("Writing {} queued diffs to snapshot", queuedDiffs.size());
 
+    int nDiffs = queuedDiffs.size();
     for (auto& diff : queuedDiffs) {
         if (diff.getOperation() ==
             faabric::util::SnapshotMergeOperation::Ignore) {
@@ -445,6 +446,8 @@ void SnapshotData::writeQueuedDiffs()
     // Clear queue
     queuedDiffs.clear();
     PROF_END(WriteQueuedDiffs)
+
+    return nDiffs;
 }
 
 void SnapshotData::clearTrackedChanges()
