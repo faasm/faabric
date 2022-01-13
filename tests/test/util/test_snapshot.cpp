@@ -1166,7 +1166,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     snap->fillGapsWithOverwriteRegions();
 
-    std::map<uint32_t, SnapshotMergeRegion> actualRegions =
+    std::vector<SnapshotMergeRegion> actualRegions =
       snap->getMergeRegions();
 
     REQUIRE(actualRegions.size() == expectedRegions.size());

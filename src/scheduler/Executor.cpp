@@ -188,7 +188,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     // Now we have to apply the merge regions for this parallel section
     for (const auto& mr : mergeRegions) {
         snap->addMergeRegion(
-          mr.offset, mr.length, mr.dataType, mr.operation, true);
+          mr.offset, mr.length, mr.dataType, mr.operation);
     }
 
     // TODO - here the main thread will wait, so technically frees up a slot

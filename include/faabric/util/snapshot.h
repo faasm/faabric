@@ -100,6 +100,11 @@ class SnapshotMergeRegion
                   std::span<const uint8_t> originalData,
                   std::span<uint8_t> updatedData,
                   const std::vector<char>& dirtyRegions);
+
+    bool operator<(const SnapshotMergeRegion& other) const
+    {
+        return (offset < other.offset);
+    }
 };
 
 /*
@@ -224,14 +229,13 @@ class SnapshotData
     void addMergeRegion(uint32_t offset,
                         size_t length,
                         SnapshotDataType dataType,
-                        SnapshotMergeOperation operation,
-                        bool overwrite = false);
+                        SnapshotMergeOperation operation);
 
     void fillGapsWithOverwriteRegions();
 
     void clearMergeRegions();
 
-    std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
+    std::vector<SnapshotMergeRegion> getMergeRegions();
 
     size_t getQueuedDiffsCount();
 
@@ -271,9 +275,7 @@ class SnapshotData
 
     std::vector<std::pair<uint32_t, uint32_t>> trackedChanges;
 
-    // Note - we care about the order of this map, as we iterate through it
-    // in order of offsets
-    std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
+    std::vector<SnapshotMergeRegion> mergeRegions;
 
     uint8_t* validatedOffsetPtr(uint32_t offset);
 

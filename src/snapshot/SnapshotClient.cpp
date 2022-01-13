@@ -99,10 +99,10 @@ void SnapshotClient::pushSnapshot(
         mrsFbVector.reserve(data->getMergeRegions().size());
         for (const auto& m : data->getMergeRegions()) {
             auto mr = CreateSnapshotMergeRegionRequest(mb,
-                                                       m.second.offset,
-                                                       m.second.length,
-                                                       m.second.dataType,
-                                                       m.second.operation);
+                                                       m.offset,
+                                                       m.length,
+                                                       m.dataType,
+                                                       m.operation);
             mrsFbVector.push_back(mr);
         }
 
@@ -186,10 +186,10 @@ void SnapshotClient::doPushSnapshotDiffs(
             mrsFbVector.reserve(data->getMergeRegions().size());
             for (const auto& m : data->getMergeRegions()) {
                 auto mr = CreateSnapshotMergeRegionRequest(mb,
-                                                           m.second.offset,
-                                                           m.second.length,
-                                                           m.second.dataType,
-                                                           m.second.operation);
+                                                           m.offset,
+                                                           m.length,
+                                                           m.dataType,
+                                                           m.operation);
                 mrsFbVector.push_back(mr);
             }
 
