@@ -23,6 +23,32 @@ class DirtyConfTestFixture
 };
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
+                 "Test configuring tracker",
+                 "[util][dirty]")
+{
+    SECTION("Segfaults")
+    {
+        conf.dirtyTrackingMode = "segfault";
+        DirtyTracker& t = getDirtyTracker();
+        REQUIRE(t.getType() == "segfault");
+    }
+
+    SECTION("Soft PTEs")
+    {
+        conf.dirtyTrackingMode = "softpte";
+        DirtyTracker& t = getDirtyTracker();
+        REQUIRE(t.getType() == "softpte");
+    }
+
+    SECTION("None")
+    {
+        conf.dirtyTrackingMode = "none";
+        DirtyTracker& t = getDirtyTracker();
+        REQUIRE(t.getType() == "none");
+    }
+}
+
+TEST_CASE_METHOD(DirtyConfTestFixture,
                  "Test dirty page checking",
                  "[util][dirty]")
 {
@@ -117,14 +143,14 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     SECTION("Soft PTEs") { conf.dirtyTrackingMode = "softpte"; }
 
-    tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
 
     int nPages = 15;
     size_t memSize = HOST_PAGE_SIZE * nPages;
     MemoryRegion mem = allocateSharedMemory(memSize);
     std::span<uint8_t> memView(mem.get(), memSize);
 
-    DirtyTracker& tracker = getDirtyTracker();
     tracker.clearAll();
 
     std::vector<char> actual =
@@ -173,7 +199,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                  "[util][dirty]")
 {
     conf.dirtyTrackingMode = "segfault";
-    tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    REQUIRE(tracker.getType() == "segfault");
 
     int nPages = 10;
     size_t memSize = nPages * HOST_PAGE_SIZE;
@@ -254,7 +281,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     // Here we want to check that faults triggered in a given thread are caught
     // by that thread, and so we can safely just to thread-local diff tracking.
     conf.dirtyTrackingMode = "segfault";
-    tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    REQUIRE(tracker.getType() == "segfault");
 
     int nLoops = 20;
 
@@ -276,7 +304,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         std::vector<std::thread> threads;
         threads.reserve(nThreads);
         for (int i = 0; i < nThreads; i++) {
-            threads.emplace_back([this, &success, &memView, &nPages, i, loop] {
+            threads.emplace_back([&tracker, &success, &memView, &nPages, i, loop] {
                 success.at(i) = std::make_shared<std::atomic<bool>>();
 
                 // Start thread-local tracking
@@ -349,5 +377,37 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
         REQUIRE(thisLoopSuccess);
     }
+}
+TEST_CASE_METHOD(DirtyConfTestFixture,
+                 "Test none dirty tracking",
+                 "[util][dirty]")
+{
+    conf.dirtyTrackingMode = "none";
+    DirtyTracker& tracker = getDirtyTracker();
+    REQUIRE(tracker.getType() == "none");
+
+    int nPages = 10;
+    size_t memSize = nPages * HOST_PAGE_SIZE;
+
+    std::vector<char> expected(nPages, 1);
+
+    MemoryRegion mem = allocatePrivateMemory(memSize);
+    std::span<uint8_t> memView(mem.get(), memSize);
+
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
+
+    // Check all pages are dirty by default
+    REQUIRE(tracker.getThreadLocalDirtyPages(memView).empty());
+    REQUIRE(tracker.getDirtyPages(memView) == expected);
+    REQUIRE(tracker.getBothDirtyPages(memView) == expected);
+
+    tracker.stopThreadLocalTracking(memView);
+    tracker.stopTracking(memView);
+
+    // Check all pages are still dirty
+    REQUIRE(tracker.getThreadLocalDirtyPages(memView).empty());
+    REQUIRE(tracker.getDirtyPages(memView) == expected);
+    REQUIRE(tracker.getBothDirtyPages(memView) == expected);
 }
 }

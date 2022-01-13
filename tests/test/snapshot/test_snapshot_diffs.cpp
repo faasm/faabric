@@ -47,6 +47,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Track changes
+    DirtyTracker &tracker = getDirtyTracker();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 

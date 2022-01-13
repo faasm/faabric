@@ -1,3 +1,4 @@
+#include "faabric/util/config.h"
 #include <faabric/util/bytes.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/gids.h>
@@ -245,8 +246,10 @@ void SnapshotData::fillGapsWithOverwriteRegions()
     faabric::util::FullLock lock(snapMx);
     PROF_START(FillGapsSnapshot)
 
-    // SnapshotMergeOperation fillType = SnapshotMergeOperation::Overwrite;
-    SnapshotMergeOperation fillType = SnapshotMergeOperation::XOR;
+    SnapshotMergeOperation fillType = SnapshotMergeOperation::Overwrite;
+    if (faabric::util::getSystemConfig().diffingMode == "xor") {
+        fillType = SnapshotMergeOperation::XOR;
+    }
 
     // If there's no merge regions, just do one big one (note, zero length means
     // fill all space

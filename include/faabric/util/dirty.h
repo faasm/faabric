@@ -23,6 +23,8 @@ namespace faabric::util {
 class DirtyTracker
 {
   public:
+    virtual std::string getType() = 0;
+
     virtual void clearAll() = 0;
 
     virtual void startTracking(std::span<uint8_t> region) = 0;
@@ -51,6 +53,10 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     SoftPTEDirtyTracker();
 
     ~SoftPTEDirtyTracker();
+
+    std::string getType() override {
+        return "softpte";
+    }
 
     void clearAll() override;
 
@@ -84,6 +90,10 @@ class SegfaultDirtyTracker final : public DirtyTracker
   public:
     SegfaultDirtyTracker();
 
+    std::string getType() override {
+        return "segfault";
+    }
+
     void clearAll() override;
 
     void startTracking(std::span<uint8_t> region) override;
@@ -115,6 +125,10 @@ class NoneDirtyTracker final : public DirtyTracker
 {
   public:
     NoneDirtyTracker() = default;
+
+    std::string getType() override {
+        return "none";
+    }
 
     void clearAll() override;
 

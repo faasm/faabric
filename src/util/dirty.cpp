@@ -19,22 +19,35 @@
 
 namespace faabric::util {
 
+class DirtyTrackerSingleton
+{
+  public:
+    SoftPTEDirtyTracker softpte;
+    SegfaultDirtyTracker sigseg;
+    NoneDirtyTracker none;
+};
+
 DirtyTracker& getDirtyTracker()
 {
-    static SoftPTEDirtyTracker softpte;
-    static SegfaultDirtyTracker sigseg;
-    static NoneDirtyTracker none;
+    static DirtyTrackerSingleton dt;
 
     std::string trackMode = faabric::util::getSystemConfig().dirtyTrackingMode;
     if (trackMode == "softpte") {
-        return softpte;
-    } else if (trackMode == "segfault") {
-        return sigseg;
-    } else if (trackMode == "none") {
-        return none;
-    } else {
-        throw std::runtime_error("Unrecognised dirty tracking mode");
+        SPDLOG_TRACE("SPTE dirty tracker");
+        return dt.softpte;
     }
+
+    if (trackMode == "segfault") {
+        SPDLOG_TRACE("segfault dirty tracker");
+        return dt.sigseg;
+    }
+
+    if (trackMode == "none") {
+        SPDLOG_TRACE("none dirty tracker");
+        return dt.none;
+    }
+
+    throw std::runtime_error("Unrecognised dirty tracking mode");
 }
 
 // ----------------------------------
