@@ -71,6 +71,16 @@ class SnapshotDiff
     std::vector<uint8_t> data;
 };
 
+/*
+ * Appends a list of snapshot diffs for any bytes differing between the two
+ * arrays.
+ */
+void diffArrayRegions(std::vector<SnapshotDiff>& diffs,
+                      uint32_t startOffset,
+                      uint32_t endOffset,
+                      std::span<const uint8_t> a,
+                      std::span<const uint8_t> b);
+
 class SnapshotMergeRegion
 {
   public:
@@ -245,7 +255,7 @@ class SnapshotData
     // snapshot.
     std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
       std::span<uint8_t> updated,
-      std::vector<char> &dirtyRegions);
+      std::vector<char>& dirtyRegions);
 
   private:
     size_t size = 0;

@@ -501,6 +501,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     faabric::util::SnapshotDataType dataType =
       faabric::util::SnapshotDataType::Raw;
+    faabric::util::SnapshotDataType expectedDataType =
+      faabric::util::SnapshotDataType::Raw;
     faabric::util::SnapshotMergeOperation operation =
       faabric::util::SnapshotMergeOperation::Overwrite;
 
@@ -516,6 +518,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         int diffValue = 0;
 
         dataType = faabric::util::SnapshotDataType::Int;
+        expectedDataType = faabric::util::SnapshotDataType::Int;
         dataLength = sizeof(int32_t);
         regionLength = sizeof(int32_t);
 
@@ -576,6 +579,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         long diffValue = 0;
 
         dataType = faabric::util::SnapshotDataType::Long;
+        expectedDataType = faabric::util::SnapshotDataType::Long;
         dataLength = sizeof(long);
         regionLength = sizeof(long);
 
@@ -636,6 +640,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         float diffValue = 0.0;
 
         dataType = faabric::util::SnapshotDataType::Float;
+        expectedDataType = faabric::util::SnapshotDataType::Float;
         dataLength = sizeof(float);
         regionLength = sizeof(float);
 
@@ -698,6 +703,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         double diffValue = 0.0;
 
         dataType = faabric::util::SnapshotDataType::Double;
+        expectedDataType = faabric::util::SnapshotDataType::Double;
         dataLength = sizeof(double);
         regionLength = sizeof(double);
 
@@ -760,6 +766,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         bool diffValue = false;
 
         dataType = faabric::util::SnapshotDataType::Bool;
+        expectedDataType = faabric::util::SnapshotDataType::Raw;
         dataLength = sizeof(bool);
         regionLength = sizeof(bool);
 
@@ -844,7 +851,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         // Check diff
         REQUIRE(actualDiffs.size() == 1);
         std::vector<SnapshotDiff> expectedDiffs = {
-            { dataType,
+            { expectedDataType,
               operation,
               offset,
               { expectedData.data(), expectedData.size() } }
@@ -1585,5 +1592,101 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     snap->mapToMemory({ memA.get(), snapSize });
     std::vector<uint8_t> remappedMemA(memB.get(), memB.get() + snapSize);
     REQUIRE(remappedMemA == expectedFinal);
+}
+
+TEST_CASE("Test diffing byte array regions", "[util][snapshot]")
+{
+    std::vector<uint8_t> a;
+    std::vector<uint8_t> b;
+    std::vector<std::pair<uint32_t, uint32_t>> expected;
+
+    uint32_t startOffset = 0;
+    uint32_t endOffset = 0;
+    SECTION("Equal")
+    {
+        a = { 0, 1, 2, 3 };
+        b = { 0, 1, 2, 3 };
+        startOffset = 0;
+        endOffset = b.size();
+    }
+
+    SECTION("Empty") {}
+
+    SECTION("Not equal")
+    {
+        a = { 0, 0, 2, 2, 3, 3, 4, 4, 5, 5 };
+        b = { 0, 1, 1, 2, 3, 6, 6, 6, 5, 5 };
+        startOffset = 0;
+        endOffset = b.size();
+        expected = {
+            { 1, 2 },
+            { 5, 3 },
+        };
+    }
+
+    SECTION("Not equal subsections")
+    {
+        a = { 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0 };
+        b = { 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0 };
+        startOffset = 3;
+        endOffset = 10;
+        expected = {
+            { 3, 2 },
+            { 6, 1 },
+            { 8, 2 },
+        };
+    }
+
+    SECTION("Single length")
+    {
+        a = { 0, 1, 2, 3, 4 };
+        b = { 0, 1, 3, 3, 4 };
+        startOffset = 0;
+        endOffset = b.size();
+        expected = { { 2, 1 } };
+    }
+
+    SECTION("Difference at start")
+    {
+        a = { 0, 1, 2, 3, 4, 5, 6 };
+        b = { 1, 2, 3, 3, 3, 4, 6 };
+        startOffset = 0;
+        endOffset = b.size();
+        expected = { { 0, 3 }, { 4, 2 } };
+    }
+
+    SECTION("Difference at end")
+    {
+        a = { 0, 1, 2, 3, 4, 5, 6 };
+        b = { 0, 1, 1, 3, 3, 4, 5 };
+        startOffset = 0;
+        endOffset = b.size();
+        expected = { { 2, 1 }, { 4, 3 } };
+    }
+
+    std::vector<SnapshotDiff> actual;
+    diffArrayRegions(actual, startOffset, endOffset, a, b);
+
+    // Convert execpted into diffs
+    std::vector<SnapshotDiff> expectedDiffs;
+    for (auto p : expected) {
+        expectedDiffs.emplace_back(
+          SnapshotDataType::Raw,
+          SnapshotMergeOperation::Overwrite,
+          p.first,
+          std::span<uint8_t>(b.data() + p.first,
+                             b.data() + p.first + p.second));
+    }
+
+    REQUIRE(actual.size() == expected.size());
+    for (int i = 0; i < actual.size(); i++) {
+        REQUIRE(actual.at(i).getOffset() == expectedDiffs.at(i).getOffset());
+        REQUIRE(actual.at(i).getDataCopy() ==
+                expectedDiffs.at(i).getDataCopy());
+        REQUIRE(actual.at(i).getDataType() ==
+                expectedDiffs.at(i).getDataType());
+        REQUIRE(actual.at(i).getOperation() ==
+                expectedDiffs.at(i).getOperation());
+    }
 }
 }

@@ -39,6 +39,41 @@ std::vector<uint8_t> SnapshotDiff::getDataCopy() const
     return std::vector<uint8_t>(data.begin(), data.end());
 }
 
+void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
+                      uint32_t startOffset,
+                      uint32_t endOffset,
+                      std::span<const uint8_t> a,
+                      std::span<const uint8_t> b)
+{
+    // Iterate through diffs and work out start and finish offsets of each dirty
+    // region
+    uint32_t diffStart = 0;
+    bool diffInProgress = false;
+    for (uint32_t i = startOffset; i < endOffset; i++) {
+        bool dirty = a.data()[i] != b.data()[i];
+        if (dirty && !diffInProgress) {
+            // Starts at this byte
+            diffInProgress = true;
+            diffStart = i;
+        } else if (!dirty && diffInProgress) {
+            // Finished on byte before
+            diffInProgress = false;
+            snapshotDiffs.emplace_back(SnapshotDataType::Raw,
+                                       SnapshotMergeOperation::Overwrite,
+                                       diffStart,
+                                       b.subspan(diffStart, i - diffStart));
+        }
+    }
+
+    // If we finish with a diff in progress, add it
+    if (diffInProgress) {
+        snapshotDiffs.emplace_back(SnapshotDataType::Raw,
+                                   SnapshotMergeOperation::Overwrite,
+                                   diffStart,
+                                   b.subspan(diffStart, endOffset - diffStart));
+    }
+}
+
 SnapshotData::SnapshotData(size_t sizeIn)
   : SnapshotData(sizeIn, sizeIn)
 {}
@@ -655,80 +690,17 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
 
             SPDLOG_TRACE("Checking page {} {}-{}", p, startByte, endByte);
 
-            uint32_t rangeSize = endByte - startByte;
             if (operation == SnapshotMergeOperation::Overwrite) {
                 PROF_START(OverwriteDiff)
 
-                std::vector<std::pair<uint32_t, uint32_t>> regions =
-                  diffArrayRegions(originalData.subspan(startByte, rangeSize),
-                                   updatedData.subspan(startByte, rangeSize));
+                diffArrayRegions(
+                  diffs, startByte, endByte, originalData, updatedData);
 
-                // Iterate through and build diffs
-                for (auto [start, len] : regions) {
-                    uint32_t diffStart = startByte + start;
-                    SPDLOG_TRACE("Adding {} overwrite diff at {}-{}",
-                                 snapshotDataTypeStr(dataType),
-                                 diffStart,
-                                 diffStart + len);
-
-                    diffs.emplace_back(dataType,
-                                       operation,
-                                       diffStart,
-                                       updatedData.subspan(diffStart, len));
-                }
-
-                //                uint32_t diffStart = 0;
-                //                bool diffInProgress = false;
-
-                //                for (uint32_t i = byteOffset; i < byteEnd;
-                //                i++) {
-                //                    bool dirty =
-                //                    originalData.data()[i] !=
-                //                    updatedData.data()[i];
-                //
-                //                    if (dirty && !diffInProgress) {
-                //                        // Starts at this byte
-                //                        diffInProgress = true;
-                //                        diffStart = i;
-                //                    } else if (!dirty && diffInProgress) {
-                //                        // Finished on byte before
-                //                        diffInProgress = false;
-                //                        uint32_t diffLen = i - diffStart;
-                //
-                //                        SPDLOG_TRACE("Adding {} Overwrite
-                //                        merge: {}-{}",
-                //                                     snapshotDataTypeStr(dataType),
-                //                                     diffStart,
-                //                                     diffStart + diffLen);
-                //
-                //                        diffs.emplace_back(
-                //                          dataType,
-                //                          operation,
-                //                          diffStart,
-                //                          updatedData.subspan(diffStart,
-                //                          diffLen));
-                //                    }
-                //               }
-                //
-                // If we finish with a diff in progress, add it
-                //              if (diffInProgress) {
-                //                    uint32_t diffLen = byteEnd - diffStart;
-                //                    SPDLOG_TRACE("Adding final {} Overwrite
-                //                    merge: {}-{}",
-                //                                 snapshotDataTypeStr(dataType),
-                //                                 diffStart,
-                //                                 diffStart + diffLen);
-                //
-                //                    diffs.emplace_back(dataType,
-                //                                       operation,
-                //                                       diffStart,
-                //                                       updatedData.subspan(diffStart,
-                //                                       diffLen));
-                //                }
                 PROF_END(OverwriteDiff)
             } else {
                 PROF_START(XORDiff)
 
+                uint32_t rangeSize = endByte - startByte;
                 std::transform(originalData.begin() + startByte,
                                originalData.begin() + startByte + rangeSize,
                                updatedData.begin() + startByte,

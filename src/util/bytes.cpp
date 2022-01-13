@@ -93,37 +93,4 @@ std::string formatByteArrayToIntString(const std::vector<uint8_t>& bytes)
 
     return ss.str();
 }
-
-// This function is called in a tight loop over large regions of data so
-// make sure it stays efficient.
-std::vector<std::pair<uint32_t, uint32_t>> diffArrayRegions(
-  std::span<const uint8_t> a,
-  std::span<const uint8_t> b)
-{
-    std::vector<std::pair<uint32_t, uint32_t>> regions;
-
-    // Iterate through diffs and work out start and finish offsets of each dirty
-    // region
-    uint32_t diffStart = 0;
-    bool diffInProgress = false;
-    for (uint32_t i = 0; i < a.size(); i++) {
-        bool dirty = a.data()[i] != b.data()[i];
-        if (dirty && !diffInProgress) {
-            // Starts at this byte
-            diffInProgress = true;
-            diffStart = i;
-        } else if (!dirty && diffInProgress) {
-            // Finished on byte before
-            diffInProgress = false;
-            regions.emplace_back(diffStart, i - diffStart);
-        }
-    }
-
-    // If we finish with a diff in progress, add it
-    if (diffInProgress) {
-        regions.emplace_back(diffStart, a.size() - diffStart);
-    }
-
-    return regions;
-}
 }
