@@ -108,5 +108,34 @@ class SegfaultDirtyTracker final : public DirtyTracker
     void setUpSignalHandler();
 };
 
+/*
+ * No dirty tracking implementation.
+ */
+class NoneDirtyTracker final : public DirtyTracker
+{
+  public:
+    NoneDirtyTracker() = default;
+
+    void clearAll() override;
+
+    void startTracking(std::span<uint8_t> region) override;
+
+    void stopTracking(std::span<uint8_t> region) override;
+
+    std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
+
+    void startThreadLocalTracking(std::span<uint8_t> region) override;
+
+    void stopThreadLocalTracking(std::span<uint8_t> region) override;
+
+    std::vector<char> getThreadLocalDirtyPages(
+      std::span<uint8_t> region) override;
+
+    std::vector<char> getBothDirtyPages(std::span<uint8_t> region) override;
+
+  private:
+    std::vector<char> dirtyPages;
+};
+
 DirtyTracker& getDirtyTracker();
 }
