@@ -1371,7 +1371,6 @@ Scheduler::doCheckForMigrationOpportunities(
                   &(*(req->mutable_messages()->begin() +
                       std::distance(originalDecision.hosts.begin(), right)));
                 auto* migrationMsgPtr = migration->mutable_msg();
-                // faabric::util::copyMessage(msgPtr, migrationMsgPtr);
                 *migrationMsgPtr = *msgPtr;
                 // Decrement by one the availability, and check for more
                 // possible sources of migration

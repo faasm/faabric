@@ -6,7 +6,6 @@
 #include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
-#include <faabric/util/message.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
@@ -86,8 +85,7 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
         for (auto pair : migrations) {
             auto* migration = expected.add_migrations();
             auto* migrationMsg = migration->mutable_msg();
-            faabric::util::copyMessage(&req->mutable_messages()->at(pair.first),
-                                       migrationMsg);
+            *migrationMsg = req->mutable_messages()->at(pair.first);
             migration->set_srchost(hosts.at(pair.first));
             migration->set_dsthost(hosts.at(pair.second));
         }
@@ -449,26 +447,6 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts, true);
 
-    // Check that certain MPI calls actually do the migration
-    SECTION("MPI barrier triggers a migration point") { world.barrier(0); }
-
-    SECTION("MPI all reduce triggers a migration point")
-    {
-        std::vector<int> messageData = { 0, 1, 2 };
-        world.allReduce(0,
-                        BYTES(messageData.data()),
-                        BYTES(messageData.data()),
-                        MPI_INT,
-                        messageData.size(),
-                        MPI_SUM);
-    }
-
-    // When performing the migration, MPI will remove it from the pending
-    // migrations map
-    REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
-    checkPendingMigrationsExpectation(
-      expectedMigrations, getMpiMockedPendingMigrations().front(), hosts, true);
-
     faabric::Message res =
       sch.getFunctionResult(firstMsg->id(), 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
@@ -476,5 +454,4 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     // Clean up
     world.destroy();
 }
-
 }

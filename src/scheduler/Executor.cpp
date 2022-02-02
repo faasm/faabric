@@ -545,10 +545,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
             returnValue = -99;
 
             // MPI migration
-            if(msg.ismpi()) {
-                // TODO - when should we delete the pending migration?
+            if (msg.ismpi()) {
+                // TODO - delete the pending migration
                 auto& mpiWorld =
-                  faabric::scheduler::getMpiWorldRegistry().getWorld(msg.mpiworldid());
+                  faabric::scheduler::getMpiWorldRegistry().getWorld(
+                    msg.mpiworldid());
                 mpiWorld.destroy();
             }
         } catch (const std::exception& ex) {

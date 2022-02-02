@@ -1758,8 +1758,6 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
-// Once per host we modify the per-world accounting of rank-to-hosts mappings
-// and the corresponding ports for cross-host messaging.
 void MpiWorld::prepareMigration(
   int thisRank,
   std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
@@ -1802,16 +1800,13 @@ void MpiWorld::prepareMigration(
         // TODO - merge with initLocalQueues
         for (const int sendRank : ranksForHost[thisHost]) {
             for (const int recvRank : ranksForHost[thisHost]) {
-                if (localQueues[getIndexForRanks(sendRank, recvRank)] == nullptr) {
+                if (localQueues[getIndexForRanks(sendRank, recvRank)] ==
+                    nullptr) {
                     localQueues[getIndexForRanks(sendRank, recvRank)] =
                       std::make_shared<InMemoryMpiQueue>();
                 }
             }
         }
-
-        // Lastly, remove the migrations from the pending migrations map
-        // TODO - when should we remove the pending migration from the map?
-        // getScheduler().removePendingMigration(thisRankMsg->appid());
     }
 }
 }

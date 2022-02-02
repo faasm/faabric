@@ -280,8 +280,6 @@ class MpiWorld
                                                              int recvRank,
                                                              int batchSize = 0);
 
-    void finishMigration(int thisRank);
-
     /* Helper methods */
 
     void checkRanksRange(int sendRank, int recvRank);
