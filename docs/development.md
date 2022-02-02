@@ -68,6 +68,11 @@ pip install -r requirements.txt
 inv dev.cc faabric
 ```
 
+## Debugging
+
+Note that Faabric provides its own `.gdbinit` file which will ensure segfaults
+(used in dirty tracking) aren't caught by gdb by default.
+
 ## Testing
 
 We have some standard tests using [Catch2](https://github.com/catchorg/Catch2)
