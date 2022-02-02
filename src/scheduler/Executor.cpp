@@ -160,7 +160,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker.stopThreadLocalTracking(memView);
 
         std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-          tracker.getBothDirtyOffsets(memView);
+          tracker.getBothDirtyPages(memView);
 
         // Apply changes to snapshot
         snap->fillGapsWithOverwriteRegions();
@@ -548,7 +548,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Add this thread's changes to executor-wide list of dirty regions
             auto thisThreadDirtyRegions =
-              tracker.getThreadLocalDirtyOffsets(memView);
+              tracker.getThreadLocalDirtyPages(memView);
 
             faabric::util::FullLock lock(threadExecutionMutex);
             dirtyRegions.insert(dirtyRegions.end(),
@@ -581,7 +581,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             {
                 faabric::util::FullLock lock(threadExecutionMutex);
                 std::vector<std::pair<uint32_t, uint32_t>> r =
-                  tracker.getDirtyOffsets(memView);
+                  tracker.getDirtyPages(memView);
 
                 dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
             }

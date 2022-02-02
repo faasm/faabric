@@ -25,24 +25,22 @@ class DirtyTracker
   public:
     virtual void clearAll() = 0;
 
-    virtual void reinitialise() = 0;
+    virtual std::string getType() = 0;
 
     virtual void startTracking(std::span<uint8_t> region) = 0;
 
     virtual void stopTracking(std::span<uint8_t> region) = 0;
 
-    virtual std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
-      std::span<uint8_t> region) = 0;
+    virtual std::vector<char> getDirtyPages(std::span<uint8_t> region) = 0;
 
     virtual void startThreadLocalTracking(std::span<uint8_t> region) = 0;
 
     virtual void stopThreadLocalTracking(std::span<uint8_t> region) = 0;
 
-    virtual std::vector<std::pair<uint32_t, uint32_t>>
-    getThreadLocalDirtyOffsets(std::span<uint8_t> region) = 0;
-
-    virtual std::vector<std::pair<uint32_t, uint32_t>> getBothDirtyOffsets(
+    virtual std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) = 0;
+
+    virtual std::vector<char> getBothDirtyPages(std::span<uint8_t> region) = 0;
 };
 
 /*
@@ -58,24 +56,22 @@ class SoftPTEDirtyTracker final : public DirtyTracker
 
     void clearAll() override;
 
-    void reinitialise() override;
+    std::string getType() override { return "softpte"; }
 
     void startTracking(std::span<uint8_t> region) override;
 
     void stopTracking(std::span<uint8_t> region) override;
 
-    std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
-      std::span<uint8_t> region) override;
+    std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
 
     void startThreadLocalTracking(std::span<uint8_t> region) override;
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
 
-    std::vector<std::pair<uint32_t, uint32_t>> getThreadLocalDirtyOffsets(
+    std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) override;
 
-    std::vector<std::pair<uint32_t, uint32_t>> getBothDirtyOffsets(
-      std::span<uint8_t> region) override;
+    std::vector<char> getBothDirtyPages(std::span<uint8_t> region) override;
 
   private:
     FILE* clearRefsFile = nullptr;
@@ -94,24 +90,22 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
     void clearAll() override;
 
-    void reinitialise() override;
+    std::string getType() override { return "segfault"; }
 
     void startTracking(std::span<uint8_t> region) override;
 
     void stopTracking(std::span<uint8_t> region) override;
 
-    std::vector<std::pair<uint32_t, uint32_t>> getDirtyOffsets(
-      std::span<uint8_t> region) override;
+    std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
 
     void startThreadLocalTracking(std::span<uint8_t> region) override;
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
 
-    std::vector<std::pair<uint32_t, uint32_t>> getThreadLocalDirtyOffsets(
+    std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) override;
 
-    std::vector<std::pair<uint32_t, uint32_t>> getBothDirtyOffsets(
-      std::span<uint8_t> region) override;
+    std::vector<char> getBothDirtyPages(std::span<uint8_t> region) override;
 
     // Signal handler for the resulting segfaults
     static void handler(int sig, siginfo_t* info, void* ucontext) noexcept;

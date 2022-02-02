@@ -65,14 +65,9 @@ class StateTestFixture
 class DirtyTrackingTestFixture
 {
   public:
-    DirtyTrackingTestFixture()
-      : tracker(faabric::util::getDirtyTracker())
-    {}
+    DirtyTrackingTestFixture() {}
 
-    ~DirtyTrackingTestFixture() { tracker.clearAll(); }
-
-  protected:
-    faabric::util::DirtyTracker& tracker;
+    ~DirtyTrackingTestFixture() { faabric::util::getDirtyTracker().clearAll(); }
 };
 
 class SchedulerTestFixture : public DirtyTrackingTestFixture
