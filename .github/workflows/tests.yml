@@ -20,7 +20,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.2.3
+      image: faasm/faabric:0.2.4
     defaults:
       run:
         working-directory: /code/faabric
@@ -64,7 +64,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.2.3
+      image: faasm/faabric:0.2.4
     defaults:
       run:
         working-directory: /code/faabric
@@ -101,7 +101,7 @@ jobs:
       TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt:history_size=7"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
-      image: faasm/faabric:0.2.3
+      image: faasm/faabric:0.2.4
     defaults:
       run:
         working-directory: /code/faabric
@@ -190,7 +190,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.2.3
+      image: faasm/faabric:0.2.4
     defaults:
       run:
         working-directory: /code/faabric
