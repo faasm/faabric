@@ -130,8 +130,6 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     std::string funcStr = faabric::util::funcToString(msg, false);
 
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    bool singleHostOptimise =
-      faabric::util::getSystemConfig().singleHostOptimise == "on";
 
     // Check if we've got a cached decision
     std::string cacheKey =
@@ -156,7 +154,6 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
           std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
               return s == thisHost;
           });
-        isSingleHost &= singleHostOptimise;
 
         if (isSingleHost) {
             SPDLOG_TRACE("Cached decision {} marked single-host on {}",
@@ -272,7 +269,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
             // See if, now that we've made the decision, we realise that this is
             // actually a single host batch
-            isSingleHost = req->singlehost() && singleHostOptimise;
+            isSingleHost = req->singlehost();
             if (isSingleHost) {
                 SPDLOG_TRACE(
                   "Marking batch as single-host based on fresh decision");
@@ -386,12 +383,11 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    bool singleHostOptimise =
-      faabric::util::getSystemConfig().singleHostOptimise == "on";
 
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    bool isSingleHost = req->singlehost() && singleHostOptimise;
+    bool isSingleHost = req->singlehost();
+    std::string snapshotKey = firstMsg.snapshotkey();
 
     // Threads on a single host don't need to do anything with snapshots, as
     // they all share a single executor.
@@ -411,7 +407,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         // Restore threads from main thread snapshot
         std::string snapKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
         SPDLOG_DEBUG(
-          "Restoring thread of {} from snapshot {}", funcStr, snapKey);
+          "Restoring threads of {} from snapshot {}", funcStr, snapKey);
         restore(snapKey);
 
         // Get updated memory view and start global tracking of memory
@@ -419,9 +415,14 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         tracker.startTracking(memView);
     } else if (!isThreads && !firstMsg.snapshotkey().empty()) {
         // Restore from snapshot if provided
-        std::string snapshotKey = firstMsg.snapshotkey();
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
         restore(snapshotKey);
+    } else {
+        SPDLOG_TRACE("Not restoring {}. threads={}, key={}, single={}",
+                     funcStr,
+                     isThreads,
+                     snapshotKey,
+                     isSingleHost);
     }
 
     // Set up shared counter for this batch of tasks
@@ -543,7 +544,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
     faabric::transport::PointToPointBroker& broker =
       faabric::transport::getPointToPointBroker();
     const auto& conf = faabric::util::getSystemConfig();
-    bool singleHostOptimise = conf.singleHostOptimise == "on";
 
     bool selfShutdown = false;
 
@@ -577,7 +577,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
           task.req->mutable_messages()->at(task.messageIndex);
 
         // Start dirty tracking if executing threads across hosts
-        bool isSingleHost = task.req->singlehost() && singleHostOptimise;
+        bool isSingleHost = task.req->singlehost();
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
         bool doDirtyTracking = isThreads && !isSingleHost;
