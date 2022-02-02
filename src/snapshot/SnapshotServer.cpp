@@ -141,13 +141,6 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
           static_cast<SnapshotMergeOperation>(diff->merge_op()),
           diff->offset(),
           std::span<const uint8_t>(diff->data()->data(), diff->data()->size()));
-
-        // NOTE if we're forcing, we'll be applying these diffs within the
-        // lifespan of the memory, so the snapshot diff doesn't have to take
-        // ownership. If not, it does need to take ownership
-        if (!r->force()) {
-            diffs.back().takeOwnership();
-        }
     }
 
     // Queue on the snapshot

@@ -1,5 +1,5 @@
-#include "faabric/util/config.h"
 #include <faabric/util/bytes.h>
+#include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
@@ -22,18 +22,6 @@ SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
   , offset(offsetIn)
   , data(dataIn.begin(), dataIn.end())
 {}
-
-void SnapshotDiff::takeOwnership()
-{
-    //    // Make the copy
-    //    ownedData.reserve(data.size());
-    //    std::copy(
-    //      data.data(), data.data() + data.size(),
-    //      std::back_inserter(ownedData));
-    //
-    //    // Update the view
-    //    data = std::span<const uint8_t>(ownedData.data(), ownedData.size());
-}
 
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
 {

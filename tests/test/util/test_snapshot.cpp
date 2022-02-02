@@ -1,11 +1,11 @@
 #include <catch2/catch.hpp>
 
-#include "faabric/util/config.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>

@@ -153,13 +153,6 @@ void SnapshotClient::doPushSnapshotDiffs(
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
 
-        // Note, when mocking, these diffs will need to outlive the life of
-        // their source data, which they don't normally have to do when
-        // pushing
-        for (auto& d : diffs) {
-            d.takeOwnership();
-        }
-
         snapshotDiffPushes.emplace_back(host, diffs);
     } else {
         flatbuffers::FlatBufferBuilder mb;

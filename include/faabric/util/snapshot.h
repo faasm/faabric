@@ -37,11 +37,6 @@ enum SnapshotMergeOperation
     Ignore
 };
 
-/**
- * A snapshot diff is a view of a segment of memory, and does not take ownership
- * of the underlying data unless explicitly asked to. Snapshot diffs are passed
- * around a fair bit, so we really must avoid copying data wherever possible.
- */
 class SnapshotDiff
 {
   public:
@@ -61,8 +56,6 @@ class SnapshotDiff
     std::span<const uint8_t> getData() const { return data; }
 
     std::vector<uint8_t> getDataCopy() const;
-
-    void takeOwnership();
 
   private:
     SnapshotDataType dataType = SnapshotDataType::Raw;
@@ -101,6 +94,10 @@ class SnapshotMergeRegion
                   std::span<uint8_t> updatedData,
                   const std::vector<char>& dirtyRegions);
 
+    /**
+     * This allows us to sort the merge regions which is important for diffing
+     * purposes.
+     */
     bool operator<(const SnapshotMergeRegion& other) const
     {
         return (offset < other.offset);
