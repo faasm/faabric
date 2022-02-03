@@ -1579,8 +1579,6 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 // Note - the queues themselves perform concurrency control
 void MpiWorld::initLocalQueues()
 {
-    // Assert we only allocate queues once
-    assert(localQueues.size() == 0);
     localQueues.resize(size * size);
     for (const int sendRank : ranksForHost[thisHost]) {
         for (const int recvRank : ranksForHost[thisHost]) {
@@ -1797,16 +1795,7 @@ void MpiWorld::prepareMigration(
         initLocalRemoteLeaders();
 
         // Add the necessary new local messaging queues
-        // TODO - merge with initLocalQueues
-        for (const int sendRank : ranksForHost[thisHost]) {
-            for (const int recvRank : ranksForHost[thisHost]) {
-                if (localQueues[getIndexForRanks(sendRank, recvRank)] ==
-                    nullptr) {
-                    localQueues[getIndexForRanks(sendRank, recvRank)] =
-                      std::make_shared<InMemoryMpiQueue>();
-                }
-            }
-        }
+        initLocalQueues();
     }
 }
 }
