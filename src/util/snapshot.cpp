@@ -224,7 +224,7 @@ void SnapshotData::fillGapsWithOverwriteRegions()
         return;
     }
 
-    // Note - we need to sort the merge regions here
+    // Sort merge regions to ensure loop below works
     std::sort(mergeRegions.begin(), mergeRegions.end());
 
     uint32_t lastRegionEnd = 0;
@@ -481,6 +481,11 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
         SPDLOG_TRACE("No merge regions, no diffs");
         return diffs;
     }
+
+    // Sort merge regions. This is not strictly necessary but makes testing and
+    // debugging a lot easier and doesn't take long. Could be removed if it
+    // became a bottleneck.
+    std::sort(mergeRegions.begin(), mergeRegions.end());
 
     // Iterate through merge regions, allow them to add diffs based on the
     // dirty regions

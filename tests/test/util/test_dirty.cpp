@@ -384,4 +384,3 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     }
 }
 }
-

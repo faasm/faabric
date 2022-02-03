@@ -19,6 +19,8 @@
 
 namespace faabric::util {
 
+// Note - this singleton is needed to contain the different singleton
+// instances. We can't make them all static variables in the function.
 class DirtyTrackerSingleton
 {
   public:

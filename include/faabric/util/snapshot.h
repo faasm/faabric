@@ -91,7 +91,7 @@ class SnapshotMergeRegion
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
                   std::span<uint8_t> updatedData,
-                  const std::vector<char> &dirtyRegions);
+                  const std::vector<char>& dirtyRegions);
 
     /**
      * This allows us to sort the merge regions which is important for diffing

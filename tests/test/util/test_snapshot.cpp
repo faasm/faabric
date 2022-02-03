@@ -1163,6 +1163,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::vector<SnapshotMergeRegion> actualRegions = snap->getMergeRegions();
 
+    // Sort regions to ensure consistent comparison
+    std::sort(actualRegions.begin(), actualRegions.end());
+
     REQUIRE(actualRegions.size() == expectedRegions.size());
     for (int i = 0; i < actualRegions.size(); i++) {
         SnapshotMergeRegion expectedRegion = expectedRegions[i];
@@ -1716,7 +1719,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     tracker.startThreadLocalTracking(memView);
 
     // Update the memory
-    std::vector<uint8_t> dataA = { 0, 1, 2, 3 };
+    std::vector<uint8_t> dataA = { 1, 2, 3, 4 };
     std::vector<uint8_t> dataB = { 3, 4, 5 };
     uint32_t offsetA = 0;
     uint32_t offsetB = 2 * HOST_PAGE_SIZE + 1;
@@ -1735,6 +1738,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Diff with snapshot
     snap->fillGapsWithOverwriteRegions();
+    std::vector<SnapshotMergeRegion> actualRegions = snap->getMergeRegions();
+    REQUIRE(actualRegions.size() == 1);
+    REQUIRE(actualRegions.at(0).offset == 0);
+    REQUIRE(actualRegions.at(0).length == 0);
+
     std::vector<faabric::util::SnapshotDiff> actual =
       snap->diffWithDirtyRegions(memView, dirtyPages);
 
@@ -1749,4 +1757,3 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(diffB.getDataCopy() == dataB);
 }
 }
-

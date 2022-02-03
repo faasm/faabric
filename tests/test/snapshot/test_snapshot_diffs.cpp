@@ -200,4 +200,3 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     checkSnapshotDiff(regionOffsetD, expectedDataD, changeDiffs.at(5));
 }
 }
-

@@ -14,7 +14,6 @@ using namespace faabric::util;
 
 namespace tests {
 
-
 TEST_CASE("Test rounding down offsets to page size", "[util][memory]")
 {
     REQUIRE(faabric::util::alignOffsetDown(2 * faabric::util::HOST_PAGE_SIZE) ==
