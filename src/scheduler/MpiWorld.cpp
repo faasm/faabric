@@ -211,9 +211,8 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     auto& sch = faabric::scheduler::getScheduler();
 
-    // Dispatch all the chained calls
-    // NOTE - with the master being rank zero, we want to spawn
-    // (size - 1) new functions starting with rank 1
+    // Dispatch all the chained calls. With the master being rank zero, we want
+    // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, size - 1);
     for (int i = 0; i < req->messages_size(); i++) {

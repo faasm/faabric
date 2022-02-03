@@ -66,7 +66,7 @@ zmq::socket_t socketFactory(zmq::socket_type socketType,
     socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
     socket.set(zmq::sockopt::sndtimeo, timeoutMs);
 
-    // Note - setting linger here is essential to avoid infinite hangs
+    // Setting linger here is essential to avoid infinite hangs
     socket.set(zmq::sockopt::linger, LINGER_MS);
 
     switch (connectType) {

@@ -83,7 +83,7 @@ void RedisStateKeyValue::pullChunkFromRemote(long offset, size_t length)
                  offset + length,
                  joinedKey);
 
-    // Note - redis ranges are inclusive, so we need to knock one off
+    // Redis ranges are inclusive, so we need to knock one off
     size_t rangeStart = offset;
     size_t rangeEnd = offset + length - 1;
 

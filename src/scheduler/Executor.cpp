@@ -19,9 +19,12 @@
 #include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
 
+// Default snapshot size here is set to support 32-bit WebAssembly, but could be
+// made configurable on the function call or language.
 #define ONE_MB (1024L * 1024L)
 #define ONE_GB (1024L * ONE_MB)
 #define DEFAULT_MAX_SNAP_SIZE (4 * ONE_GB)
+
 #define POOL_SHUTDOWN -1
 
 namespace faabric::scheduler {
@@ -127,7 +130,6 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(msg, false);
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
     // Check if we've got a cached decision
     std::string cacheKey =
@@ -694,8 +696,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
         SPDLOG_DEBUG(
           "Shutting down thread pool thread {}:{}", id, threadPoolIdx);
 
-        // Note - we have to keep a record of dead threads so we can join
-        // them all when the executor shuts down
+        // We have to keep a record of dead threads so we can join them all when
+        // the executor shuts down
         bool isFinished = true;
         {
             faabric::util::UniqueLock threadsLock(threadsMutex);

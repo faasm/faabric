@@ -452,10 +452,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         throw std::runtime_error("Invalid scheduler hint for messages");
     }
 
-    // NOTE: we want to schedule things on this host _last_, otherwise functions
-    // may start executing before all messages have been dispatched, thus
-    // slowing the remaining scheduling.
-    // Therefore we want to create a list of unique hosts, with this host last.
+    // We want to schedule things on this host _last_, otherwise functions may
+    // start executing before all messages have been dispatched, thus slowing
+    // the remaining scheduling. Therefore we want to create a list of unique
+    // hosts, with this host last.
     std::vector<std::string> orderedHosts;
     {
         std::set<std::string> uniqueHosts(decision.hosts.begin(),

@@ -73,7 +73,7 @@ AlignedChunk getPageAlignedChunk(long offset, long length)
 
     long nBytesOffset = nPagesOffset * faabric::util::HOST_PAGE_SIZE;
 
-    // Note - this value is the offset from the base of the new region
+    // This value is the offset from the base of the new region
     long shiftedOffset = offset - nBytesOffset;
 
     AlignedChunk c{

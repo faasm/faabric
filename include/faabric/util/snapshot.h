@@ -102,9 +102,6 @@ class SnapshotMergeRegion
         return (offset < other.offset);
     }
 
-    /**
-     * Utility function for testing
-     */
     bool operator==(const SnapshotMergeRegion& other) const
     {
         return offset == other.offset && length == other.length &&

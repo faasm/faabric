@@ -37,7 +37,7 @@ class StateChunk
     long offset;
     size_t length;
 
-    // Note - this pointer will always refer to chunks of the underlying
+    // This pointer will always refer to chunks of the underlying
     // state, so does not need to be deleted
     uint8_t* data;
 };

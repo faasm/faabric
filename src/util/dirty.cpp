@@ -19,7 +19,7 @@
 
 namespace faabric::util {
 
-// Note - this singleton is needed to contain the different singleton
+// This singleton is needed to contain the different singleton
 // instances. We can't make them all static variables in the function.
 class DirtyTrackerSingleton
 {
@@ -195,7 +195,7 @@ class ThreadTrackingData
 
     bool isInitialised() { return regionTop != nullptr; }
 
-    // Note - std::vector<bool> here seems to worsen performance by >4x
+    // std::vector<bool> here seems to worsen performance by >4x
     // std::vector<char> seems to be optimal
     int nPages = 0;
     std::vector<char> pageFlags;
@@ -343,7 +343,7 @@ std::vector<char> SegfaultDirtyTracker::getBothDirtyPages(
 }
 
 // ------------------------------
-// None
+// None (i.e. mark all pages dirty)
 // ------------------------------
 
 void NoneDirtyTracker::clearAll()

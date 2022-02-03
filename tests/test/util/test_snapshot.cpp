@@ -647,8 +647,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         dataLength = sizeof(float);
         regionLength = sizeof(float);
 
-        // Note - imprecision in float arithmetic makes it difficult to test
-        // the floating point types here unless we use integer values.
+        // Imprecision in float arithmetic makes it difficult to test the
+        // floating point types here unless we use integer values.
         SECTION("Float sum")
         {
             originalValue = 513;
@@ -710,7 +710,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         dataLength = sizeof(double);
         regionLength = sizeof(double);
 
-        // Note - imprecision in float arithmetic makes it difficult to test
+        // Imprecision in float arithmetic makes it difficult to test
         // the floating point types here unless we use integer values.
         SECTION("Double sum")
         {
@@ -1712,6 +1712,60 @@ TEST_CASE("Test diffing byte array regions", "[util][snapshot]")
                 expectedDiffs.at(i).getDataType());
         REQUIRE(actual.at(i).getOperation() ==
                 expectedDiffs.at(i).getOperation());
+    }
+}
+
+TEST_CASE("Test snapshot merge region equality", "[snapshot][util]")
+{
+    SECTION("Equal")
+    {
+        SnapshotMergeRegion a(
+          10, 12, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        SnapshotMergeRegion b(
+          10, 12, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        REQUIRE(a == b);
+    }
+
+    SECTION("Offset unequal")
+    {
+        SnapshotMergeRegion a(
+          123, 12, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        SnapshotMergeRegion b(
+          10, 12, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        REQUIRE(a != b);
+    }
+
+    SECTION("Length unequal")
+    {
+        SnapshotMergeRegion a(
+          10, 22, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        SnapshotMergeRegion b(
+          10, 12, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        REQUIRE(a != b);
+    }
+
+    SECTION("Data type unequal")
+    {
+        SnapshotMergeRegion a(
+          10, 22, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        SnapshotMergeRegion b(
+          10, 22, SnapshotDataType::Bool, SnapshotMergeOperation::Ignore);
+        REQUIRE(a != b);
+    }
+
+    SECTION("Operation unequal")
+    {
+        SnapshotMergeRegion a(
+          10, 22, SnapshotDataType::Double, SnapshotMergeOperation::Ignore);
+        SnapshotMergeRegion b(
+          10, 22, SnapshotDataType::Double, SnapshotMergeOperation::Sum);
+        REQUIRE(a != b);
+    }
+    SECTION("Default constructors equal")
+    {
+        SnapshotMergeRegion a;
+        SnapshotMergeRegion b;
+        REQUIRE(a == b);
     }
 }
 

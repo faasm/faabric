@@ -132,7 +132,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     for (int i = 0; i < numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv().value();
         // Check just a subset of the messages
-        // Note - this implicitly tests in-order message delivery
+        // This implicitly tests in-order message delivery
         if ((i % (numMessages / 10)) == 0) {
             std::string expectedMsg = baseMsg + std::to_string(i);
             REQUIRE(recvMsg.size() == expectedMsg.size());

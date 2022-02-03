@@ -119,7 +119,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
                          SnapshotDataType::Raw,
                          SnapshotMergeOperation::Overwrite);
 
-    // NOTE - deliberately add merge regions out of order
+    // Deliberately add merge regions out of order
 
     // Merge region across page boudary, capturing only part of a change
     std::vector<uint8_t> dataC = { 7, 6, 5, 4, 3, 2, 1 };
