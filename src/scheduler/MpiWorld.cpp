@@ -1547,6 +1547,18 @@ void MpiWorld::barrier(int thisRank)
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
     }
 
+    if (thisRank == localLeader && hasBeenMigrated) {
+        hasBeenMigrated = false;
+        if (thisRankMsg != nullptr) {
+            faabric::scheduler::getScheduler().removePendingMigration(
+              thisRankMsg->appid());
+        } else {
+            SPDLOG_ERROR("App has been migrated but rank ({}) message not set",
+                         thisRank);
+            throw std::runtime_error("App migrated but rank message not set");
+        }
+    }
+
     // Rank 0 broadcasts that the barrier is done (the others block here)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
@@ -1778,6 +1790,9 @@ void MpiWorld::prepareMigration(
             assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
             hostForRank.at(m.msg().mpirank()) = m.dsthost();
         }
+
+        // Set the migration flag
+        hasBeenMigrated = true;
 
         // Reset the internal mappings.
         initLocalBasePorts(hostForRank);

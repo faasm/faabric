@@ -289,5 +289,8 @@ class MpiWorld
                 MPI_Status* status,
                 faabric::MPIMessage::MPIMessageType messageType =
                   faabric::MPIMessage::NORMAL);
+
+    /* Function migration */
+    bool hasBeenMigrated = false;
 };
 }

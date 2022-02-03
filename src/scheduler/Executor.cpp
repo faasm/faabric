@@ -1,5 +1,5 @@
-#include "faabric/scheduler/MpiWorldRegistry.h"
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -546,7 +546,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // MPI migration
             if (msg.ismpi()) {
-                // TODO - delete the pending migration
                 auto& mpiWorld =
                   faabric::scheduler::getMpiWorldRegistry().getWorld(
                     msg.mpiworldid());
