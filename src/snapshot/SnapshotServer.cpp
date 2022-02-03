@@ -148,8 +148,9 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 
     // Write diffs and set merge regions if necessary
     if (r->force()) {
-        SPDLOG_DEBUG("Forcing write queued diffs to snapshot {}",
-                     r->key()->str());
+        SPDLOG_DEBUG("Forcing write queued diffs to snapshot {} ({} regions)",
+                     r->key()->str(),
+                     r->merge_regions()->size());
 
         // Write queued diffs
         snap->writeQueuedDiffs();

@@ -24,6 +24,7 @@ class DirtyTrackerSingleton
   public:
     SoftPTEDirtyTracker softpte;
     SegfaultDirtyTracker sigseg;
+    NoneDirtyTracker none;
 };
 
 DirtyTracker& getDirtyTracker()
@@ -37,6 +38,10 @@ DirtyTracker& getDirtyTracker()
 
     if (trackMode == "segfault") {
         return dt.sigseg;
+    }
+
+    if (trackMode == "none") {
+        return dt.none;
     }
 
     throw std::runtime_error("Unrecognised dirty tracking mode");
@@ -333,5 +338,42 @@ std::vector<char> SegfaultDirtyTracker::getBothDirtyPages(
   std::span<uint8_t> region)
 {
     return getThreadLocalDirtyPages(region);
+}
+
+// ------------------------------
+// None
+// ------------------------------
+
+void NoneDirtyTracker::clearAll()
+{
+    dirtyPages.clear();
+}
+
+void NoneDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region) {}
+
+void NoneDirtyTracker::startTracking(std::span<uint8_t> region)
+{
+    size_t nPages = getRequiredHostPages(region.size());
+    dirtyPages = std::vector<char>(nPages, 1);
+}
+
+void NoneDirtyTracker::stopTracking(std::span<uint8_t> region) {}
+
+void NoneDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region) {}
+
+std::vector<char> NoneDirtyTracker::getThreadLocalDirtyPages(
+  std::span<uint8_t> region)
+{
+    return {};
+}
+
+std::vector<char> NoneDirtyTracker::getDirtyPages(std::span<uint8_t> region)
+{
+    return dirtyPages;
+}
+
+std::vector<char> NoneDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
+{
+    return getDirtyPages(region);
 }
 }

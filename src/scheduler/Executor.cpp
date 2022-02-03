@@ -159,11 +159,9 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker.stopTracking(memView);
         tracker.stopThreadLocalTracking(memView);
 
-        std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-          tracker.getBothDirtyPages(memView);
-
         // Apply changes to snapshot
         snap->fillGapsWithOverwriteRegions();
+        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
         std::vector<faabric::util::SnapshotDiff> updates =
           snap->diffWithDirtyRegions(memView, dirtyRegions);
 
@@ -185,8 +183,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     // Now we have to apply the merge regions for this parallel section
     for (const auto& mr : mergeRegions) {
-        snap->addMergeRegion(
-          mr.offset, mr.length, mr.dataType, mr.operation, true);
+        snap->addMergeRegion(mr.offset, mr.length, mr.dataType, mr.operation);
     }
 
     // TODO - here the main thread will wait, so technically frees up a slot
@@ -551,9 +548,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
               tracker.getThreadLocalDirtyPages(memView);
 
             faabric::util::FullLock lock(threadExecutionMutex);
-            dirtyRegions.insert(dirtyRegions.end(),
-                                thisThreadDirtyRegions.begin(),
-                                thisThreadDirtyRegions.end());
+            faabric::util::mergeDirtyPages(dirtyRegions,
+                                           thisThreadDirtyRegions);
         }
 
         // Set the return value
@@ -580,10 +576,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Add non-thread-local dirty regions
             {
                 faabric::util::FullLock lock(threadExecutionMutex);
-                std::vector<std::pair<uint32_t, uint32_t>> r =
-                  tracker.getDirtyPages(memView);
-
-                dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
+                std::vector<char> r = tracker.getDirtyPages(memView);
+                faabric::util::mergeDirtyPages(dirtyRegions, r);
             }
 
             // Fill snapshot gaps with overwrite regions first

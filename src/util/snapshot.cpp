@@ -27,6 +27,45 @@ std::vector<uint8_t> SnapshotDiff::getDataCopy() const
     return std::vector<uint8_t>(data.begin(), data.end());
 }
 
+void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
+                      uint32_t startOffset,
+                      uint32_t endOffset,
+                      std::span<const uint8_t> a,
+                      std::span<const uint8_t> b)
+{
+    PROF_START(DiffRegions)
+
+    // Iterate through diffs and work out start and finish offsets of each dirty
+    // region
+    uint32_t diffStart = 0;
+    bool diffInProgress = false;
+    for (uint32_t i = startOffset; i < endOffset; i++) {
+        bool dirty = a.data()[i] != b.data()[i];
+        if (dirty && !diffInProgress) {
+            // Starts at this byte
+            diffInProgress = true;
+            diffStart = i;
+        } else if (!dirty && diffInProgress) {
+            // Finished on byte before
+            diffInProgress = false;
+            snapshotDiffs.emplace_back(SnapshotDataType::Raw,
+                                       SnapshotMergeOperation::Overwrite,
+                                       diffStart,
+                                       b.subspan(diffStart, i - diffStart));
+        }
+    }
+
+    // If we finish with a diff in progress, add it
+    if (diffInProgress) {
+        snapshotDiffs.emplace_back(SnapshotDataType::Raw,
+                                   SnapshotMergeOperation::Overwrite,
+                                   diffStart,
+                                   b.subspan(diffStart, endOffset - diffStart));
+    }
+
+    PROF_END(DiffRegions)
+}
+
 SnapshotData::SnapshotData(size_t sizeIn)
   : SnapshotData(sizeIn, sizeIn)
 {}
