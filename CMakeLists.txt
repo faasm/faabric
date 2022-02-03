@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21.0)
+cmake_minimum_required(VERSION 3.18.2)
 project(faabric)
 
 option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
@@ -11,6 +11,11 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_compile_options(-fcolor-diagnostics)
 endif()
+
+# Assume skylake for some easy performance wins
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+    add_compile_options(-march=skylake -mtune=skylake)
+endif ()
 
 # Top-level CMake config
 set(CMAKE_CXX_FLAGS "-Wall")
