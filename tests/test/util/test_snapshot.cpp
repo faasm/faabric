@@ -1070,9 +1070,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 {
     int snapPages = 3;
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
-
-    std::shared_ptr<SnapshotData> snap =
-      std::make_shared<SnapshotData>(snapSize);
+    auto snap = std::make_shared<SnapshotData>(snapSize);
 
     std::vector<SnapshotMergeRegion> expectedRegions;
 
@@ -1086,8 +1084,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     {
         snap->addMergeRegion(
           0, 100, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+
         expectedRegions.emplace_back(
           0, 100, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+
         expectedRegions.emplace_back(
           100, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
     }
@@ -1176,6 +1176,31 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         REQUIRE(actualRegion.length == expectedRegion.length);
         REQUIRE(actualRegion.operation == expectedRegion.operation);
     }
+}
+
+TEST_CASE("Test sorting snapshot merge regions", "[snapshot][util]")
+{
+    std::vector<SnapshotMergeRegion> regions;
+
+    regions.emplace_back(
+      10, 20, SnapshotDataType::Double, SnapshotMergeOperation::Sum);
+    regions.emplace_back(
+      50, 20, SnapshotDataType::Double, SnapshotMergeOperation::Sum);
+    regions.emplace_back(
+      5, 20, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+    regions.emplace_back(
+      30, 20, SnapshotDataType::Float, SnapshotMergeOperation::Max);
+
+    std::sort(regions.begin(), regions.end());
+
+    std::vector<SnapshotMergeRegion> expected = {
+        { 5, 20, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite },
+        { 10, 20, SnapshotDataType::Double, SnapshotMergeOperation::Sum },
+        { 30, 20, SnapshotDataType::Float, SnapshotMergeOperation::Max },
+        { 50, 20, SnapshotDataType::Double, SnapshotMergeOperation::Sum },
+    };
+
+    REQUIRE(regions == expected);
 }
 
 TEST_CASE_METHOD(SnapshotMergeTestFixture,

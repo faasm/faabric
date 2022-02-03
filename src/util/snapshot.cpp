@@ -225,17 +225,19 @@ void SnapshotData::fillGapsWithOverwriteRegions()
     }
 
     // Sort merge regions to ensure loop below works
-    std::sort(mergeRegions.begin(), mergeRegions.end());
+    // We're modifying the regions within the loop so need to make a copy
+    std::vector<SnapshotMergeRegion> regionsCopy = mergeRegions;
+    std::sort(regionsCopy.begin(), regionsCopy.end());
 
     uint32_t lastRegionEnd = 0;
-    for (auto region : mergeRegions) {
-        if (region.offset == 0) {
+    for (const auto& r : regionsCopy) {
+        if (r.offset == 0) {
             // Zeroth byte is in a merge region
-            lastRegionEnd = region.length;
+            lastRegionEnd = r.length;
             continue;
         }
 
-        uint32_t regionLen = region.offset - lastRegionEnd;
+        uint32_t regionLen = r.offset - lastRegionEnd;
 
         SPDLOG_TRACE("Filling gap with overwrite merge region {}-{}",
                      lastRegionEnd,
@@ -246,7 +248,7 @@ void SnapshotData::fillGapsWithOverwriteRegions()
                                   SnapshotDataType::Raw,
                                   SnapshotMergeOperation::Overwrite);
 
-        lastRegionEnd = region.offset + region.length;
+        lastRegionEnd = r.offset + r.length;
     }
 
     if (lastRegionEnd < size) {
