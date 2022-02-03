@@ -31,9 +31,6 @@ std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
   int sendRank);
 
-std::vector<std::shared_ptr<faabric::PendingMigrations>>
-getMpiMockedPendingMigrations();
-
 typedef faabric::util::FixedCapacityQueue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;
 

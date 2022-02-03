@@ -53,9 +53,6 @@ static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
 static std::map<int, std::vector<std::shared_ptr<faabric::MPIMessage>>>
   mpiMockedMessages;
 
-static std::vector<std::shared_ptr<faabric::PendingMigrations>>
-  mpiMockedPendingMigrations;
-
 std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages()
 {
     faabric::util::UniqueLock lock(mockMutex);
@@ -67,13 +64,6 @@ std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
 {
     faabric::util::UniqueLock lock(mockMutex);
     return mpiMockedMessages[sendRank];
-}
-
-std::vector<std::shared_ptr<faabric::PendingMigrations>>
-getMpiMockedPendingMigrations()
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    return mpiMockedPendingMigrations;
 }
 
 MpiWorld::MpiWorld()
@@ -350,7 +340,6 @@ void MpiWorld::destroy()
     // Clear structures used for mocking
     rankMessages.clear();
     mpiMockedMessages.clear();
-    mpiMockedPendingMigrations.clear();
 }
 
 void MpiWorld::initialiseFromMsg(faabric::Message& msg)
