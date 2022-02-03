@@ -63,8 +63,6 @@ class PointToPointGroup
   private:
     faabric::util::SystemConfig& conf;
 
-    int timeoutMs = DEFAULT_DISTRIBUTED_TIMEOUT_MS;
-
     std::string masterHost;
     int appId = 0;
     int groupId = 0;
