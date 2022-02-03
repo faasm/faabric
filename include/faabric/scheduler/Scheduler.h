@@ -23,14 +23,6 @@
 
 namespace faabric::scheduler {
 
-class ExecutorMigratedException : public faabric::util::FaabricException
-{
-  public:
-    explicit ExecutorMigratedException(std::string message)
-      : FaabricException(std::move(message))
-    {}
-};
-
 typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
                   std::shared_ptr<faabric::util::SchedulingDecision>>
   InFlightPair;
@@ -108,8 +100,6 @@ class Executor
     faabric::util::DirtyTracker& tracker;
 
     uint32_t threadPoolSize = 0;
-
-    void migrateFunction(const faabric::Message& msg, const std::string& host);
 
   private:
     std::atomic<bool> claimed = false;
