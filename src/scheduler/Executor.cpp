@@ -19,6 +19,9 @@
 #include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
 
+#define ONE_MB (1024L * 1024L)
+#define ONE_GB (1024L * ONE_MB)
+#define DEFAULT_MAX_SNAP_SIZE (4 * ONE_GB)
 #define POOL_SHUTDOWN -1
 
 namespace faabric::scheduler {
@@ -123,51 +126,68 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
     faabric::Message& msg = req->mutable_messages()->at(0);
-    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
     std::string funcStr = faabric::util::funcToString(msg, false);
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
-    std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
-    bool exists = false;
+    // Check if we've got a cached decision
+    std::string cacheKey =
+      std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
+
+    bool hasCachedDecision = false;
     {
         faabric::util::SharedLock lock(threadExecutionMutex);
-        exists = reg.snapshotExists(snapshotKey);
+        hasCachedDecision =
+          cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
     }
 
-    if (!exists) {
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+    bool alreadyExists = reg.snapshotExists(snapshotKey);
+
+    if (!alreadyExists) {
         faabric::util::FullLock lock(threadExecutionMutex);
         if (!reg.snapshotExists(snapshotKey)) {
             SPDLOG_DEBUG(
               "Creating main thread snapshot: {} for {}", snapshotKey, funcStr);
 
-            snap =
-              std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+            std::shared_ptr<faabric::util::SnapshotData> snap =
+              std::make_shared<faabric::util::SnapshotData>(
+                getMemoryView(), DEFAULT_MAX_SNAP_SIZE);
             reg.registerSnapshot(snapshotKey, snap);
         } else {
-            exists = true;
+            // This only hits when we realise there is a snapshot when we
+            // thought there wasn't
+            alreadyExists = true;
         }
     }
 
-    if (exists) {
+    // Avoid race conditions on snapshot being initialised using shared lock
+    // here
+    std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
+    {
+        faabric::util::SharedLock lock(threadExecutionMutex);
+        snap = reg.getSnapshot(snapshotKey);
+    }
+
+    if (alreadyExists) {
         SPDLOG_DEBUG(
           "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
 
-        // Get main snapshot
-        snap = reg.getSnapshot(snapshotKey);
         std::span<uint8_t> memView = getMemoryView();
 
         // Get dirty regions since last batch of threads
         tracker.stopTracking(memView);
         tracker.stopThreadLocalTracking(memView);
 
+        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
+
         // Apply changes to snapshot
         snap->fillGapsWithOverwriteRegions();
-        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
         std::vector<faabric::util::SnapshotDiff> updates =
           snap->diffWithDirtyRegions(memView, dirtyRegions);
 
         if (updates.empty()) {
             SPDLOG_TRACE(
-              "No updates to main thread snapshot for {} from {} dirty regions",
+              "No updates to main thread snapshot for {} over {} pages",
               faabric::util::funcToString(msg, false),
               dirtyRegions.size());
         } else {
@@ -181,25 +201,19 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         snap->clearMergeRegions();
     }
 
-    // Now we have to apply the merge regions for this parallel section
+    // Now we have to add any merge regions we've been saving up for this
+    // parallel section
     for (const auto& mr : mergeRegions) {
         snap->addMergeRegion(mr.offset, mr.length, mr.dataType, mr.operation);
-    }
-
-    // TODO - here the main thread will wait, so technically frees up a slot
-    // that could be used.
-    std::string cacheKey =
-      std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
-    bool hasCachedDecision = false;
-    {
-        faabric::util::SharedLock lock(threadExecutionMutex);
-        hasCachedDecision =
-          cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
     }
 
     if (!hasCachedDecision) {
         faabric::util::FullLock lock(threadExecutionMutex);
         if (cachedDecisionHosts.find(cacheKey) == cachedDecisionHosts.end()) {
+            SPDLOG_TRACE("Creating new decision for {} threads of {}",
+                         req->messages_size(),
+                         funcStr);
+
             // Set up a new group
             int groupId = faabric::util::generateGid();
             for (auto& m : *req->mutable_messages()) {
@@ -212,7 +226,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
             // Cache the decision for next time
             SPDLOG_DEBUG(
-              "No cached decision for {} x {}/{}, caching group {}, hosts: {}",
+              "Caching decision for {} x {}/{}, caching group {}, hosts: {}",
               req->messages().size(),
               msg.user(),
               msg.function(),
@@ -222,6 +236,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             cachedGroupIds[cacheKey] = groupId;
             cachedDecisionHosts[cacheKey] = decision.hosts;
         } else {
+            // This only happens when we thought we didn't have a cached
+            // decision, then when we acquired the lock, realised we did
             hasCachedDecision = true;
         }
     }
@@ -279,14 +295,14 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
       "Executor {} got results for {} threads", id, req->messages_size());
 
     // Write queued changes to snapshot
-    snap->writeQueuedDiffs();
+    int nWritten = snap->writeQueuedDiffs();
 
-    // Set memory size to fit new snapshot
-    setMemorySize(snap->getSize());
-
-    // Remap the memory
+    // Remap memory to snapshot if it's been updated
     std::span<uint8_t> memView = getMemoryView();
-    snap->mapToMemory(memView);
+    if (nWritten > 0) {
+        setMemorySize(snap->getSize());
+        snap->mapToMemory(memView);
+    }
 
     // Start tracking again
     memView = getMemoryView();
