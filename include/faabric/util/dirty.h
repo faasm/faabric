@@ -115,7 +115,9 @@ class SegfaultDirtyTracker final : public DirtyTracker
 };
 
 /*
- * No dirty tracking implementation.
+ * This tracker just marks all pages as dirty. This may be optimal for workloads
+ * with a small memory where most of that memory will be dirty anyway, so
+ * diffing every page outweighs the cost of the dirty tracking.
  */
 class NoneDirtyTracker final : public DirtyTracker
 {
