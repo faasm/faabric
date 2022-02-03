@@ -323,6 +323,10 @@ class Scheduler
 
     void broadcastPendingMigrations(
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
+    void doStartFunctionMigrationThread(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision& decision);
 };
 
 }

@@ -463,58 +463,8 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     }
 
     // Record in-flight request if function desires to be migrated
-    // NOTE: ideally, instead of allowing the applications to specify a check
-    // period, we would have a default one (overwritable through an env.
-    // variable), and apps would just opt in/out of being migrated. We set
-    // the actual check period instead to ease with experiments.
     if (!isMigration && firstMsg.migrationcheckperiod() > 0) {
-        bool startMigrationThread = inFlightRequests.size() == 0;
-
-        if (inFlightRequests.find(decision.appId) != inFlightRequests.end()) {
-            // MPI applications are made up of two different requests: the
-            // original one (with one message) and the second one (with
-            // world size - 1 messages) created during world creation time.
-            // Thus, to correctly track migration opportunities we must merge
-            // both. We append the batch request to the original one (instead
-            // of the other way around) not to affect the rest of this methods
-            // functionality.
-            if (firstMsg.ismpi()) {
-                startMigrationThread = false;
-                auto originalReq = inFlightRequests[decision.appId].first;
-                auto originalDecision = inFlightRequests[decision.appId].second;
-                assert(req->messages_size() == firstMsg.mpiworldsize() - 1);
-                for (int i = 0; i < firstMsg.mpiworldsize() - 1; i++) {
-                    // Append message to original request
-                    auto* newMsgPtr = originalReq->add_messages();
-                    *newMsgPtr = req->messages().at(i);
-
-                    // Append message to original decision
-                    originalDecision->addMessage(decision.hosts.at(i),
-                                                 req->messages().at(i));
-                }
-            } else {
-                SPDLOG_ERROR("There is already an in-flight request for app {}",
-                             firstMsg.appid());
-                throw std::runtime_error("App already in-flight");
-            }
-        } else {
-            auto decisionPtr =
-              std::make_shared<faabric::util::SchedulingDecision>(decision);
-            inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
-        }
-
-        // Decide wether we have to start the migration thread or not
-        if (startMigrationThread) {
-            functionMigrationThread.start(firstMsg.migrationcheckperiod());
-        } else if (firstMsg.migrationcheckperiod() !=
-                   functionMigrationThread.wakeUpPeriodSeconds) {
-            SPDLOG_WARN("Ignoring migration check period for app {} as the"
-                        "migration thread is already running with a different"
-                        " check period (provided: {}, current: {})",
-                        firstMsg.appid(),
-                        firstMsg.migrationcheckperiod(),
-                        functionMigrationThread.wakeUpPeriodSeconds);
-        }
+        doStartFunctionMigrationThread(req, decision);
     }
 
     // NOTE: we want to schedule things on this host _last_, otherwise functions
@@ -1395,5 +1345,64 @@ Scheduler::doCheckForMigrationOpportunities(
     }
 
     return pendingMigrationsVec;
+}
+
+// Start the function migration thread if necessary
+// NOTE: ideally, instead of allowing the applications to specify a check
+// period, we would have a default one (overwritable through an env.
+// variable), and apps would just opt in/out of being migrated. We set
+// the actual check period instead to ease with experiments.
+void Scheduler::doStartFunctionMigrationThread(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::util::SchedulingDecision& decision)
+{
+    bool startMigrationThread = inFlightRequests.size() == 0;
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+
+    if (inFlightRequests.find(decision.appId) != inFlightRequests.end()) {
+        // MPI applications are made up of two different requests: the
+        // original one (with one message) and the second one (with
+        // world size - 1 messages) created during world creation time.
+        // Thus, to correctly track migration opportunities we must merge
+        // both. We append the batch request to the original one (instead
+        // of the other way around) not to affect the rest of this methods
+        // functionality.
+        if (firstMsg.ismpi()) {
+            startMigrationThread = false;
+            auto originalReq = inFlightRequests[decision.appId].first;
+            auto originalDecision = inFlightRequests[decision.appId].second;
+            assert(req->messages_size() == firstMsg.mpiworldsize() - 1);
+            for (int i = 0; i < firstMsg.mpiworldsize() - 1; i++) {
+                // Append message to original request
+                auto* newMsgPtr = originalReq->add_messages();
+                *newMsgPtr = req->messages().at(i);
+
+                // Append message to original decision
+                originalDecision->addMessage(decision.hosts.at(i),
+                                             req->messages().at(i));
+            }
+        } else {
+            SPDLOG_ERROR("There is already an in-flight request for app {}",
+                         firstMsg.appid());
+            throw std::runtime_error("App already in-flight");
+        }
+    } else {
+        auto decisionPtr =
+          std::make_shared<faabric::util::SchedulingDecision>(decision);
+        inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
+    }
+
+    // Decide wether we have to start the migration thread or not
+    if (startMigrationThread) {
+        functionMigrationThread.start(firstMsg.migrationcheckperiod());
+    } else if (firstMsg.migrationcheckperiod() !=
+               functionMigrationThread.wakeUpPeriodSeconds) {
+        SPDLOG_WARN("Ignoring migration check period for app {} as the"
+                    "migration thread is already running with a different"
+                    " check period (provided: {}, current: {})",
+                    firstMsg.appid(),
+                    firstMsg.migrationcheckperiod(),
+                    functionMigrationThread.wakeUpPeriodSeconds);
+    }
 }
 }
