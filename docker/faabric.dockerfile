@@ -23,6 +23,10 @@ RUN inv dev.cmake --shared --build=Release
 RUN inv dev.cc faabric --shared
 RUN inv dev.install faabric --shared
 
+# GDB config, allow loading repo-specific config
+RUN touch /root/.gdbinit
+RUN echo "set auto-load safe-path /" > /root/.gdbinit
+
 # CLI setup
 ENV TERM xterm-256color
 SHELL ["/bin/bash", "-c"]
