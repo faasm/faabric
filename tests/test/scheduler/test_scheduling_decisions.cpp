@@ -97,9 +97,13 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
         // Set resources for all hosts
         setHostResources(config.hosts, config.slots);
 
+        // Set topology hint in request
+        req->mutable_messages()->at(0).set_topologyhint(
+          faabric::util::topologyHintToStr.at(config.topologyHint));
+
         // The first time we run the batch request, we will follow the
         // unregistered hosts path
-        actualDecision = sch.callFunctions(req, config.topologyHint);
+        actualDecision = sch.callFunctions(req);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
         checkRecordedBatchMessages(actualDecision, config);
 
@@ -114,9 +118,12 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
           faabric::util::batchExecFactory("foo", "baz", req->messages_size());
         setHostResources(config.hosts, config.slots);
 
+        reqCopy->mutable_messages()->at(0).set_topologyhint(
+          faabric::util::topologyHintToStr.at(config.topologyHint));
+
         // The second time we run the batch request, we will follow
         // the registered hosts path
-        actualDecision = sch.callFunctions(reqCopy, config.topologyHint);
+        actualDecision = sch.callFunctions(reqCopy);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
         checkRecordedBatchMessages(actualDecision, config);
     }

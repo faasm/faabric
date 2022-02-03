@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <faabric/proto/faabric.pb.h>
@@ -59,6 +60,24 @@ enum SchedulingTopologyHint
     NEVER_ALONE,
     UNDERFULL,
 };
+
+// Map to convert input strings to scheduling topology hints and the other way
+// around
+const std::unordered_map<std::string, SchedulingTopologyHint>
+  strToTopologyHint = {
+      { "NORMAL", SchedulingTopologyHint::NORMAL },
+      { "FORCE_LOCAL", SchedulingTopologyHint::FORCE_LOCAL },
+      { "NEVER_ALONE", SchedulingTopologyHint::NEVER_ALONE },
+      { "UNDERFULL", SchedulingTopologyHint::UNDERFULL },
+  };
+
+const std::unordered_map<SchedulingTopologyHint, std::string>
+  topologyHintToStr = {
+      { SchedulingTopologyHint::NORMAL, "NORMAL" },
+      { SchedulingTopologyHint::FORCE_LOCAL, "FORCE_LOCAL" },
+      { SchedulingTopologyHint::NEVER_ALONE, "NEVER_ALONE" },
+      { SchedulingTopologyHint::UNDERFULL, "UNDERFULL" },
+  };
 
 // Migration strategies help the scheduler decide wether the scheduling decision
 // for a batch request could be changed with the new set of available resources.

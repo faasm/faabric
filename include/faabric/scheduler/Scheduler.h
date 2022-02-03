@@ -136,9 +136,7 @@ class Scheduler
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
     faabric::util::SchedulingDecision callFunctions(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingTopologyHint =
-        faabric::util::SchedulingTopologyHint::NORMAL);
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,

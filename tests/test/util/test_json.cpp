@@ -49,6 +49,8 @@ TEST_CASE("Test message to JSON round trip", "[util]")
 
     msg.set_migrationcheckperiod(33);
 
+    msg.set_topologyhint("TEST_TOPOLOGY_HINT");
+
     SECTION("Dodgy characters") { msg.set_inputdata("[0], %$ 2233 9"); }
 
     SECTION("Bytes")

@@ -168,6 +168,9 @@ message Message {
 
     // Function migration
     int32 migrationCheckPeriod = 44;
+
+    // Scheduling
+    string topologyHint = 45;
 }
 
 // ---------------------------------------------

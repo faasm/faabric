@@ -79,8 +79,9 @@ void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,
 
     // This host has now been told to execute these functions no matter what
     // TODO - avoid this copy
-    scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(msg),
-                            faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
+    msg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
+    scheduler.callFunctions(
+      std::make_shared<faabric::BatchExecuteRequest>(msg));
 }
 
 void FunctionCallServer::recvUnregister(const uint8_t* buffer,

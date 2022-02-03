@@ -238,15 +238,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     std::vector<std::string> executedAt;
     if (size > 1) {
-        // 10/01/22 - We add this check to force different scheduling behaviour
-        // if running migration experiments. The check can be deleted
-        // afterwards.
-        bool mustUnderfull =
-          thisRankMsg != nullptr && thisRankMsg->migrationcheckperiod() > 0;
-        faabric::util::SchedulingDecision decision = sch.callFunctions(
-          req,
-          mustUnderfull ? faabric::util::SchedulingTopologyHint::UNDERFULL
-                        : faabric::util::SchedulingTopologyHint::NORMAL);
+        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
         executedAt = decision.hosts;
     }
     assert(executedAt.size() == size - 1);

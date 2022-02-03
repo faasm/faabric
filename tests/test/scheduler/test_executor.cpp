@@ -274,14 +274,12 @@ class TestExecutorFixture
 
         conf.overrideCpuCount = 10;
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
-        faabric::util::SchedulingTopologyHint topologyHint =
-          faabric::util::SchedulingTopologyHint::NORMAL;
 
         if (forceLocal) {
-            topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+            req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
         }
 
-        return sch.callFunctions(req, topologyHint).hosts;
+        return sch.callFunctions(req).hosts;
     }
 };
 
@@ -867,7 +865,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Call functions and force to execute locally
-    sch.callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
+    req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
+    sch.callFunctions(req);
 
     // Await execution
     for (auto& m : *req->mutable_messages()) {

@@ -239,8 +239,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 }
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::util::SchedulingTopologyHint topologyHint)
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     // Note, we assume all the messages are for the same function and have the
     // same master host
@@ -251,6 +250,12 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         SPDLOG_ERROR("Request {} has no master host", funcStrWithId);
         throw std::runtime_error("Message with no master host");
     }
+
+    // Get topology hint from message
+    faabric::util::SchedulingTopologyHint topologyHint =
+      firstMsg.topologyhint().empty()
+        ? faabric::util::SchedulingTopologyHint::NORMAL
+        : faabric::util::strToTopologyHint.at(firstMsg.topologyhint());
 
     // If we're not the master host, we need to forward the request back to the
     // master host. This will only happen if a nested batch execution happens.
@@ -744,12 +749,12 @@ void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
     // Specify that this is a normal function, not a thread
     req->set_type(req->FUNCTIONS);
 
-    // Make the call
     if (forceLocal) {
-        callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
-    } else {
-        callFunctions(req);
+        req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
     }
+
+    // Make the call
+    callFunctions(req);
 }
 
 void Scheduler::clearRecordedMessages()
