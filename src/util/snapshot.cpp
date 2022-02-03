@@ -224,11 +224,10 @@ void SnapshotData::fillGapsWithOverwriteRegions()
         return;
     }
 
-    uint32_t lastRegionEnd = 0;
-
     // Note - we need to sort the merge regions here
     std::sort(mergeRegions.begin(), mergeRegions.end());
 
+    uint32_t lastRegionEnd = 0;
     for (auto region : mergeRegions) {
         if (region.offset == 0) {
             // Zeroth byte is in a merge region
