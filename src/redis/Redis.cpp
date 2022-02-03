@@ -82,7 +82,7 @@ std::string RedisInstance::loadScript(redisContext* context,
 Redis::Redis(const RedisInstance& instanceIn)
   : instance(instanceIn)
 {
-    // Note, connect with IP, not with hostname
+    // Connect with IP, not with hostname
     context = redisConnect(instance.ip.c_str(), instance.port);
 
     if (context == nullptr || context->err) {
@@ -608,7 +608,7 @@ UniqueRedisReply Redis::dequeueBase(const std::string& queueName, int timeoutMs)
 
     UniqueRedisReply reply{ nullptr, &freeReplyObject };
     if (isBlocking) {
-        // Note, timeouts need to be converted into seconds
+        // Timeouts need to be converted into seconds
         // Floor to one second
         int timeoutSecs = std::max(timeoutMs / 1000, 1);
 

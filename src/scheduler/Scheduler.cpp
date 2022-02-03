@@ -236,7 +236,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingTopologyHint topologyHint)
 {
-    // Note, we assume all the messages are for the same function and have the
+    // We assume all the messages are for the same function and have the
     // same master host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string masterHost = firstMsg.masterhost();

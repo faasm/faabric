@@ -721,7 +721,7 @@ void MpiWorld::doRecv(std::shared_ptr<faabric::MPIMessage>& m,
         status->MPI_SOURCE = m->sender();
         status->MPI_ERROR = MPI_SUCCESS;
 
-        // Note, take the message size here as the receive count may be larger
+        // Take the message size here as the receive count may be larger
         status->bytesSize = m->count() * dataType->size;
 
         // TODO - thread through tag
