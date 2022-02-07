@@ -144,9 +144,9 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
-    bool alreadyExists = reg.snapshotExists(snapshotKey);
+    bool snapshotExists = reg.snapshotExists(snapshotKey);
 
-    if (!alreadyExists) {
+    if (!snapshotExists) {
         faabric::util::FullLock lock(threadExecutionMutex);
         if (!reg.snapshotExists(snapshotKey)) {
             SPDLOG_DEBUG(
@@ -159,7 +159,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         } else {
             // This only hits when we realise there is a snapshot when we
             // thought there wasn't
-            alreadyExists = true;
+            snapshotExists = true;
         }
     }
 
@@ -171,7 +171,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         snap = reg.getSnapshot(snapshotKey);
     }
 
-    if (alreadyExists) {
+    if (snapshotExists) {
         SPDLOG_DEBUG(
           "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
 
@@ -205,7 +205,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Now we have to add any merge regions we've been saving up for this
-    // parallel section
+    // batch of thread
     for (const auto& mr : mergeRegions) {
         snap->addMergeRegion(mr.offset, mr.length, mr.dataType, mr.operation);
     }

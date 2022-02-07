@@ -17,8 +17,8 @@
 namespace faabric::util {
 
 /*
- * Interface to all dirty page tracking. Implementation-specific boilerplate
- * held in subclasses.
+ * Interface to all dirty page tracking. Available types and implementation
+ * details in classes below.
  */
 class DirtyTracker
 {
