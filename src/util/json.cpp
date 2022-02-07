@@ -228,6 +228,17 @@ std::string messageToJson(const faabric::Message& msg)
         }
     }
 
+    if (msg.migrationcheckperiod() > 0) {
+        d.AddMember("migration_check_period", msg.migrationcheckperiod(), a);
+    }
+
+    if (!msg.topologyhint().empty()) {
+        d.AddMember(
+          "topology_hint",
+          Value(msg.topologyhint().c_str(), msg.topologyhint().size()).Move(),
+          a);
+    }
+
     StringBuffer sb;
     Writer<StringBuffer> writer(sb);
     d.Accept(writer);
@@ -438,6 +449,11 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     for (auto& it : intMap) {
         msgIntMap[it.first] = it.second;
     }
+
+    msg.set_migrationcheckperiod(
+      getIntFromJson(d, "migration_check_period", 0));
+
+    msg.set_topologyhint(getStringFromJson(d, "topology_hint", "NORMAL"));
 
     PROF_END(jsonDecode)
 

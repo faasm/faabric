@@ -28,6 +28,10 @@ static std::unordered_map<std::string,
                           faabric::util::Queue<faabric::HostResources>>
   queuedResourceResponses;
 
+static std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
+  pendingMigrationsRequests;
+
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
@@ -57,6 +61,13 @@ std::vector<std::pair<std::string, faabric::EmptyRequest>> getResourceRequests()
     return resourceRequests;
 }
 
+std::vector<std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
+getPendingMigrationsRequests()
+{
+    faabric::util::UniqueLock lock(mockMutex);
+    return pendingMigrationsRequests;
+}
+
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests()
 {
@@ -76,6 +87,7 @@ void clearMockRequests()
     functionCalls.clear();
     batchMessages.clear();
     resourceRequests.clear();
+    pendingMigrationsRequests.clear();
     unregisterRequests.clear();
 
     for (auto& p : queuedResourceResponses) {
@@ -126,6 +138,25 @@ faabric::HostResources FunctionCallClient::getResources()
     }
 
     return response;
+}
+
+// This function call is used by the master host of an application to let know
+// other hosts running functions of the same application that a migration
+// opportunity has been found.
+void FunctionCallClient::sendPendingMigrations(
+  std::shared_ptr<faabric::PendingMigrations> req)
+{
+    faabric::PendingMigrations request;
+    faabric::EmptyResponse response;
+
+    if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
+        pendingMigrationsRequests.emplace_back(host, req);
+    } else {
+        syncSend(faabric::scheduler::FunctionCalls::PendingMigrations,
+                 req.get(),
+                 &response);
+    }
 }
 
 void FunctionCallClient::executeFunctions(
