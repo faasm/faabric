@@ -373,7 +373,7 @@ TEST_CASE("Test set operations", "[redis]")
     std::string setA = "set_a";
     std::string setB = "set_b";
 
-    // NOTE - we need to check Redis can store odd strings like IPs
+    // We need to check Redis can store odd strings like IPs
     std::string valueA = "12.45.67.89";
     std::string valueB = "val_b";
     std::string valueC = "192.168.3.4";

@@ -14,8 +14,8 @@
 using namespace state;
 
 /**
- * NOTE - there's some copy-pasting in here because we want to run
- * the same tests on in-memory and Redis versions.
+ * There's some copy-pasting in here because we want to run the same tests on
+ * in-memory and Redis versions.
  */
 
 namespace tests {

@@ -33,7 +33,7 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
                  "Test valid calls to endpoint",
                  "[endpoint]")
 {
-    // Note - must be async to avoid needing a result
+    // Must be async to avoid needing a result
     faabric::Message call = faabric::util::messageFactory("foo", "bar");
     call.set_isasync(true);
     std::string user = "foo";

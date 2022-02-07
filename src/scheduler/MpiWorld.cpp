@@ -211,9 +211,8 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     auto& sch = faabric::scheduler::getScheduler();
 
-    // Dispatch all the chained calls
-    // NOTE - with the master being rank zero, we want to spawn
-    // (size - 1) new functions starting with rank 1
+    // Dispatch all the chained calls. With the master being rank zero, we want
+    // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, size - 1);
     for (int i = 0; i < req->messages_size(); i++) {
@@ -222,20 +221,23 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
-        // Log chained functions to generate execution graphs
-        if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
-            sch.logChainedFunction(call.id(), msg.id());
-            msg.set_recordexecgraph(true);
+        if (thisRankMsg != nullptr) {
+            // Set message fields to allow for function migration
+            msg.set_appid(thisRankMsg->appid());
+            msg.set_cmdline(thisRankMsg->cmdline());
+            msg.set_inputdata(thisRankMsg->inputdata());
+            msg.set_migrationcheckperiod(thisRankMsg->migrationcheckperiod());
+            // Log chained functions to generate execution graphs
+            if (thisRankMsg->recordexecgraph()) {
+                sch.logChainedFunction(call.id(), msg.id());
+                msg.set_recordexecgraph(true);
+            }
         }
     }
 
     std::vector<std::string> executedAt;
     if (size > 1) {
-        // Send the init messages (note that message i corresponds to rank i+1)
-        // By default, we use the NEVER_ALONE policy for MPI executions to
-        // minimise cross-host messaging
-        faabric::util::SchedulingDecision decision = sch.callFunctions(
-          req, faabric::util::SchedulingTopologyHint::NEVER_ALONE);
+        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
         executedAt = decision.hosts;
     }
     assert(executedAt.size() == size - 1);
@@ -388,6 +390,9 @@ void MpiWorld::initLocalRemoteLeaders()
 {
     // First, group the ranks per host they belong to for convinience
     assert(hostForRank.size() == size);
+    // Clear the existing map in case we are calling this method during a
+    // migration
+    ranksForHost.clear();
 
     for (int rank = 0; rank < hostForRank.size(); rank++) {
         std::string host = hostForRank.at(rank);
@@ -721,7 +726,7 @@ void MpiWorld::doRecv(std::shared_ptr<faabric::MPIMessage>& m,
         status->MPI_SOURCE = m->sender();
         status->MPI_ERROR = MPI_SUCCESS;
 
-        // Note, take the message size here as the receive count may be larger
+        // Take the message size here as the receive count may be larger
         status->bytesSize = m->count() * dataType->size;
 
         // TODO - thread through tag
@@ -1533,6 +1538,18 @@ void MpiWorld::barrier(int thisRank)
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
     }
 
+    if (thisRank == localLeader && hasBeenMigrated) {
+        hasBeenMigrated = false;
+        if (thisRankMsg != nullptr) {
+            faabric::scheduler::getScheduler().removePendingMigration(
+              thisRankMsg->appid());
+        } else {
+            SPDLOG_ERROR("App has been migrated but rank ({}) message not set",
+                         thisRank);
+            throw std::runtime_error("App migrated but rank message not set");
+        }
+    }
+
     // Rank 0 broadcasts that the barrier is done (the others block here)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
@@ -1554,12 +1571,10 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 // Note - the queues themselves perform concurrency control
 void MpiWorld::initLocalQueues()
 {
-    // Assert we only allocate queues once
-    assert(localQueues.size() == 0);
     localQueues.resize(size * size);
-    for (int recvRank = 0; recvRank < size; recvRank++) {
-        if (getHostForRank(recvRank) == thisHost) {
-            for (int sendRank = 0; sendRank < size; sendRank++) {
+    for (const int sendRank : ranksForHost[thisHost]) {
+        for (const int recvRank : ranksForHost[thisHost]) {
+            if (localQueues[getIndexForRanks(sendRank, recvRank)] == nullptr) {
                 localQueues[getIndexForRanks(sendRank, recvRank)] =
                   std::make_shared<InMemoryMpiQueue>();
             }
@@ -1730,6 +1745,52 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
         SPDLOG_ERROR(
           "Recv rank outside range: {} not in [0, {})", recvRank, size);
         throw std::runtime_error("Recv rank outside range");
+    }
+}
+
+void MpiWorld::prepareMigration(
+  int thisRank,
+  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+{
+    // Check that there are no pending asynchronous messages to send and receive
+    for (auto umb : unackedMessageBuffers) {
+        if (umb != nullptr && umb->size() > 0) {
+            SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
+                         " {} has {} pending async messages to receive",
+                         thisRankMsg->appid(),
+                         thisRank,
+                         umb->size());
+            throw std::runtime_error(
+              "Migrating with pending async messages is not supported");
+        }
+    }
+
+    if (!iSendRequests.empty()) {
+        SPDLOG_ERROR("Trying to migrate MPI application (id: {}) but rank"
+                     " {} has {} pending async send messages to acknowledge",
+                     thisRankMsg->appid(),
+                     thisRank,
+                     iSendRequests.size());
+        throw std::runtime_error(
+          "Migrating with pending async messages is not supported");
+    }
+
+    if (thisRank == localLeader) {
+        for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
+            auto m = pendingMigrations->mutable_migrations()->at(i);
+            assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
+            hostForRank.at(m.msg().mpirank()) = m.dsthost();
+        }
+
+        // Set the migration flag
+        hasBeenMigrated = true;
+
+        // Reset the internal mappings.
+        initLocalBasePorts(hostForRank);
+        initLocalRemoteLeaders();
+
+        // Add the necessary new local messaging queues
+        initLocalQueues();
     }
 }
 }

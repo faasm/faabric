@@ -16,12 +16,12 @@ static std::unordered_map<int, std::shared_ptr<PointToPointGroup>> groups;
 
 static std::shared_mutex groupsMutex;
 
-// NOTE: Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be
-// closed before the global context. However, in this case it's worth it
-// to cache the sockets across messages, as otherwise we'd be creating and
-// destroying a lot of them under high throughput. To ensure things are cleared
-// up, see the thread-local tidy-up message on this class and its usage in the
-// rest of the codebase.
+// Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be closed
+// before the global context. However, in this case it's worth it to cache the
+// sockets across messages, as otherwise we'd be creating and destroying a lot
+// of them under high throughput. To ensure things are cleared up, see the
+// thread-local tidy-up message on this class and its usage in the rest of the
+// codebase.
 thread_local std::
   unordered_map<std::string, std::unique_ptr<AsyncInternalRecvMessageEndpoint>>
     recvEndpoints;
@@ -36,7 +36,7 @@ thread_local std::unordered_map<std::string,
 
 static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
 {
-    // Note - this map is thread-local so no locking required
+    // This map is thread-local so no locking required
     if (clients.find(host) == clients.end()) {
         clients.insert(
           std::pair<std::string, std::shared_ptr<PointToPointClient>>(
@@ -515,7 +515,7 @@ void PointToPointBroker::sendMessage(int groupId,
     if (host == conf.endpointHost) {
         std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
-        // Note - this map is thread-local so no locking required
+        // This map is thread-local so no locking required
         if (sendEndpoints.find(label) == sendEndpoints.end()) {
             sendEndpoints[label] =
               std::make_unique<AsyncInternalSendMessageEndpoint>(label);

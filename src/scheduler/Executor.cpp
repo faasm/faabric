@@ -1,4 +1,5 @@
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -18,6 +19,12 @@
 #include <faabric/util/snapshot.h>
 #include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
+
+// Default snapshot size here is set to support 32-bit WebAssembly, but could be
+// made configurable on the function call or language.
+#define ONE_MB (1024L * 1024L)
+#define ONE_GB (1024L * ONE_MB)
+#define DEFAULT_MAX_SNAP_SIZE (4 * ONE_GB)
 
 #define POOL_SHUTDOWN -1
 
@@ -123,44 +130,58 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
     faabric::Message& msg = req->mutable_messages()->at(0);
-    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
     std::string funcStr = faabric::util::funcToString(msg, false);
 
-    std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
-    bool exists = false;
+    // Check if we've got a cached decision
+    std::string cacheKey =
+      std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
+
+    bool hasCachedDecision = false;
     {
         faabric::util::SharedLock lock(threadExecutionMutex);
-        exists = reg.snapshotExists(snapshotKey);
+        hasCachedDecision =
+          cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
     }
 
-    if (!exists) {
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+    bool snapshotExists = reg.snapshotExists(snapshotKey);
+
+    if (!snapshotExists) {
         faabric::util::FullLock lock(threadExecutionMutex);
         if (!reg.snapshotExists(snapshotKey)) {
             SPDLOG_DEBUG(
               "Creating main thread snapshot: {} for {}", snapshotKey, funcStr);
 
-            snap =
-              std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+            std::shared_ptr<faabric::util::SnapshotData> snap =
+              std::make_shared<faabric::util::SnapshotData>(
+                getMemoryView(), DEFAULT_MAX_SNAP_SIZE);
             reg.registerSnapshot(snapshotKey, snap);
         } else {
-            exists = true;
+            // This only hits when we realise there is a snapshot when we
+            // thought there wasn't
+            snapshotExists = true;
         }
     }
 
-    if (exists) {
+    // Avoid race conditions on snapshot being initialised using shared lock
+    // here
+    std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
+    {
+        faabric::util::SharedLock lock(threadExecutionMutex);
+        snap = reg.getSnapshot(snapshotKey);
+    }
+
+    if (snapshotExists) {
         SPDLOG_DEBUG(
           "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
 
-        // Get main snapshot
-        snap = reg.getSnapshot(snapshotKey);
         std::span<uint8_t> memView = getMemoryView();
 
         // Get dirty regions since last batch of threads
         tracker.stopTracking(memView);
         tracker.stopThreadLocalTracking(memView);
 
-        std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions =
-          tracker.getBothDirtyOffsets(memView);
+        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
 
         // Apply changes to snapshot
         snap->fillGapsWithOverwriteRegions();
@@ -169,7 +190,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
         if (updates.empty()) {
             SPDLOG_TRACE(
-              "No updates to main thread snapshot for {} from {} dirty regions",
+              "No updates to main thread snapshot for {} over {} pages",
               faabric::util::funcToString(msg, false),
               dirtyRegions.size());
         } else {
@@ -183,26 +204,19 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         snap->clearMergeRegions();
     }
 
-    // Now we have to apply the merge regions for this parallel section
+    // Now we have to add any merge regions we've been saving up for this
+    // batch of thread
     for (const auto& mr : mergeRegions) {
-        snap->addMergeRegion(
-          mr.offset, mr.length, mr.dataType, mr.operation, true);
-    }
-
-    // TODO - here the main thread will wait, so technically frees up a slot
-    // that could be used.
-    std::string cacheKey =
-      std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
-    bool hasCachedDecision = false;
-    {
-        faabric::util::SharedLock lock(threadExecutionMutex);
-        hasCachedDecision =
-          cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
+        snap->addMergeRegion(mr.offset, mr.length, mr.dataType, mr.operation);
     }
 
     if (!hasCachedDecision) {
         faabric::util::FullLock lock(threadExecutionMutex);
         if (cachedDecisionHosts.find(cacheKey) == cachedDecisionHosts.end()) {
+            SPDLOG_TRACE("Creating new decision for {} threads of {}",
+                         req->messages_size(),
+                         funcStr);
+
             // Set up a new group
             int groupId = faabric::util::generateGid();
             for (auto& m : *req->mutable_messages()) {
@@ -215,7 +229,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
             // Cache the decision for next time
             SPDLOG_DEBUG(
-              "No cached decision for {} x {}/{}, caching group {}, hosts: {}",
+              "Caching decision for {} x {}/{}, caching group {}, hosts: {}",
               req->messages().size(),
               msg.user(),
               msg.function(),
@@ -225,6 +239,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             cachedGroupIds[cacheKey] = groupId;
             cachedDecisionHosts[cacheKey] = decision.hosts;
         } else {
+            // This only happens when we thought we didn't have a cached
+            // decision, then when we acquired the lock, realised we did
             hasCachedDecision = true;
         }
     }
@@ -282,14 +298,14 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
       "Executor {} got results for {} threads", id, req->messages_size());
 
     // Write queued changes to snapshot
-    snap->writeQueuedDiffs();
+    int nWritten = snap->writeQueuedDiffs();
 
-    // Set memory size to fit new snapshot
-    setMemorySize(snap->getSize());
-
-    // Remap the memory
+    // Remap memory to snapshot if it's been updated
     std::span<uint8_t> memView = getMemoryView();
-    snap->mapToMemory(memView);
+    if (nWritten > 0) {
+        setMemorySize(snap->getSize());
+        snap->mapToMemory(memView);
+    }
 
     // Start tracking again
     memView = getMemoryView();
@@ -528,9 +544,28 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Execute the task
         int32_t returnValue;
+        bool migrated = false;
         try {
             returnValue =
               executeTask(threadPoolIdx, task.messageIndex, task.req);
+        } catch (const faabric::util::FunctionMigratedException& ex) {
+            SPDLOG_DEBUG(
+              "Task {} migrated, shutting down executor {}", msg.id(), id);
+
+            // Note that when a task has been migrated, we need to perform all
+            // the normal executor shutdown, but we must NOT set the result for
+            // the call.
+            migrated = true;
+            selfShutdown = true;
+            returnValue = -99;
+
+            // MPI migration
+            if (msg.ismpi()) {
+                auto& mpiWorld =
+                  faabric::scheduler::getMpiWorldRegistry().getWorld(
+                    msg.mpiworldid());
+                mpiWorld.destroy();
+            }
         } catch (const std::exception& ex) {
             returnValue = 1;
 
@@ -548,12 +583,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
             // Add this thread's changes to executor-wide list of dirty regions
             auto thisThreadDirtyRegions =
-              tracker.getThreadLocalDirtyOffsets(memView);
+              tracker.getThreadLocalDirtyPages(memView);
 
             faabric::util::FullLock lock(threadExecutionMutex);
-            dirtyRegions.insert(dirtyRegions.end(),
-                                thisThreadDirtyRegions.begin(),
-                                thisThreadDirtyRegions.end());
+            faabric::util::mergeDirtyPages(dirtyRegions,
+                                           thisThreadDirtyRegions);
         }
 
         // Set the return value
@@ -580,10 +614,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Add non-thread-local dirty regions
             {
                 faabric::util::FullLock lock(threadExecutionMutex);
-                std::vector<std::pair<uint32_t, uint32_t>> r =
-                  tracker.getDirtyOffsets(memView);
-
-                dirtyRegions.insert(dirtyRegions.end(), r.begin(), r.end());
+                std::vector<char> r = tracker.getDirtyPages(memView);
+                faabric::util::mergeDirtyPages(dirtyRegions, r);
             }
 
             // Fill snapshot gaps with overwrite regions first
@@ -667,6 +699,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // executor.
         sch.vacateSlot();
 
+        // If the function has been migrated, we drop out here and shut down the
+        // executor
+        if (migrated) {
+            break;
+        }
+
         // Finally set the result of the task, this will allow anything
         // waiting on its result to continue execution, therefore must be
         // done once the executor has been reset, otherwise the executor may
@@ -684,8 +722,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
         SPDLOG_DEBUG(
           "Shutting down thread pool thread {}:{}", id, threadPoolIdx);
 
-        // Note - we have to keep a record of dead threads so we can join
-        // them all when the executor shuts down
+        // We have to keep a record of dead threads so we can join them all when
+        // the executor shuts down
         bool isFinished = true;
         {
             faabric::util::UniqueLock threadsLock(threadsMutex);

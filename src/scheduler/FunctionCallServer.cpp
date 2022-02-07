@@ -49,6 +49,9 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::GetResources: {
             return recvGetResources(buffer, bufferSize);
         }
+        case faabric::scheduler::FunctionCalls::PendingMigrations: {
+            return recvPendingMigrations(buffer, bufferSize);
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized sync call header: {}", header));
@@ -76,8 +79,9 @@ void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,
 
     // This host has now been told to execute these functions no matter what
     // TODO - avoid this copy
-    scheduler.callFunctions(std::make_shared<faabric::BatchExecuteRequest>(msg),
-                            faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
+    msg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
+    scheduler.callFunctions(
+      std::make_shared<faabric::BatchExecuteRequest>(msg));
 }
 
 void FunctionCallServer::recvUnregister(const uint8_t* buffer,
@@ -99,5 +103,18 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
     auto response = std::make_unique<faabric::HostResources>(
       scheduler.getThisHostResources());
     return response;
+}
+
+std::unique_ptr<google::protobuf::Message>
+FunctionCallServer::recvPendingMigrations(const uint8_t* buffer,
+                                          size_t bufferSize)
+{
+    PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
+
+    auto msgPtr = std::make_shared<faabric::PendingMigrations>(msg);
+
+    scheduler.addPendingMigration(msgPtr);
+
+    return std::make_unique<faabric::EmptyResponse>();
 }
 }

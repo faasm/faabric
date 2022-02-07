@@ -3,6 +3,7 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -21,6 +22,10 @@
 #define AVAILABLE_HOST_SET "available_hosts"
 
 namespace faabric::scheduler {
+
+typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
+                  std::shared_ptr<faabric::util::SchedulingDecision>>
+  InFlightPair;
 
 class Scheduler;
 
@@ -77,12 +82,12 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
+    virtual std::span<uint8_t> getMemoryView();
+
   protected:
     virtual void restore(const std::string& snapshotKey);
 
     virtual void postFinish();
-
-    virtual std::span<uint8_t> getMemoryView();
 
     virtual void setMemorySize(size_t newSize);
 
@@ -104,7 +109,7 @@ class Executor
     std::unordered_map<std::string, int> cachedGroupIds;
     std::unordered_map<std::string, std::vector<std::string>>
       cachedDecisionHosts;
-    std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions;
+    std::vector<char> dirtyRegions;
 
     void deleteMainThreadSnapshot(const faabric::Message& msg);
 
@@ -131,9 +136,7 @@ class Scheduler
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
     faabric::util::SchedulingDecision callFunctions(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingTopologyHint =
-        faabric::util::SchedulingTopologyHint::NORMAL);
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -220,6 +223,27 @@ class Scheduler
 
     ExecGraph getFunctionExecGraph(unsigned int msgId);
 
+    // ----------------------------------
+    // Function Migration
+    // ----------------------------------
+    void checkForMigrationOpportunities();
+
+    std::shared_ptr<faabric::PendingMigrations> getPendingAppMigrations(
+      uint32_t appId);
+
+    void addPendingMigration(std::shared_ptr<faabric::PendingMigrations> msg);
+
+    void removePendingMigration(uint32_t appId);
+
+    // ----------------------------------
+    // Clients
+    // ----------------------------------
+    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
+      const std::string& otherHost);
+
+    faabric::snapshot::SnapshotClient& getSnapshotClient(
+      const std::string& otherHost);
+
   private:
     std::string thisHost;
 
@@ -243,13 +267,6 @@ class Scheduler
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
     std::mutex localResultsMutex;
-
-    // ---- Clients ----
-    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
-      const std::string& otherHost);
-
-    faabric::snapshot::SnapshotClient& getSnapshotClient(
-      const std::string& otherHost);
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;
@@ -290,6 +307,24 @@ class Scheduler
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;
+
+    // ---- Function migration ----
+    FunctionMigrationThread functionMigrationThread;
+    std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
+    std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
+      pendingMigrations;
+
+    std::vector<std::shared_ptr<faabric::PendingMigrations>>
+    doCheckForMigrationOpportunities(
+      faabric::util::MigrationStrategy migrationStrategy =
+        faabric::util::MigrationStrategy::BIN_PACK);
+
+    void broadcastPendingMigrations(
+      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
+    void doStartFunctionMigrationThread(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision& decision);
 };
 
 }

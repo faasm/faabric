@@ -1002,17 +1002,12 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
     }
 
-    // Set topology hint
-    faabric::util::SchedulingTopologyHint topologyHint =
-      faabric::util::SchedulingTopologyHint::NORMAL;
-
     if (forceLocal) {
-        topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+        req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
     }
 
     // Schedule and check decision
-    faabric::util::SchedulingDecision actualDecision =
-      sch.callFunctions(req, topologyHint);
+    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
     checkSchedulingDecisionEquality(expectedDecision, actualDecision);
 
     // Check mappings set up locally or not

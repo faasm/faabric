@@ -171,8 +171,8 @@ int32_t TestExecutor::executeTask(
         uint8_t pageIdx = threadPoolIdx;
 
         // Set up the data.
-        // Note, avoid writing a zero here as the memory is already zeroed hence
-        // it's not a change
+        // Avoid writing a zero here as the memory is already zeroed hence it's
+        // not a change
         std::vector<uint8_t> data = { (uint8_t)(pageIdx + 1),
                                       (uint8_t)(pageIdx + 2),
                                       (uint8_t)(pageIdx + 3) };
@@ -199,6 +199,22 @@ int32_t TestExecutor::executeTask(
 
     if (msg.function() == "error") {
         throw std::runtime_error("This is a test error");
+    }
+
+    if (msg.function() == "sleep") {
+        int timeToSleepMs = SHORT_TEST_TIMEOUT_MS;
+        if (!msg.inputdata().empty()) {
+            timeToSleepMs = std::stoi(msg.inputdata());
+        }
+        SPDLOG_DEBUG("Sleep test function going to sleep for {} ms",
+                     timeToSleepMs);
+        SLEEP_MS(timeToSleepMs);
+        SPDLOG_DEBUG("Sleep test function waking up");
+
+        msg.set_outputdata(
+          fmt::format("Migration test function {} executed", msg.id()));
+
+        return 0;
     }
 
     if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
@@ -258,14 +274,12 @@ class TestExecutorFixture
 
         conf.overrideCpuCount = 10;
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
-        faabric::util::SchedulingTopologyHint topologyHint =
-          faabric::util::SchedulingTopologyHint::NORMAL;
 
         if (forceLocal) {
-            topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+            req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
         }
 
-        return sch.callFunctions(req, topologyHint).hosts;
+        return sch.callFunctions(req).hosts;
     }
 };
 
@@ -851,7 +865,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Call functions and force to execute locally
-    sch.callFunctions(req, faabric::util::SchedulingTopologyHint::FORCE_LOCAL);
+    req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
+    sch.callFunctions(req);
 
     // Await execution
     for (auto& m : *req->mutable_messages()) {

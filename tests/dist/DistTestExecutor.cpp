@@ -78,6 +78,10 @@ void DistTestExecutor::restore(const std::string& snapshotKey)
 
 std::span<uint8_t> DistTestExecutor::getMemoryView()
 {
+    if (dummyMemory.get() == nullptr) {
+        SPDLOG_ERROR("Dist test executor using memory view on null memory");
+        throw std::runtime_error("DistTestExecutor null memory");
+    }
     return { dummyMemory.get(), dummyMemorySize };
 }
 

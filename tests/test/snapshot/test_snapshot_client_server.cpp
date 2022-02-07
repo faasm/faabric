@@ -114,7 +114,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     for (int i = 0; i < mergeRegions.size(); i++) {
         SnapshotMergeRegion expected = mergeRegions.at(i);
-        SnapshotMergeRegion actual = snapA->getMergeRegions()[expected.offset];
+        SnapshotMergeRegion actual = snapA->getMergeRegions()[i];
 
         REQUIRE(actual.offset == expected.offset);
         REQUIRE(actual.dataType == expected.dataType);
@@ -236,8 +236,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
         for (int i = 0; i < mergeRegions.size(); i++) {
             SnapshotMergeRegion expected = mergeRegions.at(i);
-            SnapshotMergeRegion actual =
-              snap->getMergeRegions()[expected.offset];
+            SnapshotMergeRegion actual = snap->getMergeRegions()[i];
 
             REQUIRE(actual.offset == expected.offset);
             REQUIRE(actual.dataType == expected.dataType);

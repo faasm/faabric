@@ -19,20 +19,34 @@
 
 namespace faabric::util {
 
+// This singleton is needed to contain the different singleton
+// instances. We can't make them all static variables in the function.
+class DirtyTrackerSingleton
+{
+  public:
+    SoftPTEDirtyTracker softpte;
+    SegfaultDirtyTracker sigseg;
+    NoneDirtyTracker none;
+};
+
 DirtyTracker& getDirtyTracker()
 {
-    static SoftPTEDirtyTracker softpte;
-    static SegfaultDirtyTracker sigseg;
+    static DirtyTrackerSingleton dt;
 
     std::string trackMode = faabric::util::getSystemConfig().dirtyTrackingMode;
     if (trackMode == "softpte") {
-        return softpte;
-    } else if (trackMode == "segfault") {
-        sigseg.reinitialise();
-        return sigseg;
-    } else {
-        throw std::runtime_error("Unrecognised dirty tracking mode");
+        return dt.softpte;
     }
+
+    if (trackMode == "segfault") {
+        return dt.sigseg;
+    }
+
+    if (trackMode == "none") {
+        return dt.none;
+    }
+
+    throw std::runtime_error("Unrecognised dirty tracking mode");
 }
 
 // ----------------------------------
@@ -101,8 +115,7 @@ void SoftPTEDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
     // Do nothing
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyOffsets(
-  std::span<uint8_t> region)
+std::vector<char> SoftPTEDirtyTracker::getDirtyPages(std::span<uint8_t> region)
 {
     PROF_START(GetDirtyRegions)
 
@@ -130,26 +143,12 @@ std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyOffsets(
     }
 
     // Iterate through the pagemap entries to work out which are dirty
-    std::vector<std::pair<uint32_t, uint32_t>> regions;
-    std::vector<int> dirtyPages;
-    bool isRegionInProgress = false;
-    int pageStart = 0;
+    std::vector<char> regions(nPages, 0);
     for (int i = 0; i < nPages; i++) {
         bool isDirty = entries.at(i) & PAGEMAP_SOFT_DIRTY;
-
-        if (isDirty && !isRegionInProgress) {
-            isRegionInProgress = true;
-            pageStart = i;
-        } else if (!isDirty && isRegionInProgress) {
-            isRegionInProgress = false;
-            regions.emplace_back(pageStart * HOST_PAGE_SIZE,
-                                 (i - pageStart) * HOST_PAGE_SIZE);
+        if (isDirty) {
+            regions[i] = 1;
         }
-    }
-
-    if (isRegionInProgress) {
-        regions.emplace_back(pageStart * HOST_PAGE_SIZE,
-                             (nPages - pageStart) * HOST_PAGE_SIZE);
     }
 
     SPDLOG_TRACE(
@@ -159,19 +158,17 @@ std::vector<std::pair<uint32_t, uint32_t>> SoftPTEDirtyTracker::getDirtyOffsets(
     return regions;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>>
-SoftPTEDirtyTracker::getBothDirtyOffsets(std::span<uint8_t> region)
+std::vector<char> SoftPTEDirtyTracker::getBothDirtyPages(
+  std::span<uint8_t> region)
 {
-    return getDirtyOffsets(region);
+    return getDirtyPages(region);
 }
 
-std::vector<std::pair<uint32_t, uint32_t>>
-SoftPTEDirtyTracker::getThreadLocalDirtyOffsets(std::span<uint8_t> region)
+std::vector<char> SoftPTEDirtyTracker::getThreadLocalDirtyPages(
+  std::span<uint8_t> region)
 {
     return {};
 }
-
-void SoftPTEDirtyTracker::reinitialise() {}
 
 // ------------------------------
 // Segfaults
@@ -183,59 +180,29 @@ class ThreadTrackingData
     ThreadTrackingData() = default;
 
     ThreadTrackingData(std::span<uint8_t> region)
-      : regionBase(region.data())
+      : nPages(faabric::util::getRequiredHostPages(region.size()))
+      , pageFlags(nPages, 0)
+      , regionBase(region.data())
       , regionTop(region.data() + region.size())
-      , nPages(faabric::util::getRequiredHostPages(region.size()))
-      , pageFlags(nPages, '0')
     {}
 
     void markDirtyPage(void* addr)
     {
         ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
         long pageNum = offset / HOST_PAGE_SIZE;
-        pageFlags[pageNum] = '1';
-    }
-
-    std::vector<std::pair<uint32_t, uint32_t>> getDirtyRegions()
-    {
-        PROF_START(GetDirtyRegions)
-        std::vector<std::pair<uint32_t, uint32_t>> dirty;
-        if (regionBase == nullptr) {
-            return dirty;
-        }
-
-        uint32_t diffPageStart = 0;
-        bool diffInProgress = false;
-        for (int i = 0; i < nPages; i++) {
-            bool isDirty = pageFlags[i] == '1';
-            if (isDirty && !diffInProgress) {
-                diffInProgress = true;
-                diffPageStart = i;
-            } else if (!isDirty && diffInProgress) {
-                diffInProgress = false;
-                dirty.emplace_back(diffPageStart * HOST_PAGE_SIZE,
-                                   (i - diffPageStart) * HOST_PAGE_SIZE);
-            }
-        }
-
-        if (diffInProgress) {
-            dirty.emplace_back(diffPageStart * HOST_PAGE_SIZE,
-                               (nPages - diffPageStart) * HOST_PAGE_SIZE);
-        }
-
-        PROF_END(GetDirtyRegions)
-        return dirty;
+        pageFlags[pageNum] = 1;
     }
 
     bool isInitialised() { return regionTop != nullptr; }
 
+    // std::vector<bool> here seems to worsen performance by >4x
+    // std::vector<char> seems to be optimal
+    int nPages = 0;
+    std::vector<char> pageFlags;
+
   private:
     uint8_t* regionBase = nullptr;
     uint8_t* regionTop = nullptr;
-    int nPages = 0;
-
-    // Note - std::vector<bool> here seems to worsen performance by >4x
-    std::vector<char> pageFlags;
 };
 
 static thread_local ThreadTrackingData tracking;
@@ -353,30 +320,62 @@ void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
                  region.size());
 }
 
-void SegfaultDirtyTracker::reinitialise()
+std::vector<char> SegfaultDirtyTracker::getThreadLocalDirtyPages(
+  std::span<uint8_t> region)
 {
-    if (faabric::util::isTestMode()) {
-        // This is a hack because catch changes the segfault signal handler
-        // between test cases, so we have to reinisiatlise
-        setUpSignalHandler();
+    if (!tracking.isInitialised()) {
+        size_t nPages = getRequiredHostPages(region.size());
+        return std::vector<char>(nPages, 0);
     }
+
+    return tracking.pageFlags;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>>
-SegfaultDirtyTracker::getThreadLocalDirtyOffsets(std::span<uint8_t> region)
-{
-    return tracking.getDirtyRegions();
-}
-
-std::vector<std::pair<uint32_t, uint32_t>>
-SegfaultDirtyTracker::getDirtyOffsets(std::span<uint8_t> region)
+std::vector<char> SegfaultDirtyTracker::getDirtyPages(std::span<uint8_t> region)
 {
     return {};
 }
 
-std::vector<std::pair<uint32_t, uint32_t>>
-SegfaultDirtyTracker::getBothDirtyOffsets(std::span<uint8_t> region)
+std::vector<char> SegfaultDirtyTracker::getBothDirtyPages(
+  std::span<uint8_t> region)
 {
-    return getThreadLocalDirtyOffsets(region);
+    return getThreadLocalDirtyPages(region);
+}
+
+// ------------------------------
+// None (i.e. mark all pages dirty)
+// ------------------------------
+
+void NoneDirtyTracker::clearAll()
+{
+    dirtyPages.clear();
+}
+
+void NoneDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region) {}
+
+void NoneDirtyTracker::startTracking(std::span<uint8_t> region)
+{
+    size_t nPages = getRequiredHostPages(region.size());
+    dirtyPages = std::vector<char>(nPages, 1);
+}
+
+void NoneDirtyTracker::stopTracking(std::span<uint8_t> region) {}
+
+void NoneDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region) {}
+
+std::vector<char> NoneDirtyTracker::getThreadLocalDirtyPages(
+  std::span<uint8_t> region)
+{
+    return {};
+}
+
+std::vector<char> NoneDirtyTracker::getDirtyPages(std::span<uint8_t> region)
+{
+    return dirtyPages;
+}
+
+std::vector<char> NoneDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
+{
+    return getDirtyPages(region);
 }
 }

@@ -154,7 +154,7 @@ std::shared_ptr<StateKeyValue> State::doGetKV(const std::string& user,
             kvMap.emplace(lookupKey, std::move(kv));
         }
     } else if (stateMode == "inmemory") {
-        // NOTE - passing IP here is crucial for testing
+        // Passing IP here is crucial for testing
         if (sizeless) {
             auto kv =
               std::make_shared<InMemoryStateKeyValue>(user, key, thisIP);

@@ -25,6 +25,7 @@ message BatchExecuteRequest {
         FUNCTIONS = 0;
         THREADS = 1;
         PROCESSES = 2;
+        MIGRATION = 3;
     }
 
     BatchExecuteType type = 2;
@@ -168,6 +169,12 @@ message Message {
     bool recordExecGraph = 41;
     map<string, int32> intExecGraphDetails = 42;
     map<string, string> execGraphDetails = 43;
+
+    // Function migration
+    int32 migrationCheckPeriod = 44;
+
+    // Scheduling
+    string topologyHint = 45;
 }
 
 // ---------------------------------------------
@@ -245,4 +252,21 @@ message PointToPointMappings {
     }
 
     repeated PointToPointMapping mappings = 3;
+}
+
+// ---------------------------------------------
+// FUNCTION MIGRATIONS
+// ---------------------------------------------
+
+message PendingMigrations {
+    int32 appId = 1;
+    int32 groupId = 2;
+
+    message PendingMigration {
+        Message msg = 1;
+        string srcHost = 2;
+        string dstHost = 3;
+    }
+
+    repeated PendingMigration migrations = 3;
 }

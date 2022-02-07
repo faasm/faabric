@@ -82,7 +82,7 @@ std::string RedisInstance::loadScript(redisContext* context,
 Redis::Redis(const RedisInstance& instanceIn)
   : instance(instanceIn)
 {
-    // Note, connect with IP, not with hostname
+    // Connect with IP, not with hostname
     context = redisConnect(instance.ip.c_str(), instance.port);
 
     if (context == nullptr || context->err) {
@@ -585,9 +585,9 @@ void Redis::enqueueBytes(const std::string& queueName,
                          const uint8_t* buffer,
                          size_t bufferLen)
 {
-    // NOTE: Here we must be careful with the input and specify bytes rather
-    // than a string otherwise an encoded false boolean can be treated as a
-    // string terminator
+    // Here we must be careful with the input and specify bytes rather than a
+    // string otherwise an encoded false boolean can be treated as a string
+    // terminator
     auto reply = safeRedisCommand(
       context, "RPUSH %s %b", queueName.c_str(), buffer, bufferLen);
 
@@ -602,13 +602,13 @@ void Redis::enqueueBytes(const std::string& queueName,
 
 UniqueRedisReply Redis::dequeueBase(const std::string& queueName, int timeoutMs)
 {
-    // NOTE - we contradict the default redis behaviour here by doing a
-    // non-blocking pop when timeout is zero (rather than infinite as in Redis)
+    // We contradict the default redis behaviour here by doing a non-blocking
+    // pop when timeout is zero (rather than infinite as in Redis)
     bool isBlocking = timeoutMs > 0;
 
     UniqueRedisReply reply{ nullptr, &freeReplyObject };
     if (isBlocking) {
-        // Note, timeouts need to be converted into seconds
+        // Timeouts need to be converted into seconds
         // Floor to one second
         int timeoutSecs = std::max(timeoutMs / 1000, 1);
 
@@ -671,7 +671,7 @@ void Redis::dequeueMultiple(const std::string& queueName,
                             long buffLen,
                             long nElems)
 {
-    // NOTE - much like other range stuff with redis, this is *INCLUSIVE*
+    // Much like other range stuff with redis, this is *INCLUSIVE*
     auto reply = safeRedisCommand(
       context, "LRANGE %s 0 %i", queueName.c_str(), nElems - 1);
 
