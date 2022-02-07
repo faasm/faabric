@@ -241,7 +241,7 @@ void Scheduler::notifyExecutorShutdown(Executor* exec,
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    // Note, we assume all the messages are for the same function and have the
+    // We assume all the messages are for the same function and have the
     // same master host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string masterHost = firstMsg.masterhost();
@@ -472,10 +472,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         doStartFunctionMigrationThread(req, decision);
     }
 
-    // NOTE: we want to schedule things on this host _last_, otherwise functions
-    // may start executing before all messages have been dispatched, thus
-    // slowing the remaining scheduling.
-    // Therefore we want to create a list of unique hosts, with this host last.
+    // We want to schedule things on this host _last_, otherwise functions may
+    // start executing before all messages have been dispatched, thus slowing
+    // the remaining scheduling. Therefore we want to create a list of unique
+    // hosts, with this host last.
     std::vector<std::string> orderedHosts;
     {
         std::set<std::string> uniqueHosts(decision.hosts.begin(),

@@ -253,8 +253,8 @@ TEST_CASE("Test client timeout on requests to valid server", "[transport]")
     if (expectFailure) {
         bool failed = false;
 
-        // Note - here we must wait until the server has finished handling the
-        // request, even though it's failed
+        // Here we must wait until the server has finished handling the request,
+        // even though it's failed
         server.setRequestLatch();
 
         // Make the call and check it fails

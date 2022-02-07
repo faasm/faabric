@@ -12,40 +12,24 @@
 
 namespace faabric::util {
 
-std::vector<std::pair<uint32_t, uint32_t>> dedupeMemoryRegions(
-  std::vector<std::pair<uint32_t, uint32_t>>& regions)
+void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b)
 {
-    if (regions.empty()) {
-        return {};
+    // Extend a to fit
+    size_t overlap = a.size();
+    if (b.size() > a.size()) {
+        a.reserve(b.size());
+        a.insert(a.end(), b.begin() + a.size(), b.end());
+    } else if (b.size() < a.size()) {
+        overlap = b.size();
     }
 
-    std::vector<std::pair<uint32_t, uint32_t>> deduped;
-
-    // Sort in place
-    std::sort(
-      std::begin(regions),
-      std::end(regions),
-      [](std::pair<uint32_t, uint32_t>& a, std::pair<uint32_t, uint32_t>& b) {
-          return a.first < b.first;
-      });
-
-    deduped.push_back(regions.front());
-    uint32_t lastOffset = regions.front().first;
-    for (int i = 1; i < regions.size(); i++) {
-        const auto& r = regions.at(i);
-        assert(r.first >= lastOffset);
-
-        if (r.first > lastOffset) {
-            deduped.push_back(r);
-            lastOffset = r.first;
-        } else if (deduped.back().second < r.second) {
-            deduped.pop_back();
-            deduped.push_back(r);
-        }
-    }
-
-    return deduped;
+    std::transform(a.begin(),
+                   a.begin() + overlap,
+                   b.begin(),
+                   a.begin(),
+                   std::logical_or<char>());
 }
+
 // -------------------------
 // Alignment
 // -------------------------
@@ -89,7 +73,7 @@ AlignedChunk getPageAlignedChunk(long offset, long length)
 
     long nBytesOffset = nPagesOffset * faabric::util::HOST_PAGE_SIZE;
 
-    // Note - this value is the offset from the base of the new region
+    // This value is the offset from the base of the new region
     long shiftedOffset = offset - nBytesOffset;
 
     AlignedChunk c{

@@ -63,6 +63,16 @@ class SnapshotDiff
     std::vector<uint8_t> data;
 };
 
+/*
+ * Appends a list of snapshot diffs for any bytes differing between the two
+ * arrays.
+ */
+void diffArrayRegions(std::vector<SnapshotDiff>& diffs,
+                      uint32_t startOffset,
+                      uint32_t endOffset,
+                      std::span<const uint8_t> a,
+                      std::span<const uint8_t> b);
+
 class SnapshotMergeRegion
 {
   public:
@@ -81,13 +91,22 @@ class SnapshotMergeRegion
     void addDiffs(std::vector<SnapshotDiff>& diffs,
                   std::span<const uint8_t> originalData,
                   std::span<uint8_t> updatedData,
-                  std::pair<uint32_t, uint32_t> dirtyRegion);
+                  const std::vector<char>& dirtyRegions);
 
-  private:
-    void addOverwriteDiff(std::vector<SnapshotDiff>& diffs,
-                          std::span<const uint8_t> original,
-                          std::span<const uint8_t> updatedData,
-                          std::pair<uint32_t, uint32_t> dirtyRegion);
+    /**
+     * This allows us to sort the merge regions which is important for diffing
+     * purposes.
+     */
+    bool operator<(const SnapshotMergeRegion& other) const
+    {
+        return (offset < other.offset);
+    }
+
+    bool operator==(const SnapshotMergeRegion& other) const
+    {
+        return offset == other.offset && length == other.length &&
+               dataType == other.dataType && operation == other.operation;
+    }
 };
 
 /*
@@ -212,20 +231,19 @@ class SnapshotData
     void addMergeRegion(uint32_t offset,
                         size_t length,
                         SnapshotDataType dataType,
-                        SnapshotMergeOperation operation,
-                        bool overwrite = false);
+                        SnapshotMergeOperation operation);
 
     void fillGapsWithOverwriteRegions();
 
     void clearMergeRegions();
 
-    std::map<uint32_t, SnapshotMergeRegion> getMergeRegions();
+    std::vector<SnapshotMergeRegion> getMergeRegions();
 
     size_t getQueuedDiffsCount();
 
     void queueDiffs(std::span<SnapshotDiff> diffs);
 
-    void writeQueuedDiffs();
+    int writeQueuedDiffs();
 
     size_t getSize() const { return size; }
 
@@ -243,7 +261,7 @@ class SnapshotData
     // snapshot.
     std::vector<faabric::util::SnapshotDiff> diffWithDirtyRegions(
       std::span<uint8_t> updated,
-      std::vector<std::pair<uint32_t, uint32_t>> dirtyRegions);
+      const std::vector<char>& dirtyRegions);
 
   private:
     size_t size = 0;
@@ -259,15 +277,15 @@ class SnapshotData
 
     std::vector<std::pair<uint32_t, uint32_t>> trackedChanges;
 
-    // Note - we care about the order of this map, as we iterate through it
-    // in order of offsets
-    std::map<uint32_t, SnapshotMergeRegion> mergeRegions;
+    std::vector<SnapshotMergeRegion> mergeRegions;
 
     uint8_t* validatedOffsetPtr(uint32_t offset);
 
     void mapToMemory(uint8_t* target, bool shared);
 
     void writeData(std::span<const uint8_t> buffer, uint32_t offset = 0);
+
+    void checkWriteExtension(std::span<const uint8_t> buffer, uint32_t offset);
 };
 
 std::string snapshotDataTypeStr(SnapshotDataType dt);

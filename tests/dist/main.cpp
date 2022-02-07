@@ -1,5 +1,8 @@
 #define CATCH_CONFIG_RUNNER
 
+// Disable catch signal catching to avoid interfering with dirty tracking
+#define CATCH_CONFIG_NO_POSIX_SIGNALS 1
+
 #include <catch2/catch.hpp>
 
 #include "DistTestExecutor.h"
@@ -9,12 +12,15 @@
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/transport/context.h>
+#include <faabric/util/crash.h>
 #include <faabric/util/logging.h>
 
 FAABRIC_CATCH_LOGGER
 
 int main(int argc, char* argv[])
 {
+    faabric::util::setUpCrashHandler();
+
     faabric::transport::initGlobalMessageContext();
     faabric::util::initLogging();
     tests::initDistTests();

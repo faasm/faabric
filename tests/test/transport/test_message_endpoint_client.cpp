@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <faabric/transport/MessageEndpoint.h>
+#include <faabric/util/gids.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/macros.h>
 
@@ -132,7 +133,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     for (int i = 0; i < numMessages; i++) {
         faabric::transport::Message recvMsg = dst.recv().value();
         // Check just a subset of the messages
-        // Note - this implicitly tests in-order message delivery
+        // This implicitly tests in-order message delivery
         if ((i % (numMessages / 10)) == 0) {
             std::string expectedMsg = baseMsg + std::to_string(i);
             REQUIRE(recvMsg.size() == expectedMsg.size());
@@ -231,8 +232,10 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test direct messaging", "[transport]")
     std::string expected = "Direct hello";
     const uint8_t* msg = BYTES_CONST(expected.c_str());
 
-    std::string inprocLabel = "direct-test";
+    std::string inprocLabel =
+      "direct-test-" + std::to_string(faabric::util::generateGid());
 
+    // Send the message
     AsyncDirectSendEndpoint sender(inprocLabel);
     sender.send(msg, expected.size());
 

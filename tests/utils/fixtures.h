@@ -65,14 +65,9 @@ class StateTestFixture
 class DirtyTrackingTestFixture
 {
   public:
-    DirtyTrackingTestFixture()
-      : tracker(faabric::util::getDirtyTracker())
-    {}
+    DirtyTrackingTestFixture() {}
 
-    ~DirtyTrackingTestFixture() { tracker.clearAll(); }
-
-  protected:
-    faabric::util::DirtyTracker& tracker;
+    ~DirtyTrackingTestFixture() { faabric::util::getDirtyTracker().clearAll(); }
 };
 
 class SchedulerTestFixture : public DirtyTrackingTestFixture
@@ -266,8 +261,8 @@ class PointToPointTestFixture
 
     ~PointToPointTestFixture()
     {
-        // Note - here we reset the thread-local cache for the test thread. If
-        // other threads are used in the tests, they too must do this.
+        // Here we reset the thread-local cache for the test thread. If other
+        // threads are used in the tests, they too must do this.
         broker.resetThreadLocalCache();
 
         faabric::transport::clearSentMessages();

@@ -100,10 +100,10 @@ In another terminal, (re)start the server:
 
 ```bash
 # Start
-./dist-tests/dev_server.sh
+./dist-test/dev_server.sh
 
 # Restart
-./dist-tests/dev_server.sh restart
+./dist-test/dev_server.sh restart
 ```
 
 Back in the CLI, you can then run the tests:

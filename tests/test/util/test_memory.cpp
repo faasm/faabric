@@ -14,58 +14,6 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE("Test dedupe memory regions", "[util][memory]")
-{
-    std::vector<std::pair<uint32_t, uint32_t>> input;
-    std::vector<std::pair<uint32_t, uint32_t>> expected;
-
-    uint32_t offsetA = 0;
-    uint32_t offsetB = 10;
-
-    uint32_t sizeA = 2;
-    uint32_t sizeB = 3;
-    uint32_t sizeC = 4;
-
-    SECTION("Empty") {}
-
-    SECTION("Nothing to do")
-    {
-        input = { { offsetA, sizeA } };
-        expected = input;
-    }
-
-    SECTION("Equal on the same offset")
-    {
-        input = {
-            { offsetB, sizeB },
-            { offsetA, sizeA },
-            { offsetA, sizeA },
-        };
-        expected = {
-            { offsetA, sizeA },
-            { offsetB, sizeB },
-        };
-    }
-
-    SECTION("Longer on the same offset")
-    {
-        input = {
-            { offsetB, sizeB },
-            { offsetA, sizeA },
-            { offsetA, sizeC },
-            { offsetA, sizeB },
-        };
-        expected = {
-            { offsetA, sizeC },
-            { offsetB, sizeB },
-        };
-    }
-
-    std::vector<std::pair<uint32_t, uint32_t>> actual =
-      dedupeMemoryRegions(input);
-    REQUIRE(actual == expected);
-}
-
 TEST_CASE("Test rounding down offsets to page size", "[util][memory]")
 {
     REQUIRE(faabric::util::alignOffsetDown(2 * faabric::util::HOST_PAGE_SIZE) ==

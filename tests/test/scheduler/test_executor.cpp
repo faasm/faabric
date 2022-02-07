@@ -171,8 +171,8 @@ int32_t TestExecutor::executeTask(
         uint8_t pageIdx = threadPoolIdx;
 
         // Set up the data.
-        // Note, avoid writing a zero here as the memory is already zeroed hence
-        // it's not a change
+        // Avoid writing a zero here as the memory is already zeroed hence it's
+        // not a change
         std::vector<uint8_t> data = { (uint8_t)(pageIdx + 1),
                                       (uint8_t)(pageIdx + 2),
                                       (uint8_t)(pageIdx + 3) };

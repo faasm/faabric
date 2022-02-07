@@ -47,7 +47,12 @@ void setUpCrashHandler(int sig)
         fflush(stderr);
         crashHandler(TEST_SIGNAL);
         SPDLOG_INFO("Installing crash handler");
-        sigs = { SIGSEGV, SIGABRT, SIGILL, SIGFPE };
+
+        // We don't handle SIGSEGV here because segfault handling is
+        // necessary for dirty tracking and if this handler gets initialised
+        // after the one for dirty tracking it thinks legitimate dirty tracking
+        // segfaults are crashes
+        sigs = { SIGABRT, SIGILL, SIGFPE };
     }
 
     for (auto signo : sigs) {
