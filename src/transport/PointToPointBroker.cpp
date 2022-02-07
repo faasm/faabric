@@ -8,14 +8,6 @@
 
 #define NO_LOCK_OWNER_IDX -1
 
-#define LOCK_TIMEOUT(mx, ms)                                                   \
-    auto timePoint =                                                           \
-      std::chrono::system_clock::now() + std::chrono::milliseconds(ms);        \
-    bool success = mx.try_lock_until(timePoint);                               \
-    if (!success) {                                                            \
-        throw std::runtime_error("Distributed coordination timeout");          \
-    }
-
 #define MAPPING_TIMEOUT_MS 20000
 
 namespace faabric::transport {
@@ -238,7 +230,7 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
 
 void PointToPointGroup::localLock()
 {
-    LOCK_TIMEOUT(localMx, timeoutMs);
+    localMx.lock();
 }
 
 bool PointToPointGroup::localTryLock()

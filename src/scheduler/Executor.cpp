@@ -1,4 +1,5 @@
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -543,9 +544,28 @@ void Executor::threadPoolThread(int threadPoolIdx)
 
         // Execute the task
         int32_t returnValue;
+        bool migrated = false;
         try {
             returnValue =
               executeTask(threadPoolIdx, task.messageIndex, task.req);
+        } catch (const faabric::util::FunctionMigratedException& ex) {
+            SPDLOG_DEBUG(
+              "Task {} migrated, shutting down executor {}", msg.id(), id);
+
+            // Note that when a task has been migrated, we need to perform all
+            // the normal executor shutdown, but we must NOT set the result for
+            // the call.
+            migrated = true;
+            selfShutdown = true;
+            returnValue = -99;
+
+            // MPI migration
+            if (msg.ismpi()) {
+                auto& mpiWorld =
+                  faabric::scheduler::getMpiWorldRegistry().getWorld(
+                    msg.mpiworldid());
+                mpiWorld.destroy();
+            }
         } catch (const std::exception& ex) {
             returnValue = 1;
 
@@ -678,6 +698,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // try to schedule another function and be unable to reuse this
         // executor.
         sch.vacateSlot();
+
+        // If the function has been migrated, we drop out here and shut down the
+        // executor
+        if (migrated) {
+            break;
+        }
 
         // Finally set the result of the task, this will allow anything
         // waiting on its result to continue execution, therefore must be

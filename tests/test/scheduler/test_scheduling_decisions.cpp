@@ -97,9 +97,13 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
         // Set resources for all hosts
         setHostResources(config.hosts, config.slots);
 
+        // Set topology hint in request
+        req->mutable_messages()->at(0).set_topologyhint(
+          faabric::util::topologyHintToStr.at(config.topologyHint));
+
         // The first time we run the batch request, we will follow the
         // unregistered hosts path
-        actualDecision = sch.callFunctions(req, config.topologyHint);
+        actualDecision = sch.callFunctions(req);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
         checkRecordedBatchMessages(actualDecision, config);
 
@@ -114,9 +118,12 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
           faabric::util::batchExecFactory("foo", "baz", req->messages_size());
         setHostResources(config.hosts, config.slots);
 
+        reqCopy->mutable_messages()->at(0).set_topologyhint(
+          faabric::util::topologyHintToStr.at(config.topologyHint));
+
         // The second time we run the batch request, we will follow
         // the registered hosts path
-        actualDecision = sch.callFunctions(reqCopy, config.topologyHint);
+        actualDecision = sch.callFunctions(reqCopy);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
         checkRecordedBatchMessages(actualDecision, config);
     }
@@ -385,6 +392,42 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         config.slots = { 2, 3, 1 };
         config.expectedHosts = { masterHost, masterHost, "hostA",
                                  "hostA",    "hostA",    "hostA" };
+        req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    testActualSchedulingDecision(req, config);
+}
+
+TEST_CASE_METHOD(SchedulingDecisionTestFixture,
+                 "Test underfull scheduling topology hint",
+                 "[scheduler]")
+{
+    SchedulingConfig config = {
+        .hosts = { masterHost, "hostA" },
+        .slots = { 2, 2 },
+        .numReqs = 2,
+        .topologyHint = faabric::util::SchedulingTopologyHint::UNDERFULL,
+        .expectedHosts = { masterHost, "hostA" },
+    };
+
+    std::shared_ptr<faabric::BatchExecuteRequest> req;
+
+    SECTION("Test hint's basic functionality")
+    {
+        req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    SECTION("Test hint does not affect other hosts")
+    {
+        config.numReqs = 3;
+        config.expectedHosts = { masterHost, "hostA", "hostA" };
+        req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    }
+
+    SECTION("Test with hint we still overload to master")
+    {
+        config.numReqs = 4;
+        config.expectedHosts = { masterHost, "hostA", "hostA", masterHost };
         req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
     }
 

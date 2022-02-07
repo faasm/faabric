@@ -52,5 +52,7 @@ void checkMessageEquality(const faabric::Message& msgA,
     checkMessageMapEquality(msgA.execgraphdetails(), msgB.execgraphdetails());
     checkMessageMapEquality(msgA.intexecgraphdetails(),
                             msgB.intexecgraphdetails());
+
+    REQUIRE(msgA.migrationcheckperiod() == msgB.migrationcheckperiod());
 }
 }
