@@ -4,11 +4,19 @@ from os import environ
 
 DOCS_ROOT = dirname(realpath(__file__))
 DOXYGEN_OUT = join(DOCS_ROOT, "doxygen", "xml")
+APIDOC_OUT_DIR = join(DOCS_ROOT, "apidoc")
 
 # Generate doxygen files in RTD
 IS_READ_THE_DOCS = environ.get("READTHEDOCS", None) == "True"
 if IS_READ_THE_DOCS:
     run("doxygen", cwd=DOCS_ROOT, check=True, shell=True)
+
+    run(
+        "breathe-apidoc {} -o {}".format(DOXYGEN_OUT, APIDOC_OUT_DIR),
+        cwd=DOCS_ROOT,
+        check=True,
+        shell=True,
+    )
 
 project = "Faabric"
 copyright = "2022, Simon Shillaker"

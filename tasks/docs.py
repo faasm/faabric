@@ -10,12 +10,25 @@ DOCS_DIR = join(PROJ_ROOT, "docs")
 DOXY_OUT_DIR = join(DOCS_DIR, "doxygen", "xml")
 SPHINX_OUT_DIR = join(DOCS_DIR, "sphinx")
 
+APIDOC_OUT_DIR = join(DOCS_DIR, "apidoc")
+
 IS_READ_THE_DOCS = environ.get("READTHEDOCS", None) == "True"
 
 
 @task(default=True)
 def doxy(ctx):
     run("doxygen", cwd=DOCS_DIR, check=True, shell=True)
+
+
+@task
+def apidoc(ctx):
+    makedirs(APIDOC_OUT_DIR, exist_ok=True)
+    run(
+        "breathe-apidoc {} -o {}".format(DOXY_OUT_DIR, APIDOC_OUT_DIR),
+        cwd=DOCS_DIR,
+        check=True,
+        shell=True,
+    )
 
 
 @task

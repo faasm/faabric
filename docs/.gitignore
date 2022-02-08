@@ -1,4 +1,3 @@
 doxygen/
-html/
+apidoc/
 sphinx/
-_build/
