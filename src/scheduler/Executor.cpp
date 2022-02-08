@@ -131,8 +131,10 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(msg, false);
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
-    // Check if we've got a cached decision
+    // ----- CACHED DECISION CHECK -----
+
     std::string cacheKey =
       std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
 
@@ -143,72 +145,101 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
           cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
     }
 
+    // ----- SINGLE HOST CHECK -----
+
+    bool isSingleHost = false;
+    if (hasCachedDecision) {
+        // See if this is a single host batch
+        std::vector<std::string> hosts = cachedDecisionHosts[cacheKey];
+
+        isSingleHost =
+          std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
+              return s == thisHost;
+          });
+
+        if (isSingleHost) {
+            SPDLOG_TRACE("Cached decision {} marked single-host on {}",
+                         cacheKey,
+                         thisHost);
+        }
+    }
+
+    // ----- MAIN THREAD SNAPSHOT UPDATE -----
+
+    // No need to do any of this if we know we're only executing on this host
     std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
-    bool snapshotExists = reg.snapshotExists(snapshotKey);
-
-    if (!snapshotExists) {
-        faabric::util::FullLock lock(threadExecutionMutex);
-        if (!reg.snapshotExists(snapshotKey)) {
-            SPDLOG_DEBUG(
-              "Creating main thread snapshot: {} for {}", snapshotKey, funcStr);
-
-            std::shared_ptr<faabric::util::SnapshotData> snap =
-              std::make_shared<faabric::util::SnapshotData>(
-                getMemoryView(), DEFAULT_MAX_SNAP_SIZE);
-            reg.registerSnapshot(snapshotKey, snap);
-        } else {
-            // This only hits when we realise there is a snapshot when we
-            // thought there wasn't
-            snapshotExists = true;
-        }
-    }
-
-    // Avoid race conditions on snapshot being initialised using shared lock
-    // here
     std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
-    {
-        faabric::util::SharedLock lock(threadExecutionMutex);
-        snap = reg.getSnapshot(snapshotKey);
-    }
+    if (!isSingleHost) {
+        bool snapshotExists = reg.snapshotExists(snapshotKey);
 
-    if (snapshotExists) {
-        SPDLOG_DEBUG(
-          "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
+        if (!snapshotExists) {
+            faabric::util::FullLock lock(threadExecutionMutex);
+            if (!reg.snapshotExists(snapshotKey)) {
+                SPDLOG_DEBUG("Creating main thread snapshot: {} for {}",
+                             snapshotKey,
+                             funcStr);
 
-        std::span<uint8_t> memView = getMemoryView();
-
-        // Get dirty regions since last batch of threads
-        tracker.stopTracking(memView);
-        tracker.stopThreadLocalTracking(memView);
-
-        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
-
-        // Apply changes to snapshot
-        snap->fillGapsWithOverwriteRegions();
-        std::vector<faabric::util::SnapshotDiff> updates =
-          snap->diffWithDirtyRegions(memView, dirtyRegions);
-
-        if (updates.empty()) {
-            SPDLOG_TRACE(
-              "No updates to main thread snapshot for {} over {} pages",
-              faabric::util::funcToString(msg, false),
-              dirtyRegions.size());
-        } else {
-            SPDLOG_DEBUG("Updating main thread snapshot for {} with {} diffs",
-                         faabric::util::funcToString(msg, false),
-                         updates.size());
-            snap->queueDiffs(updates);
-            snap->writeQueuedDiffs();
+                std::shared_ptr<faabric::util::SnapshotData> snap =
+                  std::make_shared<faabric::util::SnapshotData>(
+                    getMemoryView(), DEFAULT_MAX_SNAP_SIZE);
+                reg.registerSnapshot(snapshotKey, snap);
+            } else {
+                // This only hits when we realise there is a snapshot when we
+                // thought there wasn't
+                snapshotExists = true;
+            }
         }
 
-        snap->clearMergeRegions();
+        // Avoid race conditions on snapshot being initialised using shared lock
+        // here
+        {
+            faabric::util::SharedLock lock(threadExecutionMutex);
+            snap = reg.getSnapshot(snapshotKey);
+        }
+
+        if (snapshotExists) {
+            SPDLOG_DEBUG(
+              "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
+
+            std::span<uint8_t> memView = getMemoryView();
+
+            // Get dirty regions since last batch of threads
+            tracker.stopTracking(memView);
+            tracker.stopThreadLocalTracking(memView);
+
+            std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
+
+            // Apply changes to snapshot
+            snap->fillGapsWithOverwriteRegions();
+            std::vector<faabric::util::SnapshotDiff> updates =
+              snap->diffWithDirtyRegions(memView, dirtyRegions);
+
+            if (updates.empty()) {
+                SPDLOG_TRACE(
+                  "No updates to main thread snapshot for {} over {} pages",
+                  faabric::util::funcToString(msg, false),
+                  dirtyRegions.size());
+            } else {
+                SPDLOG_DEBUG(
+                  "Updating main thread snapshot for {} with {} diffs",
+                  faabric::util::funcToString(msg, false),
+                  updates.size());
+                snap->queueDiffs(updates);
+                snap->writeQueuedDiffs();
+            }
+
+            snap->clearMergeRegions();
+        }
+
+        // Now we have to add any merge regions we've been saving up for this
+        // batch of threads
+        for (const auto& mr : mergeRegions) {
+            snap->addMergeRegion(
+              mr.offset, mr.length, mr.dataType, mr.operation);
+        }
     }
 
-    // Now we have to add any merge regions we've been saving up for this
-    // batch of thread
-    for (const auto& mr : mergeRegions) {
-        snap->addMergeRegion(mr.offset, mr.length, mr.dataType, mr.operation);
-    }
+    // ----- NEW SCHEDULING DECISION -----
 
     if (!hasCachedDecision) {
         faabric::util::FullLock lock(threadExecutionMutex);
@@ -238,12 +269,22 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
             cachedGroupIds[cacheKey] = groupId;
             cachedDecisionHosts[cacheKey] = decision.hosts;
+
+            // See if, now that we've made the decision, we realise that this is
+            // actually a single host batch
+            isSingleHost = req->singlehost();
+            if (isSingleHost) {
+                SPDLOG_TRACE(
+                  "Marking batch as single-host based on fresh decision");
+            }
         } else {
             // This only happens when we thought we didn't have a cached
             // decision, then when we acquired the lock, realised we did
             hasCachedDecision = true;
         }
     }
+
+    // ----- CACHED DECISION -----
 
     if (hasCachedDecision) {
         // Get the cached group ID and hosts
@@ -284,7 +325,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         sch.callFunctions(req, hint);
     }
 
-    // Await all child threads
+    // ----- AWAIT CHILD THREADS -----
+
     std::vector<std::pair<uint32_t, int32_t>> results;
     results.reserve(req->messages_size());
     for (int i = 0; i < req->messages_size(); i++) {
@@ -297,20 +339,24 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     SPDLOG_DEBUG(
       "Executor {} got results for {} threads", id, req->messages_size());
 
-    // Write queued changes to snapshot
-    int nWritten = snap->writeQueuedDiffs();
+    // ----- SNAPSHOT DIFFS AND DIRTY TRACKING -----
 
-    // Remap memory to snapshot if it's been updated
-    std::span<uint8_t> memView = getMemoryView();
-    if (nWritten > 0) {
-        setMemorySize(snap->getSize());
-        snap->mapToMemory(memView);
+    if (!isSingleHost) {
+        // Write queued changes to snapshot
+        int nWritten = snap->writeQueuedDiffs();
+
+        // Remap memory to snapshot if it's been updated
+        std::span<uint8_t> memView = getMemoryView();
+        if (nWritten > 0) {
+            setMemorySize(snap->getSize());
+            snap->mapToMemory(memView);
+        }
+
+        // Start tracking again
+        memView = getMemoryView();
+        tracker.startTracking(memView);
+        tracker.startThreadLocalTracking(memView);
     }
-
-    // Start tracking again
-    memView = getMemoryView();
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
 
     return results;
 }
@@ -319,11 +365,12 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     const std::string funcStr = faabric::util::funcToString(req);
-    SPDLOG_TRACE("{} executing {}/{} tasks of {}",
+    SPDLOG_TRACE("{} executing {}/{} tasks of {} (single-host={})",
                  id,
                  msgIdxs.size(),
                  req->messages_size(),
-                 funcStr);
+                 funcStr,
+                 req->singlehost());
 
     // Note that this lock is specific to this executor, so will only block
     // when multiple threads are trying to schedule tasks. This will only
@@ -337,8 +384,14 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
+    bool isSingleHost = req->singlehost();
+    std::string snapshotKey = firstMsg.snapshotkey();
 
-    if (isThreads) {
+    // Threads on a single host don't need to do anything with snapshots, as
+    // they all share a single executor. Threads not on a single host need to
+    // restore from the main thread snapshot. Non-threads need to restore from
+    // a snapshot if they are given a snapshot key.
+    if (isThreads && !isSingleHost) {
         // Check we get a valid memory view
         std::span<uint8_t> memView = getMemoryView();
         if (memView.empty()) {
@@ -350,17 +403,23 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         // Restore threads from main thread snapshot
         std::string snapKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
         SPDLOG_DEBUG(
-          "Restoring thread of {} from snapshot {}", funcStr, snapKey);
+          "Restoring threads of {} from snapshot {}", funcStr, snapKey);
         restore(snapKey);
 
         // Get updated memory view and start global tracking of memory
         memView = getMemoryView();
         tracker.startTracking(memView);
-    } else if (!firstMsg.snapshotkey().empty()) {
+    } else if (!isThreads && !firstMsg.snapshotkey().empty()) {
         // Restore from snapshot if provided
         std::string snapshotKey = firstMsg.snapshotkey();
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
         restore(snapshotKey);
+    } else {
+        SPDLOG_TRACE("Not restoring {}. threads={}, key={}, single={}",
+                     funcStr,
+                     isThreads,
+                     snapshotKey,
+                     isSingleHost);
     }
 
     // Set up shared counter for this batch of tasks
@@ -514,10 +573,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         faabric::Message& msg =
           task.req->mutable_messages()->at(task.messageIndex);
 
-        // Start dirty tracking if executing threads
+        // Start dirty tracking if executing threads across hosts
+        bool isSingleHost = task.req->singlehost();
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
-        if (isThreads) {
+        bool doDirtyTracking = isThreads && !isSingleHost;
+        if (doDirtyTracking) {
             // If tracking is thread local, start here as it will happen for
             // each thread
             tracker.startThreadLocalTracking(getMemoryView());
@@ -576,7 +637,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         }
 
         // Handle thread-local diffing for every thread
-        if (isThreads) {
+        if (doDirtyTracking) {
             // Stop dirty tracking
             std::span<uint8_t> memView = getMemoryView();
             tracker.stopThreadLocalTracking(memView);
@@ -605,8 +666,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      threadPoolIdx,
                      oldTaskCount - 1);
 
-        // Handle snapshot diffs _before_ we reset the executor
-        if (isLastInBatch && isThreads) {
+        // Handle last-in-batch dirty tracking
+        if (isLastInBatch && doDirtyTracking) {
             // Stop non-thread-local tracking as we're the last in the batch
             std::span<uint8_t> memView = getMemoryView();
             tracker.stopTracking(memView);
@@ -636,16 +697,16 @@ void Executor::threadPoolThread(int threadPoolIdx)
             if (diffs.empty()) {
                 SPDLOG_DEBUG("No diffs for {}", mainThreadSnapKey);
             } else {
-                SPDLOG_DEBUG(
-                  "Queueing {} diffs for {} to snapshot {} (group {})",
-                  diffs.size(),
-                  faabric::util::funcToString(msg, false),
-                  mainThreadSnapKey,
-                  msg.groupid());
-
                 // On master we queue the diffs locally directly, on a remote
                 // host we push them back to master
                 if (isMaster) {
+                    SPDLOG_DEBUG(
+                      "Queueing {} diffs for {} to snapshot {} (group {})",
+                      diffs.size(),
+                      faabric::util::funcToString(msg, false),
+                      mainThreadSnapKey,
+                      msg.groupid());
+
                     snap->queueDiffs(diffs);
                 } else if (isLastInBatch) {
                     sch.pushSnapshotDiffs(msg, mainThreadSnapKey, diffs);

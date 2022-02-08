@@ -1099,6 +1099,7 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
+    SPDLOG_TRACE("Requesting resources from {}", host);
     return getFunctionCallClient(host).getResources();
 }
 
