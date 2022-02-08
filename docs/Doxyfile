@@ -1,0 +1,11 @@
+DOXYFILE_ENCODING = UTF-8
+PROJECT_NAME      = "Faabric"
+OUTPUT_DIRECTORY  = doxygen
+OUTPUT_LANGUAGE   = English
+FULL_PATH_NAMES   = YES
+MARKDOWN_SUPPORT  = YES
+GENERATE_LATEX    = NO
+GENERATE_XML      = YES
+GENERATE_HTML     = NO
+INPUT             = ../include/ ../src/
+FILE_PATTERNS     = *.h *.cpp

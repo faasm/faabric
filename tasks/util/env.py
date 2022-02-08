@@ -3,7 +3,6 @@ from os.path import dirname, realpath, join, expanduser
 
 HOME_DIR = expanduser("~")
 PROJ_ROOT = dirname(dirname(dirname(realpath(__file__))))
-ANSIBLE_ROOT = join(PROJ_ROOT, "ansible")
 
 _FAABRIC_BUILD_DIR = environ.get("FAABRIC_BUILD_DIR", "/build/faabric")
 
