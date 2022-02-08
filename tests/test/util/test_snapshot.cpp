@@ -1064,9 +1064,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     checkDiffs(actualDiffs, expectedDiffs);
 }
 
-TEST_CASE_METHOD(SnapshotMergeTestFixture,
-                 "Test filling gaps in regions with overwrite",
-                 "[snapshot][util]")
+void doFillGapsChecks(SnapshotMergeOperation op)
 {
     int snapPages = 3;
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
@@ -1076,8 +1074,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     SECTION("No existing regions")
     {
-        expectedRegions.emplace_back(
-          0, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+        expectedRegions.emplace_back(0, 0, SnapshotDataType::Raw, op);
     }
 
     SECTION("One region at start")
@@ -1088,8 +1085,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedRegions.emplace_back(
           0, 100, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
 
-        expectedRegions.emplace_back(
-          100, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+        expectedRegions.emplace_back(100, 0, SnapshotDataType::Raw, op);
     }
 
     SECTION("One region at end")
@@ -1099,10 +1095,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                              SnapshotDataType::Raw,
                              SnapshotMergeOperation::Overwrite);
 
-        expectedRegions.emplace_back(0,
-                                     snapSize - 100,
-                                     SnapshotDataType::Raw,
-                                     SnapshotMergeOperation::Overwrite);
+        expectedRegions.emplace_back(
+          0, snapSize - 100, SnapshotDataType::Raw, op);
 
         expectedRegions.emplace_back((uint32_t)snapSize - 100,
                                      100,
@@ -1126,8 +1120,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                              SnapshotDataType::Raw,
                              SnapshotMergeOperation::Overwrite);
 
-        expectedRegions.emplace_back(
-          0, 100, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+        expectedRegions.emplace_back(0, 100, SnapshotDataType::Raw, op);
 
         expectedRegions.emplace_back(
           100, sizeof(int), SnapshotDataType::Int, SnapshotMergeOperation::Sum);
@@ -1135,7 +1128,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedRegions.emplace_back(100 + sizeof(int),
                                      HOST_PAGE_SIZE - (100 + sizeof(int)),
                                      SnapshotDataType::Raw,
-                                     SnapshotMergeOperation::Overwrite);
+                                     op);
 
         expectedRegions.emplace_back((uint32_t)HOST_PAGE_SIZE,
                                      sizeof(double),
@@ -1146,17 +1139,15 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
           (uint32_t)(HOST_PAGE_SIZE + sizeof(double)),
           200 - sizeof(double),
           SnapshotDataType::Raw,
-          SnapshotMergeOperation::Overwrite);
+          op);
 
         expectedRegions.emplace_back((uint32_t)HOST_PAGE_SIZE + 200,
                                      (uint32_t)HOST_PAGE_SIZE,
                                      SnapshotDataType::Raw,
                                      SnapshotMergeOperation::Overwrite);
 
-        expectedRegions.emplace_back((uint32_t)(2 * HOST_PAGE_SIZE) + 200,
-                                     0,
-                                     SnapshotDataType::Raw,
-                                     SnapshotMergeOperation::Overwrite);
+        expectedRegions.emplace_back(
+          (uint32_t)(2 * HOST_PAGE_SIZE) + 200, 0, SnapshotDataType::Raw, op);
     }
 
     snap->fillGapsWithOverwriteRegions();
@@ -1170,11 +1161,45 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     for (int i = 0; i < actualRegions.size(); i++) {
         SnapshotMergeRegion expectedRegion = expectedRegions[i];
         SnapshotMergeRegion actualRegion = actualRegions[i];
+        REQUIRE(actualRegion == expectedRegion);
+    }
+}
 
-        REQUIRE(actualRegion.offset == expectedRegion.offset);
-        REQUIRE(actualRegion.dataType == expectedRegion.dataType);
-        REQUIRE(actualRegion.length == expectedRegion.length);
-        REQUIRE(actualRegion.operation == expectedRegion.operation);
+TEST_CASE_METHOD(SnapshotMergeTestFixture,
+                 "Test filling gaps in regions",
+                 "[snapshot][util]")
+{
+    SystemConfig& conf = getSystemConfig();
+    SECTION("Overwrite")
+    {
+        conf.diffingMode = "overwrite";
+        doFillGapsChecks(SnapshotMergeOperation::Overwrite);
+    }
+
+    SECTION("XOR")
+    {
+        conf.diffingMode = "xor";
+        doFillGapsChecks(SnapshotMergeOperation::XOR);
+    }
+
+    SECTION("Unsupported")
+    {
+        conf.diffingMode = "foobar";
+
+        int snapPages = 3;
+        size_t snapSize = snapPages * HOST_PAGE_SIZE;
+        auto snap = std::make_shared<SnapshotData>(snapSize);
+
+        bool failed = false;
+        try {
+            snap->fillGapsWithOverwriteRegions();
+        } catch (std::runtime_error& ex) {
+            std::string expected = "Unsupported diffing mode";
+            REQUIRE(ex.what() == expected);
+            failed = true;
+        }
+
+        REQUIRE(failed);
     }
 }
 
@@ -1834,5 +1859,82 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     REQUIRE(diffA.getDataCopy() == dataA);
     REQUIRE(diffB.getDataCopy() == dataB);
+}
+
+TEST_CASE_METHOD(DirtyTrackingTestFixture, "Test XOR diffs", "[util][snapshot]")
+{
+    int nSnapPages = 5;
+    size_t snapSize = nSnapPages * HOST_PAGE_SIZE;
+
+    auto snap = std::make_shared<SnapshotData>(snapSize);
+
+    std::vector<char> expectedDirtyPages(nSnapPages, 0);
+    std::vector<uint8_t> expectedSnapData(snapSize, 0);
+
+    std::vector<uint8_t> dataA(150, 3);
+    std::vector<uint8_t> dataB(200, 4);
+
+    uint32_t offsetA = 0;
+    uint32_t offsetB = 2 * HOST_PAGE_SIZE + 100;
+    expectedDirtyPages[0] = 1;
+    expectedDirtyPages[2] = 1;
+
+    // Add merge regions
+    snap->addMergeRegion(offsetA,
+                         dataA.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::XOR);
+
+    snap->addMergeRegion(offsetB,
+                         dataB.size(),
+                         SnapshotDataType::Raw,
+                         SnapshotMergeOperation::XOR);
+
+    // Map some memory
+    MemoryRegion mem = allocatePrivateMemory(snapSize);
+    std::span<uint8_t> memView(mem.get(), snapSize);
+    snap->mapToMemory(memView);
+
+    // Clear tracking
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
+    snap->clearTrackedChanges();
+
+    // Start tracking
+    tracker.startTracking(memView);
+    tracker.startThreadLocalTracking(memView);
+
+    // Copy in data
+    std::memcpy(mem.get() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(mem.get() + offsetB, dataB.data(), dataB.size());
+
+    std::memcpy(expectedSnapData.data() + offsetA, dataA.data(), dataA.size());
+    std::memcpy(expectedSnapData.data() + offsetB, dataB.data(), dataB.size());
+
+    // Stop tracking
+    tracker.stopTracking(memView);
+    tracker.stopThreadLocalTracking(memView);
+
+    // Get diffs
+    std::vector<char> dirtyPages = tracker.getBothDirtyPages(memView);
+    REQUIRE(dirtyPages == expectedDirtyPages);
+
+    // Diff with snapshot
+    std::vector<faabric::util::SnapshotDiff> actual =
+      snap->diffWithDirtyRegions(memView, dirtyPages);
+
+    REQUIRE(actual.size() == 2);
+    SnapshotDiff diffA = actual.at(0);
+    SnapshotDiff diffB = actual.at(1);
+
+    REQUIRE(diffA.getOffset() == offsetA);
+    REQUIRE(diffB.getOffset() == offsetB);
+
+    // Apply the diffs to the snapshot
+    snap->queueDiffs(actual);
+    snap->writeQueuedDiffs();
+
+    // Check snapshot data is now as expected
+    REQUIRE(snap->getDataCopy() == expectedSnapData);
 }
 }

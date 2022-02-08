@@ -153,6 +153,22 @@ void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
     trackedChanges.emplace_back(offset, regionEnd);
 }
 
+void SnapshotData::xorData(std::span<const uint8_t> buffer, uint32_t offset)
+{
+    size_t regionEnd = offset + buffer.size();
+    if (regionEnd > size) {
+        SPDLOG_ERROR(
+          "XORing snapshot data exceeding size: {} > {}", regionEnd, size);
+        throw std::runtime_error("XORing data exceeding size");
+    }
+
+    uint8_t* copyTarget = validatedOffsetPtr(offset);
+    std::transform(
+      buffer.begin(), buffer.end(), copyTarget, copyTarget, std::bit_xor());
+
+    trackedChanges.emplace_back(offset, regionEnd);
+}
+
 const uint8_t* SnapshotData::getDataPtr(uint32_t offset)
 {
     faabric::util::SharedLock lock(snapMx);
@@ -210,12 +226,22 @@ void SnapshotData::fillGapsWithOverwriteRegions()
 {
     faabric::util::FullLock lock(snapMx);
 
+    SnapshotMergeOperation fillType;
+    SystemConfig& conf = faabric::util::getSystemConfig();
+    if (conf.diffingMode == "overwrite") {
+        fillType = SnapshotMergeOperation::Overwrite;
+    } else if (conf.diffingMode == "xor") {
+        fillType = SnapshotMergeOperation::XOR;
+    } else {
+        SPDLOG_ERROR("Unsupported diffing mode: {}", conf.diffingMode);
+        throw std::runtime_error("Unsupported diffing mode");
+    }
+
     // If there's no merge regions, just do one big one (note, zero length means
     // fill all space
     if (mergeRegions.empty()) {
         SPDLOG_TRACE("Filling gap with single overwrite merge region");
-        mergeRegions.emplace_back(
-          0, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+        mergeRegions.emplace_back(0, 0, SnapshotDataType::Raw, fillType);
 
         return;
     }
@@ -240,10 +266,8 @@ void SnapshotData::fillGapsWithOverwriteRegions()
                      lastRegionEnd,
                      lastRegionEnd + regionLen);
 
-        mergeRegions.emplace_back(lastRegionEnd,
-                                  regionLen,
-                                  SnapshotDataType::Raw,
-                                  SnapshotMergeOperation::Overwrite);
+        mergeRegions.emplace_back(
+          lastRegionEnd, regionLen, SnapshotDataType::Raw, fillType);
 
         lastRegionEnd = r.offset + r.length;
     }
@@ -253,10 +277,8 @@ void SnapshotData::fillGapsWithOverwriteRegions()
                      lastRegionEnd);
 
         // Add a final region at the end of the snapshot
-        mergeRegions.emplace_back(lastRegionEnd,
-                                  0,
-                                  SnapshotDataType::Raw,
-                                  SnapshotMergeOperation::Overwrite);
+        mergeRegions.emplace_back(
+          lastRegionEnd, 0, SnapshotDataType::Raw, fillType);
     }
 }
 
@@ -324,11 +346,15 @@ int SnapshotData::writeQueuedDiffs()
 
             continue;
         }
+
         if (diff.getOperation() ==
             faabric::util::SnapshotMergeOperation::Overwrite) {
-
             writeData(diff.getData(), diff.getOffset());
+            continue;
+        }
 
+        if (diff.getOperation() == faabric::util::SnapshotMergeOperation::XOR) {
+            xorData(diff.getData(), diff.getOffset());
             continue;
         }
 
@@ -550,6 +576,9 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
         case (SnapshotMergeOperation::Sum): {
             return "Sum";
         }
+        case (SnapshotMergeOperation::XOR): {
+            return "XOR";
+        }
         default: {
             SPDLOG_ERROR("Cannot convert snapshot merge op to string: {}", op);
             throw std::runtime_error("Cannot convert merge op to string");
@@ -622,7 +651,11 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     }
     startPage += std::distance(startIt, foundIt);
 
-    if (operation == SnapshotMergeOperation::Overwrite) {
+    // Overwrites and XORs both deal with overwriting bytes without any
+    // other logic. Overwrites will filter in only the modified bytes,
+    // whereas XOR will transmit the XOR of the whole page and the original
+    if (operation == SnapshotMergeOperation::Overwrite ||
+        operation == SnapshotMergeOperation::XOR) {
         // Iterate through pages
         for (int p = startPage; p < endPage; p++) {
             // Skip if page not dirty
@@ -639,11 +672,30 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
 
             SPDLOG_TRACE("Checking page {} {}-{}", p, startByte, endByte);
 
-            diffArrayRegions(
-              diffs, startByte, endByte, originalData, updatedData);
+            if (operation == SnapshotMergeOperation::Overwrite) {
+                diffArrayRegions(
+                  diffs, startByte, endByte, originalData, updatedData);
+            } else {
+                uint32_t rangeSize = endByte - startByte;
+                std::transform(originalData.begin() + startByte,
+                               originalData.begin() + startByte + rangeSize,
+                               updatedData.begin() + startByte,
+                               updatedData.begin() + startByte,
+                               std::bit_xor<uint8_t>());
+
+                SPDLOG_TRACE("Adding {} XOR merge: {}-{}",
+                             snapshotDataTypeStr(dataType),
+                             startByte,
+                             startByte + rangeSize);
+
+                diffs.emplace_back(dataType,
+                                   operation,
+                                   startByte,
+                                   updatedData.subspan(startByte, rangeSize));
+            }
         }
 
-        // This is the end of the overwrite diff
+        // This is the end of the XOR/overwrite diff
         return;
     }
 
