@@ -1,4 +1,4 @@
-from os.path import dirname, realpath, join, expanduser
+from os.path import dirname, realpath, join
 
 DOCS_ROOT = dirname(realpath(__file__))
 DOXYGEN_OUT = join(DOCS_ROOT, "doxygen", "xml")
@@ -17,5 +17,5 @@ html_theme = "alabaster"
 
 html_static_path = ["static"]
 
-breathe_projects = {"Faabric": DOCS_ROOT}
+breathe_projects = {"Faabric": DOXYGEN_OUT}
 breathe_default_project = "Faabric"

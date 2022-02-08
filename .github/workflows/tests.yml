@@ -39,9 +39,9 @@ jobs:
       - name: "Build dependencies to be shared by all runs"
         run: inv dev.cmake -b Debug
       - name: "Build doxygen docs"
-        run: inv dev.cc docs-doxy
+        run: inv docs.doxy
       - name: "Build sphinx docs"
-        run: inv dev.cc docs-sphinx
+        run: inv docs.sphinx
 
   formatting:
     if: github.event.pull_request.draft == false

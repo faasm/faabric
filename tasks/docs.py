@@ -1,14 +1,8 @@
 from os import makedirs
-from shutil import rmtree
-from os.path import exists, join
+from os.path import join
 from subprocess import run
 
-from tasks.util.env import (
-    PROJ_ROOT,
-    FAABRIC_SHARED_BUILD_DIR,
-    FAABRIC_STATIC_BUILD_DIR,
-    FAABRIC_INSTALL_PREFIX,
-)
+from tasks.util.env import PROJ_ROOT
 
 from invoke import task
 
