@@ -360,14 +360,31 @@ TEST_CASE_METHOD(TestExecutorFixture,
                  "[executor]")
 {
     int nThreads = 0;
+    bool singleHost = false;
+    int expectedRestoreCount = 0;
 
-    SECTION("Underloaded") { nThreads = 10; }
+    SECTION("Single host")
+    {
+        singleHost = true;
+        expectedRestoreCount = 0;
 
-    SECTION("Overloaded") { nThreads = 200; }
+        SECTION("Underloaded") { nThreads = 10; }
+        SECTION("Overloaded") { nThreads = 200; }
+    }
+
+    SECTION("Non-single host")
+    {
+        singleHost = false;
+        expectedRestoreCount = 1;
+
+        SECTION("Underloaded") { nThreads = 10; }
+        SECTION("Overloaded") { nThreads = 200; }
+    }
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
+    req->set_singlehost(singleHost);
 
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
@@ -387,8 +404,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
         REQUIRE(result == msgId / 100);
     }
 
-    // Check that restore has been called
-    REQUIRE(restoreCount == 1);
+    // Check that restore has been called as many times as expected
+    REQUIRE(restoreCount == expectedRestoreCount);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
