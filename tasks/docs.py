@@ -1,4 +1,4 @@
-from os import makedirs
+from os import makedirs, environ
 from os.path import join
 from subprocess import run
 
@@ -9,6 +9,8 @@ from invoke import task
 DOCS_DIR = join(PROJ_ROOT, "docs")
 DOXY_OUT_DIR = join(DOCS_DIR, "doxygen", "xml")
 SPHINX_OUT_DIR = join(DOCS_DIR, "sphinx")
+
+IS_READ_THE_DOCS = environ.get("READTHEDOCS", None) == "True"
 
 
 @task(default=True)
