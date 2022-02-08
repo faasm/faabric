@@ -40,6 +40,10 @@ jobs:
       - uses: faasm/conan-cache-action@v1
         with:
           directory: /code/faabric
+      - name: "TEMP - install doxygen"
+        run: apt install -y doxygen
+      - name: "TEMP - install python deps"
+        run: pip install -r requirements.txt
       - name: "Build dependencies to be shared by all runs"
         run: inv dev.cmake -b Debug
       - name: "Build doxygen docs"
