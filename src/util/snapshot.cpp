@@ -47,7 +47,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
             // Finished on byte before
             diffInProgress = false;
             snapshotDiffs.emplace_back(SnapshotDataType::Raw,
-                                       SnapshotMergeOperation::Overwrite,
+                                       SnapshotMergeOperation::Bytewise,
                                        diffStart,
                                        b.subspan(diffStart, i - diffStart));
         }
@@ -56,7 +56,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
     // If we finish with a diff in progress, add it
     if (diffInProgress) {
         snapshotDiffs.emplace_back(SnapshotDataType::Raw,
-                                   SnapshotMergeOperation::Overwrite,
+                                   SnapshotMergeOperation::Bytewise,
                                    diffStart,
                                    b.subspan(diffStart, endOffset - diffStart));
     }
@@ -222,14 +222,14 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     mergeRegions.emplace_back(offset, length, dataType, operation);
 }
 
-void SnapshotData::fillGapsWithOverwriteRegions()
+void SnapshotData::fillGapsWithBytewiseRegions()
 {
     faabric::util::FullLock lock(snapMx);
 
     SnapshotMergeOperation fillType;
     SystemConfig& conf = faabric::util::getSystemConfig();
-    if (conf.diffingMode == "overwrite") {
-        fillType = SnapshotMergeOperation::Overwrite;
+    if (conf.diffingMode == "bytewise") {
+        fillType = SnapshotMergeOperation::Bytewise;
     } else if (conf.diffingMode == "xor") {
         fillType = SnapshotMergeOperation::XOR;
     } else {
@@ -240,7 +240,7 @@ void SnapshotData::fillGapsWithOverwriteRegions()
     // If there's no merge regions, just do one big one (note, zero length means
     // fill all space
     if (mergeRegions.empty()) {
-        SPDLOG_TRACE("Filling gap with single overwrite merge region");
+        SPDLOG_TRACE("Filling gap with single bytewise merge region");
         mergeRegions.emplace_back(0, 0, SnapshotDataType::Raw, fillType);
 
         return;
@@ -262,7 +262,7 @@ void SnapshotData::fillGapsWithOverwriteRegions()
 
         uint32_t regionLen = r.offset - lastRegionEnd;
 
-        SPDLOG_TRACE("Filling gap with overwrite merge region {}-{}",
+        SPDLOG_TRACE("Filling gap with bytewise merge region {}-{}",
                      lastRegionEnd,
                      lastRegionEnd + regionLen);
 
@@ -348,7 +348,7 @@ int SnapshotData::writeQueuedDiffs()
         }
 
         if (diff.getOperation() ==
-            faabric::util::SnapshotMergeOperation::Overwrite) {
+            faabric::util::SnapshotMergeOperation::Bytewise) {
             writeData(diff.getData(), diff.getOffset());
             continue;
         }
@@ -460,7 +460,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::getTrackedChanges()
     for (auto [regionBegin, regionEnd] : trackedChanges) {
         SPDLOG_TRACE("Snapshot dirty {}-{}", regionBegin, regionEnd);
         diffs.emplace_back(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Overwrite,
+                           SnapshotMergeOperation::Bytewise,
                            regionBegin,
                            d.subspan(regionBegin, regionEnd - regionBegin));
     }
@@ -477,7 +477,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
     PROF_START(DiffWithSnapshot)
     std::vector<faabric::util::SnapshotDiff> diffs;
 
-    // Always add an overwrite region that covers any extension of the
+    // Always add a bytewise region that covers any extension of the
     // updated data
     if (updated.size() > size) {
         PROF_START(ExtensionDiff)
@@ -485,7 +485,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
           "Adding diff to extend snapshot from {} to {}", size, updated.size());
         size_t extensionLen = updated.size() - size;
         diffs.emplace_back(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Overwrite,
+                           SnapshotMergeOperation::Bytewise,
                            size,
                            updated.subspan(size, extensionLen));
         PROF_END(ExtensionDiff)
@@ -564,8 +564,8 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
         case (SnapshotMergeOperation::Min): {
             return "Min";
         }
-        case (SnapshotMergeOperation::Overwrite): {
-            return "Overwrite";
+        case (SnapshotMergeOperation::Bytewise): {
+            return "Bytewise";
         }
         case (SnapshotMergeOperation::Product): {
             return "Product";
@@ -651,10 +651,10 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     }
     startPage += std::distance(startIt, foundIt);
 
-    // Overwrites and XORs both deal with overwriting bytes without any
-    // other logic. Overwrites will filter in only the modified bytes,
+    // Bytewise and XOR both deal with overwriting bytes without any
+    // other logic. Bytewise will filter in only the modified bytes,
     // whereas XOR will transmit the XOR of the whole page and the original
-    if (operation == SnapshotMergeOperation::Overwrite ||
+    if (operation == SnapshotMergeOperation::Bytewise ||
         operation == SnapshotMergeOperation::XOR) {
         // Iterate through pages
         for (int p = startPage; p < endPage; p++) {
@@ -672,7 +672,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
 
             SPDLOG_TRACE("Checking page {} {}-{}", p, startByte, endByte);
 
-            if (operation == SnapshotMergeOperation::Overwrite) {
+            if (operation == SnapshotMergeOperation::Bytewise) {
                 diffArrayRegions(
                   diffs, startByte, endByte, originalData, updatedData);
             } else {
@@ -695,7 +695,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
             }
         }
 
-        // This is the end of the XOR/overwrite diff
+        // This is the end of the XOR/bytewise diff
         return;
     }
 

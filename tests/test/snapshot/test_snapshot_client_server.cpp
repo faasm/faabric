@@ -87,7 +87,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     // Add merge regions to one
     std::vector<SnapshotMergeRegion> mergeRegions = {
         { 123, 1234, SnapshotDataType::Int, SnapshotMergeOperation::Sum },
-        { 345, 3456, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite }
+        { 345, 3456, SnapshotDataType::Raw, SnapshotMergeOperation::Bytewise }
     };
 
     for (const auto& m : mergeRegions) {
@@ -167,7 +167,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     std::vector<SnapshotMergeRegion> mergeRegions = {
         { 123, 1234, SnapshotDataType::Int, SnapshotMergeOperation::Sum },
-        { 345, 3456, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite }
+        { 345, 3456, SnapshotDataType::Raw, SnapshotMergeOperation::Bytewise }
     };
 
     for (const auto& m : mergeRegions) {
@@ -183,12 +183,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(snap->getQueuedDiffsCount() == 0);
 
     SnapshotDiff diffA1(SnapshotDataType::Raw,
-                        SnapshotMergeOperation::Overwrite,
+                        SnapshotMergeOperation::Bytewise,
                         offsetA1,
                         diffDataA1);
 
     SnapshotDiff diffA2(SnapshotDataType::Raw,
-                        SnapshotMergeOperation::Overwrite,
+                        SnapshotMergeOperation::Bytewise,
                         offsetA2,
                         diffDataA2);
 
@@ -207,17 +207,17 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<uint8_t> diffDataB3 = { 1, 1, 2, 2, 3, 3, 4, 4 };
 
     SnapshotDiff diffB1(SnapshotDataType::Raw,
-                        SnapshotMergeOperation::Overwrite,
+                        SnapshotMergeOperation::Bytewise,
                         offsetB1,
                         diffDataB1);
 
     SnapshotDiff diffB2(SnapshotDataType::Raw,
-                        SnapshotMergeOperation::Overwrite,
+                        SnapshotMergeOperation::Bytewise,
                         offsetB2,
                         diffDataB2);
 
     SnapshotDiff diffB3(SnapshotDataType::Raw,
-                        SnapshotMergeOperation::Overwrite,
+                        SnapshotMergeOperation::Bytewise,
                         offsetB3,
                         diffDataB3);
 
@@ -328,7 +328,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<uint8_t> diffData;
     std::vector<uint8_t> expectedData;
 
-    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Bytewise;
     SnapshotDataType dataType = SnapshotDataType::Raw;
 
     SECTION("Integer")

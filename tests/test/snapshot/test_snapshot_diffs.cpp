@@ -117,7 +117,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->addMergeRegion(offsetA,
                          dataA.size(),
                          SnapshotDataType::Raw,
-                         SnapshotMergeOperation::Overwrite);
+                         SnapshotMergeOperation::Bytewise);
 
     // Deliberately add merge regions out of order
 
@@ -131,7 +131,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->addMergeRegion(regionOffsetC,
                          dataC.size(),
                          SnapshotDataType::Raw,
-                         SnapshotMergeOperation::Overwrite);
+                         SnapshotMergeOperation::Bytewise);
 
     // Two changes in single merge region
     std::vector<uint8_t> dataB1 = { 4, 5, 6 };
@@ -144,7 +144,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->addMergeRegion(offsetB1,
                          (offsetB2 - offsetB1) + dataB2.size() + 10,
                          SnapshotDataType::Raw,
-                         SnapshotMergeOperation::Overwrite);
+                         SnapshotMergeOperation::Bytewise);
 
     // Merge region within a change
     std::vector<uint8_t> dataD = { 1, 1, 2, 2, 3, 3, 4 };
@@ -157,7 +157,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->addMergeRegion(regionOffsetD,
                          regionSizeD,
                          SnapshotDataType::Raw,
-                         SnapshotMergeOperation::Overwrite);
+                         SnapshotMergeOperation::Bytewise);
 
     // Write some data to the region that exceeds the size of the original.
     // Anything outside the original snapshot should be marked as changed.

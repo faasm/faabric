@@ -644,6 +644,10 @@ TEST_CASE_METHOD(TestExecutorFixture,
 {
     int nThreads = 4;
 
+    SECTION("XOR diffs") { conf.diffingMode = "xor"; }
+
+    SECTION("Bytewise diffs") { conf.diffingMode = "bytewise"; }
+
     // Sanity check memory size
     REQUIRE(TEST_EXECUTOR_DEFAULT_MEMORY_SIZE > nThreads * HOST_PAGE_SIZE);
 
@@ -691,9 +695,17 @@ TEST_CASE_METHOD(TestExecutorFixture,
         REQUIRE(diffList.at(i).getOffset() ==
                 i * faabric::util::HOST_PAGE_SIZE);
 
-        std::vector<uint8_t> expected = { (uint8_t)(i + 1),
-                                          (uint8_t)(i + 2),
-                                          (uint8_t)(i + 3) };
+        std::vector<uint8_t> expected;
+        if (conf.diffingMode == "xor") {
+            // In XOR mode we'll get the whole page back with a modification at
+            // the start
+            expected = std::vector<uint8_t>(HOST_PAGE_SIZE, 0);
+            expected[0] = i + 1;
+            expected[1] = i + 2;
+            expected[2] = i + 3;
+        } else {
+            expected = { (uint8_t)(i + 1), (uint8_t)(i + 2), (uint8_t)(i + 3) };
+        }
 
         std::vector<uint8_t> actual = diffList.at(i).getDataCopy();
 
