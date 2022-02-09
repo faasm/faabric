@@ -259,9 +259,34 @@ class TestExecutorFixture
 
     MemoryRegion dummyMemory;
 
+    std::vector<std::string> executeWithTestExecutorHint(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision hint)
+    {
+        initThreadSnapshot(req);
+
+        conf.overrideCpuCount = 10;
+        conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
+
+        return sch.callFunctions(req, hint).hosts;
+    }
+
     std::vector<std::string> executeWithTestExecutor(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       bool forceLocal)
+    {
+        initThreadSnapshot(req);
+        conf.overrideCpuCount = 10;
+        conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
+
+        if (forceLocal) {
+            req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
+        }
+
+        return sch.callFunctions(req).hosts;
+    }
+
+    void initThreadSnapshot(std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
         // Create the main thread snapshot if we're executing threads directly
         if (req->type() == faabric::BatchExecuteRequest::THREADS) {
@@ -271,15 +296,6 @@ class TestExecutorFixture
               std::make_shared<faabric::util::SnapshotData>(snapshotSize);
             reg.registerSnapshot(snapKey, snap);
         }
-
-        conf.overrideCpuCount = 10;
-        conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
-
-        if (forceLocal) {
-            req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
-        }
-
-        return sch.callFunctions(req).hosts;
     }
 };
 
@@ -356,35 +372,89 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test executing threads directly",
+                 "Test restore not called on single host",
                  "[executor]")
 {
-    int nThreads = 0;
-    bool singleHost = false;
+    int nThreads = 10;
     int expectedRestoreCount = 0;
 
-    SECTION("Single host")
-    {
-        singleHost = true;
-        expectedRestoreCount = 0;
-
-        SECTION("Underloaded") { nThreads = 10; }
-        SECTION("Overloaded") { nThreads = 200; }
-    }
-
-    SECTION("Non-single host")
-    {
-        singleHost = false;
-        expectedRestoreCount = 1;
-
-        SECTION("Underloaded") { nThreads = 10; }
-        SECTION("Overloaded") { nThreads = 200; }
-    }
+    std::string thisHost = conf.endpointHost;
+    std::string otherHost = "other";
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
-    req->set_singlehost(singleHost);
+
+    int nLocally = 0;
+    int nRemotely = 0;
+    SECTION("Single host")
+    {
+        expectedRestoreCount = 0;
+        nLocally = nThreads;
+    }
+
+    SECTION("Non-single host")
+    {
+        expectedRestoreCount = 1;
+        nLocally = nThreads - 2;
+        nRemotely = 2;
+    }
+
+    // Set up a hint to force the scheduler to execute single host or not
+    SchedulingDecision hint(123, 345);
+    std::vector<std::string> expectedHosts;
+    for (int i = 0; i < nLocally; i++) {
+        expectedHosts.emplace_back(thisHost);
+    }
+
+    for (int i = 0; i < nRemotely; i++) {
+        expectedHosts.emplace_back(otherHost);
+    }
+
+    for (int i = 0; i < nThreads; i++) {
+        hint.addMessage(expectedHosts.at(i), req->messages().at(i));
+    }
+
+    // Turn mock mode on to catch any cross-host messages
+    setMockMode(true);
+
+    // Execute the functions
+    std::vector<std::string> actualHosts =
+      executeWithTestExecutorHint(req, hint);
+
+    // Await the results on this host
+    for (int i = 0; i < nLocally; i++) {
+        uint32_t msgId = req->messages().at(i).id();
+        int32_t result = sch.awaitThreadResult(msgId);
+        REQUIRE(result == msgId / 100);
+    }
+
+    // Check sent to other host if necessary
+    auto batchRequests = getBatchRequests();
+    if (nRemotely > 0) {
+        REQUIRE(batchRequests.size() == 1);
+    }
+
+    // Check the hosts match up
+    REQUIRE(actualHosts == expectedHosts);
+    REQUIRE(restoreCount == expectedRestoreCount);
+
+    // Turn off mock mode
+    setMockMode(false);
+}
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test executing threads directly",
+                 "[executor]")
+{
+    int nThreads = 0;
+    SECTION("Overloaded") { nThreads = 100; }
+
+    SECTION("Underloaded") { nThreads = 10; }
+
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "blah", nThreads);
+    req->set_type(faabric::BatchExecuteRequest::THREADS);
 
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
@@ -395,6 +465,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     std::vector<std::string> actualHosts = executeWithTestExecutor(req, false);
+
     std::vector<std::string> expectedHosts(nThreads, conf.endpointHost);
     REQUIRE(actualHosts == expectedHosts);
 
@@ -403,9 +474,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
         int32_t result = sch.awaitThreadResult(msgId);
         REQUIRE(result == msgId / 100);
     }
-
-    // Check that restore has been called as many times as expected
-    REQUIRE(restoreCount == expectedRestoreCount);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -429,9 +497,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
     auto& sch = faabric::scheduler::getScheduler();
     faabric::Message res = sch.getFunctionResult(msg.id(), 5000);
     REQUIRE(res.returnvalue() == 0);
-
-    // Check that restore has been called
-    REQUIRE(restoreCount == 1);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -491,8 +556,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     executeWithTestExecutor(req, true);
 
-    // Note that because the results don't actually get logged on this host, we
-    // can't wait on them as usual.
+    // Note that because the results don't actually get logged on this host,
+    // we can't wait on them as usual.
     auto actual = faabric::snapshot::getThreadResults();
     REQUIRE_RETRY(actual = faabric::snapshot::getThreadResults(),
                   actual.size() == nThreads);
