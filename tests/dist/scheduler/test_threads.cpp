@@ -65,4 +65,11 @@ TEST_CASE_METHOD(DistTestsFixture,
         REQUIRE(res == m.id() / 2);
     }
 }
+
+TEST_CASE_METHOD(DistTestsFixture,
+                 "Test thread single host optimisations",
+                 "[snapshots][threads]")
+{
+
+}
 }

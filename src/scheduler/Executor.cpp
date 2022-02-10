@@ -126,25 +126,25 @@ void Executor::finish()
 
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions,
-  std::shared_ptr<faabric::util::Latch> startLatch)
+  const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions)
 {
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
     std::string funcStr = faabric::util::funcToString(req);
 
-    // ----- CHECK CACHED DECISION -----
+    // Create a group ID, this will get overridden in there's a cached decision
+    int groupId = faabric::util::generateGid();
+    for (auto& m : *req->mutable_messages()) {
+        m.set_groupid(groupId);
+        m.set_groupsize(req->messages_size());
+    }
 
-    faabric::util::DecisionCache& decisionCache =
-      faabric::util::getSchedulingDecisionCache();
-    std::shared_ptr<faabric::util::CachedDecision> cachedDecision =
-      decisionCache.getCachedDecision(req);
-    bool hasCachedDecision = cachedDecision != nullptr;
-    bool isSingleHost = hasCachedDecision && cachedDecision->isSingleHost();
+    // Get the scheduling decision
+    faabric::util::SchedulingDecision decision = sch.makeSchedulingDecision(
+      req, faabric::util::SchedulingTopologyHint::CACHED);
+    bool isSingleHost = decision.isSingleHost();
 
-    // ----- MAIN THREAD SNAPSHOT UPDATE -----
-
-    // We only do snapshotting if not on a single host
+    // Do snapshotting if not on a single host
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
     if (!isSingleHost) {
@@ -187,50 +187,12 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         }
     }
 
-    // ----- SCHEDULING -----
-
-    if (hasCachedDecision) {
-        sch.callFunctions(req, cachedDecision);
-    } else {
-        faabric::util::FullLock lock(threadExecutionMutex);
-        SPDLOG_TRACE("Creating new decision for {} threads of {}",
-                     req->messages_size(),
-                     funcStr);
-
-        // Set up a new group
-        int groupId = faabric::util::generateGid();
-        for (auto& m : *req->mutable_messages()) {
-            m.set_groupid(groupId);
-            m.set_groupsize(req->messages_size());
-        }
-
-        // Invoke the functions
-        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
-
-        // Cache the decision for next time
-        decisionCache.addCachedDecision(req, decision);
-
-        // See if, now that we've made the decision, we realise that this is
-        // actually a single host batch
-        isSingleHost = req->singlehost();
-        if (isSingleHost) {
-            SPDLOG_TRACE(
-              "Marking batch as single-host based on fresh decision");
-        }
-    }
-
-    // Await the start latch if given
-    if (startLatch != nullptr) {
-        startLatch->wait();
-    }
-
-    // ----- CHILD THREADS -----
-
+    // Invoke threads and await
+    sch.callFunctions(req, decision);
     std::vector<std::pair<uint32_t, int32_t>> results =
       sch.awaitThreadResults(req);
 
-    // ----- SNAPSHOT DIFFS AND DIRTY TRACKING -----
-
+    // Perform snapshot updates if not on single host
     if (!isSingleHost) {
         // Write queued changes to snapshot
         int nWritten = snap->writeQueuedDiffs();

@@ -303,6 +303,40 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
     }
 
+    // If requesting a cached decision, look for it now
+    faabric::util::DecisionCache& decisionCache =
+      faabric::util::getSchedulingDecisionCache();
+    if (topologyHint == faabric::util::SchedulingTopologyHint::CACHED) {
+        std::shared_ptr<faabric::util::CachedDecision> cachedDecision =
+          decisionCache.getCachedDecision(req);
+
+        if (cachedDecision != nullptr) {
+            // Get the cached group ID and hosts
+            int groupId = cachedDecision->getGroupId();
+            std::vector<std::string> hosts = cachedDecision->getHosts();
+
+            // Create the scheduling decision
+            faabric::util::SchedulingDecision decision(firstMsg.appid(),
+                                                       groupId);
+            for (int i = 0; i < hosts.size(); i++) {
+                // Reuse the group id
+                faabric::Message& m = req->mutable_messages()->at(i);
+                m.set_groupid(groupId);
+                m.set_groupsize(req->messages_size());
+
+                // Add to the decision
+                decision.addMessage(hosts.at(i), m);
+            }
+
+            SPDLOG_DEBUG("Using cached decision for {} {}, group {}",
+                         funcStr,
+                         firstMsg.appid(),
+                         decision.groupId);
+
+            return decision;
+        }
+    }
+
     std::vector<std::string> hosts;
     if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
@@ -457,39 +491,12 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         decision.addMessage(hosts.at(i), req->messages().at(i));
     }
 
-    return decision;
-}
-
-void Scheduler::callFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  std::shared_ptr<faabric::util::CachedDecision> decision)
-{
-    const faabric::Message &msg = req->messages().at(0);
-
-    // Get the cached group ID and hosts
-    int groupId = decision->getGroupId();
-    std::vector<std::string> hosts = decision->getHosts();
-
-    // Create the scheduling hint
-    faabric::util::SchedulingDecision hint(msg.appid(), groupId);
-    for (int i = 0; i < hosts.size(); i++) {
-        // Reuse the group id
-        faabric::Message& m = req->mutable_messages()->at(i);
-        m.set_groupid(groupId);
-        m.set_groupsize(req->messages_size());
-
-        // Add to the decision
-        hint.addMessage(hosts.at(i), m);
+    // Cache decision for next time if necessary
+    if (topologyHint == faabric::util::SchedulingTopologyHint::CACHED) {
+        decisionCache.addCachedDecision(req, decision);
     }
 
-    SPDLOG_DEBUG("Using cached decision for {}/{} {}, group {}",
-                 msg.user(),
-                 msg.function(),
-                 msg.appid(),
-                 hint.groupId);
-
-    // Invoke the functions
-    callFunctions(req, hint);
+    return decision;
 }
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(

@@ -9,16 +9,7 @@ CachedDecision::CachedDecision(const std::vector<std::string>& hostsIn,
                                int groupIdIn)
   : hosts(hostsIn)
   , groupId(groupIdIn)
-{
-    // Work out if this decision is all on this host. If the decision is
-    // completely on *another* host, we still count it as not being on a single
-    // host, as this host will be the master
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    _isSingleHost =
-      std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
-          return s == thisHost;
-      });
-}
+{}
 
 std::shared_ptr<CachedDecision> DecisionCache::getCachedDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -91,6 +82,17 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
   : appId(appIdIn)
   , groupId(groupIdIn)
 {}
+
+bool SchedulingDecision::isSingleHost()
+{
+    // Work out if this decision is all on this host. If the decision is
+    // completely on *another* host, we still count it as not being on a single
+    // host, as this host will be the master
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    return std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
+        return s == thisHost;
+    });
+}
 
 void SchedulingDecision::addMessage(const std::string& host,
                                     const faabric::Message& msg)

@@ -11,7 +11,6 @@
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
-#include <faabric/util/latch.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
@@ -59,8 +58,7 @@ class Executor
 
     std::vector<std::pair<uint32_t, int32_t>> executeThreads(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions,
-      std::shared_ptr<faabric::util::Latch> startLatch = nullptr);
+      const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions);
 
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -133,13 +131,15 @@ class Scheduler
   public:
     Scheduler();
 
+    faabric::util::SchedulingDecision makeSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingTopologyHint topologyHint =
+        faabric::util::SchedulingTopologyHint::NORMAL);
+
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    void callFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req,
-                       std::shared_ptr<faabric::util::CachedDecision> decision);
 
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -286,10 +286,6 @@ class Scheduler
     std::set<std::string> availableHostsCache;
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
-
-    faabric::util::SchedulingDecision makeSchedulingDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingTopologyHint topologyHint);
 
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,

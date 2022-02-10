@@ -1019,7 +1019,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test executor thread execution",
+                 "Test executor thread decision caching",
                  "[executor]")
 {
     // Create a batch request

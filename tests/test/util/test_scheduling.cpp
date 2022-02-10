@@ -20,6 +20,18 @@ TEST_CASE("Test building scheduling decisions", "[util]")
     std::string hostB = "hostB";
     std::string hostC = "hostC";
 
+    bool expectSingleHost = false;
+    SECTION("Multi-host") {
+
+    }
+
+    SECTION("Single host") {
+        hostB = "hostA";
+        hostC = "hostA";
+
+        expectSingleHost = true;
+    }
+
     auto req = batchExecFactory("foo", "bar", 3);
 
     SchedulingDecision decision(appId, groupId);
@@ -44,6 +56,7 @@ TEST_CASE("Test building scheduling decisions", "[util]")
     REQUIRE(decision.messageIds == expectedMsgIds);
     REQUIRE(decision.hosts == expectedHosts);
     REQUIRE(decision.appIdxs == expectedAppIdxs);
+    REQUIRE(decision.isSingleHost() == expectSingleHost);
 }
 
 TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
@@ -105,27 +118,9 @@ TEST_CASE_METHOD(CachedDecisionTestFixture,
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
     auto req = batchExecFactory("foo", "bar", 5);
-    std::vector<std::string> hosts;
-
-    bool expectSingleHost = false;
-
-    SECTION("Single host")
-    {
-        hosts = std::vector<std::string>(5, thisHost);
-        expectSingleHost = true;
-    }
-
-    SECTION("Single other host")
-    {
-        hosts = std::vector<std::string>(5, "blahblah");
-    }
-
-    SECTION("Multiple hosts")
-    {
-        hosts = {
-            "alpha", "alpha", "beta", "gamma", "alpha",
-        };
-    }
+    std::vector<std::string> hosts = {
+        "alpha", "alpha", "beta", "gamma", "alpha",
+    };
 
     // Build the decision
     SchedulingDecision decision(appId, groupId);
@@ -145,7 +140,6 @@ TEST_CASE_METHOD(CachedDecisionTestFixture,
     REQUIRE(actual != nullptr);
     REQUIRE(actual->getHosts() == hosts);
     REQUIRE(actual->getGroupId() == groupId);
-    REQUIRE(actual->isSingleHost() == expectSingleHost);
 
     // Check clearing decisions
     decisionCache.clear();

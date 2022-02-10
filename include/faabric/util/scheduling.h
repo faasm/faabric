@@ -34,6 +34,8 @@ class SchedulingDecision
 
     std::string returnHost;
 
+    bool isSingleHost();
+
     void addMessage(const std::string& host, const faabric::Message& msg);
 
     void addMessage(const std::string& host, int32_t messageId, int32_t appIdx);
@@ -57,6 +59,7 @@ class SchedulingDecision
 enum SchedulingTopologyHint
 {
     NORMAL,
+    CACHED,
     FORCE_LOCAL,
     NEVER_ALONE,
     UNDERFULL,
@@ -67,6 +70,7 @@ enum SchedulingTopologyHint
 const std::unordered_map<std::string, SchedulingTopologyHint>
   strToTopologyHint = {
       { "NORMAL", SchedulingTopologyHint::NORMAL },
+      { "CACHED", SchedulingTopologyHint::CACHED },
       { "FORCE_LOCAL", SchedulingTopologyHint::FORCE_LOCAL },
       { "NEVER_ALONE", SchedulingTopologyHint::NEVER_ALONE },
       { "UNDERFULL", SchedulingTopologyHint::UNDERFULL },
@@ -75,6 +79,7 @@ const std::unordered_map<std::string, SchedulingTopologyHint>
 const std::unordered_map<SchedulingTopologyHint, std::string>
   topologyHintToStr = {
       { SchedulingTopologyHint::NORMAL, "NORMAL" },
+      { SchedulingTopologyHint::CACHED, "CACHED" },
       { SchedulingTopologyHint::FORCE_LOCAL, "FORCE_LOCAL" },
       { SchedulingTopologyHint::NEVER_ALONE, "NEVER_ALONE" },
       { SchedulingTopologyHint::UNDERFULL, "UNDERFULL" },
@@ -90,8 +95,6 @@ class CachedDecision
   public:
     CachedDecision(const std::vector<std::string>& hostsIn, int groupIdIn);
 
-    bool isSingleHost() const { return _isSingleHost; }
-
     std::vector<std::string> getHosts() { return hosts; }
 
     int getGroupId() const { return groupId; }
@@ -99,7 +102,6 @@ class CachedDecision
   private:
     std::vector<std::string> hosts;
     int groupId = 0;
-    bool _isSingleHost = false;
 };
 
 /**

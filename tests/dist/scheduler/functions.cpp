@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include "DistTestExecutor.h"
+#include "faabric/snapshot/SnapshotRegistry.h"
 #include "faabric_utils.h"
 #include "init.h"
 
@@ -38,6 +39,139 @@ int handleSimpleThread(tests::DistTestExecutor* exec,
                  returnValue);
 
     return returnValue;
+}
+
+/**
+ * This function is aimed at checking the single host optimisations and thread
+ * scheduling performed by an executor. On a single host we expect no dirty
+ * page tracking or diff merging to be performed. On multiple hosts, the
+ * executor should transparently create the main thread snapshot, update it from
+ * changes in the main thread, and sync those changes with remote hosts.
+ */
+int handleThreadScheduling(tests::DistTestExecutor* exec,
+                           int threadPoolIdx,
+                           int msgIdx,
+                           std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+    faabric::snapshot::SnapshotRegistry& reg =
+      faabric::snapshot::getSnapshotRegistry();
+
+    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+
+    std::span<uint8_t> memView = exec->getMemoryView();
+
+    bool isThread = req->type() == faabric::BatchExecuteRequest::THREADS;
+
+    int nThreads = 5;
+    int nLoops = 5;
+
+    std::vector<SnapshotMergeRegion> mergeRegions;
+
+    if (!isThread) {
+        bool isSingleHost = false;
+
+        // This is the main function, so need to spawn threads in a loop
+        for (int loop = 0; loop < nLoops; loop++) {
+            // Set up the request
+            auto req = faabric::util::batchExecFactory(
+              msg.user(), msg.function(), nThreads);
+            req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+            // Spawn and await the threads
+            std::vector<std::pair<uint32_t, int32_t>> results =
+              exec->executeThreads(req, mergeRegions);
+
+            // Check the results
+            if (results.size() != nThreads) {
+                SPDLOG_ERROR("Thread results not expected length: {} != {}",
+                             results.size(),
+                             nThreads);
+                return 1;
+            }
+
+            for (int i = 0; i < nThreads; i++) {
+                const faabric::Message& msg = req->messages().at(i);
+                uint32_t msgId = results[i].first;
+                int32_t res = results[i].second;
+
+                if (msgId != msg.id()) {
+                    SPDLOG_ERROR(
+                      "Thread result msg id {} not as expected: {} != {}",
+                      i,
+                      msgId,
+                      msg.id());
+                    return 1;
+                }
+                if (res != 0) {
+                    SPDLOG_ERROR("Thread {} id {} failed: {}", i, msgId, res);
+                    return 1;
+                }
+            }
+
+            // Check whether snapshot has been updated (expect so on multi-host,
+            // but not on single)
+            isSingleHost = req->singlehost();
+            if (isSingleHost) {
+                if (reg.snapshotExists(snapshotKey)) {
+                    SPDLOG_ERROR(
+                      "Executed on single host but snapshot {} exists",
+                      snapshotKey);
+                    return 1;
+                }
+            } else {
+                if (!reg.snapshotExists(snapshotKey)) {
+                    SPDLOG_ERROR("Executed on multiple hosts but snapshot {} "
+                                 "does not exist",
+                                 snapshotKey);
+                    return 1;
+                }
+            }
+
+            // Check memory has been updated by all threads
+        }
+
+    } else {
+        if (req->singlehost()) {
+            // Check snapshot has not been created
+            if (reg.snapshotExists(snapshotKey)) {
+                SPDLOG_ERROR("Thread on single host but snapshot {} exists",
+                             snapshotKey);
+                return 1;
+            }
+        } else {
+            // Check snapshot has been created
+            if (reg.snapshotExists(snapshotKey)) {
+                SPDLOG_ERROR(
+                  "Thread on remote host but snapshot {} does not exist",
+                  snapshotKey);
+                return 1;
+            }
+        }
+
+        // Work out which iteration and thread we are
+        int iteration = std::stoi(msg.inputdata());
+        int threadIdx = msg.appidx();
+        int offset = threadIdx * HOST_PAGE_SIZE;
+
+        // Check value has edits from the main thread
+        int expectedValue = (iteration * threadIdx) + iteration;
+        int value = unalignedRead<int>(memView.data() + offset);
+
+        if(value != expectedValue) {
+            SPDLOG_ERROR("Thread {} got unexpected value on iteration {}. {} != {}",
+                    threadIdx, iteration, value, expectedValue);
+
+            return 1;
+        }
+
+        // Increment the value for this thread
+        int newValue = value + threadIdx;
+
+        unalignedWrite<int>(newValue, memView.data() + offset);
+    }
+
+    return 0;
 }
 
 int handleSimpleFunction(tests::DistTestExecutor* exec,
@@ -357,6 +491,9 @@ int handleReductionFunction(tests::DistTestExecutor* exec,
 void registerSchedulerTestFunctions()
 {
     registerDistTestExecutorCallback("threads", "simple", handleSimpleThread);
+
+    registerDistTestExecutorCallback(
+      "threads", "sched", handleThreadScheduling);
 
     registerDistTestExecutorCallback("funcs", "simple", handleSimpleFunction);
 
