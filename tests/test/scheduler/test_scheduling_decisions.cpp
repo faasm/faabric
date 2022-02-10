@@ -2,6 +2,7 @@
 
 #include "fixtures.h"
 
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
 
 using namespace faabric::scheduler;
@@ -23,8 +24,6 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
     ~SchedulingDecisionTestFixture() { faabric::util::setMockMode(false); }
 
   protected:
-    int appId = 123;
-    int groupId = 456;
     std::string masterHost = faabric::util::getSystemConfig().endpointHost;
 
     // Helper struct to configure one scheduling decision
@@ -39,50 +38,27 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
 
     // Helper method to set the available hosts and slots per host prior to
     // making a scheduling decision
-    void setHostResources(std::vector<std::string> registeredHosts,
+    void setHostResources(std::vector<std::string> hosts,
                           std::vector<int> slotsPerHost)
     {
-        assert(registeredHosts.size() == slotsPerHost.size());
-        auto& sch = getScheduler();
+        assert(hosts.size() == slotsPerHost.size());
         sch.clearRecordedMessages();
+        faabric::scheduler::clearMockRequests();
 
-        for (int i = 0; i < registeredHosts.size(); i++) {
+        for (int i = 0; i < hosts.size(); i++) {
             faabric::HostResources resources;
             resources.set_slots(slotsPerHost.at(i));
             resources.set_usedslots(0);
 
-            sch.addHostToGlobalSet(registeredHosts.at(i));
+            sch.addHostToGlobalSet(hosts.at(i));
 
             // If setting resources for the master host, update the scheduler.
             // Otherwise, queue the resource response
             if (i == 0) {
                 sch.setThisHostResources(resources);
             } else {
-                queueResourceResponse(registeredHosts.at(i), resources);
+                queueResourceResponse(hosts.at(i), resources);
             }
-        }
-    }
-
-    void checkRecordedBatchMessages(
-      faabric::util::SchedulingDecision actualDecision,
-      const SchedulingConfig& config)
-    {
-        auto batchMessages = faabric::scheduler::getBatchRequests();
-
-        // First, turn our expected list of hosts to a map with frequency count
-        // and exclude the master host as no message is sent
-        std::map<std::string, int> expectedHostCount;
-        for (const auto& h : config.expectedHosts) {
-            if (h != masterHost) {
-                ++expectedHostCount[h];
-            }
-        }
-
-        // Then check that the count matches the size of the batch sent
-        for (const auto& hostReqPair : batchMessages) {
-            REQUIRE(expectedHostCount.contains(hostReqPair.first));
-            REQUIRE(expectedHostCount.at(hostReqPair.first) ==
-                    hostReqPair.second->messages_size());
         }
     }
 
@@ -92,40 +68,32 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       const SchedulingConfig& config)
     {
-        faabric::util::SchedulingDecision actualDecision(appId, groupId);
-
         // Set resources for all hosts
         setHostResources(config.hosts, config.slots);
 
-        // Set topology hint in request
-        req->mutable_messages()->at(0).set_topologyhint(
-          faabric::util::topologyHintToStr.at(config.topologyHint));
-
         // The first time we run the batch request, we will follow the
         // unregistered hosts path
-        actualDecision = sch.callFunctions(req);
+        faabric::util::SchedulingDecision actualDecision =
+          sch.makeSchedulingDecision(req, config.topologyHint);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
-        checkRecordedBatchMessages(actualDecision, config);
 
-        // We wait for the execution to finish and the scheduler to vacate
-        // the slots. We can't wait on the function result, as sometimes
-        // functions won't be executed at all (e.g. master running out of
-        // resources).
-        SLEEP_MS(100);
-
-        // Set resources again to reset the used slots
-        auto reqCopy =
-          faabric::util::batchExecFactory("foo", "baz", req->messages_size());
+        // Reestablish host resources
         setHostResources(config.hosts, config.slots);
 
-        reqCopy->mutable_messages()->at(0).set_topologyhint(
-          faabric::util::topologyHintToStr.at(config.topologyHint));
+        // Create a new request, preserving the app ID to ensure a repeat
+        // request uses the registered hosts
+        auto repeatReq =
+          faabric::util::batchExecFactory("foo", "baz", req->messages_size());
+        for (int i = 0; i < req->messages_size(); i++) {
+            faabric::Message& msg = repeatReq->mutable_messages()->at(i);
+            msg.set_appid(actualDecision.appId);
+        }
 
         // The second time we run the batch request, we will follow
         // the registered hosts path
-        actualDecision = sch.callFunctions(reqCopy);
+        actualDecision =
+          sch.makeSchedulingDecision(repeatReq, config.topologyHint);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
-        checkRecordedBatchMessages(actualDecision, config);
     }
 };
 
@@ -432,5 +400,52 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
     }
 
     testActualSchedulingDecision(req, config);
+}
+
+TEST_CASE_METHOD(SchedulingDecisionTestFixture,
+                 "Test cached scheduling topology hint",
+                 "[scheduler]")
+{
+    // Set up a basic scenario
+    SchedulingConfig config = {
+        .hosts = { masterHost, "hostA" },
+        .slots = { 2, 2 },
+        .numReqs = 4,
+        .topologyHint = faabric::util::SchedulingTopologyHint::CACHED,
+        .expectedHosts = { masterHost, masterHost, "hostA", "hostA" },
+    };
+
+    auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    int appId = req->messages().at(0).appid();
+    testActualSchedulingDecision(req, config);
+
+    // Now change the setup so that another decision would do something
+    // different
+    SchedulingConfig hitConfig = {
+        .hosts = { masterHost, "hostA" },
+        .slots = { 0, 10 },
+        .numReqs = 4,
+        .topologyHint = faabric::util::SchedulingTopologyHint::CACHED,
+        .expectedHosts = { masterHost, masterHost, "hostA", "hostA" },
+    };
+
+    // Note we must preserve the app ID to get a cached decision
+    auto hitReq = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    for (int i = 0; i < hitReq->messages_size(); i++) {
+        hitReq->mutable_messages()->at(i).set_appid(appId);
+    }
+    testActualSchedulingDecision(hitReq, hitConfig);
+
+    // Change app ID and confirm we get new decision
+    SchedulingConfig missConfig = {
+        .hosts = { masterHost, "hostA" },
+        .slots = { 0, 10 },
+        .numReqs = 4,
+        .topologyHint = faabric::util::SchedulingTopologyHint::CACHED,
+        .expectedHosts = { "hostA", "hostA", "hostA", "hostA" },
+    };
+    auto missReq =
+      faabric::util::batchExecFactory("foo", "bar", config.numReqs);
+    testActualSchedulingDecision(missReq, missConfig);
 }
 }

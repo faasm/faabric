@@ -1,9 +1,9 @@
 #include <catch2/catch.hpp>
 
-#include "faabric/util/config.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/scheduling.h>
 
@@ -21,11 +21,10 @@ TEST_CASE("Test building scheduling decisions", "[util]")
     std::string hostC = "hostC";
 
     bool expectSingleHost = false;
-    SECTION("Multi-host") {
+    SECTION("Multi-host") {}
 
-    }
-
-    SECTION("Single host") {
+    SECTION("Single host")
+    {
         hostB = "hostA";
         hostC = "hostA";
 

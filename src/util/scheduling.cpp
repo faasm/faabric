@@ -50,14 +50,15 @@ void DecisionCache::addCachedDecision(
         throw std::runtime_error("Invalid decision caching");
     }
 
-    cachedDecisions[cacheKey] =
-      std::make_shared<CachedDecision>(decision.hosts, decision.groupId);
-
-    SPDLOG_DEBUG("Caching decision for {} x {}, caching group {}, hosts: {}",
+    SPDLOG_DEBUG("Caching decision for {} x {} app {}, group {}, hosts {}",
                  req->messages().size(),
                  faabric::util::funcToString(req),
+                 decision.appId,
                  decision.groupId,
                  faabric::util::vectorToString<std::string>(decision.hosts));
+
+    cachedDecisions[cacheKey] =
+      std::make_shared<CachedDecision>(decision.hosts, decision.groupId);
 }
 
 std::string DecisionCache::getCacheKey(

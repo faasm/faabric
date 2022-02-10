@@ -86,7 +86,7 @@ class CachedDecisionTestFixture
 
 class SchedulerTestFixture
   : public DirtyTrackingTestFixture
-  , CachedDecisionTestFixture
+  , public CachedDecisionTestFixture
 {
   public:
     SchedulerTestFixture()

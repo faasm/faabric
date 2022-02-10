@@ -311,8 +311,13 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
           decisionCache.getCachedDecision(req);
 
         if (cachedDecision != nullptr) {
-            // Get the cached group ID and hosts
             int groupId = cachedDecision->getGroupId();
+            SPDLOG_DEBUG("Using cached decision for {} {}, group {}",
+                         funcStr,
+                         firstMsg.appid(),
+                         groupId);
+
+            // Get the cached hosts
             std::vector<std::string> hosts = cachedDecision->getHosts();
 
             // Create the scheduling decision
@@ -328,13 +333,13 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                 decision.addMessage(hosts.at(i), m);
             }
 
-            SPDLOG_DEBUG("Using cached decision for {} {}, group {}",
-                         funcStr,
-                         firstMsg.appid(),
-                         decision.groupId);
-
             return decision;
         }
+
+        SPDLOG_DEBUG("No cached decision found for {} x {} in app {}",
+                     req->messages_size(),
+                     funcStr,
+                     firstMsg.appid());
     }
 
     std::vector<std::string> hosts;
