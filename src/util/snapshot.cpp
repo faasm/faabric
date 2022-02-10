@@ -47,7 +47,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
             // Finished on byte before
             diffInProgress = false;
             snapshotDiffs.emplace_back(SnapshotDataType::Raw,
-                                       SnapshotMergeOperation::Overwrite,
+                                       SnapshotMergeOperation::Bytewise,
                                        diffStart,
                                        b.subspan(diffStart, i - diffStart));
         }
@@ -56,7 +56,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
     // If we finish with a diff in progress, add it
     if (diffInProgress) {
         snapshotDiffs.emplace_back(SnapshotDataType::Raw,
-                                   SnapshotMergeOperation::Overwrite,
+                                   SnapshotMergeOperation::Bytewise,
                                    diffStart,
                                    b.subspan(diffStart, endOffset - diffStart));
     }
@@ -153,6 +153,22 @@ void SnapshotData::writeData(std::span<const uint8_t> buffer, uint32_t offset)
     trackedChanges.emplace_back(offset, regionEnd);
 }
 
+void SnapshotData::xorData(std::span<const uint8_t> buffer, uint32_t offset)
+{
+    size_t regionEnd = offset + buffer.size();
+    if (regionEnd > size) {
+        SPDLOG_ERROR(
+          "XORing snapshot data exceeding size: {} > {}", regionEnd, size);
+        throw std::runtime_error("XORing data exceeding size");
+    }
+
+    uint8_t* copyTarget = validatedOffsetPtr(offset);
+    std::transform(
+      buffer.begin(), buffer.end(), copyTarget, copyTarget, std::bit_xor());
+
+    trackedChanges.emplace_back(offset, regionEnd);
+}
+
 const uint8_t* SnapshotData::getDataPtr(uint32_t offset)
 {
     faabric::util::SharedLock lock(snapMx);
@@ -206,16 +222,26 @@ void SnapshotData::addMergeRegion(uint32_t offset,
     mergeRegions.emplace_back(offset, length, dataType, operation);
 }
 
-void SnapshotData::fillGapsWithOverwriteRegions()
+void SnapshotData::fillGapsWithBytewiseRegions()
 {
     faabric::util::FullLock lock(snapMx);
+
+    SnapshotMergeOperation fillType;
+    SystemConfig& conf = faabric::util::getSystemConfig();
+    if (conf.diffingMode == "bytewise") {
+        fillType = SnapshotMergeOperation::Bytewise;
+    } else if (conf.diffingMode == "xor") {
+        fillType = SnapshotMergeOperation::XOR;
+    } else {
+        SPDLOG_ERROR("Unsupported diffing mode: {}", conf.diffingMode);
+        throw std::runtime_error("Unsupported diffing mode");
+    }
 
     // If there's no merge regions, just do one big one (note, zero length means
     // fill all space
     if (mergeRegions.empty()) {
-        SPDLOG_TRACE("Filling gap with single overwrite merge region");
-        mergeRegions.emplace_back(
-          0, 0, SnapshotDataType::Raw, SnapshotMergeOperation::Overwrite);
+        SPDLOG_TRACE("Filling gap with single bytewise merge region");
+        mergeRegions.emplace_back(0, 0, SnapshotDataType::Raw, fillType);
 
         return;
     }
@@ -236,14 +262,12 @@ void SnapshotData::fillGapsWithOverwriteRegions()
 
         uint32_t regionLen = r.offset - lastRegionEnd;
 
-        SPDLOG_TRACE("Filling gap with overwrite merge region {}-{}",
+        SPDLOG_TRACE("Filling gap with bytewise merge region {}-{}",
                      lastRegionEnd,
                      lastRegionEnd + regionLen);
 
-        mergeRegions.emplace_back(lastRegionEnd,
-                                  regionLen,
-                                  SnapshotDataType::Raw,
-                                  SnapshotMergeOperation::Overwrite);
+        mergeRegions.emplace_back(
+          lastRegionEnd, regionLen, SnapshotDataType::Raw, fillType);
 
         lastRegionEnd = r.offset + r.length;
     }
@@ -253,10 +277,8 @@ void SnapshotData::fillGapsWithOverwriteRegions()
                      lastRegionEnd);
 
         // Add a final region at the end of the snapshot
-        mergeRegions.emplace_back(lastRegionEnd,
-                                  0,
-                                  SnapshotDataType::Raw,
-                                  SnapshotMergeOperation::Overwrite);
+        mergeRegions.emplace_back(
+          lastRegionEnd, 0, SnapshotDataType::Raw, fillType);
     }
 }
 
@@ -324,11 +346,15 @@ int SnapshotData::writeQueuedDiffs()
 
             continue;
         }
+
         if (diff.getOperation() ==
-            faabric::util::SnapshotMergeOperation::Overwrite) {
-
+            faabric::util::SnapshotMergeOperation::Bytewise) {
             writeData(diff.getData(), diff.getOffset());
+            continue;
+        }
 
+        if (diff.getOperation() == faabric::util::SnapshotMergeOperation::XOR) {
+            xorData(diff.getData(), diff.getOffset());
             continue;
         }
 
@@ -434,7 +460,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::getTrackedChanges()
     for (auto [regionBegin, regionEnd] : trackedChanges) {
         SPDLOG_TRACE("Snapshot dirty {}-{}", regionBegin, regionEnd);
         diffs.emplace_back(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Overwrite,
+                           SnapshotMergeOperation::Bytewise,
                            regionBegin,
                            d.subspan(regionBegin, regionEnd - regionBegin));
     }
@@ -451,7 +477,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
     PROF_START(DiffWithSnapshot)
     std::vector<faabric::util::SnapshotDiff> diffs;
 
-    // Always add an overwrite region that covers any extension of the
+    // Always add a bytewise region that covers any extension of the
     // updated data
     if (updated.size() > size) {
         PROF_START(ExtensionDiff)
@@ -459,7 +485,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
           "Adding diff to extend snapshot from {} to {}", size, updated.size());
         size_t extensionLen = updated.size() - size;
         diffs.emplace_back(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Overwrite,
+                           SnapshotMergeOperation::Bytewise,
                            size,
                            updated.subspan(size, extensionLen));
         PROF_END(ExtensionDiff)
@@ -538,8 +564,8 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
         case (SnapshotMergeOperation::Min): {
             return "Min";
         }
-        case (SnapshotMergeOperation::Overwrite): {
-            return "Overwrite";
+        case (SnapshotMergeOperation::Bytewise): {
+            return "Bytewise";
         }
         case (SnapshotMergeOperation::Product): {
             return "Product";
@@ -549,6 +575,9 @@ std::string snapshotMergeOpStr(SnapshotMergeOperation op)
         }
         case (SnapshotMergeOperation::Sum): {
             return "Sum";
+        }
+        case (SnapshotMergeOperation::XOR): {
+            return "XOR";
         }
         default: {
             SPDLOG_ERROR("Cannot convert snapshot merge op to string: {}", op);
@@ -622,7 +651,11 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     }
     startPage += std::distance(startIt, foundIt);
 
-    if (operation == SnapshotMergeOperation::Overwrite) {
+    // Bytewise and XOR both deal with overwriting bytes without any
+    // other logic. Bytewise will filter in only the modified bytes,
+    // whereas XOR will transmit the XOR of the whole page and the original
+    if (operation == SnapshotMergeOperation::Bytewise ||
+        operation == SnapshotMergeOperation::XOR) {
         // Iterate through pages
         for (int p = startPage; p < endPage; p++) {
             // Skip if page not dirty
@@ -639,11 +672,30 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
 
             SPDLOG_TRACE("Checking page {} {}-{}", p, startByte, endByte);
 
-            diffArrayRegions(
-              diffs, startByte, endByte, originalData, updatedData);
+            if (operation == SnapshotMergeOperation::Bytewise) {
+                diffArrayRegions(
+                  diffs, startByte, endByte, originalData, updatedData);
+            } else {
+                uint32_t rangeSize = endByte - startByte;
+                std::transform(originalData.begin() + startByte,
+                               originalData.begin() + startByte + rangeSize,
+                               updatedData.begin() + startByte,
+                               updatedData.begin() + startByte,
+                               std::bit_xor<uint8_t>());
+
+                SPDLOG_TRACE("Adding {} XOR merge: {}-{}",
+                             snapshotDataTypeStr(dataType),
+                             startByte,
+                             startByte + rangeSize);
+
+                diffs.emplace_back(dataType,
+                                   operation,
+                                   startByte,
+                                   updatedData.subspan(startByte, rangeSize));
+            }
         }
 
-        // This is the end of the overwrite diff
+        // This is the end of the XOR/bytewise diff
         return;
     }
 

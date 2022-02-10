@@ -27,7 +27,8 @@ enum SnapshotDataType
 
 enum SnapshotMergeOperation
 {
-    Overwrite,
+    Bytewise,
+    XOR,
     Sum,
     Product,
     Subtract,
@@ -58,7 +59,7 @@ class SnapshotDiff
 
   private:
     SnapshotDataType dataType = SnapshotDataType::Raw;
-    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Bytewise;
     uint32_t offset = 0;
     std::vector<uint8_t> data;
 };
@@ -79,7 +80,7 @@ class SnapshotMergeRegion
     uint32_t offset = 0;
     size_t length = 0;
     SnapshotDataType dataType = SnapshotDataType::Raw;
-    SnapshotMergeOperation operation = SnapshotMergeOperation::Overwrite;
+    SnapshotMergeOperation operation = SnapshotMergeOperation::Bytewise;
 
     SnapshotMergeRegion() = default;
 
@@ -233,7 +234,7 @@ class SnapshotData
                         SnapshotDataType dataType,
                         SnapshotMergeOperation operation);
 
-    void fillGapsWithOverwriteRegions();
+    void fillGapsWithBytewiseRegions();
 
     void clearMergeRegions();
 
@@ -284,6 +285,8 @@ class SnapshotData
     void mapToMemory(uint8_t* target, bool shared);
 
     void writeData(std::span<const uint8_t> buffer, uint32_t offset = 0);
+
+    void xorData(std::span<const uint8_t> buffer, uint32_t offset = 0);
 
     void checkWriteExtension(std::span<const uint8_t> buffer, uint32_t offset);
 };
