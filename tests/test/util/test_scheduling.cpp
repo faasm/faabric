@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include "faabric/util/config.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -92,5 +93,118 @@ TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
     REQUIRE(actual.groupIdxs == expectedGroupIdxs);
     REQUIRE(actual.messageIds == expectedMessageIds);
     REQUIRE(actual.hosts == expectedHosts);
+}
+
+TEST_CASE_METHOD(CachedDecisionTestFixture,
+                 "Test caching scheduling decisions",
+                 "[util]")
+{
+    int appId = 123;
+    int groupId = 345;
+
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    auto req = batchExecFactory("foo", "bar", 5);
+    std::vector<std::string> hosts;
+
+    bool expectSingleHost = false;
+
+    SECTION("Single host")
+    {
+        hosts = std::vector<std::string>(5, thisHost);
+        expectSingleHost = true;
+    }
+
+    SECTION("Single other host")
+    {
+        hosts = std::vector<std::string>(5, "blahblah");
+    }
+
+    SECTION("Multiple hosts")
+    {
+        hosts = {
+            "alpha", "alpha", "beta", "gamma", "alpha",
+        };
+    }
+
+    // Build the decision
+    SchedulingDecision decision(appId, groupId);
+    for (int i = 0; i < hosts.size(); i++) {
+        decision.addMessage(hosts.at(i), req->messages().at(i));
+    }
+
+    // Check no decision to start with
+    REQUIRE(decisionCache.getCachedDecision(req) == nullptr);
+
+    // Cache the decision
+    decisionCache.addCachedDecision(req, decision);
+
+    // Get the cached decision
+    std::shared_ptr<CachedDecision> actual =
+      decisionCache.getCachedDecision(req);
+    REQUIRE(actual != nullptr);
+    REQUIRE(actual->getHosts() == hosts);
+    REQUIRE(actual->getGroupId() == groupId);
+    REQUIRE(actual->isSingleHost() == expectSingleHost);
+
+    // Check clearing decisions
+    decisionCache.clear();
+    REQUIRE(decisionCache.getCachedDecision(req) == nullptr);
+}
+
+TEST_CASE_METHOD(CachedDecisionTestFixture,
+                 "Test caching invalid decision causes error",
+                 "[util]")
+{
+    auto req = batchExecFactory("foo", "bar", 3);
+
+    // Decision with wrong number of hosts
+    std::vector<std::string> hosts = { "alpha", "alpha" };
+    SchedulingDecision decision(123, 345);
+    for (int i = 0; i < hosts.size(); i++) {
+        decision.addMessage(hosts.at(i), req->messages().at(i));
+    }
+
+    // Check it throws an error
+    REQUIRE_THROWS(decisionCache.addCachedDecision(req, decision));
+}
+
+TEST_CASE_METHOD(CachedDecisionTestFixture,
+                 "Test caching multiple decisions for same function",
+                 "[util]")
+{
+    auto reqA = batchExecFactory("foo", "bar", 3);
+    auto reqB = batchExecFactory("foo", "bar", 5);
+
+    // Decision with wrong number of hosts
+    std::vector<std::string> hostsA = { "alpha", "alpha", "beta" };
+    std::vector<std::string> hostsB = {
+        "alpha", "alpha", "beta", "gamma", "gamma"
+    };
+
+    SchedulingDecision decisionA(123, 345);
+    for (int i = 0; i < hostsA.size(); i++) {
+        decisionA.addMessage(hostsA.at(i), reqA->messages().at(i));
+    }
+
+    SchedulingDecision decisionB(456, 789);
+    for (int i = 0; i < hostsB.size(); i++) {
+        decisionB.addMessage(hostsB.at(i), reqB->messages().at(i));
+    }
+
+    // Add both
+    decisionCache.addCachedDecision(reqA, decisionA);
+    decisionCache.addCachedDecision(reqB, decisionB);
+
+    // Get both
+    std::shared_ptr<CachedDecision> actualA =
+      decisionCache.getCachedDecision(reqA);
+    std::shared_ptr<CachedDecision> actualB =
+      decisionCache.getCachedDecision(reqB);
+
+    REQUIRE(actualA->getHosts() == hostsA);
+    REQUIRE(actualA->getGroupId() == 345);
+    REQUIRE(actualB->getHosts() == hostsB);
+    REQUIRE(actualB->getGroupId() == 789);
 }
 }

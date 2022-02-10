@@ -20,6 +20,7 @@
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
+#include "faabric/util/scheduling.h"
 
 namespace tests {
 class RedisTestFixture
@@ -70,7 +71,22 @@ class DirtyTrackingTestFixture
     ~DirtyTrackingTestFixture() { faabric::util::getDirtyTracker().clearAll(); }
 };
 
-class SchedulerTestFixture : public DirtyTrackingTestFixture
+class CachedDecisionTestFixture
+{
+  public:
+    CachedDecisionTestFixture()
+      : decisionCache(faabric::util::getSchedulingDecisionCache())
+    {}
+
+    ~CachedDecisionTestFixture() { decisionCache.clear(); }
+
+  protected:
+    faabric::util::DecisionCache& decisionCache;
+};
+
+class SchedulerTestFixture
+  : public DirtyTrackingTestFixture
+  , CachedDecisionTestFixture
 {
   public:
     SchedulerTestFixture()

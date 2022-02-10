@@ -116,6 +116,8 @@ class DecisionCache
     void addCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req,
                            faabric::util::SchedulingDecision& decision);
 
+    void clear();
+
   private:
     std::string getCacheKey(std::shared_ptr<faabric::BatchExecuteRequest> req);
 

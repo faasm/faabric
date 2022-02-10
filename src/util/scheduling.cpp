@@ -51,6 +51,14 @@ void DecisionCache::addCachedDecision(
 {
     std::string cacheKey = getCacheKey(req);
 
+    if (req->messages_size() != decision.hosts.size()) {
+        SPDLOG_ERROR("Trying to cache decision for {} with wrong size {} != {}",
+                     funcToString(req),
+                     req->messages_size(),
+                     decision.hosts.size());
+        throw std::runtime_error("Invalid decision caching");
+    }
+
     cachedDecisions[cacheKey] =
       std::make_shared<CachedDecision>(decision.hosts, decision.groupId);
 
@@ -66,6 +74,11 @@ std::string DecisionCache::getCacheKey(
 {
     return std::to_string(req->messages().at(0).appid()) + "_" +
            std::to_string(req->messages_size());
+}
+
+void DecisionCache::clear()
+{
+    cachedDecisions.clear();
 }
 
 DecisionCache& getSchedulingDecisionCache()
