@@ -460,6 +460,38 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
     return decision;
 }
 
+void Scheduler::callFunctions(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  std::shared_ptr<faabric::util::CachedDecision> decision)
+{
+    const faabric::Message &msg = req->messages().at(0);
+
+    // Get the cached group ID and hosts
+    int groupId = decision->getGroupId();
+    std::vector<std::string> hosts = decision->getHosts();
+
+    // Create the scheduling hint
+    faabric::util::SchedulingDecision hint(msg.appid(), groupId);
+    for (int i = 0; i < hosts.size(); i++) {
+        // Reuse the group id
+        faabric::Message& m = req->mutable_messages()->at(i);
+        m.set_groupid(groupId);
+        m.set_groupsize(req->messages_size());
+
+        // Add to the decision
+        hint.addMessage(hosts.at(i), m);
+    }
+
+    SPDLOG_DEBUG("Using cached decision for {}/{} {}, group {}",
+                 msg.user(),
+                 msg.function(),
+                 msg.appid(),
+                 hint.groupId);
+
+    // Invoke the functions
+    callFunctions(req, hint);
+}
+
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingDecision& hint)
@@ -998,6 +1030,21 @@ void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
     faabric::util::FullLock lock(mx);
     SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
     threadResults.at(msgId).set_value(returnValue);
+}
+
+std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    std::vector<std::pair<uint32_t, int32_t>> results;
+    results.reserve(req->messages_size());
+    for (int i = 0; i < req->messages_size(); i++) {
+        uint32_t messageId = req->messages().at(i).id();
+
+        int result = awaitThreadResult(messageId);
+        results.emplace_back(messageId, result);
+    }
+
+    return results;
 }
 
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)

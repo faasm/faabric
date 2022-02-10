@@ -1,22 +1,63 @@
+#include "faabric/util/func.h"
+#include "faabric/util/string_tools.h"
+#include <faabric/util/config.h>
 #include <faabric/util/scheduling.h>
 
 namespace faabric::util {
 
-CachedDecision DecisionCache::getCachedDecision(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
-{}
+CachedDecision::CachedDecision(const std::vector<std::string>& hostsIn,
+                               int groupIdIn)
+  : hosts(hostsIn)
+  , groupId(groupIdIn)
+{
+    // Work out if this decision is all on this host. If the decision is
+    // completely on *another* host, we still count it as not being on a single
+    // host, as this host will be the master
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    _isSingleHost =
+      std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
+          return s == thisHost;
+      });
+}
 
-bool DecisionCache::hasCachedDecision(
+std::shared_ptr<CachedDecision> DecisionCache::getCachedDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     std::string cacheKey = getCacheKey(req);
-    bool res = false;
-    {
-        faabric::util::SharedLock lock(mx);
-        res = cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
+    bool hasDecision = cachedDecisions.find(cacheKey) != cachedDecisions.end();
+
+    if (hasDecision) {
+        std::shared_ptr<CachedDecision> res = cachedDecisions[cacheKey];
+
+        // Sanity check we've got something the right size
+        if (res->getHosts().size() != req->messages().size()) {
+            SPDLOG_ERROR("Cached decision for {} has {} hosts, expected {}",
+                         faabric::util::funcToString(req),
+                         res->getHosts().size(),
+                         req->messages().size());
+
+            throw std::runtime_error("Invalid cached scheduling decision");
+        }
+
+        return res;
     }
 
-    return res;
+    return nullptr;
+}
+
+void DecisionCache::addCachedDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::util::SchedulingDecision& decision)
+{
+    std::string cacheKey = getCacheKey(req);
+
+    cachedDecisions.emplace(cacheKey, decision.hosts, decision.groupId);
+
+    SPDLOG_DEBUG("Caching decision for {} x {}, caching group {}, hosts: {}",
+                 req->messages().size(),
+                 faabric::util::funcToString(req),
+                 decision.groupId,
+                 faabric::util::vectorToString<std::string>(decision.hosts));
 }
 
 std::string DecisionCache::getCacheKey(

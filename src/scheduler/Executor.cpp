@@ -130,96 +130,51 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 {
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
-    faabric::Message& msg = req->mutable_messages()->at(0);
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    faabric::util::DecisionCache& cache =
+    std::string funcStr = faabric::util::funcToString(req);
+
+    // ----- CHECK CACHED DECISION -----
+    faabric::util::DecisionCache& decisionCache =
       faabric::util::getSchedulingDecisionCache();
-
-    bool isSingleHost = false;
-    bool hasCachedDecision = cache.hasCachedDecision(req);
-    if (hasCachedDecision) {
-        // See if this is a single host batch
-        std::vector<std::string> hosts = cachedDecisionHosts[cacheKey];
-
-        isSingleHost =
-          std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
-              return s == thisHost;
-          });
-
-        if (isSingleHost) {
-            SPDLOG_TRACE("Cached decision {} marked single-host on {}",
-                         cacheKey,
-                         thisHost);
-        }
-    }
+    std::shared_ptr<faabric::util::CachedDecision> cachedDecision =
+      decisionCache.getCachedDecision(req);
+    bool hasCachedDecision = cachedDecision != nullptr;
+    bool isSingleHost = hasCachedDecision && cachedDecision->isSingleHost();
 
     // ----- MAIN THREAD SNAPSHOT UPDATE -----
-
-    // No need to do any of this if we know we're only executing on this host
-    std::string snapshotKey = faabric::util::getMainThreadSnapshotKey(msg);
+    // We only do snapshotting if not on a single host
+    faabric::Message& msg = req->mutable_messages()->at(0);
     std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
     if (!isSingleHost) {
-        bool snapshotExists = reg.snapshotExists(snapshotKey);
+        snap = getMainThreadSnapshot(msg, true);
 
-        if (!snapshotExists) {
-            faabric::util::FullLock lock(threadExecutionMutex);
-            if (!reg.snapshotExists(snapshotKey)) {
-                SPDLOG_DEBUG("Creating main thread snapshot: {} for {}",
-                             snapshotKey,
-                             funcStr);
+        // TODO - skip this if it's the first time round?
 
-                std::shared_ptr<faabric::util::SnapshotData> snap =
-                  std::make_shared<faabric::util::SnapshotData>(
-                    getMemoryView(), DEFAULT_MAX_SNAP_SIZE);
-                reg.registerSnapshot(snapshotKey, snap);
-            } else {
-                // This only hits when we realise there is a snapshot when we
-                // thought there wasn't
-                snapshotExists = true;
-            }
+        // Get dirty regions since last batch of threads
+        std::span<uint8_t> memView = getMemoryView();
+        tracker.stopTracking(memView);
+        tracker.stopThreadLocalTracking(memView);
+
+        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
+
+        // Apply changes to snapshot
+        snap->fillGapsWithOverwriteRegions();
+        std::vector<faabric::util::SnapshotDiff> updates =
+          snap->diffWithDirtyRegions(memView, dirtyRegions);
+
+        if (updates.empty()) {
+            SPDLOG_TRACE(
+              "No updates to main thread snapshot for {} over {} pages",
+              faabric::util::funcToString(msg, false),
+              dirtyRegions.size());
+        } else {
+            SPDLOG_DEBUG("Updating main thread snapshot for {} with {} diffs",
+                         faabric::util::funcToString(msg, false),
+                         updates.size());
+            snap->queueDiffs(updates);
+            snap->writeQueuedDiffs();
         }
 
-        // Avoid race conditions on snapshot being initialised using shared lock
-        // here
-        {
-            faabric::util::SharedLock lock(threadExecutionMutex);
-            snap = reg.getSnapshot(snapshotKey);
-        }
-
-        if (snapshotExists) {
-            SPDLOG_DEBUG(
-              "Main thread snapshot exists: {} for {}", snapshotKey, funcStr);
-
-            std::span<uint8_t> memView = getMemoryView();
-
-            // Get dirty regions since last batch of threads
-            tracker.stopTracking(memView);
-            tracker.stopThreadLocalTracking(memView);
-
-            std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
-
-            // Apply changes to snapshot
-            snap->fillGapsWithOverwriteRegions();
-            std::vector<faabric::util::SnapshotDiff> updates =
-              snap->diffWithDirtyRegions(memView, dirtyRegions);
-
-            if (updates.empty()) {
-                SPDLOG_TRACE(
-                  "No updates to main thread snapshot for {} over {} pages",
-                  faabric::util::funcToString(msg, false),
-                  dirtyRegions.size());
-            } else {
-                SPDLOG_DEBUG(
-                  "Updating main thread snapshot for {} with {} diffs",
-                  faabric::util::funcToString(msg, false),
-                  updates.size());
-                snap->queueDiffs(updates);
-                snap->writeQueuedDiffs();
-            }
-
-            snap->clearMergeRegions();
-        }
+        snap->clearMergeRegions();
 
         // Now we have to add any merge regions we've been saving up for this
         // batch of threads
@@ -230,104 +185,40 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // ----- NEW SCHEDULING DECISION -----
-
     if (!hasCachedDecision) {
         faabric::util::FullLock lock(threadExecutionMutex);
-        if (cachedDecisionHosts.find(cacheKey) == cachedDecisionHosts.end()) {
-            SPDLOG_TRACE("Creating new decision for {} threads of {}",
-                         req->messages_size(),
-                         funcStr);
+        SPDLOG_TRACE("Creating new decision for {} threads of {}",
+                     req->messages_size(),
+                     funcStr);
 
-            // Set up a new group
-            int groupId = faabric::util::generateGid();
-            for (auto& m : *req->mutable_messages()) {
-                m.set_groupid(groupId);
-                m.set_groupsize(req->messages_size());
-            }
-
-            // Invoke the functions
-            faabric::util::SchedulingDecision decision = sch.callFunctions(req);
-
-            // Cache the decision for next time
-            SPDLOG_DEBUG(
-              "Caching decision for {} x {}/{}, caching group {}, hosts: {}",
-              req->messages().size(),
-              msg.user(),
-              msg.function(),
-              groupId,
-              faabric::util::vectorToString<std::string>(decision.hosts));
-
-            cachedGroupIds[cacheKey] = groupId;
-            cachedDecisionHosts[cacheKey] = decision.hosts;
-
-            // See if, now that we've made the decision, we realise that this is
-            // actually a single host batch
-            isSingleHost = req->singlehost();
-            if (isSingleHost) {
-                SPDLOG_TRACE(
-                  "Marking batch as single-host based on fresh decision");
-            }
-        } else {
-            // This only happens when we thought we didn't have a cached
-            // decision, then when we acquired the lock, realised we did
-            hasCachedDecision = true;
-        }
-    }
-
-    // ----- CACHED DECISION -----
-
-    if (hasCachedDecision) {
-        // Get the cached group ID and hosts
-        int groupId = cachedGroupIds[cacheKey];
-        std::vector<std::string> hosts = cachedDecisionHosts[cacheKey];
-
-        // Sanity check we've got something the right size
-        if (hosts.size() != req->messages().size()) {
-            SPDLOG_ERROR("Cached decision for {}/{} has {} hosts, expected {}",
-                         msg.user(),
-                         msg.function(),
-                         hosts.size(),
-                         req->messages().size());
-
-            throw std::runtime_error(
-              "Cached threads scheduling decision invalid");
-        }
-
-        // Create the scheduling hint
-        faabric::util::SchedulingDecision hint(msg.appid(), groupId);
-        for (int i = 0; i < hosts.size(); i++) {
-            // Reuse the group id
-            faabric::Message& m = req->mutable_messages()->at(i);
+        // Set up a new group
+        int groupId = faabric::util::generateGid();
+        for (auto& m : *req->mutable_messages()) {
             m.set_groupid(groupId);
             m.set_groupsize(req->messages_size());
-
-            // Add to the decision
-            hint.addMessage(hosts.at(i), m);
         }
 
-        SPDLOG_DEBUG("Using cached decision for {}/{} {}, group {}",
-                     msg.user(),
-                     msg.function(),
-                     msg.appid(),
-                     hint.groupId);
-
         // Invoke the functions
-        sch.callFunctions(req, hint);
+        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+
+        // Cache the decision for next time
+        decisionCache.addCachedDecision(req, decision);
+
+        // See if, now that we've made the decision, we realise that this is
+        // actually a single host batch
+        isSingleHost = req->singlehost();
+        if (isSingleHost) {
+            SPDLOG_TRACE(
+              "Marking batch as single-host based on fresh decision");
+        }
+    } else {
+        sch.callFunctions(req, cachedDecision);
     }
 
     // ----- AWAIT CHILD THREADS -----
 
-    std::vector<std::pair<uint32_t, int32_t>> results;
-    results.reserve(req->messages_size());
-    for (int i = 0; i < req->messages_size(); i++) {
-        uint32_t messageId = req->messages().at(i).id();
-
-        int result = sch.awaitThreadResult(messageId);
-        results.emplace_back(messageId, result);
-    }
-
-    SPDLOG_DEBUG(
-      "Executor {} got results for {} threads", id, req->messages_size());
+    std::vector<std::pair<uint32_t, int32_t>> results =
+      sch.awaitThreadResults(req);
 
     // ----- SNAPSHOT DIFFS AND DIRTY TRACKING -----
 

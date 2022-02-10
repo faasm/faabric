@@ -10,35 +10,6 @@
 
 namespace faabric::util {
 
-class CachedDecision
-{
-  public:
-    std::vector<std::string> getHosts();
-
-  private:
-    std::vector<std::string> hosts;
-};
-
-class DecisionCache
-{
-  public:
-    CachedDecision getCachedDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    bool hasCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-    std::string getCacheKey(std::shared_ptr<faabric::BatchExecuteRequest> req);
-
-  private:
-    std::shared_mutex mx;
-
-    std::unordered_map<std::string, int> cachedGroupIds;
-    std::unordered_map<std::string, std::vector<std::string>>
-      cachedDecisionHosts;
-};
-
-DecisionCache& getSchedulingDecisionCache();
-
 class SchedulingDecision
 {
   public:
@@ -108,6 +79,54 @@ const std::unordered_map<SchedulingTopologyHint, std::string>
       { SchedulingTopologyHint::NEVER_ALONE, "NEVER_ALONE" },
       { SchedulingTopologyHint::UNDERFULL, "UNDERFULL" },
   };
+
+/**
+ * A record of a decision already taken for the given size of batch request
+ * for the given function. This doesn't contain the messages themselves,
+ * just the hosts and group ID that was used.
+ */
+class CachedDecision
+{
+  public:
+    CachedDecision(const std::vector<std::string>& hostsIn, int groupIdIn);
+
+    std::vector<std::string> getHosts();
+
+    int getGroupId();
+
+    bool isSingleHost();
+
+  private:
+    std::vector<std::string> hosts;
+    int groupId = 0;
+    bool _isSingleHost = false;
+};
+
+/**
+ * Repository for cached scheduling decisions.
+ */
+class DecisionCache
+{
+  public:
+    std::shared_ptr<CachedDecision> getCachedDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    void addCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req,
+                           CachedDecision decision);
+
+    void addCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req,
+                           faabric::util::SchedulingDecision& decision);
+
+  private:
+    std::shared_mutex mx;
+
+    std::string getCacheKey(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    std::unordered_map<std::string, std::shared_ptr<CachedDecision>>
+      cachedDecisions;
+};
+
+DecisionCache& getSchedulingDecisionCache();
 
 // Migration strategies help the scheduler decide wether the scheduling decision
 // for a batch request could be changed with the new set of available resources.

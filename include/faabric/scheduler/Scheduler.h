@@ -82,6 +82,8 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
+    void updateMainThreadSnapshot();
+
     virtual std::span<uint8_t> getMemoryView();
 
   protected:
@@ -134,6 +136,10 @@ class Scheduler
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
+    void callFunctions(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      std::shared_ptr<faabric::util::CachedDecision> decision);
+
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingDecision& hint);
@@ -171,6 +177,9 @@ class Scheduler
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
+
+    std::vector<std::pair<uint32_t, int32_t>> awaitThreadResults(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     int32_t awaitThreadResult(uint32_t messageId);
 
