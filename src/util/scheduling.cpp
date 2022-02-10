@@ -51,7 +51,8 @@ void DecisionCache::addCachedDecision(
 {
     std::string cacheKey = getCacheKey(req);
 
-    cachedDecisions.emplace(cacheKey, decision.hosts, decision.groupId);
+    cachedDecisions[cacheKey] =
+      std::make_shared<CachedDecision>(decision.hosts, decision.groupId);
 
     SPDLOG_DEBUG("Caching decision for {} x {}, caching group {}, hosts: {}",
                  req->messages().size(),

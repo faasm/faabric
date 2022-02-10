@@ -90,11 +90,11 @@ class CachedDecision
   public:
     CachedDecision(const std::vector<std::string>& hostsIn, int groupIdIn);
 
-    std::vector<std::string> getHosts();
+    bool isSingleHost() const { return _isSingleHost; }
 
-    int getGroupId();
+    std::vector<std::string> getHosts() { return hosts; }
 
-    bool isSingleHost();
+    int getGroupId() const { return groupId; }
 
   private:
     std::vector<std::string> hosts;
