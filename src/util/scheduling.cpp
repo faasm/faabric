@@ -2,6 +2,36 @@
 
 namespace faabric::util {
 
+CachedDecision DecisionCache::getCachedDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{}
+
+bool DecisionCache::hasCachedDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    std::string cacheKey = getCacheKey(req);
+    bool res = false;
+    {
+        faabric::util::SharedLock lock(mx);
+        res = cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
+    }
+
+    return res;
+}
+
+std::string DecisionCache::getCacheKey(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    return std::to_string(req->messages().at(0).appid()) + "_" +
+           std::to_string(req->messages_size());
+}
+
+DecisionCache& getSchedulingDecisionCache()
+{
+    static DecisionCache c;
+    return c;
+}
+
 SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
   : appId(appIdIn)
   , groupId(groupIdIn)

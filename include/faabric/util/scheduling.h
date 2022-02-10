@@ -6,8 +6,38 @@
 #include <vector>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/util/locks.h>
 
 namespace faabric::util {
+
+class CachedDecision
+{
+  public:
+    std::vector<std::string> getHosts();
+
+  private:
+    std::vector<std::string> hosts;
+};
+
+class DecisionCache
+{
+  public:
+    CachedDecision getCachedDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    bool hasCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    std::string getCacheKey(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+  private:
+    std::shared_mutex mx;
+
+    std::unordered_map<std::string, int> cachedGroupIds;
+    std::unordered_map<std::string, std::vector<std::string>>
+      cachedDecisionHosts;
+};
+
+DecisionCache& getSchedulingDecisionCache();
 
 class SchedulingDecision
 {

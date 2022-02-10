@@ -106,11 +106,7 @@ class Executor
 
     // ---- Application threads ----
     std::shared_mutex threadExecutionMutex;
-    std::unordered_map<std::string, int> cachedGroupIds;
-    std::unordered_map<std::string, std::vector<std::string>>
-      cachedDecisionHosts;
     std::vector<char> dirtyRegions;
-
     void deleteMainThreadSnapshot(const faabric::Message& msg);
 
     // ---- Function execution thread pool ----

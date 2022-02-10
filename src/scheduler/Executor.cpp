@@ -16,6 +16,7 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
@@ -132,22 +133,11 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(msg, false);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-
-    // ----- CACHED DECISION CHECK -----
-
-    std::string cacheKey =
-      std::to_string(msg.appid()) + "_" + std::to_string(req->messages_size());
-
-    bool hasCachedDecision = false;
-    {
-        faabric::util::SharedLock lock(threadExecutionMutex);
-        hasCachedDecision =
-          cachedDecisionHosts.find(cacheKey) != cachedDecisionHosts.end();
-    }
-
-    // ----- SINGLE HOST CHECK -----
+    faabric::util::DecisionCache& cache =
+      faabric::util::getSchedulingDecisionCache();
 
     bool isSingleHost = false;
+    bool hasCachedDecision = cache.hasCachedDecision(req);
     if (hasCachedDecision) {
         // See if this is a single host batch
         std::vector<std::string> hosts = cachedDecisionHosts[cacheKey];

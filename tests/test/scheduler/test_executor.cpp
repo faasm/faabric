@@ -1017,4 +1017,26 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     setMockMode(false);
 }
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test executor thread execution",
+                 "[executor]")
+{
+    // Create an executor
+    faabric::Message msg =
+      faabric::util::messageFactory("dummy", "thread-check");
+    std::shared_ptr<ExecutorFactory> fac =
+      faabric::scheduler::getExecutorFactory();
+    fac->createExecutor(msg);
+
+    // Create a batch request
+    int nThreads = 10;
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "thread-check", nThreads);
+    req->set_type(faabric::BatchExecuteRequest::THREADS);
+
+    SECTION("Single host") {}
+
+    SECTION("Non-single host") {}
+}
 }
