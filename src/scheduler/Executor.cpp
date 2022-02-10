@@ -126,7 +126,8 @@ void Executor::finish()
 
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
-  const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions)
+  const std::vector<faabric::util::SnapshotMergeRegion>& mergeRegions,
+  std::shared_ptr<faabric::util::Latch> startLatch)
 {
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
@@ -186,9 +187,11 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         }
     }
 
-    // ----- NEW SCHEDULING DECISION -----
+    // ----- SCHEDULING -----
 
-    if (!hasCachedDecision) {
+    if (hasCachedDecision) {
+        sch.callFunctions(req, cachedDecision);
+    } else {
         faabric::util::FullLock lock(threadExecutionMutex);
         SPDLOG_TRACE("Creating new decision for {} threads of {}",
                      req->messages_size(),
@@ -214,8 +217,11 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             SPDLOG_TRACE(
               "Marking batch as single-host based on fresh decision");
         }
-    } else {
-        sch.callFunctions(req, cachedDecision);
+    }
+
+    // Await the start latch if given
+    if (startLatch != nullptr) {
+        startLatch->wait();
     }
 
     // ----- CHILD THREADS -----
