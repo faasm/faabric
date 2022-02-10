@@ -103,7 +103,9 @@ class CachedDecision
 };
 
 /**
- * Repository for cached scheduling decisions.
+ * Repository for cached scheduling decisions. Object is not thread safe as we
+ * assume only a single executor will be caching decisions for a given function
+ * and size of batch request on one host at a time.
  */
 class DecisionCache
 {
@@ -112,14 +114,9 @@ class DecisionCache
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void addCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req,
-                           CachedDecision decision);
-
-    void addCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req,
                            faabric::util::SchedulingDecision& decision);
 
   private:
-    std::shared_mutex mx;
-
     std::string getCacheKey(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     std::unordered_map<std::string, std::shared_ptr<CachedDecision>>

@@ -133,6 +133,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     std::string funcStr = faabric::util::funcToString(req);
 
     // ----- CHECK CACHED DECISION -----
+
     faabric::util::DecisionCache& decisionCache =
       faabric::util::getSchedulingDecisionCache();
     std::shared_ptr<faabric::util::CachedDecision> cachedDecision =
@@ -141,19 +142,19 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     bool isSingleHost = hasCachedDecision && cachedDecision->isSingleHost();
 
     // ----- MAIN THREAD SNAPSHOT UPDATE -----
+
     // We only do snapshotting if not on a single host
     faabric::Message& msg = req->mutable_messages()->at(0);
     std::shared_ptr<faabric::util::SnapshotData> snap = nullptr;
     if (!isSingleHost) {
         snap = getMainThreadSnapshot(msg, true);
 
-        // TODO - skip this if it's the first time round?
-
         // Get dirty regions since last batch of threads
         std::span<uint8_t> memView = getMemoryView();
         tracker.stopTracking(memView);
         tracker.stopThreadLocalTracking(memView);
 
+        // If this is the first batch, these dirty regions will be empty
         std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
 
         // Apply changes to snapshot
@@ -174,10 +175,11 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             snap->writeQueuedDiffs();
         }
 
+        // Clear merge regions, not persisted between batches of threads
         snap->clearMergeRegions();
 
         // Now we have to add any merge regions we've been saving up for this
-        // batch of threads
+        // next batch of threads
         for (const auto& mr : mergeRegions) {
             snap->addMergeRegion(
               mr.offset, mr.length, mr.dataType, mr.operation);
@@ -185,6 +187,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // ----- NEW SCHEDULING DECISION -----
+
     if (!hasCachedDecision) {
         faabric::util::FullLock lock(threadExecutionMutex);
         SPDLOG_TRACE("Creating new decision for {} threads of {}",
@@ -215,7 +218,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         sch.callFunctions(req, cachedDecision);
     }
 
-    // ----- AWAIT CHILD THREADS -----
+    // ----- CHILD THREADS -----
 
     std::vector<std::pair<uint32_t, int32_t>> results =
       sch.awaitThreadResults(req);
