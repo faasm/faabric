@@ -1,7 +1,7 @@
-#include "faabric/util/func.h"
-#include "faabric/util/string_tools.h"
 #include <faabric/util/config.h>
+#include <faabric/util/func.h>
 #include <faabric/util/scheduling.h>
+#include <faabric/util/string_tools.h>
 
 namespace faabric::util {
 

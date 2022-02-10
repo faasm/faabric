@@ -542,6 +542,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // the remaining scheduling. Therefore we want to create a list of unique
     // hosts, with this host last.
     std::vector<std::string> orderedHosts;
+    bool isSingleHost = false;
     {
         std::set<std::string> uniqueHosts(decision.hosts.begin(),
                                           decision.hosts.end());
@@ -549,7 +550,8 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
 
         // Mark the request as being single-host if necessary
         std::set<std::string> thisHostUniset = { thisHost };
-        req->set_singlehost((uniqueHosts == thisHostUniset) && isMaster);
+        isSingleHost = (uniqueHosts == thisHostUniset) && isMaster;
+        req->set_singlehost(isSingleHost);
 
         if (hasFunctionsOnThisHost) {
             uniqueHosts.erase(thisHost);
@@ -593,7 +595,9 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             std::runtime_error("Should not provide snapshot key for threads");
         }
 
-        snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+        if (!isSingleHost) {
+            snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+        }
     } else {
         snapshotKey = firstMsg.snapshotkey();
     }
