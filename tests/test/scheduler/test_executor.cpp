@@ -217,6 +217,14 @@ int32_t TestExecutor::executeTask(
         return 0;
     }
 
+    if (msg.function() == "single-host") {
+        if (reqOrig->singlehost()) {
+            return 10;
+        }
+
+        return 20;
+    }
+
     if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
         SPDLOG_DEBUG("TestExecutor executing simple thread {}", msg.id());
         return msg.id() / 100;
@@ -960,5 +968,53 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     REQUIRE(resetCount == expectedResets);
+}
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test single host flag passed to executor",
+                 "[executor]")
+{
+    std::string thisHost = conf.endpointHost;
+    std::string otherHost = "other-host";
+
+    std::vector<std::string> singleHosts = {
+        thisHost, thisHost, thisHost, thisHost
+    };
+
+    int nMessages = singleHosts.size();
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "single-host", nMessages);
+
+    int expectedResult = 0;
+    SECTION("Single host") { expectedResult = 10; }
+
+    SECTION("Not single host")
+    {
+        expectedResult = 20;
+        singleHosts[1] = otherHost;
+        singleHosts[2] = otherHost;
+    }
+
+    SchedulingDecision hint(123, 123);
+    for (int i = 0; i < nMessages; i++) {
+        hint.addMessage(singleHosts[i], req->messages().at(i));
+    }
+
+    // Mock mode to avoid requests sent across hosts
+    setMockMode(true);
+    executeWithTestExecutorHint(req, hint);
+
+    // Await results on this host
+    for (int i = 0; i < nMessages; i++) {
+        if (singleHosts[i] == thisHost) {
+            faabric::Message res =
+              sch.getFunctionResult(req->messages().at(i).id(), 2000);
+
+            // Check result as expected
+            REQUIRE(res.returnvalue() == expectedResult);
+        }
+    }
+
+    setMockMode(false);
 }
 }
