@@ -16,7 +16,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.2.4
+      image: faasm/faabric:0.3.0
     defaults:
       run:
         working-directory: /code/faabric
@@ -31,7 +31,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.2.4
+      image: faasm/faabric:0.3.0
     defaults:
       run:
         working-directory: /code/faabric
@@ -40,10 +40,6 @@ jobs:
         run: git fetch origin ${GITHUB_REF}:ci-branch
       - name: "Check out branch"
         run: git checkout --force ci-branch
-      - name: "TEMP - install doxygen"
-        run: apt install -y doxygen
-      - name: "TEMP - install python deps"
-        run: pip install -r requirements.txt
       - name: "Build docs"
         run: inv docs
 
@@ -51,7 +47,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.2.4
+      image: faasm/faabric:0.3.0
     defaults:
       run:
         working-directory: /code/faabric
@@ -85,7 +81,7 @@ jobs:
       TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt:history_size=7"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
-      image: faasm/faabric:0.2.4
+      image: faasm/faabric:0.3.0
     defaults:
       run:
         working-directory: /code/faabric
@@ -153,7 +149,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.2.4
+      image: faasm/faabric:0.3.0
     defaults:
       run:
         working-directory: /code/faabric
