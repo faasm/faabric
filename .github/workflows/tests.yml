@@ -29,7 +29,6 @@ jobs:
 
   docs:
     if: github.event.pull_request.draft == false
-    needs: [conan-cache]
     runs-on: ubuntu-latest
     container:
       image: faasm/faabric:0.2.4
