@@ -3,7 +3,7 @@ PROJECT_NAME      = "Faabric"
 OUTPUT_DIRECTORY  = doxygen
 OUTPUT_LANGUAGE   = English
 
-FULL_PATH_NAMES   = YES
+FULL_PATH_NAMES   = NO
 MARKDOWN_SUPPORT  = YES
 RECURSIVE         = YES
 QUIET             = YES
