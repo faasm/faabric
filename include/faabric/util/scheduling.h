@@ -48,8 +48,8 @@ class SchedulingDecision
 
 // Scheduling topology hints help the scheduler decide which host to assign new
 // requests in a batch.
-//  - NORMAL: bin-packs requests to slots in hosts starting from the master
-//            host, and overloadds the master if it runs out of resources.
+//  - NONE: bin-packs requests to slots in hosts starting from the master
+//          host, and overloadds the master if it runs out of resources.
 //  - FORCE_LOCAL: force local execution irrespective of the available
 //                 resources.
 //  - NEVER_ALONE: never allocates a single (non-master) request to a host
@@ -58,7 +58,7 @@ class SchedulingDecision
 //               migration opportunities to appear.
 enum SchedulingTopologyHint
 {
-    NORMAL,
+    NONE,
     CACHED,
     FORCE_LOCAL,
     NEVER_ALONE,
@@ -69,7 +69,7 @@ enum SchedulingTopologyHint
 // around
 const std::unordered_map<std::string, SchedulingTopologyHint>
   strToTopologyHint = {
-      { "NORMAL", SchedulingTopologyHint::NORMAL },
+      { "NONE", SchedulingTopologyHint::NONE },
       { "CACHED", SchedulingTopologyHint::CACHED },
       { "FORCE_LOCAL", SchedulingTopologyHint::FORCE_LOCAL },
       { "NEVER_ALONE", SchedulingTopologyHint::NEVER_ALONE },
@@ -78,7 +78,7 @@ const std::unordered_map<std::string, SchedulingTopologyHint>
 
 const std::unordered_map<SchedulingTopologyHint, std::string>
   topologyHintToStr = {
-      { SchedulingTopologyHint::NORMAL, "NORMAL" },
+      { SchedulingTopologyHint::NONE, "NONE" },
       { SchedulingTopologyHint::CACHED, "CACHED" },
       { SchedulingTopologyHint::FORCE_LOCAL, "FORCE_LOCAL" },
       { SchedulingTopologyHint::NEVER_ALONE, "NEVER_ALONE" },

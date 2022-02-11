@@ -245,16 +245,11 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // same master host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string masterHost = firstMsg.masterhost();
-    if (masterHost.empty()) {
-        std::string funcStrWithId = faabric::util::funcToString(firstMsg, true);
-        SPDLOG_ERROR("Request {} has no master host", funcStrWithId);
-        throw std::runtime_error("Message with no master host");
-    }
 
     // Get topology hint from message
     faabric::util::SchedulingTopologyHint topologyHint =
       firstMsg.topologyhint().empty()
-        ? faabric::util::SchedulingTopologyHint::NORMAL
+        ? faabric::util::SchedulingTopologyHint::NONE
         : faabric::util::strToTopologyHint.at(firstMsg.topologyhint());
 
     bool isForceLocal =
@@ -274,20 +269,22 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     faabric::util::FullLock lock(mx);
 
-    SchedulingDecision decision = makeSchedulingDecision(req, topologyHint);
-
-    // Send out point-to-point mappings if necessary (unless being forced to
-    // execute locally, in which case they will be transmitted from the
-    // master)
-    if (!isForceLocal && (firstMsg.groupid() > 0)) {
-        broker.setAndSendMappingsFromSchedulingDecision(decision);
-    }
+    SchedulingDecision decision = doSchedulingDecision(req, topologyHint);
 
     // Pass decision as hint
-    return doCallFunctions(req, decision, lock);
+    return doCallFunctions(req, decision, lock, topologyHint);
 }
 
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::util::SchedulingTopologyHint topologyHint)
+{
+    faabric::util::FullLock lock(mx);
+
+    return doSchedulingDecision(req, topologyHint);
+}
+
+faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingTopologyHint topologyHint)
 {
@@ -297,10 +294,10 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
 
     // If topology hints are disabled, unset the provided topology hint
     if (conf.noTopologyHints == "on" &&
-        topologyHint != faabric::util::SchedulingTopologyHint::NORMAL) {
+        topologyHint != faabric::util::SchedulingTopologyHint::NONE) {
         SPDLOG_WARN("Ignoring topology hint passed to scheduler as hints are "
                     "disabled in the config");
-        topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+        topologyHint = faabric::util::SchedulingTopologyHint::NONE;
     }
 
     // If requesting a cached decision, look for it now
@@ -509,13 +506,15 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
   faabric::util::SchedulingDecision& hint)
 {
     faabric::util::FullLock lock(mx);
-    return doCallFunctions(req, hint, lock);
+    return doCallFunctions(
+      req, hint, lock, faabric::util::SchedulingTopologyHint::NONE);
 }
 
 faabric::util::SchedulingDecision Scheduler::doCallFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingDecision& decision,
-  faabric::util::FullLock& lock)
+  faabric::util::FullLock& lock,
+  faabric::util::SchedulingTopologyHint topologyHint)
 {
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
@@ -530,6 +529,20 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
           decision.hosts.size(),
           nMessages);
         throw std::runtime_error("Invalid scheduler hint for messages");
+    }
+
+    if (firstMsg.masterhost().empty()) {
+        SPDLOG_ERROR("Request {} has no master host", funcStr);
+        throw std::runtime_error("Message with no master host");
+    }
+
+    // Send out point-to-point mappings if necessary (unless being forced to
+    // execute locally, in which case they will be transmitted from the
+    // master)
+    bool isForceLocal =
+      topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+    if (!isForceLocal && (firstMsg.groupid() > 0)) {
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
     // Record in-flight request if function desires to be migrated

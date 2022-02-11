@@ -132,7 +132,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     std::string funcStr = faabric::util::funcToString(req);
 
-    // Create a group ID, this will get overridden in there's a cached decision
+    // Set group ID, this will get overridden in there's a cached decision
     int groupId = faabric::util::generateGid();
     for (auto& m : *req->mutable_messages()) {
         m.set_groupid(groupId);

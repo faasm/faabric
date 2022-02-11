@@ -105,7 +105,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .hosts = { masterHost, "hostA" },
         .slots = { 1, 1 },
         .numReqs = 2,
-        .topologyHint = faabric::util::SchedulingTopologyHint::NORMAL,
+        .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
         .expectedHosts = { masterHost, "hostA" },
     };
 
@@ -122,7 +122,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .hosts = { masterHost, "hostA" },
         .slots = { 1, 1 },
         .numReqs = 3,
-        .topologyHint = faabric::util::SchedulingTopologyHint::NORMAL,
+        .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
         .expectedHosts = { masterHost, "hostA", masterHost },
     };
 
@@ -147,7 +147,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 
     SECTION("Force local off")
     {
-        config.topologyHint = faabric::util::SchedulingTopologyHint::NORMAL,
+        config.topologyHint = faabric::util::SchedulingTopologyHint::NONE,
         config.expectedHosts = { masterHost, "hostA" };
     }
 
@@ -200,7 +200,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .hosts = { masterHost, "hostA" },
         .slots = { 0, 2 },
         .numReqs = 2,
-        .topologyHint = faabric::util::SchedulingTopologyHint::NORMAL,
+        .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
         .expectedHosts = { "hostA", "hostA" },
     };
 
@@ -217,7 +217,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .hosts = { masterHost, "hostA", "hostB" },
         .slots = { 2, 0, 2 },
         .numReqs = 4,
-        .topologyHint = faabric::util::SchedulingTopologyHint::NORMAL,
+        .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
         .expectedHosts = { masterHost, masterHost, "hostB", "hostB" },
     };
 
@@ -225,7 +225,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 
     SECTION("No topology hint")
     {
-        config.topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+        config.topologyHint = faabric::util::SchedulingTopologyHint::NONE;
     }
 
     SECTION("Never alone topology hint")
@@ -245,7 +245,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .hosts = { masterHost, "hostA", "hostB", "hostC" },
         .slots = { 0, 0, 0, 0 },
         .numReqs = 8,
-        .topologyHint = faabric::util::SchedulingTopologyHint::NORMAL,
+        .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
         .expectedHosts = { masterHost, masterHost, masterHost, masterHost },
     };
 
@@ -280,7 +280,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 
         SECTION("No topology hint")
         {
-            config.topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+            config.topologyHint = faabric::util::SchedulingTopologyHint::NONE;
             config.expectedHosts = {
                 masterHost, masterHost, "hostA", "hostA",
                 "hostB",    "hostC",    "hostC", masterHost

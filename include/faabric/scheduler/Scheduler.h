@@ -134,7 +134,7 @@ class Scheduler
     faabric::util::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingTopologyHint topologyHint =
-        faabric::util::SchedulingTopologyHint::NORMAL);
+        faabric::util::SchedulingTopologyHint::NONE);
 
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
@@ -287,10 +287,15 @@ class Scheduler
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
+    faabric::util::SchedulingDecision doSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingTopologyHint topologyHint);
+
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingDecision& decision,
-      faabric::util::FullLock& lock);
+      faabric::util::FullLock& lock,
+      faabric::util::SchedulingTopologyHint topologyHint);
 
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,
