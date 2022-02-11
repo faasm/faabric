@@ -184,7 +184,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
 
         // Apply changes to snapshot
-        snap->fillGapsWithOverwriteRegions();
+        snap->fillGapsWithBytewiseRegions();
         std::vector<faabric::util::SnapshotDiff> updates =
           snap->diffWithDirtyRegions(memView, dirtyRegions);
 
@@ -622,7 +622,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             std::string mainThreadSnapKey =
               faabric::util::getMainThreadSnapshotKey(msg);
             auto snap = reg.getSnapshot(mainThreadSnapKey);
-            snap->fillGapsWithOverwriteRegions();
+            snap->fillGapsWithBytewiseRegions();
 
             // Compare snapshot with all dirty regions for this executor
             std::vector<faabric::util::SnapshotDiff> diffs;
