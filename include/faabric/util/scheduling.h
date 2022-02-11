@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/util/locks.h>
 
 namespace faabric::util {
 
@@ -33,6 +34,8 @@ class SchedulingDecision
 
     std::string returnHost;
 
+    bool isSingleHost();
+
     void addMessage(const std::string& host, const faabric::Message& msg);
 
     void addMessage(const std::string& host, int32_t messageId, int32_t appIdx);
@@ -45,8 +48,8 @@ class SchedulingDecision
 
 // Scheduling topology hints help the scheduler decide which host to assign new
 // requests in a batch.
-//  - NORMAL: bin-packs requests to slots in hosts starting from the master
-//            host, and overloadds the master if it runs out of resources.
+//  - NONE: bin-packs requests to slots in hosts starting from the master
+//          host, and overloadds the master if it runs out of resources.
 //  - FORCE_LOCAL: force local execution irrespective of the available
 //                 resources.
 //  - NEVER_ALONE: never allocates a single (non-master) request to a host
@@ -55,7 +58,8 @@ class SchedulingDecision
 //               migration opportunities to appear.
 enum SchedulingTopologyHint
 {
-    NORMAL,
+    NONE,
+    CACHED,
     FORCE_LOCAL,
     NEVER_ALONE,
     UNDERFULL,
@@ -65,7 +69,8 @@ enum SchedulingTopologyHint
 // around
 const std::unordered_map<std::string, SchedulingTopologyHint>
   strToTopologyHint = {
-      { "NORMAL", SchedulingTopologyHint::NORMAL },
+      { "NONE", SchedulingTopologyHint::NONE },
+      { "CACHED", SchedulingTopologyHint::CACHED },
       { "FORCE_LOCAL", SchedulingTopologyHint::FORCE_LOCAL },
       { "NEVER_ALONE", SchedulingTopologyHint::NEVER_ALONE },
       { "UNDERFULL", SchedulingTopologyHint::UNDERFULL },
@@ -73,11 +78,56 @@ const std::unordered_map<std::string, SchedulingTopologyHint>
 
 const std::unordered_map<SchedulingTopologyHint, std::string>
   topologyHintToStr = {
-      { SchedulingTopologyHint::NORMAL, "NORMAL" },
+      { SchedulingTopologyHint::NONE, "NONE" },
+      { SchedulingTopologyHint::CACHED, "CACHED" },
       { SchedulingTopologyHint::FORCE_LOCAL, "FORCE_LOCAL" },
       { SchedulingTopologyHint::NEVER_ALONE, "NEVER_ALONE" },
       { SchedulingTopologyHint::UNDERFULL, "UNDERFULL" },
   };
+
+/**
+ * A record of a decision already taken for the given size of batch request
+ * for the given function. This doesn't contain the messages themselves,
+ * just the hosts and group ID that was used.
+ */
+class CachedDecision
+{
+  public:
+    CachedDecision(const std::vector<std::string>& hostsIn, int groupIdIn);
+
+    std::vector<std::string> getHosts() { return hosts; }
+
+    int getGroupId() const { return groupId; }
+
+  private:
+    std::vector<std::string> hosts;
+    int groupId = 0;
+};
+
+/**
+ * Repository for cached scheduling decisions. Object is not thread safe as we
+ * assume only a single executor will be caching decisions for a given function
+ * and size of batch request on one host at a time.
+ */
+class DecisionCache
+{
+  public:
+    std::shared_ptr<CachedDecision> getCachedDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    void addCachedDecision(std::shared_ptr<faabric::BatchExecuteRequest> req,
+                           faabric::util::SchedulingDecision& decision);
+
+    void clear();
+
+  private:
+    std::string getCacheKey(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    std::unordered_map<std::string, std::shared_ptr<CachedDecision>>
+      cachedDecisions;
+};
+
+DecisionCache& getSchedulingDecisionCache();
 
 // Migration strategies help the scheduler decide wether the scheduling decision
 // for a batch request could be changed with the new set of available resources.

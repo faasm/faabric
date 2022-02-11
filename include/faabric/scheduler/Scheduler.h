@@ -82,6 +82,8 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
+    void updateMainThreadSnapshot();
+
     virtual std::span<uint8_t> getMemoryView();
 
   protected:
@@ -106,11 +108,7 @@ class Executor
 
     // ---- Application threads ----
     std::shared_mutex threadExecutionMutex;
-    std::unordered_map<std::string, int> cachedGroupIds;
-    std::unordered_map<std::string, std::vector<std::string>>
-      cachedDecisionHosts;
     std::vector<char> dirtyRegions;
-
     void deleteMainThreadSnapshot(const faabric::Message& msg);
 
     // ---- Function execution thread pool ----
@@ -132,6 +130,11 @@ class Scheduler
 {
   public:
     Scheduler();
+
+    faabric::util::SchedulingDecision makeSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingTopologyHint topologyHint =
+        faabric::util::SchedulingTopologyHint::NONE);
 
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
@@ -175,6 +178,9 @@ class Scheduler
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 
     void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
+
+    std::vector<std::pair<uint32_t, int32_t>> awaitThreadResults(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     int32_t awaitThreadResult(uint32_t messageId);
 
@@ -281,14 +287,15 @@ class Scheduler
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
-    faabric::util::SchedulingDecision makeSchedulingDecision(
+    faabric::util::SchedulingDecision doSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingTopologyHint topologyHint);
 
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingDecision& decision,
-      faabric::util::FullLock& lock);
+      faabric::util::FullLock& lock,
+      faabric::util::SchedulingTopologyHint topologyHint);
 
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,

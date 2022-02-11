@@ -245,22 +245,19 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     // same master host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string masterHost = firstMsg.masterhost();
-    if (masterHost.empty()) {
-        std::string funcStrWithId = faabric::util::funcToString(firstMsg, true);
-        SPDLOG_ERROR("Request {} has no master host", funcStrWithId);
-        throw std::runtime_error("Message with no master host");
-    }
 
     // Get topology hint from message
     faabric::util::SchedulingTopologyHint topologyHint =
       firstMsg.topologyhint().empty()
-        ? faabric::util::SchedulingTopologyHint::NORMAL
+        ? faabric::util::SchedulingTopologyHint::NONE
         : faabric::util::strToTopologyHint.at(firstMsg.topologyhint());
+
+    bool isForceLocal =
+      topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
 
     // If we're not the master host, we need to forward the request back to the
     // master host. This will only happen if a nested batch execution happens.
-    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
-        masterHost != thisHost) {
+    if (!isForceLocal && masterHost != thisHost) {
         std::string funcStr = faabric::util::funcToString(firstMsg, false);
         SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
 
@@ -272,21 +269,22 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     faabric::util::FullLock lock(mx);
 
-    SchedulingDecision decision = makeSchedulingDecision(req, topologyHint);
-
-    // Send out point-to-point mappings if necessary (unless being forced to
-    // execute locally, in which case they will be transmitted from the
-    // master)
-    if (topologyHint != faabric::util::SchedulingTopologyHint::FORCE_LOCAL &&
-        (firstMsg.groupid() > 0)) {
-        broker.setAndSendMappingsFromSchedulingDecision(decision);
-    }
+    SchedulingDecision decision = doSchedulingDecision(req, topologyHint);
 
     // Pass decision as hint
-    return doCallFunctions(req, decision, lock);
+    return doCallFunctions(req, decision, lock, topologyHint);
 }
 
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::util::SchedulingTopologyHint topologyHint)
+{
+    faabric::util::FullLock lock(mx);
+
+    return doSchedulingDecision(req, topologyHint);
+}
+
+faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingTopologyHint topologyHint)
 {
@@ -296,15 +294,59 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
 
     // If topology hints are disabled, unset the provided topology hint
     if (conf.noTopologyHints == "on" &&
-        topologyHint != faabric::util::SchedulingTopologyHint::NORMAL) {
+        topologyHint != faabric::util::SchedulingTopologyHint::NONE) {
         SPDLOG_WARN("Ignoring topology hint passed to scheduler as hints are "
                     "disabled in the config");
-        topologyHint = faabric::util::SchedulingTopologyHint::NORMAL;
+        topologyHint = faabric::util::SchedulingTopologyHint::NONE;
+    }
+
+    // If requesting a cached decision, look for it now
+    faabric::util::DecisionCache& decisionCache =
+      faabric::util::getSchedulingDecisionCache();
+    if (topologyHint == faabric::util::SchedulingTopologyHint::CACHED) {
+        std::shared_ptr<faabric::util::CachedDecision> cachedDecision =
+          decisionCache.getCachedDecision(req);
+
+        if (cachedDecision != nullptr) {
+            int groupId = cachedDecision->getGroupId();
+            SPDLOG_DEBUG("Using cached decision for {} {}, group {}",
+                         funcStr,
+                         firstMsg.appid(),
+                         groupId);
+
+            // Get the cached hosts
+            std::vector<std::string> hosts = cachedDecision->getHosts();
+
+            // Create the scheduling decision
+            faabric::util::SchedulingDecision decision(firstMsg.appid(),
+                                                       groupId);
+            for (int i = 0; i < hosts.size(); i++) {
+                // Reuse the group id
+                faabric::Message& m = req->mutable_messages()->at(i);
+                m.set_groupid(groupId);
+                m.set_groupsize(req->messages_size());
+
+                // Add to the decision
+                decision.addMessage(hosts.at(i), m);
+            }
+
+            return decision;
+        }
+
+        SPDLOG_DEBUG("No cached decision found for {} x {} in app {}",
+                     req->messages_size(),
+                     funcStr,
+                     firstMsg.appid());
     }
 
     std::vector<std::string> hosts;
     if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
+        SPDLOG_TRACE("Scheduling {}/{} of {} locally (force local)",
+                     nMessages,
+                     nMessages,
+                     funcStr);
+
         for (int i = 0; i < nMessages; i++) {
             hosts.push_back(thisHost);
         }
@@ -327,6 +369,8 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         int nLocally = std::min<int>(available, nMessages);
 
         // Add those that can be executed locally
+        SPDLOG_TRACE(
+          "Scheduling {}/{} of {} locally", nLocally, nMessages, funcStr);
         for (int i = 0; i < nLocally; i++) {
             hosts.push_back(thisHost);
         }
@@ -351,6 +395,12 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                     nOnThisHost < 2) {
                     continue;
                 }
+
+                SPDLOG_TRACE("Scheduling {}/{} of {} on {} (registered)",
+                             nOnThisHost,
+                             nMessages,
+                             funcStr,
+                             h);
 
                 for (int i = 0; i < nOnThisHost; i++) {
                     hosts.push_back(h);
@@ -384,6 +434,12 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
                     nOnThisHost < 2) {
                     continue;
                 }
+
+                SPDLOG_TRACE("Scheduling {}/{} of {} on {} (unregistered)",
+                             nOnThisHost,
+                             nMessages,
+                             funcStr,
+                             h);
 
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
@@ -437,6 +493,11 @@ faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
         decision.addMessage(hosts.at(i), req->messages().at(i));
     }
 
+    // Cache decision for next time if necessary
+    if (topologyHint == faabric::util::SchedulingTopologyHint::CACHED) {
+        decisionCache.addCachedDecision(req, decision);
+    }
+
     return decision;
 }
 
@@ -445,17 +506,20 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
   faabric::util::SchedulingDecision& hint)
 {
     faabric::util::FullLock lock(mx);
-    return doCallFunctions(req, hint, lock);
+    return doCallFunctions(
+      req, hint, lock, faabric::util::SchedulingTopologyHint::NONE);
 }
 
 faabric::util::SchedulingDecision Scheduler::doCallFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingDecision& decision,
-  faabric::util::FullLock& lock)
+  faabric::util::FullLock& lock,
+  faabric::util::SchedulingTopologyHint topologyHint)
 {
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
+    bool isMaster = thisHost == firstMsg.masterhost();
     bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
 
     if (decision.hosts.size() != nMessages) {
@@ -465,6 +529,20 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
           decision.hosts.size(),
           nMessages);
         throw std::runtime_error("Invalid scheduler hint for messages");
+    }
+
+    if (firstMsg.masterhost().empty()) {
+        SPDLOG_ERROR("Request {} has no master host", funcStr);
+        throw std::runtime_error("Message with no master host");
+    }
+
+    // Send out point-to-point mappings if necessary (unless being forced to
+    // execute locally, in which case they will be transmitted from the
+    // master)
+    bool isForceLocal =
+      topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+    if (!isForceLocal && (firstMsg.groupid() > 0)) {
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
     // Record in-flight request if function desires to be migrated
@@ -477,10 +555,16 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // the remaining scheduling. Therefore we want to create a list of unique
     // hosts, with this host last.
     std::vector<std::string> orderedHosts;
+    bool isSingleHost = false;
     {
         std::set<std::string> uniqueHosts(decision.hosts.begin(),
                                           decision.hosts.end());
         bool hasFunctionsOnThisHost = uniqueHosts.contains(thisHost);
+
+        // Mark the request as being single-host if necessary
+        std::set<std::string> thisHostUniset = { thisHost };
+        isSingleHost = (uniqueHosts == thisHostUniset) && isMaster;
+        req->set_singlehost(isSingleHost);
 
         if (hasFunctionsOnThisHost) {
             uniqueHosts.erase(thisHost);
@@ -524,7 +608,9 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             std::runtime_error("Should not provide snapshot key for threads");
         }
 
-        snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+        if (!isSingleHost) {
+            snapshotKey = faabric::util::getMainThreadSnapshotKey(firstMsg);
+        }
     } else {
         snapshotKey = firstMsg.snapshotkey();
     }
@@ -975,6 +1061,21 @@ void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
     threadResults.at(msgId).set_value(returnValue);
 }
 
+std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    std::vector<std::pair<uint32_t, int32_t>> results;
+    results.reserve(req->messages_size());
+    for (int i = 0; i < req->messages_size(); i++) {
+        uint32_t messageId = req->messages().at(i).id();
+
+        int result = awaitThreadResult(messageId);
+        results.emplace_back(messageId, result);
+    }
+
+    return results;
+}
+
 int32_t Scheduler::awaitThreadResult(uint32_t messageId)
 {
     faabric::util::SharedLock lock(mx);
@@ -1074,6 +1175,7 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
 
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
+    SPDLOG_TRACE("Requesting resources from {}", host);
     return getFunctionCallClient(host).getResources();
 }
 

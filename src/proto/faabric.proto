@@ -38,6 +38,10 @@ message BatchExecuteRequest {
     // Arbitrary context for this batch
     int32 subType = 6;
     bytes contextData = 7;
+
+    // Flag set by the scheduler when this batch is all executing on a single
+    // host
+    bool singleHost = 8;
 }
 
 message HostResources {

@@ -453,7 +453,7 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_migrationcheckperiod(
       getIntFromJson(d, "migration_check_period", 0));
 
-    msg.set_topologyhint(getStringFromJson(d, "topology_hint", "NORMAL"));
+    msg.set_topologyhint(getStringFromJson(d, "topology_hint", "NONE"));
 
     PROF_END(jsonDecode)
 

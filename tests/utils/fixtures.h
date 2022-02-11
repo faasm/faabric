@@ -20,6 +20,7 @@
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
+#include "faabric/util/scheduling.h"
 
 namespace tests {
 class RedisTestFixture
@@ -70,7 +71,22 @@ class DirtyTrackingTestFixture
     ~DirtyTrackingTestFixture() { faabric::util::getDirtyTracker().clearAll(); }
 };
 
-class SchedulerTestFixture : public DirtyTrackingTestFixture
+class CachedDecisionTestFixture
+{
+  public:
+    CachedDecisionTestFixture()
+      : decisionCache(faabric::util::getSchedulingDecisionCache())
+    {}
+
+    ~CachedDecisionTestFixture() { decisionCache.clear(); }
+
+  protected:
+    faabric::util::DecisionCache& decisionCache;
+};
+
+class SchedulerTestFixture
+  : public DirtyTrackingTestFixture
+  , public CachedDecisionTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -97,6 +113,33 @@ class SchedulerTestFixture : public DirtyTrackingTestFixture
         sch.shutdown();
         sch.addHostToGlobalSet();
     };
+
+    // Helper method to set the available hosts and slots per host prior to
+    // making a scheduling decision
+    void setHostResources(std::vector<std::string> hosts,
+                          std::vector<int> slotsPerHost)
+    {
+        assert(hosts.size() == slotsPerHost.size());
+        sch.clearRecordedMessages();
+        faabric::scheduler::clearMockRequests();
+
+        for (int i = 0; i < hosts.size(); i++) {
+            faabric::HostResources resources;
+            resources.set_slots(slotsPerHost.at(i));
+            resources.set_usedslots(0);
+
+            sch.addHostToGlobalSet(hosts.at(i));
+
+            // If setting resources for the master host, update the scheduler.
+            // Otherwise, queue the resource response
+            if (i == 0) {
+                sch.setThisHostResources(resources);
+            } else {
+                faabric::scheduler::queueResourceResponse(hosts.at(i),
+                                                          resources);
+            }
+        }
+    }
 
   protected:
     faabric::scheduler::Scheduler& sch;
