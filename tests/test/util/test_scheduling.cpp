@@ -20,13 +20,24 @@ TEST_CASE("Test building scheduling decisions", "[util]")
     std::string hostB = "hostB";
     std::string hostC = "hostC";
 
+    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+
     bool expectSingleHost = false;
     SECTION("Multi-host") {}
 
-    SECTION("Single host")
+    SECTION("Only remote hosts")
     {
         hostB = "hostA";
         hostC = "hostA";
+
+        expectSingleHost = false;
+    }
+
+    SECTION("All this host")
+    {
+        hostA = thisHost;
+        hostB = thisHost;
+        hostC = thisHost;
 
         expectSingleHost = true;
     }

@@ -806,15 +806,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     int nThreads = 5;
 
-    // Execute some on this host, some on the others
-    faabric::HostResources res;
-    res.set_slots(2);
-    sch.setThisHostResources(res);
-
-    // Set up other host to have some resources
-    faabric::HostResources resOther;
-    resOther.set_slots(10);
-    faabric::scheduler::queueResourceResponse(otherHost, resOther);
+    // Set host resources to force execution on other host
+    setHostResources({ thisHost, otherHost }, { 2, 10 });
 
     // Set up message for a batch of threads
     std::shared_ptr<BatchExecuteRequest> req =
@@ -873,25 +866,32 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     REQUIRE(expectedDiffs.size() == 2);
 
+    // Reset host resources
+    setHostResources({ thisHost, otherHost }, { 2, 10 });
+
     // Set up another function, make sure they have the same app ID
     std::shared_ptr<BatchExecuteRequest> reqB =
-      faabric::util::batchExecFactory("dummy", "blah", 1);
+      faabric::util::batchExecFactory("dummy", "blah", nThreads);
     reqB->set_type(faabric::BatchExecuteRequest::THREADS);
 
-    faabric::Message& msgB = reqB->mutable_messages()->at(0);
-    msgB.set_appid(msg.appid());
+    for (auto& m : *reqB->mutable_messages()) {
+        m.set_appid(msg.appid());
 
-    REQUIRE(faabric::util::getMainThreadSnapshotKey(msgB) ==
-            mainThreadSnapshotKey);
+        REQUIRE(faabric::util::getMainThreadSnapshotKey(m) ==
+                mainThreadSnapshotKey);
+    }
 
     // Invoke the function
-    std::vector<std::string> expectedHostsB = { thisHost };
     std::vector<std::string> actualHostsB =
       executeWithTestExecutor(reqB, false);
-    REQUIRE(actualHostsB == expectedHostsB);
+    REQUIRE(actualHostsB == expectedHosts);
 
-    // Wait for it to finish locally
-    sch.awaitThreadResult(msgB.id());
+    // Await local results
+    for (int i = 0; i < actualHostsB.size(); i++) {
+        if (actualHostsB.at(i) == thisHost) {
+            sch.awaitThreadResult(reqB->messages().at(i).id());
+        }
+    }
 
     // Check the full snapshot hasn't been pushed
     REQUIRE(faabric::snapshot::getSnapshotPushes().empty());

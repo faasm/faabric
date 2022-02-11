@@ -36,32 +36,6 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
         std::vector<std::string> expectedHosts;
     };
 
-    // Helper method to set the available hosts and slots per host prior to
-    // making a scheduling decision
-    void setHostResources(std::vector<std::string> hosts,
-                          std::vector<int> slotsPerHost)
-    {
-        assert(hosts.size() == slotsPerHost.size());
-        sch.clearRecordedMessages();
-        faabric::scheduler::clearMockRequests();
-
-        for (int i = 0; i < hosts.size(); i++) {
-            faabric::HostResources resources;
-            resources.set_slots(slotsPerHost.at(i));
-            resources.set_usedslots(0);
-
-            sch.addHostToGlobalSet(hosts.at(i));
-
-            // If setting resources for the master host, update the scheduler.
-            // Otherwise, queue the resource response
-            if (i == 0) {
-                sch.setThisHostResources(resources);
-            } else {
-                queueResourceResponse(hosts.at(i), resources);
-            }
-        }
-    }
-
     // We test the scheduling decision twice: the first one will follow the
     // unregistered hosts path, the second one the registerd hosts one.
     void testActualSchedulingDecision(
