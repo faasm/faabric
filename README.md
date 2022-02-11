@@ -6,12 +6,10 @@ distributed serverless runtimes.
 It began life as part of [Faasm](https://github.com/faasm/faasm), but is now a
 stand-alone library that can be used as a base for other distributed runtimes.
 
+See the [documentation](https://faabric.readthedocs.io/en/latest/) for more
+details.
+
 ## Usage
 
 You can see a simple example in the [examples](examples) directory.
-
-## Development
-
-See the [development docs](docs/development.md) for more information on
-developing Faabric.
 

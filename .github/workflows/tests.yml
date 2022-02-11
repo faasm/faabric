@@ -27,6 +27,26 @@ jobs:
       - name: "Build dependencies to be shared by all runs"
         run: inv dev.cmake -b Debug
 
+  docs:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    container:
+      image: faasm/faabric:0.2.4
+    defaults:
+      run:
+        working-directory: /code/faabric
+    steps:
+      - name: "Fetch ref"
+        run: git fetch origin ${GITHUB_REF}:ci-branch
+      - name: "Check out branch"
+        run: git checkout --force ci-branch
+      - name: "TEMP - install doxygen"
+        run: apt install -y doxygen
+      - name: "TEMP - install python deps"
+        run: pip install -r requirements.txt
+      - name: "Build docs"
+        run: inv docs
+
   formatting:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest

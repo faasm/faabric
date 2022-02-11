@@ -6,6 +6,10 @@
 #include <pistache/http.h>
 
 namespace faabric::endpoint {
+
+/**
+ * Superclass for HTTP endpoints.
+ */
 class Endpoint
 {
   public:

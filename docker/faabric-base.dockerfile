@@ -22,6 +22,7 @@ RUN apt install -y \
     clang-tidy-13 \
     clang-tools-13 \
     cmake \
+    doxygen \
     g++-11 \
     git \
     kitware-archive-keyring \
@@ -49,6 +50,9 @@ RUN apt install -y \
     unzip
 
 RUN curl -s -L -o /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.43.0/conan-ubuntu-64.deb && sudo dpkg -i /tmp/conan-latest.deb && rm -f /tmp/conan-latest.deb
+
+# Update pip
+RUN pip install -U pip
 
 # Tidy up
 RUN apt-get clean autoclean
