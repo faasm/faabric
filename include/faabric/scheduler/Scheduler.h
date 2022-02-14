@@ -38,13 +38,11 @@ class ExecutorTask
 
     ExecutorTask(int messageIndexIn,
                  std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                 std::shared_ptr<std::atomic<int>> batchCounterIn,
-                 bool skipResetIn);
+                 std::shared_ptr<std::atomic<int>> batchCounterIn);
 
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
     int messageIndex = 0;
-    bool skipReset = false;
 };
 
 class Executor
@@ -121,10 +119,6 @@ class Executor
 
     void threadPoolThread(int threadPoolIdx);
 };
-
-Executor* getExecutingExecutor();
-
-void setExecutingExecutor(Executor* exec);
 
 class Scheduler
 {

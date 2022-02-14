@@ -1,4 +1,5 @@
 #include <faabric/proto/faabric.pb.h>
+#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -31,26 +32,12 @@
 
 namespace faabric::scheduler {
 
-static thread_local Executor* executingExecutor = nullptr;
-
-Executor* getExecutingExecutor()
-{
-    return executingExecutor;
-}
-
-void setExecutingExecutor(Executor* exec)
-{
-    executingExecutor = exec;
-}
-
 ExecutorTask::ExecutorTask(int messageIndexIn,
                            std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                           std::shared_ptr<std::atomic<int>> batchCounterIn,
-                           bool skipResetIn)
+                           std::shared_ptr<std::atomic<int>> batchCounterIn)
   : req(std::move(reqIn))
   , batchCounter(std::move(batchCounterIn))
   , messageIndex(messageIndexIn)
-  , skipReset(skipResetIn)
 {}
 
 // TODO - avoid the copy of the message here?
@@ -277,11 +264,6 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // Set up shared counter for this batch of tasks
     auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
 
-    // Work out if we should skip the reset after this batch. This happens
-    // for threads, as they will be restored from their respective snapshot
-    // on the next execution.
-    bool skipReset = isThreads;
-
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted
     // do we start overloading
@@ -328,7 +310,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Enqueue the task
         threadTaskQueues[threadPoolIdx].enqueue(
-          ExecutorTask(msgIdx, req, batchCounter, skipReset));
+          ExecutorTask(msgIdx, req, batchCounter));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -453,7 +435,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      msg.groupid());
 
         // Set executing executor
-        setExecutingExecutor(this);
+        ExecutorContext::set(this, task.req, task.messageIndex);
 
         // Execute the task
         int32_t returnValue;
@@ -590,7 +572,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // claim. Note that we have to release the claim _after_ resetting,
         // otherwise the executor won't be ready for reuse
         if (isLastInBatch) {
-            if (task.skipReset) {
+            // Threads skip the reset as they will be restored from their
+            // respective snapshot on the next execution.
+            if (isThreads) {
                 SPDLOG_TRACE("Skipping reset for {}",
                              faabric::util::funcToString(msg, true));
             } else {
