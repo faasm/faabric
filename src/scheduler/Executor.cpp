@@ -74,7 +74,7 @@ void Executor::finish()
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
         threadTaskQueues[i].enqueue(
-          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr, false));
+          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr));
 
         faabric::util::UniqueLock threadsLock(threadsMutex);
         // Copy shared_ptr to avoid racing
