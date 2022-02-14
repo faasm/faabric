@@ -37,5 +37,4 @@ class ExecutorContext
     std::shared_ptr<faabric::BatchExecuteRequest> req = nullptr;
     int msgIdx = 0;
 };
-
 }
