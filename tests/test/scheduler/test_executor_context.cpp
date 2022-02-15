@@ -13,11 +13,13 @@ TEST_CASE_METHOD(ExecutorContextTestFixture,
                  "Test executor context",
                  "[scheduler]")
 {
-    REQUIRE(ExecutorContext::get() == nullptr);
+    // Getting with no context should fail
+    REQUIRE_THROWS(ExecutorContext::get());
 
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
 
-    auto fac = getExecutorFactory();
+    std::shared_ptr<DummyExecutorFactory> fac =
+      std::make_shared<DummyExecutorFactory>();
     auto exec = fac->createExecutor(msg);
 
     auto req = faabric::util::batchExecFactory("foo", "bar", 5);
@@ -55,5 +57,8 @@ TEST_CASE_METHOD(ExecutorContextTestFixture,
         REQUIRE(ctx->getMsgIdx() == 3);
         REQUIRE(ctx->getMsg().id() == req->mutable_messages()->at(3).id());
     }
+
+    ExecutorContext::unset();
+    REQUIRE_THROWS(ExecutorContext::get());
 }
 }
