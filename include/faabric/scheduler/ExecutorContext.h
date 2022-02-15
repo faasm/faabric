@@ -17,6 +17,8 @@ class ExecutorContext
                     std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                     int msgIdx);
 
+    static bool isSet();
+
     static void set(Executor* executorIn,
                     std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                     int msgIdxIn);

@@ -13,6 +13,11 @@ ExecutorContext::ExecutorContext(
   , msgIdx(msgIdxIn)
 {}
 
+bool ExecutorContext::isSet()
+{
+    return context != nullptr;
+}
+
 void ExecutorContext::set(Executor* executorIn,
                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                           int appIdxIn)
@@ -20,7 +25,8 @@ void ExecutorContext::set(Executor* executorIn,
     context = std::make_shared<ExecutorContext>(executorIn, reqIn, appIdxIn);
 }
 
-void ExecutorContext::unset() {
+void ExecutorContext::unset()
+{
     context = nullptr;
 }
 

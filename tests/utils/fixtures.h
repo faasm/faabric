@@ -21,6 +21,7 @@
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
+#include "faabric/proto/faabric.pb.h"
 #include "faabric/util/func.h"
 #include "faabric/util/scheduling.h"
 
@@ -351,13 +352,16 @@ class ExecutorContextTestFixture
     /**
      * Shortcut method to set context from a single message.
      */
-    void setContextFromMessage(faabric::Message& msg)
+    std::shared_ptr<faabric::BatchExecuteRequest> setUpContext(
+      const std::string& user,
+      const std::string& func,
+      int nMsgs = 1)
     {
-        auto req =
-          faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
-        req->mutable_messages()->at(0) = msg;
+        auto req = faabric::util::batchExecFactory(user, func, nMsgs);
 
         faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
+
+        return req;
     }
 };
 

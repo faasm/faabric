@@ -13,6 +13,8 @@ TEST_CASE_METHOD(ExecutorContextTestFixture,
                  "Test executor context",
                  "[scheduler]")
 {
+    REQUIRE(!ExecutorContext::isSet());
+
     // Getting with no context should fail
     REQUIRE_THROWS(ExecutorContext::get());
 
