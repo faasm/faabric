@@ -34,13 +34,6 @@ TEST_CASE("Test message to JSON round trip", "[util]")
 
     msg.set_cmdline("some cmdline");
 
-    msg.set_issgx(true);
-    msg.set_sgxsid("test sid string");
-    msg.set_sgxnonce("test nonce string");
-    msg.set_sgxtag("test tag string");
-    msg.set_sgxpolicy("test policy string");
-    msg.set_sgxresult("test result string");
-
     msg.set_recordexecgraph(true);
     auto& map = *msg.mutable_execgraphdetails();
     map["foo"] = "bar";
@@ -92,17 +85,5 @@ TEST_CASE("Test with raw string literals", "[util]")
       jsonToMessage(R"({"user": "foo", "function": "bar"})");
     REQUIRE(msg.user() == "foo");
     REQUIRE(msg.function() == "bar");
-}
-
-TEST_CASE("Test base64-encoded result", "[util]")
-{
-    faabric::Message msg;
-    msg.set_sgxresult("test tag string");
-    msg.set_outputdata("test output string");
-    std::string encodedOutput = getJsonOutput(msg);
-    REQUIRE(getValueFromJsonString("result", encodedOutput) ==
-            "dGVzdCB0YWcgc3RyaW5n");
-    REQUIRE(getValueFromJsonString("output_data", encodedOutput) ==
-            "test output string");
 }
 }
