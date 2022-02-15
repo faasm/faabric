@@ -137,13 +137,7 @@ std::pair<int, std::string> FaabricEndpointHandler::executeFunction(
           sch.getFunctionResult(msg.id(), conf.globalMessageTimeout);
         SPDLOG_DEBUG("Worker thread {} result {}", tid, funcStr);
 
-        if (result.sgxresult().empty()) {
-            return std::make_pair(result.returnvalue(),
-                                  result.outputdata() + "\n");
-        }
-
-        return std::make_pair(result.returnvalue(),
-                              faabric::util::getJsonOutput(result));
+        return std::make_pair(result.returnvalue(), result.outputdata() + "\n");
     } catch (faabric::redis::RedisNoResponseException& ex) {
         return std::make_pair(1, "No response from function\n");
     }
