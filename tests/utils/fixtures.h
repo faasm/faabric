@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
@@ -20,6 +21,7 @@
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
+#include "faabric/util/func.h"
 #include "faabric/util/scheduling.h"
 
 namespace tests {
@@ -334,6 +336,29 @@ class PointToPointClientServerFixture
   protected:
     faabric::transport::PointToPointClient cli;
     faabric::transport::PointToPointServer server;
+};
+
+class ExecutorContextTestFixture
+{
+  public:
+    ExecutorContextTestFixture() {}
+
+    ~ExecutorContextTestFixture()
+    {
+        faabric::scheduler::ExecutorContext::unset();
+    }
+
+    /**
+     * Shortcut method to set context from a single message.
+     */
+    void setContextFromMessage(faabric::Message& msg)
+    {
+        auto req =
+          faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
+        req->mutable_messages()->at(0) = msg;
+
+        faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
+    }
 };
 
 #define TEST_EXECUTOR_DEFAULT_MEMORY_SIZE (10 * faabric::util::HOST_PAGE_SIZE)

@@ -20,8 +20,16 @@ void ExecutorContext::set(Executor* executorIn,
     context = std::make_shared<ExecutorContext>(executorIn, reqIn, appIdxIn);
 }
 
+void ExecutorContext::unset() {
+    context = nullptr;
+}
+
 std::shared_ptr<ExecutorContext> ExecutorContext::get()
 {
+    if (context == nullptr) {
+        SPDLOG_ERROR("No executor context set");
+        throw std::runtime_error("No executor context set");
+    }
     return context;
 }
 }

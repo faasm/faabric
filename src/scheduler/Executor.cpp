@@ -434,7 +434,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      isThreads,
                      msg.groupid());
 
-        // Set executing executor
+        // Set up context
         ExecutorContext::set(this, task.req, task.messageIndex);
 
         // Execute the task
@@ -469,6 +469,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
             SPDLOG_ERROR(errorMessage);
             msg.set_outputdata(errorMessage);
         }
+
+        // Unset context
+        ExecutorContext::unset();
 
         // Handle thread-local diffing for every thread
         if (doDirtyTracking) {

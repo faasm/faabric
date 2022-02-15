@@ -1,3 +1,5 @@
+#pragma once
+
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 
@@ -19,6 +21,8 @@ class ExecutorContext
                     std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                     int msgIdxIn);
 
+    static void unset();
+
     static std::shared_ptr<ExecutorContext> get();
 
     Executor* getExecutor() { return executor; }
@@ -28,7 +32,14 @@ class ExecutorContext
         return req;
     }
 
-    faabric::Message& getMsg() { return req->mutable_messages()->at(msgIdx); }
+    faabric::Message& getMsg()
+    {
+        if (req == nullptr) {
+            throw std::runtime_error(
+              "Getting message when no request set in context");
+        }
+        return req->mutable_messages()->at(msgIdx);
+    }
 
     int getMsgIdx() { return msgIdx; }
 
