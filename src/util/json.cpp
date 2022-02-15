@@ -151,40 +151,6 @@ std::string messageToJson(const faabric::Message& msg)
                     a);
     }
 
-    if (msg.issgx()) {
-        d.AddMember("sgx", msg.issgx(), a);
-    }
-
-    if (!msg.sgxsid().empty()) {
-        d.AddMember(
-          "sgxsid", Value(msg.sgxsid().c_str(), msg.sgxsid().size()).Move(), a);
-    }
-
-    if (!msg.sgxnonce().empty()) {
-        d.AddMember("sgxnonce",
-                    Value(msg.sgxnonce().c_str(), msg.sgxnonce().size()).Move(),
-                    a);
-    }
-
-    if (!msg.sgxtag().empty()) {
-        d.AddMember(
-          "sgxtag", Value(msg.sgxtag().c_str(), msg.sgxtag().size()).Move(), a);
-    }
-
-    if (!msg.sgxpolicy().empty()) {
-        d.AddMember(
-          "sgxpolicy",
-          Value(msg.sgxpolicy().c_str(), msg.sgxpolicy().size()).Move(),
-          a);
-    }
-
-    if (!msg.sgxresult().empty()) {
-        d.AddMember(
-          "sgxresult",
-          Value(msg.sgxresult().c_str(), msg.sgxresult().size()).Move(),
-          a);
-    }
-
     if (msg.recordexecgraph()) {
         d.AddMember("record_exec_graph", msg.recordexecgraph(), a);
 
@@ -251,8 +217,6 @@ std::string getJsonOutput(const faabric::Message& msg)
     Document d;
     d.SetObject();
     Document::AllocatorType& a = d.GetAllocator();
-    std::string result_ = cppcodec::base64_rfc4648::encode(msg.sgxresult());
-    d.AddMember("result", Value(result_.c_str(), result_.size(), a).Move(), a);
     d.AddMember(
       "output_data",
       Value(msg.outputdata().c_str(), msg.outputdata().size(), a).Move(),
@@ -420,13 +384,6 @@ faabric::Message jsonToMessage(const std::string& jsonIn)
     msg.set_mpiworldsize(getIntFromJson(d, "mpi_world_size", 0));
 
     msg.set_cmdline(getStringFromJson(d, "cmdline", ""));
-
-    msg.set_issgx(getBoolFromJson(d, "sgx", false));
-    msg.set_sgxsid(getStringFromJson(d, "sgxsid", ""));
-    msg.set_sgxnonce(getStringFromJson(d, "sgxnonce", ""));
-    msg.set_sgxtag(getStringFromJson(d, "sgxtag", ""));
-    msg.set_sgxpolicy(getStringFromJson(d, "sgxpolicy", ""));
-    msg.set_sgxresult(getStringFromJson(d, "sgxresult", ""));
 
     msg.set_recordexecgraph(getBoolFromJson(d, "record_exec_graph", false));
 
