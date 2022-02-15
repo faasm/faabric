@@ -156,25 +156,16 @@ message Message {
 
     string cmdline = 34;
 
-    // SGX
-    bool isSgx = 35;
-
-    string sgxSid = 36;
-    string sgxNonce = 37;
-    string sgxTag = 38;
-    bytes sgxPolicy = 39;
-    bytes sgxResult = 40;
-
     // Exec-graph utils
-    bool recordExecGraph = 41;
-    map<string, int32> intExecGraphDetails = 42;
-    map<string, string> execGraphDetails = 43;
+    bool recordExecGraph = 35;
+    map<string, int32> intExecGraphDetails = 36;
+    map<string, string> execGraphDetails = 37;
 
     // Function migration
-    int32 migrationCheckPeriod = 44;
+    int32 migrationCheckPeriod = 38;
 
     // Scheduling
-    string topologyHint = 45;
+    string topologyHint = 39;
 }
 
 // ---------------------------------------------
