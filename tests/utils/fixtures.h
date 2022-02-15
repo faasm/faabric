@@ -2,6 +2,7 @@
 
 #include <sys/mman.h>
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -15,15 +16,14 @@
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/dirty.h>
+#include <faabric/util/func.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
-#include "faabric/proto/faabric.pb.h"
-#include "faabric/util/func.h"
-#include "faabric/util/scheduling.h"
 
 namespace tests {
 class RedisTestFixture
