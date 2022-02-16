@@ -350,7 +350,7 @@ class ExecutorContextTestFixture
     }
 
     /**
-     * Shortcut method to set context from a single message.
+     * Creates a batch request and sets up the associated context
      */
     std::shared_ptr<faabric::BatchExecuteRequest> setUpContext(
       const std::string& user,
@@ -359,9 +359,17 @@ class ExecutorContextTestFixture
     {
         auto req = faabric::util::batchExecFactory(user, func, nMsgs);
 
-        faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
+        setUpContext(req);
 
         return req;
+    }
+
+    /**
+     * Sets up context for the given batch request
+     */
+    void setUpContext(std::shared_ptr<faabric::BatchExecuteRequest> req)
+    {
+        faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
     }
 };
 
