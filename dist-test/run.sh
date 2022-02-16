@@ -3,7 +3,6 @@
 export PROJ_ROOT=$(dirname $(dirname $(readlink -f $0)))
 pushd ${PROJ_ROOT} >> /dev/null
 
-export CONAN_CACHE_MOUNT_SOURCE=$HOME/.conan/
 RETURN_VAL=0
 
 export OVERRIDE_CPU_COUNT=4

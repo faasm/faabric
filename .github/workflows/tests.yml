@@ -110,31 +110,10 @@ jobs:
       # --- Code update ---
       - name: "Check out code"
         uses: actions/checkout@v2
-        # --- Cache based on Conan version and ExternalProjects cmake source
-      - name: "Get Conan version"
-        id: get-conan-version
-        run: |
-          docker-compose run --rm cli conan --version 2>/tmp/conan-ver-log | tee /tmp/conan-ver
-          grep 'Conan version' /tmp/conan-ver || exit 1
-          sudo chown -R $(id -u):$(id -g) ~/.conan
-          echo "::set-output name=conan-version::$(grep 'Conan version' /tmp/conan-ver | tr -d '[:alpha:] ')"
-        env:
-          CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
-      - name: "Get Conan Version - Show Log"
-        if: always()
-        run: cat /tmp/conan-ver-log
-      - name: "Hash ExternalProjects"
-        id: hash-external
-        run: |
-          echo "::set-output name=hash-external::$(sha256sum cmake/ExternalProjects.cmake | cut '-d ' -f 1)"
-      - uses: actions/cache@v2
+      - name: "Conan cache"
+        uses: faasm/conan-cache-action@v1
         with:
-          path: '~/.conan'
-          key: ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-${{ steps.hash-external.outputs.hash-external }}
-          restore-keys: |
-            ${{ runner.os }}-${{ steps.get-conan-version.outputs.conan-version }}-
-            ${{ runner.os }}-
-      # --- Build and test ---
+          directory: ${{ github.workspace }}
       - name: "Build distributed tests"
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
