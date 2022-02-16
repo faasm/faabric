@@ -106,6 +106,8 @@ jobs:
     if: github.event.pull_request.draft == false
     needs: [conan-cache]
     runs-on: ubuntu-latest
+    env:
+      CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
     steps:
       # --- Code update ---
       - name: "Check out code"
