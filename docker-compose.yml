@@ -11,7 +11,7 @@ services:
       - /usr/bin/docker:/usr/bin/docker
       - ./:/code/faabric
       - ./build:/build/faabric
-      - ${CONAN_CACHE_MOUNT_SOURCE:-./conan-cache/}:/root/.conan
+      - ${CONAN_CACHE_MOUNT_SOURCE}:/root/.conan
     working_dir: /code/faabric
     stdin_open: true
     tty: true
