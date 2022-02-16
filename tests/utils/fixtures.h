@@ -2,7 +2,9 @@
 
 #include <sys/mman.h>
 
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
@@ -14,13 +16,14 @@
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/dirty.h>
+#include <faabric/util/func.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
+#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 #include "DummyExecutorFactory.h"
-#include "faabric/util/scheduling.h"
 
 namespace tests {
 class RedisTestFixture
@@ -334,6 +337,40 @@ class PointToPointClientServerFixture
   protected:
     faabric::transport::PointToPointClient cli;
     faabric::transport::PointToPointServer server;
+};
+
+class ExecutorContextTestFixture
+{
+  public:
+    ExecutorContextTestFixture() {}
+
+    ~ExecutorContextTestFixture()
+    {
+        faabric::scheduler::ExecutorContext::unset();
+    }
+
+    /**
+     * Creates a batch request and sets up the associated context
+     */
+    std::shared_ptr<faabric::BatchExecuteRequest> setUpContext(
+      const std::string& user,
+      const std::string& func,
+      int nMsgs = 1)
+    {
+        auto req = faabric::util::batchExecFactory(user, func, nMsgs);
+
+        setUpContext(req);
+
+        return req;
+    }
+
+    /**
+     * Sets up context for the given batch request
+     */
+    void setUpContext(std::shared_ptr<faabric::BatchExecuteRequest> req)
+    {
+        faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
+    }
 };
 
 #define TEST_EXECUTOR_DEFAULT_MEMORY_SIZE (10 * faabric::util::HOST_PAGE_SIZE)
