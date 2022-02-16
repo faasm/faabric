@@ -6,6 +6,7 @@
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -223,6 +224,36 @@ int32_t TestExecutor::executeTask(
         }
 
         return 20;
+    }
+
+    if (msg.function() == "context-check") {
+        std::shared_ptr<faabric::scheduler::ExecutorContext> ctx =
+          faabric::scheduler::ExecutorContext::get();
+        if (ctx == nullptr) {
+            SPDLOG_ERROR("Executor context is null");
+            return 999;
+        }
+
+        if (ctx->getExecutor() != this) {
+            SPDLOG_ERROR("Executor not equal to this one");
+            return 999;
+        }
+
+        if (ctx->getBatchRequest()->id() != reqOrig->id()) {
+            SPDLOG_ERROR("Context request does not match ({} != {})",
+                         ctx->getBatchRequest()->id(),
+                         reqOrig->id());
+            return 999;
+        }
+
+        if (ctx->getMsgIdx() != msgIdx) {
+            SPDLOG_ERROR("Context message idx does not match ({} != {})",
+                         ctx->getMsgIdx(),
+                         msgIdx);
+            return 999;
+        }
+
+        return 123;
     }
 
     if (reqOrig->type() == faabric::BatchExecuteRequest::THREADS) {
@@ -1028,5 +1059,24 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     setMockMode(false);
+}
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test executor sees context",
+                 "[executor]")
+{
+    int nMessages = 5;
+    std::shared_ptr<BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("dummy", "context-check", nMessages);
+    int expectedResult = 123;
+
+    sch.callFunctions(req);
+
+    for (int i = 0; i < nMessages; i++) {
+        faabric::Message res =
+          sch.getFunctionResult(req->messages().at(i).id(), 2000);
+
+        REQUIRE(res.returnvalue() == expectedResult);
+    }
 }
 }
