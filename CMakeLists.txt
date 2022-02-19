@@ -12,10 +12,8 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_compile_options(-fcolor-diagnostics)
 endif()
 
-# Assume skylake for some easy performance wins
-if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-    add_compile_options(-march=skylake -mtune=skylake)
-endif ()
+# Optimise for CPU
+include(cmake/OptimiseCPU.cmake)
 
 # Top-level CMake config
 set(CMAKE_CXX_FLAGS "-Wall")
