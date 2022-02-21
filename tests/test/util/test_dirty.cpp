@@ -29,21 +29,21 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     SECTION("Segfaults")
     {
         conf.dirtyTrackingMode = "segfault";
-        DirtyTracker t = getDirtyTracker();
+        DirtyTracker& t = getDirtyTracker();
         REQUIRE(t.getType() == "segfault");
     }
 
     SECTION("Soft PTEs")
     {
         conf.dirtyTrackingMode = "softpte";
-        DirtyTracker t = getDirtyTracker();
+        DirtyTracker& t = getDirtyTracker();
         REQUIRE(t.getType() == "softpte");
     }
 
     SECTION("None")
     {
         conf.dirtyTrackingMode = "none";
-        DirtyTracker t = getDirtyTracker();
+        DirtyTracker& t = getDirtyTracker();
         REQUIRE(t.getType() == "none");
     }
 }
@@ -56,13 +56,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
 
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
 
     // Create several pages of memory
     int nPages = 6;
     size_t memSize = HOST_PAGE_SIZE * nPages;
     MemoryRegion memPtr = allocatePrivateMemory(memSize);
     std::span<uint8_t> memView(memPtr.get(), memSize);
+
+    tracker.clearAll();
 
     std::vector<char> actual = tracker.getBothDirtyPages(memView);
     std::vector<char> expected(nPages, 0);
@@ -141,13 +143,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     SECTION("Soft PTEs") { conf.dirtyTrackingMode = "softpte"; }
 
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
     REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
 
     int nPages = 15;
     size_t memSize = HOST_PAGE_SIZE * nPages;
     MemoryRegion mem = allocateSharedMemory(memSize);
     std::span<uint8_t> memView(mem.get(), memSize);
+
+    tracker.clearAll();
 
     std::vector<char> actual =
       tracker.getBothDirtyPages({ mem.get(), memSize });
@@ -195,7 +199,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                  "[util][dirty]")
 {
     conf.dirtyTrackingMode = "segfault";
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
     REQUIRE(tracker.getType() == "segfault");
 
     int nPages = 10;
@@ -277,7 +281,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     // Here we want to check that faults triggered in a given thread are caught
     // by that thread, and so we can safely just to thread-local diff tracking.
     conf.dirtyTrackingMode = "segfault";
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
     REQUIRE(tracker.getType() == "segfault");
 
     int nLoops = 20;

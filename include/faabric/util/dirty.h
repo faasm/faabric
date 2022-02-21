@@ -40,24 +40,24 @@ namespace faabric::util {
 class DirtyTracker
 {
   public:
-    DirtyTracker() = default;
+    virtual void clearAll() = 0;
 
-    virtual std::string getType();
+    virtual std::string getType() = 0;
 
-    virtual void startTracking(std::span<uint8_t> region);
+    virtual void startTracking(std::span<uint8_t> region) = 0;
 
-    virtual void stopTracking(std::span<uint8_t> region);
+    virtual void stopTracking(std::span<uint8_t> region) = 0;
 
-    virtual std::vector<char> getDirtyPages(std::span<uint8_t> region);
+    virtual std::vector<char> getDirtyPages(std::span<uint8_t> region) = 0;
 
-    virtual void startThreadLocalTracking(std::span<uint8_t> region);
+    virtual void startThreadLocalTracking(std::span<uint8_t> region) = 0;
 
-    virtual void stopThreadLocalTracking(std::span<uint8_t> region);
+    virtual void stopThreadLocalTracking(std::span<uint8_t> region) = 0;
 
     virtual std::vector<char> getThreadLocalDirtyPages(
-      std::span<uint8_t> region);
+      std::span<uint8_t> region) = 0;
 
-    virtual std::vector<char> getBothDirtyPages(std::span<uint8_t> region);
+    virtual std::vector<char> getBothDirtyPages(std::span<uint8_t> region) = 0;
 };
 
 /*
@@ -70,6 +70,8 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     SoftPTEDirtyTracker();
 
     ~SoftPTEDirtyTracker();
+
+    void clearAll() override;
 
     std::string getType() override { return "softpte"; }
 
@@ -105,6 +107,8 @@ class SegfaultDirtyTracker final : public DirtyTracker
   public:
     SegfaultDirtyTracker();
 
+    void clearAll() override;
+
     std::string getType() override { return "segfault"; }
 
     void startTracking(std::span<uint8_t> region) override;
@@ -135,6 +139,8 @@ class UffdDirtyTracker final : public DirtyTracker
   public:
     UffdDirtyTracker();
 
+    void clearAll() override;
+
     std::string getType() override { return "uffd"; }
 
     void startTracking(std::span<uint8_t> region) override;
@@ -152,7 +158,9 @@ class UffdDirtyTracker final : public DirtyTracker
 
     std::vector<char> getBothDirtyPages(std::span<uint8_t> region) override;
 
-    static void sigbusHandler(int sig, siginfo_t* info, void* ucontext) noexcept;
+    static void sigbusHandler(int sig,
+                              siginfo_t* info,
+                              void* ucontext) noexcept;
 
   private:
     static long uffd;
@@ -167,6 +175,8 @@ class NoneDirtyTracker final : public DirtyTracker
 {
   public:
     NoneDirtyTracker() = default;
+
+    void clearAll() override;
 
     std::string getType() override { return "none"; }
 
@@ -193,5 +203,5 @@ class NoneDirtyTracker final : public DirtyTracker
  * Factory method to create a dirty tracker instance based on the tracking mode
  * set in the configuration.
  */
-DirtyTracker getDirtyTracker();
+DirtyTracker& getDirtyTracker();
 }

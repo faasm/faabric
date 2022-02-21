@@ -71,7 +71,7 @@ class DirtyTrackingTestFixture
   public:
     DirtyTrackingTestFixture() {}
 
-    ~DirtyTrackingTestFixture() {}
+    ~DirtyTrackingTestFixture() { faabric::util::getDirtyTracker().clearAll(); }
 };
 
 class CachedDecisionTestFixture

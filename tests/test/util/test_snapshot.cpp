@@ -305,7 +305,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     REQUIRE(*intB == originalValueB);
 
     // Reset dirty tracking to get a clean start
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -421,7 +422,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->mapToMemory(memView);
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -826,7 +828,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->mapToMemory(memView);
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -907,7 +910,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->mapToMemory(memView);
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -953,7 +957,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     faabric::util::isPageAligned((const void*)snap->getDataPtr());
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
 
     // Update the snapshot
     std::vector<uint8_t> dataA = { 0, 1, 2, 3 };
@@ -996,7 +1001,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->mapToMemory(memView);
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -1239,7 +1245,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->mapToMemory(memView);
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -1340,7 +1347,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     // Map only the size of the snapshot
     snap->mapToMemory({ mem.get(), snapSize });
 
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -1562,7 +1570,8 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     snap->mapToMemory(memViewA);
 
     // Clear tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     snap->clearTrackedChanges();
 
     std::vector<uint8_t> actualSnap = snap->getDataCopy();
@@ -1808,8 +1817,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     snap->mapToMemory(memView);
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
     REQUIRE(tracker.getType() == "none");
+    tracker.clearAll();
 
     // Start tracking
     tracker.startTracking(memView);
@@ -1921,10 +1931,11 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture, "Test XOR diffs", "[util][snapshot]")
     snap->mapToMemory(memView);
 
     // Clear tracking
+    DirtyTracker& tracker = getDirtyTracker();
+    tracker.clearAll();
     snap->clearTrackedChanges();
 
     // Start tracking
-    DirtyTracker tracker = getDirtyTracker();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 

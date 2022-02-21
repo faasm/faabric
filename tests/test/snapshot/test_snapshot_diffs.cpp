@@ -47,7 +47,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Track changes
-    DirtyTracker tracker = getDirtyTracker();
+    DirtyTracker& tracker = getDirtyTracker();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 
@@ -104,7 +104,8 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Reset dirty tracking
-    DirtyTracker tracker = getDirtyTracker();
+    faabric::util::DirtyTracker& tracker = faabric::util::getDirtyTracker();
+    tracker.clearAll();
     tracker.startTracking(memView);
     tracker.startThreadLocalTracking(memView);
 

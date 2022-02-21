@@ -21,75 +21,40 @@
 
 namespace faabric::util {
 
-DirtyTracker getDirtyTracker()
+// This singleton is needed to contain the different singleton
+// instances. We can't make them all static variables in the function.
+class DirtyTrackerSingleton
 {
+  public:
+    SoftPTEDirtyTracker softpte;
+    SegfaultDirtyTracker sigseg;
+    NoneDirtyTracker none;
+    UffdDirtyTracker uffd;
+};
+
+DirtyTracker& getDirtyTracker()
+{
+    static DirtyTrackerSingleton dt;
+
     std::string trackMode = faabric::util::getSystemConfig().dirtyTrackingMode;
     if (trackMode == "softpte") {
-        return SoftPTEDirtyTracker();
+        return dt.softpte;
     }
 
     if (trackMode == "segfault") {
-        return SegfaultDirtyTracker();
-    }
-
-    if (trackMode == "uffd") {
-        return UffdDirtyTracker();
+        return dt.sigseg;
     }
 
     if (trackMode == "none") {
-        return NoneDirtyTracker();
+        return dt.none;
+    }
+
+    if (trackMode == "uffd") {
+        return dt.uffd;
     }
 
     SPDLOG_ERROR("Unrecognised dirty tracking mode: {}", trackMode);
     throw std::runtime_error("Unrecognised dirty tracking mode");
-}
-
-// ----------------------------------
-// Dummy interface implementation
-//
-// This is required because we can't return an instance of a pure abstract class
-// from a method.
-// ----------------------------------
-
-std::string DirtyTracker::getType()
-{
-    throw std::runtime_error("Not implemented");
-}
-
-void DirtyTracker::startTracking(std::span<uint8_t> region)
-{
-    throw std::runtime_error("Not implemented");
-}
-
-void DirtyTracker::stopTracking(std::span<uint8_t> region)
-{
-    throw std::runtime_error("Not implemented");
-}
-
-std::vector<char> DirtyTracker::getDirtyPages(std::span<uint8_t> region)
-{
-    throw std::runtime_error("Not implemented");
-}
-
-void DirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
-{
-    throw std::runtime_error("Not implemented");
-}
-
-void DirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
-{
-    throw std::runtime_error("Not implemented");
-}
-
-std::vector<char> DirtyTracker::getThreadLocalDirtyPages(
-  std::span<uint8_t> region)
-{
-    throw std::runtime_error("Not implemented");
-}
-
-std::vector<char> DirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
-{
-    throw std::runtime_error("Not implemented");
 }
 
 // ----------------------------------
@@ -118,6 +83,11 @@ SoftPTEDirtyTracker::~SoftPTEDirtyTracker()
 {
     ::fclose(clearRefsFile);
     ::fclose(pagemapFile);
+}
+
+void SoftPTEDirtyTracker::clearAll()
+{
+    resetPTEs();
 }
 
 void SoftPTEDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -266,6 +236,11 @@ SegfaultDirtyTracker::SegfaultDirtyTracker()
     }
 
     SPDLOG_TRACE("Set up dirty tracking SIGSEGV handler");
+}
+
+void SegfaultDirtyTracker::clearAll()
+{
+    tracking = ThreadTrackingData();
 }
 
 void SegfaultDirtyTracker::handler(int sig,
@@ -420,6 +395,11 @@ UffdDirtyTracker::UffdDirtyTracker()
     SPDLOG_TRACE("Set up dirty tracking SIGBUS handler");
 }
 
+void UffdDirtyTracker::clearAll()
+{
+    tracking = ThreadTrackingData();
+}
+
 void UffdDirtyTracker::sigbusHandler(int sig,
                                      siginfo_t* info,
                                      void* ucontext) noexcept
@@ -541,6 +521,10 @@ std::vector<char> UffdDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
 // ------------------------------
 // None (i.e. mark all pages dirty)
 // ------------------------------
+
+void NoneDirtyTracker::clearAll() {
+    dirtyPages.clear();
+}
 
 void NoneDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region) {}
 
