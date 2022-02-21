@@ -16,8 +16,8 @@
 #define PAGEMAP_ENTRY_BYTES sizeof(uint64_t)
 #define PAGEMAP_SOFT_DIRTY (1Ull << 55)
 
-// The following isn't included in the 5.7 headers, but copied from;
-// https://github.com/torvalds/linux/commit/63b2d4174c4ad1f40b48d7138e71bcb564c1fe03
+// The following isn't available using HWE on 20.04, so copied from main at:
+// https://github.com/torvalds/linux/blob/master/fs/userfaultfd.c
 
 #define _UFFDIO_WRITEPROTECT (0x06)
 #define UFFDIO_WRITEPROTECT                                                    \
@@ -40,24 +40,24 @@ namespace faabric::util {
 class DirtyTracker
 {
   public:
-    virtual void clearAll() = 0;
+    DirtyTracker() = default;
 
-    virtual std::string getType() = 0;
+    virtual std::string getType();
 
-    virtual void startTracking(std::span<uint8_t> region) = 0;
+    virtual void startTracking(std::span<uint8_t> region);
 
-    virtual void stopTracking(std::span<uint8_t> region) = 0;
+    virtual void stopTracking(std::span<uint8_t> region);
 
-    virtual std::vector<char> getDirtyPages(std::span<uint8_t> region) = 0;
+    virtual std::vector<char> getDirtyPages(std::span<uint8_t> region);
 
-    virtual void startThreadLocalTracking(std::span<uint8_t> region) = 0;
+    virtual void startThreadLocalTracking(std::span<uint8_t> region);
 
-    virtual void stopThreadLocalTracking(std::span<uint8_t> region) = 0;
+    virtual void stopThreadLocalTracking(std::span<uint8_t> region);
 
     virtual std::vector<char> getThreadLocalDirtyPages(
-      std::span<uint8_t> region) = 0;
+      std::span<uint8_t> region);
 
-    virtual std::vector<char> getBothDirtyPages(std::span<uint8_t> region) = 0;
+    virtual std::vector<char> getBothDirtyPages(std::span<uint8_t> region);
 };
 
 /*
@@ -70,8 +70,6 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     SoftPTEDirtyTracker();
 
     ~SoftPTEDirtyTracker();
-
-    void clearAll() override;
 
     std::string getType() override { return "softpte"; }
 
@@ -94,6 +92,8 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     FILE* clearRefsFile = nullptr;
 
     FILE* pagemapFile = nullptr;
+
+    void resetPTEs();
 };
 
 /*
@@ -104,8 +104,6 @@ class SegfaultDirtyTracker final : public DirtyTracker
 {
   public:
     SegfaultDirtyTracker();
-
-    void clearAll() override;
 
     std::string getType() override { return "segfault"; }
 
@@ -126,9 +124,6 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
     // Signal handler for the resulting segfaults
     static void handler(int sig, siginfo_t* info, void* ucontext) noexcept;
-
-  private:
-    void setUpSignalHandler();
 };
 
 /*
@@ -139,8 +134,6 @@ class UffdDirtyTracker final : public DirtyTracker
 {
   public:
     UffdDirtyTracker();
-
-    void clearAll() override;
 
     std::string getType() override { return "uffd"; }
 
@@ -159,11 +152,10 @@ class UffdDirtyTracker final : public DirtyTracker
 
     std::vector<char> getBothDirtyPages(std::span<uint8_t> region) override;
 
-  private:
-    long uffd;
-    std::thread eventThread;
+    static void sigbusHandler(int sig, siginfo_t* info, void* ucontext) noexcept;
 
-    void writeProtectRegion(std::span<uint8_t> region);
+  private:
+    static long uffd;
 };
 
 /*
@@ -177,8 +169,6 @@ class NoneDirtyTracker final : public DirtyTracker
     NoneDirtyTracker() = default;
 
     std::string getType() override { return "none"; }
-
-    void clearAll() override;
 
     void startTracking(std::span<uint8_t> region) override;
 
@@ -199,5 +189,9 @@ class NoneDirtyTracker final : public DirtyTracker
     std::vector<char> dirtyPages;
 };
 
-DirtyTracker& getDirtyTracker();
+/**
+ * Factory method to create a dirty tracker instance based on the tracking mode
+ * set in the configuration.
+ */
+DirtyTracker getDirtyTracker();
 }
