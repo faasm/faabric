@@ -275,14 +275,27 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
-                 "Test multi-threaded segfault tracking",
+                 "Test multi-threaded signal-based tracking",
                  "[util][dirty]")
 {
-    // Here we want to check that faults triggered in a given thread are caught
-    // by that thread, and so we can safely just to thread-local diff tracking.
-    conf.dirtyTrackingMode = "segfault";
+    // We want to check that faults triggered in a given thread are caught
+    // by that thread, and so we can safely just do thread-local diff tracking.
+
+    std::string expectedType;
+    SECTION("Segfault")
+    {
+        conf.dirtyTrackingMode = "segfault";
+        expectedType = "segfault";
+    }
+
+    SECTION("Userfaultfd")
+    {
+        conf.dirtyTrackingMode = "uffd";
+        expectedType = "uffd";
+    }
+
     DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == "segfault");
+    REQUIRE(tracker.getType() == expectedType);
 
     int nLoops = 20;
 
@@ -304,59 +317,56 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         std::vector<std::thread> threads;
         threads.reserve(nThreads);
         for (int i = 0; i < nThreads; i++) {
-            threads.emplace_back([&tracker,
-                                  &success,
-                                  &memView,
-                                  &nPages,
-                                  i,
-                                  loop] {
-                success.at(i) = std::make_shared<std::atomic<bool>>();
+            threads.emplace_back(
+              [&tracker, &success, &memView, &nPages, i, loop] {
+                  success.at(i) = std::make_shared<std::atomic<bool>>();
 
-                // Start thread-local tracking
-                tracker.startThreadLocalTracking(memView);
+                  // Start thread-local tracking
+                  tracker.startThreadLocalTracking(memView);
 
-                // Modify a couple of pages specific to this thread
-                size_t pageOffset = i * 2;
-                size_t byteOffset = pageOffset * HOST_PAGE_SIZE;
-                uint8_t* pageOne = memView.data() + byteOffset;
-                uint8_t* pageTwo = memView.data() + byteOffset + HOST_PAGE_SIZE;
+                  // Modify a couple of pages specific to this thread
+                  size_t pageOffset = i * 2;
+                  size_t byteOffset = pageOffset * HOST_PAGE_SIZE;
+                  uint8_t* pageOne = memView.data() + byteOffset;
+                  uint8_t* pageTwo =
+                    memView.data() + byteOffset + HOST_PAGE_SIZE;
 
-                pageOne[20] = 3;
-                pageOne[250] = 5;
-                pageOne[HOST_PAGE_SIZE - 20] = 6;
+                  pageOne[20] = 3;
+                  pageOne[250] = 5;
+                  pageOne[HOST_PAGE_SIZE - 20] = 6;
 
-                pageTwo[35] = 2;
-                pageTwo[HOST_PAGE_SIZE - 100] = 3;
+                  pageTwo[35] = 2;
+                  pageTwo[HOST_PAGE_SIZE - 100] = 3;
 
-                tracker.stopThreadLocalTracking(memView);
+                  tracker.stopThreadLocalTracking(memView);
 
-                // Check we get the right number of dirty regions
-                std::vector<char> regions =
-                  tracker.getThreadLocalDirtyPages(memView);
-                if (regions.size() != nPages) {
-                    SPDLOG_ERROR("Segfault thread {} failed on loop {}. Got {} "
-                                 "regions instead of {}",
-                                 i,
-                                 loop,
-                                 regions.size(),
-                                 1);
-                    return;
-                }
+                  // Check we get the right number of dirty regions
+                  std::vector<char> regions =
+                    tracker.getThreadLocalDirtyPages(memView);
+                  if (regions.size() != nPages) {
+                      SPDLOG_ERROR("Thread {} failed on loop {}. Got {} "
+                                   "regions instead of {}",
+                                   i,
+                                   loop,
+                                   regions.size(),
+                                   1);
+                      return;
+                  }
 
-                std::vector<char> expected = std::vector<char>(nPages, 0);
-                expected[pageOffset] = 1;
-                expected[pageOffset + 1] = 1;
+                  std::vector<char> expected = std::vector<char>(nPages, 0);
+                  expected[pageOffset] = 1;
+                  expected[pageOffset + 1] = 1;
 
-                if (regions != expected) {
-                    SPDLOG_ERROR(
-                      "Segfault thread {} failed on loop {}. Regions not equal",
-                      i,
-                      loop);
-                    success.at(i)->store(false);
-                } else {
-                    success.at(i)->store(true);
-                }
-            });
+                  if (regions != expected) {
+                      SPDLOG_ERROR(
+                        "Thread {} failed on loop {}. Regions not equal",
+                        i,
+                        loop);
+                      success.at(i)->store(false);
+                  } else {
+                      success.at(i)->store(true);
+                  }
+              });
         }
 
         for (auto& t : threads) {
@@ -375,7 +385,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         for (int i = 0; i < nThreads; i++) {
             if (!success.at(i)->load()) {
                 SPDLOG_ERROR(
-                  "Segfault thread test thread {} on loop {} failed", i, loop);
+                  "Signal test thread {} on loop {} failed", i, loop);
                 thisLoopSuccess = false;
             }
         }

@@ -21,6 +21,44 @@
 
 namespace faabric::util {
 
+class ThreadTrackingData
+{
+  public:
+    ThreadTrackingData() = default;
+
+    ThreadTrackingData(std::span<uint8_t> region)
+      : nPages(faabric::util::getRequiredHostPages(region.size()))
+      , pageFlags(nPages, 0)
+      , regionBase(region.data())
+      , regionTop(region.data() + region.size())
+    {}
+
+    void markDirtyPage(void* addr)
+    {
+        ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
+        long pageNum = offset / HOST_PAGE_SIZE;
+        pageFlags[pageNum] = 1;
+    }
+
+    bool isInitialised() { return regionTop != nullptr; }
+
+    // std::vector<bool> here seems to worsen performance by >4x
+    // std::vector<char> seems to be optimal
+    int nPages = 0;
+    std::vector<char> pageFlags;
+
+  private:
+    uint8_t* regionBase = nullptr;
+    uint8_t* regionTop = nullptr;
+};
+
+// Thread-local tracking information for dirty tracking using signal handlers in
+// the same thread as the fault.
+static thread_local ThreadTrackingData tracking;
+
+// Shared uffd file descriptor when using userfaultfd
+static long uffd;
+
 // This singleton is needed to contain the different singleton
 // instances. We can't make them all static variables in the function.
 class DirtyTrackerSingleton
@@ -102,7 +140,7 @@ void SoftPTEDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 
 void SoftPTEDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
-    resetPTEs();
+    // Do nothing
 }
 
 void SoftPTEDirtyTracker::resetPTEs()
@@ -187,42 +225,9 @@ std::vector<char> SoftPTEDirtyTracker::getThreadLocalDirtyPages(
 // Segfaults
 // ------------------------------
 
-class ThreadTrackingData
-{
-  public:
-    ThreadTrackingData() = default;
-
-    ThreadTrackingData(std::span<uint8_t> region)
-      : nPages(faabric::util::getRequiredHostPages(region.size()))
-      , pageFlags(nPages, 0)
-      , regionBase(region.data())
-      , regionTop(region.data() + region.size())
-    {}
-
-    void markDirtyPage(void* addr)
-    {
-        ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
-        long pageNum = offset / HOST_PAGE_SIZE;
-        pageFlags[pageNum] = 1;
-    }
-
-    bool isInitialised() { return regionTop != nullptr; }
-
-    // std::vector<bool> here seems to worsen performance by >4x
-    // std::vector<char> seems to be optimal
-    int nPages = 0;
-    std::vector<char> pageFlags;
-
-  private:
-    uint8_t* regionBase = nullptr;
-    uint8_t* regionTop = nullptr;
-};
-
-static thread_local ThreadTrackingData tracking;
-
 SegfaultDirtyTracker::SegfaultDirtyTracker()
 {
-    // See sigaction docs
+    // Sigaction docs;
     // https://www.man7.org/linux/man-pages/man2/sigaction.2.html
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
@@ -423,10 +428,8 @@ void UffdDirtyTracker::sigbusHandler(int sig,
     struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
 
     if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) == -1) {
-        SPDLOG_ERROR(
+        SPDLOG_WARN(
           "Failed removing write protection: {} ({})", errno, strerror(errno));
-
-        throw std::runtime_error("Failed removing write protection");
     }
 }
 
@@ -522,7 +525,8 @@ std::vector<char> UffdDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
 // None (i.e. mark all pages dirty)
 // ------------------------------
 
-void NoneDirtyTracker::clearAll() {
+void NoneDirtyTracker::clearAll()
+{
     dirtyPages.clear();
 }
 

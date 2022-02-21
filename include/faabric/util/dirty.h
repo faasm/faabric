@@ -161,9 +161,6 @@ class UffdDirtyTracker final : public DirtyTracker
     static void sigbusHandler(int sig,
                               siginfo_t* info,
                               void* ucontext) noexcept;
-
-  private:
-    static long uffd;
 };
 
 /*
