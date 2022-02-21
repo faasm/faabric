@@ -16,8 +16,8 @@
 #define PAGEMAP_ENTRY_BYTES sizeof(uint64_t)
 #define PAGEMAP_SOFT_DIRTY (1Ull << 55)
 
-// The following isn't available using HWE on 20.04, so copied from main at:
-// https://github.com/torvalds/linux/blob/master/fs/userfaultfd.c
+// The following isn't available using HWE on 20.04, so copied from:
+// https://github.com/torvalds/linux/blob/v5.14/include/uapi/linux/userfaultfd.h
 
 #define _UFFDIO_WRITEPROTECT (0x06)
 #define UFFDIO_WRITEPROTECT                                                    \

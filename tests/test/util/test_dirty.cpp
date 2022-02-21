@@ -46,6 +46,13 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         DirtyTracker& t = getDirtyTracker();
         REQUIRE(t.getType() == "none");
     }
+
+    SECTION("Uffd")
+    {
+        conf.dirtyTrackingMode = "uffd";
+        DirtyTracker& t = getDirtyTracker();
+        REQUIRE(t.getType() == "uffd");
+    }
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
@@ -55,6 +62,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     SECTION("Soft dirty PTEs") { conf.dirtyTrackingMode = "softpte"; }
 
     SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
+
+    SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
 
     DirtyTracker& tracker = getDirtyTracker();
 

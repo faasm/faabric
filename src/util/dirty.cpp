@@ -236,7 +236,7 @@ SegfaultDirtyTracker::SegfaultDirtyTracker()
     sigaddset(&sa.sa_mask, SIGSEGV);
 
     sa.sa_sigaction = SegfaultDirtyTracker::handler;
-    if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+    if (sigaction(SIGSEGV, &sa, NULL) != 0) {
         throw std::runtime_error("Failed sigaction");
     }
 
@@ -267,7 +267,7 @@ void SegfaultDirtyTracker::handler(int sig,
     auto* alignedAddr = (void*)addr;
 
     // Remove write protection from page
-    if (::mprotect(alignedAddr, HOST_PAGE_SIZE, PROT_READ | PROT_WRITE) == -1) {
+    if (::mprotect(alignedAddr, HOST_PAGE_SIZE, PROT_READ | PROT_WRITE) != 0) {
         SPDLOG_ERROR("WARNING: mprotect failed to unset read-only");
     }
 }
@@ -295,7 +295,7 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 
     // Note that here we want to mark the memory read-only, this is to ensure
     // that only writes are counted as dirtying a page.
-    if (::mprotect(region.data(), region.size(), PROT_READ) == -1) {
+    if (::mprotect(region.data(), region.size(), PROT_READ) != 0) {
         SPDLOG_ERROR("Failed to start tracking with mprotect: {} ({})",
                      errno,
                      strerror(errno));
@@ -371,7 +371,7 @@ UffdDirtyTracker::UffdDirtyTracker()
     // Check API features
     struct uffdio_api uffdApi = { .api = UFFD_API,
                                   .features = UFFD_FEATURE_SIGBUS };
-    if (ioctl(uffd, UFFDIO_API, &uffdApi) == -1) {
+    if (ioctl(uffd, UFFDIO_API, &uffdApi) != 0) {
         SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
         throw std::runtime_error("ioctl API failed");
     }
@@ -384,12 +384,10 @@ UffdDirtyTracker::UffdDirtyTracker()
     }
 
     struct sigaction sa;
-    sa.sa_flags = SA_SIGINFO | SA_RESTART;
-
-    sigemptyset(&sa.sa_mask);
-    sigaddset(&sa.sa_mask, SIGBUS);
-
+    sa.sa_flags = SA_RESTART | SA_SIGINFO;
+    sa.sa_handler = nullptr;
     sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
+    sigemptyset(&sa.sa_mask);
 
     if (sigaction(SIGBUS, &sa, nullptr) != 0) {
         SPDLOG_ERROR(
@@ -397,7 +395,7 @@ UffdDirtyTracker::UffdDirtyTracker()
         throw std::runtime_error("Failed to set up SIGBUS");
     }
 
-    SPDLOG_TRACE("Set up dirty tracking SIGBUS handler");
+    SPDLOG_TRACE("Set up dirty tracking SIGBUS handler (uffd={})", uffd);
 }
 
 void UffdDirtyTracker::clearAll()
@@ -409,6 +407,7 @@ void UffdDirtyTracker::sigbusHandler(int sig,
                                      siginfo_t* info,
                                      void* ucontext) noexcept
 {
+    SPDLOG_TRACE("SIGBUS event");
     void* faultAddr = info->si_addr;
 
     if (!tracking.isInitialised()) {
@@ -423,11 +422,11 @@ void UffdDirtyTracker::sigbusHandler(int sig,
     addr &= -HOST_PAGE_SIZE;
     auto* alignedAddr = (void*)addr;
 
-    struct uffdio_range uffdRange = { (uint64_t)alignedAddr,
+    struct uffdio_range uffdRange = { (__u64)alignedAddr,
                                       (size_t)HOST_PAGE_SIZE };
     struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) == -1) {
+    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
         SPDLOG_WARN(
           "Failed removing write protection: {} ({})", errno, strerror(errno));
     }
@@ -453,13 +452,14 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
         return;
     }
 
-    struct uffdio_range uffdRange = { (uint64_t)region.data(), region.size() };
+    struct uffdio_range uffdRange = { (__u64)region.data(), region.size() };
+    __u64 ioctls = 0;
     struct uffdio_register uffdRegister = { uffdRange,
                                             UFFDIO_REGISTER_MODE_WP,
-                                            (uint32_t)0 };
+                                            ioctls };
 
     // Register the range
-    if (ioctl(uffd, UFFDIO_REGISTER, &uffdRegister) == -1) {
+    if (ioctl(uffd, UFFDIO_REGISTER, &uffdRegister) != 0) {
         SPDLOG_ERROR(
           "Failed to register range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Range register failed");
@@ -469,7 +469,7 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
     struct uffdio_writeprotect uffdArgs = { uffdRange,
                                             UFFDIO_WRITEPROTECT_MODE_WP };
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdArgs) == -1) {
+    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdArgs) != 0) {
         SPDLOG_ERROR(
           "Failed to write-protect range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Write protect failed");
@@ -486,7 +486,7 @@ void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
     struct uffdio_range uffdRange = { (uint64_t)region.data(), region.size() };
     struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) == -1) {
+    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
         SPDLOG_ERROR(
           "Failed removing write protection: {} ({})", errno, strerror(errno));
 
