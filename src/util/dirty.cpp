@@ -2,7 +2,9 @@
 #include <cstring>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <linux/userfaultfd.h>
 #include <memory>
+#include <poll.h>
 #include <signal.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -26,6 +28,7 @@ class DirtyTrackerSingleton
   public:
     SoftPTEDirtyTracker softpte;
     SegfaultDirtyTracker sigseg;
+    UffdDirtyTracker uffd;
     NoneDirtyTracker none;
 };
 
@@ -40,6 +43,10 @@ DirtyTracker& getDirtyTracker()
 
     if (trackMode == "segfault") {
         return dt.sigseg;
+    }
+
+    if (trackMode == "uffd") {
+        return dt.uffd;
     }
 
     if (trackMode == "none") {
@@ -338,6 +345,149 @@ std::vector<char> SegfaultDirtyTracker::getDirtyPages(std::span<uint8_t> region)
 
 std::vector<char> SegfaultDirtyTracker::getBothDirtyPages(
   std::span<uint8_t> region)
+{
+    return getThreadLocalDirtyPages(region);
+}
+
+// ------------------------------
+// Userfaultfd
+// ------------------------------
+
+UffdDirtyTracker::UffdDirtyTracker()
+{
+    uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+    if (uffd == -1) {
+        SPDLOG_ERROR("Failed on userfaultfd: {} ({})", errno, strerror(errno));
+        throw std::runtime_error("userfaultfd failed");
+    }
+
+    struct uffdio_api uffdApi = { .api = UFFD_API, .features = 0 };
+    if (ioctl(uffd, UFFDIO_API, &uffdApi) == -1) {
+        SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
+        throw std::runtime_error("ioctl API failed");
+    }
+
+    bool writeProtectSupported =
+      uffdApi.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP;
+    if (!writeProtectSupported) {
+        SPDLOG_ERROR("Userfaultfd write protect not supported");
+        throw std::runtime_error("Userfaultfd write protect not supported");
+    }
+
+    // Start background thread
+    eventThread = std::thread([this] {
+        for (;;) {
+            // Poll for events
+            struct pollfd pollfd;
+            int nready;
+            pollfd.fd = uffd;
+            pollfd.events = POLLIN;
+            nready = poll(&pollfd, 1, -1);
+            if (nready == -1) {
+                SPDLOG_ERROR("Poll failed");
+                throw std::runtime_error("Poll failed");
+            }
+
+            // Read an event
+            uffd_msg msg;
+            ssize_t nread = read(uffd, &msg, sizeof(msg));
+            if (nread == 0) {
+                printf("EOF on userfaultfd!\n");
+                exit(EXIT_FAILURE);
+            }
+
+            if (nread == -1) {
+                SPDLOG_ERROR("Read failed");
+                throw std::runtime_error("Read failed");
+            }
+
+            if (msg.event != UFFD_EVENT_PAGEFAULT) {
+                SPDLOG_ERROR("Unexpected userfault event: {}", msg.event);
+                throw std::runtime_error("Unexpected userfault event");
+            }
+
+            if (!(msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE)) {
+                throw std::runtime_error("Pagefault flag not as expected");
+            }
+
+            size_t pageBase =
+              ((uint8_t*)msg.arg.pagefault.address) - region.data();
+
+            SPDLOG_TRACE(
+              "Uffd fault: {} ({})", msg.arg.pagefault.address, pageBase);
+
+            dirty.emplace_back(pageBase, pageBase + HOST_PAGE_SIZE);
+
+            uffdio_zeropage zeroPage;
+            zeroPage.range.start = msg.arg.pagefault.address;
+            zeroPage.range.len = HOST_PAGE_SIZE;
+
+            if (ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage) == -1) {
+                SPDLOG_ERROR("ioctl zeropage failed");
+            }
+        }
+    });
+}
+
+void UffdDirtyTracker::writeProtectRegion(std::span<uint8_t> region)
+{
+    struct uffdio_range uffdRange = { (__u64)region.data(), region.size() };
+    struct uffdio_writeprotect uffdArgs = { uffdRange,
+                                            UFFDIO_WRITEPROTECT_MODE_WP };
+
+    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdArgs) == -1) {
+        SPDLOG_ERROR(
+          "Failed to write-protect range: {} ({})", errno, strerror(errno));
+        throw std::runtime_error("Write protect failed");
+    }
+}
+
+void UffdDirtyTracker::clearAll() {}
+
+void UffdDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
+{
+    if (region.empty() || region.data() == nullptr) {
+        return;
+    }
+
+    SPDLOG_TRACE("Starting thread-local tracking on region size {}",
+                 region.size());
+}
+
+void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
+{
+    SPDLOG_TRACE("Starting tracking on region size {}", region.size());
+
+    if (region.empty() || region.data() == nullptr) {
+        return;
+    }
+}
+
+void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
+{
+    if (region.empty() || region.data() == nullptr) {
+        return;
+    }
+
+    SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
+}
+
+void UffdDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
+{
+    SPDLOG_TRACE("Stopping thread-local tracking on region size {}",
+                 region.size());
+}
+
+std::vector<char> UffdDirtyTracker::getThreadLocalDirtyPages(
+  std::span<uint8_t> region)
+{}
+
+std::vector<char> UffdDirtyTracker::getDirtyPages(std::span<uint8_t> region)
+{
+    return {};
+}
+
+std::vector<char> UffdDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
 {
     return getThreadLocalDirtyPages(region);
 }

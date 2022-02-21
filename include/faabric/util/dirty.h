@@ -1,8 +1,10 @@
 #pragma once
 
+#include <linux/userfaultfd.h>
 #include <signal.h>
 #include <span>
 #include <string>
+#include <thread>
 
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
@@ -13,6 +15,21 @@
 
 #define PAGEMAP_ENTRY_BYTES sizeof(uint64_t)
 #define PAGEMAP_SOFT_DIRTY (1Ull << 55)
+
+// The following isn't included in the 5.7 headers, but copied from;
+// https://github.com/torvalds/linux/commit/63b2d4174c4ad1f40b48d7138e71bcb564c1fe03
+
+#define _UFFDIO_WRITEPROTECT (0x06)
+#define UFFDIO_WRITEPROTECT                                                    \
+    _IOWR(UFFDIO, _UFFDIO_WRITEPROTECT, struct uffdio_writeprotect)
+
+struct uffdio_writeprotect
+{
+    struct uffdio_range range;
+#define UFFDIO_WRITEPROTECT_MODE_WP ((__u64)1 << 0)
+#define UFFDIO_WRITEPROTECT_MODE_DONTWAKE ((__u64)1 << 1)
+    __u64 mode;
+};
 
 namespace faabric::util {
 
@@ -112,6 +129,41 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
   private:
     void setUpSignalHandler();
+};
+
+/*
+ * Dirty tracking implementation using userfaultfd to write-protect pages, then
+ * handle the resulting userspace events when they are written to.
+ */
+class UffdDirtyTracker final : public DirtyTracker
+{
+  public:
+    UffdDirtyTracker();
+
+    void clearAll() override;
+
+    std::string getType() override { return "uffd"; }
+
+    void startTracking(std::span<uint8_t> region) override;
+
+    void stopTracking(std::span<uint8_t> region) override;
+
+    std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
+
+    void startThreadLocalTracking(std::span<uint8_t> region) override;
+
+    void stopThreadLocalTracking(std::span<uint8_t> region) override;
+
+    std::vector<char> getThreadLocalDirtyPages(
+      std::span<uint8_t> region) override;
+
+    std::vector<char> getBothDirtyPages(std::span<uint8_t> region) override;
+
+  private:
+    long uffd;
+    std::thread eventThread;
+
+    void writeProtectRegion(std::span<uint8_t> region);
 };
 
 /*

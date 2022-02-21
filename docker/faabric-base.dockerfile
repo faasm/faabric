@@ -37,6 +37,7 @@ RUN apt install -y \
     libtool \
     libunwind-13-dev \
     libz-dev \
+    linux-generic-hwe-20.04 \
     lld-13 \
     lldb-13 \
     make \
