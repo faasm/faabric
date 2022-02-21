@@ -197,8 +197,8 @@ class NoneDirtyTracker final : public DirtyTracker
 };
 
 /**
- * Factory method to create a dirty tracker instance based on the tracking mode
- * set in the configuration.
+ * Returns the dirty tracker singleton. The dirty tracking mode is determined in
+ * the system config.
  */
 DirtyTracker& getDirtyTracker();
 }

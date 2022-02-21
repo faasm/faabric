@@ -236,7 +236,7 @@ SegfaultDirtyTracker::SegfaultDirtyTracker()
     sigaddset(&sa.sa_mask, SIGSEGV);
 
     sa.sa_sigaction = SegfaultDirtyTracker::handler;
-    if (sigaction(SIGSEGV, &sa, NULL) != 0) {
+    if (sigaction(SIGSEGV, &sa, nullptr) != 0) {
         throw std::runtime_error("Failed sigaction");
     }
 
@@ -370,7 +370,9 @@ UffdDirtyTracker::UffdDirtyTracker()
 
     // Check API features
     struct uffdio_api uffdApi = { .api = UFFD_API,
-                                  .features = UFFD_FEATURE_SIGBUS };
+                                  .features = UFFD_FEATURE_SIGBUS |
+                                              UFFD_FEATURE_THREAD_ID,
+                                  .ioctls = 0 };
     if (ioctl(uffd, UFFDIO_API, &uffdApi) != 0) {
         SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
         throw std::runtime_error("ioctl API failed");
@@ -383,6 +385,7 @@ UffdDirtyTracker::UffdDirtyTracker()
         throw std::runtime_error("Userfaultfd write protect not supported");
     }
 
+    // Set up the sigbus handler
     struct sigaction sa;
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
     sa.sa_handler = nullptr;
@@ -452,13 +455,16 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
         return;
     }
 
-    struct uffdio_range uffdRange = { (__u64)region.data(), region.size() };
-    __u64 ioctls = 0;
-    struct uffdio_register uffdRegister = { uffdRange,
-                                            UFFDIO_REGISTER_MODE_WP,
-                                            ioctls };
-
     // Register the range
+    struct uffdio_range regRange = { .start = (__u64)region.data(),
+                                     .len = region.size() };
+    __u64 ioctls = 0;
+    struct uffdio_register uffdRegister = {
+        .range = regRange,
+        .mode = UFFDIO_REGISTER_MODE_WP, // | UFFDIO_REGISTER_MODE_MISSING,
+        .ioctls = ioctls
+    };
+
     if (ioctl(uffd, UFFDIO_REGISTER, &uffdRegister) != 0) {
         SPDLOG_ERROR(
           "Failed to register range: {} ({})", errno, strerror(errno));
@@ -466,10 +472,12 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
     }
 
     // Write protect it
-    struct uffdio_writeprotect uffdArgs = { uffdRange,
-                                            UFFDIO_WRITEPROTECT_MODE_WP };
+    struct uffdio_range wpRange = { .start = (__u64)region.data(),
+                                    .len = region.size() };
+    struct uffdio_writeprotect wpArgs = { .range = wpRange,
+                                          .mode = UFFDIO_WRITEPROTECT_MODE_WP };
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &uffdArgs) != 0) {
+    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
         SPDLOG_ERROR(
           "Failed to write-protect range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Write protect failed");

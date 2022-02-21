@@ -66,6 +66,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
 
     DirtyTracker& tracker = getDirtyTracker();
+    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
 
     // Create several pages of memory
     int nPages = 6;
