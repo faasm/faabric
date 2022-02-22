@@ -6,6 +6,7 @@
 #include <memory>
 #include <poll.h>
 #include <signal.h>
+#include <sys/eventfd.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
@@ -58,54 +59,36 @@ static thread_local ThreadTrackingData tracking;
 // Global tracking information is used for non-thread-local tracking
 static ThreadTrackingData globalTracking;
 
-// This singleton is needed to contain the different singleton
-// instances. We can't make them all static variables in the function.
-class DirtyTrackerSingleton
+static std::shared_ptr<DirtyTracker> tracker = nullptr;
+
+void resetDirtyTracker()
 {
-  public:
-    DirtyTrackerSingleton()
-      : mode(faabric::util::getSystemConfig().dirtyTrackingMode)
-      , softpte(mode)
-      , sigseg(mode)
-      , none(mode)
-      , uffd(mode)
-    {}
+    tracker = nullptr;
 
-    std::string mode;
+    std::string mode = getSystemConfig().dirtyTrackingMode;
 
-    SoftPTEDirtyTracker softpte;
-    SegfaultDirtyTracker sigseg;
-    NoneDirtyTracker none;
-    UffdDirtyTracker uffd;
-
-    DirtyTracker& get()
-    {
-        if (mode == "softpte") {
-            return softpte;
-        }
-
-        if (mode == "segfault") {
-            return sigseg;
-        }
-
-        if (mode == "none") {
-            return none;
-        }
-
-        if (mode == "uffd" || mode == "uffd-wp" || mode == "uffd-thread" ||
-            mode == "uffd-thread-wp") {
-            return uffd;
-        }
-
+    if (mode == "softpte") {
+        tracker = std::make_shared<SoftPTEDirtyTracker>(mode);
+    } else if (mode == "segfault") {
+        tracker = std::make_shared<SegfaultDirtyTracker>(mode);
+    } else if (mode == "none") {
+        tracker = std::make_shared<NoneDirtyTracker>(mode);
+    } else if (mode == "uffd" || mode == "uffd-wp" || mode == "uffd-thread" ||
+               mode == "uffd-thread-wp") {
+        tracker = std::make_shared<UffdDirtyTracker>(mode);
+    } else {
         SPDLOG_ERROR("Unrecognised dirty tracking mode: {}", mode);
         throw std::runtime_error("Unrecognised dirty tracking mode");
     }
-};
+}
 
-DirtyTracker& getDirtyTracker()
+std::shared_ptr<DirtyTracker> getDirtyTracker()
 {
-    static DirtyTrackerSingleton dt;
-    return dt.get();
+    if (tracker == nullptr) {
+        resetDirtyTracker();
+    }
+
+    return tracker;
 }
 
 // ----------------------------------
@@ -452,34 +435,72 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
 
         SPDLOG_TRACE("Set up dirty tracking SIGBUS handler (uffd={})", uffd);
     } else {
-        eventThread = std::thread(&UffdDirtyTracker::eventThreadEntrypoint);
+        eventThread =
+          std::thread(&UffdDirtyTracker::eventThreadEntrypoint, this);
+
+        // Open shutdown fd for closing event thread
+        closeFd = ::eventfd(0, 0);
+        if (closeFd == -1) {
+            SPDLOG_ERROR(
+              "Failed to open eventfd for closing uffd event thread");
+            throw std::runtime_error("Failed to open eventfd");
+        }
+    }
+}
+
+UffdDirtyTracker::~UffdDirtyTracker()
+{
+    // Close down the uffd handle
+    if (uffd > 0) {
+        SPDLOG_DEBUG("Closing uffd {}", uffd);
+        ::close(uffd);
+    }
+
+    if (!sigbus && eventThread.joinable()) {
+        SPDLOG_DEBUG("Awaiting uffd event thread");
+
+        uint64_t msg = 123;
+        ::write(closeFd, &msg, sizeof(uint64_t));
+        eventThread.join();
     }
 }
 
 void UffdDirtyTracker::eventThreadEntrypoint()
 {
     for (;;) {
-        // Poll for events
-        struct pollfd pollfd;
-        int nready;
-        pollfd.fd = uffd;
-        pollfd.events = POLLIN;
+        struct pollfd pollfds[2];
 
-        nready = poll(&pollfd, 1, -1);
-        if (nready == -1) {
+        pollfds[0].fd = uffd;
+        pollfds[0].events = POLLIN;
+
+        pollfds[1].fd = closeFd;
+        pollfds[1].events = POLLIN;
+
+        int nReady = poll(pollfds, 2, -1);
+        if (nReady == -1) {
             SPDLOG_ERROR("Poll failed: {} ({})", errno, strerror(errno));
             throw std::runtime_error("Poll failed");
         }
 
+        if (pollfds[0].revents & POLLERR) {
+            SPDLOG_DEBUG("Uffd shut down");
+            return;
+        }
+
+        if (pollfds[1].revents > 0) {
+            SPDLOG_DEBUG("Uffd shut down");
+            return;
+        }
+
         // Read an event
         uffd_msg msg;
-        ssize_t nread = read(uffd, &msg, sizeof(msg));
-        if (nread == 0) {
+        ssize_t nRead = read(uffd, &msg, sizeof(msg));
+        if (nRead == 0) {
             SPDLOG_ERROR("EOF on userfaultfd: {} ({})", errno, strerror(errno));
             throw std::runtime_error("EOF on uffd");
         }
 
-        if (nread == -1) {
+        if (nRead == -1) {
             SPDLOG_ERROR("Read failed: {} ({})", errno, strerror(errno));
             throw std::runtime_error("Read failed");
         }

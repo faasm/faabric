@@ -47,9 +47,9 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Track changes
-    DirtyTracker& tracker = getDirtyTracker();
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
+    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
+    tracker->startTracking(memView);
+    tracker->startThreadLocalTracking(memView);
 
     std::vector<char> expected(memPages, 0);
 
@@ -66,11 +66,11 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     expected[3] = 1;
     expected[7] = 1;
 
-    tracker.stopTracking(memView);
-    tracker.stopThreadLocalTracking(memView);
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
 
     // Check there are no diffs even though we have dirty regions
-    auto dirtyRegions = tracker.getBothDirtyPages(memView);
+    auto dirtyRegions = tracker->getBothDirtyPages(memView);
     REQUIRE(dirtyRegions == expected);
 
     std::vector<SnapshotDiff> changeDiffs =
@@ -104,10 +104,10 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     snap->mapToMemory({ mem.get(), snapSize });
 
     // Reset dirty tracking
-    faabric::util::DirtyTracker& tracker = faabric::util::getDirtyTracker();
-    tracker.clearAll();
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
+    std::shared_ptr<DirtyTracker> tracker = faabric::util::getDirtyTracker();
+    tracker->clearAll();
+    tracker->startTracking(memView);
+    tracker->startThreadLocalTracking(memView);
 
     // Single change, single merge region
     std::vector<uint8_t> dataA = { 1, 2, 3, 4 };
@@ -181,11 +181,11 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
       mem.get() + offsetNoChange, dataNoChange.data(), dataNoChange.size());
 
     // Stop tracking
-    tracker.stopTracking(memView);
-    tracker.stopThreadLocalTracking(memView);
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
 
     // Check we have the right number of diffs
-    auto dirtyRegions = tracker.getBothDirtyPages(memView);
+    auto dirtyRegions = tracker->getBothDirtyPages(memView);
     std::vector<SnapshotDiff> changeDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
 

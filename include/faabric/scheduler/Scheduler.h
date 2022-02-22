@@ -97,7 +97,7 @@ class Executor
 
     faabric::snapshot::SnapshotRegistry& reg;
 
-    faabric::util::DirtyTracker& tracker;
+    std::shared_ptr<faabric::util::DirtyTracker> tracker;
 
     uint32_t threadPoolSize = 0;
 

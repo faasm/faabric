@@ -20,60 +20,38 @@ class DirtyConfTestFixture
   public:
     DirtyConfTestFixture() = default;
     ~DirtyConfTestFixture() = default;
+
+    void setTrackingMode(const std::string& mode)
+    {
+        conf.dirtyTrackingMode = mode;
+        resetDirtyTracker();
+    }
 };
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
                  "Test configuring tracker",
                  "[util][dirty]")
 {
-    SECTION("Segfaults")
-    {
-        conf.dirtyTrackingMode = "segfault";
-        DirtyTracker& t = getDirtyTracker();
-        REQUIRE(t.getType() == "segfault");
-    }
+    std::string mode;
 
-    SECTION("Soft PTEs")
-    {
-        conf.dirtyTrackingMode = "softpte";
-        DirtyTracker& t = getDirtyTracker();
-        REQUIRE(t.getType() == "softpte");
-    }
+    SECTION("Segfaults") { mode = "segfault"; }
 
-    SECTION("None")
-    {
-        conf.dirtyTrackingMode = "none";
-        DirtyTracker& t = getDirtyTracker();
-        REQUIRE(t.getType() == "none");
-    }
+    SECTION("Soft PTEs") { mode = "softpte"; }
 
-    SECTION("Uffd")
-    {
-        conf.dirtyTrackingMode = "uffd";
-        DirtyTracker& t = getDirtyTracker();
-        REQUIRE(t.getType() == "uffd");
-    }
+    SECTION("None") { mode = "none"; }
 
-    SECTION("Uffd write-protect")
-    {
-        conf.dirtyTrackingMode = "uffd-wp";
-        DirtyTracker& t = getDirtyTracker();
-        REQUIRE(t.getType() == "uffd-wp");
-    }
+    SECTION("Uffd") { mode = "uffd"; }
 
-    SECTION("Uffd threaded")
-    {
-        conf.dirtyTrackingMode = "uffd-thread";
-        DirtyTracker& t = getDirtyTracker();
-        REQUIRE(t.getType() == "uffd-thread");
-    }
+    SECTION("Uffd write-protect") { mode = "uffd-wp"; }
 
-    SECTION("Uffd threaded write-protect")
-    {
-        conf.dirtyTrackingMode = "uffd-thread-wp";
-        DirtyTracker& t = getDirtyTracker();
-        REQUIRE(t.getType() == "uffd-thread-wp");
-    }
+    SECTION("Uffd threaded") { mode = "uffd-thread"; }
+
+    SECTION("Uffd threaded write-protect") { mode = "uffd-thread-wp"; }
+
+    // Set the conf, reset the tracker and check
+    setTrackingMode(mode);
+    auto t = getDirtyTracker();
+    REQUIRE(t->getType() == mode);
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
@@ -95,8 +73,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         conf.dirtyTrackingMode = "uffd-thread-wp";
     }
 
-    DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
+    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
+    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
 
     // Create several pages of memory
     int nPages = 6;
@@ -104,14 +82,14 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     MemoryRegion memPtr = allocatePrivateMemory(memSize);
     std::span<uint8_t> memView(memPtr.get(), memSize);
 
-    tracker.clearAll();
+    tracker->clearAll();
 
-    std::vector<char> actual = tracker.getBothDirtyPages(memView);
+    std::vector<char> actual = tracker->getBothDirtyPages(memView);
     std::vector<char> expected(nPages, 0);
     REQUIRE(actual == expected);
 
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
+    tracker->startTracking(memView);
+    tracker->startThreadLocalTracking(memView);
 
     // Dirty two of the pages
     uint8_t* pageZero = memPtr.get();
@@ -123,7 +101,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     expected = { 0, 1, 0, 1, 0, 0 };
 
-    actual = tracker.getBothDirtyPages(memView);
+    actual = tracker->getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
     // And another
@@ -131,16 +109,16 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     pageFive[99] = 3;
 
     expected[5] = 1;
-    actual = tracker.getBothDirtyPages(memView);
+    actual = tracker->getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
     // Reset
-    tracker.stopTracking(memView);
-    tracker.stopThreadLocalTracking(memView);
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
+    tracker->startTracking(memView);
+    tracker->startThreadLocalTracking(memView);
 
-    actual = tracker.getBothDirtyPages(memView);
+    actual = tracker->getBothDirtyPages(memView);
     expected = std::vector<char>(nPages, 0);
     REQUIRE(actual == expected);
 
@@ -159,21 +137,21 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     expected = std::vector<char>(nPages, 0);
     expected[3] = 1;
     expected[4] = 1;
-    actual = tracker.getBothDirtyPages(memView);
+    actual = tracker->getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
     // Final reset and check
-    tracker.stopTracking(memView);
-    tracker.stopThreadLocalTracking(memView);
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
 
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
-    actual = tracker.getBothDirtyPages(memView);
+    tracker->startTracking(memView);
+    tracker->startThreadLocalTracking(memView);
+    actual = tracker->getBothDirtyPages(memView);
     expected = std::vector<char>(nPages, 0);
     REQUIRE(actual == expected);
 
-    tracker.stopTracking(memView);
-    tracker.stopThreadLocalTracking(memView);
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
@@ -195,23 +173,23 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         conf.dirtyTrackingMode = "uffd-thread-wp";
     }
 
-    DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
+    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
+    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
 
     int nPages = 15;
     size_t memSize = HOST_PAGE_SIZE * nPages;
     MemoryRegion mem = allocateSharedMemory(memSize);
     std::span<uint8_t> memView(mem.get(), memSize);
 
-    tracker.clearAll();
+    tracker->clearAll();
 
     std::vector<char> actual =
-      tracker.getBothDirtyPages({ mem.get(), memSize });
+      tracker->getBothDirtyPages({ mem.get(), memSize });
     std::vector<char> expected(nPages, 0);
     REQUIRE(actual == expected);
 
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
+    tracker->startTracking(memView);
+    tracker->startThreadLocalTracking(memView);
 
     // Dirty some pages, some adjacent
     uint8_t* pageZero = mem.get();
@@ -236,10 +214,10 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     expected[7] = 1;
     expected[9] = 1;
 
-    tracker.stopTracking({ mem.get(), memSize });
-    tracker.stopThreadLocalTracking({ mem.get(), memSize });
+    tracker->stopTracking({ mem.get(), memSize });
+    tracker->stopThreadLocalTracking({ mem.get(), memSize });
 
-    actual = tracker.getBothDirtyPages({ mem.get(), memSize });
+    actual = tracker->getBothDirtyPages({ mem.get(), memSize });
 
     REQUIRE(actual.size() == expected.size());
 
@@ -308,16 +286,16 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         mapMemoryPrivate(memView, fd);
     }
 
-    DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
+    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
+    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
 
     // Check memory to start with
     std::vector<uint8_t> actualMemBefore(mem.get(), mem.get() + memSize);
     REQUIRE(actualMemBefore == expectedData);
 
     // Start tracking
-    tracker.startTracking(memView);
-    tracker.startThreadLocalTracking(memView);
+    tracker->startTracking(memView);
+    tracker->startThreadLocalTracking(memView);
 
     // Make a change on one page
     size_t offsetA = 0;
@@ -349,13 +327,13 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     REQUIRE(actualMemAfter == expectedData);
 
     // Get dirty regions
-    std::vector<char> actualDirty = tracker.getBothDirtyPages(memView);
+    std::vector<char> actualDirty = tracker->getBothDirtyPages(memView);
 
     // Check dirty regions
     REQUIRE(actualDirty == expectedDirty);
 
-    tracker.stopTracking(memView);
-    tracker.stopThreadLocalTracking(memView);
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
@@ -378,8 +356,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         conf.dirtyTrackingMode = "uffd-thread-wp";
     }
 
-    DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
+    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
+    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
 
     int nLoops = 20;
 
@@ -396,7 +374,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         success.resize(nThreads);
 
         // Start global tracking
-        tracker.startTracking(memView);
+        tracker->startTracking(memView);
 
         std::vector<std::thread> threads;
         threads.reserve(nThreads);
@@ -406,7 +384,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                   success.at(i) = std::make_shared<std::atomic<bool>>();
 
                   // Start thread-local tracking
-                  tracker.startThreadLocalTracking(memView);
+                  tracker->startThreadLocalTracking(memView);
 
                   // Modify a couple of pages specific to this thread
                   size_t pageOffset = i * 2;
@@ -422,11 +400,11 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                   pageTwo[35] = 2;
                   pageTwo[HOST_PAGE_SIZE - 100] = 3;
 
-                  tracker.stopThreadLocalTracking(memView);
+                  tracker->stopThreadLocalTracking(memView);
 
                   // Check we get the right number of dirty regions
                   std::vector<char> regions =
-                    tracker.getThreadLocalDirtyPages(memView);
+                    tracker->getThreadLocalDirtyPages(memView);
                   if (regions.size() != nPages) {
                       SPDLOG_ERROR("Thread {} failed on loop {}. Got {} "
                                    "regions instead of {}",
@@ -460,10 +438,10 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         }
 
         // Stop tracking
-        tracker.stopTracking(memView);
+        tracker->stopTracking(memView);
 
         // Check no global offsets
-        REQUIRE(tracker.getDirtyPages(memView).empty());
+        REQUIRE(tracker->getDirtyPages(memView).empty());
 
         bool thisLoopSuccess = true;
         for (int i = 0; i < nThreads; i++) {

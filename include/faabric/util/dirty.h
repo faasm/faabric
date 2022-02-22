@@ -74,7 +74,7 @@ class DirtyTracker
 class SoftPTEDirtyTracker final : public DirtyTracker
 {
   public:
-    SoftPTEDirtyTracker(const std::string &modeIn);
+    SoftPTEDirtyTracker(const std::string& modeIn);
 
     ~SoftPTEDirtyTracker();
 
@@ -147,6 +147,8 @@ class UffdDirtyTracker final : public DirtyTracker
   public:
     UffdDirtyTracker(const std::string& modeIn);
 
+    ~UffdDirtyTracker();
+
     void clearAll() override;
 
     std::string getType() override { return mode; }
@@ -175,6 +177,8 @@ class UffdDirtyTracker final : public DirtyTracker
 
     bool sigbus = false;
 
+    int closeFd;
+
     std::thread eventThread;
 
     static void registerRegion(std::span<uint8_t> region);
@@ -187,7 +191,7 @@ class UffdDirtyTracker final : public DirtyTracker
 
     static void deregisterRegion(std::span<uint8_t> region);
 
-    static void eventThreadEntrypoint();
+    void eventThreadEntrypoint();
 };
 
 /*
@@ -198,7 +202,7 @@ class UffdDirtyTracker final : public DirtyTracker
 class NoneDirtyTracker final : public DirtyTracker
 {
   public:
-    NoneDirtyTracker(const std::string &modeIn);
+    NoneDirtyTracker(const std::string& modeIn);
 
     void clearAll() override;
 
@@ -227,5 +231,10 @@ class NoneDirtyTracker final : public DirtyTracker
  * Returns the dirty tracker singleton. The dirty tracking mode is determined in
  * the system config.
  */
-DirtyTracker& getDirtyTracker();
+std::shared_ptr<DirtyTracker> getDirtyTracker();
+
+/**
+ * Resets the dirty tracker singleton (e.g. if the config has been changed).
+ */
+void resetDirtyTracker();
 }
