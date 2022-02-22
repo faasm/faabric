@@ -28,7 +28,8 @@ class ThreadTrackingData
 
     ThreadTrackingData(std::span<uint8_t> region)
       : nPages(faabric::util::getRequiredHostPages(region.size()))
-      , pageFlags(nPages, 0)
+      , missingFlags(nPages, 1)
+      , dirtyFlags(nPages, 0)
       , regionBase(region.data())
       , regionTop(region.data() + region.size())
     {}
@@ -36,7 +37,13 @@ class ThreadTrackingData
     void markDirtyPage(void* addr)
     {
         long pageNum = ((uint8_t*)addr - regionBase) / HOST_PAGE_SIZE;
-        pageFlags[pageNum] = 1;
+        dirtyFlags[pageNum] = 1;
+    }
+
+    void unmarkMissingPage(void* addr)
+    {
+        long pageNum = ((uint8_t*)addr - regionBase) / HOST_PAGE_SIZE;
+        missingFlags[pageNum] = 0;
     }
 
     bool isInitialised() { return regionTop != nullptr; }
@@ -44,7 +51,8 @@ class ThreadTrackingData
     // std::vector<bool> here seems to worsen performance by >4x
     // std::vector<char> seems to be optimal
     int nPages = 0;
-    std::vector<char> pageFlags;
+    std::vector<char> missingFlags;
+    std::vector<char> dirtyFlags;
 
   private:
     uint8_t* regionBase = nullptr;
@@ -346,7 +354,7 @@ std::vector<char> SegfaultDirtyTracker::getThreadLocalDirtyPages(
         return std::vector<char>(nPages, 0);
     }
 
-    return tracking.pageFlags;
+    return tracking.dirtyFlags;
 }
 
 std::vector<char> SegfaultDirtyTracker::getDirtyPages(std::span<uint8_t> region)
@@ -419,24 +427,27 @@ void UffdDirtyTracker::sigbusHandler(int sig,
                                      siginfo_t* info,
                                      void* ucontext) noexcept
 {
-    SPDLOG_TRACE("SIGBUS event");
-    void* faultAddr = info->si_addr;
+    ucontext_t* context = (ucontext_t*)ucontext;
+    SPDLOG_TRACE(
+      "SIGBUS event: {}, {}, {}", sig, info->si_code, context->uc_flags);
 
+    void* faultAddr = info->si_addr;
     if (!tracking.isInitialised()) {
         // Unexpected sigbus fault, treat as normal
         faabric::util::handleCrash(sig);
     }
 
+    // Mark the page as dirty
     tracking.markDirtyPage(faultAddr);
 
-    // Page-align address
+    // Get page-aligned address
     uintptr_t addr = (uintptr_t)faultAddr;
     addr &= -HOST_PAGE_SIZE;
     auto* alignedAddr = (void*)addr;
 
     if (uffdWriteProtect) {
         removeWriteProtect(
-          std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
+             std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE), false);
     }
 
     if (uffdMissing) {
@@ -481,11 +492,11 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
                                      .len = region.size() };
 
     __u64 mode = 0;
-    if (missing) {
+    if (uffdMissing) {
         mode |= UFFDIO_REGISTER_MODE_MISSING;
     }
 
-    if (writeProtect) {
+    if (uffdWriteProtect) {
         mode |= UFFDIO_REGISTER_MODE_WP;
     }
 
@@ -527,24 +538,44 @@ void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
     }
 
     SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
-    deregisterRegion(region);
 
     if (writeProtect) {
-        removeWriteProtect(region);
+        removeWriteProtect(region, true);
     }
+
+    deregisterRegion(region);
 }
 
 void UffdDirtyTracker::zeroRegion(std::span<uint8_t> region)
 {
-    // TODO implement
+    struct uffdio_range zeroRange = { .start = (__u64)region.data(),
+                                      .len = region.size() };
+    uffdio_zeropage zeroPage = { .range = zeroRange, .mode = 0 };
+
+    if (ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage) != 0) {
+        SPDLOG_ERROR("Failed zeroing page: {} ({})", errno, strerror(errno));
+        exit(1);
+    }
 }
 
 void UffdDirtyTracker::deregisterRegion(std::span<uint8_t> region)
 {
-    // TODO implement
+    unsigned int ioctls = 0;
+    struct uffdio_range deregRange = { .start = (__u64)region.data(),
+                                       .len = region.size() };
+    struct uffdio_register deregister = { .range = deregRange,
+                                          .mode = 0,
+                                          .ioctls = ioctls };
+
+    if (ioctl(uffd, UFFDIO_UNREGISTER, &deregister) != 0) {
+        SPDLOG_ERROR(
+          "Failed to deregister range: {} ({})", errno, strerror(errno));
+        throw std::runtime_error("Range deregister failed");
+    }
 }
 
-void UffdDirtyTracker::removeWriteProtect(std::span<uint8_t> region)
+void UffdDirtyTracker::removeWriteProtect(std::span<uint8_t> region,
+                                          bool throwEx)
 {
     struct uffdio_range uffdRange = { (__u64)region.data(), region.size() };
     struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
@@ -553,7 +584,11 @@ void UffdDirtyTracker::removeWriteProtect(std::span<uint8_t> region)
         SPDLOG_ERROR(
           "Failed removing write protection: {} ({})", errno, strerror(errno));
 
-        throw std::runtime_error("Failed removing write protection");
+        if (throwEx) {
+            throw std::runtime_error("Failed removing write protection");
+        }
+
+        exit(1);
     }
 }
 
@@ -571,7 +606,7 @@ std::vector<char> UffdDirtyTracker::getThreadLocalDirtyPages(
         return std::vector<char>(nPages, 0);
     }
 
-    return tracking.pageFlags;
+    return tracking.dirtyFlags;
 }
 
 std::vector<char> UffdDirtyTracker::getDirtyPages(std::span<uint8_t> region)

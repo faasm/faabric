@@ -119,12 +119,13 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     REQUIRE(pageThree[123] == 4);
     REQUIRE(pageFive[99] == 3);
 
-    // Set some other data
+    // Set some other data, make sure we write to one of the pages already
+    // modified in the first changes
     uint8_t* pageFour = pageThree + HOST_PAGE_SIZE;
     pageThree[100] = 2;
     pageFour[22] = 5;
 
-    // As pages are adjacent we get a single region
+    // Check dirty pages
     expected = std::vector<char>(nPages, 0);
     expected[3] = 1;
     expected[4] = 1;
