@@ -35,8 +35,7 @@ class ThreadTrackingData
 
     void markDirtyPage(void* addr)
     {
-        ptrdiff_t offset = ((uint8_t*)addr) - regionBase;
-        long pageNum = offset / HOST_PAGE_SIZE;
+        long pageNum = ((uint8_t*)addr - regionBase) / HOST_PAGE_SIZE;
         pageFlags[pageNum] = 1;
     }
 
@@ -58,6 +57,9 @@ static thread_local ThreadTrackingData tracking;
 
 // Shared uffd file descriptor when using userfaultfd
 static long uffd;
+
+bool uffdWriteProtect = false;
+bool uffdMissing = false;
 
 // This singleton is needed to contain the different singleton
 // instances. We can't make them all static variables in the function.
@@ -275,6 +277,7 @@ void SegfaultDirtyTracker::handler(int sig,
 void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 {
     if (region.empty() || region.data() == nullptr) {
+        SPDLOG_WARN("Empty region passed, not starting thread-local tracking");
         return;
     }
 
@@ -288,6 +291,7 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
     SPDLOG_TRACE("Starting tracking on region size {}", region.size());
 
     if (region.empty() || region.data() == nullptr) {
+        SPDLOG_WARN("Empty region passed, not starting tracking");
         return;
     }
 
@@ -308,6 +312,7 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
     if (region.empty() || region.data() == nullptr) {
+        SPDLOG_WARN("Empty region passed, not stopping tracking");
         return;
     }
 
@@ -362,7 +367,7 @@ std::vector<char> SegfaultDirtyTracker::getBothDirtyPages(
 UffdDirtyTracker::UffdDirtyTracker()
 {
     // Set up userfaultfd
-    uffd = syscall(__NR_userfaultfd, O_CLOEXEC | O_NONBLOCK);
+    uffd = syscall(__NR_userfaultfd, O_NONBLOCK);
     if (uffd == -1) {
         SPDLOG_ERROR("Failed on userfaultfd: {} ({})", errno, strerror(errno));
         throw std::runtime_error("userfaultfd failed");
@@ -384,6 +389,10 @@ UffdDirtyTracker::UffdDirtyTracker()
         SPDLOG_ERROR("Userfaultfd write protect not supported");
         throw std::runtime_error("Userfaultfd write protect not supported");
     }
+
+    // Set up global flags
+    uffdWriteProtect = writeProtect;
+    uffdMissing = missing;
 
     // Set up the sigbus handler
     struct sigaction sa;
@@ -420,28 +429,30 @@ void UffdDirtyTracker::sigbusHandler(int sig,
 
     tracking.markDirtyPage(faultAddr);
 
-    // Remove write protection from page
+    // Page-align address
     uintptr_t addr = (uintptr_t)faultAddr;
     addr &= -HOST_PAGE_SIZE;
     auto* alignedAddr = (void*)addr;
 
-    struct uffdio_range uffdRange = { (__u64)alignedAddr,
-                                      (size_t)HOST_PAGE_SIZE };
-    struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
+    if (uffdWriteProtect) {
+        removeWriteProtect(
+          std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
+    }
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
-        SPDLOG_WARN(
-          "Failed removing write protection: {} ({})", errno, strerror(errno));
+    if (uffdMissing) {
+        zeroRegion(std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
     }
 }
 
 void UffdDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 {
     if (region.empty() || region.data() == nullptr) {
+        SPDLOG_WARN("Empty region passed, not starting thread-local tracking");
         return;
     }
 
-    SPDLOG_TRACE("Starting thread-local tracking on region size {}",
+    SPDLOG_TRACE("Starting thread-local tracking on region {} {}",
+                 (__u64)region.data(),
                  region.size());
 
     tracking = ThreadTrackingData(region);
@@ -452,18 +463,36 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
     SPDLOG_TRACE("Starting tracking on region size {}", region.size());
 
     if (region.empty() || region.data() == nullptr) {
+        SPDLOG_WARN("Empty region passed, not starting tracking");
         return;
     }
 
+    registerRegion(region);
+
+    if (writeProtect) {
+        writeProtectRegion(region);
+    }
+}
+
+void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
+{
     // Register the range
     struct uffdio_range regRange = { .start = (__u64)region.data(),
                                      .len = region.size() };
-    __u64 ioctls = 0;
-    struct uffdio_register uffdRegister = {
-        .range = regRange,
-        .mode = UFFDIO_REGISTER_MODE_WP, // | UFFDIO_REGISTER_MODE_MISSING,
-        .ioctls = ioctls
-    };
+
+    __u64 mode = 0;
+    if (missing) {
+        mode |= UFFDIO_REGISTER_MODE_MISSING;
+    }
+
+    if (writeProtect) {
+        mode |= UFFDIO_REGISTER_MODE_WP;
+    }
+
+    unsigned int ioctls = 0;
+    struct uffdio_register uffdRegister = { .range = regRange,
+                                            .mode = mode,
+                                            .ioctls = ioctls };
 
     if (ioctl(uffd, UFFDIO_REGISTER, &uffdRegister) != 0) {
         SPDLOG_ERROR(
@@ -471,7 +500,11 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
         throw std::runtime_error("Range register failed");
     }
 
-    // Write protect it
+    SPDLOG_TRACE("Uffd registered {} {}", regRange.start, regRange.len);
+}
+
+void UffdDirtyTracker::writeProtectRegion(std::span<uint8_t> region)
+{
     struct uffdio_range wpRange = { .start = (__u64)region.data(),
                                     .len = region.size() };
     struct uffdio_writeprotect wpArgs = { .range = wpRange,
@@ -482,16 +515,38 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
           "Failed to write-protect range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Write protect failed");
     }
+
+    SPDLOG_TRACE("Uffd write-protected {} {}", wpRange.start, wpRange.len);
 }
 
 void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
 {
     if (region.empty() || region.data() == nullptr) {
+        SPDLOG_WARN("Empty region passed, not stopping tracking");
         return;
     }
 
     SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
-    struct uffdio_range uffdRange = { (uint64_t)region.data(), region.size() };
+    deregisterRegion(region);
+
+    if (writeProtect) {
+        removeWriteProtect(region);
+    }
+}
+
+void UffdDirtyTracker::zeroRegion(std::span<uint8_t> region)
+{
+    // TODO implement
+}
+
+void UffdDirtyTracker::deregisterRegion(std::span<uint8_t> region)
+{
+    // TODO implement
+}
+
+void UffdDirtyTracker::removeWriteProtect(std::span<uint8_t> region)
+{
+    struct uffdio_range uffdRange = { (__u64)region.data(), region.size() };
     struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
 
     if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {

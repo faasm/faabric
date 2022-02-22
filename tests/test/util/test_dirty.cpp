@@ -153,6 +153,8 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     SECTION("Soft PTEs") { conf.dirtyTrackingMode = "softpte"; }
 
+    SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+
     DirtyTracker& tracker = getDirtyTracker();
     REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
 

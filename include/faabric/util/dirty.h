@@ -134,6 +134,7 @@ class SegfaultDirtyTracker final : public DirtyTracker
  * Dirty tracking implementation using userfaultfd to write-protect pages, then
  * handle the resulting userspace events when they are written to.
  */
+
 class UffdDirtyTracker final : public DirtyTracker
 {
   public:
@@ -161,6 +162,20 @@ class UffdDirtyTracker final : public DirtyTracker
     static void sigbusHandler(int sig,
                               siginfo_t* info,
                               void* ucontext) noexcept;
+
+  private:
+    bool missing = true;
+    bool writeProtect = false;
+
+    static void registerRegion(std::span<uint8_t> region);
+
+    static void writeProtectRegion(std::span<uint8_t> region);
+
+    static void removeWriteProtect(std::span<uint8_t> region);
+
+    static void zeroRegion(std::span<uint8_t> region);
+
+    static void deregisterRegion(std::span<uint8_t> region);
 };
 
 /*
