@@ -16,15 +16,17 @@ For a newly mapped/ created page, we will see the following events:
 - Initial `MISSING` event when the page is _either_ read from or written to the
   first time.
 - Subsequent `WP` event if the page has been write-protected and it's written
-  to again.
+  to _again_.
+- Thus, a page that's only written to once, will only get one `MISSING` event,
+  so these must be included in the dirty tracking.
 
 Observations:
 
 - All function memory in Faabric will have been freshly mapped just before
   execution, so will always trigger a `MISSING` event on the first read _or_
   write (i.e. we can't ignore this in case there's only one write to that page).
-- `userfaultfd` write-protected pages (i.e. `FEATURE_WP`) don't work with
-  shared memory (hence can't be used for Faabric dirty tracking).
+- `userfaultfd` write-protected pages don't work with shared memory (hence can't
+  be used for Faabric dirty tracking).
 - When using `FEATURE_MISSING`, an event is created for reads and writes (i.e.
   any time the page needs to be created by the kernel).
 - When using `SIGBUS`, it's not possible to distinguish between reads and

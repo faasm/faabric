@@ -52,6 +52,14 @@ class ThreadTrackingData
     uint8_t* regionTop = nullptr;
 };
 
+void* pageAlignAddress(void* faultAddr)
+{
+    uintptr_t addr = (uintptr_t)faultAddr;
+    addr &= -HOST_PAGE_SIZE;
+    auto* alignedAddr = (void*)addr;
+    return alignedAddr;
+}
+
 // Thread-local tracking information for dirty tracking using signal handlers in
 // the same thread as the fault.
 static thread_local ThreadTrackingData tracking;
@@ -260,9 +268,7 @@ void SegfaultDirtyTracker::handler(int sig,
     tracking.markPage(faultAddr);
 
     // Align down to nearest page boundary
-    uintptr_t addr = (uintptr_t)faultAddr;
-    addr &= -HOST_PAGE_SIZE;
-    auto* alignedAddr = (void*)addr;
+    void* alignedAddr = pageAlignAddress(faultAddr);
 
     // Remove write protection from page
     if (::mprotect(alignedAddr, HOST_PAGE_SIZE, PROT_READ | PROT_WRITE) != 0) {
@@ -521,9 +527,7 @@ void UffdDirtyTracker::eventThreadEntrypoint()
 
         // Get page-aligned address
         void* faultAddr = (void*)msg.arg.pagefault.address;
-        uintptr_t addr = (uintptr_t)faultAddr;
-        addr &= -HOST_PAGE_SIZE;
-        auto* alignedAddr = (void*)addr;
+        void* alignedAddr = pageAlignAddress(faultAddr);
 
         // Events will ALWAYS have UFFD_PAGEFAULT_FLAG_WRITE set, but will only
         // have UFFD_PAGEFAULT_FLAG_WP set when it's a write-protected event
@@ -573,9 +577,7 @@ void UffdDirtyTracker::sigbusHandler(int sig,
     tracking.markPage(faultAddr);
 
     // Get page-aligned address
-    uintptr_t addr = (uintptr_t)faultAddr;
-    addr &= -HOST_PAGE_SIZE;
-    auto* alignedAddr = (void*)addr;
+    void* alignedAddr = pageAlignAddress(faultAddr);
 
     bool exists =
       zeroRegion(std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
