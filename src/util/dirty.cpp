@@ -519,32 +519,34 @@ void UffdDirtyTracker::eventThreadEntrypoint()
             throw std::runtime_error("Unexpected userfault event");
         }
 
-        // Events will ALWAYS have UFFD_PAGEFAULT_FLAG_WRITE set, but will only
-        // have UFFD_PAGEFAULT_FLAG_WP set when it's a write-protected event
-        bool isMissing = msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE;
-        bool isWriteProtected =
-          msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP;
-        if ((!isMissing) && (!isWriteProtected)) {
-            throw std::runtime_error("Pagefault flag not as expected");
-        }
-
-        void* faultAddr = (void*)msg.arg.pagefault.address;
-        globalTracking.markPage(faultAddr);
-
         // Get page-aligned address
+        void* faultAddr = (void*)msg.arg.pagefault.address;
         uintptr_t addr = (uintptr_t)faultAddr;
         addr &= -HOST_PAGE_SIZE;
         auto* alignedAddr = (void*)addr;
 
+        // Events will ALWAYS have UFFD_PAGEFAULT_FLAG_WRITE set, but will only
+        // have UFFD_PAGEFAULT_FLAG_WP set when it's a write-protected event
+        bool isWriteEvent = msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE;
+        bool isWriteProtected =
+          msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP;
+
+        // Mark the page dirty if there's been a write
+        if (isWriteEvent) {
+            globalTracking.markPage(faultAddr);
+        }
+
         if (isWriteProtected) {
-            SPDLOG_TRACE("Uffd thread got write-protected event at {}",
+            SPDLOG_TRACE("Uffd thread got write on write-protected page {}",
                          __u64(alignedAddr));
 
             removeWriteProtect(
-              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE), false);
+              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE), true);
         } else {
-            SPDLOG_TRACE("Uffd thread got missing page event at {}",
-                         __u64(alignedAddr));
+            SPDLOG_TRACE("Uffd thread got missing page event at {} (write={})",
+                         __u64(alignedAddr),
+                         isWriteEvent);
+
             zeroRegion(
               std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
         }

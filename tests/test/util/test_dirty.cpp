@@ -55,39 +55,84 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
-                 "Test dirty page checking",
+                 "Test basic dirty tracking",
                  "[util][dirty]")
 {
-    // Crrtain dirty trackers are expected to work after being reset, others
-    // not.
+    // Some dirty trackers are expected to work after being reset, others not
     bool checkPostReset = false;
+
+    // Shared vs. private memory is an important distinction as userfaultfd may
+    // perform differently
+    bool sharedMemory = false;
+
+    // Some dirty trackers count reads as well as writes when marking pages as
+    // dirty
+    bool dirtyReads = false;
 
     SECTION("Soft dirty PTEs")
     {
         setTrackingMode("softpte");
         checkPostReset = true;
+        dirtyReads = false;
+
+        SECTION("Shared") { sharedMemory = true; }
+
+        SECTION("Private") { sharedMemory = false; }
     }
 
     SECTION("Segfaults")
     {
         setTrackingMode("segfault");
         checkPostReset = true;
+        dirtyReads = false;
+
+        SECTION("Shared") { sharedMemory = true; }
+
+        SECTION("Private") { sharedMemory = false; }
     }
 
-    SECTION("Userfaultfd") { setTrackingMode("uffd"); }
+    SECTION("Userfaultfd")
+    {
+        setTrackingMode("uffd");
+        checkPostReset = false;
+        dirtyReads = true;
+
+        SECTION("Shared") { sharedMemory = true; }
+
+        SECTION("Private") { sharedMemory = false; }
+    }
 
     SECTION("Userfaultfd wp")
     {
         setTrackingMode("uffd-wp");
         checkPostReset = true;
+        dirtyReads = true;
+
+        // Shared mem doesn't work with write-protection
+
+        SECTION("Private") { sharedMemory = false; }
     }
 
-    SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
+    SECTION("Userfaultfd thread")
+    {
+        setTrackingMode("uffd-thread");
+        checkPostReset = false;
+        dirtyReads = false;
+
+        SECTION("Shared") { sharedMemory = true; }
+
+        SECTION("Private") { sharedMemory = false; }
+    }
 
     SECTION("Userfaultfd thread wp")
     {
         setTrackingMode("uffd-thread-wp");
         checkPostReset = true;
+        dirtyReads = false;
+
+        // Shared mem doesn't work with write-protection
+
+        SECTION("Private") { sharedMemory = false; }
     }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
@@ -96,8 +141,17 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     // Create several pages of memory
     int nPages = 6;
     size_t memSize = HOST_PAGE_SIZE * nPages;
-    MemoryRegion memPtr = allocatePrivateMemory(memSize);
-    std::span<uint8_t> memView(memPtr.get(), memSize);
+
+    // Need to allocate both regions here otherwise destructors will nuke them
+    // before we're done
+    std::span<uint8_t> memView;
+    MemoryRegion sharedMemPtr = allocateSharedMemory(memSize);
+    MemoryRegion privateMemPtr = allocatePrivateMemory(memSize);
+    if (sharedMemory) {
+        memView = std::span<uint8_t>(sharedMemPtr.get(), memSize);
+    } else {
+        memView = std::span<uint8_t>(privateMemPtr.get(), memSize);
+    }
 
     tracker->clearAll();
 
@@ -108,15 +162,24 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     tracker->startTracking(memView);
     tracker->startThreadLocalTracking(memView);
 
-    // Dirty two of the pages
-    uint8_t* pageZero = memPtr.get();
+    // Get pointers to pages
+    uint8_t* pageZero = memView.data();
     uint8_t* pageOne = pageZero + HOST_PAGE_SIZE;
     uint8_t* pageThree = pageOne + (2 * HOST_PAGE_SIZE);
 
+    // Do a read, make sure this isn't marked as dirty
+    int readValue = pageZero[1];
+    REQUIRE(readValue == 0);
+
+    // Dirty some pages
     pageOne[10] = 1;
     pageThree[123] = 4;
 
-    expected = { 0, 1, 0, 1, 0, 0 };
+    if (dirtyReads) {
+        expected = { 1, 1, 0, 1, 0, 0 };
+    } else {
+        expected = { 0, 1, 0, 1, 0, 0 };
+    }
 
     actual = tracker->getBothDirtyPages(memView);
     REQUIRE(actual == expected);
@@ -171,73 +234,6 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         tracker->stopTracking(memView);
         tracker->stopThreadLocalTracking(memView);
     }
-}
-
-TEST_CASE_METHOD(DirtyConfTestFixture,
-                 "Test dirty region checking",
-                 "[util][dirty]")
-{
-    SECTION("Segfaults") { setTrackingMode("segfault"); }
-
-    SECTION("Soft PTEs") { setTrackingMode("softpte"); }
-
-    SECTION("Userfaultfd") { setTrackingMode("uffd"); }
-
-    SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
-
-    SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
-
-    SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
-
-    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
-    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
-
-    int nPages = 15;
-    size_t memSize = HOST_PAGE_SIZE * nPages;
-    MemoryRegion mem = allocateSharedMemory(memSize);
-    std::span<uint8_t> memView(mem.get(), memSize);
-
-    tracker->clearAll();
-
-    std::vector<char> actual =
-      tracker->getBothDirtyPages({ mem.get(), memSize });
-    std::vector<char> expected(nPages, 0);
-    REQUIRE(actual == expected);
-
-    tracker->startTracking(memView);
-    tracker->startThreadLocalTracking(memView);
-
-    // Dirty some pages, some adjacent
-    uint8_t* pageZero = mem.get();
-    uint8_t* pageOne = pageZero + HOST_PAGE_SIZE;
-    uint8_t* pageThree = pageZero + (3 * HOST_PAGE_SIZE);
-    uint8_t* pageFour = pageZero + (4 * HOST_PAGE_SIZE);
-    uint8_t* pageSeven = pageZero + (7 * HOST_PAGE_SIZE);
-    uint8_t* pageNine = pageZero + (9 * HOST_PAGE_SIZE);
-
-    // Set some byte within each page
-    pageZero[1] = 1;
-    pageOne[11] = 1;
-    pageThree[33] = 1;
-    pageFour[44] = 1;
-    pageSeven[77] = 1;
-    pageNine[99] = 1;
-
-    expected[0] = 1;
-    expected[1] = 1;
-    expected[3] = 1;
-    expected[4] = 1;
-    expected[7] = 1;
-    expected[9] = 1;
-
-    tracker->stopTracking({ mem.get(), memSize });
-    tracker->stopThreadLocalTracking({ mem.get(), memSize });
-
-    actual = tracker->getBothDirtyPages({ mem.get(), memSize });
-
-    REQUIRE(actual.size() == expected.size());
-
-    REQUIRE(actual == expected);
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
