@@ -419,10 +419,6 @@ void UffdDirtyTracker::sigbusHandler(int sig,
                                      siginfo_t* info,
                                      void* ucontext) noexcept
 {
-    ucontext_t* context = (ucontext_t*)ucontext;
-    SPDLOG_TRACE(
-      "SIGBUS event: {}, {}, {}", sig, info->si_code, context->uc_flags);
-
     void* faultAddr = info->si_addr;
     if (!tracking.isInitialised()) {
         // Unexpected sigbus fault, treat as normal

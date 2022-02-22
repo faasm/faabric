@@ -208,13 +208,9 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
-                 "Test segfault tracking",
+                 "Test signal-based tracking",
                  "[util][dirty]")
 {
-    conf.dirtyTrackingMode = "segfault";
-    DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == "segfault");
-
     int nPages = 10;
     size_t memSize = nPages * HOST_PAGE_SIZE;
     std::vector<uint8_t> expectedData(memSize, 5);
@@ -224,21 +220,53 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     std::span<uint8_t> memView(mem.get(), memSize);
 
-    SECTION("Standard alloc")
+    std::string expectedType;
+    SECTION("Segfault")
     {
-        // Copy expected data into memory
-        std::memcpy(mem.get(), expectedData.data(), memSize);
+        conf.dirtyTrackingMode = "segfault";
+        expectedType = "segfault";
+
+        SECTION("Standard alloc")
+        {
+            // Copy expected data into memory
+            std::memcpy(mem.get(), expectedData.data(), memSize);
+        }
+
+        SECTION("Mapped from fd")
+        {
+            // Create a file descriptor holding expected data
+            int fd = createFd(memSize, "foobar");
+            writeToFd(fd, 0, expectedData);
+
+            // Map the memory
+            mapMemoryPrivate(memView, fd);
+        }
     }
 
-    SECTION("Mapped from fd")
+    SECTION("Userfaultfd")
     {
-        // Create a file descriptor holding expected data
-        int fd = createFd(memSize, "foobar");
-        writeToFd(fd, 0, expectedData);
+        conf.dirtyTrackingMode = "uffd";
+        expectedType = "uffd";
 
-        // Map the memory
-        mapMemoryPrivate(memView, fd);
+        SECTION("Standard alloc")
+        {
+            // Copy expected data into memory
+            std::memcpy(mem.get(), expectedData.data(), memSize);
+        }
+
+        SECTION("Mapped from fd")
+        {
+            // Create a file descriptor holding expected data
+            int fd = createFd(memSize, "foobar");
+            writeToFd(fd, 0, expectedData);
+
+            // Map the memory
+            mapMemoryPrivate(memView, fd);
+        }
     }
+
+    DirtyTracker& tracker = getDirtyTracker();
+    REQUIRE(tracker.getType() == expectedType);
 
     // Check memory to start with
     std::vector<uint8_t> actualMemBefore(mem.get(), mem.get() + memSize);
