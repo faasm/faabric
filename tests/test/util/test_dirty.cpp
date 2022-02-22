@@ -53,6 +53,27 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         DirtyTracker& t = getDirtyTracker();
         REQUIRE(t.getType() == "uffd");
     }
+
+    SECTION("Uffd write-protect")
+    {
+        conf.dirtyTrackingMode = "uffd-wp";
+        DirtyTracker& t = getDirtyTracker();
+        REQUIRE(t.getType() == "uffd-wp");
+    }
+
+    SECTION("Uffd threaded")
+    {
+        conf.dirtyTrackingMode = "uffd-thread";
+        DirtyTracker& t = getDirtyTracker();
+        REQUIRE(t.getType() == "uffd-thread");
+    }
+
+    SECTION("Uffd threaded write-protect")
+    {
+        conf.dirtyTrackingMode = "uffd-thread-wp";
+        DirtyTracker& t = getDirtyTracker();
+        REQUIRE(t.getType() == "uffd-thread-wp");
+    }
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
@@ -64,6 +85,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
 
     SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+
+    SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+
+    SECTION("Userfaultfd thread") { conf.dirtyTrackingMode = "uffd-thread"; }
+
+    SECTION("Userfaultfd thread wp")
+    {
+        conf.dirtyTrackingMode = "uffd-thread-wp";
+    }
 
     DirtyTracker& tracker = getDirtyTracker();
     REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
@@ -156,6 +186,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
 
+    SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+
+    SECTION("Userfaultfd thread") { conf.dirtyTrackingMode = "uffd-thread"; }
+
+    SECTION("Userfaultfd thread wp")
+    {
+        conf.dirtyTrackingMode = "uffd-thread-wp";
+    }
+
     DirtyTracker& tracker = getDirtyTracker();
     REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
 
@@ -221,52 +260,56 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     std::span<uint8_t> memView(mem.get(), memSize);
 
     std::string expectedType;
-    SECTION("Segfault")
+
+    SECTION("Standard alloc")
     {
-        conf.dirtyTrackingMode = "segfault";
-        expectedType = "segfault";
+        SECTION("Segfault") { conf.dirtyTrackingMode = "segfault"; }
 
-        SECTION("Standard alloc")
+        SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+
+        SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+
+        SECTION("Userfaultfd thread")
         {
-            // Copy expected data into memory
-            std::memcpy(mem.get(), expectedData.data(), memSize);
+            conf.dirtyTrackingMode = "uffd-thread";
+        }
+        SECTION("Userfaultfd thread wp")
+        {
+            conf.dirtyTrackingMode = "uffd-thread-wp";
         }
 
-        SECTION("Mapped from fd")
-        {
-            // Create a file descriptor holding expected data
-            int fd = createFd(memSize, "foobar");
-            writeToFd(fd, 0, expectedData);
-
-            // Map the memory
-            mapMemoryPrivate(memView, fd);
-        }
+        // Copy expected data into memory
+        std::memcpy(mem.get(), expectedData.data(), memSize);
     }
 
-    SECTION("Userfaultfd")
+    SECTION("Mapped from fd")
     {
-        conf.dirtyTrackingMode = "uffd";
-        expectedType = "uffd";
+        SECTION("Segfault") { conf.dirtyTrackingMode = "segfault"; }
 
-        SECTION("Standard alloc")
+        SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+
+        SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+
+        SECTION("Userfaultfd thread")
         {
-            // Copy expected data into memory
-            std::memcpy(mem.get(), expectedData.data(), memSize);
+            conf.dirtyTrackingMode = "uffd-thread";
         }
 
-        SECTION("Mapped from fd")
+        SECTION("Userfaultfd thread wp")
         {
-            // Create a file descriptor holding expected data
-            int fd = createFd(memSize, "foobar");
-            writeToFd(fd, 0, expectedData);
-
-            // Map the memory
-            mapMemoryPrivate(memView, fd);
+            conf.dirtyTrackingMode = "uffd-thread-wp";
         }
+
+        // Create a file descriptor holding expected data
+        int fd = createFd(memSize, "foobar");
+        writeToFd(fd, 0, expectedData);
+
+        // Map the memory
+        mapMemoryPrivate(memView, fd);
     }
 
     DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == expectedType);
+    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
 
     // Check memory to start with
     std::vector<uint8_t> actualMemBefore(mem.get(), mem.get() + memSize);
@@ -322,21 +365,21 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     // We want to check that faults triggered in a given thread are caught
     // by that thread, and so we can safely just do thread-local diff tracking.
 
-    std::string expectedType;
-    SECTION("Segfault")
-    {
-        conf.dirtyTrackingMode = "segfault";
-        expectedType = "segfault";
-    }
+    SECTION("Segfault") { conf.dirtyTrackingMode = "segfault"; }
 
-    SECTION("Userfaultfd")
+    SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+
+    SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+
+    SECTION("Userfaultfd thread") { conf.dirtyTrackingMode = "uffd-thread"; }
+
+    SECTION("Userfaultfd thread wp")
     {
-        conf.dirtyTrackingMode = "uffd";
-        expectedType = "uffd";
+        conf.dirtyTrackingMode = "uffd-thread-wp";
     }
 
     DirtyTracker& tracker = getDirtyTracker();
-    REQUIRE(tracker.getType() == expectedType);
+    REQUIRE(tracker.getType() == conf.dirtyTrackingMode);
 
     int nLoops = 20;
 

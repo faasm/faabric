@@ -40,6 +40,10 @@ namespace faabric::util {
 class DirtyTracker
 {
   public:
+    DirtyTracker(const std::string& modeIn)
+      : mode(modeIn)
+    {}
+
     virtual void clearAll() = 0;
 
     virtual std::string getType() = 0;
@@ -58,6 +62,9 @@ class DirtyTracker
       std::span<uint8_t> region) = 0;
 
     virtual std::vector<char> getBothDirtyPages(std::span<uint8_t> region) = 0;
+
+  protected:
+    const std::string mode;
 };
 
 /*
@@ -67,7 +74,7 @@ class DirtyTracker
 class SoftPTEDirtyTracker final : public DirtyTracker
 {
   public:
-    SoftPTEDirtyTracker();
+    SoftPTEDirtyTracker(const std::string &modeIn);
 
     ~SoftPTEDirtyTracker();
 
@@ -105,7 +112,7 @@ class SoftPTEDirtyTracker final : public DirtyTracker
 class SegfaultDirtyTracker final : public DirtyTracker
 {
   public:
-    SegfaultDirtyTracker();
+    SegfaultDirtyTracker(const std::string& modeIn);
 
     void clearAll() override;
 
@@ -138,11 +145,11 @@ class SegfaultDirtyTracker final : public DirtyTracker
 class UffdDirtyTracker final : public DirtyTracker
 {
   public:
-    UffdDirtyTracker();
+    UffdDirtyTracker(const std::string& modeIn);
 
     void clearAll() override;
 
-    std::string getType() override { return "uffd"; }
+    std::string getType() override { return mode; }
 
     void startTracking(std::span<uint8_t> region) override;
 
@@ -164,9 +171,11 @@ class UffdDirtyTracker final : public DirtyTracker
                               void* ucontext) noexcept;
 
   private:
-    bool missing = true;
+    bool writeProtect = false;
 
-    bool writeProtect = true;
+    bool sigbus = false;
+
+    std::thread eventThread;
 
     static void registerRegion(std::span<uint8_t> region);
 
@@ -177,6 +186,8 @@ class UffdDirtyTracker final : public DirtyTracker
     static bool zeroRegion(std::span<uint8_t> region);
 
     static void deregisterRegion(std::span<uint8_t> region);
+
+    static void eventThreadEntrypoint();
 };
 
 /*
@@ -187,7 +198,7 @@ class UffdDirtyTracker final : public DirtyTracker
 class NoneDirtyTracker final : public DirtyTracker
 {
   public:
-    NoneDirtyTracker() = default;
+    NoneDirtyTracker(const std::string &modeIn);
 
     void clearAll() override;
 

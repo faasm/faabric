@@ -55,53 +55,65 @@ class ThreadTrackingData
 // the same thread as the fault.
 static thread_local ThreadTrackingData tracking;
 
-// Shared uffd file descriptor when using userfaultfd
-static long uffd;
-
-bool uffdWriteProtect = false;
-bool uffdMissing = false;
+// Global tracking information is used for non-thread-local tracking
+static ThreadTrackingData globalTracking;
 
 // This singleton is needed to contain the different singleton
 // instances. We can't make them all static variables in the function.
 class DirtyTrackerSingleton
 {
   public:
+    DirtyTrackerSingleton()
+      : mode(faabric::util::getSystemConfig().dirtyTrackingMode)
+      , softpte(mode)
+      , sigseg(mode)
+      , none(mode)
+      , uffd(mode)
+    {}
+
+    std::string mode;
+
     SoftPTEDirtyTracker softpte;
     SegfaultDirtyTracker sigseg;
     NoneDirtyTracker none;
     UffdDirtyTracker uffd;
+
+    DirtyTracker& get()
+    {
+        if (mode == "softpte") {
+            return softpte;
+        }
+
+        if (mode == "segfault") {
+            return sigseg;
+        }
+
+        if (mode == "none") {
+            return none;
+        }
+
+        if (mode == "uffd" || mode == "uffd-wp" || mode == "uffd-thread" ||
+            mode == "uffd-thread-wp") {
+            return uffd;
+        }
+
+        SPDLOG_ERROR("Unrecognised dirty tracking mode: {}", mode);
+        throw std::runtime_error("Unrecognised dirty tracking mode");
+    }
 };
 
 DirtyTracker& getDirtyTracker()
 {
     static DirtyTrackerSingleton dt;
-
-    std::string trackMode = faabric::util::getSystemConfig().dirtyTrackingMode;
-    if (trackMode == "softpte") {
-        return dt.softpte;
-    }
-
-    if (trackMode == "segfault") {
-        return dt.sigseg;
-    }
-
-    if (trackMode == "none") {
-        return dt.none;
-    }
-
-    if (trackMode == "uffd") {
-        return dt.uffd;
-    }
-
-    SPDLOG_ERROR("Unrecognised dirty tracking mode: {}", trackMode);
-    throw std::runtime_error("Unrecognised dirty tracking mode");
+    return dt.get();
 }
 
 // ----------------------------------
 // Soft dirty PTE
 // ----------------------------------
 
-SoftPTEDirtyTracker::SoftPTEDirtyTracker()
+SoftPTEDirtyTracker::SoftPTEDirtyTracker(const std::string& modeIn)
+  : DirtyTracker(modeIn)
 {
     clearRefsFile = ::fopen(CLEAR_REFS, "w");
     if (clearRefsFile == nullptr) {
@@ -227,7 +239,8 @@ std::vector<char> SoftPTEDirtyTracker::getThreadLocalDirtyPages(
 // Segfaults
 // ------------------------------
 
-SegfaultDirtyTracker::SegfaultDirtyTracker()
+SegfaultDirtyTracker::SegfaultDirtyTracker(const std::string& modeIn)
+  : DirtyTracker(modeIn)
 {
     // Sigaction docs;
     // https://www.man7.org/linux/man-pages/man2/sigaction.2.html
@@ -364,8 +377,34 @@ std::vector<char> SegfaultDirtyTracker::getBothDirtyPages(
 // Userfaultfd
 // ------------------------------
 
-UffdDirtyTracker::UffdDirtyTracker()
+// Shared uffd file descriptor when using userfaultfd
+static long uffd;
+
+// Global flags
+bool uffdWriteProtect = false;
+bool uffdSigbus = false;
+
+UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
+  : DirtyTracker(modeIn)
 {
+    if (mode == "uffd") {
+        writeProtect = false;
+        sigbus = true;
+    } else if (mode == "uffd-wp") {
+        writeProtect = true;
+        sigbus = true;
+    } else if (mode == "uffd-thread") {
+        writeProtect = false;
+        sigbus = false;
+    } else if (mode == "uffd-thread-wp") {
+        writeProtect = true;
+        sigbus = false;
+    }
+
+    // Set up global flags
+    uffdWriteProtect = writeProtect;
+    uffdSigbus = sigbus;
+
     // Set up userfaultfd
     uffd = syscall(__NR_userfaultfd, O_NONBLOCK);
     if (uffd == -1) {
@@ -374,45 +413,111 @@ UffdDirtyTracker::UffdDirtyTracker()
     }
 
     // Check API features
-    struct uffdio_api uffdApi = { .api = UFFD_API,
-                                  .features = UFFD_FEATURE_SIGBUS |
-                                              UFFD_FEATURE_THREAD_ID,
-                                  .ioctls = 0 };
+    __u64 features = UFFD_FEATURE_MISSING_SHMEM;
+    if (sigbus) {
+        features |= UFFD_FEATURE_SIGBUS;
+        features |= UFFD_FEATURE_THREAD_ID;
+    }
+
+    struct uffdio_api uffdApi = { .api = UFFD_API, .features = features };
+
     if (ioctl(uffd, UFFDIO_API, &uffdApi) != 0) {
         SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
-        throw std::runtime_error("ioctl API failed");
+        throw std::runtime_error("Userfaultfd API failed");
     }
 
-    bool writeProtectSupported =
-      uffdApi.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP;
-    if (!writeProtectSupported) {
-        SPDLOG_ERROR("Userfaultfd write protect not supported");
-        throw std::runtime_error("Userfaultfd write protect not supported");
+    if (writeProtect) {
+        bool writeProtectSupported =
+          uffdApi.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP;
+        if (!writeProtectSupported) {
+            SPDLOG_ERROR("Userfaultfd write protect not supported");
+            throw std::runtime_error("Userfaultfd write protect not supported");
+        }
     }
 
-    // Set up global flags
-    uffdWriteProtect = writeProtect;
-    uffdMissing = missing;
+    if (sigbus) {
+        // Set up the sigbus handler
+        struct sigaction sa;
+        sa.sa_flags = SA_RESTART | SA_SIGINFO;
+        sa.sa_handler = nullptr;
+        sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
+        sigemptyset(&sa.sa_mask);
 
-    // Set up the sigbus handler
-    struct sigaction sa;
-    sa.sa_flags = SA_RESTART | SA_SIGINFO;
-    sa.sa_handler = nullptr;
-    sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
-    sigemptyset(&sa.sa_mask);
+        if (sigaction(SIGBUS, &sa, nullptr) != 0) {
+            SPDLOG_ERROR("Failed to set up SIGBUS handler: {} ({})",
+                         errno,
+                         strerror(errno));
+            throw std::runtime_error("Failed to set up SIGBUS");
+        }
 
-    if (sigaction(SIGBUS, &sa, nullptr) != 0) {
-        SPDLOG_ERROR(
-          "Failed to set up SIGBUS handler: {} ({})", errno, strerror(errno));
-        throw std::runtime_error("Failed to set up SIGBUS");
+        SPDLOG_TRACE("Set up dirty tracking SIGBUS handler (uffd={})", uffd);
+    } else {
+        eventThread = std::thread(&UffdDirtyTracker::eventThreadEntrypoint);
     }
+}
 
-    SPDLOG_TRACE("Set up dirty tracking SIGBUS handler (uffd={})", uffd);
+void UffdDirtyTracker::eventThreadEntrypoint()
+{
+    for (;;) {
+        // Poll for events
+        struct pollfd pollfd;
+        int nready;
+        pollfd.fd = uffd;
+        pollfd.events = POLLIN;
+
+        nready = poll(&pollfd, 1, -1);
+        if (nready == -1) {
+            SPDLOG_ERROR("Poll failed: {} ({})", errno, strerror(errno));
+            throw std::runtime_error("Poll failed");
+        }
+
+        // Read an event
+        uffd_msg msg;
+        ssize_t nread = read(uffd, &msg, sizeof(msg));
+        if (nread == 0) {
+            SPDLOG_ERROR("EOF on userfaultfd: {} ({})", errno, strerror(errno));
+            throw std::runtime_error("EOF on uffd");
+        }
+
+        if (nread == -1) {
+            SPDLOG_ERROR("Read failed: {} ({})", errno, strerror(errno));
+            throw std::runtime_error("Read failed");
+        }
+
+        if (msg.event != UFFD_EVENT_PAGEFAULT) {
+            SPDLOG_ERROR("Unexpected userfault event: {}", msg.event);
+            throw std::runtime_error("Unexpected userfault event");
+        }
+
+        bool isMissing = msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE;
+        bool isWriteProtected =
+          msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP;
+        if ((!isMissing) && (!isWriteProtected)) {
+            throw std::runtime_error("Pagefault flag not as expected");
+        }
+
+        void* faultAddr = (void*)msg.arg.pagefault.address;
+        globalTracking.markPage(faultAddr);
+
+        // Get page-aligned address
+        uintptr_t addr = (uintptr_t)faultAddr;
+        addr &= -HOST_PAGE_SIZE;
+        auto* alignedAddr = (void*)addr;
+
+        if (isMissing) {
+            zeroRegion(
+              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
+        } else {
+            removeWriteProtect(
+              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE), false);
+        }
+    }
 }
 
 void UffdDirtyTracker::clearAll()
 {
     tracking = ThreadTrackingData();
+    globalTracking = ThreadTrackingData();
 }
 
 void UffdDirtyTracker::sigbusHandler(int sig,
@@ -453,7 +558,9 @@ void UffdDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
                  (__u64)region.data(),
                  region.size());
 
-    tracking = ThreadTrackingData(region);
+    if (sigbus) {
+        tracking = ThreadTrackingData(region);
+    }
 }
 
 void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -470,6 +577,10 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
     if (writeProtect) {
         writeProtectRegion(region);
     }
+
+    if (!sigbus) {
+        globalTracking = ThreadTrackingData(region);
+    }
 }
 
 void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
@@ -478,10 +589,7 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
     struct uffdio_range regRange = { .start = (__u64)region.data(),
                                      .len = region.size() };
 
-    __u64 mode = 0;
-    if (uffdMissing) {
-        mode |= UFFDIO_REGISTER_MODE_MISSING;
-    }
+    __u64 mode = UFFDIO_REGISTER_MODE_MISSING;
 
     if (uffdWriteProtect) {
         mode |= UFFDIO_REGISTER_MODE_WP;
@@ -492,7 +600,8 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
                                             .mode = mode,
                                             .ioctls = ioctls };
 
-    if (ioctl(uffd, UFFDIO_REGISTER, &uffdRegister) != 0) {
+    int res = ioctl(uffd, UFFDIO_REGISTER, &uffdRegister);
+    if (res != 0) {
         SPDLOG_ERROR(
           "Failed to register range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Range register failed");
@@ -608,6 +717,10 @@ std::vector<char> UffdDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
 // ------------------------------
 // None (i.e. mark all pages dirty)
 // ------------------------------
+
+NoneDirtyTracker::NoneDirtyTracker(const std::string& modeIn)
+  : DirtyTracker(modeIn)
+{}
 
 void NoneDirtyTracker::clearAll()
 {
