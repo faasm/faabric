@@ -174,7 +174,7 @@ class UffdDirtyTracker final : public DirtyTracker
 
     static void removeWriteProtect(std::span<uint8_t> region, bool throwEx);
 
-    static void zeroRegion(std::span<uint8_t> region);
+    static bool zeroRegion(std::span<uint8_t> region);
 
     static void deregisterRegion(std::span<uint8_t> region);
 };
