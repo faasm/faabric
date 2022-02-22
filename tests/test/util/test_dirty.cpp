@@ -260,6 +260,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
 
         SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
+
         SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
 
         // Copy expected data into memory
