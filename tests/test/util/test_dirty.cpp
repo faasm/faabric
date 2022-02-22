@@ -58,19 +58,36 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                  "Test dirty page checking",
                  "[util][dirty]")
 {
-    SECTION("Soft dirty PTEs") { conf.dirtyTrackingMode = "softpte"; }
+    // Crrtain dirty trackers are expected to work after being reset, others
+    // not.
+    bool checkPostReset = false;
 
-    SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
+    SECTION("Soft dirty PTEs")
+    {
+        setTrackingMode("softpte");
+        checkPostReset = true;
+    }
 
-    SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+    SECTION("Segfaults")
+    {
+        setTrackingMode("segfault");
+        checkPostReset = true;
+    }
 
-    SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+    SECTION("Userfaultfd") { setTrackingMode("uffd"); }
 
-    SECTION("Userfaultfd thread") { conf.dirtyTrackingMode = "uffd-thread"; }
+    SECTION("Userfaultfd wp")
+    {
+        setTrackingMode("uffd-wp");
+        checkPostReset = true;
+    }
+
+    SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
 
     SECTION("Userfaultfd thread wp")
     {
-        conf.dirtyTrackingMode = "uffd-thread-wp";
+        setTrackingMode("uffd-thread-wp");
+        checkPostReset = true;
     }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
@@ -127,51 +144,50 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     REQUIRE(pageThree[123] == 4);
     REQUIRE(pageFive[99] == 3);
 
-    // Set some other data, make sure we write to one of the pages already
-    // modified in the first changes
-    uint8_t* pageFour = pageThree + HOST_PAGE_SIZE;
-    pageThree[100] = 2;
-    pageFour[22] = 5;
+    if (checkPostReset) {
+        // Set some other data, make sure we write to one of the pages already
+        // modified in the first changes
+        uint8_t* pageFour = pageThree + HOST_PAGE_SIZE;
+        pageThree[100] = 2;
+        pageFour[22] = 5;
 
-    // Check dirty pages
-    expected = std::vector<char>(nPages, 0);
-    expected[3] = 1;
-    expected[4] = 1;
-    actual = tracker->getBothDirtyPages(memView);
-    REQUIRE(actual == expected);
+        // Check dirty pages
+        expected = std::vector<char>(nPages, 0);
+        expected[3] = 1;
+        expected[4] = 1;
+        actual = tracker->getBothDirtyPages(memView);
+        REQUIRE(actual == expected);
 
-    // Final reset and check
-    tracker->stopTracking(memView);
-    tracker->stopThreadLocalTracking(memView);
+        // Final reset and check
+        tracker->stopTracking(memView);
+        tracker->stopThreadLocalTracking(memView);
 
-    tracker->startTracking(memView);
-    tracker->startThreadLocalTracking(memView);
-    actual = tracker->getBothDirtyPages(memView);
-    expected = std::vector<char>(nPages, 0);
-    REQUIRE(actual == expected);
+        tracker->startTracking(memView);
+        tracker->startThreadLocalTracking(memView);
+        actual = tracker->getBothDirtyPages(memView);
+        expected = std::vector<char>(nPages, 0);
+        REQUIRE(actual == expected);
 
-    tracker->stopTracking(memView);
-    tracker->stopThreadLocalTracking(memView);
+        tracker->stopTracking(memView);
+        tracker->stopThreadLocalTracking(memView);
+    }
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
                  "Test dirty region checking",
                  "[util][dirty]")
 {
-    SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
+    SECTION("Segfaults") { setTrackingMode("segfault"); }
 
-    SECTION("Soft PTEs") { conf.dirtyTrackingMode = "softpte"; }
+    SECTION("Soft PTEs") { setTrackingMode("softpte"); }
 
-    SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+    SECTION("Userfaultfd") { setTrackingMode("uffd"); }
 
-    SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+    SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
 
-    SECTION("Userfaultfd thread") { conf.dirtyTrackingMode = "uffd-thread"; }
+    SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
 
-    SECTION("Userfaultfd thread wp")
-    {
-        conf.dirtyTrackingMode = "uffd-thread-wp";
-    }
+    SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
     REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
@@ -241,20 +257,14 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     SECTION("Standard alloc")
     {
-        SECTION("Segfault") { conf.dirtyTrackingMode = "segfault"; }
+        SECTION("Segfault") { setTrackingMode("segfault"); }
 
-        SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+        SECTION("Userfaultfd") { setTrackingMode("uffd"); }
 
-        SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+        SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
 
-        SECTION("Userfaultfd thread")
-        {
-            conf.dirtyTrackingMode = "uffd-thread";
-        }
-        SECTION("Userfaultfd thread wp")
-        {
-            conf.dirtyTrackingMode = "uffd-thread-wp";
-        }
+        SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
+        SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
 
         // Copy expected data into memory
         std::memcpy(mem.get(), expectedData.data(), memSize);
@@ -262,21 +272,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
     SECTION("Mapped from fd")
     {
-        SECTION("Segfault") { conf.dirtyTrackingMode = "segfault"; }
+        SECTION("Segfault") { setTrackingMode("segfault"); }
 
-        SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+        SECTION("Userfaultfd") { setTrackingMode("uffd"); }
 
-        SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+        SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
 
-        SECTION("Userfaultfd thread")
-        {
-            conf.dirtyTrackingMode = "uffd-thread";
-        }
+        SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
 
-        SECTION("Userfaultfd thread wp")
-        {
-            conf.dirtyTrackingMode = "uffd-thread-wp";
-        }
+        SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
 
         // Create a file descriptor holding expected data
         int fd = createFd(memSize, "foobar");
@@ -343,18 +347,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     // We want to check that faults triggered in a given thread are caught
     // by that thread, and so we can safely just do thread-local diff tracking.
 
-    SECTION("Segfault") { conf.dirtyTrackingMode = "segfault"; }
+    SECTION("Segfault") { setTrackingMode("segfault"); }
 
-    SECTION("Userfaultfd") { conf.dirtyTrackingMode = "uffd"; }
+    SECTION("Userfaultfd") { setTrackingMode("uffd"); }
 
-    SECTION("Userfaultfd wp") { conf.dirtyTrackingMode = "uffd-wp"; }
+    SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
 
-    SECTION("Userfaultfd thread") { conf.dirtyTrackingMode = "uffd-thread"; }
+    SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
 
-    SECTION("Userfaultfd thread wp")
-    {
-        conf.dirtyTrackingMode = "uffd-thread-wp";
-    }
+    SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
     REQUIRE(tracker->getType() == conf.dirtyTrackingMode);

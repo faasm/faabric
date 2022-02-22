@@ -384,6 +384,9 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         sigbus = false;
     }
 
+    SPDLOG_DEBUG(
+      "Uffd dirty tracking: write-protect={}, sigbus={}", writeProtect, sigbus);
+
     // Set up global flags
     uffdWriteProtect = writeProtect;
     uffdSigbus = sigbus;
@@ -456,17 +459,23 @@ UffdDirtyTracker::~UffdDirtyTracker()
         ::close(uffd);
     }
 
-    if (!sigbus && eventThread.joinable()) {
+    if (!sigbus) {
         SPDLOG_DEBUG("Awaiting uffd event thread");
 
         uint64_t msg = 123;
         ::write(closeFd, &msg, sizeof(uint64_t));
-        eventThread.join();
+
+        if (eventThread.joinable()) {
+            eventThread.join();
+        }
+
+        ::close(closeFd);
     }
 }
 
 void UffdDirtyTracker::eventThreadEntrypoint()
 {
+    SPDLOG_TRACE("Starting uffd event thread");
     for (;;) {
         struct pollfd pollfds[2];
 
@@ -510,6 +519,8 @@ void UffdDirtyTracker::eventThreadEntrypoint()
             throw std::runtime_error("Unexpected userfault event");
         }
 
+        // Events will ALWAYS have UFFD_PAGEFAULT_FLAG_WRITE set, but will only
+        // have UFFD_PAGEFAULT_FLAG_WP set when it's a write-protected event
         bool isMissing = msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE;
         bool isWriteProtected =
           msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP;
@@ -525,12 +536,17 @@ void UffdDirtyTracker::eventThreadEntrypoint()
         addr &= -HOST_PAGE_SIZE;
         auto* alignedAddr = (void*)addr;
 
-        if (isMissing) {
-            zeroRegion(
-              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
-        } else {
+        if (isWriteProtected) {
+            SPDLOG_TRACE("Uffd thread got write-protected event at {}",
+                         __u64(alignedAddr));
+
             removeWriteProtect(
               std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE), false);
+        } else {
+            SPDLOG_TRACE("Uffd thread got missing page event at {}",
+                         __u64(alignedAddr));
+            zeroRegion(
+              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
         }
     }
 }
@@ -579,9 +595,7 @@ void UffdDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
                  (__u64)region.data(),
                  region.size());
 
-    if (sigbus) {
-        tracking = ThreadTrackingData(region);
-    }
+    tracking = ThreadTrackingData(region);
 }
 
 void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -599,9 +613,7 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
         writeProtectRegion(region);
     }
 
-    if (!sigbus) {
-        globalTracking = ThreadTrackingData(region);
-    }
+    globalTracking = ThreadTrackingData(region);
 }
 
 void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
@@ -612,14 +624,12 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
 
     __u64 mode = UFFDIO_REGISTER_MODE_MISSING;
 
+    // Register for write-protect events if necessary
     if (uffdWriteProtect) {
         mode |= UFFDIO_REGISTER_MODE_WP;
     }
 
-    unsigned int ioctls = 0;
-    struct uffdio_register uffdRegister = { .range = regRange,
-                                            .mode = mode,
-                                            .ioctls = ioctls };
+    struct uffdio_register uffdRegister = { .range = regRange, .mode = mode };
 
     int res = ioctl(uffd, UFFDIO_REGISTER, &uffdRegister);
     if (res != 0) {
@@ -696,6 +706,8 @@ void UffdDirtyTracker::removeWriteProtect(std::span<uint8_t> region,
     struct uffdio_range uffdRange = { (__u64)region.data(), region.size() };
     struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
 
+    SPDLOG_TRACE("Removing write protection from {}", (__u64)region.data());
+
     if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
         SPDLOG_ERROR(
           "Failed removing write protection: {} ({})", errno, strerror(errno));
@@ -727,12 +739,21 @@ std::vector<char> UffdDirtyTracker::getThreadLocalDirtyPages(
 
 std::vector<char> UffdDirtyTracker::getDirtyPages(std::span<uint8_t> region)
 {
-    return {};
+    if (!globalTracking.isInitialised()) {
+        size_t nPages = getRequiredHostPages(region.size());
+        return std::vector<char>(nPages, 0);
+    }
+
+    return globalTracking.dirtyFlags;
 }
 
 std::vector<char> UffdDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)
 {
-    return getThreadLocalDirtyPages(region);
+    if (sigbus) {
+        return getThreadLocalDirtyPages(region);
+    }
+
+    return getDirtyPages(region);
 }
 
 // ------------------------------
