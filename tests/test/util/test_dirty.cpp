@@ -18,8 +18,17 @@ class DirtyConfTestFixture
   , public DirtyTrackingTestFixture
 {
   public:
-    DirtyConfTestFixture() = default;
-    ~DirtyConfTestFixture() = default;
+    DirtyConfTestFixture()
+    {
+        conf.reset();
+        resetDirtyTracker();
+    };
+
+    ~DirtyConfTestFixture()
+    {
+        conf.reset();
+        resetDirtyTracker();
+    };
 
     void setTrackingMode(const std::string& mode)
     {
