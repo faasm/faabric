@@ -3,7 +3,6 @@
 [changelog]
 # changelog header
 header = """
-# Faabric's Changelog\n
 Here is what has changed since last release:
 
 """

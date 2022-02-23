@@ -127,7 +127,7 @@ docker-compose stop
 ./dist-test/run.sh
 ```
 
-## Releasing
+## Creating a new tag
 
 Create a new branch, then find and replace the current version with the relevant
 bumped version. It should appear in:
@@ -161,17 +161,10 @@ history, you may re-tag the code again:
 inv git.tag --force
 ```
 
-Lastly, to publish a release, you can generate the change log for the release
-body by running:
-
-```bash
-inv git.release_body
-```
-
 ### Building images manually
 
-Containers are built with Github Actions, so you should only need to build them
-yourself when diagnosing issues.
+Containers are built with Github Actions, when a new tag is pushed, so you
+should only need to build them yourself when diagnosing issues.
 
 To build the main container, run:
 
@@ -188,3 +181,35 @@ inv container.push
 inv container.build --push
 ```
 
+## Publishing a release
+
+To publish a release in Github, make sure you are in the main branch, and have
+just tagged the code (see previous section).
+
+Then, you can create a release on [Github](https://github.com/faasm/faabric/releases)
+and publish it from the command line. If it is the first time you are creating
+a release you will have to configure a Github access token (see below).
+
+First, generate a draft release:
+
+```bash
+inv git.release_create
+```
+
+Then, after verifying that the release looks fine, you may publish it:
+
+```bash
+inv git.release_publish
+```
+
+### Configuring a Github access token
+
+Follow the instructions on [how to create a personal access token](
+https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token).
+Then, create a config file for faabric in the main directory named
+`faabric.ini` with the following contents:
+
+```toml
+[Github]
+access_token = <paste your personal access token>
+```

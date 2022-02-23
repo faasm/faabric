@@ -5,6 +5,9 @@ conan-cache/
 .clangd
 compile_commands.json
 
+# Faabric config file
+faabric.ini
+
 # Ansible
 *.retry
 

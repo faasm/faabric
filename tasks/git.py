@@ -1,7 +1,11 @@
+from github import Github
 from invoke import task
-from tasks.util.env import get_version, PROJ_ROOT
+from tasks.util.env import get_faabric_config, get_version, PROJ_ROOT
 from subprocess import run, PIPE, STDOUT
-import json
+
+
+def get_tag_name(version):
+    return "v{}".format(version)
 
 
 @task
@@ -9,7 +13,7 @@ def tag(ctx, force=False):
     """
     Creates git tag from the current tree
     """
-    git_tag = "v{}".format(get_version())
+    git_tag = get_tag_name(get_version())
     run(
         "git tag {} {}".format("--force" if force else "", git_tag),
         shell=True,
@@ -31,20 +35,32 @@ def is_git_submodule():
     return result.stdout.decode("utf-8") != ""
 
 
-def get_latest_release_tag():
-    gh_url = "https://api.github.com/repos/faasm/faabric/releases/latest"
+def get_github_instance():
+    conf = get_faabric_config()
 
-    curl_cmd = "curl --silent {}".format(gh_url)
-    print(curl_cmd)
-    result = run(curl_cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+    if not conf.has_section("Github") or not conf.has_option(
+        "Github", "access_token"
+    ):
+        print("Must set up Github config with access token")
 
-    tag = json.loads(result.stdout.decode("utf-8"))["tag_name"]
+    token = conf["Github"]["access_token"]
+    g = Github(token)
+    return g
 
-    return tag
+
+def get_repo():
+    g = get_github_instance()
+    return g.get_repo("faasm/faabric")
 
 
-@task
-def release_body(ctx, file_path="/tmp/release_body.md"):
+def get_release():
+    r = get_repo()
+    rels = r.get_releases()
+
+    return rels[0]
+
+
+def get_release_body():
     """
     Generate body for release with detailed changelog
     """
@@ -55,7 +71,7 @@ def release_body(ctx, file_path="/tmp/release_body.md"):
             "orhunp/git-cliff:latest",
             "--config ./faabric/cliff.toml",
             "--repository ./faabric",
-            "{}..v{}".format(get_latest_release_tag(), get_version()),
+            "{}..v{}".format(get_release().tag_name, get_version()),
         ]
     else:
         docker_cmd = [
@@ -64,15 +80,43 @@ def release_body(ctx, file_path="/tmp/release_body.md"):
             "orhunp/git-cliff:latest",
             "--config cliff.toml",
             "--repository .",
-            "{}..v{}".format(get_latest_release_tag(), get_version()),
+            "{}..v{}".format(get_release().tag_name, get_version()),
         ]
 
     cmd = " ".join(docker_cmd)
+    print("Generating release body...")
     print(cmd)
     result = run(cmd, shell=True, stdout=PIPE, stderr=PIPE)
 
-    with open(file_path, "w") as f:
-        f.write(result.stdout.decode("utf-8"))
+    return result.stdout.decode("utf-8")
 
-    print("Stored release body in temporary file:")
-    print("vim {}".format(file_path))
+
+@task
+def release_create(ctx):
+    """
+    Create a draft release on Github
+    """
+    # Work out the tag
+    faabric_ver = get_version()
+    tag_name = get_tag_name(faabric_ver)
+
+    # Create a release in github from this tag
+    r = get_repo()
+    r.create_git_release(
+        tag_name,
+        "Faabric {}".format(faabric_ver),
+        get_release_body(),
+        draft=True,
+    )
+
+    print("You may now review the draft release in:")
+    print("https://github.com/faasm/faabric/releases")
+
+
+@task
+def release_publish(ctx):
+    """
+    Publish the draft release
+    """
+    rel = get_release()
+    rel.update_release(rel.title, rel.raw_data["body"], draft=False)
