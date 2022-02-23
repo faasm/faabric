@@ -16,8 +16,8 @@ using namespace faabric::util;
 namespace tests {
 
 class SnapshotMergeTestFixture
-  : public ConfTestFixture
-  , public SnapshotTestFixture
+  : public SnapshotTestFixture
+  , public DirtyTrackingTestFixture
 {
   public:
     SnapshotMergeTestFixture() = default;
@@ -164,9 +164,9 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test mapping editing and remapping memory",
                  "[snapshot][util]")
 {
-    SECTION("Soft PTEs") { conf.dirtyTrackingMode = "softpte"; }
+    SECTION("Soft PTEs") { setTrackingMode("softpte"); }
 
-    SECTION("Segfaults") { conf.dirtyTrackingMode = "segfault"; }
+    SECTION("Segfaults") { setTrackingMode("segfault"); }
 
     int snapPages = 4;
     size_t snapSize = snapPages * HOST_PAGE_SIZE;
@@ -1797,7 +1797,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
                  "Test diffing snapshot memory with none tracking",
                  "[snapshot][util]")
 {
-    conf.dirtyTrackingMode = "none";
+    setTrackingMode("none");
 
     SECTION("XOR diffs") { conf.diffingMode = "xor"; }
 

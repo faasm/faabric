@@ -13,31 +13,7 @@ using namespace faabric::util;
 
 namespace tests {
 
-class DirtyConfTestFixture
-  : public ConfTestFixture
-  , public DirtyTrackingTestFixture
-{
-  public:
-    DirtyConfTestFixture()
-    {
-        conf.reset();
-        resetDirtyTracker();
-    };
-
-    ~DirtyConfTestFixture()
-    {
-        conf.reset();
-        resetDirtyTracker();
-    };
-
-    void setTrackingMode(const std::string& mode)
-    {
-        conf.dirtyTrackingMode = mode;
-        resetDirtyTracker();
-    }
-};
-
-TEST_CASE_METHOD(DirtyConfTestFixture,
+TEST_CASE_METHOD(DirtyTrackingTestFixture,
                  "Test configuring tracker",
                  "[util][dirty]")
 {
@@ -63,7 +39,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     REQUIRE(t->getType() == mode);
 }
 
-TEST_CASE_METHOD(DirtyConfTestFixture,
+TEST_CASE_METHOD(DirtyTrackingTestFixture,
                  "Test basic dirty tracking",
                  "[util][dirty]")
 {
@@ -305,7 +281,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     }
 }
 
-TEST_CASE_METHOD(DirtyConfTestFixture,
+TEST_CASE_METHOD(DirtyTrackingTestFixture,
                  "Test thread-local dirty tracking",
                  "[util][dirty]")
 {
