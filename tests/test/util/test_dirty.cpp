@@ -307,24 +307,26 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     // others don't, so we may or may not loop
     int nLoops = 0;
 
-    SECTION("Segfault") {
+    SECTION("Segfault")
+    {
         setTrackingMode("segfault");
         nLoops = 20;
     }
 
-    SECTION("Userfaultfd") {
+    SECTION("Userfaultfd")
+    {
         setTrackingMode("uffd");
         nLoops = 1;
     }
 
-    SECTION("Userfaultfd wp") {
+    SECTION("Userfaultfd wp")
+    {
         setTrackingMode("uffd-wp");
         nLoops = 20;
     }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
     REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
-
 
     // Deliberately cause contention
     int nThreads = 100;
