@@ -405,7 +405,7 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
     }
 
     // Check API features
-    __u64 features = UFFD_FEATURE_MISSING_SHMEM | UFFD_FEATURE_THREAD_ID;
+    __u64 features = UFFD_FEATURE_THREAD_ID;
     if (sigbus) {
         features |= UFFD_FEATURE_SIGBUS;
         features |= UFFD_FEATURE_THREAD_ID;
@@ -416,6 +416,12 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
     if (ioctl(uffd, UFFDIO_API, &uffdApi) != 0) {
         SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
         throw std::runtime_error("Userfaultfd API failed");
+    }
+
+    bool shmemSupported = uffdApi.features & UFFD_FEATURE_MISSING_SHMEM;
+    if (!shmemSupported) {
+        SPDLOG_ERROR("Userfaultfd shared memory not supported");
+        throw std::runtime_error("Userfaultfd shared memory not supported");
     }
 
     if (writeProtect) {
