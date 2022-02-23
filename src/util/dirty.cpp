@@ -405,7 +405,7 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
     }
 
     // Check API features
-    __u64 features = UFFD_FEATURE_MISSING_SHMEM;
+    __u64 features = UFFD_FEATURE_MISSING_SHMEM | UFFD_FEATURE_THREAD_ID;
     if (sigbus) {
         features |= UFFD_FEATURE_SIGBUS;
         features |= UFFD_FEATURE_THREAD_ID;
@@ -743,6 +743,10 @@ std::vector<char> UffdDirtyTracker::getThreadLocalDirtyPages(
 
 std::vector<char> UffdDirtyTracker::getDirtyPages(std::span<uint8_t> region)
 {
+    if (sigbus) {
+        return {};
+    }
+
     if (!globalTracking.isInitialised()) {
         size_t nPages = getRequiredHostPages(region.size());
         return std::vector<char>(nPages, 0);

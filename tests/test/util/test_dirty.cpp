@@ -64,6 +64,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
     // Shared vs. private memory is an important distinction as userfaultfd may
     // perform differently
     bool sharedMemory = false;
+    bool mappedMemory = false;
 
     // Some dirty trackers count reads as well as writes when marking pages as
     // dirty
@@ -78,6 +79,18 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         SECTION("Shared") { sharedMemory = true; }
 
         SECTION("Private") { sharedMemory = false; }
+
+        SECTION("Mapped shared")
+        {
+            sharedMemory = true;
+            mappedMemory = true;
+        }
+
+        SECTION("Mapped private")
+        {
+            sharedMemory = false;
+            mappedMemory = true;
+        }
     }
 
     SECTION("Segfaults")
@@ -89,6 +102,18 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         SECTION("Shared") { sharedMemory = true; }
 
         SECTION("Private") { sharedMemory = false; }
+
+        SECTION("Mapped shared")
+        {
+            sharedMemory = true;
+            mappedMemory = true;
+        }
+
+        SECTION("Mapped private")
+        {
+            sharedMemory = false;
+            mappedMemory = true;
+        }
     }
 
     SECTION("Userfaultfd")
@@ -100,6 +125,18 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         SECTION("Shared") { sharedMemory = true; }
 
         SECTION("Private") { sharedMemory = false; }
+
+        SECTION("Mapped shared")
+        {
+            sharedMemory = true;
+            mappedMemory = true;
+        }
+
+        SECTION("Mapped private")
+        {
+            sharedMemory = false;
+            mappedMemory = true;
+        }
     }
 
     SECTION("Userfaultfd wp")
@@ -108,7 +145,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         checkPostReset = true;
         dirtyReads = true;
 
-        // Shared mem doesn't work with write-protection
+        // Neither shared nor mapped mem works with write-protection
 
         SECTION("Private") { sharedMemory = false; }
     }
@@ -122,6 +159,18 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         SECTION("Shared") { sharedMemory = true; }
 
         SECTION("Private") { sharedMemory = false; }
+
+        SECTION("Mapped shared")
+        {
+            sharedMemory = true;
+            mappedMemory = true;
+        }
+
+        SECTION("Mapped private")
+        {
+            sharedMemory = false;
+            mappedMemory = true;
+        }
     }
 
     SECTION("Userfaultfd thread wp")
@@ -130,7 +179,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         checkPostReset = true;
         dirtyReads = false;
 
-        // Shared mem doesn't work with write-protection
+        // Neither shared nor mapped mem works with write-protection
 
         SECTION("Private") { sharedMemory = false; }
     }
@@ -151,6 +200,17 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         memView = std::span<uint8_t>(sharedMemPtr.get(), memSize);
     } else {
         memView = std::span<uint8_t>(privateMemPtr.get(), memSize);
+    }
+
+    if (mappedMemory) {
+        int fd = createFd(memSize, "foobar");
+
+        // Map the memory
+        if (sharedMemory) {
+            mapMemoryShared(memView, fd);
+        } else {
+            mapMemoryPrivate(memView, fd);
+        }
     }
 
     tracker->clearAll();
@@ -237,127 +297,34 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 }
 
 TEST_CASE_METHOD(DirtyConfTestFixture,
-                 "Test signal-based tracking",
+                 "Test thread-local dirty tracking",
                  "[util][dirty]")
 {
-    int nPages = 10;
-    size_t memSize = nPages * HOST_PAGE_SIZE;
-    std::vector<uint8_t> expectedData(memSize, 5);
-    std::vector<char> expectedDirty(nPages, 0);
+    // Here we just want to check that thread-local tracking works for the
+    // trackers that support it, i.e. those based on signal handling
 
-    MemoryRegion mem = allocatePrivateMemory(memSize);
+    // Certain trackers support repeat tracking on the same address space, while
+    // others don't, so we may or may not loop
+    int nLoops = 0;
 
-    std::span<uint8_t> memView(mem.get(), memSize);
-
-    std::string expectedType;
-
-    SECTION("Standard alloc")
-    {
-        SECTION("Segfault") { setTrackingMode("segfault"); }
-
-        SECTION("Userfaultfd") { setTrackingMode("uffd"); }
-
-        SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
-
-        SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
-
-        SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
-
-        // Copy expected data into memory
-        std::memcpy(mem.get(), expectedData.data(), memSize);
+    SECTION("Segfault") {
+        setTrackingMode("segfault");
+        nLoops = 20;
     }
 
-    SECTION("Mapped from fd")
-    {
-        SECTION("Segfault") { setTrackingMode("segfault"); }
+    SECTION("Userfaultfd") {
+        setTrackingMode("uffd");
+        nLoops = 1;
+    }
 
-        SECTION("Userfaultfd") { setTrackingMode("uffd"); }
-
-        SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
-
-        SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
-
-        SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
-
-        // Create a file descriptor holding expected data
-        int fd = createFd(memSize, "foobar");
-        writeToFd(fd, 0, expectedData);
-
-        // Map the memory
-        mapMemoryPrivate(memView, fd);
+    SECTION("Userfaultfd wp") {
+        setTrackingMode("uffd-wp");
+        nLoops = 20;
     }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
     REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
 
-    // Check memory to start with
-    std::vector<uint8_t> actualMemBefore(mem.get(), mem.get() + memSize);
-    REQUIRE(actualMemBefore == expectedData);
-
-    // Start tracking
-    tracker->startTracking(memView);
-    tracker->startThreadLocalTracking(memView);
-
-    // Make a change on one page
-    size_t offsetA = 0;
-    mem[offsetA] = 3;
-    expectedData[offsetA] = 3;
-    expectedDirty[0] = 1;
-
-    // Make two changes on adjacent page
-    size_t offsetB1 = HOST_PAGE_SIZE + 10;
-    size_t offsetB2 = HOST_PAGE_SIZE + 50;
-    mem[offsetB1] = 4;
-    mem[offsetB2] = 2;
-    expectedData[offsetB1] = 4;
-    expectedData[offsetB2] = 2;
-    expectedDirty[1] = 1;
-
-    // Change another page
-    size_t offsetC = (5 * HOST_PAGE_SIZE) + 10;
-    mem[offsetC] = 6;
-    expectedData[offsetC] = 6;
-    expectedDirty[5] = 1;
-
-    // Just read from another (should not cause a diff)
-    int readValue = mem[4 * HOST_PAGE_SIZE + 5];
-    REQUIRE(readValue == 5);
-
-    // Check writes have propagated to the actual memory
-    std::vector<uint8_t> actualMemAfter(mem.get(), mem.get() + memSize);
-    REQUIRE(actualMemAfter == expectedData);
-
-    // Get dirty regions
-    std::vector<char> actualDirty = tracker->getBothDirtyPages(memView);
-
-    // Check dirty regions
-    REQUIRE(actualDirty == expectedDirty);
-
-    tracker->stopTracking(memView);
-    tracker->stopThreadLocalTracking(memView);
-}
-
-TEST_CASE_METHOD(DirtyConfTestFixture,
-                 "Test multi-threaded signal-based tracking",
-                 "[util][dirty]")
-{
-    // We want to check that faults triggered in a given thread are caught
-    // by that thread, and so we can safely just do thread-local diff tracking.
-
-    SECTION("Segfault") { setTrackingMode("segfault"); }
-
-    SECTION("Userfaultfd") { setTrackingMode("uffd"); }
-
-    SECTION("Userfaultfd wp") { setTrackingMode("uffd-wp"); }
-
-    SECTION("Userfaultfd thread") { setTrackingMode("uffd-thread"); }
-
-    SECTION("Userfaultfd thread wp") { setTrackingMode("uffd-thread-wp"); }
-
-    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
-    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
-
-    int nLoops = 20;
 
     // Deliberately cause contention
     int nThreads = 100;
@@ -400,15 +367,15 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
 
                   tracker->stopThreadLocalTracking(memView);
 
-                  // Check we get the right number of dirty regions
-                  std::vector<char> regions =
+                  // Check we get the right size for the dirty pages
+                  std::vector<char> dirtyPages =
                     tracker->getThreadLocalDirtyPages(memView);
-                  if (regions.size() != nPages) {
+                  if (dirtyPages.size() != nPages) {
                       SPDLOG_ERROR("Thread {} failed on loop {}. Got {} "
                                    "regions instead of {}",
                                    i,
                                    loop,
-                                   regions.size(),
+                                   dirtyPages.size(),
                                    1);
                       return;
                   }
@@ -417,11 +384,19 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
                   expected[pageOffset] = 1;
                   expected[pageOffset + 1] = 1;
 
-                  if (regions != expected) {
-                      SPDLOG_ERROR(
-                        "Thread {} failed on loop {}. Regions not equal",
-                        i,
-                        loop);
+                  if (dirtyPages != expected) {
+                      int actualCount =
+                        std::count(dirtyPages.begin(), dirtyPages.end(), 1);
+                      int expectedCount =
+                        std::count(expected.begin(), expected.end(), 1);
+
+                      SPDLOG_ERROR("Thread {} failed on loop {}. Regions not "
+                                   "equal ({} != {})",
+                                   i,
+                                   loop,
+                                   actualCount,
+                                   expectedCount);
+
                       success.at(i)->store(false);
                   } else {
                       success.at(i)->store(true);
@@ -451,6 +426,7 @@ TEST_CASE_METHOD(DirtyConfTestFixture,
         }
 
         REQUIRE(thisLoopSuccess);
+        SPDLOG_DEBUG("Thread-local tracking loop {} succeeded", loop);
     }
 }
 }
