@@ -16,7 +16,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.3.0
+      image: faasm/faabric:0.3.2
     defaults:
       run:
         working-directory: /code/faabric
@@ -31,7 +31,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.3.0
+      image: faasm/faabric:0.3.2
     defaults:
       run:
         working-directory: /code/faabric
@@ -47,7 +47,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.3.0
+      image: faasm/faabric:0.3.2
     defaults:
       run:
         working-directory: /code/faabric
@@ -81,7 +81,7 @@ jobs:
       TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt:history_size=7"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
-      image: faasm/faabric:0.3.0
+      image: faasm/faabric:0.3.2
     defaults:
       run:
         working-directory: /code/faabric
@@ -130,7 +130,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.3.0
+      image: faasm/faabric:0.3.2
     defaults:
       run:
         working-directory: /code/faabric
