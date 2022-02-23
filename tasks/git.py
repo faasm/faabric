@@ -25,6 +25,12 @@ def tag(ctx, force=False):
     )
 
 
+def is_git_submodule():
+    git_cmd = "git rev-parse --show-superproject-working-tree"
+    result = run(git_cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+    return result.stdout.decode("utf-8") != ""
+
+
 def get_latest_release_tag():
     gh_url = "https://api.github.com/repos/faasm/faabric/releases/latest"
 
@@ -42,14 +48,24 @@ def release_body(ctx, file_path="/tmp/release_body.md"):
     """
     Generate body for release with detailed changelog
     """
-    docker_cmd = [
-        "docker run -t -v",
-        "{}/..:/app/".format(PROJ_ROOT),
-        "orhunp/git-cliff:latest",
-        "--config ./faabric/cliff.toml",
-        "--repository ./faabric",
-        "{}..v{}".format(get_latest_release_tag(), get_version()),
-    ]
+    if is_git_submodule():
+        docker_cmd = [
+            "docker run -t -v",
+            "{}/..:/app/".format(PROJ_ROOT),
+            "orhunp/git-cliff:latest",
+            "--config ./faabric/cliff.toml",
+            "--repository ./faabric",
+            "{}..v{}".format(get_latest_release_tag(), get_version()),
+        ]
+    else:
+        docker_cmd = [
+            "docker run -t -v",
+            "{}:/app/".format(PROJ_ROOT),
+            "orhunp/git-cliff:latest",
+            "--config cliff.toml",
+            "--repository .",
+            "{}..v{}".format(get_latest_release_tag(), get_version()),
+        ]
 
     cmd = " ".join(docker_cmd)
     print(cmd)
