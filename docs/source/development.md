@@ -154,6 +154,20 @@ If you want to overwrite a tag, you can run:
 inv git.tag --force
 ```
 
+After the new tag has been merged in, and in order to keep a clean commit
+history, you may re-tag the code again:
+
+```bash
+inv git.tag --force
+```
+
+Lastly, to publish a release, you can generate the change log for the release
+body by running:
+
+```bash
+inv git.release_body
+```
+
 ### Building images manually
 
 Containers are built with Github Actions, so you should only need to build them
