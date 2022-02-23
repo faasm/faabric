@@ -15,11 +15,9 @@ body = """
 {% else %}\
     ## [unreleased]
 {% endif %}\
-{% for commit in commits %}
-    ### {{ commit.message | upper_first | split(pat="\n") | first }} {% for i in commit.message | split(pat="\n") | slice(start=2) %}
-    {% if loop.index % 2 == 1%} {{ i | spaceless }} {% endif %} {% endfor %}
-
+{% for commit in commits %} * {{ commit.message | upper_first | split(pat="\n") | first }}
 {% endfor %}
+
 """
 # remove the leading and trailing whitespace from the template
 trim = true
