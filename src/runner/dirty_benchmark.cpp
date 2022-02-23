@@ -14,9 +14,6 @@ namespace faabric::runner {
 #define NUM_PAGES (_TARGET_MEM_SIZE / HOST_PAGE_SIZE)
 #define MEM_SIZE (HOST_PAGE_SIZE * NUM_PAGES)
 
-#define READ_INTERVAL 100
-#define SKIP_INTERVAL 11
-
 struct BenchConf
 {
     std::string mode;
@@ -24,6 +21,8 @@ struct BenchConf
     bool sharedMemory = false;
     bool dirtyReads = false;
     int nThreads = 2;
+    int readPct = 20;
+    int writePct = 80;
 };
 
 struct BenchResult
@@ -40,12 +39,15 @@ std::string benchToString(BenchConf c)
     res += c.mapMemory ? " MAP " : "";
     res += c.sharedMemory ? " SHARED " : "";
 
+    res += fmt::format(" R {}% : W {}% ", c.readPct, c.writePct);
+
     return res;
 }
 
 void doBench(BenchConf conf)
 {
-    SPDLOG_ERROR("RUN: {}", benchToString(conf));
+    SPDLOG_INFO("---------------");
+    SPDLOG_INFO("{}", benchToString(conf));
 
     SystemConfig& c = getSystemConfig();
     c.dirtyTrackingMode = conf.mode;
@@ -104,32 +106,32 @@ void doBench(BenchConf conf)
             int threadChunkSize = NUM_PAGES / conf.nThreads;
             int offset = t * threadChunkSize;
 
+            int targetReads = threadChunkSize * conf.readPct;
+            int targetWrites = threadChunkSize * conf.writePct;
+
             for (int i = offset; i < offset + threadChunkSize; i++) {
                 res.nPages++;
 
-                // Skip if necessary
-                if (i % SKIP_INTERVAL == 0) {
-                    SPDLOG_TRACE("Skipping {} ({})", i, SKIP_INTERVAL);
-                    continue;
-                }
+                bool isWrite = res.nWrites < targetWrites;
+                bool isRead = !isWrite && res.nReads < targetReads;
 
-                // Work out if this is a read or write
-                bool isWrite = true;
-                if (i % READ_INTERVAL == 0) {
-                    SPDLOG_TRACE("Reading {}", i);
-                    isWrite = false;
-                    res.nReads++;
-                } else {
-                    SPDLOG_TRACE("Writing {}", i);
-                    isWrite = true;
-                    res.nWrites++;
+                // Skip if necessary
+                if (!isWrite && !isRead) {
+                    SPDLOG_TRACE("Skipping {}");
+                    continue;
                 }
 
                 // Perform the relevant operation
                 uint8_t* ptr = memView.data() + (i * HOST_PAGE_SIZE) + 5;
                 if (isWrite) {
+                    SPDLOG_TRACE("Writing {}", i);
+                    res.nWrites++;
+
                     *ptr = (uint8_t)5;
                 } else {
+                    SPDLOG_TRACE("Reading {}", i);
+                    res.nReads++;
+
                     uint8_t loopRes = *ptr;
                     if (loopRes == 9) {
                         printf("This will never happen %u\n", loopRes);
