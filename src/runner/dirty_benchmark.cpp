@@ -36,15 +36,18 @@ struct BenchResult
 std::string benchToString(BenchConf c)
 {
     std::string res = c.mode;
-    res += c.mapMemory ? " MAP " : "";
-    res += c.sharedMemory ? " SHARED " : "";
 
-    res += fmt::format(" R {}% : W {}% ", c.readPct, c.writePct);
+    res += fmt::format(" READ {}% WRITE {}%", c.readPct, c.writePct);
+
+    res += fmt::format(" {} THREADS", c.nThreads);
+
+    res += c.mapMemory ? " MAP" : "";
+    res += c.sharedMemory ? " SHARED" : "";
 
     return res;
 }
 
-void doBench(BenchConf conf)
+void doBenchInner(BenchConf conf)
 {
     SPDLOG_INFO("---------------");
     SPDLOG_INFO("{}", benchToString(conf));
@@ -83,7 +86,7 @@ void doBench(BenchConf conf)
     tracker.startTracking(memView);
 
     long startNanos = getTimeDiffNanos(startStart);
-    float startMicros = float(startNanos) / 1000;
+    float startMillis = float(startNanos) / (1000L * 1000L);
 
     std::vector<std::thread> threads;
     std::vector<BenchResult> results;
@@ -151,7 +154,7 @@ void doBench(BenchConf conf)
     }
 
     long runNanos = getTimeDiffNanos(runStart);
-    float runMicros = float(runNanos) / 1000;
+    float runMillis = float(runNanos) / (1000L * 1000L);
 
     // ----------
     TimePoint stopStart = startTimer();
@@ -160,16 +163,16 @@ void doBench(BenchConf conf)
     tracker.stopThreadLocalTracking(memView);
 
     long stopNanos = getTimeDiffNanos(stopStart);
-    float stopMicros = float(stopNanos) / 1000;
+    float stopMillis = float(stopNanos) / (1000L * 1000L);
 
-    float totalMicros = startMicros + runMicros + stopMicros;
+    float totalMillis = startMillis + runMillis + stopMillis;
     // ----------
 
-    SPDLOG_INFO("{}us {}us {}us; TOT {}us",
-                startMicros,
-                runMicros,
-                stopMicros,
-                totalMicros);
+    SPDLOG_INFO("{:.2f}ms {:.2f}ms {:.2f}ms; TOT {:.2f}ms",
+                startMillis,
+                runMillis,
+                stopMillis,
+                totalMillis);
 
     std::vector<char> dirtyPages = tracker.getDirtyPages(memView);
     int actualDirty = std::count(dirtyPages.begin(), dirtyPages.end(), 1);
@@ -183,7 +186,7 @@ void doBench(BenchConf conf)
         actualDirty += nDirty;
 
         SPDLOG_DEBUG(
-          "Thread {} processed {} pages ({} writes, {} reads, {} dirty)",
+          "Thread {} processed {} pages ({} writes, {} reads, {} dirty (TLS))",
           t,
           res.nPages,
           res.nWrites,
@@ -205,30 +208,42 @@ void doBench(BenchConf conf)
                      expectedDirty);
     }
 }
+
+void doBench(BenchConf conf)
+{
+    // Shared, write-heavy
+    conf.readPct = 20;
+    conf.writePct = 80;
+    conf.sharedMemory = true;
+    doBenchInner(conf);
+
+    // Shared, read-heavy
+    conf.readPct = 80;
+    conf.writePct = 20;
+    conf.sharedMemory = true;
+    doBenchInner(conf);
+
+    // Mapped, write-heavy
+    conf.readPct = 20;
+    conf.writePct = 80;
+    conf.mapMemory = true;
+    doBenchInner(conf);
+
+    // Mapped, read-heavy
+    conf.readPct = 80;
+    conf.writePct = 20;
+    conf.mapMemory = false;
+    doBenchInner(conf);
+}
 }
 
 int main()
 {
     initLogging();
 
-    faabric::runner::doBench({ .mode = "segfault",
-                               .mapMemory = false,
-                               .sharedMemory = false,
-                               .dirtyReads = false });
+    faabric::runner::doBench({ .mode = "segfault", .dirtyReads = false });
 
-    faabric::runner::doBench({ .mode = "segfault",
-                               .mapMemory = false,
-                               .sharedMemory = true,
-                               .dirtyReads = false });
+    faabric::runner::doBench({ .mode = "softpte", .dirtyReads = false });
 
-    faabric::runner::doBench({ .mode = "softpte",
-                               .mapMemory = false,
-                               .sharedMemory = false,
-                               .dirtyReads = false });
-
-    faabric::runner::doBench({ .mode = "softpte",
-                               .mapMemory = false,
-                               .sharedMemory = true,
-                               .dirtyReads = false });
     return 0;
 }
