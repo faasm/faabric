@@ -450,9 +450,6 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
 
         SPDLOG_TRACE("Set up dirty tracking SIGBUS handler (uffd={})", uffd);
     } else {
-        eventThread =
-          std::thread(&UffdDirtyTracker::eventThreadEntrypoint, this);
-
         // Open shutdown fd for closing event thread
         closeFd = ::eventfd(0, 0);
         if (closeFd == -1) {
@@ -460,6 +457,10 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
               "Failed to open eventfd for closing uffd event thread");
             throw std::runtime_error("Failed to open eventfd");
         }
+
+        // Start event thread
+        eventThread =
+          std::thread(&UffdDirtyTracker::eventThreadEntrypoint, this);
     }
 }
 
