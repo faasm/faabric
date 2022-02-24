@@ -5,6 +5,7 @@
 #include <linux/userfaultfd.h>
 #include <memory>
 #include <poll.h>
+#include <shared_mutex>
 #include <signal.h>
 #include <sys/eventfd.h>
 #include <sys/ioctl.h>
@@ -16,40 +17,111 @@
 
 #include <faabric/util/crash.h>
 #include <faabric/util/dirty.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
 
 namespace faabric::util {
 
-class ThreadTrackingData
+/**
+ * Wrapper around the actual bookkeeping behind dirty tracking. This is
+ * deliberately not thread-safe as it will only ever be used in TLS for signal
+ * handlers.
+ */
+class DirtyTrackingRecord
 {
   public:
-    ThreadTrackingData() = default;
+    DirtyTrackingRecord() = default;
 
-    ThreadTrackingData(std::span<uint8_t> region)
-      : nPages(faabric::util::getRequiredHostPages(region.size()))
-      , dirtyFlags(nPages, 0)
-      , regionBase(region.data())
-      , regionTop(region.data() + region.size())
-    {}
+    virtual void trackRegion(std::span<uint8_t> region)
+    {
+        nPages = faabric::util::getRequiredHostPages(region.size());
+        dirtyFlags = std::vector<char>(nPages, 0);
+        regionBase = region.data();
+        regionTop = region.data() + region.size();
+    }
 
-    void markPage(void* addr)
+    virtual void markPage(void* addr)
     {
         long pageNum = ((uint8_t*)addr - regionBase) / HOST_PAGE_SIZE;
         dirtyFlags[pageNum] = 1;
     }
 
-    bool isInitialised() { return regionTop != nullptr; }
+    virtual bool isInitialised() { return regionTop != nullptr; }
+
+    virtual int getNPages() { return nPages; }
+
+    virtual std::vector<char> getDirtyFlags() { return dirtyFlags; }
+
+    virtual void reset()
+    {
+        nPages = 0;
+        dirtyFlags.clear();
+        regionBase = nullptr;
+        regionTop = nullptr;
+    }
+
+  protected:
+    int nPages = 0;
 
     // std::vector<bool> here seems to worsen performance by >4x
     // std::vector<char> seems to be optimal
-    int nPages = 0;
     std::vector<char> dirtyFlags;
 
-  private:
     uint8_t* regionBase = nullptr;
     uint8_t* regionTop = nullptr;
+};
+
+/**
+ * Thread-safe wrapper around dirty tracking data, necessary for use with the
+ * background event thread in the userfaultfd tracker. Although the logic around
+ * the interaction between the event thread and the main thread should in theory
+ * protect against concurrent accesses, we need this to keep TSan happy.
+ */
+class ThreadsafeDirtyTrackingRecord final : public DirtyTrackingRecord
+{
+  public:
+    ThreadsafeDirtyTrackingRecord() = default;
+
+    void trackRegion(std::span<uint8_t> region) override
+    {
+        FullLock lock(mx);
+        DirtyTrackingRecord::trackRegion(region);
+    }
+
+    void markPage(void* addr) override
+    {
+        FullLock lock(mx);
+        DirtyTrackingRecord::markPage(addr);
+    }
+
+    std::vector<char> getDirtyFlags() override
+    {
+        SharedLock lock(mx);
+        return DirtyTrackingRecord::getDirtyFlags();
+    }
+
+    bool isInitialised() override
+    {
+        SharedLock lock(mx);
+        return DirtyTrackingRecord::isInitialised();
+    }
+
+    int getNPages() override
+    {
+        SharedLock lock(mx);
+        return DirtyTrackingRecord::getNPages();
+    }
+
+    void reset() override
+    {
+        FullLock lock(mx);
+        DirtyTrackingRecord::reset();
+    }
+
+  private:
+    std::shared_mutex mx;
 };
 
 void* pageAlignAddress(void* faultAddr)
@@ -60,12 +132,12 @@ void* pageAlignAddress(void* faultAddr)
     return alignedAddr;
 }
 
-// Thread-local tracking information for dirty tracking using signal handlers in
-// the same thread as the fault.
-static thread_local ThreadTrackingData tracking;
+// Thread-local tracking information for dirty tracking using signal
+// handlers in the same thread as the fault.
+static thread_local DirtyTrackingRecord tracking;
 
 // Global tracking information is used for non-thread-local tracking
-static ThreadTrackingData globalTracking;
+static ThreadsafeDirtyTrackingRecord globalTracking;
 
 static std::shared_ptr<DirtyTracker> tracker = nullptr;
 
@@ -118,7 +190,8 @@ SoftPTEDirtyTracker::SoftPTEDirtyTracker(const std::string& modeIn)
         throw std::runtime_error("Could not open pagemap");
     }
 
-    // Disable buffering, we want to repeatedly read updates to the same file
+    // Disable buffering, we want to repeatedly read updates to the same
+    // file
     setbuf(pagemapFile, nullptr);
 }
 
@@ -251,7 +324,7 @@ SegfaultDirtyTracker::SegfaultDirtyTracker(const std::string& modeIn)
 
 void SegfaultDirtyTracker::clearAll()
 {
-    tracking = ThreadTrackingData();
+    tracking.reset();
 }
 
 void SegfaultDirtyTracker::handler(int sig,
@@ -285,7 +358,7 @@ void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
 
     SPDLOG_TRACE("Starting thread-local tracking on region size {}",
                  region.size());
-    tracking = ThreadTrackingData(region);
+    tracking.trackRegion(region);
 }
 
 void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -299,8 +372,8 @@ void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 
     PROF_START(MprotectStart)
 
-    // Note that here we want to mark the memory read-only, this is to ensure
-    // that only writes are counted as dirtying a page.
+    // Note that here we want to mark the memory read-only, this is to
+    // ensure that only writes are counted as dirtying a page.
     if (::mprotect(region.data(), region.size(), PROT_READ) != 0) {
         SPDLOG_ERROR("Failed to start tracking with mprotect: {} ({})",
                      errno,
@@ -335,7 +408,8 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
 
 void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
 {
-    // Do nothing - need to preserve thread-local data for getting dirty regions
+    // Do nothing - need to preserve thread-local data for getting dirty
+    // regions
     SPDLOG_TRACE("Stopping thread-local tracking on region size {}",
                  region.size());
 }
@@ -348,7 +422,7 @@ std::vector<char> SegfaultDirtyTracker::getThreadLocalDirtyPages(
         return std::vector<char>(nPages, 0);
     }
 
-    return tracking.dirtyFlags;
+    return tracking.getDirtyFlags();
 }
 
 std::vector<char> SegfaultDirtyTracker::getDirtyPages(std::span<uint8_t> region)
@@ -367,11 +441,14 @@ std::vector<char> SegfaultDirtyTracker::getBothDirtyPages(
 // ------------------------------
 
 // Shared uffd file descriptor when using userfaultfd
-static long uffd;
+static long uffd = -1;
 
 // Global flags
-bool uffdWriteProtect = false;
-bool uffdSigbus = false;
+static bool uffdWriteProtect = false;
+static bool uffdSigbus = false;
+
+static int closeFd = -1;
+static std::shared_ptr<std::thread> eventThread = nullptr;
 
 UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
   : DirtyTracker(modeIn)
@@ -397,6 +474,30 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
     uffdWriteProtect = writeProtect;
     uffdSigbus = sigbus;
 
+    if (uffdSigbus) {
+        // Set up the sigbus handler
+        struct sigaction sa;
+        sa.sa_flags = SA_RESTART | SA_SIGINFO;
+        sa.sa_handler = nullptr;
+        sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
+        sigemptyset(&sa.sa_mask);
+
+        if (sigaction(SIGBUS, &sa, nullptr) != 0) {
+            SPDLOG_ERROR("Failed to set up SIGBUS handler: {} ({})",
+                         errno,
+                         strerror(errno));
+            throw std::runtime_error("Failed to set up SIGBUS");
+        }
+
+        SPDLOG_TRACE("Set up dirty tracking SIGBUS handler");
+    }
+
+    // Initialise uffd
+    initUffd();
+}
+
+void UffdDirtyTracker::initUffd()
+{
     // Set up userfaultfd
     uffd = syscall(__NR_userfaultfd, O_NONBLOCK);
     if (uffd == -1) {
@@ -406,7 +507,7 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
 
     // Check API features
     __u64 features = UFFD_FEATURE_THREAD_ID;
-    if (sigbus) {
+    if (uffdSigbus) {
         features |= UFFD_FEATURE_SIGBUS;
         features |= UFFD_FEATURE_THREAD_ID;
     }
@@ -424,7 +525,7 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         throw std::runtime_error("Userfaultfd shared memory not supported");
     }
 
-    if (writeProtect) {
+    if (uffdWriteProtect) {
         bool writeProtectSupported =
           uffdApi.features & UFFD_FEATURE_PAGEFAULT_FLAG_WP;
         if (!writeProtectSupported) {
@@ -433,23 +534,7 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         }
     }
 
-    if (sigbus) {
-        // Set up the sigbus handler
-        struct sigaction sa;
-        sa.sa_flags = SA_RESTART | SA_SIGINFO;
-        sa.sa_handler = nullptr;
-        sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
-        sigemptyset(&sa.sa_mask);
-
-        if (sigaction(SIGBUS, &sa, nullptr) != 0) {
-            SPDLOG_ERROR("Failed to set up SIGBUS handler: {} ({})",
-                         errno,
-                         strerror(errno));
-            throw std::runtime_error("Failed to set up SIGBUS");
-        }
-
-        SPDLOG_TRACE("Set up dirty tracking SIGBUS handler (uffd={})", uffd);
-    } else {
+    if (!uffdSigbus) {
         // Open shutdown fd for closing event thread
         closeFd = ::eventfd(0, 0);
         if (closeFd == -1) {
@@ -459,58 +544,74 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         }
 
         // Start event thread
-        eventThread =
-          std::thread(&UffdDirtyTracker::eventThreadEntrypoint, this);
+        eventThread = std::make_shared<std::thread>(
+          &UffdDirtyTracker::eventThreadEntrypoint);
+    }
+
+    SPDLOG_DEBUG("Initialised uffd {} (sigbus {}, write-protect {})",
+                 uffd,
+                 uffdSigbus,
+                 uffdWriteProtect);
+}
+
+void UffdDirtyTracker::stopUffd()
+{
+    if (!uffdSigbus && eventThread != nullptr) {
+        SPDLOG_DEBUG("Sending shutdown to event thread on {}", closeFd);
+
+        uint64_t msg = 123;
+        ::write(closeFd, &msg, sizeof(uint64_t));
+
+        if (eventThread->joinable()) {
+            eventThread->join();
+        }
+
+        eventThread = nullptr;
+
+        ::close(closeFd);
+        closeFd = -1;
+    }
+
+    // Close down the uffd handle
+    if (uffd > 0) {
+        SPDLOG_DEBUG("Closing uffd {}", uffd);
+        ::close(uffd);
+        uffd = -1;
     }
 }
 
 UffdDirtyTracker::~UffdDirtyTracker()
 {
-    // Close down the uffd handle
-    if (uffd > 0) {
-        SPDLOG_DEBUG("Closing uffd {}", uffd);
-        ::close(uffd);
-    }
-
-    if (!sigbus) {
-        SPDLOG_DEBUG("Awaiting uffd event thread");
-
-        uint64_t msg = 123;
-        ::write(closeFd, &msg, sizeof(uint64_t));
-
-        if (eventThread.joinable()) {
-            eventThread.join();
-        }
-
-        ::close(closeFd);
-    }
+    stopUffd();
 }
 
 void UffdDirtyTracker::eventThreadEntrypoint()
 {
-    SPDLOG_TRACE("Starting uffd event thread");
+    SPDLOG_TRACE(
+      "Starting uffd event thread (uffd={}, closeFd={})", uffd, closeFd);
+    int nFds = 2;
+    struct pollfd pollfds[nFds];
+
+    pollfds[0].fd = uffd;
+    pollfds[0].events = POLLIN;
+
+    pollfds[1].fd = closeFd;
+    pollfds[1].events = POLLIN;
+
     for (;;) {
-        struct pollfd pollfds[2];
-
-        pollfds[0].fd = uffd;
-        pollfds[0].events = POLLIN;
-
-        pollfds[1].fd = closeFd;
-        pollfds[1].events = POLLIN;
-
-        int nReady = poll(pollfds, 2, -1);
+        int nReady = poll(pollfds, nFds, -1);
         if (nReady == -1) {
             SPDLOG_ERROR("Poll failed: {} ({})", errno, strerror(errno));
             throw std::runtime_error("Poll failed");
         }
 
         if (pollfds[0].revents & POLLERR) {
-            SPDLOG_DEBUG("Uffd shut down");
-            return;
+            SPDLOG_DEBUG("Ignoring uffd POLLERR");
+            continue;
         }
 
-        if (pollfds[1].revents > 0) {
-            SPDLOG_DEBUG("Uffd shut down");
+        if ((pollfds[1].revents & POLLERR) || (pollfds[1].revents & POLLIN)) {
+            SPDLOG_DEBUG("Received uffd shut down");
             return;
         }
 
@@ -536,8 +637,9 @@ void UffdDirtyTracker::eventThreadEntrypoint()
         void* faultAddr = (void*)msg.arg.pagefault.address;
         void* alignedAddr = pageAlignAddress(faultAddr);
 
-        // Events will ALWAYS have UFFD_PAGEFAULT_FLAG_WRITE set, but will only
-        // have UFFD_PAGEFAULT_FLAG_WP set when it's a write-protected event
+        // Events will ALWAYS have UFFD_PAGEFAULT_FLAG_WRITE set, but will
+        // only have UFFD_PAGEFAULT_FLAG_WP set when it's a write-protected
+        // event
         bool isWriteEvent = msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WRITE;
         bool isWriteProtected =
           msg.arg.pagefault.flags & UFFD_PAGEFAULT_FLAG_WP;
@@ -566,8 +668,8 @@ void UffdDirtyTracker::eventThreadEntrypoint()
 
 void UffdDirtyTracker::clearAll()
 {
-    tracking = ThreadTrackingData();
-    globalTracking = ThreadTrackingData();
+    tracking.reset();
+    globalTracking.reset();
 }
 
 void UffdDirtyTracker::sigbusHandler(int sig,
@@ -606,7 +708,7 @@ void UffdDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
                  (__u64)region.data(),
                  region.size());
 
-    tracking = ThreadTrackingData(region);
+    tracking.trackRegion(region);
 }
 
 void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -618,13 +720,13 @@ void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
         return;
     }
 
+    globalTracking.trackRegion(region);
+
     registerRegion(region);
 
     if (writeProtect) {
         writeProtectRegion(region);
     }
-
-    globalTracking = ThreadTrackingData(region);
 }
 
 void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
@@ -745,7 +847,7 @@ std::vector<char> UffdDirtyTracker::getThreadLocalDirtyPages(
         return std::vector<char>(nPages, 0);
     }
 
-    return tracking.dirtyFlags;
+    return tracking.getDirtyFlags();
 }
 
 std::vector<char> UffdDirtyTracker::getDirtyPages(std::span<uint8_t> region)
@@ -759,7 +861,7 @@ std::vector<char> UffdDirtyTracker::getDirtyPages(std::span<uint8_t> region)
         return std::vector<char>(nPages, 0);
     }
 
-    return globalTracking.dirtyFlags;
+    return globalTracking.getDirtyFlags();
 }
 
 std::vector<char> UffdDirtyTracker::getBothDirtyPages(std::span<uint8_t> region)

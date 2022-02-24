@@ -169,9 +169,6 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         SECTION("Private") { sharedMemory = false; }
     }
 
-    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
-    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
-
     // Create several pages of memory
     int nPages = 6;
     size_t memSize = HOST_PAGE_SIZE * nPages;
@@ -198,6 +195,10 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         }
     }
 
+    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
+    REQUIRE(tracker->getType() == conf.dirtyTrackingMode);
+
+    // Make sure we clear all, relevant for anything with system-wide state
     tracker->clearAll();
 
     std::vector<char> actual = tracker->getBothDirtyPages(memView);
@@ -212,11 +213,11 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     uint8_t* pageOne = pageZero + HOST_PAGE_SIZE;
     uint8_t* pageThree = pageOne + (2 * HOST_PAGE_SIZE);
 
-    // Do a read, make sure this isn't marked as dirty
+    // Do a read
     int readValue = pageZero[1];
     REQUIRE(readValue == 0);
 
-    // Dirty some pages
+    // Do a couple of writes
     pageOne[10] = 1;
     pageThree[123] = 4;
 

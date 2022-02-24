@@ -177,9 +177,9 @@ class UffdDirtyTracker final : public DirtyTracker
 
     bool sigbus = false;
 
-    int closeFd;
+    static void initUffd();
 
-    std::thread eventThread;
+    static void stopUffd();
 
     static void registerRegion(std::span<uint8_t> region);
 
@@ -191,7 +191,7 @@ class UffdDirtyTracker final : public DirtyTracker
 
     static void deregisterRegion(std::span<uint8_t> region);
 
-    void eventThreadEntrypoint();
+    static void eventThreadEntrypoint();
 };
 
 /*
