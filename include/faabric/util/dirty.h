@@ -137,11 +137,24 @@ class SegfaultDirtyTracker final : public DirtyTracker
     static void handler(int sig, siginfo_t* info, void* ucontext) noexcept;
 };
 
-/*
+/**
  * Dirty tracking implementation using userfaultfd to write-protect pages, then
  * handle the resulting userspace events when they are written to.
+ *
+ * The dirty tracking mode can be one of four options:
+ *
+ * - uffd - uses the `SIGBUS` handler to catch events triggered by accessing
+ *   missing pages in demand-zero paged memory.
+ * - uffd-wp - same as `uffd` but adds write-protected events to catch
+ *   subsequent writes to write-protected pages.
+ * - uffd-thread - same as `uffd`, but using a background event thread to handle
+ *   events. This has the benefit of distinguishing between read and write
+ *   missing page events.
+ * - uffd-thread-wp - same as `uffd-thread`, but adds write-protected events.
+ *
+ * See the docs for more info on these different approaches:
+ * https://www.kernel.org/doc/html/latest/admin-guide/mm/userfaultfd.html
  */
-
 class UffdDirtyTracker final : public DirtyTracker
 {
   public:

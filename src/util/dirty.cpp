@@ -306,7 +306,7 @@ std::vector<char> SoftPTEDirtyTracker::getThreadLocalDirtyPages(
 SegfaultDirtyTracker::SegfaultDirtyTracker(const std::string& modeIn)
   : DirtyTracker(modeIn)
 {
-    // Sigaction docs;
+    // Sigaction docs:
     // https://www.man7.org/linux/man-pages/man2/sigaction.2.html
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
