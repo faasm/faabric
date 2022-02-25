@@ -2,7 +2,6 @@
 #include <cstring>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <linux/userfaultfd.h>
 #include <memory>
 #include <poll.h>
 #include <shared_mutex>
@@ -21,6 +20,7 @@
 #include <faabric/util/memory.h>
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
+#include <faabric/util/userfaultfd.h>
 
 namespace faabric::util {
 
@@ -79,10 +79,10 @@ class DirtyTrackingRecord
  * the interaction between the event thread and the main thread should in theory
  * protect against concurrent accesses, we need this to keep TSan happy.
  */
-class ThreadsafeDirtyTrackingRecord final : public DirtyTrackingRecord
+class ThreadSafeDirtyTrackingRecord final : public DirtyTrackingRecord
 {
   public:
-    ThreadsafeDirtyTrackingRecord() = default;
+    ThreadSafeDirtyTrackingRecord() = default;
 
     void trackRegion(std::span<uint8_t> region) override
     {
@@ -137,7 +137,7 @@ void* pageAlignAddress(void* faultAddr)
 static thread_local DirtyTrackingRecord tracking;
 
 // Global tracking information is used for non-thread-local tracking
-static ThreadsafeDirtyTrackingRecord globalTracking;
+static ThreadSafeDirtyTrackingRecord globalTracking;
 
 static std::shared_ptr<DirtyTracker> tracker = nullptr;
 
@@ -514,7 +514,7 @@ void UffdDirtyTracker::initUffd()
 
     struct uffdio_api uffdApi = { .api = UFFD_API, .features = features };
 
-    if (ioctl(uffd, UFFDIO_API, &uffdApi) != 0) {
+    if (::ioctl(uffd, UFFDIO_API, &uffdApi) != 0) {
         SPDLOG_ERROR("Failed on ioctl API {} ({})", errno, strerror(errno));
         throw std::runtime_error("Userfaultfd API failed");
     }
@@ -559,7 +559,8 @@ void UffdDirtyTracker::stopUffd()
     if (!uffdSigbus && eventThread != nullptr) {
         SPDLOG_DEBUG("Sending shutdown to event thread on {}", closeFd);
 
-        uint64_t msg = 123;
+        // This message can be anything, so its value doesn't matter.
+        uint64_t msg = 1;
         ::write(closeFd, &msg, sizeof(uint64_t));
 
         if (eventThread->joinable()) {
@@ -744,7 +745,7 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
 
     struct uffdio_register uffdRegister = { .range = regRange, .mode = mode };
 
-    int res = ioctl(uffd, UFFDIO_REGISTER, &uffdRegister);
+    int res = ::ioctl(uffd, UFFDIO_REGISTER, &uffdRegister);
     if (res != 0) {
         SPDLOG_ERROR(
           "Failed to register range: {} ({})", errno, strerror(errno));
@@ -761,7 +762,7 @@ void UffdDirtyTracker::writeProtectRegion(std::span<uint8_t> region)
     struct uffdio_writeprotect wpArgs = { .range = wpRange,
                                           .mode = UFFDIO_WRITEPROTECT_MODE_WP };
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
+    if (::ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
         SPDLOG_ERROR(
           "Failed to write-protect range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Write protect failed");
@@ -792,7 +793,7 @@ bool UffdDirtyTracker::zeroRegion(std::span<uint8_t> region)
                                       .len = region.size() };
     uffdio_zeropage zeroPage = { .range = zeroRange, .mode = 0 };
 
-    int result = ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage);
+    int result = ::ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage);
 
     return result != 0;
 }
@@ -806,7 +807,7 @@ void UffdDirtyTracker::deregisterRegion(std::span<uint8_t> region)
                                           .mode = 0,
                                           .ioctls = ioctls };
 
-    if (ioctl(uffd, UFFDIO_UNREGISTER, &deregister) != 0) {
+    if (::ioctl(uffd, UFFDIO_UNREGISTER, &deregister) != 0) {
         SPDLOG_ERROR(
           "Failed to deregister range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Range deregister failed");
@@ -821,7 +822,7 @@ void UffdDirtyTracker::removeWriteProtect(std::span<uint8_t> region,
 
     SPDLOG_TRACE("Removing write protection from {}", (__u64)region.data());
 
-    if (ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
+    if (::ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
         SPDLOG_ERROR(
           "Failed removing write protection: {} ({})", errno, strerror(errno));
 

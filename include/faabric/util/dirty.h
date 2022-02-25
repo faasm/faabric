@@ -1,6 +1,5 @@
 #pragma once
 
-#include <linux/userfaultfd.h>
 #include <signal.h>
 #include <span>
 #include <string>
@@ -15,21 +14,6 @@
 
 #define PAGEMAP_ENTRY_BYTES sizeof(uint64_t)
 #define PAGEMAP_SOFT_DIRTY (1Ull << 55)
-
-// The following isn't available using HWE on 20.04, so copied from:
-// https://github.com/torvalds/linux/blob/v5.14/include/uapi/linux/userfaultfd.h
-
-#define _UFFDIO_WRITEPROTECT (0x06)
-#define UFFDIO_WRITEPROTECT                                                    \
-    _IOWR(UFFDIO, _UFFDIO_WRITEPROTECT, struct uffdio_writeprotect)
-
-struct uffdio_writeprotect
-{
-    struct uffdio_range range;
-#define UFFDIO_WRITEPROTECT_MODE_WP ((__u64)1 << 0)
-#define UFFDIO_WRITEPROTECT_MODE_DONTWAKE ((__u64)1 << 1)
-    __u64 mode;
-};
 
 namespace faabric::util {
 
