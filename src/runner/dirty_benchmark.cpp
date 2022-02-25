@@ -44,8 +44,6 @@ std::string benchToString(BenchConf c)
     res += c.mapMemory ? " MAP" : "";
     res += c.sharedMemory ? " SHARED" : "";
 
-    return res;
-}
 
 void doBenchInner(BenchConf conf)
 {
@@ -54,14 +52,13 @@ void doBenchInner(BenchConf conf)
 
     SystemConfig& c = getSystemConfig();
     c.dirtyTrackingMode = conf.mode;
+    resetDirtyTracker();
 
-    // TODO - resetDirtyTracker
+    std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
 
-    DirtyTracker& tracker = getDirtyTracker();
-
-    if (tracker.getType() != conf.mode) {
+    if (tracker->getType() != conf.mode) {
         SPDLOG_ERROR(
-          "Tracker not expected mode: {} != {}", tracker.getType(), conf.mode);
+          "Tracker not expected mode: {} != {}", tracker->getType(), conf.mode);
         exit(1);
     }
 
@@ -82,8 +79,8 @@ void doBenchInner(BenchConf conf)
 
     // ---------
     TimePoint startStart = startTimer();
-    tracker.clearAll();
-    tracker.startTracking(memView);
+    tracker->clearAll();
+    tracker->startTracking(memView);
 
     long startNanos = getTimeDiffNanos(startStart);
     float startMillis = float(startNanos) / (1000L * 1000L);
@@ -103,7 +100,7 @@ void doBenchInner(BenchConf conf)
 
     for (int t = 0; t < conf.nThreads; t++) {
         threads.emplace_back([&results, &conf, t, &tracker, &memView] {
-            tracker.startThreadLocalTracking(memView);
+            tracker->startThreadLocalTracking(memView);
 
             BenchResult& res = results[t];
             int threadChunkSize = NUM_PAGES / conf.nThreads;
@@ -143,7 +140,7 @@ void doBenchInner(BenchConf conf)
             }
 
             // Get dirty pages for this thread
-            res.dirtyPages = tracker.getThreadLocalDirtyPages(memView);
+            res.dirtyPages = tracker->getThreadLocalDirtyPages(memView);
         });
     }
 
@@ -159,8 +156,8 @@ void doBenchInner(BenchConf conf)
     // ----------
     TimePoint stopStart = startTimer();
 
-    tracker.stopTracking(memView);
-    tracker.stopThreadLocalTracking(memView);
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
 
     long stopNanos = getTimeDiffNanos(stopStart);
     float stopMillis = float(stopNanos) / (1000L * 1000L);
@@ -174,7 +171,7 @@ void doBenchInner(BenchConf conf)
                 stopMillis,
                 totalMillis);
 
-    std::vector<char> dirtyPages = tracker.getDirtyPages(memView);
+    std::vector<char> dirtyPages = tracker->getDirtyPages(memView);
     int actualDirty = std::count(dirtyPages.begin(), dirtyPages.end(), 1);
 
     int expectedDirty = 0;
