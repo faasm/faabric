@@ -84,9 +84,9 @@ class Executor
 
     virtual std::span<uint8_t> getMemoryView();
 
-  protected:
     virtual void restore(const std::string& snapshotKey);
 
+  protected:
     virtual void postFinish();
 
     virtual void setMemorySize(size_t newSize);

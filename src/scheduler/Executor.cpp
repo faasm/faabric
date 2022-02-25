@@ -702,6 +702,17 @@ void Executor::setMemorySize(size_t newSize)
 
 void Executor::restore(const std::string& snapshotKey)
 {
-    SPDLOG_WARN("Executor has not implemented restore method");
+    std::span<uint8_t> memView = getMemoryView();
+    if (memView.empty()) {
+        SPDLOG_ERROR("No memory on {} to restore {}", id, snapshotKey);
+        throw std::runtime_error("No memory to restore executor");
+    }
+
+    // Expand memory if necessary
+    auto snap = reg.getSnapshot(snapshotKey);
+    setMemorySize(snap->getSize());
+
+    // Map the memory onto the snapshot
+    snap->mapToMemory({ memView.data(), snap->getSize() });
 }
 }
