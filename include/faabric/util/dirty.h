@@ -3,6 +3,7 @@
 #include <signal.h>
 #include <span>
 #include <string>
+#include <thread>
 
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
@@ -23,6 +24,10 @@ namespace faabric::util {
 class DirtyTracker
 {
   public:
+    DirtyTracker(const std::string& modeIn)
+      : mode(modeIn)
+    {}
+
     virtual void clearAll() = 0;
 
     virtual std::string getType() = 0;
@@ -41,6 +46,9 @@ class DirtyTracker
       std::span<uint8_t> region) = 0;
 
     virtual std::vector<char> getBothDirtyPages(std::span<uint8_t> region) = 0;
+
+  protected:
+    const std::string mode;
 };
 
 /*
@@ -50,7 +58,7 @@ class DirtyTracker
 class SoftPTEDirtyTracker final : public DirtyTracker
 {
   public:
-    SoftPTEDirtyTracker();
+    SoftPTEDirtyTracker(const std::string& modeIn);
 
     ~SoftPTEDirtyTracker();
 
@@ -77,6 +85,8 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     FILE* clearRefsFile = nullptr;
 
     FILE* pagemapFile = nullptr;
+
+    void resetPTEs();
 };
 
 /*
@@ -86,7 +96,7 @@ class SoftPTEDirtyTracker final : public DirtyTracker
 class SegfaultDirtyTracker final : public DirtyTracker
 {
   public:
-    SegfaultDirtyTracker();
+    SegfaultDirtyTracker(const std::string& modeIn);
 
     void clearAll() override;
 
@@ -109,9 +119,76 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
     // Signal handler for the resulting segfaults
     static void handler(int sig, siginfo_t* info, void* ucontext) noexcept;
+};
+
+/**
+ * Dirty tracking implementation using userfaultfd to write-protect pages, then
+ * handle the resulting userspace events when they are written to.
+ *
+ * The dirty tracking mode can be one of four options:
+ *
+ * - uffd - uses the `SIGBUS` handler to catch events triggered by accessing
+ *   missing pages in demand-zero paged memory.
+ * - uffd-wp - same as `uffd` but adds write-protected events to catch
+ *   subsequent writes to write-protected pages.
+ * - uffd-thread - same as `uffd`, but using a background event thread to handle
+ *   events. This has the benefit of distinguishing between read and write
+ *   missing page events.
+ * - uffd-thread-wp - same as `uffd-thread`, but adds write-protected events.
+ *
+ * See the docs for more info on these different approaches:
+ * https://www.kernel.org/doc/html/latest/admin-guide/mm/userfaultfd.html
+ */
+class UffdDirtyTracker final : public DirtyTracker
+{
+  public:
+    UffdDirtyTracker(const std::string& modeIn);
+
+    ~UffdDirtyTracker();
+
+    void clearAll() override;
+
+    std::string getType() override { return mode; }
+
+    void startTracking(std::span<uint8_t> region) override;
+
+    void stopTracking(std::span<uint8_t> region) override;
+
+    std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
+
+    void startThreadLocalTracking(std::span<uint8_t> region) override;
+
+    void stopThreadLocalTracking(std::span<uint8_t> region) override;
+
+    std::vector<char> getThreadLocalDirtyPages(
+      std::span<uint8_t> region) override;
+
+    std::vector<char> getBothDirtyPages(std::span<uint8_t> region) override;
+
+    static void sigbusHandler(int sig,
+                              siginfo_t* info,
+                              void* ucontext) noexcept;
 
   private:
-    void setUpSignalHandler();
+    bool writeProtect = false;
+
+    bool sigbus = false;
+
+    static void initUffd();
+
+    static void stopUffd();
+
+    static void registerRegion(std::span<uint8_t> region);
+
+    static void writeProtectRegion(std::span<uint8_t> region);
+
+    static void removeWriteProtect(std::span<uint8_t> region, bool throwEx);
+
+    static bool zeroRegion(std::span<uint8_t> region);
+
+    static void deregisterRegion(std::span<uint8_t> region);
+
+    static void eventThreadEntrypoint();
 };
 
 /*
@@ -122,11 +199,11 @@ class SegfaultDirtyTracker final : public DirtyTracker
 class NoneDirtyTracker final : public DirtyTracker
 {
   public:
-    NoneDirtyTracker() = default;
-
-    std::string getType() override { return "none"; }
+    NoneDirtyTracker(const std::string& modeIn);
 
     void clearAll() override;
+
+    std::string getType() override { return "none"; }
 
     void startTracking(std::span<uint8_t> region) override;
 
@@ -147,5 +224,14 @@ class NoneDirtyTracker final : public DirtyTracker
     std::vector<char> dirtyPages;
 };
 
-DirtyTracker& getDirtyTracker();
+/**
+ * Returns the dirty tracker singleton. The dirty tracking mode is determined in
+ * the system config.
+ */
+std::shared_ptr<DirtyTracker> getDirtyTracker();
+
+/**
+ * Resets the dirty tracker singleton (e.g. if the config has been changed).
+ */
+void resetDirtyTracker();
 }

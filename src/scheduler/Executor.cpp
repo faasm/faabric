@@ -139,11 +139,11 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
         // Get dirty regions since last batch of threads
         std::span<uint8_t> memView = getMemoryView();
-        tracker.stopTracking(memView);
-        tracker.stopThreadLocalTracking(memView);
+        tracker->stopTracking(memView);
+        tracker->stopThreadLocalTracking(memView);
 
         // If this is the first batch, these dirty regions will be empty
-        std::vector<char> dirtyRegions = tracker.getBothDirtyPages(memView);
+        std::vector<char> dirtyRegions = tracker->getBothDirtyPages(memView);
 
         // Apply changes to snapshot
         snap->fillGapsWithBytewiseRegions();
@@ -193,8 +193,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
         // Start tracking again
         memView = getMemoryView();
-        tracker.startTracking(memView);
-        tracker.startThreadLocalTracking(memView);
+        tracker->startTracking(memView);
+        tracker->startThreadLocalTracking(memView);
     }
 
     return results;
@@ -247,7 +247,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Get updated memory view and start global tracking of memory
         memView = getMemoryView();
-        tracker.startTracking(memView);
+        tracker->startTracking(memView);
     } else if (!isThreads && !firstMsg.snapshotkey().empty()) {
         // Restore from snapshot if provided
         std::string snapshotKey = firstMsg.snapshotkey();
@@ -415,7 +415,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         if (doDirtyTracking) {
             // If tracking is thread local, start here as it will happen for
             // each thread
-            tracker.startThreadLocalTracking(getMemoryView());
+            tracker->startThreadLocalTracking(getMemoryView());
         }
 
         // Check ptp group
@@ -477,11 +477,11 @@ void Executor::threadPoolThread(int threadPoolIdx)
         if (doDirtyTracking) {
             // Stop dirty tracking
             std::span<uint8_t> memView = getMemoryView();
-            tracker.stopThreadLocalTracking(memView);
+            tracker->stopThreadLocalTracking(memView);
 
             // Add this thread's changes to executor-wide list of dirty regions
             auto thisThreadDirtyRegions =
-              tracker.getThreadLocalDirtyPages(memView);
+              tracker->getThreadLocalDirtyPages(memView);
 
             faabric::util::FullLock lock(threadExecutionMutex);
             faabric::util::mergeDirtyPages(dirtyRegions,
@@ -507,12 +507,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         if (isLastInBatch && doDirtyTracking) {
             // Stop non-thread-local tracking as we're the last in the batch
             std::span<uint8_t> memView = getMemoryView();
-            tracker.stopTracking(memView);
+            tracker->stopTracking(memView);
 
             // Add non-thread-local dirty regions
             {
                 faabric::util::FullLock lock(threadExecutionMutex);
-                std::vector<char> r = tracker.getDirtyPages(memView);
+                std::vector<char> r = tracker->getDirtyPages(memView);
                 faabric::util::mergeDirtyPages(dirtyRegions, r);
             }
 
@@ -562,8 +562,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Stop tracking memory
             std::span<uint8_t> memView = getMemoryView();
             if (!memView.empty()) {
-                tracker.stopTracking(memView);
-                tracker.stopThreadLocalTracking(memView);
+                tracker->stopTracking(memView);
+                tracker->stopThreadLocalTracking(memView);
 
                 // Delete the main thread snapshot (implicitly does nothing if
                 // doesn't exist)
@@ -634,7 +634,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // Make sure we're definitely not still tracking changes
             std::span<uint8_t> memView = getMemoryView();
             if (!memView.empty()) {
-                tracker.stopTracking(memView);
+                tracker->stopTracking(memView);
             }
 
             // Set this thread to nullptr

@@ -66,14 +66,6 @@ class StateTestFixture
     }
 };
 
-class DirtyTrackingTestFixture
-{
-  public:
-    DirtyTrackingTestFixture() {}
-
-    ~DirtyTrackingTestFixture() { faabric::util::getDirtyTracker().clearAll(); }
-};
-
 class CachedDecisionTestFixture
 {
   public:
@@ -87,9 +79,7 @@ class CachedDecisionTestFixture
     faabric::util::DecisionCache& decisionCache;
 };
 
-class SchedulerTestFixture
-  : public DirtyTrackingTestFixture
-  , public CachedDecisionTestFixture
+class SchedulerTestFixture : public CachedDecisionTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -115,6 +105,8 @@ class SchedulerTestFixture
 
         sch.shutdown();
         sch.addHostToGlobalSet();
+
+        faabric::util::getDirtyTracker()->clearAll();
     };
 
     // Helper method to set the available hosts and slots per host prior to
@@ -148,7 +140,7 @@ class SchedulerTestFixture
     faabric::scheduler::Scheduler& sch;
 };
 
-class SnapshotTestFixture : public DirtyTrackingTestFixture
+class SnapshotTestFixture
 {
   public:
     SnapshotTestFixture()
@@ -157,7 +149,11 @@ class SnapshotTestFixture : public DirtyTrackingTestFixture
         reg.clear();
     }
 
-    ~SnapshotTestFixture() { reg.clear(); }
+    ~SnapshotTestFixture()
+    {
+        reg.clear();
+        faabric::util::getDirtyTracker()->clearAll();
+    }
 
     std::shared_ptr<faabric::util::SnapshotData> setUpSnapshot(
       const std::string& snapKey,
@@ -402,5 +398,28 @@ class TestExecutorFactory : public faabric::scheduler::ExecutorFactory
   protected:
     std::shared_ptr<faabric::scheduler::Executor> createExecutor(
       faabric::Message& msg) override;
+};
+
+class DirtyTrackingTestFixture : public ConfTestFixture
+{
+  public:
+    DirtyTrackingTestFixture()
+    {
+        conf.reset();
+        faabric::util::resetDirtyTracker();
+    };
+
+    ~DirtyTrackingTestFixture()
+    {
+        faabric::util::getDirtyTracker()->clearAll();
+        conf.reset();
+        faabric::util::resetDirtyTracker();
+    }
+
+    void setTrackingMode(const std::string& mode)
+    {
+        conf.dirtyTrackingMode = mode;
+        faabric::util::resetDirtyTracker();
+    }
 };
 }
