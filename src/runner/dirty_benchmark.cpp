@@ -44,6 +44,8 @@ std::string benchToString(BenchConf c)
     res += c.mapMemory ? " MAP" : "";
     res += c.sharedMemory ? " SHARED" : "";
 
+    return res;
+}
 
 void doBenchInner(BenchConf conf)
 {
