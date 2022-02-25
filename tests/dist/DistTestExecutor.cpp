@@ -62,20 +62,6 @@ void DistTestExecutor::reset(faabric::Message& msg)
                  faabric::util::funcToString(msg, false));
 }
 
-void DistTestExecutor::restore(const std::string& snapshotKey)
-{
-    SPDLOG_DEBUG("Dist test executor restoring from {}", snapshotKey);
-
-    if (dummyMemory.get() == nullptr) {
-        SPDLOG_ERROR("No memory for dist test executor to restore {}",
-                     snapshotKey);
-        throw std::runtime_error("No memory to restore dist test executor");
-    }
-
-    auto snap = reg.getSnapshot(snapshotKey);
-    snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
-}
-
 std::span<uint8_t> DistTestExecutor::getMemoryView()
 {
     if (dummyMemory.get() == nullptr) {

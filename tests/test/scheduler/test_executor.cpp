@@ -52,15 +52,13 @@ void TestExecutor::setUpDummyMemory(size_t memSize)
 
 void TestExecutor::restore(const std::string& snapshotKey)
 {
-    restoreCount += 1;
-
-    auto snap = reg.getSnapshot(snapshotKey);
     if (dummyMemory == nullptr) {
         throw std::runtime_error(
           "Attempting to restore test executor with no memory set up");
     }
 
-    snap->mapToMemory({ dummyMemory.get(), dummyMemorySize });
+    restoreCount += 1;
+    Executor::restore(snapshotKey);
 }
 
 std::span<uint8_t> TestExecutor::getMemoryView()
@@ -1078,5 +1076,49 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
         REQUIRE(res.returnvalue() == expectedResult);
     }
+}
+
+TEST_CASE_METHOD(TestExecutorFixture, "Test executor restore", "[executor]")
+{
+    // Create a message
+    std::string user = "foo";
+    std::string function = "bar";
+    faabric::Message m = faabric::util::messageFactory(user, function);
+
+    // Create a snapshot
+    std::string snapKey = faabric::util::getMainThreadSnapshotKey(m);
+    auto snap = std::make_shared<faabric::util::SnapshotData>(snapshotSize);
+    reg.registerSnapshot(snapKey, snap);
+
+    // Modify the snapshot to check changes are propagated
+    std::vector<uint8_t> dataA = { 0, 1, 2, 3 };
+    std::vector<uint8_t> dataB = { 4, 5, 6 };
+    size_t offsetA = HOST_PAGE_SIZE;
+    size_t offsetB = 3 * HOST_PAGE_SIZE;
+    snap->copyInData(dataA, offsetA);
+    snap->copyInData(dataB, offsetB);
+
+    // Create an executor
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      faabric::scheduler::getExecutorFactory();
+    std::shared_ptr<faabric::scheduler::Executor> exec = fac->createExecutor(m);
+
+    // Restore from snapshot
+    exec->restore(snapKey);
+
+    // Check size of restored memory is as expected
+    std::span<uint8_t> memViewAfter = exec->getMemoryView();
+    REQUIRE(memViewAfter.size() == snapshotSize);
+
+    // Check data found in restored memory
+    std::vector<uint8_t> actualDataA(memViewAfter.data() + offsetA,
+                                     memViewAfter.data() + offsetA +
+                                       dataA.size());
+    std::vector<uint8_t> actualDataB(memViewAfter.data() + offsetB,
+                                     memViewAfter.data() + offsetB +
+                                       dataB.size());
+
+    REQUIRE(actualDataA == dataA);
+    REQUIRE(actualDataB == dataB);
 }
 }
