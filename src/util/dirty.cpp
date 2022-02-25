@@ -467,7 +467,7 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         sigbus = false;
     }
 
-    SPDLOG_DEBUG(
+    SPDLOG_TRACE(
       "Uffd dirty tracking: write-protect={}, sigbus={}", writeProtect, sigbus);
 
     // Set up global flags
@@ -548,7 +548,7 @@ void UffdDirtyTracker::initUffd()
           &UffdDirtyTracker::eventThreadEntrypoint);
     }
 
-    SPDLOG_DEBUG("Initialised uffd {} (sigbus {}, write-protect {})",
+    SPDLOG_TRACE("Initialised uffd {} (sigbus {}, write-protect {})",
                  uffd,
                  uffdSigbus,
                  uffdWriteProtect);
@@ -557,7 +557,7 @@ void UffdDirtyTracker::initUffd()
 void UffdDirtyTracker::stopUffd()
 {
     if (!uffdSigbus && eventThread != nullptr) {
-        SPDLOG_DEBUG("Sending shutdown to event thread on {}", closeFd);
+        SPDLOG_TRACE("Sending shutdown to event thread on {}", closeFd);
 
         // This message can be anything, so its value doesn't matter.
         uint64_t msg = 1;
@@ -575,7 +575,7 @@ void UffdDirtyTracker::stopUffd()
 
     // Close down the uffd handle
     if (uffd > 0) {
-        SPDLOG_DEBUG("Closing uffd {}", uffd);
+        SPDLOG_TRACE("Closing uffd {}", uffd);
         ::close(uffd);
         uffd = -1;
     }
@@ -607,12 +607,12 @@ void UffdDirtyTracker::eventThreadEntrypoint()
         }
 
         if (pollfds[0].revents & POLLERR) {
-            SPDLOG_DEBUG("Ignoring uffd POLLERR");
+            SPDLOG_TRACE("Ignoring uffd POLLERR");
             continue;
         }
 
         if ((pollfds[1].revents & POLLERR) || (pollfds[1].revents & POLLIN)) {
-            SPDLOG_DEBUG("Received uffd shut down");
+            SPDLOG_TRACE("Received uffd shut down");
             return;
         }
 
