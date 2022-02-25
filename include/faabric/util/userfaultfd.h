@@ -310,4 +310,3 @@ extern "C"
  */
 #define UFFD_USER_MODE_ONLY 1
 }
-
