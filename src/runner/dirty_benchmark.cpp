@@ -1,3 +1,4 @@
+#include "faabric/util/environment.h"
 #include <faabric/util/dirty.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
@@ -20,9 +21,9 @@ struct BenchConf
     bool mapMemory = false;
     bool sharedMemory = false;
     bool dirtyReads = false;
-    int nThreads = 2;
-    int readPct = 20;
-    int writePct = 80;
+    int nThreads = faabric::util::getUsableCores() - 1;
+    float readPct = 0.2;
+    float writePct = 0.8;
 };
 
 struct BenchResult
@@ -37,13 +38,15 @@ std::string benchToString(BenchConf c)
 {
     std::string res = c.mode;
 
-    res += fmt::format(" READ {}% WRITE {}%", c.readPct, c.writePct);
+    res += fmt::format(" READ {:.1f}% WRITE {:.1f}%", c.readPct, c.writePct);
 
     res += fmt::format(" {} THREADS", c.nThreads);
 
     res += c.mapMemory ? " MAP" : "";
     res += c.sharedMemory ? " SHARED" : "";
 
+    return res;
+}
 
 void doBenchInner(BenchConf conf)
 {
@@ -182,7 +185,7 @@ void doBenchInner(BenchConf conf)
           std::count(res.dirtyPages.begin(), res.dirtyPages.end(), 1);
         actualDirty += nDirty;
 
-        SPDLOG_DEBUG(
+        SPDLOG_TRACE(
           "Thread {} processed {} pages ({} writes, {} reads, {} dirty (TLS))",
           t,
           res.nPages,
@@ -209,28 +212,34 @@ void doBenchInner(BenchConf conf)
 void doBench(BenchConf conf)
 {
     // Shared, write-heavy
-    conf.readPct = 20;
-    conf.writePct = 80;
+    conf.readPct = 0.2;
+    conf.writePct = 0.8;
     conf.sharedMemory = true;
-    doBenchInner(conf);
+    //doBenchInner(conf);
 
     // Shared, read-heavy
-    conf.readPct = 80;
-    conf.writePct = 20;
+    conf.readPct = 0.8;
+    conf.writePct = 0.2;
     conf.sharedMemory = true;
-    doBenchInner(conf);
+    //doBenchInner(conf);
 
     // Mapped, write-heavy
-    conf.readPct = 20;
-    conf.writePct = 80;
+    conf.readPct = 0.2;
+    conf.writePct = 0.8;
+    conf.mapMemory = true;
+    doBenchInner(conf);
+
+    // Mapped, low writes and reads
+    conf.readPct = 0.1;
+    conf.writePct = 0.1;
     conf.mapMemory = true;
     doBenchInner(conf);
 
     // Mapped, read-heavy
-    conf.readPct = 80;
-    conf.writePct = 20;
-    conf.mapMemory = false;
-    doBenchInner(conf);
+    conf.readPct = 0.8;
+    conf.writePct = 0.2;
+    conf.mapMemory = true;
+    //doBenchInner(conf);
 }
 }
 
@@ -241,6 +250,14 @@ int main()
     faabric::runner::doBench({ .mode = "segfault", .dirtyReads = false });
 
     faabric::runner::doBench({ .mode = "softpte", .dirtyReads = false });
+
+    faabric::runner::doBench({ .mode = "uffd", .dirtyReads = true });
+
+    faabric::runner::doBench({ .mode = "uffd-thread", .dirtyReads = false });
+
+    faabric::runner::doBench({ .mode = "uffd-wp", .dirtyReads = true });
+
+    faabric::runner::doBench({ .mode = "uffd-thread-wp", .dirtyReads = false });
 
     return 0;
 }
