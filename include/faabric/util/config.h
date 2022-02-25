@@ -29,6 +29,7 @@ class SystemConfig
     int noScheduler;
     int overrideCpuCount;
     std::string noTopologyHints;
+    int noSingleHostOptimisations;
 
     // Worker-related timeouts
     int globalMessageTimeout;

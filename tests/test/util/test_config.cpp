@@ -23,6 +23,7 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.noScheduler == 0);
     REQUIRE(conf.overrideCpuCount == 0);
     REQUIRE(conf.noTopologyHints == "off");
+    REQUIRE(conf.noSingleHostOptimisations == 0);
 
     REQUIRE(conf.globalMessageTimeout == 60000);
     REQUIRE(conf.boundTimeout == 30000);

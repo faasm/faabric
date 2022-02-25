@@ -564,7 +564,12 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         // Mark the request as being single-host if necessary
         std::set<std::string> thisHostUniset = { thisHost };
         isSingleHost = (uniqueHosts == thisHostUniset) && isMaster;
-        req->set_singlehost(isSingleHost);
+
+        if (conf.noSingleHostOptimisations == 1) {
+            SPDLOG_DEBUG("Single-host optimisations turned off");
+        } else {
+            req->set_singlehost(isSingleHost);
+        }
 
         if (hasFunctionsOnThisHost) {
             uniqueHosts.erase(thisHost);
