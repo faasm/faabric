@@ -117,6 +117,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 {
     SPDLOG_DEBUG("Executor {} executing {} threads", id, req->messages_size());
 
+    PROF_START(ExecutorThreadInit)
+
     std::string funcStr = faabric::util::funcToString(req);
 
     // Set group ID, this will get overridden in there's a cached decision
@@ -176,10 +178,15 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
 
     // Invoke threads and await
     sch.callFunctions(req, decision);
+    PROF_END(ExecutorThreadInit)
+
+    PROF_START(ExecutorThreadExec)
     std::vector<std::pair<uint32_t, int32_t>> results =
       sch.awaitThreadResults(req);
+    PROF_END(ExecutorThreadExec)
 
     // Perform snapshot updates if not on single host
+    PROF_START(ExecutorThreadUpdate)
     if (!isSingleHost) {
         // Write queued changes to snapshot
         int nWritten = snap->writeQueuedDiffs();
@@ -196,6 +203,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker->startTracking(memView);
         tracker->startThreadLocalTracking(memView);
     }
+    PROF_END(ExecutorThreadUpdate)
 
     return results;
 }
