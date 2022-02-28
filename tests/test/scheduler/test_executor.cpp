@@ -1029,6 +1029,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
     int expectedResult = 0;
     SECTION("Single host") { expectedResult = 10; }
 
+    SECTION("Single host disabled in conf")
+    {
+        expectedResult = 20;
+        conf.noSingleHostOptimisations = 1;
+    }
+
     SECTION("Not single host")
     {
         expectedResult = 20;
