@@ -494,6 +494,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     SECTION("Underloaded") { nThreads = 10; }
 
+    SECTION("Underloaded no single host optimisation")
+    {
+        nThreads = 10;
+        conf.noSingleHostOptimisations = 1;
+    }
+
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
@@ -526,6 +532,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
     SECTION("Underloaded") { nThreads = 8; }
 
     SECTION("Overloaded") { nThreads = 100; }
+
+    SECTION("Underloaded no single host optimisation")
+    {
+        nThreads = 10;
+        conf.noSingleHostOptimisations = 1;
+    }
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "thread-check", 1);
@@ -1033,6 +1045,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     int expectedResult = 0;
     SECTION("Single host") { expectedResult = 10; }
+
+    SECTION("Single host disabled in conf")
+    {
+        expectedResult = 20;
+        conf.noSingleHostOptimisations = 1;
+    }
 
     SECTION("Not single host")
     {
