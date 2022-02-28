@@ -11,7 +11,9 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE("Test building scheduling decisions", "[util]")
+TEST_CASE_METHOD(ConfTestFixture,
+                 "Test building scheduling decisions",
+                 "[util]")
 {
     int appId = 123;
     int groupId = 345;
@@ -20,7 +22,8 @@ TEST_CASE("Test building scheduling decisions", "[util]")
     std::string hostB = "hostB";
     std::string hostC = "hostC";
 
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    SystemConfig& conf = getSystemConfig();
+    std::string thisHost = conf.endpointHost;
 
     bool expectSingleHost = false;
     SECTION("Multi-host") {}
@@ -40,6 +43,17 @@ TEST_CASE("Test building scheduling decisions", "[util]")
         hostC = thisHost;
 
         expectSingleHost = true;
+    }
+
+    SECTION("All this host single host optimisations off")
+    {
+        conf.noSingleHostOptimisations = 1;
+
+        hostA = thisHost;
+        hostB = thisHost;
+        hostC = thisHost;
+
+        expectSingleHost = false;
     }
 
     auto req = batchExecFactory("foo", "bar", 3);

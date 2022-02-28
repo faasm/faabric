@@ -86,10 +86,13 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
 
 bool SchedulingDecision::isSingleHost()
 {
-    // Work out if this decision is all on this host. If the decision is
-    // completely on *another* host, we still count it as not being on a single
-    // host, as this host will be the master
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+    // Always return false if single-host optimisations are switched off
+    SystemConfig& conf = getSystemConfig();
+    if (conf.noSingleHostOptimisations == 1) {
+        return false;
+    }
+
+    std::string thisHost = conf.endpointHost;
     return std::all_of(hosts.begin(), hosts.end(), [&](const std::string& s) {
         return s == thisHost;
     });
