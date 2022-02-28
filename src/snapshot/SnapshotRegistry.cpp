@@ -39,7 +39,10 @@ void SnapshotRegistry::registerSnapshot(
 {
     faabric::util::FullLock lock(snapshotsMx);
 
-    SPDLOG_DEBUG("Registering snapshot {} size {}", key, data->getSize());
+    SPDLOG_DEBUG("Registering snapshot {} size {} max {}",
+                 key,
+                 data->getSize(),
+                 data->getMaxSize());
 
     snapshotMap.insert_or_assign(key, std::move(data));
 }

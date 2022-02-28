@@ -91,6 +91,8 @@ class Executor
 
     virtual void setMemorySize(size_t newSize);
 
+    virtual size_t getMaxMemorySize();
+
     faabric::Message boundMessage;
 
     Scheduler& sch;
