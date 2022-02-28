@@ -50,6 +50,11 @@ void TestExecutor::setUpDummyMemory(size_t memSize)
     dummyMemorySize = memSize;
 }
 
+size_t TestExecutor::getMaxMemorySize()
+{
+    return maxMemorySize;
+}
+
 void TestExecutor::restore(const std::string& snapshotKey)
 {
     if (dummyMemory == nullptr) {
@@ -1121,4 +1126,71 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test executor restore", "[executor]")
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
 }
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test get main thread snapshot",
+                 "[executor]")
+{
+    std::string user = "foo";
+    std::string function = "bar";
+    faabric::Message m = faabric::util::messageFactory(user, function);
+
+    // Get the snapshot key
+    std::string snapKey = faabric::util::getMainThreadSnapshotKey(m);
+
+    // Create an executor
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      faabric::scheduler::getExecutorFactory();
+    std::shared_ptr<faabric::scheduler::Executor> exec = fac->createExecutor(m);
+
+    // Get a pointer to the TestExecutor so we can override the max memory
+    auto testExec = std::static_pointer_cast<TestExecutor>(exec);
+    size_t memSize = testExec->dummyMemorySize;
+
+    SECTION("Non-existent, don't create")
+    {
+        REQUIRE_THROWS(exec->getMainThreadSnapshot(m, false));
+    }
+
+    SECTION("Non-existent, create")
+    {
+        size_t expectedSize = memSize;
+        size_t expectedMaxSize = memSize;
+
+        SECTION("No max mem size") { testExec->maxMemorySize = 0; }
+
+        SECTION("Max mem size")
+        {
+            testExec->maxMemorySize = 2 * memSize;
+            expectedMaxSize = 2 * memSize;
+        }
+
+        std::shared_ptr<SnapshotData> snap =
+          exec->getMainThreadSnapshot(m, true);
+        REQUIRE(snap->getSize() == expectedSize);
+        REQUIRE(snap->getMaxSize() == expectedMaxSize);
+    }
+
+    SECTION("Existing")
+    {
+        // Create the snapshot manually
+        auto existingSnap =
+          std::make_shared<faabric::util::SnapshotData>(memSize);
+        reg.registerSnapshot(snapKey, existingSnap);
+
+        bool requestCreate = false;
+        SECTION("Request create if not exist") { requestCreate = true; }
+
+        SECTION("No request create if not exist") { requestCreate = false; }
+
+        std::shared_ptr<SnapshotData> actualSnap =
+          exec->getMainThreadSnapshot(m, requestCreate);
+        REQUIRE(actualSnap->getSize() == memSize);
+        REQUIRE(actualSnap->getMaxSize() == memSize);
+
+        // Check they are actually the same
+        REQUIRE(actualSnap == existingSnap);
+    }
+}
+
 }

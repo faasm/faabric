@@ -378,6 +378,7 @@ class TestExecutor final : public faabric::scheduler::Executor
 
     faabric::util::MemoryRegion dummyMemory = nullptr;
     size_t dummyMemorySize = TEST_EXECUTOR_DEFAULT_MEMORY_SIZE;
+    size_t maxMemorySize = 0;
 
     void reset(faabric::Message& msg) override;
 
@@ -386,6 +387,8 @@ class TestExecutor final : public faabric::scheduler::Executor
     std::span<uint8_t> getMemoryView() override;
 
     void setUpDummyMemory(size_t memSize);
+
+    size_t getMaxMemorySize() override;
 
     int32_t executeTask(
       int threadPoolIdx,

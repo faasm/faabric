@@ -339,7 +339,8 @@ std::shared_ptr<faabric::util::SnapshotData> Executor::getMainThreadSnapshot(
                          faabric::util::funcToString(msg, false));
 
             std::shared_ptr<faabric::util::SnapshotData> snap =
-              std::make_shared<faabric::util::SnapshotData>(getMemoryView());
+              std::make_shared<faabric::util::SnapshotData>(getMemoryView(),
+                                                            getMaxMemorySize());
             reg.registerSnapshot(snapshotKey, snap);
         } else {
             return reg.getSnapshot(snapshotKey);
@@ -698,6 +699,13 @@ std::span<uint8_t> Executor::getMemoryView()
 void Executor::setMemorySize(size_t newSize)
 {
     SPDLOG_WARN("Executor has not implemented set memory size method");
+}
+
+size_t Executor::getMaxMemorySize()
+{
+    SPDLOG_WARN("Executor has not implemented max memory size method");
+
+    return 0;
 }
 
 void Executor::restore(const std::string& snapshotKey)
