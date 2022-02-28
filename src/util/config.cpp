@@ -107,8 +107,7 @@ void SystemConfig::print()
     SPDLOG_INFO("--- Scheduling ---");
     SPDLOG_INFO("NO_SCHEDULER               {}", noScheduler);
     SPDLOG_INFO("OVERRIDE_CPU_COUNT         {}", overrideCpuCount);
-    SPDLOG_INFO("NO_TOPOLOGY_HINTS          {}", noTopologyHints);
-    SPDLOG_INFO("NO_SINGLE_HOST             {}", noSingleHostOptimisations);
+    SPDLOG_INFO("NO_TOPOLOGY_HINTS         {}", noTopologyHints);
 
     SPDLOG_INFO("--- Timeouts ---");
     SPDLOG_INFO("GLOBAL_MESSAGE_TIMEOUT     {}", globalMessageTimeout);
