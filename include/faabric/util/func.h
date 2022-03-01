@@ -46,6 +46,8 @@ std::vector<uint8_t> messageToBytes(const faabric::Message& msg);
 
 std::vector<std::string> getArgvForMessage(const faabric::Message& msg);
 
+std::vector<char*> getCStyleArgvForMessage(const faabric::Message& msg);
+
 /*
  * Gets the key for the main thread snapshot for the given message. Result will
  * be the same on all hosts.

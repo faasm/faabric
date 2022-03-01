@@ -9,6 +9,8 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/random.h>
 
+#include <faabric/util/logging.h>
+
 namespace faabric::util {
 
 std::vector<uint8_t> messageToBytes(const faabric::Message& msg)
@@ -172,6 +174,21 @@ std::vector<std::string> getArgvForMessage(const faabric::Message& msg)
     argv.insert(argv.end(), extraArgs.begin(), extraArgs.end());
 
     return argv;
+}
+
+std::vector<char*> getCStyleArgvForMessage(const faabric::Message& msg)
+{
+    // Get vector-style argv
+    std::vector<std::string> argv = getArgvForMessage(msg);
+
+    // Convert to vector of char pointers
+    std::vector<char*> cArgv;
+    cArgv.resize(argv.size());
+    for (int i = 0; i < argv.size(); i++) {
+        cArgv.at(i) = const_cast<char*>(argv.at(i).c_str());
+    }
+
+    return cArgv;
 }
 
 std::string getMainThreadSnapshotKey(const faabric::Message& msg)
