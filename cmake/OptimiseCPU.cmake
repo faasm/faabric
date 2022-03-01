@@ -15,20 +15,27 @@ string(REGEX REPLACE ".*flags[ \t]*:[ \t]+([^\n]+).*" "\\1"
 
 message("Found CPU: Vendor = ${CPU_VENDOR} Family = ${CPU_FAMILY} Model = ${CPU_MODEL} Props = ${CPU_PROPS}")
 
-# See this file for an example of extending this list:
+# See these files for examples of extending this list:
 # https://github.com/VcDevel/Vc/blob/1.4/cmake/OptimizeForArchitecture.cmake
+# https://github.com/scivision/cmake-cpu-detect/blob/main/DetectHostArch.cmake
 # See the LLVM source for list of supported arch, e.g. this test:
 # https://github.com/llvm/llvm-project/blob/main/clang/test/Driver/x86-march.c
 
 set(CPU_COMPILE_FLAGS)
 if(CPU_VENDOR STREQUAL "GenuineIntel")
     if(CPU_FAMILY EQUAL 6)
-        if(CPU_MODEL EQUAL 78 OR CPU_MODEL EQUAL 94)
-            # Skylake
-            set(CPU_COMPILE_FLAGS -march=skylake -mtune=skylake)
-        elseif(CPU_MODEL EQUAL 58 OR CPU_MODEL EQUAL 62)
+        if(CPU_MODEL EQUAL 58 OR CPU_MODEL EQUAL 62)
             # Ivy bridge
             set(CPU_COMPILE_FLAGS -march=ivybridge -mtune=ivybridge)
+        elseif(CPU_MODEL EQUAL 78 OR CPU_MODEL EQUAL 94)
+            # Skylake
+            set(CPU_COMPILE_FLAGS -march=skylake -mtune=skylake)
+        elseif(CPU_MODEL EQUAL 106 OR CPU_MODEL EQUAL 108)
+            # Icelake server
+            set(CPU_COMPILE_FLAGS -march=icelake-server -mtune=icelake-server)
+        elseif(CPU_MODEL EQUAL 126 OR CPU_MODEL EQUAL 125)
+            # Icelake client
+            set(CPU_COMPILE_FLAGS -march=icelake-client -mtune=icelake-client)
         endif()
     endif()
 endif()
