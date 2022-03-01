@@ -169,4 +169,29 @@ TEST_CASE("Test creating async response")
 
     REQUIRE(expected == actual);
 }
+
+TEST_CASE("Test getting argv from message")
+{
+    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    msg.set_cmdline("foo bar baz");
+    std::vector<std::string> expected = {
+        "function.wasm", "foo", "bar", "baz"
+    };
+
+    SECTION("Regular argv")
+    {
+        REQUIRE(expected == faabric::util::getArgvForMessage(msg));
+    }
+
+    SECTION("C-Style argv")
+    {
+        std::vector<char*> actualCStyle =
+          faabric::util::getCStyleArgvForMessage(msg);
+        for (int i = 0; i < expected.size(); i++) {
+            // Catch2 does not like comparing char*, so we cast the actual
+            // result to a string.
+            REQUIRE(std::string(actualCStyle.at(i)) == expected.at(i));
+        }
+    }
+}
 }

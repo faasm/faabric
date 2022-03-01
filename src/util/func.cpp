@@ -9,8 +9,6 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/random.h>
 
-#include <faabric/util/logging.h>
-
 namespace faabric::util {
 
 std::vector<uint8_t> messageToBytes(const faabric::Message& msg)
