@@ -5,6 +5,8 @@ option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
 option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
 option(FAABRIC_SELF_TRACING "Turn on system tracing using the logger" OFF)
 
+option(FAABRIC_TARGET_CPU "CPU to optimise for, e.g. skylake, icelake or native" OFF)
+
 # Enable colorized compiler output
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options(-fdiagnostics-color=always)
@@ -13,7 +15,12 @@ elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 endif()
 
 # Optimise for CPU
-include(cmake/OptimiseCPU.cmake)
+if(FAABRIC_TARGET_CPU)
+    message(STATUS "Optimising Faabric for CPU ${FAABRIC_TARGET_CPU}")
+    add_compile_options(-march=${FAABRIC_TARGET_CPU} -mtune=${FAABRIC_TARGET_CPU})
+else()
+    message(STATUS "Faabric not optimised for specific CPU")
+endif()
 
 # Top-level CMake config
 set(CMAKE_CXX_FLAGS "-Wall")
