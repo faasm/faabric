@@ -619,8 +619,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<uint32_t> actualMessageIds;
     for (auto& p : actual) {
         REQUIRE(p.first == otherHost);
-        uint32_t messageId = p.second.first;
-        int32_t returnValue = p.second.second;
+        uint32_t messageId = p.second.msgId;
+        int32_t returnValue = p.second.res;
         REQUIRE(returnValue == messageId / 100);
 
         actualMessageIds.push_back(messageId);
@@ -817,11 +817,27 @@ TEST_CASE_METHOD(TestExecutorFixture,
     auto actualResults = faabric::snapshot::getThreadResults();
     REQUIRE(actualResults.size() == nThreads);
 
-    // Check diffs also sent
-    auto diffs = faabric::snapshot::getSnapshotDiffPushes();
-    REQUIRE(diffs.size() == 1);
-    REQUIRE(diffs.at(0).first == otherHost);
-    std::vector<faabric::util::SnapshotDiff> diffList = diffs.at(0).second;
+    // Check that only one result has been assigned diffs
+    faabric::snapshot::MockThreadResult diffRes;
+    bool diffsFound = false;
+    for (int i = 0; i < nThreads; i++) {
+        faabric::snapshot::MockThreadResult res = actualResults[i].second;
+        if (!res.diffs.empty()) {
+            if (diffsFound) {
+                FAIL("More than one thread result has diffs");
+            } else {
+                diffRes = res;
+                diffsFound = true;
+
+                // Check it was sent to the right host
+                REQUIRE(actualResults[i].first == otherHost);
+            }
+        }
+    }
+
+    // Check that diffs were found
+    REQUIRE(diffsFound);
+    std::vector<faabric::util::SnapshotDiff> diffList = diffRes.diffs;
 
     // Each thread should have edited one page, check diffs are correct
     REQUIRE(diffList.size() == nThreads);

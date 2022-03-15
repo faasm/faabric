@@ -51,6 +51,7 @@ Scheduler& getScheduler()
 Scheduler::Scheduler()
   : thisHost(faabric::util::getSystemConfig().endpointHost)
   , conf(faabric::util::getSystemConfig())
+  , reg(faabric::snapshot::getSnapshotRegistry())
   , broker(faabric::transport::getPointToPointBroker())
 {
     // Set up the initial resources
@@ -618,8 +619,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     }
 
     if (!snapshotKey.empty()) {
-        auto snap =
-          faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+        auto snap = reg.getSnapshot(snapshotKey);
 
         for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
             SnapshotClient& c = getSnapshotClient(host);
@@ -643,8 +643,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         // If we are executing a migrated function, we don't need to distribute
         // the snapshot to other hosts, as this snapshot is specific to the
         // to-be-restored function
-        auto snap =
-          faabric::snapshot::getSnapshotRegistry().getSnapshot(snapshotKey);
+        auto snap = reg.getSnapshot(snapshotKey);
 
         // Now reset the tracking on the snapshot before we start executing
         snap->clearTrackedChanges();
@@ -1021,39 +1020,34 @@ void Scheduler::registerThread(uint32_t msgId)
     threadResults[msgId];
 }
 
-void Scheduler::setThreadResult(const faabric::Message& msg,
-                                int32_t returnValue)
-{
-    bool isMaster = msg.masterhost() == conf.endpointHost;
-
-    if (isMaster) {
-        setThreadResultLocally(msg.id(), returnValue);
-    } else {
-        SnapshotClient& c = getSnapshotClient(msg.masterhost());
-        c.pushThreadResult(msg.id(), returnValue);
-    }
-}
-
-void Scheduler::pushSnapshotDiffs(
+void Scheduler::setThreadResult(
   const faabric::Message& msg,
-  const std::string& snapshotKey,
+  int32_t returnValue,
+  const std::string& key,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
-    if (diffs.empty()) {
-        return;
-    }
-
     bool isMaster = msg.masterhost() == conf.endpointHost;
-
     if (isMaster) {
-        SPDLOG_ERROR("{} pushing snapshot diffs for {} on master",
-                     faabric::util::funcToString(msg, false),
-                     snapshotKey);
-        throw std::runtime_error("Cannot push snapshot diffs on master");
-    }
+        if (!diffs.empty()) {
+            // On master we queue the diffs locally directly, on a remote
+            // host we push them back to master
+            SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
+                         diffs.size(),
+                         faabric::util::funcToString(msg, false),
+                         key,
+                         msg.groupid());
 
-    SnapshotClient& c = getSnapshotClient(msg.masterhost());
-    c.pushSnapshotDiffs(snapshotKey, diffs);
+            auto snap = reg.getSnapshot(key);
+            snap->queueDiffs(diffs);
+        }
+
+        // Set thread result locally
+        setThreadResultLocally(msg.id(), returnValue);
+    } else {
+        // Push thread result and diffs together
+        SnapshotClient& c = getSnapshotClient(msg.masterhost());
+        c.pushThreadResult(msg.id(), returnValue, key, diffs);
+    }
 }
 
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)

@@ -426,7 +426,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
               faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
-        bool isMaster = msg.masterhost() == conf.endpointHost;
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
@@ -505,6 +504,9 @@ void Executor::threadPoolThread(int threadPoolIdx)
                      oldTaskCount - 1);
 
         // Handle last-in-batch dirty tracking
+        std::string mainThreadSnapKey =
+          faabric::util::getMainThreadSnapshotKey(msg);
+        std::vector<faabric::util::SnapshotDiff> diffs;
         if (isLastInBatch && doDirtyTracking) {
             // Stop non-thread-local tracking as we're the last in the batch
             std::span<uint8_t> memView = getMemoryView();
@@ -518,13 +520,10 @@ void Executor::threadPoolThread(int threadPoolIdx)
             }
 
             // Fill snapshot gaps with overwrite regions first
-            std::string mainThreadSnapKey =
-              faabric::util::getMainThreadSnapshotKey(msg);
             auto snap = reg.getSnapshot(mainThreadSnapKey);
             snap->fillGapsWithBytewiseRegions();
 
             // Compare snapshot with all dirty regions for this executor
-            std::vector<faabric::util::SnapshotDiff> diffs;
             {
                 // Do the diffing
                 faabric::util::FullLock lock(threadExecutionMutex);
@@ -532,26 +531,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 dirtyRegions.clear();
             }
 
-            if (diffs.empty()) {
-                SPDLOG_DEBUG("No diffs for {}", mainThreadSnapKey);
-            } else {
-                // On master we queue the diffs locally directly, on a remote
-                // host we push them back to master
-                if (isMaster) {
-                    SPDLOG_DEBUG(
-                      "Queueing {} diffs for {} to snapshot {} (group {})",
-                      diffs.size(),
-                      faabric::util::funcToString(msg, false),
-                      mainThreadSnapKey,
-                      msg.groupid());
-
-                    snap->queueDiffs(diffs);
-                } else if (isLastInBatch) {
-                    sch.pushSnapshotDiffs(msg, mainThreadSnapKey, diffs);
-                }
-            }
-
-            // If last in batch on this host, clear the merge regions
+            // If last in batch on this host, clear the merge regions (only
+            // needed for doing the diffing on the current host)
             SPDLOG_DEBUG("Clearing merge regions for {}", mainThreadSnapKey);
             snap->clearMergeRegions();
         }
@@ -612,7 +593,12 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // not be reused for a repeat invocation.
         if (isThreads) {
             // Set non-final thread result
-            sch.setThreadResult(msg, returnValue);
+            if (isLastInBatch) {
+                // Include diffs if this is the last one
+                sch.setThreadResult(msg, returnValue, mainThreadSnapKey, diffs);
+            } else {
+                sch.setThreadResult(msg, returnValue, "", {});
+            }
         } else {
             // Set normal function result
             sch.setFunctionResult(msg);
