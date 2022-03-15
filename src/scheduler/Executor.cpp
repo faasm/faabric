@@ -531,7 +531,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
                 dirtyRegions.clear();
             }
 
-            // If last in batch on this host, clear the merge regions
+            // If last in batch on this host, clear the merge regions (only
+            // needed for doing the diffing on the current host)
             SPDLOG_DEBUG("Clearing merge regions for {}", mainThreadSnapKey);
             snap->clearMergeRegions();
         }

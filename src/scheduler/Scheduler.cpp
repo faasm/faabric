@@ -1028,15 +1028,15 @@ void Scheduler::setThreadResult(
 {
     bool isMaster = msg.masterhost() == conf.endpointHost;
     if (isMaster) {
-        // On master we queue the diffs locally directly, on a remote
-        // host we push them back to master
-        SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
-                     diffs.size(),
-                     faabric::util::funcToString(msg, false),
-                     key,
-                     msg.groupid());
-
         if (!diffs.empty()) {
+            // On master we queue the diffs locally directly, on a remote
+            // host we push them back to master
+            SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
+                         diffs.size(),
+                         faabric::util::funcToString(msg, false),
+                         key,
+                         msg.groupid());
+
             auto snap = reg.getSnapshot(key);
             snap->queueDiffs(diffs);
         }
