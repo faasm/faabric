@@ -1026,9 +1026,6 @@ void Scheduler::setThreadResult(
   const std::string& key,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
-    std::string mainThreadSnapKey =
-      faabric::util::getMainThreadSnapshotKey(msg);
-
     bool isMaster = msg.masterhost() == conf.endpointHost;
     if (isMaster) {
         // On master we queue the diffs locally directly, on a remote
@@ -1036,11 +1033,11 @@ void Scheduler::setThreadResult(
         SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
                      diffs.size(),
                      faabric::util::funcToString(msg, false),
-                     mainThreadSnapKey,
+                     key,
                      msg.groupid());
 
         if (!diffs.empty()) {
-            auto snap = reg.getSnapshot(mainThreadSnapKey);
+            auto snap = reg.getSnapshot(key);
             snap->queueDiffs(diffs);
         }
 
@@ -1049,7 +1046,7 @@ void Scheduler::setThreadResult(
     } else {
         // Push thread result and diffs together
         SnapshotClient& c = getSnapshotClient(msg.masterhost());
-        c.pushThreadResult(msg.id(), returnValue, mainThreadSnapKey, diffs);
+        c.pushThreadResult(msg.id(), returnValue, key, diffs);
     }
 }
 

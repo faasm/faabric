@@ -858,12 +858,27 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     msg.set_masterhost("otherHost");
 
-    int returnValue = 123;
-    std::string snapshotKey;
-
     // Set the thread result
-    sch.setThreadResult(msg, returnValue, "", {});
+    int returnValue = 123;
+    std::string snapKey;
+    std::vector<faabric::util::SnapshotDiff> diffs;
 
+    SECTION("Without diffs") {}
+
+    SECTION("With diffs")
+    {
+        snapKey = "foobar123";
+        std::vector<uint8_t> snapData = { 1, 2, 3 };
+        // Push initial update
+        diffs = std::vector<faabric::util::SnapshotDiff>(1);
+        diffs.emplace_back(faabric::util::SnapshotDiff(
+          faabric::util::SnapshotDataType::Raw,
+          faabric::util::SnapshotMergeOperation::Bytewise,
+          123,
+          snapData));
+    }
+
+    sch.setThreadResult(msg, returnValue, snapKey, diffs);
     auto actualResults = faabric::snapshot::getThreadResults();
 
     REQUIRE(actualResults.size() == 1);
@@ -872,8 +887,8 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     auto actualRes = actualResults.at(0).second;
     REQUIRE(actualRes.msgId == msg.id());
     REQUIRE(actualRes.res == returnValue);
-    REQUIRE(actualRes.key.empty());
-    REQUIRE(actualRes.diffs.empty());
+    REQUIRE(actualRes.key == snapKey);
+    REQUIRE(actualRes.diffs.size() == diffs.size());
 }
 
 TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
