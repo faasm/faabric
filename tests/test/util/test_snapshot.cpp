@@ -1104,6 +1104,35 @@ void doFillGapsChecks(SnapshotMergeOperation op)
                                      SnapshotMergeOperation::Bytewise);
     }
 
+    SECTION("Adjacent regions")
+    {
+        snap->addMergeRegion(HOST_PAGE_SIZE,
+                             sizeof(int),
+                             SnapshotDataType::Int,
+                             SnapshotMergeOperation::Sum);
+
+        snap->addMergeRegion(HOST_PAGE_SIZE + sizeof(int),
+                             sizeof(int),
+                             SnapshotDataType::Int,
+                             SnapshotMergeOperation::Sum);
+
+        expectedRegions.emplace_back(
+          0, HOST_PAGE_SIZE, SnapshotDataType::Raw, op);
+
+        expectedRegions.emplace_back(HOST_PAGE_SIZE,
+                                     sizeof(int),
+                                     SnapshotDataType::Int,
+                                     SnapshotMergeOperation::Sum);
+
+        expectedRegions.emplace_back(HOST_PAGE_SIZE + sizeof(int),
+                                     sizeof(int),
+                                     SnapshotDataType::Int,
+                                     SnapshotMergeOperation::Sum);
+
+        expectedRegions.emplace_back(
+          HOST_PAGE_SIZE + 2 * sizeof(int), 0, SnapshotDataType::Raw, op);
+    }
+
     SECTION("Multiple regions")
     {
         // Deliberately add out of order

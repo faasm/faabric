@@ -252,16 +252,23 @@ void SnapshotData::fillGapsWithBytewiseRegions()
     // Sort merge regions to ensure loop below works
     std::sort(regionsCopy.begin(), regionsCopy.end());
 
+    // Iterate through the merge regions, adding regions that fill the gaps
+    // between them
     uint32_t lastRegionEnd = 0;
     for (const auto& r : regionsCopy) {
+        // This checks whether the very first byte is in a merge region
         if (r.offset == 0) {
-            // Zeroth byte is in a merge region
             lastRegionEnd = r.length;
             continue;
         }
 
-        uint32_t regionLen = r.offset - lastRegionEnd;
+        // This checks whether we have two adjacent regions
+        if (r.offset == lastRegionEnd) {
+            lastRegionEnd += r.length;
+            continue;
+        }
 
+        uint32_t regionLen = r.offset - lastRegionEnd;
         SPDLOG_TRACE("Filling gap with bytewise merge region {}-{}",
                      lastRegionEnd,
                      lastRegionEnd + regionLen);
