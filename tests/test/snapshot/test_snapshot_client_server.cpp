@@ -281,16 +281,11 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     SnapshotDiff diffA2(
       SnapshotDataType::Int, SnapshotMergeOperation::Sum, offsetA2, intDataA2);
 
-    size_t originalDiffsApplied = snap->getQueuedDiffsCount();
-
     // Push diffs with result for a fake thread
     int msgId = 345;
     sch.registerThread(msgId);
     diffs = { diffA1, diffA2 };
     cli.pushThreadResult(msgId, 0, snapKey, diffs);
-
-    // Ensure the right number of diffs is applied
-    REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 2);
 
     // Write and check diffs have been applied according to the merge operations
     snap->writeQueuedDiffs();

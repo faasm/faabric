@@ -31,11 +31,7 @@ void SnapshotServer::doAsyncRecv(int header,
 {
     switch (header) {
         case faabric::snapshot::SnapshotCalls::DeleteSnapshot: {
-            this->recvDeleteSnapshot(buffer, bufferSize);
-            break;
-        }
-        case faabric::snapshot::SnapshotCalls::ThreadResult: {
-            this->recvThreadResult(buffer, bufferSize);
+            recvDeleteSnapshot(buffer, bufferSize);
             break;
         }
         default: {
@@ -54,6 +50,9 @@ SnapshotServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
         }
         case faabric::snapshot::SnapshotCalls::PushSnapshotDiffs: {
             return recvPushSnapshotDiffs(buffer, bufferSize);
+        }
+        case faabric::snapshot::SnapshotCalls::ThreadResult: {
+            return recvThreadResult(buffer, bufferSize);
         }
         default: {
             throw std::runtime_error(
@@ -103,14 +102,17 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void SnapshotServer::recvThreadResult(const uint8_t* buffer, size_t bufferSize)
+std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
+  const uint8_t* buffer,
+  size_t bufferSize)
 {
     const ThreadResultRequest* r =
       flatbuffers::GetRoot<ThreadResultRequest>(buffer);
 
-    SPDLOG_DEBUG("Receiving thread result {} for message {}",
+    SPDLOG_DEBUG("Receiving thread result {} for message {} with {} diffs",
                  r->return_value(),
-                 r->message_id());
+                 r->message_id(),
+                 r->diffs()->size());
 
     if (r->diffs()->size() > 0) {
         auto snap = reg.getSnapshot(r->key()->str());
@@ -134,6 +136,8 @@ void SnapshotServer::recvThreadResult(const uint8_t* buffer, size_t bufferSize)
     // Set the result locally
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThreadResultLocally(r->message_id(), r->return_value());
+
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
 std::unique_ptr<google::protobuf::Message>

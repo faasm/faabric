@@ -229,7 +229,7 @@ void SnapshotClient::pushThreadResult(
           mb, messageId, returnValue, keyOffset, diffsOffset);
 
         mb.Finish(requestOffset);
-        SEND_FB_MSG_ASYNC(SnapshotCalls::ThreadResult, mb)
+        SEND_FB_MSG(SnapshotCalls::ThreadResult, mb);
     }
 }
 }

@@ -32,7 +32,9 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
 
     void recvDeleteSnapshot(const uint8_t* buffer, size_t bufferSize);
 
-    void recvThreadResult(const uint8_t* buffer, size_t bufferSize);
+    std::unique_ptr<google::protobuf::Message> recvThreadResult(
+      const uint8_t* buffer,
+      size_t bufferSize);
 
   private:
     faabric::transport::PointToPointBroker& broker;
