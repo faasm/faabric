@@ -242,7 +242,7 @@ class SnapshotData
 
     size_t getQueuedDiffsCount();
 
-    void queueDiffs(const std::vector<SnapshotDiff> &diffs);
+    void queueDiffs(const std::vector<SnapshotDiff>& diffs);
 
     int writeQueuedDiffs();
 
