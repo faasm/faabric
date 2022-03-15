@@ -216,7 +216,11 @@ void SnapshotClient::deleteSnapshot(const std::string& key)
     }
 }
 
-void SnapshotClient::pushThreadResult(uint32_t messageId, int returnValue)
+void SnapshotClient::pushThreadResult(
+  uint32_t messageId,
+  int returnValue,
+  const std::string& key,
+  std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
@@ -227,10 +231,30 @@ void SnapshotClient::pushThreadResult(uint32_t messageId, int returnValue)
         flatbuffers::FlatBufferBuilder mb;
         flatbuffers::Offset<ThreadResultRequest> requestOffset;
 
-        SPDLOG_DEBUG("Sending thread result for {} to {}", messageId, host);
+        SPDLOG_DEBUG("Sending thread result for {} with {} diffs to {}",
+                     messageId,
+                     diffs.size(),
+                     host);
 
-        // Create message without diffs
-        requestOffset = CreateThreadResultRequest(mb, messageId, returnValue);
+        auto keyOffset = mb.CreateString(key);
+
+        // Create objects for all the diffs
+        std::vector<flatbuffers::Offset<SnapshotDiffRequest>> diffsFbVector;
+        diffsFbVector.reserve(diffs.size());
+        for (const auto& d : diffs) {
+            std::span<const uint8_t> diffData = d.getData();
+            auto dataOffset =
+              mb.CreateVector<uint8_t>(diffData.data(), diffData.size());
+
+            auto diff = CreateSnapshotDiffRequest(
+              mb, d.getOffset(), d.getDataType(), d.getOperation(), dataOffset);
+            diffsFbVector.push_back(diff);
+        }
+
+        auto diffsOffset = mb.CreateVector(diffsFbVector);
+
+        requestOffset = CreateThreadResultRequest(
+          mb, messageId, returnValue, keyOffset, diffsOffset);
 
         mb.Finish(requestOffset);
         SEND_FB_MSG_ASYNC(SnapshotCalls::ThreadResult, mb)

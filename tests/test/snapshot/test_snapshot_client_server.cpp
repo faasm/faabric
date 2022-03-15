@@ -440,8 +440,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     sch.registerThread(threadIdA);
     sch.registerThread(threadIdB);
 
-    cli.pushThreadResult(threadIdA, returnValueA);
-    cli.pushThreadResult(threadIdB, returnValueB);
+    cli.pushThreadResult(threadIdA, returnValueA, "", {});
+    cli.pushThreadResult(threadIdB, returnValueB, "", {});
 
     // Set up two threads to await the results
     std::thread tA([threadIdA, returnValueA] {

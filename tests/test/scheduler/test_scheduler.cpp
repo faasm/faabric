@@ -862,7 +862,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     std::string snapshotKey;
 
     // Set the thread result
-    sch.setThreadResult(msg, returnValue);
+    sch.setThreadResult(msg, returnValue, "", {});
 
     auto actualResults = faabric::snapshot::getThreadResults();
 

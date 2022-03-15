@@ -168,6 +168,11 @@ class Scheduler
 
     void setThreadResult(const faabric::Message& msg, int32_t returnValue);
 
+    void setThreadResultWithDiffs(
+      const faabric::Message& msg,
+      int32_t returnValue,
+      const std::vector<faabric::util::SnapshotDiff>& diffs);
+
     void pushSnapshotDiffs(
       const faabric::Message& msg,
       const std::string& snapshotKey,
@@ -260,6 +265,8 @@ class Scheduler
       executors;
 
     // ---- Threads ----
+    faabric::snapshot::SnapshotRegistry &reg;
+
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
 
     std::unordered_map<uint32_t,

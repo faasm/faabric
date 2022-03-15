@@ -319,7 +319,7 @@ size_t SnapshotData::getQueuedDiffsCount()
     return queuedDiffs.size();
 }
 
-void SnapshotData::queueDiffs(const std::span<SnapshotDiff> diffs)
+void SnapshotData::queueDiffs(const std::vector<SnapshotDiff> &diffs)
 {
     faabric::util::FullLock lock(snapMx);
     for (const auto& diff : diffs) {
