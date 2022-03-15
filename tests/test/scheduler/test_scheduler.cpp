@@ -869,9 +869,11 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(actualResults.size() == 1);
     REQUIRE(actualResults.at(0).first == "otherHost");
 
-    auto actualPair = actualResults.at(0).second;
-    REQUIRE(actualPair.first == msg.id());
-    REQUIRE(actualPair.second == returnValue);
+    auto actualRes = actualResults.at(0).second;
+    REQUIRE(actualRes.msgId == msg.id());
+    REQUIRE(actualRes.res == returnValue);
+    REQUIRE(actualRes.key.empty());
+    REQUIRE(actualRes.diffs.empty());
 }
 
 TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")

@@ -24,8 +24,7 @@ static std::vector<
 
 static std::vector<std::pair<std::string, std::string>> snapshotDeletes;
 
-static std::vector<std::pair<std::string, std::pair<uint32_t, int>>>
-  threadResults;
+static std::vector<std::pair<std::string, MockThreadResult>> threadResults;
 
 std::vector<
   std::pair<std::string, std::shared_ptr<faabric::util::SnapshotData>>>
@@ -48,7 +47,7 @@ std::vector<std::pair<std::string, std::string>> getSnapshotDeletes()
     return snapshotDeletes;
 }
 
-std::vector<std::pair<std::string, std::pair<uint32_t, int>>> getThreadResults()
+std::vector<std::pair<std::string, MockThreadResult>> getThreadResults()
 {
     faabric::util::UniqueLock lock(mockMutex);
     return threadResults;
@@ -196,8 +195,10 @@ void SnapshotClient::pushThreadResult(
 {
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
-        threadResults.emplace_back(
-          std::make_pair(host, std::make_pair(messageId, returnValue)));
+        MockThreadResult mockResult{
+            .msgId = messageId, .res = returnValue, .key = key, .diffs = diffs
+        };
+        threadResults.emplace_back(std::make_pair(host, mockResult));
 
     } else {
         flatbuffers::FlatBufferBuilder mb;

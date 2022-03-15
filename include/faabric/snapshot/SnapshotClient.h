@@ -12,6 +12,14 @@ namespace faabric::snapshot {
 // Mocking
 // -----------------------------------
 
+struct MockThreadResult
+{
+    uint32_t msgId = 0;
+    int res = 0;
+    std::string key;
+    std::vector<faabric::util::SnapshotDiff> diffs;
+};
+
 std::vector<
   std::pair<std::string, std::shared_ptr<faabric::util::SnapshotData>>>
 getSnapshotPushes();
@@ -21,8 +29,7 @@ getSnapshotDiffPushes();
 
 std::vector<std::pair<std::string, std::string>> getSnapshotDeletes();
 
-std::vector<std::pair<std::string, std::pair<uint32_t, int>>>
-getThreadResults();
+std::vector<std::pair<std::string, MockThreadResult>> getThreadResults();
 
 void clearMockSnapshotRequests();
 
