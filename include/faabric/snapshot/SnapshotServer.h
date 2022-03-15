@@ -26,7 +26,7 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
       const uint8_t* buffer,
       size_t bufferSize);
 
-    std::unique_ptr<google::protobuf::Message> recvPushSnapshotDiffs(
+    std::unique_ptr<google::protobuf::Message> recvPushSnapshotUpdate(
       const uint8_t* buffer,
       size_t bufferSize);
 

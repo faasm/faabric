@@ -164,7 +164,7 @@ void SnapshotClient::pushSnapshotUpdate(
 
         mb.Finish(requestOffset);
 
-        SEND_FB_MSG(SnapshotCalls::PushSnapshotDiffs, mb);
+        SEND_FB_MSG(SnapshotCalls::PushSnapshotUpdate, mb);
     }
 }
 

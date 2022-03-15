@@ -48,8 +48,8 @@ SnapshotServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
         case faabric::snapshot::SnapshotCalls::PushSnapshot: {
             return recvPushSnapshot(buffer, bufferSize);
         }
-        case faabric::snapshot::SnapshotCalls::PushSnapshotDiffs: {
-            return recvPushSnapshotDiffs(buffer, bufferSize);
+        case faabric::snapshot::SnapshotCalls::PushSnapshotUpdate: {
+            return recvPushSnapshotUpdate(buffer, bufferSize);
         }
         case faabric::snapshot::SnapshotCalls::ThreadResult: {
             return recvThreadResult(buffer, bufferSize);
@@ -141,7 +141,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
 }
 
 std::unique_ptr<google::protobuf::Message>
-SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
+SnapshotServer::recvPushSnapshotUpdate(const uint8_t* buffer, size_t bufferSize)
 {
     const SnapshotUpdateRequest* r =
       flatbuffers::GetRoot<SnapshotUpdateRequest>(buffer);

@@ -60,10 +60,5 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
 
   private:
     void sendHeader(faabric::snapshot::SnapshotCalls call);
-
-    void doPushSnapshotDiffs(
-      const std::string& snapshotKey,
-      const std::shared_ptr<faabric::util::SnapshotData>& data,
-      const std::vector<faabric::util::SnapshotDiff>& diffs);
 };
 }
