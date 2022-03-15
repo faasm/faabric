@@ -1023,6 +1023,7 @@ void Scheduler::registerThread(uint32_t msgId)
 void Scheduler::setThreadResult(
   const faabric::Message& msg,
   int32_t returnValue,
+  const std::string& key,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     bool isMaster = msg.masterhost() == conf.endpointHost;

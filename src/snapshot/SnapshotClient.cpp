@@ -220,7 +220,7 @@ void SnapshotClient::pushThreadResult(
   uint32_t messageId,
   int returnValue,
   const std::string& key,
-  std::vector<faabric::util::SnapshotDiff>& diffs)
+  const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);

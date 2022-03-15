@@ -426,7 +426,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
               faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
-        bool isMaster = msg.masterhost() == conf.endpointHost;
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,

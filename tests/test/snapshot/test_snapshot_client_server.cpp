@@ -443,17 +443,18 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     cli.pushThreadResult(threadIdA, returnValueA, "", {});
     cli.pushThreadResult(threadIdB, returnValueB, "", {});
 
+    int rA = 0;
+    int rB = 0;
+
     // Set up two threads to await the results
-    std::thread tA([threadIdA, returnValueA] {
+    std::thread tA([&rA, threadIdA] {
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        int32_t r = sch.awaitThreadResult(threadIdA);
-        assert(r == returnValueA);
+        rA = sch.awaitThreadResult(threadIdA);
     });
 
-    std::thread tB([threadIdB, returnValueB] {
+    std::thread tB([&rB, threadIdB] {
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        int32_t r = sch.awaitThreadResult(threadIdB);
-        assert(r == returnValueB);
+        rB = sch.awaitThreadResult(threadIdB);
     });
 
     if (tA.joinable()) {
@@ -463,5 +464,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     if (tB.joinable()) {
         tB.join();
     }
+
+    REQUIRE(rA == returnValueA);
+    REQUIRE(rB == returnValueB);
 }
 }

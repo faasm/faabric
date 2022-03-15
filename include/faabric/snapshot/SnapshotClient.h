@@ -53,7 +53,7 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
       uint32_t messageId,
       int returnValue,
       const std::string &key,
-      std::vector<faabric::util::SnapshotDiff>& diffs);
+      const std::vector<faabric::util::SnapshotDiff>& diffs);
 
   private:
     void sendHeader(faabric::snapshot::SnapshotCalls call);
