@@ -36,5 +36,6 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
 
   private:
     faabric::transport::PointToPointBroker& broker;
+    faabric::snapshot::SnapshotRegistry& reg;
 };
 }

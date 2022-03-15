@@ -22,6 +22,7 @@ SnapshotServer::SnapshotServer()
       SNAPSHOT_INPROC_LABEL,
       getSystemConfig().snapshotServerThreads)
   , broker(faabric::transport::getPointToPointBroker())
+  , reg(faabric::snapshot::getSnapshotRegistry())
 {}
 
 void SnapshotServer::doAsyncRecv(int header,
@@ -78,9 +79,6 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
                  r->contents()->size(),
                  r->max_size());
 
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
-
     // Set up the snapshot
     size_t snapSize = r->contents()->size();
     std::string snapKey = r->key()->str();
@@ -114,6 +112,26 @@ void SnapshotServer::recvThreadResult(const uint8_t* buffer, size_t bufferSize)
                  r->return_value(),
                  r->message_id());
 
+    if (r->diffs()->size() > 0) {
+        auto snap = reg.getSnapshot(r->key()->str());
+
+        // Convert diffs to snapshot diff objects
+        std::vector<SnapshotDiff> diffs;
+        diffs.reserve(r->diffs()->size());
+        for (const auto* diff : *r->diffs()) {
+            diffs.emplace_back(
+              static_cast<SnapshotDataType>(diff->data_type()),
+              static_cast<SnapshotMergeOperation>(diff->merge_op()),
+              diff->offset(),
+              std::span<const uint8_t>(diff->data()->data(),
+                                       diff->data()->size()));
+        }
+
+        // Queue on the snapshot
+        snap->queueDiffs(diffs);
+    }
+
+    // Set the result locally
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThreadResultLocally(r->message_id(), r->return_value());
 }
@@ -128,8 +146,6 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
       "Queueing {} diffs for snapshot {}", r->diffs()->size(), r->key()->str());
 
     // Get the snapshot
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
     auto snap = reg.getSnapshot(r->key()->str());
 
     // Convert diffs to snapshot diff objects
@@ -178,9 +194,6 @@ void SnapshotServer::recvDeleteSnapshot(const uint8_t* buffer,
     const SnapshotDeleteRequest* r =
       flatbuffers::GetRoot<SnapshotDeleteRequest>(buffer);
     SPDLOG_INFO("Deleting shapshot {}", r->key()->c_str());
-
-    faabric::snapshot::SnapshotRegistry& reg =
-      faabric::snapshot::getSnapshotRegistry();
 
     // Delete the registry entry
     reg.deleteSnapshot(r->key()->str());
