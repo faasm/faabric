@@ -1053,28 +1053,6 @@ void Scheduler::setThreadResult(
     }
 }
 
-void Scheduler::pushSnapshotDiffs(
-  const faabric::Message& msg,
-  const std::string& snapshotKey,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
-{
-    if (diffs.empty()) {
-        return;
-    }
-
-    bool isMaster = msg.masterhost() == conf.endpointHost;
-
-    if (isMaster) {
-        SPDLOG_ERROR("{} pushing snapshot diffs for {} on master",
-                     faabric::util::funcToString(msg, false),
-                     snapshotKey);
-        throw std::runtime_error("Cannot push snapshot diffs on master");
-    }
-
-    SnapshotClient& c = getSnapshotClient(msg.masterhost());
-    c.pushSnapshotDiffs(snapshotKey, diffs);
-}
-
 void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 {
     faabric::util::FullLock lock(mx);

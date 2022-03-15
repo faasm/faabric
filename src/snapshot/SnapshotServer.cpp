@@ -139,8 +139,8 @@ void SnapshotServer::recvThreadResult(const uint8_t* buffer, size_t bufferSize)
 std::unique_ptr<google::protobuf::Message>
 SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
 {
-    const SnapshotDiffPushRequest* r =
-      flatbuffers::GetRoot<SnapshotDiffPushRequest>(buffer);
+    const SnapshotUpdateRequest* r =
+      flatbuffers::GetRoot<SnapshotUpdateRequest>(buffer);
 
     SPDLOG_DEBUG(
       "Queueing {} diffs for snapshot {}", r->diffs()->size(), r->key()->str());
@@ -162,26 +162,24 @@ SnapshotServer::recvPushSnapshotDiffs(const uint8_t* buffer, size_t bufferSize)
     // Queue on the snapshot
     snap->queueDiffs(diffs);
 
-    // Write diffs and set merge regions if necessary
-    if (r->force()) {
-        SPDLOG_DEBUG("Forcing write queued diffs to snapshot {} ({} regions)",
-                     r->key()->str(),
-                     r->merge_regions()->size());
+    // Write diffs and set merge regions
+    SPDLOG_DEBUG("Writing queued diffs to snapshot {} ({} regions)",
+                 r->key()->str(),
+                 r->merge_regions()->size());
 
-        // Write queued diffs
-        snap->writeQueuedDiffs();
+    // Write queued diffs
+    snap->writeQueuedDiffs();
 
-        // Clear merge regions
-        snap->clearMergeRegions();
+    // Clear merge regions
+    snap->clearMergeRegions();
 
-        // Add merge regions from request
-        for (const auto* mr : *r->merge_regions()) {
-            snap->addMergeRegion(
-              mr->offset(),
-              mr->length(),
-              static_cast<SnapshotDataType>(mr->data_type()),
-              static_cast<SnapshotMergeOperation>(mr->merge_op()));
-        }
+    // Add merge regions from request
+    for (const auto* mr : *r->merge_regions()) {
+        snap->addMergeRegion(
+          mr->offset(),
+          mr->length(),
+          static_cast<SnapshotDataType>(mr->data_type()),
+          static_cast<SnapshotMergeOperation>(mr->merge_op()));
     }
 
     // Send response

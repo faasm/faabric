@@ -127,26 +127,6 @@ void SnapshotClient::pushSnapshotUpdate(
                  diffs.size(),
                  data->getMergeRegions().size());
 
-    doPushSnapshotDiffs(snapshotKey, data, diffs);
-}
-
-void SnapshotClient::pushSnapshotDiffs(
-  std::string snapshotKey,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
-{
-    SPDLOG_DEBUG("Pushing {} diffs for snapshot {} to {}",
-                 diffs.size(),
-                 snapshotKey,
-                 host);
-
-    doPushSnapshotDiffs(snapshotKey, nullptr, diffs);
-}
-
-void SnapshotClient::doPushSnapshotDiffs(
-  const std::string& snapshotKey,
-  const std::shared_ptr<faabric::util::SnapshotData>& data,
-  const std::vector<faabric::util::SnapshotDiff>& diffs)
-{
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
         snapshotDiffPushes.emplace_back(host, diffs);
@@ -166,30 +146,22 @@ void SnapshotClient::doPushSnapshotDiffs(
             diffsFbVector.push_back(diff);
         }
 
-        // If we have snapshot data, we need to include the merge regions and
-        // force too.
+        // Add merge regions
         std::vector<flatbuffers::Offset<SnapshotMergeRegionRequest>>
           mrsFbVector;
-        bool force = false;
-        if (data != nullptr) {
-            mrsFbVector.reserve(data->getMergeRegions().size());
-            for (const auto& m : data->getMergeRegions()) {
-                auto mr = CreateSnapshotMergeRegionRequest(
-                  mb, m.offset, m.length, m.dataType, m.operation);
-                mrsFbVector.push_back(mr);
-            }
-
-            force = true;
-        } else {
-            force = false;
+        mrsFbVector.reserve(data->getMergeRegions().size());
+        for (const auto& m : data->getMergeRegions()) {
+            auto mr = CreateSnapshotMergeRegionRequest(
+              mb, m.offset, m.length, m.dataType, m.operation);
+            mrsFbVector.push_back(mr);
         }
 
         auto keyOffset = mb.CreateString(snapshotKey);
         auto diffsOffset = mb.CreateVector(diffsFbVector);
         auto mrsOffset = mb.CreateVector(mrsFbVector);
 
-        auto requestOffset = CreateSnapshotDiffPushRequest(
-          mb, keyOffset, force, mrsOffset, diffsOffset);
+        auto requestOffset =
+          CreateSnapshotUpdateRequest(mb, keyOffset, mrsOffset, diffsOffset);
 
         mb.Finish(requestOffset);
 

@@ -23,9 +23,8 @@ table SnapshotDiffRequest {
   data:[ubyte];
 }
 
-table SnapshotDiffPushRequest {
+table SnapshotUpdateRequest {
   key:string;
-  force:bool;
   merge_regions:[SnapshotMergeRegionRequest];
   diffs:[SnapshotDiffRequest];
 }
