@@ -47,21 +47,6 @@ void RedisStateKeyValue::clearAll(bool global)
     }
 }
 
-// TODO - the remote locking here is quite primitive since we ignore the fact
-// threads can run on the same machine. Redis is also aware of scheduling and so
-// we could optimise this.
-void RedisStateKeyValue::lockGlobal()
-{
-    faabric::util::FullLock lock(valueMutex);
-    lastRemoteLockId = waitOnRedisRemoteLock(joinedKey);
-}
-
-void RedisStateKeyValue::unlockGlobal()
-{
-    faabric::util::FullLock lock(valueMutex);
-    redis::Redis::getState().releaseLock(joinedKey, lastRemoteLockId);
-}
-
 void RedisStateKeyValue::pullFromRemote()
 {
     PROF_START(statePull)

@@ -24,10 +24,6 @@ class RedisStateKeyValue final : public StateKeyValue
 
     static void clearAll(bool global);
 
-    void lockGlobal() override;
-
-    void unlockGlobal() override;
-
   private:
     const std::string joinedKey;
 

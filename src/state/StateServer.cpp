@@ -199,34 +199,4 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvClearAppended(
     auto response = std::make_unique<faabric::StateResponse>();
     return response;
 }
-
-std::unique_ptr<google::protobuf::Message> StateServer::recvLock(
-  const uint8_t* buffer,
-  size_t bufferSize)
-{
-    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
-
-    // Perform operation
-    SPDLOG_TRACE("Received lock {}/{}", msg.user(), msg.key());
-    KV_FROM_REQUEST(msg)
-    kv->lockGlobal();
-
-    auto response = std::make_unique<faabric::StateResponse>();
-    return response;
-}
-
-std::unique_ptr<google::protobuf::Message> StateServer::recvUnlock(
-  const uint8_t* buffer,
-  size_t bufferSize)
-{
-    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
-
-    // Perform operation
-    SPDLOG_TRACE("Received unlock {}/{}", msg.user(), msg.key());
-    KV_FROM_REQUEST(msg)
-    kv->unlockGlobal();
-
-    auto response = std::make_unique<faabric::StateResponse>();
-    return response;
-}
 }
