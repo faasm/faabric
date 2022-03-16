@@ -53,6 +53,10 @@ class InMemoryStateKeyValue final : public StateKeyValue
 
     AppendedInMemoryState& getAppendedValue(uint idx);
 
+    void lockGlobal() override;
+
+    void unlockGlobal() override;
+
   private:
     const std::string thisIP;
     const std::string masterIP;
@@ -63,10 +67,6 @@ class InMemoryStateKeyValue final : public StateKeyValue
     std::shared_mutex globalLock;
 
     std::vector<AppendedInMemoryState> appendedData;
-
-    void lockGlobal() override;
-
-    void unlockGlobal() override;
 
     void pullFromRemote() override;
 

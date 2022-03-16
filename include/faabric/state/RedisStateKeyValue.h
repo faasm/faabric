@@ -24,14 +24,14 @@ class RedisStateKeyValue final : public StateKeyValue
 
     static void clearAll(bool global);
 
+    void lockGlobal() override;
+
+    void unlockGlobal() override;
+
   private:
     const std::string joinedKey;
 
     uint32_t lastRemoteLockId = 0;
-
-    void lockGlobal() override;
-
-    void unlockGlobal() override;
 
     void pullFromRemote() override;
 

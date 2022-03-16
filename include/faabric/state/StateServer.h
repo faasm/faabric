@@ -13,6 +13,8 @@ class StateServer final : public faabric::transport::MessageEndpointServer
   private:
     State& state;
 
+    void logOperation(const std::string &op);
+
     void doAsyncRecv(int header,
                      const uint8_t* buffer,
                      size_t bufferSize) override;

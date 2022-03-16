@@ -40,5 +40,7 @@ class StateClient : public faabric::transport::MessageEndpointClient
     void sendStateRequest(faabric::state::StateCalls header,
                           const uint8_t* data,
                           int length);
+
+    void logRequest(const std::string &op);
 };
 }
