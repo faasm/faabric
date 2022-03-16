@@ -386,11 +386,13 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
               registeredHosts[funcStr];
 
             for (const auto& h : thisRegisteredHosts) {
-                // Work out resources on this host
+                // Work out resources on the remote host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
 
-                // Floor this at zero and claim as many as we can
+                // We need to floor at zero here in case the remote host is
+                // overloaded, in which case its used slots will be greater than
+                // its available slots.
                 available = std::max<int>(0, available);
                 int nOnThisHost = std::min<int>(available, remainder);
 
@@ -430,11 +432,13 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                     continue;
                 }
 
-                // Work out resources on this host
+                // Work out resources on the remote host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
 
-                // Floor at zero
+                // We need to floor at zero here in case the remote host is
+                // overloaded, in which case its used slots will be greater than
+                // its available slots.
                 available = std::max<int>(0, available);
                 int nOnThisHost = std::min(available, remainder);
 
