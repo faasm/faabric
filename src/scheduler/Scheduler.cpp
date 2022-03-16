@@ -486,7 +486,12 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
     }
 
     // Sanity check
-    assert(hosts.size() == nMessages);
+    if (hosts.size() != nMessages) {
+        SPDLOG_ERROR(
+          "Serious scheduling error: {} != {}", hosts.size(), nMessages);
+
+        throw std::runtime_error("Not enough scheduled hosts for messages");
+    }
 
     // Set up decision
     SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
