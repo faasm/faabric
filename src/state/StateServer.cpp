@@ -50,12 +50,6 @@ StateServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
         case faabric::state::StateCalls::PullAppended: {
             return recvPullAppended(buffer, bufferSize);
         }
-        case faabric::state::StateCalls::Lock: {
-            return recvLock(buffer, bufferSize);
-        }
-        case faabric::state::StateCalls::Unlock: {
-            return recvUnlock(buffer, bufferSize);
-        }
         case faabric::state::StateCalls::Delete: {
             return recvDelete(buffer, bufferSize);
         }

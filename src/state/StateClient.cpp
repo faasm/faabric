@@ -138,18 +138,4 @@ void StateClient::deleteState()
 
     sendStateRequest(faabric::state::StateCalls::Delete, nullptr, 0);
 }
-
-void StateClient::lock()
-{
-    logRequest("lock");
-
-    sendStateRequest(faabric::state::StateCalls::Lock, nullptr, 0);
-}
-
-void StateClient::unlock()
-{
-    logRequest("unlock");
-
-    sendStateRequest(faabric::state::StateCalls::Unlock, nullptr, 0);
-}
 }

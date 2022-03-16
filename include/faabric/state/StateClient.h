@@ -41,6 +41,6 @@ class StateClient : public faabric::transport::MessageEndpointClient
                           const uint8_t* data,
                           int length);
 
-    void logRequest(const std::string &op);
+    void logRequest(const std::string& op);
 };
 }
