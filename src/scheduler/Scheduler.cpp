@@ -341,6 +341,8 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
     }
 
     std::vector<std::string> hosts;
+    hosts.reserve(nMessages);
+
     if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
         SPDLOG_TRACE("Scheduling {}/{} of {} locally (force local)",
@@ -387,7 +389,10 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 // Work out resources on this host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
-                int nOnThisHost = std::min(available, remainder);
+
+                // Floor this at zero and claim as many as we can
+                available = std::max<int>(0, available);
+                int nOnThisHost = std::min<int>(available, remainder);
 
                 // Under the NEVER_ALONE topology hint, we never choose a host
                 // unless we can schedule at least two requests in it.
@@ -428,6 +433,9 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 // Work out resources on this host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
+
+                // Floor at zero
+                available = std::max<int>(0, available);
                 int nOnThisHost = std::min(available, remainder);
 
                 if (topologyHint ==
