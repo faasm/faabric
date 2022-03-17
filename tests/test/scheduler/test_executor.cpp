@@ -881,7 +881,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     int nThreads = 5;
 
     // Set host resources to force execution on other host
-    setHostResources({ thisHost, otherHost }, { 2, 10 });
+    setHostResources({ thisHost, otherHost }, { 2, 10 }, { 0, 0 });
 
     // Set up message for a batch of threads
     std::shared_ptr<BatchExecuteRequest> req =
@@ -941,7 +941,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(expectedDiffs.size() == 2);
 
     // Reset host resources
-    setHostResources({ thisHost, otherHost }, { 2, 10 });
+    setHostResources({ thisHost, otherHost }, { 2, 10 }, { 0, 0 });
 
     // Set up another function, make sure they have the same app ID
     std::shared_ptr<BatchExecuteRequest> reqB =

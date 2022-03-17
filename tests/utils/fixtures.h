@@ -112,16 +112,23 @@ class SchedulerTestFixture : public CachedDecisionTestFixture
     // Helper method to set the available hosts and slots per host prior to
     // making a scheduling decision
     void setHostResources(std::vector<std::string> hosts,
-                          std::vector<int> slotsPerHost)
+                          std::vector<int> slotsPerHost,
+                          std::vector<int> usedPerHost)
     {
-        assert(hosts.size() == slotsPerHost.size());
+        if (hosts.size() != slotsPerHost.size() ||
+            hosts.size() != usedPerHost.size()) {
+            SPDLOG_ERROR("Must provide one value for slots and used per host");
+            throw std::runtime_error(
+              "Not providing one value per slot and used per host");
+        }
+
         sch.clearRecordedMessages();
         faabric::scheduler::clearMockRequests();
 
         for (int i = 0; i < hosts.size(); i++) {
             faabric::HostResources resources;
             resources.set_slots(slotsPerHost.at(i));
-            resources.set_usedslots(0);
+            resources.set_usedslots(usedPerHost.at(i));
 
             sch.addHostToGlobalSet(hosts.at(i));
 
