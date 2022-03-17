@@ -5,6 +5,7 @@
 #include <faabric/util/macros.h>
 
 namespace faabric::state {
+
 StateClient::StateClient(const std::string& userIn,
                          const std::string& keyIn,
                          const std::string& hostIn)
@@ -14,6 +15,11 @@ StateClient::StateClient(const std::string& userIn,
   , user(userIn)
   , key(keyIn)
 {}
+
+void StateClient::logRequest(const std::string& op)
+{
+    SPDLOG_TRACE("Requesting {} on {}/{} at {}", op, user, key, host);
+}
 
 void StateClient::sendStateRequest(faabric::state::StateCalls header,
                                    const uint8_t* data,
@@ -33,6 +39,8 @@ void StateClient::sendStateRequest(faabric::state::StateCalls header,
 
 void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
 {
+    logRequest("push-chunks");
+
     for (const auto& chunk : chunks) {
         faabric::StatePart stateChunk;
         stateChunk.set_user(user);
@@ -48,6 +56,8 @@ void StateClient::pushChunks(const std::vector<StateChunk>& chunks)
 void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
                              uint8_t* bufferStart)
 {
+    logRequest("pull-chunks");
+
     for (const auto& chunk : chunks) {
         // Prepare request
         faabric::StateChunkRequest request;
@@ -69,11 +79,14 @@ void StateClient::pullChunks(const std::vector<StateChunk>& chunks,
 
 void StateClient::append(const uint8_t* data, size_t length)
 {
+    logRequest("append");
     sendStateRequest(faabric::state::StateCalls::Append, data, length);
 }
 
 void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 {
+    logRequest("pull-appended");
+
     // Prepare request
     faabric::StateAppendedRequest request;
     request.set_user(user);
@@ -101,11 +114,14 @@ void StateClient::pullAppended(uint8_t* buffer, size_t length, long nValues)
 
 void StateClient::clearAppended()
 {
+    logRequest("clear-appended");
     sendStateRequest(faabric::state::StateCalls::ClearAppended, nullptr, 0);
 }
 
 size_t StateClient::stateSize()
 {
+    logRequest("state-size");
+
     faabric::StateRequest request;
     request.set_user(user);
     request.set_key(key);
@@ -118,16 +134,8 @@ size_t StateClient::stateSize()
 
 void StateClient::deleteState()
 {
+    logRequest("delete");
+
     sendStateRequest(faabric::state::StateCalls::Delete, nullptr, 0);
-}
-
-void StateClient::lock()
-{
-    sendStateRequest(faabric::state::StateCalls::Lock, nullptr, 0);
-}
-
-void StateClient::unlock()
-{
-    sendStateRequest(faabric::state::StateCalls::Unlock, nullptr, 0);
 }
 }
