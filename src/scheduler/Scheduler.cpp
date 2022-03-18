@@ -341,6 +341,8 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
     }
 
     std::vector<std::string> hosts;
+    hosts.reserve(nMessages);
+
     if (topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL) {
         // We're forced to execute locally here so we do all the messages
         SPDLOG_TRACE("Scheduling {}/{} of {} locally (force local)",
@@ -384,10 +386,15 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
               registeredHosts[funcStr];
 
             for (const auto& h : thisRegisteredHosts) {
-                // Work out resources on this host
+                // Work out resources on the remote host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
-                int nOnThisHost = std::min(available, remainder);
+
+                // We need to floor at zero here in case the remote host is
+                // overloaded, in which case its used slots will be greater than
+                // its available slots.
+                available = std::max<int>(0, available);
+                int nOnThisHost = std::min<int>(available, remainder);
 
                 // Under the NEVER_ALONE topology hint, we never choose a host
                 // unless we can schedule at least two requests in it.
@@ -425,9 +432,14 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                     continue;
                 }
 
-                // Work out resources on this host
+                // Work out resources on the remote host
                 faabric::HostResources r = getHostResources(h);
                 int available = r.slots() - r.usedslots();
+
+                // We need to floor at zero here in case the remote host is
+                // overloaded, in which case its used slots will be greater than
+                // its available slots.
+                available = std::max<int>(0, available);
                 int nOnThisHost = std::min(available, remainder);
 
                 if (topologyHint ==
@@ -486,7 +498,12 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
     }
 
     // Sanity check
-    assert(hosts.size() == nMessages);
+    if (hosts.size() != nMessages) {
+        SPDLOG_ERROR(
+          "Serious scheduling error: {} != {}", hosts.size(), nMessages);
+
+        throw std::runtime_error("Not enough scheduled hosts for messages");
+    }
 
     // Set up decision
     SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
