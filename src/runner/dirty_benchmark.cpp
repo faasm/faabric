@@ -80,6 +80,8 @@ void doBenchInner(BenchConf conf)
         exit(1);
     }
 
+    std::vector<uint8_t> dummyData(1, MEM_SIZE);
+
     MemoryRegion mappingSourceMemPtr = allocateSharedMemory(MEM_SIZE);
     MemoryRegion sharedMemPtr = allocateSharedMemory(MEM_SIZE);
     MemoryRegion privateMemPtr = allocatePrivateMemory(MEM_SIZE);
@@ -96,6 +98,8 @@ void doBenchInner(BenchConf conf)
 
     if (conf.mapMemory) {
         int fd = createFd(MEM_SIZE, "foobar");
+        writeToFd(fd, 0, dummyData);
+
         mapMemoryPrivate(memView, fd);
     }
 
@@ -153,12 +157,10 @@ void doBenchInner(BenchConf conf)
                   // Perform the relevant operation
                   uint8_t* ptr = memView.data() + (i * HOST_PAGE_SIZE) + 5;
                   if (isWrite) {
-                      SPDLOG_TRACE("Write to page {}", i);
                       res.nWrites++;
 
                       *ptr = (uint8_t)5;
                   } else {
-                      SPDLOG_TRACE("Read on page {}", i);
                       res.nReads++;
 
                       uint8_t loopRes = *ptr;

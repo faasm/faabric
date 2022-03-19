@@ -12,12 +12,15 @@ if [[ -z "$FAABRIC_DOCKER" ]]; then
         THIS_DIR="$( cd "$( dirname "${ZSH_ARGZERO}" )" >/dev/null 2>&1 && pwd )"
     fi
     PROJ_ROOT="${THIS_DIR}/.."
+    export FAABRIC_BUILD_DIR="${PROJ_ROOT}/build"
 
     # Normal terminal
     MODE="terminal"
+
 else
     # Running inside the container, we know the project root
     PROJ_ROOT="/code/faabric"
+    export FAABRIC_BUILD_DIR="/build/faabric"
 
     # Use containerised redis
     alias redis-cli="redis-cli -h redis"
@@ -73,7 +76,7 @@ export FAABRIC_VERSION=$(cat ${VERSION_FILE})
 
 export PS1="(faabric) $PS1"
 
-export PATH=/build/faabric/static/bin:${PATH}
+export PATH=${FAABRIC_BUILD_DIR}/static/bin:${PATH}
 
 # -----------------------------
 # Splash
@@ -84,6 +87,7 @@ echo "----------------------------------"
 echo "Faabric CLI"
 echo "Version: ${FAABRIC_VERSION}"
 echo "Project root: $(pwd)"
+echo "Build dir: ${FAABRIC_BUILD_DIR}"
 echo "Mode: ${MODE}"
 echo "----------------------------------"
 echo ""
