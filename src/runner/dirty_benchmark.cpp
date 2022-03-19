@@ -52,7 +52,8 @@ std::string benchToString(BenchConf c)
 {
     std::string res = c.mode;
 
-    res += fmt::format(" READ {:.1f}% WRITE {:.1f}%", 100*c.readPct, 100*c.writePct);
+    res += fmt::format(
+      " READ {:.1f}% WRITE {:.1f}%", 100 * c.readPct, 100 * c.writePct);
 
     res += fmt::format(" {} THREADS", c.nThreads);
 
