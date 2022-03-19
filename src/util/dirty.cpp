@@ -181,7 +181,8 @@ void* pageAlignAddress(void* faultAddr)
 static thread_local DirtyTrackingRecord tracking;
 
 // Global tracking information is used for non-thread-local tracking
-static ThreadSafeDirtyTrackingRecord globalTracking;
+// static ThreadSafeDirtyTrackingRecord globalTracking;
+static DirtyTrackingRecord globalTracking;
 
 static std::shared_ptr<DirtyTracker> tracker = nullptr;
 
@@ -551,10 +552,11 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         // Set up the sigbus handler
         struct sigaction sa;
         sa.sa_flags = SA_SIGINFO;
-        sa.sa_handler = nullptr;
-        sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
-        sigemptyset(&sa.sa_mask);
 
+        sigemptyset(&sa.sa_mask);
+        sigaddset(&sa.sa_mask, SIGBUS);
+
+        sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
         if (sigaction(SIGBUS, &sa, nullptr) != 0) {
             SPDLOG_ERROR("Failed to set up SIGBUS handler: {} ({})",
                          errno,

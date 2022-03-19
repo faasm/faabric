@@ -52,7 +52,7 @@ std::string benchToString(BenchConf c)
 {
     std::string res = c.mode;
 
-    res += fmt::format(" READ {:.1f}% WRITE {:.1f}%", c.readPct, c.writePct);
+    res += fmt::format(" READ {:.1f}% WRITE {:.1f}%", 100*c.readPct, 100*c.writePct);
 
     res += fmt::format(" {} THREADS", c.nThreads);
 
@@ -236,53 +236,31 @@ void doBenchInner(BenchConf conf)
     }
 }
 
-void doBench(BenchConf conf)
+void doBench(BenchConf conf, bool map)
 {
-    // Private, write-heavy
-    conf.readPct = 0.2;
-    conf.writePct = 0.8;
-    doBenchInner(conf);
-
-    // Private, read-heavy
-    conf.readPct = 0.8;
-    conf.writePct = 0.2;
-    doBenchInner(conf);
-
-    // Shared, read-heavy
-    conf.readPct = 0.8;
-    conf.writePct = 0.2;
-    conf.sharedMemory = true;
-    // doBenchInner(conf);
-
-    // Shared, write-heavy
-    conf.readPct = 0.2;
-    conf.writePct = 0.8;
-    conf.sharedMemory = true;
-    // doBenchInner(conf);
-
-    // Shared, read-heavy
-    conf.readPct = 0.8;
-    conf.writePct = 0.2;
-    conf.sharedMemory = true;
-    // doBenchInner(conf);
-
     // Mapped, write-heavy
-    conf.readPct = 0.2;
-    conf.writePct = 0.8;
-    conf.mapMemory = true;
-    // doBenchInner(conf);
+    if (map) {
+        conf.readPct = 0.2;
+        conf.writePct = 0.8;
+        conf.mapMemory = true;
+        doBenchInner(conf);
 
-    // Mapped, low writes and reads
-    conf.readPct = 0.1;
-    conf.writePct = 0.1;
-    conf.mapMemory = true;
-    // doBenchInner(conf);
+        // Mapped, read-heavy
+        conf.readPct = 0.8;
+        conf.writePct = 0.2;
+        conf.mapMemory = true;
+        doBenchInner(conf);
+    } else {
+        // Private, write-heavy
+        conf.readPct = 0.2;
+        conf.writePct = 0.8;
+        doBenchInner(conf);
 
-    // Mapped, read-heavy
-    conf.readPct = 0.8;
-    conf.writePct = 0.2;
-    conf.mapMemory = true;
-    // doBenchInner(conf);
+        // Private, read-heavy
+        conf.readPct = 0.8;
+        conf.writePct = 0.2;
+        doBenchInner(conf);
+    }
 }
 }
 
@@ -291,21 +269,14 @@ int main()
     initLogging();
 
     faabric::runner::doBench(
-      { .mode = "uffd-thread-demand", .dirtyReads = false });
+      { .mode = "uffd-thread-demand", .dirtyReads = false }, false);
 
-    faabric::runner::doBench({ .mode = "uffd-demand", .dirtyReads = false });
+    faabric::runner::doBench({ .mode = "uffd-demand", .dirtyReads = false },
+                             false);
 
-    faabric::runner::doBench({ .mode = "segfault", .dirtyReads = false });
+    faabric::runner::doBench({ .mode = "segfault", .dirtyReads = false }, true);
 
-    faabric::runner::doBench({ .mode = "softpte", .dirtyReads = false });
-
-    faabric::runner::doBench({ .mode = "uffd", .dirtyReads = true });
-
-    faabric::runner::doBench({ .mode = "uffd-thread", .dirtyReads = false });
-
-    faabric::runner::doBench({ .mode = "uffd-wp", .dirtyReads = true });
-
-    faabric::runner::doBench({ .mode = "uffd-thread-wp", .dirtyReads = false });
+    faabric::runner::doBench({ .mode = "softpte", .dirtyReads = false }, true);
 
     return 0;
 }
