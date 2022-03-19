@@ -15,6 +15,10 @@
 
 namespace faabric::util {
 
+/**
+ * Defines the permitted datatypes for snapshot diffs. Each has a predefined
+ * length, except for the raw option which is used for generic streams of bytes.
+ */
 enum SnapshotDataType
 {
     Raw,
@@ -25,18 +29,29 @@ enum SnapshotDataType
     Double
 };
 
+/**
+ * Defines the operation to perform when merging the diff with the original
+ * snapshot.
+ *
+ * WARNING: this enum forms part of the API with executing applications, so make
+ * sure they are updated accordingly when it's changed.
+ */
 enum SnapshotMergeOperation
 {
     Bytewise,
-    XOR,
     Sum,
     Product,
     Subtract,
     Max,
     Min,
-    Ignore
+    Ignore,
+    XOR
 };
 
+/**
+ * Represents a modification to a snapshot (a.k.a. a dirty region). Captures the
+ * modified data, as well as its offset within the snapshot.
+ */
 class SnapshotDiff
 {
   public:
@@ -74,6 +89,18 @@ void diffArrayRegions(std::vector<SnapshotDiff>& diffs,
                       std::span<const uint8_t> a,
                       std::span<const uint8_t> b);
 
+/**
+ * Defines how diffs in the given snapshot region should be interpreted wrt the
+ * original snapshot.
+ *
+ * For example, it may specify that the change should be treated as an integer
+ * that needs to be summed (i.e. the diff is the current value minus the
+ * original), or just as a region of raw bytes that needs to be XORed with the
+ * original.
+ *
+ * A merge region specifies an offset, length, data type and operation, e.g. an
+ * integer to be summed at offset 100 with a length of 4.
+ */
 class SnapshotMergeRegion
 {
   public:
@@ -242,7 +269,7 @@ class SnapshotData
 
     size_t getQueuedDiffsCount();
 
-    void queueDiffs(std::span<SnapshotDiff> diffs);
+    void queueDiffs(const std::vector<SnapshotDiff>& diffs);
 
     int writeQueuedDiffs();
 

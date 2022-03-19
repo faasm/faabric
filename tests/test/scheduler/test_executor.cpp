@@ -50,6 +50,11 @@ void TestExecutor::setUpDummyMemory(size_t memSize)
     dummyMemorySize = memSize;
 }
 
+size_t TestExecutor::getMaxMemorySize()
+{
+    return maxMemorySize;
+}
+
 void TestExecutor::restore(const std::string& snapshotKey)
 {
     if (dummyMemory == nullptr) {
@@ -489,6 +494,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     SECTION("Underloaded") { nThreads = 10; }
 
+    SECTION("Underloaded no single host optimisation")
+    {
+        nThreads = 10;
+        conf.noSingleHostOptimisations = 1;
+    }
+
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "blah", nThreads);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
@@ -521,6 +532,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
     SECTION("Underloaded") { nThreads = 8; }
 
     SECTION("Overloaded") { nThreads = 100; }
+
+    SECTION("Underloaded no single host optimisation")
+    {
+        nThreads = 10;
+        conf.noSingleHostOptimisations = 1;
+    }
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "thread-check", 1);
@@ -602,8 +619,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<uint32_t> actualMessageIds;
     for (auto& p : actual) {
         REQUIRE(p.first == otherHost);
-        uint32_t messageId = p.second.first;
-        int32_t returnValue = p.second.second;
+        uint32_t messageId = p.second.msgId;
+        int32_t returnValue = p.second.res;
         REQUIRE(returnValue == messageId / 100);
 
         actualMessageIds.push_back(messageId);
@@ -800,11 +817,27 @@ TEST_CASE_METHOD(TestExecutorFixture,
     auto actualResults = faabric::snapshot::getThreadResults();
     REQUIRE(actualResults.size() == nThreads);
 
-    // Check diffs also sent
-    auto diffs = faabric::snapshot::getSnapshotDiffPushes();
-    REQUIRE(diffs.size() == 1);
-    REQUIRE(diffs.at(0).first == otherHost);
-    std::vector<faabric::util::SnapshotDiff> diffList = diffs.at(0).second;
+    // Check that only one result has been assigned diffs
+    faabric::snapshot::MockThreadResult diffRes;
+    bool diffsFound = false;
+    for (int i = 0; i < nThreads; i++) {
+        faabric::snapshot::MockThreadResult res = actualResults[i].second;
+        if (!res.diffs.empty()) {
+            if (diffsFound) {
+                FAIL("More than one thread result has diffs");
+            } else {
+                diffRes = res;
+                diffsFound = true;
+
+                // Check it was sent to the right host
+                REQUIRE(actualResults[i].first == otherHost);
+            }
+        }
+    }
+
+    // Check that diffs were found
+    REQUIRE(diffsFound);
+    std::vector<faabric::util::SnapshotDiff> diffList = diffRes.diffs;
 
     // Each thread should have edited one page, check diffs are correct
     REQUIRE(diffList.size() == nThreads);
@@ -848,7 +881,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     int nThreads = 5;
 
     // Set host resources to force execution on other host
-    setHostResources({ thisHost, otherHost }, { 2, 10 });
+    setHostResources({ thisHost, otherHost }, { 2, 10 }, { 0, 0 });
 
     // Set up message for a batch of threads
     std::shared_ptr<BatchExecuteRequest> req =
@@ -908,7 +941,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(expectedDiffs.size() == 2);
 
     // Reset host resources
-    setHostResources({ thisHost, otherHost }, { 2, 10 });
+    setHostResources({ thisHost, otherHost }, { 2, 10 }, { 0, 0 });
 
     // Set up another function, make sure they have the same app ID
     std::shared_ptr<BatchExecuteRequest> reqB =
@@ -1029,6 +1062,12 @@ TEST_CASE_METHOD(TestExecutorFixture,
     int expectedResult = 0;
     SECTION("Single host") { expectedResult = 10; }
 
+    SECTION("Single host disabled in conf")
+    {
+        expectedResult = 20;
+        conf.noSingleHostOptimisations = 1;
+    }
+
     SECTION("Not single host")
     {
         expectedResult = 20;
@@ -1121,4 +1160,71 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test executor restore", "[executor]")
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
 }
+
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test get main thread snapshot",
+                 "[executor]")
+{
+    std::string user = "foo";
+    std::string function = "bar";
+    faabric::Message m = faabric::util::messageFactory(user, function);
+
+    // Get the snapshot key
+    std::string snapKey = faabric::util::getMainThreadSnapshotKey(m);
+
+    // Create an executor
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      faabric::scheduler::getExecutorFactory();
+    std::shared_ptr<faabric::scheduler::Executor> exec = fac->createExecutor(m);
+
+    // Get a pointer to the TestExecutor so we can override the max memory
+    auto testExec = std::static_pointer_cast<TestExecutor>(exec);
+    size_t memSize = testExec->dummyMemorySize;
+
+    SECTION("Non-existent, don't create")
+    {
+        REQUIRE_THROWS(exec->getMainThreadSnapshot(m, false));
+    }
+
+    SECTION("Non-existent, create")
+    {
+        size_t expectedSize = memSize;
+        size_t expectedMaxSize = memSize;
+
+        SECTION("No max mem size") { testExec->maxMemorySize = 0; }
+
+        SECTION("Max mem size")
+        {
+            testExec->maxMemorySize = 2 * memSize;
+            expectedMaxSize = 2 * memSize;
+        }
+
+        std::shared_ptr<SnapshotData> snap =
+          exec->getMainThreadSnapshot(m, true);
+        REQUIRE(snap->getSize() == expectedSize);
+        REQUIRE(snap->getMaxSize() == expectedMaxSize);
+    }
+
+    SECTION("Existing")
+    {
+        // Create the snapshot manually
+        auto existingSnap =
+          std::make_shared<faabric::util::SnapshotData>(memSize);
+        reg.registerSnapshot(snapKey, existingSnap);
+
+        bool requestCreate = false;
+        SECTION("Request create if not exist") { requestCreate = true; }
+
+        SECTION("No request create if not exist") { requestCreate = false; }
+
+        std::shared_ptr<SnapshotData> actualSnap =
+          exec->getMainThreadSnapshot(m, requestCreate);
+        REQUIRE(actualSnap->getSize() == memSize);
+        REQUIRE(actualSnap->getMaxSize() == memSize);
+
+        // Check they are actually the same
+        REQUIRE(actualSnap == existingSnap);
+    }
+}
+
 }

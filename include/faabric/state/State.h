@@ -17,9 +17,7 @@ enum StateCalls
     Append = 4,
     ClearAppended = 5,
     PullAppended = 6,
-    Lock = 7,
-    Unlock = 8,
-    Delete = 9,
+    Delete = 7,
 };
 
 class State

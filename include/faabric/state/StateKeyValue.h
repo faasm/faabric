@@ -105,10 +105,6 @@ class StateKeyValue
 
     void pushFull();
 
-    virtual void lockGlobal() = 0;
-
-    virtual void unlockGlobal() = 0;
-
   protected:
     std::shared_mutex valueMutex;
 

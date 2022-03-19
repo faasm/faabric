@@ -90,26 +90,6 @@ bool InMemoryStateKeyValue::isMaster()
 // Normal state key-value API
 // ----------------------------------------
 
-void InMemoryStateKeyValue::lockGlobal()
-{
-    if (status == InMemoryStateKeyStatus::MASTER) {
-        globalLock.lock();
-    } else {
-        StateClient cli(user, key, masterIP);
-        cli.lock();
-    }
-}
-
-void InMemoryStateKeyValue::unlockGlobal()
-{
-    if (status == InMemoryStateKeyStatus::MASTER) {
-        globalLock.unlock();
-    } else {
-        StateClient cli(user, key, masterIP);
-        cli.unlock();
-    }
-}
-
 void InMemoryStateKeyValue::pullFromRemote()
 {
     if (status == InMemoryStateKeyStatus::MASTER) {

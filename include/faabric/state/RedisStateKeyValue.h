@@ -27,12 +27,6 @@ class RedisStateKeyValue final : public StateKeyValue
   private:
     const std::string joinedKey;
 
-    uint32_t lastRemoteLockId = 0;
-
-    void lockGlobal() override;
-
-    void unlockGlobal() override;
-
     void pullFromRemote() override;
 
     void pullChunkFromRemote(long offset, size_t length) override;
