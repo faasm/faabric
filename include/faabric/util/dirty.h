@@ -192,11 +192,11 @@ class UffdDirtyTracker final : public DirtyTracker
 
     static void writeProtectRegion(std::span<uint8_t> region);
 
-    static void removeWriteProtect(std::span<uint8_t> region, bool throwEx);
+    static void removeWriteProtectFromPage(uint8_t* region, bool throwEx);
 
-    static void copyRegion(std::span<uint8_t> source, std::span<uint8_t> dest);
+    static void copyPage(uint8_t* source, uint8_t* dest);
 
-    static bool zeroRegion(std::span<uint8_t> region);
+    static bool zeroPage(uint8_t* region);
 
     static void deregisterRegion(std::span<uint8_t> region);
 

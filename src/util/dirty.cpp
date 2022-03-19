@@ -514,8 +514,10 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         demandPaging = false;
     }
 
-    SPDLOG_DEBUG(
-      "Uffd dirty tracking: write-protect={}, sigbus={}", writeProtect, sigbus);
+    SPDLOG_DEBUG("Uffd dirty tracking: write-protect={}, sigbus={}, demand={}",
+                 writeProtect,
+                 sigbus,
+                 demandPaging);
 
     // Set up global flags
     uffdWriteProtect = writeProtect;
@@ -525,7 +527,7 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
     if (uffdSigbus) {
         // Set up the sigbus handler
         struct sigaction sa;
-        sa.sa_flags = SA_RESTART | SA_SIGINFO;
+        sa.sa_flags = SA_SIGINFO;
         sa.sa_handler = nullptr;
         sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
         sigemptyset(&sa.sa_mask);
@@ -554,10 +556,9 @@ void UffdDirtyTracker::initUffd()
     }
 
     // Check API features
-    __u64 features = UFFD_FEATURE_THREAD_ID;
+    __u64 features = 0;
     if (uffdSigbus) {
         features |= UFFD_FEATURE_SIGBUS;
-        features |= UFFD_FEATURE_THREAD_ID;
     }
 
     struct uffdio_api uffdApi = { .api = UFFD_API, .features = features };
@@ -716,15 +717,13 @@ void UffdDirtyTracker::eventThreadEntrypoint()
             SPDLOG_TRACE("Uffd thread got write on write-protected page {}",
                          __u64(alignedAddr));
 
-            removeWriteProtect(
-              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE), true);
+            removeWriteProtectFromPage((uint8_t*)alignedAddr, true);
         } else {
             SPDLOG_TRACE("Uffd thread got missing page event at {} (write={})",
                          __u64(alignedAddr),
                          isWriteEvent);
 
-            zeroRegion(
-              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
+            zeroPage((uint8_t*)alignedAddr);
         }
     }
 }
@@ -748,24 +747,24 @@ void UffdDirtyTracker::sigbusHandler(int sig,
     if (uffdDemandPaging) {
         long pageNum = tracking.getPage(faultAddr);
         long offset = pageNum * HOST_PAGE_SIZE;
-        std::span<uint8_t> dest(tracking.getRegionBase() + offset,
-                                HOST_PAGE_SIZE);
 
         // If page is not yet paged in, we need to copy from the source to the
         // dest. If it is already paged in, this is a write on the paged region,
         // so we need to remove write protection and mark it.
         if (tracking.isPaged(pageNum)) {
             // Remove write-protection
-            removeWriteProtect(dest, false);
+            removeWriteProtectFromPage(tracking.getRegionBase() + offset,
+                                       false);
 
             // Mark page (can safely do this after thread has woken up as this
             // will only ever be thread-local)
             tracking.markPageDirtyNum(pageNum);
         } else {
             // Copy source page into dest page
-            std::span<uint8_t> source(tracking.getSourceMapping() + offset,
-                                      HOST_PAGE_SIZE);
-            copyRegion(source, dest);
+            copyPage(tracking.getSourceMapping() + offset,
+                     tracking.getRegionBase() + offset);
+
+            tracking.markPagePagedNum(pageNum);
         }
     } else {
         // Mark the page
@@ -774,12 +773,10 @@ void UffdDirtyTracker::sigbusHandler(int sig,
         // Get page-aligned address
         void* alignedAddr = pageAlignAddress(faultAddr);
 
-        bool exists =
-          zeroRegion(std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE));
+        bool exists = zeroPage((uint8_t*)alignedAddr);
 
         if (exists) {
-            removeWriteProtect(
-              std::span<uint8_t>((uint8_t*)alignedAddr, HOST_PAGE_SIZE), false);
+            removeWriteProtectFromPage((uint8_t*)alignedAddr, false);
         }
     }
 }
@@ -867,21 +864,20 @@ void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
     SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
 
     if (writeProtect) {
-        removeWriteProtect(region, true);
+        removeWriteProtectFromPage(region.data(), true);
     }
 
     deregisterRegion(region);
 }
 
-void UffdDirtyTracker::copyRegion(std::span<uint8_t> source,
-                                  std::span<uint8_t> dest)
+void UffdDirtyTracker::copyPage(uint8_t* source, uint8_t* dest)
 {
     // Note that here we also set the copied page to write-protected, this way
     // we can track writes on the newly copied page
     struct uffdio_copy copyDef
     {
-        .dst = (__u64)dest.data(), .src = (__u64)source.data(),
-        .len = dest.size(), .mode = UFFDIO_COPY_MODE_WP
+        .dst = (__u64)dest, .src = (__u64)source, .len = (__u64)HOST_PAGE_SIZE,
+        .mode = UFFDIO_COPY_MODE_WP
     };
 
     if (::ioctl(uffd, UFFDIO_COPY, &copyDef) != 0) {
@@ -890,10 +886,10 @@ void UffdDirtyTracker::copyRegion(std::span<uint8_t> source,
     }
 }
 
-bool UffdDirtyTracker::zeroRegion(std::span<uint8_t> region)
+bool UffdDirtyTracker::zeroPage(uint8_t* region)
 {
-    struct uffdio_range zeroRange = { .start = (__u64)region.data(),
-                                      .len = region.size() };
+    struct uffdio_range zeroRange = { .start = (__u64)region,
+                                      .len = (__u64)HOST_PAGE_SIZE };
     uffdio_zeropage zeroPage = { .range = zeroRange, .mode = 0 };
 
     int result = ::ioctl(uffd, UFFDIO_ZEROPAGE, &zeroPage);
@@ -917,10 +913,12 @@ void UffdDirtyTracker::deregisterRegion(std::span<uint8_t> region)
     }
 }
 
-void UffdDirtyTracker::removeWriteProtect(std::span<uint8_t> region,
-                                          bool throwEx)
+void UffdDirtyTracker::removeWriteProtectFromPage(uint8_t* region, bool throwEx)
 {
-    struct uffdio_range uffdRange = { (__u64)region.data(), region.size() };
+    struct uffdio_range uffdRange
+    {
+        .start = (__u64)region, .len = (__u64)HOST_PAGE_SIZE
+    };
     struct uffdio_writeprotect wpArgs = { uffdRange, 0 };
 
     if (::ioctl(uffd, UFFDIO_WRITEPROTECT, &wpArgs) != 0) {
