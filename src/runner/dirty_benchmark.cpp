@@ -1,9 +1,23 @@
-#include "faabric/util/environment.h"
 #include <faabric/util/dirty.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
+#include <cstdint>
+#include <cstring>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <memory>
+#include <poll.h>
+#include <shared_mutex>
+#include <signal.h>
+#include <sys/eventfd.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
 #include <thread>
+#include <unistd.h>
+#include <vector>
 
 using namespace faabric::util;
 
@@ -65,6 +79,7 @@ void doBenchInner(BenchConf conf)
         exit(1);
     }
 
+    MemoryRegion mappingSourceMemPtr = allocateSharedMemory(MEM_SIZE);
     MemoryRegion sharedMemPtr = allocateSharedMemory(MEM_SIZE);
     MemoryRegion privateMemPtr = allocatePrivateMemory(MEM_SIZE);
 
@@ -74,6 +89,9 @@ void doBenchInner(BenchConf conf)
     } else {
         memView = std::span<uint8_t>(privateMemPtr.get(), MEM_SIZE);
     }
+
+    std::span<uint8_t> mappingView =
+      std::span<uint8_t>(mappingSourceMemPtr.get(), MEM_SIZE);
 
     if (conf.mapMemory) {
         int fd = createFd(MEM_SIZE, "foobar");
@@ -102,49 +120,55 @@ void doBenchInner(BenchConf conf)
     TimePoint runStart = startTimer();
 
     for (int t = 0; t < conf.nThreads; t++) {
-        threads.emplace_back([&results, &conf, t, &tracker, &memView] {
-            tracker->startThreadLocalTracking(memView);
+        threads.emplace_back(
+          [&mappingView, &results, &conf, t, &tracker, &memView] {
+              tracker->startThreadLocalTracking(memView);
 
-            BenchResult& res = results[t];
-            int threadChunkSize = NUM_PAGES / conf.nThreads;
-            int offset = t * threadChunkSize;
+              // Set up source mapping for demand paging
+              if (conf.mode == "uffd-demand") {
+                  tracker->mapRegions(mappingView, memView);
+              }
 
-            int targetReads = threadChunkSize * conf.readPct;
-            int targetWrites = threadChunkSize * conf.writePct;
+              BenchResult& res = results[t];
+              int threadChunkSize = NUM_PAGES / conf.nThreads;
+              int offset = t * threadChunkSize;
 
-            for (int i = offset; i < offset + threadChunkSize; i++) {
-                res.nPages++;
+              int targetReads = threadChunkSize * conf.readPct;
+              int targetWrites = threadChunkSize * conf.writePct;
 
-                bool isWrite = res.nWrites < targetWrites;
-                bool isRead = !isWrite && res.nReads < targetReads;
+              for (int i = offset; i < offset + threadChunkSize; i++) {
+                  res.nPages++;
 
-                // Skip if necessary
-                if (!isWrite && !isRead) {
-                    SPDLOG_TRACE("Skipping {}");
-                    continue;
-                }
+                  bool isWrite = res.nWrites < targetWrites;
+                  bool isRead = !isWrite && res.nReads < targetReads;
 
-                // Perform the relevant operation
-                uint8_t* ptr = memView.data() + (i * HOST_PAGE_SIZE) + 5;
-                if (isWrite) {
-                    SPDLOG_TRACE("Writing {}", i);
-                    res.nWrites++;
+                  // Skip if necessary
+                  if (!isWrite && !isRead) {
+                      SPDLOG_TRACE("Skipping {}");
+                      continue;
+                  }
 
-                    *ptr = (uint8_t)5;
-                } else {
-                    SPDLOG_TRACE("Reading {}", i);
-                    res.nReads++;
+                  // Perform the relevant operation
+                  uint8_t* ptr = memView.data() + (i * HOST_PAGE_SIZE) + 5;
+                  if (isWrite) {
+                      SPDLOG_TRACE("Writing {}", i);
+                      res.nWrites++;
 
-                    uint8_t loopRes = *ptr;
-                    if (loopRes == 9) {
-                        printf("This will never happen %u\n", loopRes);
-                    }
-                }
-            }
+                      *ptr = (uint8_t)5;
+                  } else {
+                      SPDLOG_TRACE("Reading {}", i);
+                      res.nReads++;
 
-            // Get dirty pages for this thread
-            res.dirtyPages = tracker->getThreadLocalDirtyPages(memView);
-        });
+                      uint8_t loopRes = *ptr;
+                      if (loopRes == 9) {
+                          printf("This will never happen %u\n", loopRes);
+                      }
+                  }
+              }
+
+              // Get dirty pages for this thread
+              res.dirtyPages = tracker->getThreadLocalDirtyPages(memView);
+          });
     }
 
     for (auto& t : threads) {
@@ -211,35 +235,51 @@ void doBenchInner(BenchConf conf)
 
 void doBench(BenchConf conf)
 {
-    // Shared, write-heavy
+    // Private, write-heavy
     conf.readPct = 0.2;
     conf.writePct = 0.8;
-    conf.sharedMemory = true;
-    //doBenchInner(conf);
+    doBenchInner(conf);
+
+    // Private, read-heavy
+    conf.readPct = 0.8;
+    conf.writePct = 0.2;
+    doBenchInner(conf);
 
     // Shared, read-heavy
     conf.readPct = 0.8;
     conf.writePct = 0.2;
     conf.sharedMemory = true;
-    //doBenchInner(conf);
+    // doBenchInner(conf);
+
+    // Shared, write-heavy
+    conf.readPct = 0.2;
+    conf.writePct = 0.8;
+    conf.sharedMemory = true;
+    // doBenchInner(conf);
+
+    // Shared, read-heavy
+    conf.readPct = 0.8;
+    conf.writePct = 0.2;
+    conf.sharedMemory = true;
+    // doBenchInner(conf);
 
     // Mapped, write-heavy
     conf.readPct = 0.2;
     conf.writePct = 0.8;
     conf.mapMemory = true;
-    doBenchInner(conf);
+    // doBenchInner(conf);
 
     // Mapped, low writes and reads
     conf.readPct = 0.1;
     conf.writePct = 0.1;
     conf.mapMemory = true;
-    doBenchInner(conf);
+    // doBenchInner(conf);
 
     // Mapped, read-heavy
     conf.readPct = 0.8;
     conf.writePct = 0.2;
     conf.mapMemory = true;
-    //doBenchInner(conf);
+    // doBenchInner(conf);
 }
 }
 
@@ -252,6 +292,8 @@ int main()
     faabric::runner::doBench({ .mode = "softpte", .dirtyReads = false });
 
     faabric::runner::doBench({ .mode = "uffd", .dirtyReads = true });
+
+    faabric::runner::doBench({ .mode = "uffd-demand", .dirtyReads = false });
 
     faabric::runner::doBench({ .mode = "uffd-thread", .dirtyReads = false });
 

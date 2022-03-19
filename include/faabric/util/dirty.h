@@ -42,6 +42,8 @@ class DirtyTracker
 
     virtual void stopThreadLocalTracking(std::span<uint8_t> region) = 0;
 
+    virtual void mapRegions(std::span<uint8_t> source, std::span<uint8_t> dest) = 0;
+
     virtual std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) = 0;
 
@@ -75,6 +77,8 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     void startThreadLocalTracking(std::span<uint8_t> region) override;
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
+
+    void mapRegions(std::span<uint8_t> source, std::span<uint8_t> dest) override;
 
     std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) override;
@@ -111,6 +115,8 @@ class SegfaultDirtyTracker final : public DirtyTracker
     void startThreadLocalTracking(std::span<uint8_t> region) override;
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
+
+    void mapRegions(std::span<uint8_t> source, std::span<uint8_t> dest) override;
 
     std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) override;
@@ -160,6 +166,8 @@ class UffdDirtyTracker final : public DirtyTracker
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
 
+    void mapRegions(std::span<uint8_t> source, std::span<uint8_t> dest) override;
+
     std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) override;
 
@@ -174,6 +182,8 @@ class UffdDirtyTracker final : public DirtyTracker
 
     bool sigbus = false;
 
+    bool demandPaging = false;
+
     static void initUffd();
 
     static void stopUffd();
@@ -183,6 +193,8 @@ class UffdDirtyTracker final : public DirtyTracker
     static void writeProtectRegion(std::span<uint8_t> region);
 
     static void removeWriteProtect(std::span<uint8_t> region, bool throwEx);
+
+    static void copyRegion(std::span<uint8_t> source, std::span<uint8_t> dest);
 
     static bool zeroRegion(std::span<uint8_t> region);
 
@@ -214,6 +226,8 @@ class NoneDirtyTracker final : public DirtyTracker
     void startThreadLocalTracking(std::span<uint8_t> region) override;
 
     void stopThreadLocalTracking(std::span<uint8_t> region) override;
+
+    void mapRegions(std::span<uint8_t> source, std::span<uint8_t> dest) override;
 
     std::vector<char> getThreadLocalDirtyPages(
       std::span<uint8_t> region) override;
