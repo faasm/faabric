@@ -36,7 +36,7 @@ def cmake(
     if not exists(build_dir):
         makedirs(build_dir)
 
-    build_types = ["Release", "Debug"]
+    build_types = ["Release", "RelWithDebInfo", "Debug"]
     if build not in build_types:
         raise RuntimeError("Expected build to be in {}".format(build_types))
 

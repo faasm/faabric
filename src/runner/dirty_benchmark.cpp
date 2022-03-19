@@ -125,7 +125,8 @@ void doBenchInner(BenchConf conf)
               tracker->startThreadLocalTracking(memView);
 
               // Set up source mapping for demand paging
-              if (conf.mode == "uffd-demand") {
+              if (conf.mode == "uffd-demand" ||
+                  conf.mode == "uffd-thread-demand") {
                   tracker->mapRegions(mappingView, memView);
               }
 
@@ -151,12 +152,12 @@ void doBenchInner(BenchConf conf)
                   // Perform the relevant operation
                   uint8_t* ptr = memView.data() + (i * HOST_PAGE_SIZE) + 5;
                   if (isWrite) {
-                      SPDLOG_TRACE("Writing {}", i);
+                      SPDLOG_TRACE("Write to page {}", i);
                       res.nWrites++;
 
                       *ptr = (uint8_t)5;
                   } else {
-                      SPDLOG_TRACE("Reading {}", i);
+                      SPDLOG_TRACE("Read on page {}", i);
                       res.nReads++;
 
                       uint8_t loopRes = *ptr;
@@ -230,6 +231,8 @@ void doBenchInner(BenchConf conf)
                      conf.sharedMemory,
                      actualDirty,
                      expectedDirty);
+
+        throw std::runtime_error("Failed");
     }
 }
 
@@ -287,13 +290,16 @@ int main()
 {
     initLogging();
 
+    faabric::runner::doBench(
+      { .mode = "uffd-thread-demand", .dirtyReads = false });
+
+    faabric::runner::doBench({ .mode = "uffd-demand", .dirtyReads = false });
+
     faabric::runner::doBench({ .mode = "segfault", .dirtyReads = false });
 
     faabric::runner::doBench({ .mode = "softpte", .dirtyReads = false });
 
     faabric::runner::doBench({ .mode = "uffd", .dirtyReads = true });
-
-    faabric::runner::doBench({ .mode = "uffd-demand", .dirtyReads = false });
 
     faabric::runner::doBench({ .mode = "uffd-thread", .dirtyReads = false });
 
