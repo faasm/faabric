@@ -62,13 +62,20 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
     }
 }
 
+SnapshotData::SnapshotData()
+  : SnapshotData(0, 0)
+{}
+
 SnapshotData::SnapshotData(size_t sizeIn)
   : SnapshotData(sizeIn, sizeIn)
 {}
 
 SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
-  : size(sizeIn)
+  : conf(faabric::util::getSystemConfig())
+  , size(sizeIn)
   , maxSize(maxSizeIn)
+  , isDemandPaged(conf.dirtyTrackingMode == "uffd-demand" ||
+                  conf.dirtyTrackingMode == "uffd-thread-demand")
 {
     if (maxSize == 0) {
         maxSize = size;
@@ -80,10 +87,12 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
     // Claim just the snapshot region
     faabric::util::claimVirtualMemory({ BYTES(data.get()), size });
 
-    // Set up the fd with a two-way mapping to the data
-    std::string fdLabel = "snap_" + std::to_string(generateGid());
-    fd = createFd(size, fdLabel);
-    mapMemoryShared({ data.get(), size }, fd);
+    // Set up the fd with a two-way mapping to the data if necessary
+    if (!isDemandPaged) {
+        std::string fdLabel = "snap_" + std::to_string(generateGid());
+        fd = createFd(size, fdLabel);
+        mapMemoryShared({ data.get(), size }, fd);
+    }
 }
 
 SnapshotData::SnapshotData(std::span<const uint8_t> dataIn)
@@ -136,7 +145,9 @@ void SnapshotData::checkWriteExtension(std::span<const uint8_t> buffer,
         }
 
         // Remap data
-        mapMemoryShared({ data.get(), size }, fd);
+        if (!isDemandPaged) {
+            mapMemoryShared({ data.get(), size }, fd);
+        }
     }
 }
 
@@ -227,7 +238,6 @@ void SnapshotData::fillGapsWithBytewiseRegions()
     faabric::util::FullLock lock(snapMx);
 
     SnapshotMergeOperation fillType;
-    SystemConfig& conf = faabric::util::getSystemConfig();
     if (conf.diffingMode == "bytewise") {
         fillType = SnapshotMergeOperation::Bytewise;
     } else if (conf.diffingMode == "xor") {
@@ -303,7 +313,13 @@ void SnapshotData::mapToMemory(std::span<uint8_t> target)
         throw std::runtime_error("Target memory larger than snapshot");
     }
 
-    faabric::util::mapMemoryPrivate(target, fd);
+    // Set up mapping
+    if (isDemandPaged) {
+        auto tracker = faabric::util::getDirtyTracker();
+        tracker->mapRegions(std::span<uint8_t>(data.get(), size), target);
+    } else {
+        faabric::util::mapMemoryPrivate(target, fd);
+    }
 
     PROF_END(MapSnapshot)
 }

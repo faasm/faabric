@@ -230,7 +230,7 @@ inline T applyDiffValue(const uint8_t* original,
 class SnapshotData
 {
   public:
-    SnapshotData() = default;
+    SnapshotData();
 
     explicit SnapshotData(size_t sizeIn);
 
@@ -292,8 +292,12 @@ class SnapshotData
       const std::vector<char>& dirtyRegions);
 
   private:
+    SystemConfig& conf;
+
     size_t size = 0;
     size_t maxSize = 0;
+
+    bool isDemandPaged = false;
 
     int fd = -1;
 

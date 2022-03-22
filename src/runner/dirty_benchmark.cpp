@@ -1,3 +1,4 @@
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/logging.h>
@@ -20,6 +21,7 @@
 #include <vector>
 
 using namespace faabric::util;
+using namespace faabric::snapshot;
 
 namespace faabric::runner {
 
@@ -80,30 +82,20 @@ void doBenchInner(BenchConf conf)
         exit(1);
     }
 
+    // Create a snapshot
     std::vector<uint8_t> dummyData(1, MEM_SIZE);
+    auto snap = std::make_shared<SnapshotData>(dummyData);
 
-    MemoryRegion mappingSourceMemPtr = allocateSharedMemory(MEM_SIZE);
-    MemoryRegion sharedMemPtr = allocateSharedMemory(MEM_SIZE);
-    MemoryRegion privateMemPtr = allocatePrivateMemory(MEM_SIZE);
+    // Allocate the memory
+    int memPages = 8;
+    size_t memSize = memPages * HOST_PAGE_SIZE;
+    MemoryRegion mem = allocatePrivateMemory(memSize);
+    std::span<uint8_t> memView = std::span<uint8_t>(mem.get(), MEM_SIZE);
 
-    std::span<uint8_t> memView;
-    if (conf.sharedMemory) {
-        memView = std::span<uint8_t>(sharedMemPtr.get(), MEM_SIZE);
-    } else {
-        memView = std::span<uint8_t>(privateMemPtr.get(), MEM_SIZE);
-    }
+    // Map to the snapshot
+    snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
 
-    std::span<uint8_t> mappingView =
-      std::span<uint8_t>(mappingSourceMemPtr.get(), MEM_SIZE);
-
-    if (conf.mapMemory) {
-        int fd = createFd(MEM_SIZE, "foobar");
-        writeToFd(fd, 0, dummyData);
-
-        mapMemoryPrivate(memView, fd);
-    }
-
-    // ---------
+    // ------- Initialisation -------
     TimePoint startStart = startTimer();
     tracker->clearAll();
     tracker->startTracking(memView);
@@ -121,58 +113,51 @@ void doBenchInner(BenchConf conf)
         results[t].dirtyPages = std::vector<char>(NUM_PAGES, 0);
     }
 
-    // ---------
+    // ------- Running -------
     TimePoint runStart = startTimer();
 
     for (int t = 0; t < conf.nThreads; t++) {
-        threads.emplace_back(
-          [&mappingView, &results, &conf, t, &tracker, &memView] {
-              tracker->startThreadLocalTracking(memView);
+        threads.emplace_back([&results, &conf, t, &tracker, &memView] {
+            tracker->startThreadLocalTracking(memView);
 
-              // Set up source mapping for demand paging
-              if (conf.mode == "uffd-demand" ||
-                  conf.mode == "uffd-thread-demand") {
-                  tracker->mapRegions(mappingView, memView);
-              }
+            BenchResult& res = results[t];
+            int threadChunkSize = NUM_PAGES / conf.nThreads;
+            int offset = t * threadChunkSize;
 
-              BenchResult& res = results[t];
-              int threadChunkSize = NUM_PAGES / conf.nThreads;
-              int offset = t * threadChunkSize;
+            int targetReads = threadChunkSize * conf.readPct;
+            int targetWrites = threadChunkSize * conf.writePct;
 
-              int targetReads = threadChunkSize * conf.readPct;
-              int targetWrites = threadChunkSize * conf.writePct;
+            for (int i = offset; i < offset + threadChunkSize; i++) {
+                res.nPages++;
 
-              for (int i = offset; i < offset + threadChunkSize; i++) {
-                  res.nPages++;
+                bool isWrite = res.nWrites < targetWrites;
+                bool isRead = !isWrite && res.nReads < targetReads;
 
-                  bool isWrite = res.nWrites < targetWrites;
-                  bool isRead = !isWrite && res.nReads < targetReads;
+                // Skip if necessary
+                if (!isWrite && !isRead) {
+                    SPDLOG_TRACE("Skipping {}");
+                    continue;
+                }
 
-                  // Skip if necessary
-                  if (!isWrite && !isRead) {
-                      SPDLOG_TRACE("Skipping {}");
-                      continue;
-                  }
+                // Perform the relevant operation
+                uint8_t* ptr = memView.data() + (i * HOST_PAGE_SIZE) + 5;
+                if (isWrite) {
+                    res.nWrites++;
 
-                  // Perform the relevant operation
-                  uint8_t* ptr = memView.data() + (i * HOST_PAGE_SIZE) + 5;
-                  if (isWrite) {
-                      res.nWrites++;
+                    *ptr = (uint8_t)5;
+                } else {
+                    res.nReads++;
 
-                      *ptr = (uint8_t)5;
-                  } else {
-                      res.nReads++;
+                    uint8_t loopRes = *ptr;
+                    if (loopRes == 9) {
+                        printf("This will never happen %u\n", loopRes);
+                    }
+                }
+            }
 
-                      uint8_t loopRes = *ptr;
-                      if (loopRes == 9) {
-                          printf("This will never happen %u\n", loopRes);
-                      }
-                  }
-              }
-
-              // Get dirty pages for this thread
-              res.dirtyPages = tracker->getThreadLocalDirtyPages(memView);
-          });
+            // Get dirty pages for this thread
+            res.dirtyPages = tracker->getThreadLocalDirtyPages(memView);
+        });
     }
 
     for (auto& t : threads) {
@@ -184,25 +169,42 @@ void doBenchInner(BenchConf conf)
     long runNanos = getTimeDiffNanos(runStart);
     float runMillis = float(runNanos) / (1000L * 1000L);
 
-    // ----------
+    // ------- Diffing --------
     TimePoint stopStart = startTimer();
 
     tracker->stopTracking(memView);
     tracker->stopThreadLocalTracking(memView);
 
+    std::vector<char> dirtyPages = tracker->getDirtyPages(memView);
+    std::vector<SnapshotDiff> diffs =
+      snap->diffWithDirtyRegions(memView, dirtyPages);
+
     long stopNanos = getTimeDiffNanos(stopStart);
     float stopMillis = float(stopNanos) / (1000L * 1000L);
-
-    float totalMillis = startMillis + runMillis + stopMillis;
     // ----------
 
-    SPDLOG_INFO("{:.2f}ms {:.2f}ms {:.2f}ms; TOT {:.2f}ms",
+    // ------- Writing diffs --------
+    TimePoint writingStart = startTimer();
+
+    snap->queueDiffs(diffs);
+    snap->writeQueuedDiffs();
+
+    long writingNanos = getTimeDiffNanos(writingStart);
+    float writingMillis = float(writingNanos) / (1000L * 1000L);
+    // ----------
+
+    float totalMillis = startMillis + runMillis + stopMillis + writingMillis;
+
+    SPDLOG_INFO("{:.2f}ms {:.2f}ms {:.2f}ms {:.2f}ms; TOT {:.2f}ms",
                 startMillis,
                 runMillis,
                 stopMillis,
-                totalMillis);
+                totalMillis,
+                writingMillis);
 
-    std::vector<char> dirtyPages = tracker->getDirtyPages(memView);
+    // -----------------------------
+    // VALIDATION
+    // -----------------------------
     int actualDirty = std::count(dirtyPages.begin(), dirtyPages.end(), 1);
 
     int expectedDirty = 0;
