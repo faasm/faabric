@@ -332,9 +332,6 @@ std::vector<char> SoftPTEDirtyTracker::getDirtyPages(std::span<uint8_t> region)
         }
     }
 
-    SPDLOG_TRACE(
-      "Out of {} pages, found {} dirty regions", nPages, regions.size());
-
     PROF_END(GetDirtyRegions)
     return regions;
 }
@@ -370,8 +367,6 @@ SegfaultDirtyTracker::SegfaultDirtyTracker(const std::string& modeIn)
     if (sigaction(SIGSEGV, &sa, nullptr) != 0) {
         throw std::runtime_error("Failed sigaction");
     }
-
-    SPDLOG_TRACE("Set up dirty tracking SIGSEGV handler");
 }
 
 void SegfaultDirtyTracker::mapRegions(std::span<uint8_t> source,
@@ -414,15 +409,11 @@ void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
         return;
     }
 
-    SPDLOG_TRACE("Starting thread-local tracking on region size {}",
-                 region.size());
     tracking.trackRegion(region);
 }
 
 void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
 {
-    SPDLOG_TRACE("Starting tracking on region size {}", region.size());
-
     if (region.empty() || region.data() == nullptr) {
         SPDLOG_WARN("Empty region passed, not starting tracking");
         return;
@@ -449,8 +440,6 @@ void SegfaultDirtyTracker::stopTracking(std::span<uint8_t> region)
         return;
     }
 
-    SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
-
     PROF_START(MprotectEnd)
 
     if (::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE) ==
@@ -468,8 +457,6 @@ void SegfaultDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
 {
     // Do nothing - need to preserve thread-local data for getting dirty
     // regions
-    SPDLOG_TRACE("Stopping thread-local tracking on region size {}",
-                 region.size());
 }
 
 std::vector<char> SegfaultDirtyTracker::getThreadLocalDirtyPages(
@@ -538,11 +525,6 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
         demandPaging = false;
     }
 
-    SPDLOG_DEBUG("Uffd dirty tracking: write-protect={}, sigbus={}, demand={}",
-                 writeProtect,
-                 sigbus,
-                 demandPaging);
-
     // Set up global flags
     uffdWriteProtect = writeProtect;
     uffdSigbus = sigbus;
@@ -563,8 +545,6 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
                          strerror(errno));
             throw std::runtime_error("Failed to set up SIGBUS");
         }
-
-        SPDLOG_TRACE("Set up dirty tracking SIGBUS handler");
     }
 
     // Initialise uffd
@@ -621,11 +601,6 @@ void UffdDirtyTracker::initUffd()
         eventThread = std::make_shared<std::thread>(
           &UffdDirtyTracker::eventThreadEntrypoint);
     }
-
-    SPDLOG_DEBUG("Initialised uffd {} (sigbus {}, write-protect {})",
-                 uffd,
-                 uffdSigbus,
-                 uffdWriteProtect);
 }
 
 void UffdDirtyTracker::stopUffd()
@@ -677,8 +652,6 @@ UffdDirtyTracker::~UffdDirtyTracker()
 
 void UffdDirtyTracker::eventThreadEntrypoint()
 {
-    SPDLOG_TRACE(
-      "Starting uffd event thread (uffd={}, closeFd={})", uffd, closeFd);
     int nFds = 2;
     struct pollfd pollfds[nFds];
 
@@ -739,23 +712,15 @@ void UffdDirtyTracker::eventThreadEntrypoint()
             // If it's a write-protected event, we need to mark as dirty,
             // otherwise we need to page in from the source
             if (isWriteProtected) {
-                SPDLOG_TRACE("Uffd write: page={} write={} wp={}",
-                             pageNum,
-                             isWriteEvent,
-                             isWriteProtected);
-
                 removeWriteProtectFromPage(
                   globalTracking.getRegionBase() + offset, true);
 
                 globalTracking.markPageDirtyNum(pageNum);
             } else {
-                SPDLOG_TRACE("Uffd page: page={} write={} wp={}",
-                             pageNum,
-                             isWriteEvent,
-                             isWriteProtected);
+                uint8_t* from = globalTracking.getSourceMapping() + offset;
+                uint8_t* to = globalTracking.getRegionBase() + offset;
 
-                copyPage(globalTracking.getSourceMapping() + offset,
-                         globalTracking.getRegionBase() + offset);
+                copyPage(from, to);
             }
 
         } else {
@@ -768,16 +733,8 @@ void UffdDirtyTracker::eventThreadEntrypoint()
             }
 
             if (isWriteProtected) {
-                SPDLOG_TRACE("Uffd thread got write on write-protected page {}",
-                             __u64(alignedAddr));
-
                 removeWriteProtectFromPage((uint8_t*)alignedAddr, true);
             } else {
-                SPDLOG_TRACE(
-                  "Uffd thread got missing page event at {} (write={})",
-                  __u64(alignedAddr),
-                  isWriteEvent);
-
                 zeroPage((uint8_t*)alignedAddr);
             }
         }
@@ -808,8 +765,6 @@ void UffdDirtyTracker::sigbusHandler(int sig,
         // dest. If it is already paged in, this is a write on the paged region,
         // so we need to remove write protection and mark it.
         if (tracking.isPaged(pageNum)) {
-            SPDLOG_TRACE("Uffd write: page={}", pageNum);
-
             // Remove write-protection
             removeWriteProtectFromPage(tracking.getRegionBase() + offset,
                                        false);
@@ -817,8 +772,6 @@ void UffdDirtyTracker::sigbusHandler(int sig,
             // Mark page dirty
             tracking.markPageDirtyNum(pageNum);
         } else {
-            SPDLOG_TRACE("Uffd page: page={}", pageNum);
-
             // Copy source page into dest page
             copyPage(tracking.getSourceMapping() + offset,
                      tracking.getRegionBase() + offset);
@@ -848,17 +801,15 @@ void UffdDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
         return;
     }
 
-    SPDLOG_TRACE("Starting thread-local tracking on region {} {}",
-                 (__u64)region.data(),
-                 region.size());
+    // Copy global source mapping
+    tracking.setSourceMapping(
+      std::span<uint8_t>(globalTracking.getSourceMapping(), region.size()));
 
     tracking.trackRegion(region);
 }
 
 void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
 {
-    SPDLOG_TRACE("Starting tracking on region size {}", region.size());
-
     if (region.empty() || region.data() == nullptr) {
         SPDLOG_WARN("Empty region passed, not starting tracking");
         return;
@@ -897,8 +848,6 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
           "Failed to register range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Range register failed");
     }
-
-    SPDLOG_TRACE("Uffd registered {} {}", regRange.start, regRange.len);
 }
 
 void UffdDirtyTracker::writeProtectRegion(std::span<uint8_t> region)
@@ -913,8 +862,6 @@ void UffdDirtyTracker::writeProtectRegion(std::span<uint8_t> region)
           "Failed to write-protect range: {} ({})", errno, strerror(errno));
         throw std::runtime_error("Write protect failed");
     }
-
-    SPDLOG_TRACE("Uffd write-protected {} {}", wpRange.start, wpRange.len);
 }
 
 void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
@@ -923,8 +870,6 @@ void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
         SPDLOG_WARN("Empty region passed, not stopping tracking");
         return;
     }
-
-    SPDLOG_TRACE("Stopping tracking on region size {}", region.size());
 
     if (writeProtect) {
         removeWriteProtectFromPage(region.data(), true);
@@ -998,8 +943,7 @@ void UffdDirtyTracker::removeWriteProtectFromPage(uint8_t* region, bool throwEx)
 
 void UffdDirtyTracker::stopThreadLocalTracking(std::span<uint8_t> region)
 {
-    SPDLOG_TRACE("Stopping thread-local tracking on region size {}",
-                 region.size());
+    // Do nothing
 }
 
 std::vector<char> UffdDirtyTracker::getThreadLocalDirtyPages(

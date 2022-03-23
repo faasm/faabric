@@ -1,3 +1,4 @@
+#include "faabric/util/string_tools.h"
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
@@ -34,9 +35,6 @@ namespace faabric::runner {
 struct BenchConf
 {
     std::string mode;
-    bool mapMemory = false;
-    bool sharedMemory = false;
-    bool dirtyReads = false;
     int nThreads = faabric::util::getUsableCores() - 1;
     float readPct = 0.2;
     float writePct = 0.8;
@@ -59,9 +57,6 @@ std::string benchToString(BenchConf c)
 
     res += fmt::format(" {} THREADS", c.nThreads);
 
-    res += c.mapMemory ? " MAP" : "";
-    res += c.sharedMemory ? " SHARED" : "";
-
     return res;
 }
 
@@ -70,9 +65,12 @@ void doBenchInner(BenchConf conf)
     SPDLOG_INFO("---------------");
     SPDLOG_INFO("{}", benchToString(conf));
 
+    // Configure dirty tracking
     SystemConfig& c = getSystemConfig();
     c.dirtyTrackingMode = conf.mode;
     resetDirtyTracker();
+
+    bool isUffd = faabric::util::startsWith(conf.mode, "uffd");
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
 
@@ -82,27 +80,35 @@ void doBenchInner(BenchConf conf)
         exit(1);
     }
 
-    // Create a snapshot
-    std::vector<uint8_t> dummyData(1, MEM_SIZE);
+    // Create some dummy data and a snapshot
+    std::vector<uint8_t> dummyData(MEM_SIZE, 1);
     auto snap = std::make_shared<SnapshotData>(dummyData);
 
-    // Allocate the memory
-    int memPages = 8;
-    size_t memSize = memPages * HOST_PAGE_SIZE;
-    MemoryRegion mem = allocatePrivateMemory(memSize);
+    // Allocate memory
+    MemoryRegion mem = allocatePrivateMemory(MEM_SIZE);
     std::span<uint8_t> memView = std::span<uint8_t>(mem.get(), MEM_SIZE);
 
-    // Map to the snapshot
-    snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
+    // Map to the snapshot *before* for some types
+    if (!isUffd) {
+        snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
+    }
 
     // ------- Initialisation -------
     TimePoint startStart = startTimer();
+
     tracker->clearAll();
     tracker->startTracking(memView);
+
+    // Map to the snapshot
+    // TODO this should be possible to do before all the tracking initialisation
+    if (isUffd) {
+        snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
+    }
 
     long startNanos = getTimeDiffNanos(startStart);
     float startMillis = float(startNanos) / (1000L * 1000L);
 
+    // ------- Running -------
     std::vector<std::thread> threads;
     std::vector<BenchResult> results;
 
@@ -113,7 +119,6 @@ void doBenchInner(BenchConf conf)
         results[t].dirtyPages = std::vector<char>(NUM_PAGES, 0);
     }
 
-    // ------- Running -------
     TimePoint runStart = startTimer();
 
     for (int t = 0; t < conf.nThreads; t++) {
@@ -150,7 +155,7 @@ void doBenchInner(BenchConf conf)
 
                     uint8_t loopRes = *ptr;
                     if (loopRes == 9) {
-                        printf("This will never happen %u\n", loopRes);
+                        printf("This should never happen %u\n", loopRes);
                     }
                 }
             }
@@ -170,7 +175,7 @@ void doBenchInner(BenchConf conf)
     float runMillis = float(runNanos) / (1000L * 1000L);
 
     // ------- Diffing --------
-    TimePoint stopStart = startTimer();
+    TimePoint diffingStart = startTimer();
 
     tracker->stopTracking(memView);
     tracker->stopThreadLocalTracking(memView);
@@ -179,8 +184,8 @@ void doBenchInner(BenchConf conf)
     std::vector<SnapshotDiff> diffs =
       snap->diffWithDirtyRegions(memView, dirtyPages);
 
-    long stopNanos = getTimeDiffNanos(stopStart);
-    float stopMillis = float(stopNanos) / (1000L * 1000L);
+    long diffingNanos = getTimeDiffNanos(diffingStart);
+    float diffingMillis = float(diffingNanos) / (1000L * 1000L);
     // ----------
 
     // ------- Writing diffs --------
@@ -193,14 +198,14 @@ void doBenchInner(BenchConf conf)
     float writingMillis = float(writingNanos) / (1000L * 1000L);
     // ----------
 
-    float totalMillis = startMillis + runMillis + stopMillis + writingMillis;
+    float totalMillis = startMillis + runMillis + diffingMillis + writingMillis;
 
-    SPDLOG_INFO("{:.2f}ms {:.2f}ms {:.2f}ms {:.2f}ms; TOT {:.2f}ms",
+    SPDLOG_INFO("S {:.2f}ms R {:.2f}ms D {:.2f}ms W {:.2f}ms; TOT {:.2f}ms",
                 startMillis,
                 runMillis,
-                stopMillis,
-                totalMillis,
-                writingMillis);
+                diffingMillis,
+                writingMillis,
+                totalMillis);
 
     // -----------------------------
     // VALIDATION
@@ -224,44 +229,27 @@ void doBenchInner(BenchConf conf)
           nDirty);
 
         expectedDirty += res.nWrites;
-        if (conf.dirtyReads) {
-            expectedDirty += res.nReads;
-        }
     }
 
     if (actualDirty != expectedDirty) {
-        SPDLOG_ERROR("FAILED: on {} {} {}: {} != {}",
-                     conf.mode,
-                     conf.mapMemory,
-                     conf.sharedMemory,
-                     actualDirty,
-                     expectedDirty);
+        SPDLOG_ERROR(
+          "FAILED: on {}: {} != {}", conf.mode, actualDirty, expectedDirty);
 
         throw std::runtime_error("Failed");
     }
 }
 
-void doBench(BenchConf conf, bool map)
+void doBench(const std::string& mode)
 {
-    // Mapped, write-heavy
-    if (map) {
-        conf.readPct = 0.2;
-        conf.writePct = 0.8;
-        conf.mapMemory = true;
-        doBenchInner(conf);
+    int reps = 3;
+    for (int r = 0; r < reps; r++) {
+        BenchConf conf;
+        conf.mode = mode;
 
-        // Mapped, read-heavy
-        conf.readPct = 0.8;
-        conf.writePct = 0.2;
-        conf.mapMemory = true;
-        doBenchInner(conf);
-    } else {
-        // Private, write-heavy
         conf.readPct = 0.2;
         conf.writePct = 0.8;
         doBenchInner(conf);
 
-        // Private, read-heavy
         conf.readPct = 0.8;
         conf.writePct = 0.2;
         doBenchInner(conf);
@@ -269,19 +257,20 @@ void doBench(BenchConf conf, bool map)
 }
 }
 
-int main()
+int main(int argc, char* argv[])
 {
     initLogging();
 
-    faabric::runner::doBench(
-      { .mode = "uffd-thread-demand", .dirtyReads = false }, false);
+    std::vector<std::string> modes;
+    if (argc > 1) {
+        modes = { argv[1] };
+    } else {
+        modes = { "uffd-thread-demand", "uffd-demand", "segfault", "soft-pte" };
+    }
 
-    faabric::runner::doBench({ .mode = "uffd-demand", .dirtyReads = false },
-                             false);
-
-    faabric::runner::doBench({ .mode = "segfault", .dirtyReads = false }, true);
-
-    faabric::runner::doBench({ .mode = "softpte", .dirtyReads = false }, true);
+    for (const auto& m : modes) {
+        faabric::runner::doBench(m);
+    }
 
     return 0;
 }
