@@ -321,6 +321,12 @@ void SnapshotData::mapToMemory(std::span<uint8_t> target)
         faabric::util::mapMemoryPrivate(target, fd);
     }
 
+    // Warn kernel we will likely need this memory
+    ::madvise(target.data(), size, MADV_WILLNEED);
+
+    // Advise huge pages
+    ::madvise(target.data(), size, MADV_HUGEPAGE);
+
     PROF_END(MapSnapshot)
 }
 

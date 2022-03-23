@@ -128,6 +128,7 @@ void claimVirtualMemory(std::span<uint8_t> region)
 {
     int protectRes =
       ::mprotect(region.data(), region.size(), PROT_READ | PROT_WRITE);
+
     if (protectRes != 0) {
         SPDLOG_ERROR("Failed claiming virtual memory: {}", strerror(errno));
         throw std::runtime_error("Failed claiming virtual memory");

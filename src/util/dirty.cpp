@@ -359,11 +359,12 @@ SegfaultDirtyTracker::SegfaultDirtyTracker(const std::string& modeIn)
     // https://www.man7.org/linux/man-pages/man2/sigaction.2.html
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+    sa.sa_handler = nullptr;
+    sa.sa_sigaction = SegfaultDirtyTracker::handler;
 
     sigemptyset(&sa.sa_mask);
     sigaddset(&sa.sa_mask, SIGSEGV);
 
-    sa.sa_sigaction = SegfaultDirtyTracker::handler;
     if (sigaction(SIGSEGV, &sa, nullptr) != 0) {
         throw std::runtime_error("Failed sigaction");
     }
@@ -533,12 +534,13 @@ UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
     if (uffdSigbus) {
         // Set up the sigbus handler
         struct sigaction sa;
-        sa.sa_flags = SA_SIGINFO;
+        sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+        sa.sa_handler = nullptr;
+        sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
 
         sigemptyset(&sa.sa_mask);
         sigaddset(&sa.sa_mask, SIGBUS);
 
-        sa.sa_sigaction = UffdDirtyTracker::sigbusHandler;
         if (sigaction(SIGBUS, &sa, nullptr) != 0) {
             SPDLOG_ERROR("Failed to set up SIGBUS handler: {} ({})",
                          errno,

@@ -88,22 +88,23 @@ void doBenchInner(BenchConf conf)
     MemoryRegion mem = allocatePrivateMemory(MEM_SIZE);
     std::span<uint8_t> memView = std::span<uint8_t>(mem.get(), MEM_SIZE);
 
+    // ------- Initialisation -------
+    TimePoint startStart = startTimer();
+
     // Map to the snapshot *before* for some types
     if (!isUffd) {
         snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
     }
 
-    // ------- Initialisation -------
-    TimePoint startStart = startTimer();
-
     tracker->clearAll();
-    tracker->startTracking(memView);
 
     // Map to the snapshot
     // TODO this should be possible to do before all the tracking initialisation
     if (isUffd) {
         snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
     }
+
+    tracker->startTracking(memView);
 
     long startNanos = getTimeDiffNanos(startStart);
     float startMillis = float(startNanos) / (1000L * 1000L);
@@ -241,7 +242,7 @@ void doBenchInner(BenchConf conf)
 
 void doBench(const std::string& mode)
 {
-    int reps = 20;
+    int reps = 5;
     for (int r = 0; r < reps; r++) {
         BenchConf conf;
         conf.mode = mode;
@@ -265,7 +266,7 @@ int main(int argc, char* argv[])
     if (argc > 1) {
         modes = { argv[1] };
     } else {
-        modes = { "uffd-thread-demand", "uffd-demand", "segfault", "soft-pte" };
+        modes = { "uffd-thread-demand", "uffd-demand", "segfault", "softpte" };
     }
 
     for (const auto& m : modes) {
