@@ -1,4 +1,4 @@
-#include "faabric/util/string_tools.h"
+#include <faabric/util/string_tools.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
@@ -241,7 +241,7 @@ void doBenchInner(BenchConf conf)
 
 void doBench(const std::string& mode)
 {
-    int reps = 3;
+    int reps = 20;
     for (int r = 0; r < reps; r++) {
         BenchConf conf;
         conf.mode = mode;
@@ -250,9 +250,9 @@ void doBench(const std::string& mode)
         conf.writePct = 0.8;
         doBenchInner(conf);
 
-        conf.readPct = 0.8;
-        conf.writePct = 0.2;
-        doBenchInner(conf);
+        //conf.readPct = 0.8;
+        //conf.writePct = 0.2;
+        //doBenchInner(conf);
     }
 }
 }
