@@ -1,8 +1,8 @@
-#include <faabric/util/string_tools.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
 
 #include <cstdint>
@@ -70,8 +70,6 @@ void doBenchInner(BenchConf conf)
     c.dirtyTrackingMode = conf.mode;
     resetDirtyTracker();
 
-    bool isUffd = faabric::util::startsWith(conf.mode, "uffd");
-
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
 
     if (tracker->getType() != conf.mode) {
@@ -91,19 +89,12 @@ void doBenchInner(BenchConf conf)
     // ------- Initialisation -------
     TimePoint startStart = startTimer();
 
-    // Map to the snapshot *before* for some types
-    if (!isUffd) {
-        snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
-    }
-
     tracker->clearAll();
 
     // Map to the snapshot
-    // TODO this should be possible to do before all the tracking initialisation
-    if (isUffd) {
-        snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
-    }
+    snap->mapToMemory({ mem.get(), (size_t)MEM_SIZE });
 
+    // Start tracking
     tracker->startTracking(memView);
 
     long startNanos = getTimeDiffNanos(startStart);
@@ -251,9 +242,9 @@ void doBench(const std::string& mode)
         conf.writePct = 0.8;
         doBenchInner(conf);
 
-        //conf.readPct = 0.8;
-        //conf.writePct = 0.2;
-        //doBenchInner(conf);
+        // conf.readPct = 0.8;
+        // conf.writePct = 0.2;
+        // doBenchInner(conf);
     }
 }
 }

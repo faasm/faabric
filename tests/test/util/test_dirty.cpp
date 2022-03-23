@@ -25,13 +25,9 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
 
     SECTION("None") { mode = "none"; }
 
-    SECTION("Uffd") { mode = "uffd"; }
+    SECTION("Uffd demand") { mode = "uffd-demand"; }
 
-    SECTION("Uffd write-protect") { mode = "uffd-wp"; }
-
-    SECTION("Uffd threaded") { mode = "uffd-thread"; }
-
-    SECTION("Uffd threaded write-protect") { mode = "uffd-thread-wp"; }
+    SECTION("Uffd thread demand") { mode = "uffd-thread-demand"; }
 
     // Set the conf, reset the tracker and check
     setTrackingMode(mode);
@@ -51,15 +47,10 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     bool sharedMemory = false;
     bool mappedMemory = false;
 
-    // Some dirty trackers count reads as well as writes when marking pages as
-    // dirty
-    bool dirtyReads = false;
-
     SECTION("Soft dirty PTEs")
     {
         setTrackingMode("softpte");
         checkPostReset = true;
-        dirtyReads = false;
 
         SECTION("Shared") { sharedMemory = true; }
 
@@ -82,7 +73,6 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     {
         setTrackingMode("segfault");
         checkPostReset = true;
-        dirtyReads = false;
 
         SECTION("Shared") { sharedMemory = true; }
 
@@ -105,7 +95,6 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     {
         setTrackingMode("uffd");
         checkPostReset = false;
-        dirtyReads = true;
 
         SECTION("Shared") { sharedMemory = true; }
 
@@ -124,48 +113,21 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         }
     }
 
-    SECTION("Userfaultfd wp")
+    SECTION("Uffd demand paging")
     {
-        setTrackingMode("uffd-wp");
+        setTrackingMode("uffd-demand");
         checkPostReset = true;
-        dirtyReads = true;
 
-        // Neither shared nor mapped mem works with write-protection
-
+        // Uffd only supports private memory with write-protection
         SECTION("Private") { sharedMemory = false; }
     }
 
-    SECTION("Userfaultfd thread")
+    SECTION("Uffd demand paging thread")
     {
-        setTrackingMode("uffd-thread");
+        setTrackingMode("uffd-thread-demand");
         checkPostReset = false;
-        dirtyReads = false;
 
-        SECTION("Shared") { sharedMemory = true; }
-
-        SECTION("Private") { sharedMemory = false; }
-
-        SECTION("Mapped shared")
-        {
-            sharedMemory = true;
-            mappedMemory = true;
-        }
-
-        SECTION("Mapped private")
-        {
-            sharedMemory = false;
-            mappedMemory = true;
-        }
-    }
-
-    SECTION("Userfaultfd thread wp")
-    {
-        setTrackingMode("uffd-thread-wp");
-        checkPostReset = true;
-        dirtyReads = false;
-
-        // Neither shared nor mapped mem works with write-protection
-
+        // Uffd only supports private memory with write-protection
         SECTION("Private") { sharedMemory = false; }
     }
 
@@ -221,11 +183,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     pageOne[10] = 1;
     pageThree[123] = 4;
 
-    if (dirtyReads) {
-        expected = { 1, 1, 0, 1, 0, 0 };
-    } else {
-        expected = { 0, 1, 0, 1, 0, 0 };
-    }
+    expected = { 0, 1, 0, 1, 0, 0 };
 
     actual = tracker->getBothDirtyPages(memView);
     REQUIRE(actual == expected);
@@ -299,16 +257,16 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         nLoops = 20;
     }
 
-    SECTION("Userfaultfd")
+    SECTION("Uffd demand paging")
     {
-        setTrackingMode("uffd");
+        setTrackingMode("uffd-demand");
         nLoops = 1;
     }
 
-    SECTION("Userfaultfd wp")
+    SECTION("Uffd demand paging thread")
     {
-        setTrackingMode("uffd-wp");
-        nLoops = 20;
+        setTrackingMode("uffd-thread-demand");
+        nLoops = 1;
     }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
