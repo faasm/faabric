@@ -306,7 +306,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     // Reset dirty tracking to get a clean start
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
-    tracker->clearAll();
+    tracker->resetCurrentRegion();
     tracker->startTracking(memView);
     tracker->startThreadLocalTracking(memView);
 

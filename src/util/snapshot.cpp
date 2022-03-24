@@ -74,8 +74,8 @@ SnapshotData::SnapshotData(size_t sizeIn, size_t maxSizeIn)
   : conf(faabric::util::getSystemConfig())
   , size(sizeIn)
   , maxSize(maxSizeIn)
-  , isDemandPaged(conf.dirtyTrackingMode == "uffd-demand" ||
-                  conf.dirtyTrackingMode == "uffd-thread-demand")
+  , isDemandPaged(conf.dirtyTrackingMode == "uffd" ||
+                  conf.dirtyTrackingMode == "uffd-thread")
 {
     if (maxSize == 0) {
         maxSize = size;

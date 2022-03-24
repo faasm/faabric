@@ -71,6 +71,14 @@ class DirtyTrackingRecord
 
     virtual std::vector<char> getDirtyFlags() { return dirtyFlags; }
 
+    virtual void resetCurrentRegion()
+    {
+        if (nPages > 0) {
+            dirtyFlags = std::vector<char>(nPages, 0);
+            pagedFlags = std::vector<char>(nPages, 0);
+        }
+    }
+
     virtual void reset()
     {
         nPages = 0;
@@ -97,75 +105,6 @@ class DirtyTrackingRecord
     uint8_t* sourceMapping = nullptr;
     uint8_t* regionBase = nullptr;
     uint8_t* regionTop = nullptr;
-};
-
-/**
- * Thread-safe wrapper around dirty tracking data, necessary for use with the
- * background event thread in the userfaultfd tracker. Although the logic around
- * the interaction between the event thread and the main thread should in theory
- * protect against concurrent accesses, we need this to keep TSan happy.
- */
-class ThreadSafeDirtyTrackingRecord final : public DirtyTrackingRecord
-{
-  public:
-    ThreadSafeDirtyTrackingRecord() = default;
-
-    void trackRegion(std::span<uint8_t> region) override
-    {
-        FullLock lock(mx);
-        DirtyTrackingRecord::trackRegion(region);
-    }
-
-    void markPageDirty(void* addr) override
-    {
-        FullLock lock(mx);
-        DirtyTrackingRecord::markPageDirty(addr);
-    }
-
-    bool isPaged(long pageNum) override
-    {
-        SharedLock lock(mx);
-        return DirtyTrackingRecord::isPaged(pageNum);
-    }
-
-    void markPagePagedNum(long pageNum) override
-    {
-        FullLock lock(mx);
-        DirtyTrackingRecord::markPagePagedNum(pageNum);
-    }
-
-    void markPageDirtyNum(long pageNum) override
-    {
-        FullLock lock(mx);
-        DirtyTrackingRecord::markPageDirtyNum(pageNum);
-    }
-
-    std::vector<char> getDirtyFlags() override
-    {
-        SharedLock lock(mx);
-        return DirtyTrackingRecord::getDirtyFlags();
-    }
-
-    bool isInitialised() override
-    {
-        SharedLock lock(mx);
-        return DirtyTrackingRecord::isInitialised();
-    }
-
-    int getNPages() override
-    {
-        SharedLock lock(mx);
-        return DirtyTrackingRecord::getNPages();
-    }
-
-    void reset() override
-    {
-        FullLock lock(mx);
-        DirtyTrackingRecord::reset();
-    }
-
-  private:
-    std::shared_mutex mx;
 };
 
 void* pageAlignAddress(void* faultAddr)
@@ -198,7 +137,7 @@ void resetDirtyTracker()
         tracker = std::make_shared<SegfaultDirtyTracker>(mode);
     } else if (mode == "none") {
         tracker = std::make_shared<NoneDirtyTracker>(mode);
-    } else if ("uffd-demand" || mode == "uffd-thread-demand") {
+    } else if ("uffd" || mode == "uffd-thread") {
         tracker = std::make_shared<UffdDirtyTracker>(mode);
     } else {
         SPDLOG_ERROR("Unrecognised dirty tracking mode: {}", mode);
@@ -248,12 +187,18 @@ SoftPTEDirtyTracker::~SoftPTEDirtyTracker()
 void SoftPTEDirtyTracker::mapRegions(std::span<uint8_t> source,
                                      std::span<uint8_t> dest)
 {
-    throw std::runtime_error("Mapping not supported");
+    // No mapping required for softptes
 }
 
 void SoftPTEDirtyTracker::clearAll()
 {
     resetPTEs();
+}
+
+void SoftPTEDirtyTracker::resetCurrentRegion()
+{
+    globalTracking.resetCurrentRegion();
+    tracking.resetCurrentRegion();
 }
 
 void SoftPTEDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -371,7 +316,7 @@ SegfaultDirtyTracker::SegfaultDirtyTracker(const std::string& modeIn)
 void SegfaultDirtyTracker::mapRegions(std::span<uint8_t> source,
                                       std::span<uint8_t> dest)
 {
-    throw std::runtime_error("Mapping not supported");
+    // No mapping needed for segfaults
 }
 
 void SegfaultDirtyTracker::clearAll()
@@ -409,6 +354,12 @@ void SegfaultDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
     }
 
     tracking.trackRegion(region);
+}
+
+void SegfaultDirtyTracker::resetCurrentRegion()
+{
+    globalTracking.resetCurrentRegion();
+    tracking.resetCurrentRegion();
 }
 
 void SegfaultDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -496,9 +447,9 @@ static std::shared_ptr<std::thread> eventThread = nullptr;
 UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
   : DirtyTracker(modeIn)
 {
-    if (mode == "uffd-demand") {
+    if (mode == "uffd") {
         sigbus = true;
-    } else if (mode == "uffd-thread-demand") {
+    } else if (mode == "uffd-thread") {
         sigbus = false;
     }
 
@@ -673,7 +624,7 @@ void UffdDirtyTracker::eventThreadEntrypoint()
         void* faultAddr = (void*)msg.arg.pagefault.address;
         long pageNum = globalTracking.getPage(faultAddr);
 
-        // Events will ALWAYS have UFFD_PAGEFAULT_FLAG_WRITE set, but will
+        // Events will always have UFFD_PAGEFAULT_FLAG_WRITE set, but will
         // only have UFFD_PAGEFAULT_FLAG_WP set when it's a write-protected
         // event
         bool isWriteProtected =
@@ -689,10 +640,16 @@ void UffdDirtyTracker::eventThreadEntrypoint()
 
             globalTracking.markPageDirtyNum(pageNum);
         } else {
+            if (globalTracking.getSourceMapping() == nullptr) {
+                SPDLOG_ERROR(
+                  "Got missing page event but no source mapping set");
+                throw std::runtime_error("No source mapping set");
+            }
+
             uint8_t* from = globalTracking.getSourceMapping() + offset;
             uint8_t* to = globalTracking.getRegionBase() + offset;
 
-            copyPage(from, to);
+            copyPage(from, to, true);
         }
     }
 }
@@ -715,11 +672,12 @@ void UffdDirtyTracker::sigbusHandler(int sig,
 
     long pageNum = tracking.getPage(faultAddr);
     long offset = pageNum * HOST_PAGE_SIZE;
+    bool demandPaged = tracking.getSourceMapping() != nullptr;
 
     // If page is not yet paged in, we need to copy from the source to the
     // dest. If it is already paged in, this is a write on the paged region,
     // so we need to remove write protection and mark it.
-    if (tracking.isPaged(pageNum)) {
+    if (!demandPaged || tracking.isPaged(pageNum)) {
         // Remove write-protection
         removeWriteProtectFromPage(tracking.getRegionBase() + offset, false);
 
@@ -728,7 +686,8 @@ void UffdDirtyTracker::sigbusHandler(int sig,
     } else {
         // Copy source page into dest page
         copyPage(tracking.getSourceMapping() + offset,
-                 tracking.getRegionBase() + offset);
+                 tracking.getRegionBase() + offset,
+                 false);
 
         // Mark page as paged
         tracking.markPagePagedNum(pageNum);
@@ -747,6 +706,12 @@ void UffdDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region)
       std::span<uint8_t>(globalTracking.getSourceMapping(), region.size()));
 
     tracking.trackRegion(region);
+}
+
+void UffdDirtyTracker::resetCurrentRegion()
+{
+    globalTracking.resetCurrentRegion();
+    tracking.resetCurrentRegion();
 }
 
 void UffdDirtyTracker::startTracking(std::span<uint8_t> region)
@@ -771,14 +736,20 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
 
     __u64 mode = 0;
 
-    // All uffd modes require demand paging to handle the mapping.
-    // This wouldn't be necessary if uffd write-protect was supported on shared
-    // memory mappings (in which case we could just write-protect a
-    // copy-on-write region of memory).
-    mode |= UFFDIO_REGISTER_MODE_MISSING;
-
     // Register for write-protect events
     mode |= UFFDIO_REGISTER_MODE_WP;
+
+    // We demand page too if we have a source mapping. This wouldn't be
+    // necessary if uffd write-protect was supported on shared memory mappings
+    // (in which case we could just write-protect a copy-on-write region of
+    // memory).
+    bool demandPage = globalTracking.getSourceMapping() != nullptr;
+    if (demandPage) {
+        SPDLOG_TRACE("Registering region for write-protect and demand paging");
+        mode |= UFFDIO_REGISTER_MODE_MISSING;
+    } else {
+        SPDLOG_TRACE("Registering region for just write-protect");
+    }
 
     struct uffdio_register uffdRegister = { .range = regRange, .mode = mode };
 
@@ -814,7 +785,7 @@ void UffdDirtyTracker::stopTracking(std::span<uint8_t> region)
     deregisterRegion(region);
 }
 
-void UffdDirtyTracker::copyPage(uint8_t* source, uint8_t* dest)
+void UffdDirtyTracker::copyPage(uint8_t* source, uint8_t* dest, bool throwEx)
 {
     // Note that here we also set the copied page to write-protected, this way
     // we can track writes on the newly copied page
@@ -826,7 +797,12 @@ void UffdDirtyTracker::copyPage(uint8_t* source, uint8_t* dest)
 
     if (::ioctl(uffd, UFFDIO_COPY, &copyDef) != 0) {
         SPDLOG_ERROR("Failed to copy range: {} ({})", errno, strerror(errno));
-        throw std::runtime_error("Range copy");
+
+        if (throwEx) {
+            throw std::runtime_error("Range copy");
+        }
+
+        std::terminate();
     }
 }
 
@@ -927,7 +903,7 @@ NoneDirtyTracker::NoneDirtyTracker(const std::string& modeIn)
 void NoneDirtyTracker::mapRegions(std::span<uint8_t> source,
                                   std::span<uint8_t> dest)
 {
-    throw std::runtime_error("Map regions not supported");
+    // No mapping required
 }
 
 void NoneDirtyTracker::clearAll()
@@ -936,6 +912,12 @@ void NoneDirtyTracker::clearAll()
 }
 
 void NoneDirtyTracker::startThreadLocalTracking(std::span<uint8_t> region) {}
+
+void NoneDirtyTracker::resetCurrentRegion()
+{
+    globalTracking.resetCurrentRegion();
+    tracking.resetCurrentRegion();
+}
 
 void NoneDirtyTracker::startTracking(std::span<uint8_t> region)
 {

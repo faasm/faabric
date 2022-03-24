@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
     if (argc > 1) {
         modes = { argv[1] };
     } else {
-        modes = { "uffd-thread-demand", "uffd-demand", "segfault", "softpte" };
+        modes = { "uffd-thread", "uffd", "segfault", "softpte" };
     }
 
     for (const auto& m : modes) {

@@ -32,6 +32,8 @@ class DirtyTracker
 
     virtual std::string getType() = 0;
 
+    virtual void resetCurrentRegion() = 0;
+
     virtual void startTracking(std::span<uint8_t> region) = 0;
 
     virtual void stopTracking(std::span<uint8_t> region) = 0;
@@ -68,6 +70,8 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     void clearAll() override;
 
     std::string getType() override { return "softpte"; }
+
+    void resetCurrentRegion() override;
 
     void startTracking(std::span<uint8_t> region) override;
 
@@ -108,6 +112,8 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
     std::string getType() override { return "segfault"; }
 
+    void resetCurrentRegion() override;
+
     void startTracking(std::span<uint8_t> region) override;
 
     void stopTracking(std::span<uint8_t> region) override;
@@ -136,10 +142,10 @@ class SegfaultDirtyTracker final : public DirtyTracker
  *
  * The dirty tracking mode can be one of four options:
  *
- * - uffd-demand - uses the `SIGBUS` handler to catch events triggered by
+ * - uffd - uses the `SIGBUS` handler to catch events triggered by
  *   accessing missing pages in demand-zero paged memory, then wirte-protects
  *   them, and handles the subsequent write-protect fault
- * - uffd-thread-demand - same as `uffd-demand` but uses a background event
+ * - uffd-thread - same as `uffd` but uses a background event
  *   handler thread
  *
  * See the docs for more info on these different approaches:
@@ -155,6 +161,8 @@ class UffdDirtyTracker final : public DirtyTracker
     void clearAll() override;
 
     std::string getType() override { return mode; }
+
+    void resetCurrentRegion() override;
 
     void startTracking(std::span<uint8_t> region) override;
 
@@ -191,7 +199,7 @@ class UffdDirtyTracker final : public DirtyTracker
 
     static void removeWriteProtectFromPage(uint8_t* region, bool throwEx);
 
-    static void copyPage(uint8_t* source, uint8_t* dest);
+    static void copyPage(uint8_t* source, uint8_t* dest, bool throwEx);
 
     static bool zeroPage(uint8_t* region);
 
@@ -213,6 +221,8 @@ class NoneDirtyTracker final : public DirtyTracker
     void clearAll() override;
 
     std::string getType() override { return "none"; }
+
+    void resetCurrentRegion() override;
 
     void startTracking(std::span<uint8_t> region) override;
 
