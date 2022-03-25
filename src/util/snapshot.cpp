@@ -37,19 +37,59 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
     // region
     uint32_t diffStart = 0;
     bool diffInProgress = false;
-    for (uint32_t i = startOffset; i < endOffset; i++) {
-        bool dirty = a.data()[i] != b.data()[i];
-        if (dirty && !diffInProgress) {
-            // Starts at this byte
-            diffInProgress = true;
-            diffStart = i;
-        } else if (!dirty && diffInProgress) {
-            // Finished on byte before
-            diffInProgress = false;
-            snapshotDiffs.emplace_back(SnapshotDataType::Raw,
-                                       SnapshotMergeOperation::Bytewise,
-                                       diffStart,
-                                       b.subspan(diffStart, i - diffStart));
+    const uint8_t* aPtr = a.data();
+    const uint8_t* bPtr = b.data();
+
+    // Check chunks at a time, only do byte-wise checks if we find a diff within
+    // a given chunk
+    size_t chunkSize = ARRAY_COMP_STEP_SIZE;
+
+    for (uint32_t i = startOffset; i < endOffset; i += chunkSize) {
+        const uint8_t* thisAPtr = aPtr + i;
+        const uint8_t* thisBPtr = bPtr + i;
+
+        // Check to see if we can skip this chunk
+        size_t thisStep = chunkSize;
+        if (endOffset > 0) {
+            thisStep = std::min<size_t>(endOffset - i, chunkSize);
+        }
+
+        if (memcmp(thisAPtr, thisBPtr, thisStep) == 0) {
+            SPDLOG_INFO("Skipping {} bytes {}-{} ({})",
+                        thisStep,
+                        i,
+                        i + thisStep,
+                        endOffset);
+
+            if (diffInProgress) {
+                // Finished on byte before
+                diffInProgress = false;
+                snapshotDiffs.emplace_back(SnapshotDataType::Raw,
+                                           SnapshotMergeOperation::Bytewise,
+                                           diffStart,
+                                           b.subspan(diffStart, i - diffStart));
+            }
+
+            continue;
+        }
+
+        for (uint32_t c = i; c < i + thisStep; c++) {
+            thisAPtr = aPtr + c;
+            thisBPtr = bPtr + c;
+
+            bool dirty = *thisAPtr != *thisBPtr;
+            if (dirty && !diffInProgress) {
+                // Starts at this byte
+                diffInProgress = true;
+                diffStart = c;
+            } else if (!dirty && diffInProgress) {
+                // Finished on byte before
+                diffInProgress = false;
+                snapshotDiffs.emplace_back(SnapshotDataType::Raw,
+                                           SnapshotMergeOperation::Bytewise,
+                                           diffStart,
+                                           b.subspan(diffStart, c - diffStart));
+            }
         }
     }
 
@@ -678,6 +718,9 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     }
     startPage += std::distance(startIt, foundIt);
 
+    // Seems to be quicker to access this via a raw ptr
+    const char* dirtyRegionsPtr = dirtyRegions.data();
+
     // Bytewise and XOR both deal with overwriting bytes without any
     // other logic. Bytewise will filter in only the modified bytes,
     // whereas XOR will transmit the XOR of the whole page and the original
@@ -686,7 +729,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         // Iterate through pages
         for (int p = startPage; p < endPage; p++) {
             // Skip if page not dirty
-            if (dirtyRegions.at(p) == 0) {
+            if (dirtyRegionsPtr[p] == 0) {
                 continue;
             }
 

@@ -1742,6 +1742,36 @@ TEST_CASE("Test diffing byte array regions", "[util][snapshot]")
         expected = { { 2, 1 }, { 4, 3 } };
     }
 
+    SECTION("Not equal multiple chunks")
+    {
+        size_t arraySize = 4 * ARRAY_COMP_STEP_SIZE;
+        a = std::vector<uint8_t>(arraySize, 1);
+        b = std::vector<uint8_t>(arraySize, 1);
+        startOffset = 3;
+        endOffset = arraySize;
+
+        uint32_t offsetOneA = startOffset + ARRAY_COMP_STEP_SIZE + 2;
+        uint32_t offsetOneB = startOffset + ARRAY_COMP_STEP_SIZE + 10;
+        uint32_t offsetTwo = startOffset + 2 * ARRAY_COMP_STEP_SIZE + 1;
+
+        std::vector<uint8_t> diffChunkOneA = { 0, 0, 0 };
+        std::vector<uint8_t> diffChunkOneB = { 3, 3, 3, 3, 3 };
+        std::vector<uint8_t> diffChunkTwo = { 4, 4, 4, 4, 4, 4 };
+
+        std::copy(
+          diffChunkOneA.begin(), diffChunkOneA.end(), a.data() + offsetOneA);
+        std::copy(
+          diffChunkOneB.begin(), diffChunkOneB.end(), a.data() + offsetOneB);
+        std::copy(
+          diffChunkTwo.begin(), diffChunkTwo.end(), a.data() + offsetTwo);
+
+        expected = {
+            { offsetOneA, offsetOneA + diffChunkOneA.size() },
+            { offsetOneB, offsetOneB + diffChunkOneB.size() },
+            { offsetTwo, offsetTwo + diffChunkTwo.size() },
+        };
+    }
+
     std::vector<SnapshotDiff> actual;
     diffArrayRegions(actual, startOffset, endOffset, a, b);
 

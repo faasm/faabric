@@ -13,6 +13,8 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 
+#define ARRAY_COMP_STEP_SIZE 32
+
 namespace faabric::util {
 
 /**

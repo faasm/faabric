@@ -491,6 +491,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
             auto thisThreadDirtyRegions =
               tracker->getThreadLocalDirtyPages(memView);
 
+            // TODO - remove this synchronisation point, some kind of
+            // append-only data structure?
             faabric::util::FullLock lock(threadExecutionMutex);
             faabric::util::mergeDirtyPages(dirtyRegions,
                                            thisThreadDirtyRegions);

@@ -72,8 +72,17 @@ void SystemConfig::initialise()
       this->getSystemConfIntParam("POINT_TO_POINT_SERVER_THREADS", "2");
 
     // Dirty tracking
+    // Segfault dirty tracking appears to be more performant than softptes on
+    // high churn jobs due to the clean-up cost for softptes (resetting the
+    // ptes), however, softpte may be better in low-churn workloads. Userfaultfd
+    // seems least performant in all scenarios, but is a cleaner, more flexible
+    // implementation.
     dirtyTrackingMode = getEnvVar("DIRTY_TRACKING_MODE", "segfault");
-    diffingMode = getEnvVar("DIFFING_MODE", "xor");
+
+    // Bytewise appears to be more performant than XOR (potentially because it
+    // pushes more effort onto the executor threads rather than the merging
+    // thread)
+    diffingMode = getEnvVar("DIFFING_MODE", "bytewise");
 }
 
 int SystemConfig::getSystemConfIntParam(const char* name,
