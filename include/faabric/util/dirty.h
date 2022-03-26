@@ -180,8 +180,6 @@ class UffdDirtyTracker final : public DirtyTracker
                               void* ucontext) noexcept;
 
   private:
-    bool writeProtect = false;
-
     bool sigbus = false;
 
     static void initUffd();

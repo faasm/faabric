@@ -713,6 +713,9 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
 
     __u64 mode = 0;
 
+    // Register for write-protect events
+    mode |= UFFDIO_REGISTER_MODE_WP;
+
     // We demand page too if we have a source mapping. This wouldn't be
     // necessary if uffd write-protect was supported on shared memory mappings
     // (in which case we could just write-protect a copy-on-write region of
@@ -722,7 +725,7 @@ void UffdDirtyTracker::registerRegion(std::span<uint8_t> region)
         SPDLOG_TRACE("Registering region for write-protect and demand paging");
         mode |= UFFDIO_REGISTER_MODE_MISSING;
     } else {
-        SPDLOG_TRACE("Registering region for just write-protect");
+        SPDLOG_TRACE("Registering region for write-protect only");
     }
 
     struct uffdio_register uffdRegister = { .range = regRange, .mode = mode };
