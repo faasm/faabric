@@ -50,6 +50,8 @@ AlignedChunk getPageAlignedChunk(long offset, long length);
 // Allocation
 // -------------------------
 
+MemoryRegion allocatePrivatePopulatedMemory(size_t size);
+
 MemoryRegion allocatePrivateMemory(size_t size);
 
 MemoryRegion allocateSharedMemory(size_t size);

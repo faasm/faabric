@@ -27,11 +27,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
 
     SECTION("Uffd") { mode = "uffd"; }
 
-    SECTION("Uffd write-protect") { mode = "uffd-wp"; }
-
-    SECTION("Uffd threaded") { mode = "uffd-thread"; }
-
-    SECTION("Uffd threaded write-protect") { mode = "uffd-thread-wp"; }
+    SECTION("Uffd thread") { mode = "uffd-thread"; }
 
     // Set the conf, reset the tracker and check
     setTrackingMode(mode);
@@ -43,156 +39,59 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
                  "Test basic dirty tracking",
                  "[util][dirty]")
 {
-    // Some dirty trackers are expected to work after being reset, others not
-    bool checkPostReset = false;
-
-    // Shared vs. private memory is an important distinction as userfaultfd may
-    // perform differently
-    bool sharedMemory = false;
-    bool mappedMemory = false;
-
-    // Some dirty trackers count reads as well as writes when marking pages as
-    // dirty
-    bool dirtyReads = false;
+    bool demandPaged = false;
+    bool resetSupported = true;
+    bool cowMapped = false;
+    bool prefault = false;
 
     SECTION("Soft dirty PTEs")
     {
         setTrackingMode("softpte");
-        checkPostReset = true;
-        dirtyReads = false;
+        demandPaged = false;
 
-        SECTION("Shared") { sharedMemory = true; }
-
-        SECTION("Private") { sharedMemory = false; }
-
-        SECTION("Mapped shared")
-        {
-            sharedMemory = true;
-            mappedMemory = true;
-        }
-
-        SECTION("Mapped private")
-        {
-            sharedMemory = false;
-            mappedMemory = true;
-        }
+        SECTION("CoW-mapped") { cowMapped = true; }
+        SECTION("Not mapped") { cowMapped = false; }
     }
 
     SECTION("Segfaults")
     {
         setTrackingMode("segfault");
-        checkPostReset = true;
-        dirtyReads = false;
+        demandPaged = false;
 
-        SECTION("Shared") { sharedMemory = true; }
-
-        SECTION("Private") { sharedMemory = false; }
-
-        SECTION("Mapped shared")
-        {
-            sharedMemory = true;
-            mappedMemory = true;
-        }
-
-        SECTION("Mapped private")
-        {
-            sharedMemory = false;
-            mappedMemory = true;
-        }
+        SECTION("CoW-mapped") { cowMapped = true; }
+        SECTION("Not mapped") { cowMapped = false; }
     }
 
-    SECTION("Userfaultfd")
+    SECTION("Uffd write-protect")
     {
         setTrackingMode("uffd");
-        checkPostReset = false;
-        dirtyReads = true;
-
-        SECTION("Shared") { sharedMemory = true; }
-
-        SECTION("Private") { sharedMemory = false; }
-
-        SECTION("Mapped shared")
-        {
-            sharedMemory = true;
-            mappedMemory = true;
-        }
-
-        SECTION("Mapped private")
-        {
-            sharedMemory = false;
-            mappedMemory = true;
-        }
+        demandPaged = false;
+        cowMapped = false;
+        prefault = true;
     }
 
-    SECTION("Userfaultfd wp")
-    {
-        setTrackingMode("uffd-wp");
-        checkPostReset = true;
-        dirtyReads = true;
-
-        // Neither shared nor mapped mem works with write-protection
-
-        SECTION("Private") { sharedMemory = false; }
-    }
-
-    SECTION("Userfaultfd thread")
+    SECTION("Uffd thread write-protect")
     {
         setTrackingMode("uffd-thread");
-        checkPostReset = false;
-        dirtyReads = false;
-
-        SECTION("Shared") { sharedMemory = true; }
-
-        SECTION("Private") { sharedMemory = false; }
-
-        SECTION("Mapped shared")
-        {
-            sharedMemory = true;
-            mappedMemory = true;
-        }
-
-        SECTION("Mapped private")
-        {
-            sharedMemory = false;
-            mappedMemory = true;
-        }
+        demandPaged = false;
+        cowMapped = false;
+        prefault = true;
     }
 
-    SECTION("Userfaultfd thread wp")
+    SECTION("Uffd demand paging")
     {
-        setTrackingMode("uffd-thread-wp");
-        checkPostReset = true;
-        dirtyReads = false;
-
-        // Neither shared nor mapped mem works with write-protection
-
-        SECTION("Private") { sharedMemory = false; }
+        setTrackingMode("uffd");
+        demandPaged = true;
+        resetSupported = false;
+        cowMapped = false;
     }
 
-    // Create several pages of memory
-    int nPages = 6;
-    size_t memSize = HOST_PAGE_SIZE * nPages;
-
-    // Need to allocate both regions here otherwise destructors will nuke them
-    // before we're done
-    std::span<uint8_t> memView;
-    MemoryRegion sharedMemPtr = allocateSharedMemory(memSize);
-    MemoryRegion privateMemPtr = allocatePrivateMemory(memSize);
-    if (sharedMemory) {
-        memView = std::span<uint8_t>(sharedMemPtr.get(), memSize);
-    } else {
-        memView = std::span<uint8_t>(privateMemPtr.get(), memSize);
-    }
-
-    if (mappedMemory) {
-        int fd = createFd(memSize, "foobar");
-
-        // Map the memory
-        if (sharedMemory) {
-            mapMemoryShared(memView, fd);
-        } else {
-            mapMemoryPrivate(memView, fd);
-        }
+    SECTION("Uffd demand paging thread")
+    {
+        setTrackingMode("uffd-thread");
+        demandPaged = true;
+        resetSupported = false;
+        cowMapped = false;
     }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
@@ -200,6 +99,38 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
 
     // Make sure we clear all, relevant for anything with system-wide state
     tracker->clearAll();
+
+    // Create several pages of memory
+    int nPages = 6;
+    size_t memSize = HOST_PAGE_SIZE * nPages;
+
+    // Allocate memory and data
+    // If it's not demand paged, or fd-mapped, we need to pre-fault the memory
+    MemoryRegion unfaultedPtr = allocatePrivateMemory(memSize);
+    MemoryRegion prefaultedPtr = allocatePrivatePopulatedMemory(memSize);
+    std::span<uint8_t> memView;
+
+    if (prefault) {
+        memView = std::span<uint8_t>(prefaultedPtr.get(), memSize);
+    } else {
+        memView = std::span<uint8_t>(unfaultedPtr.get(), memSize);
+    }
+
+    MemoryRegion sourceMemPtr = allocatePrivateMemory(memSize);
+    std::span<uint8_t> sourceMemView =
+      std::span<uint8_t>(sourceMemPtr.get(), memSize);
+
+    // Set up demand paging or map memory accordingly
+    if (demandPaged) {
+        tracker->mapRegions(sourceMemView, memView);
+    } else if (cowMapped) {
+        int fd = createFd(memSize, "foobar");
+        mapMemoryPrivate(memView, fd);
+    }
+
+    if (tracker->getType() == "softpte") {
+        tracker->clearAll();
+    }
 
     std::vector<char> actual = tracker->getBothDirtyPages(memView);
     std::vector<char> expected(nPages, 0);
@@ -221,11 +152,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     pageOne[10] = 1;
     pageThree[123] = 4;
 
-    if (dirtyReads) {
-        expected = { 1, 1, 0, 1, 0, 0 };
-    } else {
-        expected = { 0, 1, 0, 1, 0, 0 };
-    }
+    expected = { 0, 1, 0, 1, 0, 0 };
 
     actual = tracker->getBothDirtyPages(memView);
     REQUIRE(actual == expected);
@@ -238,22 +165,23 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     actual = tracker->getBothDirtyPages(memView);
     REQUIRE(actual == expected);
 
-    // Reset
-    tracker->stopTracking(memView);
-    tracker->stopThreadLocalTracking(memView);
-    tracker->startTracking(memView);
-    tracker->startThreadLocalTracking(memView);
+    if (resetSupported) {
+        // Reset
+        tracker->stopTracking(memView);
+        tracker->stopThreadLocalTracking(memView);
 
-    actual = tracker->getBothDirtyPages(memView);
-    expected = std::vector<char>(nPages, 0);
-    REQUIRE(actual == expected);
+        tracker->startTracking(memView);
+        tracker->startThreadLocalTracking(memView);
 
-    // Check the data hasn't changed
-    REQUIRE(pageOne[10] == 1);
-    REQUIRE(pageThree[123] == 4);
-    REQUIRE(pageFive[99] == 3);
+        actual = tracker->getBothDirtyPages(memView);
+        expected = std::vector<char>(nPages, 0);
+        REQUIRE(actual == expected);
 
-    if (checkPostReset) {
+        // Check the data hasn't changed
+        REQUIRE(pageOne[10] == 1);
+        REQUIRE(pageThree[123] == 4);
+        REQUIRE(pageFive[99] == 3);
+
         // Set some other data, make sure we write to one of the pages already
         // modified in the first changes
         uint8_t* pageFour = pageThree + HOST_PAGE_SIZE;
@@ -276,10 +204,10 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         actual = tracker->getBothDirtyPages(memView);
         expected = std::vector<char>(nPages, 0);
         REQUIRE(actual == expected);
-
-        tracker->stopTracking(memView);
-        tracker->stopThreadLocalTracking(memView);
     }
+
+    tracker->stopTracking(memView);
+    tracker->stopThreadLocalTracking(memView);
 }
 
 TEST_CASE_METHOD(DirtyTrackingTestFixture,
@@ -293,22 +221,27 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     // others don't, so we may or may not loop
     int nLoops = 0;
 
+    bool demandPaged = false;
+    bool prefault = false;
+
     SECTION("Segfault")
     {
         setTrackingMode("segfault");
         nLoops = 20;
     }
 
-    SECTION("Userfaultfd")
+    SECTION("Uffd write-protect")
+    {
+        setTrackingMode("uffd");
+        nLoops = 20;
+        prefault = true;
+    }
+
+    SECTION("Uffd demand paging")
     {
         setTrackingMode("uffd");
         nLoops = 1;
-    }
-
-    SECTION("Userfaultfd wp")
-    {
-        setTrackingMode("uffd-wp");
-        nLoops = 20;
+        demandPaged = true;
     }
 
     std::shared_ptr<DirtyTracker> tracker = getDirtyTracker();
@@ -320,7 +253,22 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     size_t memSize = nPages * HOST_PAGE_SIZE;
 
     MemoryRegion mem = allocatePrivateMemory(memSize);
-    std::span<uint8_t> memView(mem.get(), memSize);
+    MemoryRegion memPrefault = allocatePrivatePopulatedMemory(memSize);
+    std::span<uint8_t> memView;
+
+    if (prefault) {
+        memView = std::span<uint8_t>(memPrefault.get(), memSize);
+    } else {
+        memView = std::span<uint8_t>(mem.get(), memSize);
+    }
+
+    MemoryRegion sourceMemPtr = allocatePrivateMemory(memSize);
+    std::span<uint8_t> sourceMemView =
+      std::span<uint8_t>(sourceMemPtr.get(), memSize);
+
+    if (demandPaged) {
+        tracker->mapRegions(sourceMemView, memView);
+    }
 
     for (int loop = 0; loop < nLoops; loop++) {
         std::vector<std::shared_ptr<std::atomic<bool>>> success;

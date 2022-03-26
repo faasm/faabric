@@ -58,7 +58,6 @@ You can also run the CLI with:
 
 ```bash
 # Set up env
-export FAABRIC_BUILD_DIR=<some dir>
 source bin/workon.sh
 
 # Install requirements

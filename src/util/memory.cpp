@@ -109,6 +109,12 @@ MemoryRegion doAlloc(size_t size, int prot, int flags)
     return mem;
 }
 
+MemoryRegion allocatePrivatePopulatedMemory(size_t size)
+{
+    return doAlloc(
+      size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_POPULATE);
+}
+
 MemoryRegion allocatePrivateMemory(size_t size)
 {
     return doAlloc(size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS);

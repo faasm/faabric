@@ -36,6 +36,9 @@ class DirtyTracker
 
     virtual void stopTracking(std::span<uint8_t> region) = 0;
 
+    virtual void mapRegions(std::span<uint8_t> source,
+                            std::span<uint8_t> dest) = 0;
+
     virtual std::vector<char> getDirtyPages(std::span<uint8_t> region) = 0;
 
     virtual void startThreadLocalTracking(std::span<uint8_t> region) = 0;
@@ -69,6 +72,9 @@ class SoftPTEDirtyTracker final : public DirtyTracker
     void startTracking(std::span<uint8_t> region) override;
 
     void stopTracking(std::span<uint8_t> region) override;
+
+    void mapRegions(std::span<uint8_t> source,
+                    std::span<uint8_t> dest) override;
 
     std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
 
@@ -106,6 +112,9 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
     void stopTracking(std::span<uint8_t> region) override;
 
+    void mapRegions(std::span<uint8_t> source,
+                    std::span<uint8_t> dest) override;
+
     std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
 
     void startThreadLocalTracking(std::span<uint8_t> region) override;
@@ -123,18 +132,16 @@ class SegfaultDirtyTracker final : public DirtyTracker
 
 /**
  * Dirty tracking implementation using userfaultfd to write-protect pages, then
- * handle the resulting userspace events when they are written to.
+ * handle the resulting userspace events when they are written to and optionally
+ * when they are demand-paged.
  *
- * The dirty tracking mode can be one of four options:
+ * There are two modes:
  *
- * - uffd - uses the `SIGBUS` handler to catch events triggered by accessing
- *   missing pages in demand-zero paged memory.
- * - uffd-wp - same as `uffd` but adds write-protected events to catch
- *   subsequent writes to write-protected pages.
- * - uffd-thread - same as `uffd`, but using a background event thread to handle
- *   events. This has the benefit of distinguishing between read and write
- *   missing page events.
- * - uffd-thread-wp - same as `uffd-thread`, but adds write-protected events.
+ * - uffd - uses the `SIGBUS` handler to catch events triggered by
+ *   accessing missing pages in demand-paged memory, then wirte-protects
+ *   them, and handles the subsequent write-protect fault.
+ * - uffd-thread - same as `uffd` but uses a background event
+ *   handler thread.
  *
  * See the docs for more info on these different approaches:
  * https://www.kernel.org/doc/html/latest/admin-guide/mm/userfaultfd.html
@@ -153,6 +160,9 @@ class UffdDirtyTracker final : public DirtyTracker
     void startTracking(std::span<uint8_t> region) override;
 
     void stopTracking(std::span<uint8_t> region) override;
+
+    void mapRegions(std::span<uint8_t> source,
+                    std::span<uint8_t> dest) override;
 
     std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
 
@@ -182,9 +192,11 @@ class UffdDirtyTracker final : public DirtyTracker
 
     static void writeProtectRegion(std::span<uint8_t> region);
 
-    static void removeWriteProtect(std::span<uint8_t> region, bool throwEx);
+    static void removeWriteProtectFromPage(uint8_t* region, bool throwEx);
 
-    static bool zeroRegion(std::span<uint8_t> region);
+    static void copyPage(uint8_t* source, uint8_t* dest, bool throwEx);
+
+    static bool zeroPage(uint8_t* region);
 
     static void deregisterRegion(std::span<uint8_t> region);
 
@@ -208,6 +220,9 @@ class NoneDirtyTracker final : public DirtyTracker
     void startTracking(std::span<uint8_t> region) override;
 
     void stopTracking(std::span<uint8_t> region) override;
+
+    void mapRegions(std::span<uint8_t> source,
+                    std::span<uint8_t> dest) override;
 
     std::vector<char> getDirtyPages(std::span<uint8_t> region) override;
 
