@@ -5,7 +5,6 @@ namespace faabric::transport {
 
 Message::Message(zmq::message_t&& msgIn)
   : msg(std::move(msgIn))
-  , _more(msg.more())
 {}
 
 char* Message::data()
@@ -31,6 +30,6 @@ int Message::size()
 
 bool Message::more()
 {
-    return _more;
+    return msg.more();
 }
 }

@@ -38,7 +38,5 @@ class Message
 
   private:
     zmq::message_t msg;
-
-    bool _more = false;
 };
 }

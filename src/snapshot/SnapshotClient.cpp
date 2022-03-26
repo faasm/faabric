@@ -108,6 +108,7 @@ void SnapshotClient::pushSnapshot(
         auto mrsOffset = mb.CreateVector(mrsFbVector);
         auto requestOffset = CreateSnapshotPushRequest(
           mb, keyOffset, data->getMaxSize(), dataOffset, mrsOffset);
+
         mb.Finish(requestOffset);
 
         // Send it
