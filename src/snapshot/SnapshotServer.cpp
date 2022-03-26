@@ -130,6 +130,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
         }
 
         // Queue on the snapshot
+        // TODO - take ownership of data here
         snap->queueDiffs(diffs);
     }
 
@@ -163,16 +164,13 @@ SnapshotServer::recvPushSnapshotUpdate(const uint8_t* buffer, size_t bufferSize)
           std::span<const uint8_t>(diff->data()->data(), diff->data()->size()));
     }
 
-    // Queue on the snapshot
-    snap->queueDiffs(diffs);
-
     // Write diffs and set merge regions
     SPDLOG_DEBUG("Writing queued diffs to snapshot {} ({} regions)",
                  r->key()->str(),
                  r->merge_regions()->size());
 
-    // Write queued diffs
-    snap->writeQueuedDiffs();
+    // Queue on the snapshot
+    snap->applyDiffs(diffs);
 
     // Clear merge regions
     snap->clearMergeRegions();

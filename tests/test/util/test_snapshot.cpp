@@ -1633,8 +1633,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         REQUIRE(actualDiff.getOffset() == offsetC);
 
         // Apply diffs from memory to the snapshot
-        snap->queueDiffs(actualDiffs);
-        snap->writeQueuedDiffs();
+        snap->applyDiffs(actualDiffs);
     }
 
     // Check snapshot now shows both diffs
@@ -2062,8 +2061,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture, "Test XOR diffs", "[util][snapshot]")
     REQUIRE(diffB.getOffset() == offsetB);
 
     // Apply the diffs to the snapshot
-    snap->queueDiffs(actual);
-    snap->writeQueuedDiffs();
+    snap->applyDiffs(actual);
 
     // Check snapshot data is now as expected
     REQUIRE(snap->getDataCopy() == expectedSnapData);
