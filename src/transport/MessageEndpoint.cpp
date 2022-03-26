@@ -300,10 +300,10 @@ std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
 std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
 {
     // Allocate a message to receive data
-    auto msg = std::unique_ptr<zmq::message_t>();
+    zmq::message_t msg;
     CATCH_ZMQ_ERR(
       try {
-          auto res = socket.recv(*msg);
+          auto res = socket.recv(msg);
           if (!res.has_value()) {
               SPDLOG_TRACE("Did not receive message within {}ms on {}",
                            timeoutMs,

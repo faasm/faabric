@@ -12,7 +12,7 @@ namespace faabric::transport {
 class Message
 {
   public:
-    explicit Message(std::unique_ptr<zmq::message_t> msgIn);
+    explicit Message(zmq::message_t msgIn);
 
     explicit Message(int sizeIn);
 
@@ -30,7 +30,7 @@ class Message
     bool more();
 
   private:
-    std::unique_ptr<zmq::message_t> msg;
+    zmq::message_t msg;
 
     std::vector<uint8_t> bytes;
 

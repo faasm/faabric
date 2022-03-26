@@ -3,9 +3,9 @@
 
 namespace faabric::transport {
 
-Message::Message(std::unique_ptr<zmq::message_t> msgIn)
+Message::Message(zmq::message_t msgIn)
   : msg(std::move(msgIn))
-  , _more(msgIn->more())
+  , _more(msg.more())
 {}
 
 Message::Message(int sizeIn)
@@ -15,16 +15,16 @@ Message::Message(int sizeIn)
 
 char* Message::data()
 {
-    if (msg != nullptr) {
-        return reinterpret_cast<char*>(msg->data());
+    if (!msg.empty()) {
+        return reinterpret_cast<char*>(msg.data());
     }
     return reinterpret_cast<char*>(bytes.data());
 }
 
 uint8_t* Message::udata()
 {
-    if (msg != nullptr) {
-        return reinterpret_cast<uint8_t*>(msg->data());
+    if (!msg.empty()) {
+        return reinterpret_cast<uint8_t*>(msg.data());
     }
 
     return bytes.data();
@@ -32,9 +32,9 @@ uint8_t* Message::udata()
 
 std::vector<uint8_t> Message::dataCopy()
 {
-    if (msg != nullptr) {
-        return std::vector<uint8_t>(BYTES(msg->data()),
-                                    BYTES(msg->data()) + msg->size());
+    if (!msg.empty()) {
+        return std::vector<uint8_t>(BYTES(msg.data()),
+                                    BYTES(msg.data()) + msg.size());
     }
 
     return bytes;
@@ -42,6 +42,9 @@ std::vector<uint8_t> Message::dataCopy()
 
 int Message::size()
 {
+    if (!msg.empty()) {
+        return msg.size();
+    }
     return bytes.size();
 }
 
