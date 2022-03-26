@@ -159,8 +159,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
             SPDLOG_DEBUG("Updating main thread snapshot for {} with {} diffs",
                          faabric::util::funcToString(msg, false),
                          updates.size());
-            snap->queueDiffs(updates);
-            snap->writeQueuedDiffs();
+            snap->applyDiffs(updates);
         }
 
         // Clear merge regions, not persisted between batches of threads
@@ -483,6 +482,8 @@ void Executor::threadPoolThread(int threadPoolIdx)
             auto thisThreadDirtyRegions =
               tracker->getThreadLocalDirtyPages(memView);
 
+            // TODO - remove this synchronisation point, some kind of
+            // append-only data structure?
             faabric::util::FullLock lock(threadExecutionMutex);
             faabric::util::mergeDirtyPages(dirtyRegions,
                                            thisThreadDirtyRegions);

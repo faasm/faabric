@@ -1055,6 +1055,9 @@ void Scheduler::setThreadResult(
                          msg.groupid());
 
             auto snap = reg.getSnapshot(key);
+
+            // Ok not to take ownership of diffs data here, executor memory will
+            // outlast the need for the diffs
             snap->queueDiffs(diffs);
         }
 
