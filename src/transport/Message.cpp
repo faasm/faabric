@@ -8,6 +8,10 @@ Message::Message(zmq::message_t&& msgIn)
   , _more(msg.more())
 {}
 
+Message::Message(Message&& other) noexcept
+  : Message(std::move(other.msg))
+{}
+
 char* Message::data()
 {
     return reinterpret_cast<char*>(msg.data());

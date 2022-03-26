@@ -17,17 +17,15 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doAsyncRecv(int header,
-                                     const uint8_t* buffer,
-                                     size_t bufferSize)
+void FunctionCallServer::doAsyncRecv(int header, transport::Message&& message)
 {
     switch (header) {
         case faabric::scheduler::FunctionCalls::ExecuteFunctions: {
-            recvExecuteFunctions(buffer, bufferSize);
+            recvExecuteFunctions(message.udata(), message.size());
             break;
         }
         case faabric::scheduler::FunctionCalls::Unregister: {
-            recvUnregister(buffer, bufferSize);
+            recvUnregister(message.udata(), message.size());
             break;
         }
         default: {
@@ -39,18 +37,17 @@ void FunctionCallServer::doAsyncRecv(int header,
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
   int header,
-  const uint8_t* buffer,
-  size_t bufferSize)
+  transport::Message&& message)
 {
     switch (header) {
         case faabric::scheduler::FunctionCalls::Flush: {
-            return recvFlush(buffer, bufferSize);
+            return recvFlush(message.udata(), message.size());
         }
         case faabric::scheduler::FunctionCalls::GetResources: {
-            return recvGetResources(buffer, bufferSize);
+            return recvGetResources(message.udata(), message.size());
         }
         case faabric::scheduler::FunctionCalls::PendingMigrations: {
-            return recvPendingMigrations(buffer, bufferSize);
+            return recvPendingMigrations(message.udata(), message.size());
         }
         default: {
             throw std::runtime_error(

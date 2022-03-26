@@ -66,11 +66,10 @@ class MessageEndpointServer
 
   protected:
     virtual void doAsyncRecv(int header,
-                             const uint8_t* buffer,
-                             size_t bufferSize) = 0;
+            transport::Message &&message) = 0;
 
     virtual std::unique_ptr<google::protobuf::Message>
-    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) = 0;
+    doSyncRecv(int header, transport::Message &&message) = 0;
 
   private:
     friend class MessageEndpointServerHandler;

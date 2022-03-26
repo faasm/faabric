@@ -117,8 +117,7 @@ void MessageEndpointServerHandler::start(
                               "Server, got header, timed out on body");
                         }
 
-                        Message& body = bodyMaybe.value();
-                        if (body.more()) {
+                        if (bodyMaybe.value().more()) {
                             throw std::runtime_error(
                               "Body sent with SNDMORE flag");
                         }
@@ -129,13 +128,14 @@ void MessageEndpointServerHandler::start(
 
                         if (async) {
                             // Server-specific async handling
-                            server->doAsyncRecv(
-                              header, body.udata(), body.size());
+                            server->doAsyncRecv(header,
+                                                std::move(bodyMaybe.value()));
                         } else {
                             // Server-specific sync handling
                             std::unique_ptr<google::protobuf::Message> resp =
-                              server->doSyncRecv(
-                                header, body.udata(), body.size());
+                              server->doSyncRecv(header,
+                                                 std::move(bodyMaybe.value()));
+
                             size_t respSize = resp->ByteSizeLong();
 
                             uint8_t buffer[respSize];

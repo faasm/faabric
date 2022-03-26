@@ -21,37 +21,36 @@ StateServer::StateServer(State& stateIn)
   , state(stateIn)
 {}
 
-void StateServer::doAsyncRecv(int header,
-                              const uint8_t* buffer,
-                              size_t bufferSize)
+void StateServer::doAsyncRecv(int header, transport::Message&& message)
 {
     throw std::runtime_error("State server does not support async recv");
 }
 
-std::unique_ptr<google::protobuf::Message>
-StateServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
+std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
+  int header,
+  transport::Message&& message)
 {
     switch (header) {
         case faabric::state::StateCalls::Pull: {
-            return recvPull(buffer, bufferSize);
+            return recvPull(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Push: {
-            return recvPush(buffer, bufferSize);
+            return recvPush(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Size: {
-            return recvSize(buffer, bufferSize);
+            return recvSize(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Append: {
-            return recvAppend(buffer, bufferSize);
+            return recvAppend(message.udata(), message.size());
         }
         case faabric::state::StateCalls::ClearAppended: {
-            return recvClearAppended(buffer, bufferSize);
+            return recvClearAppended(message.udata(), message.size());
         }
         case faabric::state::StateCalls::PullAppended: {
-            return recvPullAppended(buffer, bufferSize);
+            return recvPullAppended(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Delete: {
-            return recvDelete(buffer, bufferSize);
+            return recvDelete(message.udata(), message.size());
         }
         default: {
             throw std::runtime_error(

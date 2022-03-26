@@ -19,13 +19,12 @@ PointToPointServer::PointToPointServer()
   , broker(getPointToPointBroker())
 {}
 
-void PointToPointServer::doAsyncRecv(int header,
-                                     const uint8_t* buffer,
-                                     size_t bufferSize)
+void PointToPointServer::doAsyncRecv(int header, transport::Message&& message)
 {
     switch (header) {
         case (faabric::transport::PointToPointCall::MESSAGE): {
-            PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
+            PARSE_MSG(
+              faabric::PointToPointMessage, message.udata(), message.size())
 
             // Send the message locally to the downstream socket
             broker.sendMessage(msg.groupid(),
@@ -36,19 +35,19 @@ void PointToPointServer::doAsyncRecv(int header,
             break;
         }
         case faabric::transport::PointToPointCall::LOCK_GROUP: {
-            recvGroupLock(buffer, bufferSize, false);
+            recvGroupLock(message.udata(), message.size(), false);
             break;
         }
         case faabric::transport::PointToPointCall::LOCK_GROUP_RECURSIVE: {
-            recvGroupLock(buffer, bufferSize, true);
+            recvGroupLock(message.udata(), message.size(), true);
             break;
         }
         case faabric::transport::PointToPointCall::UNLOCK_GROUP: {
-            recvGroupUnlock(buffer, bufferSize, false);
+            recvGroupUnlock(message.udata(), message.size(), false);
             break;
         }
         case faabric::transport::PointToPointCall::UNLOCK_GROUP_RECURSIVE: {
-            recvGroupUnlock(buffer, bufferSize, true);
+            recvGroupUnlock(message.udata(), message.size(), true);
             break;
         }
         default: {
@@ -60,12 +59,11 @@ void PointToPointServer::doAsyncRecv(int header,
 
 std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
   int header,
-  const uint8_t* buffer,
-  size_t bufferSize)
+  transport::Message&& message)
 {
     switch (header) {
         case (faabric::transport::PointToPointCall::MAPPING): {
-            return doRecvMappings(buffer, bufferSize);
+            return doRecvMappings(message.udata(), message.size());
         }
         default: {
             SPDLOG_ERROR("Invalid sync point-to-point header: {}", header);

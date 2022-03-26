@@ -26,15 +26,14 @@ class DummyServer final : public MessageEndpointServer
     std::atomic<int> messageCount = 0;
 
   private:
-    void doAsyncRecv(int header,
-                     const uint8_t* buffer,
-                     size_t bufferSize) override
+    void doAsyncRecv(int header, transport::Message&& message) override
     {
         messageCount++;
     }
 
-    std::unique_ptr<google::protobuf::Message>
-    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override
+    std::unique_ptr<google::protobuf::Message> doSyncRecv(
+      int header,
+      transport::Message&& message) override
     {
         messageCount++;
 
@@ -50,20 +49,19 @@ class EchoServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header,
-                     const uint8_t* buffer,
-                     size_t bufferSize) override
+    void doAsyncRecv(int header, transport::Message&& message) override
     {
         throw std::runtime_error("Echo server not expecting async recv");
     }
 
-    std::unique_ptr<google::protobuf::Message>
-    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override
+    std::unique_ptr<google::protobuf::Message> doSyncRecv(
+      int header,
+      transport::Message&& message) override
     {
-        SPDLOG_TRACE("Echo server received {} bytes", bufferSize);
+        SPDLOG_TRACE("Echo server received {} bytes", message.size());
 
         auto response = std::make_unique<faabric::StatePart>();
-        response->set_data(buffer, bufferSize);
+        response->set_data(message.udata(), message.size());
 
         return response;
     }
@@ -79,17 +77,16 @@ class SleepServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header,
-                     const uint8_t* buffer,
-                     size_t bufferSize) override
+    void doAsyncRecv(int header, transport::Message&& message) override
     {
         throw std::runtime_error("Sleep server not expecting async recv");
     }
 
-    std::unique_ptr<google::protobuf::Message>
-    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override
+    std::unique_ptr<google::protobuf::Message> doSyncRecv(
+      int header,
+      transport::Message&& message) override
     {
-        int* sleepTimeMs = (int*)buffer;
+        int* sleepTimeMs = (int*)message.udata();
         SPDLOG_DEBUG("Sleep server sleeping for {}ms", *sleepTimeMs);
         SLEEP_MS(*sleepTimeMs);
 
@@ -108,15 +105,14 @@ class BlockServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header,
-                     const uint8_t* buffer,
-                     size_t bufferSize) override
+    void doAsyncRecv(int header, transport::Message&& message) override
     {
         throw std::runtime_error("Lock server not expecting async recv");
     }
 
-    std::unique_ptr<google::protobuf::Message>
-    doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize) override
+    std::unique_ptr<google::protobuf::Message> doSyncRecv(
+      int header,
+      transport::Message&& message) override
     {
         // Wait on the latch, requires multiple threads executing in parallel to
         // get a response.
@@ -124,7 +120,7 @@ class BlockServer final : public MessageEndpointServer
 
         // Echo input data
         auto response = std::make_unique<faabric::StatePart>();
-        response->set_data(buffer, bufferSize);
+        response->set_data(message.udata(), message.size());
         return response;
     }
 

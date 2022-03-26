@@ -23,6 +23,8 @@ class Message
      */
     explicit Message(zmq::message_t&& msgIn);
 
+    explicit Message(Message&& other) noexcept;
+
     // Empty message signals shutdown
     Message() = default;
 

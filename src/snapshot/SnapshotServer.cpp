@@ -25,13 +25,11 @@ SnapshotServer::SnapshotServer()
   , reg(faabric::snapshot::getSnapshotRegistry())
 {}
 
-void SnapshotServer::doAsyncRecv(int header,
-                                 const uint8_t* buffer,
-                                 size_t bufferSize)
+void SnapshotServer::doAsyncRecv(int header, transport::Message&& message)
 {
     switch (header) {
         case faabric::snapshot::SnapshotCalls::DeleteSnapshot: {
-            recvDeleteSnapshot(buffer, bufferSize);
+            recvDeleteSnapshot(message.udata(), message.size());
             break;
         }
         default: {
@@ -41,18 +39,19 @@ void SnapshotServer::doAsyncRecv(int header,
     }
 }
 
-std::unique_ptr<google::protobuf::Message>
-SnapshotServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
+std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
+  int header,
+  transport::Message&& message)
 {
     switch (header) {
         case faabric::snapshot::SnapshotCalls::PushSnapshot: {
-            return recvPushSnapshot(buffer, bufferSize);
+            return recvPushSnapshot(message.udata(), message.size());
         }
         case faabric::snapshot::SnapshotCalls::PushSnapshotUpdate: {
-            return recvPushSnapshotUpdate(buffer, bufferSize);
+            return recvPushSnapshotUpdate(message.udata(), message.size());
         }
         case faabric::snapshot::SnapshotCalls::ThreadResult: {
-            return recvThreadResult(buffer, bufferSize);
+            return recvThreadResult(message.udata(), message.size());
         }
         default: {
             throw std::runtime_error(
