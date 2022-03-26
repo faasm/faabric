@@ -16,7 +16,6 @@ if [[ -z "$FAABRIC_DOCKER" ]]; then
 
     # Normal terminal
     MODE="terminal"
-
 else
     # Running inside the container, we know the project root
     PROJ_ROOT="/code/faabric"
