@@ -3,7 +3,7 @@
 
 namespace faabric::transport {
 
-Message::Message(zmq::message_t &&msgIn)
+Message::Message(zmq::message_t&& msgIn)
   : msg(std::move(msgIn))
   , _more(msg.more())
 {}
