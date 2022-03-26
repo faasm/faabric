@@ -12,9 +12,7 @@ namespace faabric::transport {
 class Message
 {
   public:
-    explicit Message(zmq::message_t msgIn);
-
-    explicit Message(int sizeIn);
+    explicit Message(zmq::message_t &&msgIn);
 
     // Empty message signals shutdown
     Message() = default;
@@ -31,8 +29,6 @@ class Message
 
   private:
     zmq::message_t msg;
-
-    std::vector<uint8_t> bytes;
 
     bool _more = false;
 };

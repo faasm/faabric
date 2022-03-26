@@ -262,12 +262,12 @@ std::optional<Message> MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
 std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
                                                    int size)
 {
-    // Pre-allocate buffer to avoid copying data
-    Message msg(size);
+    // Pre-allocate message to avoid copying
+    zmq::message_t msg(size);
 
     CATCH_ZMQ_ERR(
       try {
-          auto res = socket.recv(zmq::buffer(msg.udata(), msg.size()));
+          auto res = socket.recv(zmq::buffer(msg.data(), msg.size()));
 
           if (!res.has_value()) {
               SPDLOG_TRACE("Did not receive message size {} within {}ms on {}",
@@ -294,7 +294,7 @@ std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
       },
       "recv_buffer")
 
-    return msg;
+    return Message(std::move(msg));
 }
 
 std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
