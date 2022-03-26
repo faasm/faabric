@@ -300,10 +300,10 @@ std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
 std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
 {
     // Allocate a message to receive data
-    zmq::message_t msg;
+    auto msg = std::unique_ptr<zmq::message_t>();
     CATCH_ZMQ_ERR(
       try {
-          auto res = socket.recv(msg);
+          auto res = socket.recv(*msg);
           if (!res.has_value()) {
               SPDLOG_TRACE("Did not receive message within {}ms on {}",
                            timeoutMs,
@@ -319,8 +319,7 @@ std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
       },
       "recv_no_buffer")
 
-    // Copy the received message to a buffer whose scope we control
-    return Message(msg);
+    return Message(std::move(msg));
 }
 
 // ----------------------------------------------
@@ -405,7 +404,8 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
     if (!msgMaybe.has_value()) {
         throw MessageTimeoutException("SendAwaitResponse timeout");
     }
-    return msgMaybe.value();
+
+    return std::move(msgMaybe.value());
 }
 
 // ----------------------------------------------
