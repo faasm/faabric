@@ -42,7 +42,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
 
     // Check chunks at a time, only do byte-wise checks if we find a diff within
     // a given chunk
-    size_t chunkSize = ARRAY_COMP_STEP_SIZE;
+    size_t chunkSize = ARRAY_COMP_CHUNK_SIZE;
 
     for (uint32_t i = startOffset; i < endOffset; i += chunkSize) {
         const uint8_t* thisAPtr = aPtr + i;
@@ -55,12 +55,6 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
         }
 
         if (memcmp(thisAPtr, thisBPtr, thisStep) == 0) {
-            SPDLOG_INFO("Skipping {} bytes {}-{} ({})",
-                        thisStep,
-                        i,
-                        i + thisStep,
-                        endOffset);
-
             if (diffInProgress) {
                 // Finished on byte before
                 diffInProgress = false;
