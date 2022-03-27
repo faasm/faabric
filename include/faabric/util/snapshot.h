@@ -57,19 +57,18 @@ enum SnapshotMergeOperation
  * Represents a modification to a snapshot (a.k.a. a dirty region). Specifies
  * the modified data, as well as its offset within the snapshot.
  *
- * Each diff does not own the data, it just provides a span pointing at the original
- * data.
+ * Each diff does not own the data, it just provides a span pointing at the
+ * original data.
  */
 class SnapshotDiff
 {
   public:
     SnapshotDiff() = default;
 
-    SnapshotDiff(
-      SnapshotDataType dataTypeIn,
-      SnapshotMergeOperation operationIn,
-      uint32_t offsetIn,
-      std::span<const uint8_t> dataIn);
+    SnapshotDiff(SnapshotDataType dataTypeIn,
+                 SnapshotMergeOperation operationIn,
+                 uint32_t offsetIn,
+                 std::span<const uint8_t> dataIn);
 
     SnapshotDataType getDataType() const { return dataType; }
 
