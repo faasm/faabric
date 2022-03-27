@@ -91,6 +91,8 @@ class SnapshotDiff
 
     uint32_t getOffset() const { return offset; }
 
+    SnapshotDiffOwnership getOwnership() const { return ownership; }
+
     std::span<const uint8_t> getData() const { return data; }
 
     std::vector<uint8_t> getDataCopy() const;

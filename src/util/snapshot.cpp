@@ -23,6 +23,8 @@ SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
   , ownership(ownershipIn)
 {
     if (ownership == SnapshotDiffOwnership::Owner) {
+        // Take ownership of the data here, copy into a buffer, then take a span
+        // from that copy
         ownedData = std::vector<uint8_t>(dataIn.begin(), dataIn.end());
         data = std::span<uint8_t>(ownedData.data(), ownedData.size());
     } else {
@@ -551,7 +553,8 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
         diffs.emplace_back(SnapshotDataType::Raw,
                            SnapshotMergeOperation::Bytewise,
                            size,
-                           updated.subspan(size, extensionLen));
+                           updated.subspan(size, extensionLen),
+                           SnapshotDiffOwnership::NotOwner);
         PROF_END(ExtensionDiff)
     }
 
@@ -830,7 +833,8 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         diffs.emplace_back(dataType,
                            operation,
                            offset,
-                           std::span<const uint8_t>(updated, length));
+                           std::span<const uint8_t>(updated, length),
+                           SnapshotDiffOwnership::Owner);
     }
 }
 }

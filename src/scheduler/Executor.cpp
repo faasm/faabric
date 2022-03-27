@@ -196,6 +196,9 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
         tracker->startThreadLocalTracking(memView);
     }
 
+    // Deregister the threads
+    sch.deregisterThreads(req);
+
     return results;
 }
 

@@ -189,6 +189,10 @@ class Scheduler
 
     void registerThread(uint32_t msgId);
 
+    void deregisterThreads(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    void deregisterThread(uint32_t msgId);
+
     void vacateSlot();
 
     void notifyExecutorShutdown(Executor* exec, const faabric::Message& msg);

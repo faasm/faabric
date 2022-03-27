@@ -131,13 +131,13 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
         }
 
         // Queue on the snapshot
-        // TODO - make sure the message doesn't go out of scope
         snap->queueDiffs(diffs);
     }
 
     // Set the result locally
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResultLocally(r->message_id(), r->return_value());
+    sch.setThreadResultLocally(
+      r->message_id(), r->return_value(), std::move(message));
 
     return std::make_unique<faabric::EmptyResponse>();
 }

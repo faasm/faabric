@@ -1114,16 +1114,25 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
     }
     lock.unlock();
 
-    int32_t result = it->second.get_future().get();
+    return it->second.get_future().get();
+}
 
-    // Erase the cached message and thread result
-    {
-        faabric::util::FullLock eraseLock(mx);
-        threadResults.erase(messageId);
-        threadResultMessages.erase(messageId);
+void Scheduler::deregisterThreads(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::util::FullLock eraseLock(mx);
+    for (auto m : req->messages()) {
+        threadResults.erase(m.id());
+        threadResultMessages.erase(m.id());
     }
+}
 
-    return result;
+void Scheduler::deregisterThread(uint32_t msgId)
+{
+    // Erase the cached message and thread result
+    faabric::util::FullLock eraseLock(mx);
+    threadResults.erase(msgId);
+    threadResultMessages.erase(msgId);
 }
 
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
