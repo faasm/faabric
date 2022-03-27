@@ -15,6 +15,16 @@
 
 namespace faabric::util {
 
+// This paramter controls the step size in the array comparison function. The
+// function will normally be comparing 4kB pages, and when it detects a change
+// within a chunk, it will byte-wise compare that chunk
+#define ARRAY_COMP_CHUNK_SIZE 128
+
+/**
+ * Ownership modes for snapshot diffs. Because snapshot diffs often reference
+ * large amounts of data, it's more efficient to avoid copying the data where
+ * possible.
+ */
 enum SnapshotDiffOwnership
 {
     Owner,
@@ -98,6 +108,15 @@ class SnapshotDiff
 /*
  * Appends a list of snapshot diffs for any bytes differing between the two
  * arrays.
+ *
+ * The function compares chunks of bytes at a time, if there are no differences,
+ * it skips to the next chunk. If one or more differences are detected in a
+ * chunk, it does a byte-wise comparison on that chunk.
+ *
+ * The performance of this will vary depending on how sparse the diffs are, and
+ * on the chunk size itself. A larger chunk size is optimal for very sparse
+ * changes, but it makes the byte-wise comparision more intensive (as we're
+ * byte-wise comparing more bytes).
  */
 void diffArrayRegions(std::vector<SnapshotDiff>& diffs,
                       uint32_t startOffset,
