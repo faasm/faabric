@@ -173,6 +173,15 @@ class Scheduler
 
     void setThreadResultLocally(uint32_t msgId, int32_t returnValue);
 
+    /**
+     * Caches a message along with the thread result, to allow the thread result
+     * to refer to data held in that message (i.e. snapshot diffs). The message
+     * will be destroyed once the thread result is consumed.
+     */
+    void setThreadResultLocally(uint32_t msgId,
+                                int32_t returnValue,
+                                faabric::transport::Message&& message);
+
     std::vector<std::pair<uint32_t, int32_t>> awaitThreadResults(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
@@ -261,6 +270,8 @@ class Scheduler
     faabric::snapshot::SnapshotRegistry& reg;
 
     std::unordered_map<uint32_t, std::promise<int32_t>> threadResults;
+    std::unordered_map<uint32_t, faabric::transport::Message>
+      threadResultMessages;
 
     std::unordered_map<uint32_t,
                        std::promise<std::unique_ptr<faabric::Message>>>

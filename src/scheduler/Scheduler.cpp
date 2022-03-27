@@ -1056,8 +1056,9 @@ void Scheduler::setThreadResult(
 
             auto snap = reg.getSnapshot(key);
 
-            // Ok not to take ownership of diffs data here, executor memory will
-            // outlast the need for the diffs
+            // Here we don't have ownership over all of the snapshot diff data,
+            // but that's ok as the executor memory will outlast the snapshot
+            // merging operation.
             snap->queueDiffs(diffs);
         }
 
@@ -1075,6 +1076,17 @@ void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
     faabric::util::FullLock lock(mx);
     SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
     threadResults.at(msgId).set_value(returnValue);
+}
+
+void Scheduler::setThreadResultLocally(uint32_t msgId,
+                                       int32_t returnValue,
+                                       faabric::transport::Message&& message)
+{
+    setThreadResultLocally(msgId, returnValue);
+
+    // Keep the message
+    faabric::util::FullLock lock(mx);
+    threadResultMessages.insert(std::make_pair(msgId, std::move(message)));
 }
 
 std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
@@ -1101,7 +1113,17 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
         throw std::runtime_error("Awaiting unregistered thread");
     }
     lock.unlock();
-    return it->second.get_future().get();
+
+    int32_t result = it->second.get_future().get();
+
+    // Erase the cached message and thread result
+    {
+        faabric::util::FullLock eraseLock(mx);
+        threadResults.erase(messageId);
+        threadResultMessages.erase(messageId);
+    }
+
+    return result;
 }
 
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,

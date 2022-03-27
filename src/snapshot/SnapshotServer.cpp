@@ -51,7 +51,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
             return recvPushSnapshotUpdate(message.udata(), message.size());
         }
         case faabric::snapshot::SnapshotCalls::ThreadResult: {
-            return recvThreadResult(message.udata(), message.size());
+            return recvThreadResult(std::move(message));
         }
         default: {
             throw std::runtime_error(
@@ -102,11 +102,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
 }
 
 std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  faabric::transport::Message&& message)
 {
     const ThreadResultRequest* r =
-      flatbuffers::GetRoot<ThreadResultRequest>(buffer);
+      flatbuffers::GetRoot<ThreadResultRequest>(message.udata());
 
     SPDLOG_DEBUG("Receiving thread result {} for message {} with {} diffs",
                  r->return_value(),
@@ -117,6 +116,8 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
         auto snap = reg.getSnapshot(r->key()->str());
 
         // Convert diffs to snapshot diff objects
+        // We don't take *any* ownership here, and just ensure that the
+        // backing message is also preserved along with the diffs.
         std::vector<SnapshotDiff> diffs;
         diffs.reserve(r->diffs()->size());
         for (const auto* diff : *r->diffs()) {
@@ -125,11 +126,12 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
               static_cast<SnapshotMergeOperation>(diff->merge_op()),
               diff->offset(),
               std::span<const uint8_t>(diff->data()->data(),
-                                       diff->data()->size()));
+                                       diff->data()->size()),
+              SnapshotDiffOwnership::NotOwner);
         }
 
         // Queue on the snapshot
-        // TODO - take ownership of data here
+        // TODO - make sure the message doesn't go out of scope
         snap->queueDiffs(diffs);
     }
 
