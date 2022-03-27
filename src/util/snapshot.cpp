@@ -15,12 +15,20 @@ namespace faabric::util {
 SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
                            SnapshotMergeOperation operationIn,
                            uint32_t offsetIn,
-                           std::span<const uint8_t> dataIn)
+                           std::span<const uint8_t> dataIn,
+                           SnapshotDiffOwnership ownershipIn)
   : dataType(dataTypeIn)
   , operation(operationIn)
   , offset(offsetIn)
-  , data(dataIn.begin(), dataIn.end())
-{}
+  , ownership(ownershipIn)
+{
+    if (ownership == SnapshotDiffOwnership::Owner) {
+        ownedData = std::vector<uint8_t>(dataIn.begin(), dataIn.end());
+        data = std::span<uint8_t>(ownedData.data(), ownedData.size());
+    } else {
+        data = dataIn;
+    }
+}
 
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
 {
@@ -49,7 +57,8 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
             snapshotDiffs.emplace_back(SnapshotDataType::Raw,
                                        SnapshotMergeOperation::Bytewise,
                                        diffStart,
-                                       b.subspan(diffStart, i - diffStart));
+                                       b.subspan(diffStart, i - diffStart),
+                                       SnapshotDiffOwnership::NotOwner);
         }
     }
 
@@ -58,7 +67,8 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
         snapshotDiffs.emplace_back(SnapshotDataType::Raw,
                                    SnapshotMergeOperation::Bytewise,
                                    diffStart,
-                                   b.subspan(diffStart, endOffset - diffStart));
+                                   b.subspan(diffStart, endOffset - diffStart),
+                                   SnapshotDiffOwnership::NotOwner);
     }
 }
 
@@ -710,10 +720,12 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                              startByte,
                              startByte + rangeSize);
 
+                // Raw diff data is not owned by the diff object itself
                 diffs.emplace_back(dataType,
                                    operation,
                                    startByte,
-                                   updatedData.subspan(startByte, rangeSize));
+                                   updatedData.subspan(startByte, rangeSize),
+                                   SnapshotDiffOwnership::NotOwner);
             }
         }
 

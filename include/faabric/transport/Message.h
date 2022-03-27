@@ -6,7 +6,7 @@
 namespace faabric::transport {
 
 /**
- * Types of message failures
+ * Types of message send/ receive outcomes.
  */
 enum MessageResponseCode
 {
