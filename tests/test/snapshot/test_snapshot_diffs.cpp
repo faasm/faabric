@@ -203,7 +203,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
 }
 
 TEST_CASE_METHOD(SnapshotTestFixture,
-                 "Test snapshot diff ownership",
+                 "Test snapshot diff and unerlying data",
                  "[snapshot]")
 {
     SECTION("Raw data")
@@ -222,35 +222,16 @@ TEST_CASE_METHOD(SnapshotTestFixture,
 
         std::vector<uint8_t> subsectionCopy(subsection.begin(),
                                             subsection.end());
-        std::span<const uint8_t> actual;
 
-        SnapshotDiff d;
-        SECTION("Non-owner")
-        {
-            // Create a diff from the memory, check it still refers to the same
-            // data
-            d = SnapshotDiff(SnapshotDataType::Raw,
-                             SnapshotMergeOperation::Bytewise,
-                             123,
-                             subsection,
-                             SnapshotDiffOwnership::NotOwner);
+        // Create a diff from the memory, check it still refers to the same
+        // data
+        SnapshotDiff d = SnapshotDiff(SnapshotDataType::Raw,
+                                      SnapshotMergeOperation::Bytewise,
+                                      123,
+                                      subsection);
 
-            actual = d.getData();
-            REQUIRE(actual.data() == rawSubsection);
-        }
-
-        SECTION("Owner")
-        {
-            // Check owner creates copy
-            d = SnapshotDiff(SnapshotDataType::Raw,
-                             SnapshotMergeOperation::Bytewise,
-                             123,
-                             subsection,
-                             SnapshotDiffOwnership::Owner);
-
-            actual = d.getData();
-            REQUIRE(actual.data() != rawSubsection);
-        }
+        std::span<const uint8_t> actual = d.getData();
+        REQUIRE(actual.data() == rawSubsection);
 
         REQUIRE(actual.size() == subsection.size());
         REQUIRE(d.getDataCopy() == subsectionCopy);
@@ -263,33 +244,14 @@ TEST_CASE_METHOD(SnapshotTestFixture,
         std::vector<uint8_t> originalCopy(originalBytes,
                                           originalBytes + sizeof(int));
 
-        SnapshotDiff d;
+        SnapshotDiff d =
+          SnapshotDiff(SnapshotDataType::Int,
+                       SnapshotMergeOperation::Sum,
+                       100,
+                       std::span<uint8_t>(originalBytes, sizeof(int)));
 
-        std::span<const uint8_t> actual;
-
-        SECTION("Not owner")
-        {
-            d = SnapshotDiff(SnapshotDataType::Int,
-                             SnapshotMergeOperation::Sum,
-                             100,
-                             std::span<uint8_t>(originalBytes, sizeof(int)),
-                             SnapshotDiffOwnership::NotOwner);
-
-            actual = d.getData();
-            REQUIRE(actual.data() == originalBytes);
-        }
-
-        SECTION("Owner")
-        {
-            d = SnapshotDiff(SnapshotDataType::Int,
-                             SnapshotMergeOperation::Sum,
-                             100,
-                             std::span<uint8_t>(originalBytes, sizeof(int)),
-                             SnapshotDiffOwnership::Owner);
-
-            actual = d.getData();
-            REQUIRE(actual.data() != originalBytes);
-        }
+        std::span<const uint8_t> actual = d.getData();
+        REQUIRE(actual.data() == originalBytes);
 
         std::vector<uint8_t> dataCopy = d.getDataCopy();
         REQUIRE(dataCopy == originalCopy);

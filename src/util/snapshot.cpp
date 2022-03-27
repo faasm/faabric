@@ -15,22 +15,12 @@ namespace faabric::util {
 SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
                            SnapshotMergeOperation operationIn,
                            uint32_t offsetIn,
-                           std::span<const uint8_t> dataIn,
-                           SnapshotDiffOwnership ownershipIn)
+                           std::span<const uint8_t> dataIn)
   : dataType(dataTypeIn)
   , operation(operationIn)
   , offset(offsetIn)
-  , ownership(ownershipIn)
-{
-    if (ownership == SnapshotDiffOwnership::Owner) {
-        // Take ownership of the data here, copy into a buffer, then take a span
-        // from that copy
-        ownedData = std::vector<uint8_t>(dataIn.begin(), dataIn.end());
-        data = std::span<uint8_t>(ownedData.data(), ownedData.size());
-    } else {
-        data = dataIn;
-    }
-}
+  , data(dataIn)
+{}
 
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
 {
@@ -71,8 +61,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
                 snapshotDiffs.emplace_back(SnapshotDataType::Raw,
                                            SnapshotMergeOperation::Bytewise,
                                            diffStart,
-                                           b.subspan(diffStart, i - diffStart),
-                                           SnapshotDiffOwnership::NotOwner);
+                                           b.subspan(diffStart, i - diffStart));
             }
 
             continue;
@@ -93,8 +82,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
                 snapshotDiffs.emplace_back(SnapshotDataType::Raw,
                                            SnapshotMergeOperation::Bytewise,
                                            diffStart,
-                                           b.subspan(diffStart, c - diffStart),
-                                           SnapshotDiffOwnership::NotOwner);
+                                           b.subspan(diffStart, c - diffStart));
             }
         }
     }
@@ -104,8 +92,7 @@ void diffArrayRegions(std::vector<SnapshotDiff>& snapshotDiffs,
         snapshotDiffs.emplace_back(SnapshotDataType::Raw,
                                    SnapshotMergeOperation::Bytewise,
                                    diffStart,
-                                   b.subspan(diffStart, endOffset - diffStart),
-                                   SnapshotDiffOwnership::NotOwner);
+                                   b.subspan(diffStart, endOffset - diffStart));
     }
 }
 
@@ -553,8 +540,7 @@ std::vector<faabric::util::SnapshotDiff> SnapshotData::diffWithDirtyRegions(
         diffs.emplace_back(SnapshotDataType::Raw,
                            SnapshotMergeOperation::Bytewise,
                            size,
-                           updated.subspan(size, extensionLen),
-                           SnapshotDiffOwnership::NotOwner);
+                           updated.subspan(size, extensionLen));
         PROF_END(ExtensionDiff)
     }
 
@@ -762,8 +748,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                 diffs.emplace_back(dataType,
                                    operation,
                                    startByte,
-                                   updatedData.subspan(startByte, rangeSize),
-                                   SnapshotDiffOwnership::NotOwner);
+                                   updatedData.subspan(startByte, rangeSize));
             }
         }
 
@@ -828,13 +813,13 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         }
     }
 
-    // Add the diff
+    // Add the diff. Data here does not need to be owned by the snapshot diff
+    // object, as it's been changed in place above
     if (changed) {
         diffs.emplace_back(dataType,
                            operation,
                            offset,
-                           std::span<const uint8_t>(updated, length),
-                           SnapshotDiffOwnership::Owner);
+                           std::span<const uint8_t>(updated, length));
     }
 }
 }

@@ -116,8 +116,6 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
         auto snap = reg.getSnapshot(r->key()->str());
 
         // Convert diffs to snapshot diff objects
-        // We don't take *any* ownership here, and just ensure that the
-        // backing message is also preserved along with the diffs.
         std::vector<SnapshotDiff> diffs;
         diffs.reserve(r->diffs()->size());
         for (const auto* diff : *r->diffs()) {
@@ -126,8 +124,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
               static_cast<SnapshotMergeOperation>(diff->merge_op()),
               diff->offset(),
               std::span<const uint8_t>(diff->data()->data(),
-                                       diff->data()->size()),
-              SnapshotDiffOwnership::NotOwner);
+                                       diff->data()->size()));
         }
 
         // Queue on the snapshot
@@ -135,6 +132,8 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
     }
 
     // Set the result locally
+    // Because we don't take ownership of the data in the diffs, we must also
+    // ensure that the underlying message is cached
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThreadResultLocally(
       r->message_id(), r->return_value(), std::move(message));

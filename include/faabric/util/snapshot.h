@@ -21,17 +21,6 @@ namespace faabric::util {
 #define ARRAY_COMP_CHUNK_SIZE 128
 
 /**
- * Ownership modes for snapshot diffs. Because snapshot diffs often reference
- * large amounts of data, it's more efficient to avoid copying the data where
- * possible.
- */
-enum SnapshotDiffOwnership
-{
-    Owner,
-    NotOwner
-};
-
-/**
  * Defines the permitted datatypes for snapshot diffs. Each has a predefined
  * length, except for the raw option which is used for generic streams of bytes.
  */
@@ -68,9 +57,7 @@ enum SnapshotMergeOperation
  * Represents a modification to a snapshot (a.k.a. a dirty region). Specifies
  * the modified data, as well as its offset within the snapshot.
  *
- * Each diff either owns the data, or is a view on data it doesn't own. If it
- * owns the data, it copies data into a buffer whose lifecycle is the same as
- * the diff itself. If not, it just provides a span pointing at the original
+ * Each diff does not own the data, it just provides a span pointing at the original
  * data.
  */
 class SnapshotDiff
@@ -82,16 +69,13 @@ class SnapshotDiff
       SnapshotDataType dataTypeIn,
       SnapshotMergeOperation operationIn,
       uint32_t offsetIn,
-      std::span<const uint8_t> dataIn,
-      SnapshotDiffOwnership ownershipIn = SnapshotDiffOwnership::Owner);
+      std::span<const uint8_t> dataIn);
 
     SnapshotDataType getDataType() const { return dataType; }
 
     SnapshotMergeOperation getOperation() const { return operation; }
 
     uint32_t getOffset() const { return offset; }
-
-    SnapshotDiffOwnership getOwnership() const { return ownership; }
 
     std::span<const uint8_t> getData() const { return data; }
 
@@ -101,10 +85,8 @@ class SnapshotDiff
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Bytewise;
     uint32_t offset = 0;
-    SnapshotDiffOwnership ownership = SnapshotDiffOwnership::Owner;
 
     std::span<const uint8_t> data;
-    std::vector<uint8_t> ownedData;
 };
 
 /*

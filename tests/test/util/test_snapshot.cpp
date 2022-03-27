@@ -52,7 +52,6 @@ class SnapshotMergeTestFixture
             REQUIRE(actualDiff.getOperation() == expectedDiff.getOperation());
             REQUIRE(actualDiff.getDataType() == expectedDiff.getDataType());
             REQUIRE(actualDiff.getOffset() == expectedDiff.getOffset());
-            REQUIRE(actualDiff.getOwnership() == expectedDiff.getOwnership());
 
             std::vector<uint8_t> actualData = actualDiff.getDataCopy();
             std::vector<uint8_t> expectedData = expectedDiff.getDataCopy();
@@ -460,23 +459,19 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Subtract,
           offsetA,
-          { BYTES(&subA), sizeof(int32_t) },
-          SnapshotDiffOwnership::Owner },
+          { BYTES(&subA), sizeof(int32_t) } },
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Sum,
           offsetB,
-          { BYTES(&sumB), sizeof(int32_t) },
-          SnapshotDiffOwnership::Owner },
+          { BYTES(&sumB), sizeof(int32_t) } },
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Subtract,
           offsetC,
-          { BYTES(&subC), sizeof(int32_t) },
-          SnapshotDiffOwnership::Owner },
+          { BYTES(&subC), sizeof(int32_t) } },
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Sum,
           offsetD,
-          { BYTES(&sumD), sizeof(int32_t) },
-          SnapshotDiffOwnership::Owner },
+          { BYTES(&sumD), sizeof(int32_t) } },
     };
 
     tracker->stopTracking(memView);
@@ -520,8 +515,6 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
       faabric::util::SnapshotDataType::Raw;
     faabric::util::SnapshotMergeOperation operation =
       faabric::util::SnapshotMergeOperation::Bytewise;
-    faabric::util::SnapshotDiffOwnership ownership =
-      faabric::util::SnapshotDiffOwnership::Owner;
 
     size_t dataLength = 0;
     size_t regionLength = 0;
@@ -794,7 +787,6 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
             diffValue = false;
 
             operation = faabric::util::SnapshotMergeOperation::Bytewise;
-            ownership = SnapshotDiffOwnership::NotOwner;
         }
 
         originalData = faabric::util::valueToBytes<bool>(originalValue);
@@ -815,14 +807,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         {
             regionLength = dataLength;
             operation = faabric::util::SnapshotMergeOperation::Bytewise;
-            ownership = SnapshotDiffOwnership::NotOwner;
         }
 
         SECTION("Bytewise unspecified length")
         {
             regionLength = 0;
             operation = faabric::util::SnapshotMergeOperation::Bytewise;
-            ownership = SnapshotDiffOwnership::NotOwner;
         }
 
         SECTION("Ignore")
@@ -871,12 +861,12 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     } else {
         // Check diff
         REQUIRE(actualDiffs.size() == 1);
-        std::vector<SnapshotDiff> expectedDiffs = { { expectedDataType,
-                                                      operation,
-                                                      offset,
-                                                      { expectedData.data(),
-                                                        expectedData.size() },
-                                                      ownership } };
+        std::vector<SnapshotDiff> expectedDiffs = {
+            { expectedDataType,
+              operation,
+              offset,
+              { expectedData.data(), expectedData.size() } }
+        };
 
         checkDiffs(actualDiffs, expectedDiffs);
     }
@@ -1047,23 +1037,19 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Bytewise,
           offsetA,
-          { dataA.data(), dataA.size() },
-          SnapshotDiffOwnership::NotOwner },
+          { dataA.data(), dataA.size() } },
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Bytewise,
           offsetB,
-          { dataB.data(), dataB.size() },
-          SnapshotDiffOwnership::NotOwner },
+          { dataB.data(), dataB.size() } },
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Bytewise,
           offsetC,
-          { dataC.data(), dataC.size() },
-          SnapshotDiffOwnership::NotOwner },
+          { dataC.data(), dataC.size() } },
         { SnapshotDataType::Raw,
           SnapshotMergeOperation::Bytewise,
           offsetD,
-          { dataD.data(), dataD.size() },
-          SnapshotDiffOwnership::NotOwner },
+          { dataD.data(), dataD.size() } },
     };
 
     // Add a single merge region for all the changes
@@ -1357,13 +1343,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         { faabric::util::SnapshotDataType::Raw,
           faabric::util::SnapshotMergeOperation::Bytewise,
           bytewiseAOffset,
-          { BYTES(bytewiseData.data()), bytewiseData.size() },
-          faabric::util::SnapshotDiffOwnership::NotOwner },
+          { BYTES(bytewiseData.data()), bytewiseData.size() } },
         { faabric::util::SnapshotDataType::Int,
           faabric::util::SnapshotMergeOperation::Sum,
           sumOffset,
-          { BYTES(&sumExpected), sizeof(int32_t) },
-          faabric::util::SnapshotDiffOwnership::Owner },
+          { BYTES(&sumExpected), sizeof(int32_t) } },
     };
 
     tracker->stopTracking(memView);
@@ -1441,8 +1425,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedDataA,
-                            faabric::util::SnapshotDiffOwnership::NotOwner } };
+                            expectedDataA } };
     }
 
     SECTION("Change and merge region aligned at end of original data")
@@ -1458,8 +1441,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedDataA,
-                            faabric::util::SnapshotDiffOwnership::NotOwner } };
+                            expectedDataA } };
     }
 
     SECTION("Change and merge region after end of original data")
@@ -1476,8 +1458,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedDataA,
-                            faabric::util::SnapshotDiffOwnership::NotOwner } };
+                            expectedDataA } };
     }
 
     SECTION("Merge region and change both crossing end of original data")
@@ -1506,13 +1487,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedDataB,
-                            SnapshotDiffOwnership::NotOwner },
+                            expectedDataB },
                           { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             changeOffset,
-                            expectedDataA,
-                            SnapshotDiffOwnership::NotOwner } };
+                            expectedDataA } };
     }
 
     // Copy in the changed data
