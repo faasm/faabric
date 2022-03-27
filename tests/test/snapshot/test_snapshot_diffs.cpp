@@ -215,68 +215,87 @@ TEST_CASE_METHOD(SnapshotTestFixture,
         uint8_t* rawSubsection = mem.get() + 50;
         std::span<uint8_t> subsection(rawSubsection, 100);
 
+        // Write some data that we can check
+        for (int i = 0; i < 10; i++) {
+            subsection.data()[i] = i;
+        }
+
+        std::vector<uint8_t> subsectionCopy(subsection.begin(),
+                                            subsection.end());
+        std::span<const uint8_t> actual;
+
+        SnapshotDiff d;
         SECTION("Non-owner")
         {
             // Create a diff from the memory, check it still refers to the same
             // data
-            SnapshotDiff d(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Bytewise,
-                           123,
-                           subsection,
-                           SnapshotDiffOwnership::NotOwner);
+            d = SnapshotDiff(SnapshotDataType::Raw,
+                             SnapshotMergeOperation::Bytewise,
+                             123,
+                             subsection,
+                             SnapshotDiffOwnership::NotOwner);
 
-            std::span<const uint8_t> actual = d.getData();
+            actual = d.getData();
             REQUIRE(actual.data() == rawSubsection);
-            REQUIRE(actual.size() == subsection.size());
         }
 
         SECTION("Owner")
         {
             // Check owner creates copy
-            SnapshotDiff d(SnapshotDataType::Raw,
-                           SnapshotMergeOperation::Bytewise,
-                           123,
-                           subsection,
-                           SnapshotDiffOwnership::Owner);
+            d = SnapshotDiff(SnapshotDataType::Raw,
+                             SnapshotMergeOperation::Bytewise,
+                             123,
+                             subsection,
+                             SnapshotDiffOwnership::Owner);
 
-            std::span<const uint8_t> actual = d.getData();
+            actual = d.getData();
             REQUIRE(actual.data() != rawSubsection);
-            REQUIRE(actual.size() == subsection.size());
         }
+
+        REQUIRE(actual.size() == subsection.size());
+        REQUIRE(d.getDataCopy() == subsectionCopy);
     }
 
     SECTION("Integers")
     {
         int originalInt = 123;
         uint8_t* originalBytes = BYTES(&originalInt);
+        std::vector<uint8_t> originalCopy(originalBytes,
+                                          originalBytes + sizeof(int));
+
+        SnapshotDiff d;
+
+        std::span<const uint8_t> actual;
 
         SECTION("Not owner")
         {
-            SnapshotDiff d(SnapshotDataType::Int,
-                           SnapshotMergeOperation::Sum,
-                           100,
-                           std::span<uint8_t>(originalBytes, sizeof(int)),
-                           SnapshotDiffOwnership::NotOwner);
+            d = SnapshotDiff(SnapshotDataType::Int,
+                             SnapshotMergeOperation::Sum,
+                             100,
+                             std::span<uint8_t>(originalBytes, sizeof(int)),
+                             SnapshotDiffOwnership::NotOwner);
 
-            std::span<const uint8_t> actual = d.getData();
-
+            actual = d.getData();
             REQUIRE(actual.data() == originalBytes);
         }
 
         SECTION("Owner")
         {
-            SnapshotDiff d(SnapshotDataType::Int,
-                           SnapshotMergeOperation::Sum,
-                           100,
-                           std::span<uint8_t>(originalBytes, sizeof(int)),
-                           SnapshotDiffOwnership::Owner);
+            d = SnapshotDiff(SnapshotDataType::Int,
+                             SnapshotMergeOperation::Sum,
+                             100,
+                             std::span<uint8_t>(originalBytes, sizeof(int)),
+                             SnapshotDiffOwnership::Owner);
 
-            std::span<const uint8_t> actual = d.getData();
+            actual = d.getData();
             REQUIRE(actual.data() != originalBytes);
-
-            int actualInt = faabric::util::unalignedRead<int>(actual.data());
-            REQUIRE(actualInt == originalInt);
         }
+
+        std::vector<uint8_t> dataCopy = d.getDataCopy();
+        REQUIRE(dataCopy == originalCopy);
+
+        int actualInt = faabric::util::unalignedRead<int>(actual.data());
+        REQUIRE(actualInt == originalInt);
     }
 }
 }

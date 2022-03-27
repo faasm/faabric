@@ -44,6 +44,8 @@ class SnapshotMergeTestFixture
         REQUIRE(actualDiffs.size() == expectedDiffs.size());
 
         for (int i = 0; i < actualDiffs.size(); i++) {
+            SPDLOG_TRACE("Checking {}th of {} diffs", i, actualDiffs.size());
+
             SnapshotDiff& actualDiff = actualDiffs.at(i);
             SnapshotDiff& expectedDiff = expectedDiffs.at(i);
 
@@ -404,6 +406,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     int sumD = 1;
     uint32_t offsetD = snapSize - sizeof(int32_t);
 
+    std::vector<char> expectedDirtyPages = { 1, 1, 0, 0, 1 };
+
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
 
@@ -451,7 +455,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     *(int*)(mem.get() + offsetC) = finalC;
     *(int*)(mem.get() + offsetD) = finalD;
 
-    // Check the diffs
+    // Set up expectations
     std::vector<SnapshotDiff> expectedDiffs = {
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Subtract,
@@ -477,7 +481,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     tracker->stopTracking(memView);
     tracker->stopThreadLocalTracking(memView);
+
     auto dirtyRegions = tracker->getBothDirtyPages(memView);
+    REQUIRE(dirtyRegions == expectedDirtyPages);
+
     std::vector<SnapshotDiff> actualDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
     REQUIRE(actualDiffs.size() == 4);
