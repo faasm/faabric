@@ -247,7 +247,7 @@ void MessageEndpoint::doSend(zmq::socket_t& socket,
       "send")
 }
 
-std::optional<Message> MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
+Message MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
 {
     assert(tid == std::this_thread::get_id());
     assert(size >= 0);
@@ -259,8 +259,7 @@ std::optional<Message> MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
     return recvBuffer(socket, size);
 }
 
-std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
-                                                   int size)
+Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
 {
     // Pre-allocate message to avoid copying
     zmq::message_t msg(size);
@@ -274,7 +273,7 @@ std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
                            size,
                            timeoutMs,
                            address);
-              return std::nullopt;
+              return Message();
           }
 
           if (res.has_value() && (res->size != res->untruncated_size)) {
@@ -297,7 +296,7 @@ std::optional<Message> MessageEndpoint::recvBuffer(zmq::socket_t& socket,
     return Message(std::move(msg));
 }
 
-std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
+Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
 {
     // Allocate a message to receive data
     zmq::message_t msg;
@@ -308,7 +307,7 @@ std::optional<Message> MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
               SPDLOG_TRACE("Did not receive message within {}ms on {}",
                            timeoutMs,
                            address);
-              return std::nullopt;
+              return Message();
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
@@ -400,12 +399,12 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
 
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", address);
-    auto msgMaybe = recvNoBuffer(reqSocket);
-    if (!msgMaybe.has_value()) {
+    auto msg = recvNoBuffer(reqSocket);
+    if (msg.empty()) {
         throw MessageTimeoutException("SendAwaitResponse timeout");
     }
 
-    return std::move(msgMaybe.value());
+    return Message(std::move(msg));
 }
 
 // ----------------------------------------------
@@ -429,7 +428,7 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
     socket = setUpSocket(socketType, MessageEndpointConnectType::BIND);
 }
 
-std::optional<Message> RecvMessageEndpoint::recv(int size)
+Message RecvMessageEndpoint::recv(int size)
 {
     return doRecv(socket, size);
 }
@@ -525,7 +524,7 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
 {}
 
-std::optional<Message> AsyncRecvMessageEndpoint::recv(int size)
+Message AsyncRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);
@@ -540,7 +539,7 @@ AsyncInternalRecvMessageEndpoint::AsyncInternalRecvMessageEndpoint(
                         MessageEndpointConnectType::BIND)
 {}
 
-std::optional<Message> AsyncInternalRecvMessageEndpoint::recv(int size)
+Message AsyncInternalRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);
@@ -562,7 +561,7 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::rep)
 {}
 
-std::optional<Message> SyncRecvMessageEndpoint::recv(int size)
+Message SyncRecvMessageEndpoint::recv(int size)
 {
     SPDLOG_TRACE("RECV (REP) {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);
@@ -586,7 +585,7 @@ AsyncDirectRecvEndpoint::AsyncDirectRecvEndpoint(const std::string& inprocLabel,
                         MessageEndpointConnectType::BIND)
 {}
 
-std::optional<Message> AsyncDirectRecvEndpoint::recv(int size)
+Message AsyncDirectRecvEndpoint::recv(int size)
 {
     SPDLOG_TRACE("PAIR recv {} ({} bytes)", address, size);
     return RecvMessageEndpoint::recv(size);

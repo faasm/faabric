@@ -76,9 +76,9 @@ void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,
 
     // This host has now been told to execute these functions no matter what
     // TODO - avoid this copy
-    msg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
+    parsedMsg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
     scheduler.callFunctions(
-      std::make_shared<faabric::BatchExecuteRequest>(msg));
+      std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }
 
 void FunctionCallServer::recvUnregister(const uint8_t* buffer,
@@ -86,11 +86,12 @@ void FunctionCallServer::recvUnregister(const uint8_t* buffer,
 {
     PARSE_MSG(faabric::UnregisterRequest, buffer, bufferSize)
 
-    std::string funcStr = faabric::util::funcToString(msg.function(), false);
-    SPDLOG_DEBUG("Unregistering host {} for {}", msg.host(), funcStr);
+    std::string funcStr =
+      faabric::util::funcToString(parsedMsg.function(), false);
+    SPDLOG_DEBUG("Unregistering host {} for {}", parsedMsg.host(), funcStr);
 
     // Remove the host from the warm set
-    scheduler.removeRegisteredHost(msg.host(), msg.function());
+    scheduler.removeRegisteredHost(parsedMsg.host(), parsedMsg.function());
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
@@ -108,7 +109,7 @@ FunctionCallServer::recvPendingMigrations(const uint8_t* buffer,
 {
     PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
 
-    auto msgPtr = std::make_shared<faabric::PendingMigrations>(msg);
+    auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
 
     scheduler.addPendingMigration(msgPtr);
 

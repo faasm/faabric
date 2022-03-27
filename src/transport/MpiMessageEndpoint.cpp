@@ -16,18 +16,17 @@ void MpiMessageEndpoint::sendMpiMessage(
   const std::shared_ptr<faabric::MPIMessage>& msg)
 {
     SERIALISE_MSG_PTR(msg)
-    sendSocket.send(buffer, msgSize, false);
+    sendSocket.send(serialisedBuffer, serialisedSize, false);
 }
 
 std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
 {
-    std::optional<Message> mMaybe = recvSocket.recv();
-    if (!mMaybe.has_value()) {
+    Message msg = recvSocket.recv();
+    if (msg.empty()) {
         throw MessageTimeoutException("Mpi message timeout");
     }
-    Message& m = mMaybe.value();
-    PARSE_MSG(faabric::MPIMessage, m.data(), m.size());
+    PARSE_MSG(faabric::MPIMessage, msg.data(), msg.size());
 
-    return std::make_shared<faabric::MPIMessage>(msg);
+    return std::make_shared<faabric::MPIMessage>(parsedMsg);
 }
 }

@@ -564,11 +564,11 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
                      recvEndpoints[label]->getAddress());
     }
 
-    std::optional<Message> messageDataMaybe =
-      recvEndpoints[label]->recv().value();
+    Message message =
+      recvEndpoints[label]->recv();
 
     // TODO - possible to avoid this copy?
-    return messageDataMaybe.value().dataCopy();
+    return message.dataCopy();
 }
 
 void PointToPointBroker::clearGroup(int groupId)

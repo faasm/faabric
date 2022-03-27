@@ -89,10 +89,10 @@ faabric::MpiHostsToRanksMessage MpiWorld::recvMpiHostRankMsg()
     }
 
     SPDLOG_TRACE("Receiving MPI host ranks on {}", basePort);
-    faabric::transport::Message m(std::move(ranksRecvEndpoint->recv().value()));
+    faabric::transport::Message m = ranksRecvEndpoint->recv();
     PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
 
-    return msg;
+    return parsedMsg;
 }
 
 void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
@@ -112,7 +112,7 @@ void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
 
     SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, basePort);
     SERIALISE_MSG(msg)
-    ranksSendEndpoints[hostIn]->send(buffer, msgSize, false);
+    ranksSendEndpoints[hostIn]->send(serialisedBuffer, serialisedSize, false);
 }
 
 void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)

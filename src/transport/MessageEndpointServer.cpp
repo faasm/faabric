@@ -71,16 +71,13 @@ void MessageEndpointServerHandler::start(
 
                     while (true) {
                         // Receive header and body
-                        std::optional<Message> headerMessageMaybe =
-                          endpoint->recv();
-                        if (!headerMessageMaybe.has_value()) {
+                        Message headerMessage = endpoint->recv();
+                        if (!headerMessage.empty()) {
                             SPDLOG_TRACE(
                               "Server on {}, looping after no message",
                               endpoint->getAddress());
                             continue;
                         }
-
-                        Message& headerMessage = headerMessageMaybe.value();
 
                         if (headerMessage.size() == shutdownHeader.size()) {
                             if (headerMessage.dataCopy() == shutdownHeader) {
@@ -108,8 +105,8 @@ void MessageEndpointServerHandler::start(
                               "Header sent without SNDMORE flag");
                         }
 
-                        std::optional<Message> bodyMaybe = endpoint->recv();
-                        if (!bodyMaybe.has_value()) {
+                        Message body = endpoint->recv();
+                        if (body.empty()) {
                             SPDLOG_ERROR("Server on port {}, got header, timed "
                                          "out on body",
                                          endpoint->getAddress());
@@ -117,7 +114,7 @@ void MessageEndpointServerHandler::start(
                               "Server, got header, timed out on body");
                         }
 
-                        if (bodyMaybe.value().more()) {
+                        if (body.more()) {
                             throw std::runtime_error(
                               "Body sent with SNDMORE flag");
                         }
@@ -128,13 +125,11 @@ void MessageEndpointServerHandler::start(
 
                         if (async) {
                             // Server-specific async handling
-                            server->doAsyncRecv(header,
-                                                std::move(bodyMaybe.value()));
+                            server->doAsyncRecv(header, std::move(body));
                         } else {
                             // Server-specific sync handling
                             std::unique_ptr<google::protobuf::Message> resp =
-                              server->doSyncRecv(header,
-                                                 std::move(bodyMaybe.value()));
+                              server->doSyncRecv(header, std::move(body));
 
                             size_t respSize = resp->ByteSizeLong();
 

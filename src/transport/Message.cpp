@@ -12,6 +12,17 @@ Message::Message(Message&& other) noexcept
   : Message(std::move(other.msg))
 {}
 
+Message& Message::operator=(Message&& other)
+{
+    msg.move(other.msg);
+
+    return *this;
+}
+
+bool Message::empty() {
+    return msg.empty();
+}
+
 char* Message::data()
 {
     return reinterpret_cast<char*>(msg.data());

@@ -25,8 +25,14 @@ class Message
 
     explicit Message(Message&& other) noexcept;
 
-    // Empty message signals shutdown
+    Message& operator=(Message&&);
+
+    /**
+     * Empty messages imply a failure or shutdown request
+     */
     Message() = default;
+
+    bool empty();
 
     char* data();
 
