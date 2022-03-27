@@ -19,7 +19,8 @@ Message& Message::operator=(Message&& other)
     return *this;
 }
 
-bool Message::empty() {
+bool Message::empty()
+{
     return msg.empty();
 }
 
