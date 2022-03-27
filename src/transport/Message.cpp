@@ -12,8 +12,9 @@ Message::Message(Message&& other) noexcept
   : Message(std::move(other.msg))
 {}
 
-Message::Message(MessageFailCode failCodeIn):failCode(failCodeIn) {
-}
+Message::Message(MessageResponseCode failCodeIn)
+  : failCode(failCodeIn)
+{}
 
 Message& Message::operator=(Message&& other)
 {

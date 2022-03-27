@@ -22,8 +22,8 @@ void MpiMessageEndpoint::sendMpiMessage(
 std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()
 {
     Message msg = recvSocket.recv();
-    if (msg.getFailCode() != MessageFailCode::SUCCESS) {
-        SPDLOG_ERROR("Error on MPI message: {}", msg.getFailCode());
+    if (msg.getResponseCode() != MessageResponseCode::SUCCESS) {
+        SPDLOG_ERROR("Error on MPI message: {}", msg.getResponseCode());
         throw MessageTimeoutException("Mpi message error");
     }
     PARSE_MSG(faabric::MPIMessage, msg.data(), msg.size());

@@ -73,8 +73,8 @@ void MessageEndpointServerHandler::start(
                     while (true) {
                         // Receive header and body
                         Message headerMessage = endpoint->recv();
-                        if (headerMessage.getFailCode() ==
-                            MessageFailCode::TIMEOUT) {
+                        if (headerMessage.getResponseCode() ==
+                            MessageResponseCode::TIMEOUT) {
                             SPDLOG_TRACE(
                               "Server on {}, looping after no message",
                               endpoint->getAddress());
@@ -108,11 +108,12 @@ void MessageEndpointServerHandler::start(
                         }
 
                         Message body = endpoint->recv();
-                        if (body.getFailCode() != MessageFailCode::SUCCESS) {
+                        if (body.getResponseCode() !=
+                            MessageResponseCode::SUCCESS) {
                             SPDLOG_ERROR("Server on port {}, got header, error "
                                          "on body: {}",
                                          endpoint->getAddress(),
-                                         body.getFailCode());
+                                         body.getResponseCode());
                             throw MessageTimeoutException(
                               "Server, got header, error on body");
                         }

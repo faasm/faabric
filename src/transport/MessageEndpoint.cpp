@@ -273,7 +273,7 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
                            size,
                            timeoutMs,
                            address);
-              return Message(MessageFailCode::TIMEOUT);
+              return Message(MessageResponseCode::TIMEOUT);
           }
 
           if (res.has_value() && (res->size != res->untruncated_size)) {
@@ -286,7 +286,7 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
               SPDLOG_WARN("Endpoint {} received ETERM on recv", address);
-              return Message(MessageFailCode::TERM);
+              return Message(MessageResponseCode::TERM);
           }
 
           throw;
@@ -307,12 +307,12 @@ Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
               SPDLOG_TRACE("Did not receive message within {}ms on {}",
                            timeoutMs,
                            address);
-              return Message(MessageFailCode::TIMEOUT);
+              return Message(MessageResponseCode::TIMEOUT);
           }
       } catch (zmq::error_t& e) {
           if (e.num() == ZMQ_ETERM) {
               SPDLOG_WARN("Endpoint {} received ETERM on recv", address);
-              return Message(MessageFailCode::TERM);
+              return Message(MessageResponseCode::TERM);
           }
           throw;
       },
@@ -400,9 +400,10 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", address);
     auto msg = recvNoBuffer(reqSocket);
-    if (msg.getFailCode() != MessageFailCode::SUCCESS) {
-        SPDLOG_ERROR(
-          "Failed getting response on {}: code {}", address, msg.getFailCode());
+    if (msg.getResponseCode() != MessageResponseCode::SUCCESS) {
+        SPDLOG_ERROR("Failed getting response on {}: code {}",
+                     address,
+                     msg.getResponseCode());
         throw MessageTimeoutException("Error on waiting for response.");
     }
 

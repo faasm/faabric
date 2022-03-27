@@ -8,7 +8,8 @@ namespace faabric::transport {
 /**
  * Types of message failures
  */
-enum MessageFailCode {
+enum MessageResponseCode
+{
     SUCCESS,
     TERM,
     TIMEOUT,
@@ -36,13 +37,11 @@ class Message
 
     explicit Message(Message&& other) noexcept;
 
-    explicit Message(MessageFailCode failCodeIn);
+    explicit Message(MessageResponseCode failCodeIn);
 
     Message& operator=(Message&&);
 
-    MessageFailCode getFailCode() {
-        return failCode;
-    }
+    MessageResponseCode getResponseCode() { return failCode; }
 
     char* data();
 
@@ -59,6 +58,6 @@ class Message
 
     bool _more = false;
 
-    MessageFailCode failCode = MessageFailCode::SUCCESS;
+    MessageResponseCode failCode = MessageResponseCode::SUCCESS;
 };
 }
