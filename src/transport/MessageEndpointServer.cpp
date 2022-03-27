@@ -1,3 +1,4 @@
+#include "faabric/transport/Message.h"
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/transport/common.h>
@@ -72,7 +73,8 @@ void MessageEndpointServerHandler::start(
                     while (true) {
                         // Receive header and body
                         Message headerMessage = endpoint->recv();
-                        if (!headerMessage.empty()) {
+                        if (headerMessage.getFailCode() ==
+                            MessageFailCode::TIMEOUT) {
                             SPDLOG_TRACE(
                               "Server on {}, looping after no message",
                               endpoint->getAddress());
@@ -106,12 +108,13 @@ void MessageEndpointServerHandler::start(
                         }
 
                         Message body = endpoint->recv();
-                        if (body.empty()) {
-                            SPDLOG_ERROR("Server on port {}, got header, timed "
-                                         "out on body",
-                                         endpoint->getAddress());
+                        if (body.getFailCode() != MessageFailCode::SUCCESS) {
+                            SPDLOG_ERROR("Server on port {}, got header, error "
+                                         "on body: {}",
+                                         endpoint->getAddress(),
+                                         body.getFailCode());
                             throw MessageTimeoutException(
-                              "Server, got header, timed out on body");
+                              "Server, got header, error on body");
                         }
 
                         if (body.more()) {
