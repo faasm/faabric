@@ -138,6 +138,8 @@ void Scheduler::reset()
     availableHostsCache.clear();
     registeredHosts.clear();
     threadResults.clear();
+    threadResultMessages.clear();
+
     pushedSnapshotsMap.clear();
 
     // Reset function migration tracking

@@ -312,6 +312,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     SnapshotMergeOperation operation = SnapshotMergeOperation::Bytewise;
     SnapshotDataType dataType = SnapshotDataType::Raw;
 
+    REQUIRE(snap->getQueuedDiffsCount() == 0);
+
     SECTION("Integer")
     {
         dataType = SnapshotDataType::Int;
@@ -394,8 +396,6 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     SnapshotDiff diff(dataType, operation, offset, diffData);
 
-    size_t originalDiffsApplied = snap->getQueuedDiffsCount();
-
     // Push diffs for a fake thread
     int msgId = 123;
     sch.registerThread(msgId);
@@ -403,13 +403,17 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     cli.pushThreadResult(msgId, 0, snapKey, diffs);
 
     // Ensure the right number of diffs is applied
-    REQUIRE(snap->getQueuedDiffsCount() == originalDiffsApplied + 1);
+    REQUIRE(snap->getQueuedDiffsCount() == 1);
 
     // Apply and check data is as expected
-    snap->writeQueuedDiffs();
+    int nWritten = snap->writeQueuedDiffs();
+    REQUIRE(nWritten == 1);
+
     std::vector<uint8_t> actualData =
       snap->getDataCopy(offset, expectedData.size());
     REQUIRE(actualData == expectedData);
+
+    sch.deregisterThread(msgId);
 }
 
 TEST_CASE_METHOD(SnapshotClientServerFixture,
