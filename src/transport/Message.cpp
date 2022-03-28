@@ -3,48 +3,42 @@
 
 namespace faabric::transport {
 
-Message::Message(zmq::message_t&& msgIn)
-  : msg(std::move(msgIn))
-{}
+Message::Message(size_t size):
+    buffer(size) {
+}
 
 Message::Message(Message&& other) noexcept
-  : Message(std::move(other.msg))
+  : buffer(std::move(other.buffer))
 {}
 
-Message::Message(MessageResponseCode failCodeIn)
-  : failCode(failCodeIn)
+Message::Message(MessageResponseCode responseCodeIn)
+  : responseCode(responseCodeIn)
 {}
 
 Message& Message::operator=(Message&& other)
 {
-    msg.move(other.msg);
+    buffer = std::move(other.buffer);
 
     return *this;
 }
 
 char* Message::data()
 {
-    return reinterpret_cast<char*>(msg.data());
+    return reinterpret_cast<char*>(buffer.data());
 }
 
 uint8_t* Message::udata()
 {
-    return reinterpret_cast<uint8_t*>(msg.data());
+    return buffer.data();
 }
 
 std::vector<uint8_t> Message::dataCopy()
 {
-    return std::vector<uint8_t>(BYTES(msg.data()),
-                                BYTES(msg.data()) + msg.size());
+    return std::vector<uint8_t>(buffer.begin(), buffer.end());
 }
 
 int Message::size()
 {
-    return msg.size();
-}
-
-bool Message::more()
-{
-    return msg.more();
+    return buffer.size();
 }
 }

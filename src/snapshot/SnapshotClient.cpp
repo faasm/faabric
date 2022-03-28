@@ -1,3 +1,4 @@
+#include "faabric/util/bytes.h"
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
@@ -110,6 +111,14 @@ void SnapshotClient::pushSnapshot(
           mb, keyOffset, data->getMaxSize(), dataOffset, mrsOffset);
 
         mb.Finish(requestOffset);
+
+        // Print first n characters
+        int nElems = 30;
+        SPDLOG_INFO("PRINTING {}", nElems);
+        const uint8_t* buff = mb.GetBufferPointer();
+        for (int i = 0; i < nElems; i++) {
+            SPDLOG_INFO("{}", buff[i]);
+        }
 
         // Send it
         SEND_FB_MSG(SnapshotCalls::PushSnapshot, mb)

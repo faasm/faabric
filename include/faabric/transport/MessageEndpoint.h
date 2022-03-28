@@ -49,6 +49,8 @@ class MessageEndpoint
 
     std::string getAddress();
 
+    virtual Message recv(int size);
+
   protected:
     const std::string address;
     const int timeoutMs;
@@ -66,8 +68,6 @@ class MessageEndpoint
     Message doRecv(zmq::socket_t& socket, int size = 0);
 
     Message recvBuffer(zmq::socket_t& socket, int size);
-
-    Message recvNoBuffer(zmq::socket_t& socket);
 };
 
 class AsyncSendMessageEndpoint final : public MessageEndpoint

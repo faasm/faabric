@@ -247,14 +247,62 @@ void MessageEndpoint::doSend(zmq::socket_t& socket,
       "send")
 }
 
+Message MessageEndpoint::recvHeaderAndBody()
+{
+    // Receive header and body
+    Message headerMessage = recv();
+    if (headerMessage.getResponseCode() == MessageResponseCode::TIMEOUT) {
+        SPDLOG_TRACE("Server on {}, looping after no message",
+                     endpoint->getAddress());
+        continue;
+    }
+
+    if (headerMessage.size() == shutdownHeader.size()) {
+        if (headerMessage.dataCopy() == shutdownHeader) {
+            SPDLOG_TRACE("Server thread {} on {} got shutdown message",
+                         i,
+                         endpoint->getAddress());
+
+            // Send an empty response if in sync mode
+            // (otherwise upstream socket will hang)
+            if (!async) {
+                std::vector<uint8_t> empty(4, 0);
+                static_cast<SyncRecvMessageEndpoint*>(endpoint.get())
+                  ->sendResponse(empty.data(), empty.size());
+            }
+
+            break;
+        }
+    }
+
+    if (!headerMessage.more()) {
+        throw std::runtime_error("Header sent without SNDMORE flag");
+    }
+
+    assert(headerMessage.size() == sizeof(size_t) + sizeof(uint8_t));
+    size_t msgSize =
+      faabric::util::unalignedRead<size_t>(headerMessage.udata());
+    uint8_t header = faabric::util::unalignedRead<uint8_t>(
+      headerMessage.udata() + sizeof(uint8_t));
+
+    Message body = endpoint->recv(msgSize);
+    if (body.getResponseCode() != MessageResponseCode::SUCCESS) {
+        SPDLOG_ERROR("Server on port {}, got header, error "
+                     "on body: {}",
+                     endpoint->getAddress(),
+                     body.getResponseCode());
+        throw MessageTimeoutException("Server, got header, error on body");
+    }
+
+    if (body.more()) {
+        throw std::runtime_error("Body sent with SNDMORE flag");
+    }
+}
+
 Message MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
 {
     assert(tid == std::this_thread::get_id());
     assert(size >= 0);
-
-    if (size == 0) {
-        return recvNoBuffer(socket);
-    }
 
     return recvBuffer(socket, size);
 }
@@ -262,7 +310,7 @@ Message MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
 Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
 {
     // Pre-allocate message to avoid copying
-    zmq::message_t msg(size);
+    Message msg(size);
 
     CATCH_ZMQ_ERR(
       try {
@@ -292,31 +340,6 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
           throw;
       },
       "recv_buffer")
-
-    return Message(std::move(msg));
-}
-
-Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
-{
-    // Allocate a message to receive data
-    zmq::message_t msg;
-    CATCH_ZMQ_ERR(
-      try {
-          auto res = socket.recv(msg);
-          if (!res.has_value()) {
-              SPDLOG_TRACE("Did not receive message within {}ms on {}",
-                           timeoutMs,
-                           address);
-              return Message(MessageResponseCode::TIMEOUT);
-          }
-      } catch (zmq::error_t& e) {
-          if (e.num() == ZMQ_ETERM) {
-              SPDLOG_WARN("Endpoint {} received ETERM on recv", address);
-              return Message(MessageResponseCode::TERM);
-          }
-          throw;
-      },
-      "recv_no_buffer")
 
     return Message(std::move(msg));
 }
