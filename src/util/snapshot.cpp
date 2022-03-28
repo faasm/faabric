@@ -19,7 +19,7 @@ SnapshotDiff::SnapshotDiff(SnapshotDataType dataTypeIn,
   : dataType(dataTypeIn)
   , operation(operationIn)
   , offset(offsetIn)
-  , data(dataIn.begin(), dataIn.end())
+  , data(dataIn)
 {}
 
 std::vector<uint8_t> SnapshotDiff::getDataCopy() const
@@ -360,6 +360,13 @@ size_t SnapshotData::getQueuedDiffsCount()
     return queuedDiffs.size();
 }
 
+void SnapshotData::applyDiffs(const std::vector<SnapshotDiff>& diffs)
+{
+    for (const auto& diff : diffs) {
+        applyDiff(diff);
+    }
+}
+
 void SnapshotData::queueDiffs(const std::vector<SnapshotDiff>& diffs)
 {
     if (diffs.empty()) {
@@ -382,98 +389,7 @@ int SnapshotData::writeQueuedDiffs()
     // Iterate through diffs
     int nDiffs = queuedDiffs.size();
     for (auto& diff : queuedDiffs) {
-        if (diff.getOperation() ==
-            faabric::util::SnapshotMergeOperation::Ignore) {
-
-            SPDLOG_TRACE("Ignoring region {}-{}",
-                         diff.getOffset(),
-                         diff.getOffset() + diff.getData().size());
-
-            continue;
-        }
-
-        if (diff.getOperation() ==
-            faabric::util::SnapshotMergeOperation::Bytewise) {
-            writeData(diff.getData(), diff.getOffset());
-            continue;
-        }
-
-        if (diff.getOperation() == faabric::util::SnapshotMergeOperation::XOR) {
-            xorData(diff.getData(), diff.getOffset());
-            continue;
-        }
-
-        uint8_t* copyTarget = validatedOffsetPtr(diff.getOffset());
-        switch (diff.getDataType()) {
-            case (faabric::util::SnapshotDataType::Int): {
-                int32_t finalValue =
-                  applyDiffValue<int32_t>(validatedOffsetPtr(diff.getOffset()),
-                                          diff.getData().data(),
-                                          diff.getOperation());
-
-                SPDLOG_TRACE("Writing int {} diff: {} {} -> {}",
-                             snapshotMergeOpStr(diff.getOperation()),
-                             unalignedRead<int32_t>(copyTarget),
-                             unalignedRead<int32_t>(diff.getData().data()),
-                             finalValue);
-
-                writeData({ BYTES(&finalValue), sizeof(int32_t) },
-                          diff.getOffset());
-                break;
-            }
-            case (faabric::util::SnapshotDataType::Long): {
-                long finalValue =
-                  applyDiffValue<long>(validatedOffsetPtr(diff.getOffset()),
-                                       diff.getData().data(),
-                                       diff.getOperation());
-
-                SPDLOG_TRACE("Writing long {} diff: {} {} -> {}",
-                             snapshotMergeOpStr(diff.getOperation()),
-                             unalignedRead<long>(copyTarget),
-                             unalignedRead<long>(diff.getData().data()),
-                             finalValue);
-
-                writeData({ BYTES(&finalValue), sizeof(long) },
-                          diff.getOffset());
-                break;
-            }
-            case (faabric::util::SnapshotDataType::Float): {
-                float finalValue =
-                  applyDiffValue<float>(validatedOffsetPtr(diff.getOffset()),
-                                        diff.getData().data(),
-                                        diff.getOperation());
-
-                SPDLOG_TRACE("Writing float {} diff: {} {} -> {}",
-                             snapshotMergeOpStr(diff.getOperation()),
-                             unalignedRead<float>(copyTarget),
-                             unalignedRead<float>(diff.getData().data()),
-                             finalValue);
-
-                writeData({ BYTES(&finalValue), sizeof(float) },
-                          diff.getOffset());
-                break;
-            }
-            case (faabric::util::SnapshotDataType::Double): {
-                double finalValue =
-                  applyDiffValue<double>(validatedOffsetPtr(diff.getOffset()),
-                                         diff.getData().data(),
-                                         diff.getOperation());
-
-                SPDLOG_TRACE("Writing double {} diff: {} {} -> {}",
-                             snapshotMergeOpStr(diff.getOperation()),
-                             unalignedRead<double>(copyTarget),
-                             unalignedRead<double>(diff.getData().data()),
-                             finalValue);
-
-                writeData({ BYTES(&finalValue), sizeof(double) },
-                          diff.getOffset());
-                break;
-            }
-            default: {
-                SPDLOG_ERROR("Unsupported data type: {}", diff.getDataType());
-                throw std::runtime_error("Unsupported merge data type");
-            }
-        }
+        applyDiff(diff);
     }
 
     // Clear queue
@@ -481,6 +397,98 @@ int SnapshotData::writeQueuedDiffs()
     PROF_END(WriteQueuedDiffs)
 
     return nDiffs;
+}
+
+void SnapshotData::applyDiff(const SnapshotDiff& diff)
+{
+    if (diff.getOperation() == faabric::util::SnapshotMergeOperation::Ignore) {
+
+        SPDLOG_TRACE("Ignoring region {}-{}",
+                     diff.getOffset(),
+                     diff.getOffset() + diff.getData().size());
+
+        return;
+    }
+
+    if (diff.getOperation() ==
+        faabric::util::SnapshotMergeOperation::Bytewise) {
+        writeData(diff.getData(), diff.getOffset());
+        return;
+    }
+
+    if (diff.getOperation() == faabric::util::SnapshotMergeOperation::XOR) {
+        xorData(diff.getData(), diff.getOffset());
+        return;
+    }
+
+    uint8_t* copyTarget = validatedOffsetPtr(diff.getOffset());
+    switch (diff.getDataType()) {
+        case (faabric::util::SnapshotDataType::Int): {
+            int32_t finalValue =
+              applyDiffValue<int32_t>(validatedOffsetPtr(diff.getOffset()),
+                                      diff.getData().data(),
+                                      diff.getOperation());
+
+            SPDLOG_TRACE("Writing int {} diff: {} {} -> {}",
+                         snapshotMergeOpStr(diff.getOperation()),
+                         unalignedRead<int32_t>(copyTarget),
+                         unalignedRead<int32_t>(diff.getData().data()),
+                         finalValue);
+
+            writeData({ BYTES(&finalValue), sizeof(int32_t) },
+                      diff.getOffset());
+            break;
+        }
+        case (faabric::util::SnapshotDataType::Long): {
+            long finalValue =
+              applyDiffValue<long>(validatedOffsetPtr(diff.getOffset()),
+                                   diff.getData().data(),
+                                   diff.getOperation());
+
+            SPDLOG_TRACE("Writing long {} diff: {} {} -> {}",
+                         snapshotMergeOpStr(diff.getOperation()),
+                         unalignedRead<long>(copyTarget),
+                         unalignedRead<long>(diff.getData().data()),
+                         finalValue);
+
+            writeData({ BYTES(&finalValue), sizeof(long) }, diff.getOffset());
+            break;
+        }
+        case (faabric::util::SnapshotDataType::Float): {
+            float finalValue =
+              applyDiffValue<float>(validatedOffsetPtr(diff.getOffset()),
+                                    diff.getData().data(),
+                                    diff.getOperation());
+
+            SPDLOG_TRACE("Writing float {} diff: {} {} -> {}",
+                         snapshotMergeOpStr(diff.getOperation()),
+                         unalignedRead<float>(copyTarget),
+                         unalignedRead<float>(diff.getData().data()),
+                         finalValue);
+
+            writeData({ BYTES(&finalValue), sizeof(float) }, diff.getOffset());
+            break;
+        }
+        case (faabric::util::SnapshotDataType::Double): {
+            double finalValue =
+              applyDiffValue<double>(validatedOffsetPtr(diff.getOffset()),
+                                     diff.getData().data(),
+                                     diff.getOperation());
+
+            SPDLOG_TRACE("Writing double {} diff: {} {} -> {}",
+                         snapshotMergeOpStr(diff.getOperation()),
+                         unalignedRead<double>(copyTarget),
+                         unalignedRead<double>(diff.getData().data()),
+                         finalValue);
+
+            writeData({ BYTES(&finalValue), sizeof(double) }, diff.getOffset());
+            break;
+        }
+        default: {
+            SPDLOG_ERROR("Unsupported data type: {}", diff.getDataType());
+            throw std::runtime_error("Unsupported merge data type");
+        }
+    }
 }
 
 void SnapshotData::clearTrackedChanges()
@@ -696,6 +704,9 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
     }
     startPage += std::distance(startIt, foundIt);
 
+    // Seems to be quicker to access this via a raw ptr
+    const char* dirtyRegionsPtr = dirtyRegions.data();
+
     // Bytewise and XOR both deal with overwriting bytes without any
     // other logic. Bytewise will filter in only the modified bytes,
     // whereas XOR will transmit the XOR of the whole page and the original
@@ -704,7 +715,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         // Iterate through pages
         for (int p = startPage; p < endPage; p++) {
             // Skip if page not dirty
-            if (dirtyRegions.at(p) == 0) {
+            if (dirtyRegionsPtr[p] == 0) {
                 continue;
             }
 
@@ -733,6 +744,7 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
                              startByte,
                              startByte + rangeSize);
 
+                // Raw diff data is not owned by the diff object itself
                 diffs.emplace_back(dataType,
                                    operation,
                                    startByte,
@@ -801,7 +813,8 @@ void SnapshotMergeRegion::addDiffs(std::vector<SnapshotDiff>& diffs,
         }
     }
 
-    // Add the diff
+    // Add the diff. Data here does not need to be owned by the snapshot diff
+    // object, as it's been changed in place above
     if (changed) {
         diffs.emplace_back(dataType,
                            operation,

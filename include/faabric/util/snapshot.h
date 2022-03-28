@@ -54,8 +54,11 @@ enum SnapshotMergeOperation
 };
 
 /**
- * Represents a modification to a snapshot (a.k.a. a dirty region). Captures the
- * modified data, as well as its offset within the snapshot.
+ * Represents a modification to a snapshot (a.k.a. a dirty region). Specifies
+ * the modified data, as well as its offset within the snapshot.
+ *
+ * Each diff does not own the data, it just provides a span pointing at the
+ * original data.
  */
 class SnapshotDiff
 {
@@ -81,7 +84,8 @@ class SnapshotDiff
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Bytewise;
     uint32_t offset = 0;
-    std::vector<uint8_t> data;
+
+    std::span<const uint8_t> data;
 };
 
 /*
@@ -282,6 +286,10 @@ class SnapshotData
     std::vector<SnapshotMergeRegion> getMergeRegions();
 
     size_t getQueuedDiffsCount();
+
+    void applyDiffs(const std::vector<SnapshotDiff>& diffs);
+
+    void applyDiff(const SnapshotDiff& diff);
 
     void queueDiffs(const std::vector<SnapshotDiff>& diffs);
 

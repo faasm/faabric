@@ -1,5 +1,7 @@
 #include <catch2/catch.hpp>
 
+#include "faabric/util/bytes.h"
+#include "faabric/util/snapshot.h"
 #include "faabric_utils.h"
 
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -198,5 +200,64 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     checkSnapshotDiff(offsetB2, dataB2, changeDiffs.at(3));
     checkSnapshotDiff(offsetC, expectedDataC, changeDiffs.at(4));
     checkSnapshotDiff(regionOffsetD, expectedDataD, changeDiffs.at(5));
+}
+
+TEST_CASE_METHOD(SnapshotTestFixture,
+                 "Test snapshot diff and unerlying data",
+                 "[snapshot]")
+{
+    SECTION("Raw data")
+    {
+        size_t memSize = 200;
+        MemoryRegion mem = allocatePrivateMemory(memSize);
+        std::span<uint8_t> memView(mem.get(), memSize);
+
+        uint8_t* rawSubsection = mem.get() + 50;
+        std::span<uint8_t> subsection(rawSubsection, 100);
+
+        // Write some data that we can check
+        for (int i = 0; i < 10; i++) {
+            subsection.data()[i] = i;
+        }
+
+        std::vector<uint8_t> subsectionCopy(subsection.begin(),
+                                            subsection.end());
+
+        // Create a diff from the memory, check it still refers to the same
+        // data
+        SnapshotDiff d = SnapshotDiff(SnapshotDataType::Raw,
+                                      SnapshotMergeOperation::Bytewise,
+                                      123,
+                                      subsection);
+
+        std::span<const uint8_t> actual = d.getData();
+        REQUIRE(actual.data() == rawSubsection);
+
+        REQUIRE(actual.size() == subsection.size());
+        REQUIRE(d.getDataCopy() == subsectionCopy);
+    }
+
+    SECTION("Integers")
+    {
+        int originalInt = 123;
+        uint8_t* originalBytes = BYTES(&originalInt);
+        std::vector<uint8_t> originalCopy(originalBytes,
+                                          originalBytes + sizeof(int));
+
+        SnapshotDiff d =
+          SnapshotDiff(SnapshotDataType::Int,
+                       SnapshotMergeOperation::Sum,
+                       100,
+                       std::span<uint8_t>(originalBytes, sizeof(int)));
+
+        std::span<const uint8_t> actual = d.getData();
+        REQUIRE(actual.data() == originalBytes);
+
+        std::vector<uint8_t> dataCopy = d.getDataCopy();
+        REQUIRE(dataCopy == originalCopy);
+
+        int actualInt = faabric::util::unalignedRead<int>(actual.data());
+        REQUIRE(actualInt == originalInt);
+    }
 }
 }

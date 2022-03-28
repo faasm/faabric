@@ -21,37 +21,36 @@ StateServer::StateServer(State& stateIn)
   , state(stateIn)
 {}
 
-void StateServer::doAsyncRecv(int header,
-                              const uint8_t* buffer,
-                              size_t bufferSize)
+void StateServer::doAsyncRecv(int header, transport::Message&& message)
 {
     throw std::runtime_error("State server does not support async recv");
 }
 
-std::unique_ptr<google::protobuf::Message>
-StateServer::doSyncRecv(int header, const uint8_t* buffer, size_t bufferSize)
+std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
+  int header,
+  transport::Message&& message)
 {
     switch (header) {
         case faabric::state::StateCalls::Pull: {
-            return recvPull(buffer, bufferSize);
+            return recvPull(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Push: {
-            return recvPush(buffer, bufferSize);
+            return recvPush(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Size: {
-            return recvSize(buffer, bufferSize);
+            return recvSize(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Append: {
-            return recvAppend(buffer, bufferSize);
+            return recvAppend(message.udata(), message.size());
         }
         case faabric::state::StateCalls::ClearAppended: {
-            return recvClearAppended(buffer, bufferSize);
+            return recvClearAppended(message.udata(), message.size());
         }
         case faabric::state::StateCalls::PullAppended: {
-            return recvPullAppended(buffer, bufferSize);
+            return recvPullAppended(message.udata(), message.size());
         }
         case faabric::state::StateCalls::Delete: {
-            return recvDelete(buffer, bufferSize);
+            return recvDelete(message.udata(), message.size());
         }
         default: {
             throw std::runtime_error(
@@ -67,8 +66,8 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvSize(
     PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Prepare the response
-    SPDLOG_TRACE("Received size {}/{}", msg.user(), msg.key());
-    KV_FROM_REQUEST(msg)
+    SPDLOG_TRACE("Received size {}/{}", parsedMsg.user(), parsedMsg.key());
+    KV_FROM_REQUEST(parsedMsg)
     auto response = std::make_unique<faabric::StateSizeResponse>();
     response->set_user(kv->user);
     response->set_key(kv->key);
@@ -84,20 +83,20 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPull(
     PARSE_MSG(faabric::StateChunkRequest, buffer, bufferSize)
 
     SPDLOG_TRACE("Received pull {}/{} ({}->{})",
-                 msg.user(),
-                 msg.key(),
-                 msg.offset(),
-                 msg.offset() + msg.chunksize());
+                 parsedMsg.user(),
+                 parsedMsg.key(),
+                 parsedMsg.offset(),
+                 parsedMsg.offset() + parsedMsg.chunksize());
 
     // Write the response
-    KV_FROM_REQUEST(msg)
-    uint64_t chunkOffset = msg.offset();
-    uint64_t chunkLen = msg.chunksize();
+    KV_FROM_REQUEST(parsedMsg)
+    uint64_t chunkOffset = parsedMsg.offset();
+    uint64_t chunkLen = parsedMsg.chunksize();
     uint8_t* chunk = kv->getChunk(chunkOffset, chunkLen);
 
     auto response = std::make_unique<faabric::StatePart>();
-    response->set_user(msg.user());
-    response->set_key(msg.key());
+    response->set_user(parsedMsg.user());
+    response->set_key(parsedMsg.key());
     response->set_offset(chunkOffset);
     // TODO: avoid copying here
     response->set_data(chunk, chunkLen);
@@ -113,14 +112,15 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPush(
 
     // Update the KV store
     SPDLOG_TRACE("Received push {}/{} ({}->{})",
-                 msg.user(),
-                 msg.key(),
-                 msg.offset(),
-                 msg.offset() + msg.data().size());
+                 parsedMsg.user(),
+                 parsedMsg.key(),
+                 parsedMsg.offset(),
+                 parsedMsg.offset() + parsedMsg.data().size());
 
-    KV_FROM_REQUEST(msg)
-    kv->setChunk(
-      msg.offset(), BYTES_CONST(msg.data().c_str()), msg.data().size());
+    KV_FROM_REQUEST(parsedMsg)
+    kv->setChunk(parsedMsg.offset(),
+                 BYTES_CONST(parsedMsg.data().c_str()),
+                 parsedMsg.data().size());
 
     auto response = std::make_unique<faabric::StateResponse>();
     return response;
@@ -133,9 +133,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvAppend(
     PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Update the KV
-    KV_FROM_REQUEST(msg)
-    auto reqData = BYTES_CONST(msg.data().c_str());
-    uint64_t dataLen = msg.data().size();
+    KV_FROM_REQUEST(parsedMsg)
+    auto reqData = BYTES_CONST(parsedMsg.data().c_str());
+    uint64_t dataLen = parsedMsg.data().size();
     kv->append(reqData, dataLen);
 
     auto response = std::make_unique<faabric::StateResponse>();
@@ -149,13 +149,14 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPullAppended(
     PARSE_MSG(faabric::StateAppendedRequest, buffer, bufferSize)
 
     // Prepare response
-    SPDLOG_TRACE("Received pull-appended {}/{}", msg.user(), msg.key());
-    KV_FROM_REQUEST(msg)
+    SPDLOG_TRACE(
+      "Received pull-appended {}/{}", parsedMsg.user(), parsedMsg.key());
+    KV_FROM_REQUEST(parsedMsg)
 
     auto response = std::make_unique<faabric::StateAppendedResponse>();
-    response->set_user(msg.user());
-    response->set_key(msg.key());
-    for (uint32_t i = 0; i < msg.nvalues(); i++) {
+    response->set_user(parsedMsg.user());
+    response->set_key(parsedMsg.key());
+    for (uint32_t i = 0; i < parsedMsg.nvalues(); i++) {
         AppendedInMemoryState& value = kv->getAppendedValue(i);
         auto appendedValue = response->add_values();
         appendedValue->set_data(reinterpret_cast<char*>(value.data.get()),
@@ -172,8 +173,8 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvDelete(
     PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Delete value
-    SPDLOG_TRACE("Received delete {}/{}", msg.user(), msg.key());
-    state.deleteKV(msg.user(), msg.key());
+    SPDLOG_TRACE("Received delete {}/{}", parsedMsg.user(), parsedMsg.key());
+    state.deleteKV(parsedMsg.user(), parsedMsg.key());
 
     auto response = std::make_unique<faabric::StateResponse>();
     return response;
@@ -186,8 +187,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvClearAppended(
     PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
 
     // Perform operation
-    SPDLOG_TRACE("Received clear-appended {}/{}", msg.user(), msg.key());
-    KV_FROM_REQUEST(msg)
+    SPDLOG_TRACE(
+      "Received clear-appended {}/{}", parsedMsg.user(), parsedMsg.key());
+    KV_FROM_REQUEST(parsedMsg)
     kv->clearAppended();
 
     auto response = std::make_unique<faabric::StateResponse>();

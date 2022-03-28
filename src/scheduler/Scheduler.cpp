@@ -1055,6 +1055,10 @@ void Scheduler::setThreadResult(
                          msg.groupid());
 
             auto snap = reg.getSnapshot(key);
+
+            // Here we don't have ownership over all of the snapshot diff data,
+            // but that's ok as the executor memory will outlast the snapshot
+            // merging operation.
             snap->queueDiffs(diffs);
         }
 
@@ -1072,6 +1076,17 @@ void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
     faabric::util::FullLock lock(mx);
     SPDLOG_DEBUG("Setting result for thread {} to {}", msgId, returnValue);
     threadResults.at(msgId).set_value(returnValue);
+}
+
+void Scheduler::setThreadResultLocally(uint32_t msgId,
+                                       int32_t returnValue,
+                                       faabric::transport::Message&& message)
+{
+    setThreadResultLocally(msgId, returnValue);
+
+    // Keep the message
+    faabric::util::FullLock lock(mx);
+    threadResultMessages.insert(std::make_pair(msgId, std::move(message)));
 }
 
 std::vector<std::pair<uint32_t, int32_t>> Scheduler::awaitThreadResults(
@@ -1098,7 +1113,45 @@ int32_t Scheduler::awaitThreadResult(uint32_t messageId)
         throw std::runtime_error("Awaiting unregistered thread");
     }
     lock.unlock();
+
     return it->second.get_future().get();
+}
+
+void Scheduler::deregisterThreads(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::util::FullLock eraseLock(mx);
+    for (auto m : req->messages()) {
+        threadResults.erase(m.id());
+        threadResultMessages.erase(m.id());
+    }
+}
+
+void Scheduler::deregisterThread(uint32_t msgId)
+{
+    // Erase the cached message and thread result
+    faabric::util::FullLock eraseLock(mx);
+    threadResults.erase(msgId);
+    threadResultMessages.erase(msgId);
+}
+
+std::vector<uint32_t> Scheduler::getRegisteredThreads()
+{
+    faabric::util::SharedLock lock(mx);
+
+    std::vector<uint32_t> registeredIds;
+    for (auto const& p : threadResults) {
+        registeredIds.push_back(p.first);
+    }
+
+    std::sort(registeredIds.begin(), registeredIds.end());
+
+    return registeredIds;
+}
+
+size_t Scheduler::getCachedMessageCount()
+{
+    return threadResultMessages.size();
 }
 
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,

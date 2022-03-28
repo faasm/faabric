@@ -8,6 +8,21 @@ Message::Message(zmq::message_t&& msgIn)
   , _more(msg.more())
 {}
 
+Message::Message(Message&& other) noexcept
+  : Message(std::move(other.msg))
+{}
+
+Message::Message(MessageResponseCode failCodeIn)
+  : failCode(failCodeIn)
+{}
+
+Message& Message::operator=(Message&& other)
+{
+    msg.move(other.msg);
+
+    return *this;
+}
+
 char* Message::data()
 {
     return reinterpret_cast<char*>(msg.data());
