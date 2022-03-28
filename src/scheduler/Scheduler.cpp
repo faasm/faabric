@@ -1135,6 +1135,25 @@ void Scheduler::deregisterThread(uint32_t msgId)
     threadResultMessages.erase(msgId);
 }
 
+std::vector<uint32_t> Scheduler::getRegisteredThreads()
+{
+    faabric::util::SharedLock lock(mx);
+
+    std::vector<uint32_t> registeredIds;
+    for (auto const& p : threadResults) {
+        registeredIds.push_back(p.first);
+    }
+
+    std::sort(registeredIds.begin(), registeredIds.end());
+
+    return registeredIds;
+}
+
+size_t Scheduler::getCachedMessageCount()
+{
+    return threadResultMessages.size();
+}
+
 faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
                                               int timeoutMs)
 {

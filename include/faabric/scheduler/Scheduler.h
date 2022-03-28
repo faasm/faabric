@@ -193,6 +193,10 @@ class Scheduler
 
     void deregisterThread(uint32_t msgId);
 
+    std::vector<uint32_t> getRegisteredThreads();
+
+    size_t getCachedMessageCount();
+
     void vacateSlot();
 
     void notifyExecutorShutdown(Executor* exec, const faabric::Message& msg);
