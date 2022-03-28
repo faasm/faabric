@@ -3,9 +3,9 @@
 
 namespace faabric::transport {
 
-Message::Message(size_t size):
-    buffer(size) {
-}
+Message::Message(size_t size)
+  : buffer(size)
+{}
 
 Message::Message(Message&& other) noexcept
   : buffer(std::move(other.buffer))

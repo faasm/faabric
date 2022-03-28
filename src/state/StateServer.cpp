@@ -27,9 +27,9 @@ void StateServer::doAsyncRecv(int header, transport::Message&& message)
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
-  int header,
   transport::Message&& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case faabric::state::StateCalls::Pull: {
             return recvPull(message.udata(), message.size());

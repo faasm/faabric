@@ -68,7 +68,6 @@ class MessageEndpointServer
     virtual void doAsyncRecv(transport::Message&& message) = 0;
 
     virtual std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
       transport::Message&& message) = 0;
 
   private:

@@ -57,8 +57,5 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
       int returnValue,
       const std::string& key,
       const std::vector<faabric::util::SnapshotDiff>& diffs);
-
-  private:
-    void sendHeader(faabric::snapshot::SnapshotCalls call);
 };
 }

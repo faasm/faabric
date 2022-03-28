@@ -44,9 +44,16 @@ class Message
     std::vector<uint8_t> dataCopy();
 
     int size();
+
+    void setHeader(uint8_t header) { _header = header; };
+
+    uint8_t getHeader() { return _header; };
+
   private:
     std::vector<uint8_t> buffer;
 
     MessageResponseCode responseCode = MessageResponseCode::SUCCESS;
+
+    uint8_t _header = 0;
 };
 }

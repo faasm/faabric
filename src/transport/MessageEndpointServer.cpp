@@ -15,8 +15,6 @@
 
 namespace faabric::transport {
 
-static const std::vector<uint8_t> shutdownHeader = { 0, 0, 1, 1 };
-
 MessageEndpointServerHandler::MessageEndpointServerHandler(
   MessageEndpointServer* serverIn,
   bool asyncIn,
@@ -74,11 +72,11 @@ void MessageEndpointServerHandler::start(
                     while (true) {
                         if (async) {
                             // Server-specific async handling
-                            server->doAsyncRecv(header, std::move(body));
+                            server->doAsyncRecv(std::move(body));
                         } else {
                             // Server-specific sync handling
                             std::unique_ptr<google::protobuf::Message> resp =
-                              server->doSyncRecv(header, std::move(body));
+                              server->doSyncRecv(std::move(body));
 
                             size_t respSize = resp->ByteSizeLong();
 
