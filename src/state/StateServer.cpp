@@ -21,7 +21,7 @@ StateServer::StateServer(State& stateIn)
   , state(stateIn)
 {}
 
-void StateServer::doAsyncRecv(int header, transport::Message&& message)
+void StateServer::doAsyncRecv(transport::Message&& message)
 {
     throw std::runtime_error("State server does not support async recv");
 }

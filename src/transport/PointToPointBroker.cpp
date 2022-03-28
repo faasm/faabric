@@ -530,7 +530,7 @@ void PointToPointBroker::sendMessage(int groupId,
                      recvIdx,
                      sendEndpoints[label]->getAddress());
 
-        sendEndpoints[label]->send(buffer, bufferSize);
+        sendEndpoints[label]->send(NO_HEADER, buffer, bufferSize);
 
     } else {
         auto cli = getClient(host);

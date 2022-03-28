@@ -1,8 +1,8 @@
-#include "faabric/transport/Message.h"
-#include "faabric/util/bytes.h"
+#include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/context.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -248,8 +248,20 @@ Message MessageEndpoint::recvMessage(zmq::socket_t& socket, bool async)
         return Message(MessageResponseCode::TIMEOUT);
     }
 
-    if (headerMessage.size() == shutdownHeader.size()) {
-        if (headerMessage.dataCopy() == shutdownHeader) {
+    assert(headerMessage.size() == HEADER_MSG_SIZE);
+    uint8_t header =
+      faabric::util::unalignedRead<uint8_t>(headerMessage.udata());
+    size_t msgSize = faabric::util::unalignedRead<size_t>(
+      headerMessage.udata() + sizeof(uint8_t));
+
+    SPDLOG_TRACE(
+      "Received header {} size {} on {}", header, msgSize, getAddress());
+
+    Message body = recvBuffer(socket, msgSize);
+    body.setHeader(header);
+
+    if (body.getHeader() == SHUTDOWN_HEADER) {
+        if (body.dataCopy() == shutdownPayload) {
             SPDLOG_TRACE("Server thread on {} got shutdown message",
                          getAddress());
 
@@ -258,21 +270,12 @@ Message MessageEndpoint::recvMessage(zmq::socket_t& socket, bool async)
             if (!async) {
                 std::vector<uint8_t> empty(4, 0);
                 static_cast<SyncRecvMessageEndpoint*>(this)->sendResponse(
-                  empty.data(), empty.size());
+                  0, empty.data(), empty.size());
             }
 
             return Message(MessageResponseCode::TERM);
         }
     }
-
-    assert(headerMessage.size() == HEADER_MSG_SIZE);
-    uint8_t header =
-      faabric::util::unalignedRead<uint8_t>(headerMessage.udata());
-    size_t msgSize = faabric::util::unalignedRead<size_t>(
-      headerMessage.udata() + sizeof(uint8_t));
-
-    Message body = recvBuffer(socket, msgSize);
-    body.setHeader(header);
 
     if (body.getResponseCode() != MessageResponseCode::SUCCESS) {
         SPDLOG_ERROR("Server on port {}, got header, error "
@@ -281,6 +284,8 @@ Message MessageEndpoint::recvMessage(zmq::socket_t& socket, bool async)
                      body.getResponseCode());
         throw MessageTimeoutException("Server, got header, error on body");
     }
+
+    SPDLOG_TRACE("Received body size {} on {}", body.size(), getAddress());
 
     return Message(std::move(body));
 }
@@ -399,7 +404,7 @@ SyncSendMessageEndpoint::SyncSendMessageEndpoint(const std::string& hostIn,
 void SyncSendMessageEndpoint::sendRaw(const uint8_t* data, size_t dataSize)
 {
     SPDLOG_TRACE("REQ {} ({} bytes)", address, dataSize);
-    sendMessage(reqSocket, 0, data, dataSize);
+    sendMessage(reqSocket, NO_HEADER, data, dataSize);
 }
 
 Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
@@ -411,7 +416,7 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
 
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", address);
-    auto msg = recvMesage(reqSocket, false);
+    Message msg = recvMessage(reqSocket, false);
     if (msg.getResponseCode() != MessageResponseCode::SUCCESS) {
         SPDLOG_ERROR("Failed getting response on {}: code {}",
                      address,
@@ -443,7 +448,12 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
     socket = setUpSocket(socketType, MessageEndpointConnectType::BIND);
 }
 
-Message RecvMessageEndpoint::recv(bool async)
+Message RecvMessageEndpoint::recv()
+{
+    return doRecv(false);
+}
+
+Message RecvMessageEndpoint::doRecv(bool async)
 {
     return recvMessage(socket, async);
 }
@@ -579,7 +589,7 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
 Message SyncRecvMessageEndpoint::recv()
 {
     SPDLOG_TRACE("RECV (REP) {}", address);
-    return RecvMessageEndpoint::recv(false);
+    return doRecv(false);
 }
 
 void SyncRecvMessageEndpoint::sendResponse(uint8_t header,
@@ -605,7 +615,7 @@ AsyncDirectRecvEndpoint::AsyncDirectRecvEndpoint(const std::string& inprocLabel,
 Message AsyncDirectRecvEndpoint::recv()
 {
     SPDLOG_TRACE("PAIR recv {}", address);
-    return RecvMessageEndpoint::recv(true);
+    return doRecv(true);
 }
 
 AsyncDirectSendEndpoint::AsyncDirectSendEndpoint(const std::string& inprocLabel,

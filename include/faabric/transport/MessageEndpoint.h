@@ -23,9 +23,11 @@
 // things haven't yet completed (usually only when there's an error).
 #define LINGER_MS 100
 
+#define NO_HEADER 0
 #define HEADER_MSG_SIZE (sizeof(uint8_t) + sizeof(size_t))
 
-static const std::vector<uint8_t> shutdownHeader = { 0, 0, 1, 1 };
+#define SHUTDOWN_HEADER 220
+static const std::vector<uint8_t> shutdownPayload = { 0, 0, 1, 1 };
 
 namespace faabric::transport {
 
@@ -52,8 +54,6 @@ class MessageEndpoint
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
 
     std::string getAddress();
-
-    virtual Message recv(int size);
 
   protected:
     const std::string address;
@@ -140,10 +140,12 @@ class RecvMessageEndpoint : public MessageEndpoint
 
     virtual ~RecvMessageEndpoint(){};
 
-    virtual Message recv(bool async);
+    virtual Message recv();
+
+    zmq::socket_t socket;
 
   protected:
-    zmq::socket_t socket;
+    Message doRecv(bool async);
 };
 
 class FanInMessageEndpoint : public RecvMessageEndpoint

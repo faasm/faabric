@@ -48,13 +48,12 @@ class EchoServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header, transport::Message&& message) override
+    void doAsyncRecv(transport::Message&& message) override
     {
         throw std::runtime_error("Echo server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
       transport::Message&& message) override
     {
         SPDLOG_TRACE("Echo server received {} bytes", message.size());
@@ -76,13 +75,12 @@ class SleepServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header, transport::Message&& message) override
+    void doAsyncRecv(transport::Message&& message) override
     {
         throw std::runtime_error("Sleep server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
       transport::Message&& message) override
     {
         int* sleepTimeMs = (int*)message.udata();
@@ -104,13 +102,12 @@ class BlockServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header, transport::Message&& message) override
+    void doAsyncRecv(transport::Message&& message) override
     {
         throw std::runtime_error("Lock server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
       transport::Message&& message) override
     {
         // Wait on the latch, requires multiple threads executing in parallel to

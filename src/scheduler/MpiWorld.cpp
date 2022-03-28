@@ -112,7 +112,7 @@ void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
 
     SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, basePort);
     SERIALISE_MSG(msg)
-    ranksSendEndpoints[hostIn]->send(serialisedBuffer, serialisedSize, false);
+    ranksSendEndpoints[hostIn]->send(NO_HEADER, serialisedBuffer, serialisedSize);
 }
 
 void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)
@@ -184,7 +184,7 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     // We want to lazily initialise this data structure because, given its
     // thread local nature, we expect it to be quite sparse (i.e. filled with
     // nullptr).
-    if (unackedMessageBuffers.size() == 0) {
+    if (unackedMessageBuffers.empty()) {
         unackedMessageBuffers.resize(size * size, nullptr);
     }
 

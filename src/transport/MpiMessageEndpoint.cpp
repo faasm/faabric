@@ -16,7 +16,7 @@ void MpiMessageEndpoint::sendMpiMessage(
   const std::shared_ptr<faabric::MPIMessage>& msg)
 {
     SERIALISE_MSG_PTR(msg)
-    sendSocket.send(serialisedBuffer, serialisedSize, false);
+    sendSocket.send(NO_HEADER, serialisedBuffer, serialisedSize);
 }
 
 std::shared_ptr<faabric::MPIMessage> MpiMessageEndpoint::recvMpiMessage()

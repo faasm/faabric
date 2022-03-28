@@ -70,6 +70,15 @@ void MessageEndpointServerHandler::start(
                     }
 
                     while (true) {
+                        // Receive the message
+                        Message body = endpoint->recv();
+
+                        // Shut down if necessary
+                        if (body.getResponseCode() ==
+                            MessageResponseCode::TERM) {
+                            break;
+                        }
+
                         if (async) {
                             // Server-specific async handling
                             server->doAsyncRecv(std::move(body));
@@ -89,7 +98,7 @@ void MessageEndpointServerHandler::start(
                             // Return the response
                             static_cast<SyncRecvMessageEndpoint*>(
                               endpoint.get())
-                              ->sendResponse(buffer, respSize);
+                              ->sendResponse(NO_HEADER, buffer, respSize);
                         }
 
                         // Wait on the request latch if necessary
@@ -220,7 +229,8 @@ void MessageEndpointServer::stop()
                                    faabric::util::Latch::create(2),
                                    std::memory_order_release);
 
-        asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
+        asyncShutdownSender.send(
+          SHUTDOWN_HEADER, shutdownPayload.data(), shutdownPayload.size());
 
         std::atomic_load_explicit(&shutdownLatch, std::memory_order_acquire)
           ->wait();
@@ -240,8 +250,8 @@ void MessageEndpointServer::stop()
                                    faabric::util::Latch::create(2),
                                    std::memory_order_release);
 
-        syncShutdownSender.sendAwaitResponse(shutdownHeader.data(),
-                                             shutdownHeader.size());
+        syncShutdownSender.sendAwaitResponse(
+          SHUTDOWN_HEADER, shutdownPayload.data(), shutdownPayload.size());
 
         std::atomic_load_explicit(&shutdownLatch, std::memory_order_acquire)
           ->wait();

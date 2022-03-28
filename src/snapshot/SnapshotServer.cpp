@@ -25,8 +25,9 @@ SnapshotServer::SnapshotServer()
   , reg(faabric::snapshot::getSnapshotRegistry())
 {}
 
-void SnapshotServer::doAsyncRecv(int header, transport::Message&& message)
+void SnapshotServer::doAsyncRecv(transport::Message&& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case faabric::snapshot::SnapshotCalls::DeleteSnapshot: {
             recvDeleteSnapshot(message.udata(), message.size());
