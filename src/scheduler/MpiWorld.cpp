@@ -112,7 +112,8 @@ void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
 
     SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, basePort);
     SERIALISE_MSG(msg)
-    ranksSendEndpoints[hostIn]->send(NO_HEADER, serialisedBuffer, serialisedSize);
+    ranksSendEndpoints[hostIn]->send(
+      NO_HEADER, serialisedBuffer, serialisedSize);
 }
 
 void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)

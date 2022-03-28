@@ -26,10 +26,7 @@ class DummyServer final : public MessageEndpointServer
     std::atomic<int> messageCount = 0;
 
   private:
-    void doAsyncRecv(transport::Message&& message) override
-    {
-        messageCount++;
-    }
+    void doAsyncRecv(transport::Message&& message) override { messageCount++; }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
       transport::Message&& message) override
