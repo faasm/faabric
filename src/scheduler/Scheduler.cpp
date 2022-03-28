@@ -1080,7 +1080,7 @@ void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 
 void Scheduler::setThreadResultLocally(uint32_t msgId,
                                        int32_t returnValue,
-                                       faabric::transport::Message&& message)
+                                       faabric::transport::Message& message)
 {
     setThreadResultLocally(msgId, returnValue);
 

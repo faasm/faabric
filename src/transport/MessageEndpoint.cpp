@@ -287,12 +287,11 @@ Message MessageEndpoint::recvMessage(zmq::socket_t& socket, bool async)
 
     SPDLOG_TRACE("Received body size {} on {}", body.size(), getAddress());
 
-    return Message(std::move(body));
+    return body;
 }
 
 Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, size_t size)
 {
-    // Pre-allocate message to avoid copying
     Message msg(size);
 
     CATCH_ZMQ_ERR(
@@ -324,7 +323,7 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, size_t size)
       },
       "recv_buffer")
 
-    return Message(std::move(msg));
+    return msg;
 }
 
 void MessageEndpoint::sendBuffer(zmq::socket_t& socket,
@@ -424,7 +423,7 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
         throw MessageTimeoutException("Error on waiting for response.");
     }
 
-    return Message(std::move(msg));
+    return msg;
 }
 
 // ----------------------------------------------

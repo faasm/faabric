@@ -7,24 +7,9 @@ Message::Message(size_t size)
   : buffer(size)
 {}
 
-Message::Message(Message&& other) noexcept
-  : buffer(std::move(other.buffer))
-  , responseCode(other.responseCode)
-  , _header(other._header)
-{}
-
 Message::Message(MessageResponseCode responseCodeIn)
   : responseCode(responseCodeIn)
 {}
-
-Message& Message::operator=(Message&& other)
-{
-    buffer = std::move(other.buffer);
-    responseCode = other.responseCode;
-    _header = other._header;
-
-    return *this;
-}
 
 char* Message::data()
 {

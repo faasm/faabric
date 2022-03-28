@@ -25,7 +25,7 @@ SnapshotServer::SnapshotServer()
   , reg(faabric::snapshot::getSnapshotRegistry())
 {}
 
-void SnapshotServer::doAsyncRecv(transport::Message&& message)
+void SnapshotServer::doAsyncRecv(transport::Message& message)
 {
     uint8_t header = message.getHeader();
     switch (header) {
@@ -41,7 +41,7 @@ void SnapshotServer::doAsyncRecv(transport::Message&& message)
 }
 
 std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
-  transport::Message&& message)
+  transport::Message& message)
 {
     uint8_t header = message.getHeader();
     switch (header) {
@@ -52,7 +52,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
             return recvPushSnapshotUpdate(message.udata(), message.size());
         }
         case faabric::snapshot::SnapshotCalls::ThreadResult: {
-            return recvThreadResult(std::move(message));
+            return recvThreadResult(message);
         }
         default: {
             throw std::runtime_error(
@@ -103,7 +103,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
 }
 
 std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
-  faabric::transport::Message&& message)
+  faabric::transport::Message& message)
 {
     const ThreadResultRequest* r =
       flatbuffers::GetRoot<ThreadResultRequest>(message.udata());
@@ -137,7 +137,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
     // ensure that the underlying message is cached
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
     sch.setThreadResultLocally(
-      r->message_id(), r->return_value(), std::move(message));
+      r->message_id(), r->return_value(), message);
 
     return std::make_unique<faabric::EmptyResponse>();
 }

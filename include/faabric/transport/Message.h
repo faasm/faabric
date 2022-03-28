@@ -21,19 +21,24 @@ enum MessageResponseCode
  * array of bytes, with a size and a flag to say whether there's more data to
  * follow.
  *
- * We must block users from accidentally copying these messages. If they need to
- * be passed around, it should be done using move semantics/ constructors.
+ * Messages are not copyable, only movable, as they will regularly contain large
+ * amounts of data.
  */
 class Message
 {
   public:
-    explicit Message(size_t size);
+    // Delete everything copy-related, default everything move-related
+    Message(const Message& other) = delete;
 
-    explicit Message(Message&& other) noexcept;
+    Message& operator=(const Message& other) = delete;
 
-    explicit Message(MessageResponseCode responseCodeIn);
+    Message(Message&& other) = default;
 
-    Message& operator=(Message&&);
+    Message& operator=(Message&& other) = default;
+
+    Message(size_t size);
+
+    Message(MessageResponseCode responseCodeIn);
 
     MessageResponseCode getResponseCode() { return responseCode; }
 

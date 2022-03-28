@@ -19,7 +19,7 @@ PointToPointServer::PointToPointServer()
   , broker(getPointToPointBroker())
 {}
 
-void PointToPointServer::doAsyncRecv(transport::Message&& message)
+void PointToPointServer::doAsyncRecv(transport::Message& message)
 {
     uint8_t header = message.getHeader();
     switch (header) {
@@ -59,7 +59,7 @@ void PointToPointServer::doAsyncRecv(transport::Message&& message)
 }
 
 std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
-  transport::Message&& message)
+  transport::Message& message)
 {
     uint8_t header = message.getHeader();
     switch (header) {

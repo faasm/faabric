@@ -65,10 +65,10 @@ class MessageEndpointServer
     int getNThreads();
 
   protected:
-    virtual void doAsyncRecv(transport::Message&& message) = 0;
+    virtual void doAsyncRecv(transport::Message& message) = 0;
 
     virtual std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      transport::Message&& message) = 0;
+      transport::Message& message) = 0;
 
   private:
     friend class MessageEndpointServerHandler;

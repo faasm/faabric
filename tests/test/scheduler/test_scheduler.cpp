@@ -1109,7 +1109,7 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         sch.registerThread(msgId);
 
         // Set result along with the message to cache
-        sch.setThreadResultLocally(msgId, 0, std::move(msg));
+        sch.setThreadResultLocally(msgId, 0, msg);
     }
 
     // Now check that it's cached

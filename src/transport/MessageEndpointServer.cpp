@@ -81,11 +81,11 @@ void MessageEndpointServerHandler::start(
 
                         if (async) {
                             // Server-specific async handling
-                            server->doAsyncRecv(std::move(body));
+                            server->doAsyncRecv(body);
                         } else {
                             // Server-specific sync handling
                             std::unique_ptr<google::protobuf::Message> resp =
-                              server->doSyncRecv(std::move(body));
+                              server->doSyncRecv(body);
 
                             size_t respSize = resp->ByteSizeLong();
 

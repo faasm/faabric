@@ -17,7 +17,7 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doAsyncRecv(transport::Message&& message)
+void FunctionCallServer::doAsyncRecv(transport::Message& message)
 {
     uint8_t header = message.getHeader();
     switch (header) {
@@ -37,7 +37,7 @@ void FunctionCallServer::doAsyncRecv(transport::Message&& message)
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
-  transport::Message&& message)
+  transport::Message& message)
 {
     uint8_t header = message.getHeader();
     switch (header) {
