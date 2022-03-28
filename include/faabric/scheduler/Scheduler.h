@@ -180,7 +180,7 @@ class Scheduler
      */
     void setThreadResultLocally(uint32_t msgId,
                                 int32_t returnValue,
-                                faabric::transport::Message&& message);
+                                faabric::transport::Message& message);
 
     std::vector<std::pair<uint32_t, int32_t>> awaitThreadResults(
       std::shared_ptr<faabric::BatchExecuteRequest> req);

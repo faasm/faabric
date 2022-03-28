@@ -23,6 +23,12 @@
 // things haven't yet completed (usually only when there's an error).
 #define LINGER_MS 100
 
+#define NO_HEADER 0
+#define HEADER_MSG_SIZE (sizeof(uint8_t) + sizeof(size_t))
+
+#define SHUTDOWN_HEADER 220
+static const std::vector<uint8_t> shutdownPayload = { 0, 0, 1, 1 };
+
 namespace faabric::transport {
 
 enum MessageEndpointConnectType
@@ -58,16 +64,20 @@ class MessageEndpoint
     zmq::socket_t setUpSocket(zmq::socket_type socketType,
                               MessageEndpointConnectType connectType);
 
-    void doSend(zmq::socket_t& socket,
-                const uint8_t* data,
-                size_t dataSize,
-                bool more);
+    void sendMessage(zmq::socket_t& socket,
+                     uint8_t header,
+                     const uint8_t* data,
+                     size_t dataSize);
 
-    Message doRecv(zmq::socket_t& socket, int size = 0);
+    Message recvMessage(zmq::socket_t& socket, bool async);
 
-    Message recvBuffer(zmq::socket_t& socket, int size);
+  private:
+    Message recvBuffer(zmq::socket_t& socket, size_t size);
 
-    Message recvNoBuffer(zmq::socket_t& socket);
+    void sendBuffer(zmq::socket_t& socket,
+                    const uint8_t* data,
+                    size_t dataSize,
+                    bool more);
 };
 
 class AsyncSendMessageEndpoint final : public MessageEndpoint
@@ -77,10 +87,9 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
                              int portIn,
                              int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
-    void sendHeader(int header);
+    void send(uint8_t header, const uint8_t* data, size_t dataSize);
 
-    void send(const uint8_t* data, size_t dataSize, bool more = false);
-
+  protected:
     zmq::socket_t socket;
 };
 
@@ -90,8 +99,9 @@ class AsyncInternalSendMessageEndpoint final : public MessageEndpoint
     AsyncInternalSendMessageEndpoint(const std::string& inProcLabel,
                                      int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    void send(const uint8_t* data, size_t dataSize, bool more = false);
+    void send(uint8_t header, const uint8_t* data, size_t dataSize);
 
+  protected:
     zmq::socket_t socket;
 };
 
@@ -102,13 +112,11 @@ class SyncSendMessageEndpoint final : public MessageEndpoint
                             int portIn,
                             int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
 
-    void sendHeader(int header);
-
     void sendRaw(const uint8_t* data, size_t dataSize);
 
-    Message sendAwaitResponse(const uint8_t* data,
-                              size_t dataSize,
-                              bool more = false);
+    Message sendAwaitResponse(uint8_t header,
+                              const uint8_t* data,
+                              size_t dataSize);
 
   private:
     zmq::socket_t reqSocket;
@@ -132,9 +140,12 @@ class RecvMessageEndpoint : public MessageEndpoint
 
     virtual ~RecvMessageEndpoint(){};
 
-    virtual Message recv(int size = 0);
+    virtual Message recv();
 
     zmq::socket_t socket;
+
+  protected:
+    Message doRecv(bool async);
 };
 
 class FanInMessageEndpoint : public RecvMessageEndpoint
@@ -192,7 +203,7 @@ class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
     AsyncRecvMessageEndpoint(int portIn,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    Message recv(int size = 0) override;
+    Message recv() override;
 };
 
 class AsyncInternalRecvMessageEndpoint final : public RecvMessageEndpoint
@@ -201,7 +212,7 @@ class AsyncInternalRecvMessageEndpoint final : public RecvMessageEndpoint
     AsyncInternalRecvMessageEndpoint(const std::string& inprocLabel,
                                      int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    Message recv(int size = 0) override;
+    Message recv() override;
 };
 
 class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
@@ -213,9 +224,9 @@ class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
     SyncRecvMessageEndpoint(int portIn,
                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    Message recv(int size = 0) override;
+    Message recv() override;
 
-    void sendResponse(const uint8_t* data, int size);
+    void sendResponse(uint8_t header, const uint8_t* data, size_t dataSize);
 };
 
 class AsyncDirectRecvEndpoint final : public RecvMessageEndpoint
@@ -224,7 +235,7 @@ class AsyncDirectRecvEndpoint final : public RecvMessageEndpoint
     AsyncDirectRecvEndpoint(const std::string& inprocLabel,
                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    Message recv(int size = 0) override;
+    Message recv() override;
 };
 
 class AsyncDirectSendEndpoint final : public MessageEndpoint
@@ -233,8 +244,9 @@ class AsyncDirectSendEndpoint final : public MessageEndpoint
     AsyncDirectSendEndpoint(const std::string& inProcLabel,
                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    void send(const uint8_t* data, size_t dataSize, bool more = false);
+    void send(uint8_t header, const uint8_t* data, size_t dataSize);
 
+  protected:
     zmq::socket_t socket;
 };
 

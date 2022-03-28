@@ -1086,41 +1086,38 @@ TEST_CASE_METHOD(DummyExecutorFixture,
 {
     // In here we want to check that data cached in the scheduler from a message
     // will survive the original message going out of scope
-    uint8_t* zmqData = nullptr;
+    uint8_t* msgData = nullptr;
     int bufferSize = 100;
 
     REQUIRE(sch.getCachedMessageCount() == 0);
 
     // Do everything in a nested scope
     {
-        // Create a zmq message
-        zmq::message_t zmqMsg(bufferSize);
+        // Create a message
+        faabric::transport::Message msg(bufferSize);
 
         // Get a pointer to the message data
-        zmqData = (uint8_t*)zmqMsg.data();
+        msgData = msg.udata();
 
         // Write something
-        zmqData[0] = 1;
-        zmqData[1] = 2;
-        zmqData[2] = 3;
-
-        // Create a message wrapper
-        faabric::transport::Message msg(std::move(zmqMsg));
+        msgData[0] = 1;
+        msgData[1] = 2;
+        msgData[2] = 3;
 
         // Register a thread
         uint32_t msgId = 123;
         sch.registerThread(msgId);
 
         // Set result along with the message to cache
-        sch.setThreadResultLocally(msgId, 0, std::move(msg));
+        sch.setThreadResultLocally(msgId, 0, msg);
     }
 
     // Now check that it's cached
     REQUIRE(sch.getCachedMessageCount() == 1);
 
     // Check we can still read from the message
-    REQUIRE(zmqData[0] == 1);
-    REQUIRE(zmqData[1] == 2);
-    REQUIRE(zmqData[2] == 3);
+    REQUIRE(msgData[0] == 1);
+    REQUIRE(msgData[1] == 2);
+    REQUIRE(msgData[2] == 3);
 }
 }

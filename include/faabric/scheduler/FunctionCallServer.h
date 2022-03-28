@@ -15,11 +15,10 @@ class FunctionCallServer final
   private:
     Scheduler& scheduler;
 
-    void doAsyncRecv(int header, transport::Message&& message) override;
+    void doAsyncRecv(transport::Message& message) override;
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
-      transport::Message&& message) override;
+      transport::Message& message) override;
 
     std::unique_ptr<google::protobuf::Message> recvFlush(const uint8_t* buffer,
                                                          size_t bufferSize);

@@ -138,6 +138,8 @@ void Scheduler::reset()
     availableHostsCache.clear();
     registeredHosts.clear();
     threadResults.clear();
+    threadResultMessages.clear();
+
     pushedSnapshotsMap.clear();
 
     // Reset function migration tracking
@@ -1080,7 +1082,7 @@ void Scheduler::setThreadResultLocally(uint32_t msgId, int32_t returnValue)
 
 void Scheduler::setThreadResultLocally(uint32_t msgId,
                                        int32_t returnValue,
-                                       faabric::transport::Message&& message)
+                                       faabric::transport::Message& message)
 {
     setThreadResultLocally(msgId, returnValue);
 

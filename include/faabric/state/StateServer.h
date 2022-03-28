@@ -15,11 +15,10 @@ class StateServer final : public faabric::transport::MessageEndpointServer
 
     void logOperation(const std::string& op);
 
-    void doAsyncRecv(int header, transport::Message&& message) override;
+    void doAsyncRecv(transport::Message& message) override;
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
-      transport::Message&& message) override;
+      transport::Message& message) override;
 
     // Sync methods
 

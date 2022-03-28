@@ -17,8 +17,9 @@ FunctionCallServer::FunctionCallServer()
   , scheduler(getScheduler())
 {}
 
-void FunctionCallServer::doAsyncRecv(int header, transport::Message&& message)
+void FunctionCallServer::doAsyncRecv(transport::Message& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case faabric::scheduler::FunctionCalls::ExecuteFunctions: {
             recvExecuteFunctions(message.udata(), message.size());
@@ -36,9 +37,9 @@ void FunctionCallServer::doAsyncRecv(int header, transport::Message&& message)
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
-  int header,
-  transport::Message&& message)
+  transport::Message& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case faabric::scheduler::FunctionCalls::Flush: {
             return recvFlush(message.udata(), message.size());

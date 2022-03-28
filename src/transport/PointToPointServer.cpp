@@ -19,8 +19,9 @@ PointToPointServer::PointToPointServer()
   , broker(getPointToPointBroker())
 {}
 
-void PointToPointServer::doAsyncRecv(int header, transport::Message&& message)
+void PointToPointServer::doAsyncRecv(transport::Message& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case (faabric::transport::PointToPointCall::MESSAGE): {
             PARSE_MSG(
@@ -58,9 +59,9 @@ void PointToPointServer::doAsyncRecv(int header, transport::Message&& message)
 }
 
 std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
-  int header,
-  transport::Message&& message)
+  transport::Message& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case (faabric::transport::PointToPointCall::MAPPING): {
             return doRecvMappings(message.udata(), message.size());

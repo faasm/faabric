@@ -30,9 +30,7 @@ void MessageEndpointClient::asyncSend(int header,
                                       const uint8_t* buffer,
                                       size_t bufferSize)
 {
-    asyncEndpoint.sendHeader(header);
-
-    asyncEndpoint.send(buffer, bufferSize);
+    asyncEndpoint.send(header, buffer, bufferSize);
 }
 
 void MessageEndpointClient::syncSend(int header,
@@ -53,9 +51,8 @@ void MessageEndpointClient::syncSend(int header,
                                      const size_t bufferSize,
                                      google::protobuf::Message* response)
 {
-    syncEndpoint.sendHeader(header);
-
-    Message responseMsg = syncEndpoint.sendAwaitResponse(buffer, bufferSize);
+    Message responseMsg =
+      syncEndpoint.sendAwaitResponse(header, buffer, bufferSize);
 
     // Deserialise response
     if (!response->ParseFromArray(responseMsg.data(), responseMsg.size())) {

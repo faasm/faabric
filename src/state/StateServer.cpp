@@ -21,15 +21,15 @@ StateServer::StateServer(State& stateIn)
   , state(stateIn)
 {}
 
-void StateServer::doAsyncRecv(int header, transport::Message&& message)
+void StateServer::doAsyncRecv(transport::Message& message)
 {
     throw std::runtime_error("State server does not support async recv");
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
-  int header,
-  transport::Message&& message)
+  transport::Message& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case faabric::state::StateCalls::Pull: {
             return recvPull(message.udata(), message.size());

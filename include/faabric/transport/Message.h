@@ -21,27 +21,26 @@ enum MessageResponseCode
  * array of bytes, with a size and a flag to say whether there's more data to
  * follow.
  *
- * Currently it's just a thin wrapper around a ZeroMQ message that avoids us
- * being dependent on the ZeroMQ API outside of boilerplate code.
+ * Messages are not copyable, only movable, as they will regularly contain large
+ * amounts of data.
  */
 class Message
 {
   public:
-    /**
-     * Creates a message from a ZeroMQ message. Importantly avoids a copy by
-     * using the move constructor of zmq::message_t
-     *
-     * https://github.com/zeromq/cppzmq/blob/master/zmq.hpp#L408
-     */
-    explicit Message(zmq::message_t&& msgIn);
+    // Delete everything copy-related, default everything move-related
+    Message(const Message& other) = delete;
 
-    explicit Message(Message&& other) noexcept;
+    Message& operator=(const Message& other) = delete;
 
-    explicit Message(MessageResponseCode failCodeIn);
+    Message(Message&& other) = default;
 
-    Message& operator=(Message&&);
+    Message& operator=(Message&& other) = default;
 
-    MessageResponseCode getResponseCode() { return failCode; }
+    Message(size_t size);
+
+    Message(MessageResponseCode responseCodeIn);
+
+    MessageResponseCode getResponseCode() { return responseCode; }
 
     char* data();
 
@@ -51,13 +50,15 @@ class Message
 
     int size();
 
-    bool more();
+    void setHeader(uint8_t header) { _header = header; };
+
+    uint8_t getHeader() { return _header; };
 
   private:
-    zmq::message_t msg;
+    std::vector<uint8_t> buffer;
 
-    bool _more = false;
+    MessageResponseCode responseCode = MessageResponseCode::SUCCESS;
 
-    MessageResponseCode failCode = MessageResponseCode::SUCCESS;
+    uint8_t _header = 0;
 };
 }

@@ -25,8 +25,9 @@ SnapshotServer::SnapshotServer()
   , reg(faabric::snapshot::getSnapshotRegistry())
 {}
 
-void SnapshotServer::doAsyncRecv(int header, transport::Message&& message)
+void SnapshotServer::doAsyncRecv(transport::Message& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case faabric::snapshot::SnapshotCalls::DeleteSnapshot: {
             recvDeleteSnapshot(message.udata(), message.size());
@@ -40,9 +41,9 @@ void SnapshotServer::doAsyncRecv(int header, transport::Message&& message)
 }
 
 std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
-  int header,
-  transport::Message&& message)
+  transport::Message& message)
 {
+    uint8_t header = message.getHeader();
     switch (header) {
         case faabric::snapshot::SnapshotCalls::PushSnapshot: {
             return recvPushSnapshot(message.udata(), message.size());
@@ -51,7 +52,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
             return recvPushSnapshotUpdate(message.udata(), message.size());
         }
         case faabric::snapshot::SnapshotCalls::ThreadResult: {
-            return recvThreadResult(std::move(message));
+            return recvThreadResult(message);
         }
         default: {
             throw std::runtime_error(
@@ -102,7 +103,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
 }
 
 std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
-  faabric::transport::Message&& message)
+  faabric::transport::Message& message)
 {
     const ThreadResultRequest* r =
       flatbuffers::GetRoot<ThreadResultRequest>(message.udata());
@@ -123,7 +124,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
               static_cast<SnapshotDataType>(diff->data_type()),
               static_cast<SnapshotMergeOperation>(diff->merge_op()),
               diff->offset(),
-              std::span<const uint8_t>(diff->data()->data(),
+              std::span<const uint8_t>(diff->data()->Data(),
                                        diff->data()->size()));
         }
 
@@ -135,8 +136,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
     // Because we don't take ownership of the data in the diffs, we must also
     // ensure that the underlying message is cached
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.setThreadResultLocally(
-      r->message_id(), r->return_value(), std::move(message));
+    sch.setThreadResultLocally(r->message_id(), r->return_value(), message);
 
     return std::make_unique<faabric::EmptyResponse>();
 }

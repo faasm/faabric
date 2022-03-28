@@ -1,6 +1,8 @@
+#include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/context.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -224,45 +226,73 @@ zmq::socket_t MessageEndpoint::setUpSocket(
     return socketFactory(socketType, connectType, timeoutMs, address);
 }
 
-void MessageEndpoint::doSend(zmq::socket_t& socket,
-                             const uint8_t* data,
-                             size_t dataSize,
-                             bool more)
+void MessageEndpoint::sendMessage(zmq::socket_t& socket,
+                                  uint8_t header,
+                                  const uint8_t* data,
+                                  size_t dataSize)
 {
-    assert(tid == std::this_thread::get_id());
-    zmq::send_flags sendFlags =
-      more ? zmq::send_flags::sndmore : zmq::send_flags::none;
+    uint8_t buffer[HEADER_MSG_SIZE];
+    faabric::util::unalignedWrite<uint8_t>(header, buffer);
+    faabric::util::unalignedWrite<size_t>(dataSize, buffer + sizeof(uint8_t));
 
-    CATCH_ZMQ_ERR(
-      {
-          auto res = socket.send(zmq::buffer(data, dataSize), sendFlags);
-          if (res != dataSize) {
-              SPDLOG_ERROR("Sent different bytes than expected (sent "
-                           "{}, expected {})",
-                           res.value_or(0),
-                           dataSize);
-              throw std::runtime_error("Error sending message");
-          }
-      },
-      "send")
+    sendBuffer(socket, buffer, HEADER_MSG_SIZE, true);
+    sendBuffer(socket, data, dataSize, false);
 }
 
-Message MessageEndpoint::doRecv(zmq::socket_t& socket, int size)
+Message MessageEndpoint::recvMessage(zmq::socket_t& socket, bool async)
 {
-    assert(tid == std::this_thread::get_id());
-    assert(size >= 0);
-
-    if (size == 0) {
-        return recvNoBuffer(socket);
+    // Receive header and body
+    Message headerMessage = recvBuffer(socket, HEADER_MSG_SIZE);
+    if (headerMessage.getResponseCode() == MessageResponseCode::TIMEOUT) {
+        SPDLOG_TRACE("Server on {}, looping after no message", getAddress());
+        return Message(MessageResponseCode::TIMEOUT);
     }
 
-    return recvBuffer(socket, size);
+    assert(headerMessage.size() == HEADER_MSG_SIZE);
+    uint8_t header =
+      faabric::util::unalignedRead<uint8_t>(headerMessage.udata());
+    size_t msgSize = faabric::util::unalignedRead<size_t>(
+      headerMessage.udata() + sizeof(uint8_t));
+
+    SPDLOG_TRACE(
+      "Received header {} size {} on {}", header, msgSize, getAddress());
+
+    Message body = recvBuffer(socket, msgSize);
+    body.setHeader(header);
+
+    if (body.getHeader() == SHUTDOWN_HEADER) {
+        if (body.dataCopy() == shutdownPayload) {
+            SPDLOG_TRACE("Server thread on {} got shutdown message",
+                         getAddress());
+
+            // Send an empty response if in sync mode
+            // (otherwise upstream socket will hang)
+            if (!async) {
+                std::vector<uint8_t> empty(4, 0);
+                static_cast<SyncRecvMessageEndpoint*>(this)->sendResponse(
+                  0, empty.data(), empty.size());
+            }
+
+            return Message(MessageResponseCode::TERM);
+        }
+    }
+
+    if (body.getResponseCode() != MessageResponseCode::SUCCESS) {
+        SPDLOG_ERROR("Server on port {}, got header, error "
+                     "on body: {}",
+                     getAddress(),
+                     body.getResponseCode());
+        throw MessageTimeoutException("Server, got header, error on body");
+    }
+
+    SPDLOG_TRACE("Received body size {} on {}", body.size(), getAddress());
+
+    return body;
 }
 
-Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
+Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, size_t size)
 {
-    // Pre-allocate message to avoid copying
-    zmq::message_t msg(size);
+    Message msg(size);
 
     CATCH_ZMQ_ERR(
       try {
@@ -293,32 +323,30 @@ Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, int size)
       },
       "recv_buffer")
 
-    return Message(std::move(msg));
+    return msg;
 }
 
-Message MessageEndpoint::recvNoBuffer(zmq::socket_t& socket)
+void MessageEndpoint::sendBuffer(zmq::socket_t& socket,
+                                 const uint8_t* data,
+                                 size_t dataSize,
+                                 bool more)
 {
-    // Allocate a message to receive data
-    zmq::message_t msg;
-    CATCH_ZMQ_ERR(
-      try {
-          auto res = socket.recv(msg);
-          if (!res.has_value()) {
-              SPDLOG_TRACE("Did not receive message within {}ms on {}",
-                           timeoutMs,
-                           address);
-              return Message(MessageResponseCode::TIMEOUT);
-          }
-      } catch (zmq::error_t& e) {
-          if (e.num() == ZMQ_ETERM) {
-              SPDLOG_WARN("Endpoint {} received ETERM on recv", address);
-              return Message(MessageResponseCode::TERM);
-          }
-          throw;
-      },
-      "recv_no_buffer")
+    assert(tid == std::this_thread::get_id());
+    zmq::send_flags sendFlags =
+      more ? zmq::send_flags::sndmore : zmq::send_flags::none;
 
-    return Message(std::move(msg));
+    CATCH_ZMQ_ERR(
+      {
+          auto res = socket.send(zmq::buffer(data, dataSize), sendFlags);
+          if (res != dataSize) {
+              SPDLOG_ERROR("Sent different bytes than expected (sent "
+                           "{}, expected {})",
+                           res.value_or(0),
+                           dataSize);
+              throw std::runtime_error("Error sending message");
+          }
+      },
+      "send")
 }
 
 // ----------------------------------------------
@@ -334,18 +362,12 @@ AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
       setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::CONNECT);
 }
 
-void AsyncSendMessageEndpoint::sendHeader(int header)
+void AsyncSendMessageEndpoint::send(uint8_t header,
+                                    const uint8_t* data,
+                                    size_t dataSize)
 {
-    uint8_t headerBytes = static_cast<uint8_t>(header);
-    doSend(socket, &headerBytes, sizeof(headerBytes), true);
-}
-
-void AsyncSendMessageEndpoint::send(const uint8_t* data,
-                                    size_t dataSize,
-                                    bool more)
-{
-    SPDLOG_TRACE("PUSH {} ({} bytes, more {})", address, dataSize, more);
-    doSend(socket, data, dataSize, more);
+    SPDLOG_TRACE("PUSH {} ({} bytes)", address, dataSize);
+    sendMessage(socket, header, data, dataSize);
 }
 
 AsyncInternalSendMessageEndpoint::AsyncInternalSendMessageEndpoint(
@@ -357,12 +379,12 @@ AsyncInternalSendMessageEndpoint::AsyncInternalSendMessageEndpoint(
       setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::CONNECT);
 }
 
-void AsyncInternalSendMessageEndpoint::send(const uint8_t* data,
-                                            size_t dataSize,
-                                            bool more)
+void AsyncInternalSendMessageEndpoint::send(uint8_t header,
+                                            const uint8_t* data,
+                                            size_t dataSize)
 {
-    SPDLOG_TRACE("PUSH {} ({} bytes, more {})", address, dataSize, more);
-    doSend(socket, data, dataSize, more);
+    SPDLOG_TRACE("PUSH {} ({} bytes)", address, dataSize);
+    sendMessage(socket, header, data, dataSize);
 }
 
 // ----------------------------------------------
@@ -378,28 +400,22 @@ SyncSendMessageEndpoint::SyncSendMessageEndpoint(const std::string& hostIn,
       setUpSocket(zmq::socket_type::req, MessageEndpointConnectType::CONNECT);
 }
 
-void SyncSendMessageEndpoint::sendHeader(int header)
-{
-    uint8_t headerBytes = static_cast<uint8_t>(header);
-    doSend(reqSocket, &headerBytes, sizeof(headerBytes), true);
-}
-
 void SyncSendMessageEndpoint::sendRaw(const uint8_t* data, size_t dataSize)
 {
     SPDLOG_TRACE("REQ {} ({} bytes)", address, dataSize);
-    doSend(reqSocket, data, dataSize, false);
+    sendMessage(reqSocket, NO_HEADER, data, dataSize);
 }
 
-Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
-                                                   size_t dataSize,
-                                                   bool more)
+Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
+                                                   const uint8_t* data,
+                                                   size_t dataSize)
 {
-    SPDLOG_TRACE("REQ {} ({} bytes, more {})", address, dataSize, more);
-    doSend(reqSocket, data, dataSize, more);
+    SPDLOG_TRACE("REQ {} ({} bytes)", address, dataSize);
+    sendMessage(reqSocket, header, data, dataSize);
 
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", address);
-    auto msg = recvNoBuffer(reqSocket);
+    Message msg = recvMessage(reqSocket, false);
     if (msg.getResponseCode() != MessageResponseCode::SUCCESS) {
         SPDLOG_ERROR("Failed getting response on {}: code {}",
                      address,
@@ -407,7 +423,7 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(const uint8_t* data,
         throw MessageTimeoutException("Error on waiting for response.");
     }
 
-    return Message(std::move(msg));
+    return msg;
 }
 
 // ----------------------------------------------
@@ -431,9 +447,14 @@ RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
     socket = setUpSocket(socketType, MessageEndpointConnectType::BIND);
 }
 
-Message RecvMessageEndpoint::recv(int size)
+Message RecvMessageEndpoint::recv()
 {
-    return doRecv(socket, size);
+    return doRecv(false);
+}
+
+Message RecvMessageEndpoint::doRecv(bool async)
+{
+    return recvMessage(socket, async);
 }
 
 // ----------------------------------------------
@@ -527,10 +548,10 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
 {}
 
-Message AsyncRecvMessageEndpoint::recv(int size)
+Message AsyncRecvMessageEndpoint::recv()
 {
-    SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
-    return RecvMessageEndpoint::recv(size);
+    SPDLOG_TRACE("PULL {}", address);
+    return RecvMessageEndpoint::recvMessage(socket, true);
 }
 
 AsyncInternalRecvMessageEndpoint::AsyncInternalRecvMessageEndpoint(
@@ -542,10 +563,10 @@ AsyncInternalRecvMessageEndpoint::AsyncInternalRecvMessageEndpoint(
                         MessageEndpointConnectType::BIND)
 {}
 
-Message AsyncInternalRecvMessageEndpoint::recv(int size)
+Message AsyncInternalRecvMessageEndpoint::recv()
 {
-    SPDLOG_TRACE("PULL {} ({} bytes)", address, size);
-    return RecvMessageEndpoint::recv(size);
+    SPDLOG_TRACE("PULL {}", address);
+    return RecvMessageEndpoint::recv();
 }
 
 // ----------------------------------------------
@@ -564,16 +585,18 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
   : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::rep)
 {}
 
-Message SyncRecvMessageEndpoint::recv(int size)
+Message SyncRecvMessageEndpoint::recv()
 {
-    SPDLOG_TRACE("RECV (REP) {} ({} bytes)", address, size);
-    return RecvMessageEndpoint::recv(size);
+    SPDLOG_TRACE("RECV (REP) {}", address);
+    return doRecv(false);
 }
 
-void SyncRecvMessageEndpoint::sendResponse(const uint8_t* data, int size)
+void SyncRecvMessageEndpoint::sendResponse(uint8_t header,
+                                           const uint8_t* data,
+                                           size_t size)
 {
     SPDLOG_TRACE("REP {} ({} bytes)", address, size);
-    doSend(socket, data, size, false);
+    sendMessage(socket, header, data, size);
 }
 
 // ----------------------------------------------
@@ -588,10 +611,10 @@ AsyncDirectRecvEndpoint::AsyncDirectRecvEndpoint(const std::string& inprocLabel,
                         MessageEndpointConnectType::BIND)
 {}
 
-Message AsyncDirectRecvEndpoint::recv(int size)
+Message AsyncDirectRecvEndpoint::recv()
 {
-    SPDLOG_TRACE("PAIR recv {} ({} bytes)", address, size);
-    return RecvMessageEndpoint::recv(size);
+    SPDLOG_TRACE("PAIR recv {}", address);
+    return doRecv(true);
 }
 
 AsyncDirectSendEndpoint::AsyncDirectSendEndpoint(const std::string& inprocLabel,
@@ -602,11 +625,11 @@ AsyncDirectSendEndpoint::AsyncDirectSendEndpoint(const std::string& inprocLabel,
       setUpSocket(zmq::socket_type::pair, MessageEndpointConnectType::CONNECT);
 }
 
-void AsyncDirectSendEndpoint::send(const uint8_t* data,
-                                   size_t dataSize,
-                                   bool more)
+void AsyncDirectSendEndpoint::send(uint8_t header,
+                                   const uint8_t* data,
+                                   size_t dataSize)
 {
-    SPDLOG_TRACE("PAIR send {} ({} bytes, more {})", address, dataSize, more);
-    doSend(socket, data, dataSize, more);
+    SPDLOG_TRACE("PAIR send {} ({} bytes)", address, dataSize);
+    sendMessage(socket, header, data, dataSize);
 }
 }

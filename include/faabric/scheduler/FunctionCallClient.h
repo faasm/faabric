@@ -50,8 +50,5 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
     void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void unregister(faabric::UnregisterRequest& req);
-
-  private:
-    void sendHeader(faabric::scheduler::FunctionCalls call);
 };
 }

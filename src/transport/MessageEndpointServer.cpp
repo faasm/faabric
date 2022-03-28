@@ -1,7 +1,8 @@
-#include "faabric/transport/Message.h"
+#include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/MessageEndpointServer.h>
 #include <faabric/transport/common.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -13,8 +14,6 @@
 #include <memory>
 
 namespace faabric::transport {
-
-static const std::vector<uint8_t> shutdownHeader = { 0, 0, 1, 1 };
 
 MessageEndpointServerHandler::MessageEndpointServerHandler(
   MessageEndpointServer* serverIn,
@@ -71,69 +70,22 @@ void MessageEndpointServerHandler::start(
                     }
 
                     while (true) {
-                        // Receive header and body
-                        Message headerMessage = endpoint->recv();
-                        if (headerMessage.getResponseCode() ==
-                            MessageResponseCode::TIMEOUT) {
-                            SPDLOG_TRACE(
-                              "Server on {}, looping after no message",
-                              endpoint->getAddress());
-                            continue;
-                        }
-
-                        if (headerMessage.size() == shutdownHeader.size()) {
-                            if (headerMessage.dataCopy() == shutdownHeader) {
-                                SPDLOG_TRACE(
-                                  "Server thread {} on {} got shutdown message",
-                                  i,
-                                  endpoint->getAddress());
-
-                                // Send an empty response if in sync mode
-                                // (otherwise upstream socket will hang)
-                                if (!async) {
-                                    std::vector<uint8_t> empty(4, 0);
-                                    static_cast<SyncRecvMessageEndpoint*>(
-                                      endpoint.get())
-                                      ->sendResponse(empty.data(),
-                                                     empty.size());
-                                }
-
-                                break;
-                            }
-                        }
-
-                        if (!headerMessage.more()) {
-                            throw std::runtime_error(
-                              "Header sent without SNDMORE flag");
-                        }
-
+                        // Receive the message
                         Message body = endpoint->recv();
-                        if (body.getResponseCode() !=
-                            MessageResponseCode::SUCCESS) {
-                            SPDLOG_ERROR("Server on port {}, got header, error "
-                                         "on body: {}",
-                                         endpoint->getAddress(),
-                                         body.getResponseCode());
-                            throw MessageTimeoutException(
-                              "Server, got header, error on body");
-                        }
 
-                        if (body.more()) {
-                            throw std::runtime_error(
-                              "Body sent with SNDMORE flag");
+                        // Shut down if necessary
+                        if (body.getResponseCode() ==
+                            MessageResponseCode::TERM) {
+                            break;
                         }
-
-                        assert(headerMessage.size() == sizeof(uint8_t));
-                        uint8_t header =
-                          static_cast<uint8_t>(*headerMessage.data());
 
                         if (async) {
                             // Server-specific async handling
-                            server->doAsyncRecv(header, std::move(body));
+                            server->doAsyncRecv(body);
                         } else {
                             // Server-specific sync handling
                             std::unique_ptr<google::protobuf::Message> resp =
-                              server->doSyncRecv(header, std::move(body));
+                              server->doSyncRecv(body);
 
                             size_t respSize = resp->ByteSizeLong();
 
@@ -146,7 +98,7 @@ void MessageEndpointServerHandler::start(
                             // Return the response
                             static_cast<SyncRecvMessageEndpoint*>(
                               endpoint.get())
-                              ->sendResponse(buffer, respSize);
+                              ->sendResponse(NO_HEADER, buffer, respSize);
                         }
 
                         // Wait on the request latch if necessary
@@ -277,7 +229,8 @@ void MessageEndpointServer::stop()
                                    faabric::util::Latch::create(2),
                                    std::memory_order_release);
 
-        asyncShutdownSender.send(shutdownHeader.data(), shutdownHeader.size());
+        asyncShutdownSender.send(
+          SHUTDOWN_HEADER, shutdownPayload.data(), shutdownPayload.size());
 
         std::atomic_load_explicit(&shutdownLatch, std::memory_order_acquire)
           ->wait();
@@ -297,8 +250,8 @@ void MessageEndpointServer::stop()
                                    faabric::util::Latch::create(2),
                                    std::memory_order_release);
 
-        syncShutdownSender.sendAwaitResponse(shutdownHeader.data(),
-                                             shutdownHeader.size());
+        syncShutdownSender.sendAwaitResponse(
+          SHUTDOWN_HEADER, shutdownPayload.data(), shutdownPayload.size());
 
         std::atomic_load_explicit(&shutdownLatch, std::memory_order_acquire)
           ->wait();

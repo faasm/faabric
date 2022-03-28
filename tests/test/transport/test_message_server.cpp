@@ -26,14 +26,10 @@ class DummyServer final : public MessageEndpointServer
     std::atomic<int> messageCount = 0;
 
   private:
-    void doAsyncRecv(int header, transport::Message&& message) override
-    {
-        messageCount++;
-    }
+    void doAsyncRecv(transport::Message& message) override { messageCount++; }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
-      transport::Message&& message) override
+      transport::Message& message) override
     {
         messageCount++;
 
@@ -49,14 +45,13 @@ class EchoServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header, transport::Message&& message) override
+    void doAsyncRecv(transport::Message& message) override
     {
         throw std::runtime_error("Echo server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
-      transport::Message&& message) override
+      transport::Message& message) override
     {
         SPDLOG_TRACE("Echo server received {} bytes", message.size());
 
@@ -77,14 +72,13 @@ class SleepServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header, transport::Message&& message) override
+    void doAsyncRecv(transport::Message& message) override
     {
         throw std::runtime_error("Sleep server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
-      transport::Message&& message) override
+      transport::Message& message) override
     {
         int* sleepTimeMs = (int*)message.udata();
         SPDLOG_DEBUG("Sleep server sleeping for {}ms", *sleepTimeMs);
@@ -105,14 +99,13 @@ class BlockServer final : public MessageEndpointServer
     {}
 
   protected:
-    void doAsyncRecv(int header, transport::Message&& message) override
+    void doAsyncRecv(transport::Message& message) override
     {
         throw std::runtime_error("Lock server not expecting async recv");
     }
 
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
-      int header,
-      transport::Message&& message) override
+      transport::Message& message) override
     {
         // Wait on the latch, requires multiple threads executing in parallel to
         // get a response.

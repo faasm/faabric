@@ -108,6 +108,7 @@ void SnapshotClient::pushSnapshot(
         auto mrsOffset = mb.CreateVector(mrsFbVector);
         auto requestOffset = CreateSnapshotPushRequest(
           mb, keyOffset, data->getMaxSize(), dataOffset, mrsOffset);
+
         mb.Finish(requestOffset);
 
         // Send it
@@ -216,6 +217,8 @@ void SnapshotClient::pushThreadResult(
         diffsFbVector.reserve(diffs.size());
         for (const auto& d : diffs) {
             std::span<const uint8_t> diffData = d.getData();
+
+            // Note that we're doing a copy here, but it's unavoidable
             auto dataOffset =
               mb.CreateVector<uint8_t>(diffData.data(), diffData.size());
 
