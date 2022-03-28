@@ -4,6 +4,18 @@
 #include <zmq.hpp>
 
 namespace faabric::transport {
+
+/**
+ * Types of message send/ receive outcomes.
+ */
+enum MessageResponseCode
+{
+    SUCCESS,
+    TERM,
+    TIMEOUT,
+    ERROR
+};
+
 /**
  * Represents message data passed around the transport layer. Essentially an
  * array of bytes, with a size and a flag to say whether there's more data to
@@ -23,8 +35,13 @@ class Message
      */
     explicit Message(zmq::message_t&& msgIn);
 
-    // Empty message signals shutdown
-    Message() = default;
+    explicit Message(Message&& other) noexcept;
+
+    explicit Message(MessageResponseCode failCodeIn);
+
+    Message& operator=(Message&&);
+
+    MessageResponseCode getResponseCode() { return failCode; }
 
     char* data();
 
@@ -38,5 +55,9 @@ class Message
 
   private:
     zmq::message_t msg;
+
+    bool _more = false;
+
+    MessageResponseCode failCode = MessageResponseCode::SUCCESS;
 };
 }

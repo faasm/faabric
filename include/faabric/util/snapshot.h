@@ -15,6 +15,11 @@
 
 namespace faabric::util {
 
+// This paramter controls the step size in the array comparison function. The
+// function will normally be comparing 4kB pages, and when it detects a change
+// within a chunk, it will byte-wise compare that chunk
+#define ARRAY_COMP_CHUNK_SIZE 128
+
 /**
  * Defines the permitted datatypes for snapshot diffs. Each has a predefined
  * length, except for the raw option which is used for generic streams of bytes.
@@ -49,8 +54,11 @@ enum SnapshotMergeOperation
 };
 
 /**
- * Represents a modification to a snapshot (a.k.a. a dirty region). Captures the
- * modified data, as well as its offset within the snapshot.
+ * Represents a modification to a snapshot (a.k.a. a dirty region). Specifies
+ * the modified data, as well as its offset within the snapshot.
+ *
+ * Each diff does not own the data, it just provides a span pointing at the
+ * original data.
  */
 class SnapshotDiff
 {
@@ -76,12 +84,22 @@ class SnapshotDiff
     SnapshotDataType dataType = SnapshotDataType::Raw;
     SnapshotMergeOperation operation = SnapshotMergeOperation::Bytewise;
     uint32_t offset = 0;
-    std::vector<uint8_t> data;
+
+    std::span<const uint8_t> data;
 };
 
 /*
  * Appends a list of snapshot diffs for any bytes differing between the two
  * arrays.
+ *
+ * The function compares chunks of bytes at a time, if there are no differences,
+ * it skips to the next chunk. If one or more differences are detected in a
+ * chunk, it does a byte-wise comparison on that chunk.
+ *
+ * The performance of this will vary depending on how sparse the diffs are, and
+ * on the chunk size itself. A larger chunk size is optimal for very sparse
+ * changes, but it makes the byte-wise comparision more intensive (as we're
+ * byte-wise comparing more bytes).
  */
 void diffArrayRegions(std::vector<SnapshotDiff>& diffs,
                       uint32_t startOffset,
@@ -268,6 +286,10 @@ class SnapshotData
     std::vector<SnapshotMergeRegion> getMergeRegions();
 
     size_t getQueuedDiffsCount();
+
+    void applyDiffs(const std::vector<SnapshotDiff>& diffs);
+
+    void applyDiff(const SnapshotDiff& diff);
 
     void queueDiffs(const std::vector<SnapshotDiff>& diffs);
 

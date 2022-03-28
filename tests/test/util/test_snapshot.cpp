@@ -44,6 +44,8 @@ class SnapshotMergeTestFixture
         REQUIRE(actualDiffs.size() == expectedDiffs.size());
 
         for (int i = 0; i < actualDiffs.size(); i++) {
+            SPDLOG_TRACE("Checking {}th of {} diffs", i, actualDiffs.size());
+
             SnapshotDiff& actualDiff = actualDiffs.at(i);
             SnapshotDiff& expectedDiff = expectedDiffs.at(i);
 
@@ -403,6 +405,8 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     int sumD = 1;
     uint32_t offsetD = snapSize - sizeof(int32_t);
 
+    std::vector<char> expectedDirtyPages = { 1, 1, 0, 0, 1 };
+
     std::shared_ptr<SnapshotData> snap =
       std::make_shared<SnapshotData>(snapPages * HOST_PAGE_SIZE);
 
@@ -450,7 +454,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     *(int*)(mem.get() + offsetC) = finalC;
     *(int*)(mem.get() + offsetD) = finalD;
 
-    // Check the diffs
+    // Set up expectations
     std::vector<SnapshotDiff> expectedDiffs = {
         { SnapshotDataType::Int,
           SnapshotMergeOperation::Subtract,
@@ -472,7 +476,10 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     tracker->stopTracking(memView);
     tracker->stopThreadLocalTracking(memView);
+
     auto dirtyRegions = tracker->getBothDirtyPages(memView);
+    REQUIRE(dirtyRegions == expectedDirtyPages);
+
     std::vector<SnapshotDiff> actualDiffs =
       snap->diffWithDirtyRegions(memView, dirtyRegions);
     REQUIRE(actualDiffs.size() == 4);
@@ -1396,6 +1403,11 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
     std::vector<SnapshotDiff> expectedDiffs;
 
+    // The diffs won't take ownership over the data, so we need to make sure it
+    // doesn't go out of scope
+    std::vector<uint8_t> expectedDataA;
+    std::vector<uint8_t> expectedDataB;
+
     std::vector<uint8_t> zeroedPage(HOST_PAGE_SIZE, 0);
     std::vector<uint8_t> diffData(changeLength, 2);
 
@@ -1406,14 +1418,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         mergeRegionStart = snapSize;
 
         diffData = std::vector<uint8_t>(100, 2);
-        std::vector<uint8_t> expectedData = overshootData;
-        std::memset(expectedData.data() + 100, 2, 100);
+        expectedDataA = overshootData;
+        std::memset(expectedDataA.data() + 100, 2, 100);
 
         // Diff should just be the whole of the updated memory
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedData } };
+                            expectedDataA } };
     }
 
     SECTION("Change and merge region aligned at end of original data")
@@ -1422,14 +1434,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         mergeRegionStart = snapSize;
 
         diffData = std::vector<uint8_t>(100, 2);
-        std::vector<uint8_t> expectedData = overshootData;
-        std::memset(expectedData.data(), 2, 100);
+        expectedDataA = overshootData;
+        std::memset(expectedDataA.data(), 2, 100);
 
         // Diff should just be the whole of the updated memory
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedData } };
+                            expectedDataA } };
     }
 
     SECTION("Change and merge region after end of original data")
@@ -1439,14 +1451,14 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
         mergeRegionStart = start;
 
         diffData = std::vector<uint8_t>(100, 2);
-        std::vector<uint8_t> expectedData = overshootData;
-        std::memset(expectedData.data() + (2 * HOST_PAGE_SIZE) + 100, 2, 100);
+        expectedDataA = overshootData;
+        std::memset(expectedDataA.data() + (2 * HOST_PAGE_SIZE) + 100, 2, 100);
 
         // Diff should be the whole region of updated memory
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedData } };
+                            expectedDataA } };
     }
 
     SECTION("Merge region and change both crossing end of original data")
@@ -1468,18 +1480,18 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
 
         // One diff will cover the overlap with last part of original data, and
         // another will be the rest of the data
-        std::vector<uint8_t> expectedDataOne(HOST_PAGE_SIZE - 100, 2);
-        std::vector<uint8_t> expectedDataTwo = overshootData;
-        std::memset(expectedDataTwo.data(), 2, overshootSize);
+        expectedDataA = std::vector<uint8_t>(HOST_PAGE_SIZE - 100, 2);
+        expectedDataB = overshootData;
+        std::memset(expectedDataB.data(), 2, overshootSize);
 
         expectedDiffs = { { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             (uint32_t)snapSize,
-                            expectedDataTwo },
+                            expectedDataB },
                           { faabric::util::SnapshotDataType::Raw,
                             faabric::util::SnapshotMergeOperation::Bytewise,
                             changeOffset,
-                            expectedDataOne } };
+                            expectedDataA } };
     }
 
     // Copy in the changed data
@@ -1633,8 +1645,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         REQUIRE(actualDiff.getOffset() == offsetC);
 
         // Apply diffs from memory to the snapshot
-        snap->queueDiffs(actualDiffs);
-        snap->writeQueuedDiffs();
+        snap->applyDiffs(actualDiffs);
     }
 
     // Check snapshot now shows both diffs
@@ -1740,6 +1751,73 @@ TEST_CASE("Test diffing byte array regions", "[util][snapshot]")
         startOffset = 0;
         endOffset = b.size();
         expected = { { 2, 1 }, { 4, 3 } };
+    }
+
+    SECTION("Not equal multiple chunks")
+    {
+        size_t arraySize = 4 * ARRAY_COMP_CHUNK_SIZE;
+        a = std::vector<uint8_t>(arraySize, 1);
+        b = std::vector<uint8_t>(arraySize, 1);
+        startOffset = 3;
+        endOffset = arraySize;
+
+        uint32_t offsetOneA = startOffset + ARRAY_COMP_CHUNK_SIZE + 2;
+        uint32_t offsetOneB = startOffset + ARRAY_COMP_CHUNK_SIZE + 10;
+        uint32_t offsetTwo = startOffset + 2 * ARRAY_COMP_CHUNK_SIZE + 1;
+
+        std::vector<uint8_t> diffChunkOneA = { 0, 0, 0 };
+        std::vector<uint8_t> diffChunkOneB = { 3, 3, 3, 3, 3 };
+        std::vector<uint8_t> diffChunkTwo = { 4, 4, 4, 4, 4, 4 };
+
+        std::copy(
+          diffChunkOneA.begin(), diffChunkOneA.end(), b.data() + offsetOneA);
+        std::copy(
+          diffChunkOneB.begin(), diffChunkOneB.end(), b.data() + offsetOneB);
+        std::copy(
+          diffChunkTwo.begin(), diffChunkTwo.end(), b.data() + offsetTwo);
+
+        expected = {
+            { offsetOneA, diffChunkOneA.size() },
+            { offsetOneB, diffChunkOneB.size() },
+            { offsetTwo, diffChunkTwo.size() },
+        };
+    }
+
+    SECTION("Not equal crossing chunks")
+    {
+        size_t arraySize = 3 * ARRAY_COMP_CHUNK_SIZE;
+        a = std::vector<uint8_t>(arraySize, 1);
+        b = std::vector<uint8_t>(arraySize, 1);
+        startOffset = 0;
+        endOffset = arraySize;
+
+        uint32_t offset = ARRAY_COMP_CHUNK_SIZE - 5;
+        std::vector<uint8_t> diffChunk(20, 2);
+
+        std::copy(diffChunk.begin(), diffChunk.end(), b.data() + offset);
+
+        expected = {
+            { offset, diffChunk.size() },
+        };
+    }
+
+    SECTION("Not equal chunk boundaries")
+    {
+        size_t arraySize = 3 * ARRAY_COMP_CHUNK_SIZE;
+        a = std::vector<uint8_t>(arraySize, 1);
+        b = std::vector<uint8_t>(arraySize, 1);
+        startOffset = 0;
+        endOffset = arraySize;
+
+        size_t diffSize = 20;
+        uint32_t offset = ARRAY_COMP_CHUNK_SIZE - diffSize;
+        std::vector<uint8_t> diffChunk(diffSize, 2);
+
+        std::copy(diffChunk.begin(), diffChunk.end(), b.data() + offset);
+
+        expected = {
+            { offset, diffChunk.size() },
+        };
     }
 
     std::vector<SnapshotDiff> actual;
@@ -1995,8 +2073,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture, "Test XOR diffs", "[util][snapshot]")
     REQUIRE(diffB.getOffset() == offsetB);
 
     // Apply the diffs to the snapshot
-    snap->queueDiffs(actual);
-    snap->writeQueuedDiffs();
+    snap->applyDiffs(actual);
 
     // Check snapshot data is now as expected
     REQUIRE(snap->getDataCopy() == expectedSnapData);

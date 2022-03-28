@@ -1056,4 +1056,71 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         sch.getFunctionResult(messageId, 10000);
     }
 }
+
+TEST_CASE_METHOD(DummyExecutorFixture,
+                 "Test scheduler register and deregister threads",
+                 "[scheduler]")
+{
+    uint32_t msgIdA = 123;
+    uint32_t msgIdB = 124;
+
+    // Check empty initially
+    REQUIRE(sch.getRegisteredThreads().empty());
+
+    // Register a couple and check they're listed
+    sch.registerThread(msgIdA);
+    sch.registerThread(msgIdB);
+
+    std::vector<uint32_t> expected = { msgIdA, msgIdB };
+    REQUIRE(sch.getRegisteredThreads() == expected);
+
+    // Deregister and check
+    sch.deregisterThread(msgIdB);
+    expected = { msgIdA };
+    REQUIRE(sch.getRegisteredThreads() == expected);
+}
+
+TEST_CASE_METHOD(DummyExecutorFixture,
+                 "Test caching message data when setting thread result",
+                 "[scheduler]")
+{
+    // In here we want to check that data cached in the scheduler from a message
+    // will survive the original message going out of scope
+    uint8_t* zmqData = nullptr;
+    int bufferSize = 100;
+
+    REQUIRE(sch.getCachedMessageCount() == 0);
+
+    // Do everything in a nested scope
+    {
+        // Create a zmq message
+        zmq::message_t zmqMsg(bufferSize);
+
+        // Get a pointer to the message data
+        zmqData = (uint8_t*)zmqMsg.data();
+
+        // Write something
+        zmqData[0] = 1;
+        zmqData[1] = 2;
+        zmqData[2] = 3;
+
+        // Create a message wrapper
+        faabric::transport::Message msg(std::move(zmqMsg));
+
+        // Register a thread
+        uint32_t msgId = 123;
+        sch.registerThread(msgId);
+
+        // Set result along with the message to cache
+        sch.setThreadResultLocally(msgId, 0, std::move(msg));
+    }
+
+    // Now check that it's cached
+    REQUIRE(sch.getCachedMessageCount() == 1);
+
+    // Check we can still read from the message
+    REQUIRE(zmqData[0] == 1);
+    REQUIRE(zmqData[1] == 2);
+    REQUIRE(zmqData[2] == 3);
+}
 }

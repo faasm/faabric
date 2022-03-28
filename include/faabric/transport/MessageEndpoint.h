@@ -63,11 +63,11 @@ class MessageEndpoint
                 size_t dataSize,
                 bool more);
 
-    std::optional<Message> doRecv(zmq::socket_t& socket, int size = 0);
+    Message doRecv(zmq::socket_t& socket, int size = 0);
 
-    std::optional<Message> recvBuffer(zmq::socket_t& socket, int size);
+    Message recvBuffer(zmq::socket_t& socket, int size);
 
-    std::optional<Message> recvNoBuffer(zmq::socket_t& socket);
+    Message recvNoBuffer(zmq::socket_t& socket);
 };
 
 class AsyncSendMessageEndpoint final : public MessageEndpoint
@@ -132,7 +132,7 @@ class RecvMessageEndpoint : public MessageEndpoint
 
     virtual ~RecvMessageEndpoint(){};
 
-    virtual std::optional<Message> recv(int size = 0);
+    virtual Message recv(int size = 0);
 
     zmq::socket_t socket;
 };
@@ -192,7 +192,7 @@ class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
     AsyncRecvMessageEndpoint(int portIn,
                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    std::optional<Message> recv(int size = 0) override;
+    Message recv(int size = 0) override;
 };
 
 class AsyncInternalRecvMessageEndpoint final : public RecvMessageEndpoint
@@ -201,7 +201,7 @@ class AsyncInternalRecvMessageEndpoint final : public RecvMessageEndpoint
     AsyncInternalRecvMessageEndpoint(const std::string& inprocLabel,
                                      int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    std::optional<Message> recv(int size = 0) override;
+    Message recv(int size = 0) override;
 };
 
 class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
@@ -213,7 +213,7 @@ class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
     SyncRecvMessageEndpoint(int portIn,
                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    std::optional<Message> recv(int size = 0) override;
+    Message recv(int size = 0) override;
 
     void sendResponse(const uint8_t* data, int size);
 };
@@ -224,7 +224,7 @@ class AsyncDirectRecvEndpoint final : public RecvMessageEndpoint
     AsyncDirectRecvEndpoint(const std::string& inprocLabel,
                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
 
-    std::optional<Message> recv(int size = 0) override;
+    Message recv(int size = 0) override;
 };
 
 class AsyncDirectSendEndpoint final : public MessageEndpoint
