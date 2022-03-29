@@ -11,9 +11,16 @@
 namespace faabric::util {
 
 /*
- * Merges the dirty page flags from b into a in place
+ * Merges all the dirty page flags from the list of vectors into the first
+ * vector in place.
  */
-void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b);
+void mergeManyDirtyPages(std::vector<char>& dest,
+                         const std::vector<std::vector<char>>& source);
+
+/*
+ * Merges the dirty page flags from the source into the destination.
+ */
+void mergeDirtyPages(std::vector<char>& dest, const std::vector<char>& source);
 
 /*
  * Typedef used to enforce RAII on mmapped memory regions
