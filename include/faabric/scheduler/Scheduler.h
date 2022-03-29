@@ -109,6 +109,7 @@ class Executor
     // ---- Application threads ----
     std::shared_mutex threadExecutionMutex;
     std::vector<char> dirtyRegions;
+    std::vector<std::vector<char>> threadLocalDirtyRegions;
     void deleteMainThreadSnapshot(const faabric::Message& msg);
 
     // ---- Function execution thread pool ----

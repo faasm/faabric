@@ -368,4 +368,80 @@ TEST_CASE("Test remapping memory", "[util][memory]")
                                          mappedMem.get() + dataSize);
     REQUIRE(actualDataAfter == expectedData);
 }
+
+TEST_CASE("Test merging dirty pages", "[util][memory]")
+{
+    std::vector<char> source;
+    std::vector<char> dest;
+    std::vector<char> expected;
+
+    SECTION("Equal length source and dest")
+    {
+        source = { 0, 1, 0, 1, 1, 0 };
+        dest = { 0, 1, 1, 0, 1, 0 };
+        expected = { 0, 1, 1, 1, 1, 0 };
+    }
+
+    SECTION("Source shorter than dest")
+    {
+        source = { 0, 1, 0, 1 };
+        dest = { 0, 1, 1, 0, 0, 1 };
+        expected = { 0, 1, 1, 1, 0, 1 };
+    }
+
+    SECTION("Source longer than dest")
+    {
+        source = { 0, 1, 0, 1, 1, 0 };
+        dest = { 0, 1, 1, 0 };
+        expected = { 0, 1, 1, 1, 1, 0 };
+    }
+
+    mergeDirtyPages(dest, source);
+
+    REQUIRE(dest == expected);
+}
+
+TEST_CASE("Test merging multiple dirty pages", "[util][memory]")
+{
+    std::vector<std::vector<char>> sources;
+    std::vector<char> dest;
+    std::vector<char> expected;
+
+    SECTION("Equal length sources and dest")
+    {
+        sources = {
+            { 0, 1, 0, 0, 0, 0 },
+            { 0, 1, 0, 1, 0, 0 },
+            { 0, 1, 0, 0, 1, 0 },
+        };
+        dest = { 0, 1, 1, 0, 1, 0 };
+        expected = { 0, 1, 1, 1, 1, 0 };
+    }
+
+    SECTION("Shorter dest")
+    {
+        sources = {
+            { 0, 1, 0, 0, 0, 0 },
+            { 0, 1, 0, 1 },
+            { 0, 1, 0, 0, 1 },
+        };
+        dest = { 0, 1, 1, 0 };
+        expected = { 0, 1, 1, 1, 1, 0 };
+    }
+
+    SECTION("Longer dest")
+    {
+        sources = {
+            { 0, 1, 0, 0, 0, 0 },
+            { 0, 1, 0, 1 },
+            { 0, 1, 0, 0, 1 },
+        };
+        dest = { 0, 1, 1, 0, 0, 0, 0, 1, 1 };
+        expected = { 0, 1, 1, 1, 1, 0, 0, 1, 1 };
+    }
+
+    mergeManyDirtyPages(dest, sources);
+
+    REQUIRE(dest == expected);
+}
 }

@@ -12,21 +12,29 @@
 
 namespace faabric::util {
 
-void mergeDirtyPages(std::vector<char>& a, const std::vector<char>& b)
+void mergeManyDirtyPages(std::vector<char>& dest,
+                         const std::vector<std::vector<char>>& source)
+{
+    for (const auto& v : source) {
+        mergeDirtyPages(dest, v);
+    }
+}
+
+void mergeDirtyPages(std::vector<char>& dest, const std::vector<char>& source)
 {
     // Extend a to fit
-    size_t overlap = a.size();
-    if (b.size() > a.size()) {
-        a.reserve(b.size());
-        a.insert(a.end(), b.begin() + a.size(), b.end());
-    } else if (b.size() < a.size()) {
-        overlap = b.size();
+    size_t overlap = dest.size();
+    if (source.size() > dest.size()) {
+        dest.reserve(source.size());
+        dest.insert(dest.end(), source.begin() + dest.size(), source.end());
+    } else if (source.size() < dest.size()) {
+        overlap = source.size();
     }
 
-    std::transform(a.begin(),
-                   a.begin() + overlap,
-                   b.begin(),
-                   a.begin(),
+    std::transform(dest.begin(),
+                   dest.begin() + overlap,
+                   source.begin(),
+                   dest.begin(),
                    std::logical_or<char>());
 }
 

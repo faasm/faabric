@@ -250,6 +250,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         // Get updated memory view and start global tracking of memory
         memView = getMemoryView();
         tracker->startTracking(memView);
+
+        // Prepare list of lists for dirty pages from each thread
+        threadLocalDirtyRegions.resize(req->messages_size());
     } else if (!isThreads && !firstMsg.snapshotkey().empty()) {
         // Restore from snapshot if provided
         std::string snapshotKey = firstMsg.snapshotkey();
@@ -485,17 +488,17 @@ void Executor::threadPoolThread(int threadPoolIdx)
             auto thisThreadDirtyRegions =
               tracker->getThreadLocalDirtyPages(memView);
 
-            // TODO - remove this synchronisation point, some kind of
-            // append-only data structure?
-            faabric::util::FullLock lock(threadExecutionMutex);
-            faabric::util::mergeDirtyPages(dirtyRegions,
-                                           thisThreadDirtyRegions);
+            // Record this thread's dirty regions
+            threadLocalDirtyRegions[task.messageIndex] = thisThreadDirtyRegions;
         }
 
         // Set the return value
         msg.set_returnvalue(returnValue);
 
-        // Decrement the task count
+        // Decrement the task count. If the counter reaches zero at this point,
+        // all other tasks must also have reached this point, hence we can
+        // guarantee that the other tasks have also finished, and perform any
+        // merging or tidying up.
         std::atomic_thread_fence(std::memory_order_release);
         int oldTaskCount = task.batchCounter->fetch_sub(1);
         assert(oldTaskCount >= 0);
@@ -516,11 +519,22 @@ void Executor::threadPoolThread(int threadPoolIdx)
             std::span<uint8_t> memView = getMemoryView();
             tracker->stopTracking(memView);
 
-            // Add non-thread-local dirty regions
+            // Merge all dirty regions
             {
                 faabric::util::FullLock lock(threadExecutionMutex);
-                std::vector<char> r = tracker->getDirtyPages(memView);
-                faabric::util::mergeDirtyPages(dirtyRegions, r);
+
+                // Merge together regions from all threads
+                faabric::util::mergeManyDirtyPages(dirtyRegions,
+                                                   threadLocalDirtyRegions);
+
+                // Clear thread-local dirty regions, no longer needed
+                threadLocalDirtyRegions.clear();
+
+                // Merge the globally tracked regions
+                std::vector<char> globalDirtyRegions =
+                  tracker->getDirtyPages(memView);
+                faabric::util::mergeDirtyPages(dirtyRegions,
+                                               globalDirtyRegions);
             }
 
             // Fill snapshot gaps with overwrite regions first
