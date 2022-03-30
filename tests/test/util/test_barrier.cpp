@@ -26,7 +26,7 @@ TEST_CASE("Test barrier operation", "[util]")
 
     // Have n-1 threads iterating through sums, adding, then waiting on the
     // barrier
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int i = 1; i < nThreads; i++) {
         threads.emplace_back([nSums, &b, &sums]() {
             for (int s = 0; s < nSums; s++) {

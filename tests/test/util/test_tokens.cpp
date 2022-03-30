@@ -46,24 +46,24 @@ TEST_CASE("Test token pool operation with some threads", "[util]")
     std::vector<int> expected;
     REQUIRE(vars::acquiredTokens.empty());
 
-    std::thread t1(getTokenTask);
+    std::jthread t1(getTokenTask);
     t1.join();
     expected.push_back(0);
     REQUIRE(vars::acquiredTokens == expected);
 
-    std::thread t2(getTokenTask);
+    std::jthread t2(getTokenTask);
     t2.join();
     expected.push_back(1);
     REQUIRE(vars::acquiredTokens == expected);
 
-    std::thread t3(getTokenTask);
+    std::jthread t3(getTokenTask);
     t3.join();
     expected.push_back(2);
     REQUIRE(vars::acquiredTokens == expected);
 
     vars::sharedPool.releaseToken(1);
 
-    std::thread t4(getTokenTask);
+    std::jthread t4(getTokenTask);
     t4.join();
     expected.push_back(1);
     REQUIRE(vars::acquiredTokens == expected);

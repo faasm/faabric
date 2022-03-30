@@ -18,7 +18,7 @@ class FunctionMigrationThread
     int wakeUpPeriodSeconds;
 
   private:
-    std::unique_ptr<std::thread> workThread = nullptr;
+    std::unique_ptr<std::jthread> workThread = nullptr;
     std::mutex mx;
     std::condition_variable mustStopCv;
     std::atomic<bool> isShutdown;

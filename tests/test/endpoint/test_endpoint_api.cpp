@@ -88,7 +88,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
 
     faabric::endpoint::FaabricEndpoint endpoint(port, 2);
 
-    std::thread serverThread([&endpoint]() { endpoint.start(false); });
+    std::jthread serverThread([&endpoint]() { endpoint.start(false); });
 
     // Wait for the server to start
     SLEEP_MS(2000);
@@ -149,7 +149,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
     port++;
     faabric::endpoint::FaabricEndpoint endpoint(port, 2);
 
-    std::thread serverThread([&endpoint]() { endpoint.start(false); });
+    std::jthread serverThread([&endpoint]() { endpoint.start(false); });
 
     // Wait for the server to start
     SLEEP_MS(2000);

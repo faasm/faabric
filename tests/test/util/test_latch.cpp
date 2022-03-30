@@ -16,8 +16,8 @@ TEST_CASE("Test latch operation", "[util]")
 {
     auto l = Latch::create(3);
 
-    auto t1 = std::thread([l] { l->wait(); });
-    auto t2 = std::thread([l] { l->wait(); });
+    auto t1 = std::jthread([l] { l->wait(); });
+    auto t2 = std::jthread([l] { l->wait(); });
 
     l->wait();
 

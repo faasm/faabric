@@ -91,7 +91,7 @@ TEST_CASE("Test wait for draining queue with elements", "[util]")
     }
 
     // Background thread to consume elements
-    std::thread t([&q, &dequeued, nElems] {
+    std::jthread t([&q, &dequeued, nElems] {
         for (int i = 0; i < nElems; i++) {
             SLEEP_MS(100);
 
@@ -125,8 +125,8 @@ TEMPLATE_TEST_CASE("Test queue on non-copy-constructible object",
     q.enqueue(std::move(a));
     q.enqueue(std::move(b));
 
-    std::thread ta([&q] { q.dequeue().set_value(1); });
-    std::thread tb([&q] {
+    std::jthread ta([&q] { q.dequeue().set_value(1); });
+    std::jthread tb([&q] {
         SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
         q.dequeue().set_value(2);
     });
@@ -174,7 +174,7 @@ TEST_CASE("Test fixed capacity queue", "[util]")
     FixedCapIntQueue q(2);
     auto latch = faabric::util::Latch::create(2);
 
-    std::thread consumerThread([&latch, &q] {
+    std::jthread consumerThread([&latch, &q] {
         // Make sure we consume once to make one slot in the queue
         latch->wait();
         q.dequeue();
@@ -197,8 +197,8 @@ TEST_CASE("Stress test fixed capacity queue", "[util]")
 {
     int numThreadPairs = 10;
     int numMessages = 1000;
-    std::vector<std::thread> producerThreads;
-    std::vector<std::thread> consumerThreads;
+    std::vector<std::jthread> producerThreads;
+    std::vector<std::jthread> consumerThreads;
     std::vector<std::unique_ptr<FixedCapIntQueue>> queues;
     auto startLatch = faabric::util::Latch::create(2 * numThreadPairs + 1);
 
@@ -245,7 +245,7 @@ TEST_CASE("Test fixed capacity queue with asymetric consume/produce rates",
 
     // Fast producer
     bool producerSuccess = false;
-    std::thread producerThread([&q, nMessages, &producerSuccess] {
+    std::jthread producerThread([&q, nMessages, &producerSuccess] {
         for (int i = 0; i < nMessages; i++) {
             SLEEP_MS(1);
             q.enqueue(i);
@@ -256,7 +256,7 @@ TEST_CASE("Test fixed capacity queue with asymetric consume/produce rates",
 
     // Slow consumer
     bool consumerSuccess = false;
-    std::thread consumerThread([&q, nMessages, &consumerSuccess] {
+    std::jthread consumerThread([&q, nMessages, &consumerSuccess] {
         for (int i = 0; i < nMessages; i++) {
             SLEEP_MS(50);
             int res = q.dequeue();

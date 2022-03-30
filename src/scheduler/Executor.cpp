@@ -319,7 +319,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
-            threadPoolThreads.at(threadPoolIdx) = std::make_shared<std::thread>(
+            threadPoolThreads.at(threadPoolIdx) = std::make_shared<std::jthread>(
               &Executor::threadPoolThread, this, threadPoolIdx);
         }
     }
@@ -632,7 +632,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         bool isFinished = true;
         {
             faabric::util::UniqueLock threadsLock(threadsMutex);
-            std::shared_ptr<std::thread> thisThread =
+            std::shared_ptr<std::jthread> thisThread =
               threadPoolThreads.at(threadPoolIdx);
             deadThreads.emplace_back(thisThread);
 

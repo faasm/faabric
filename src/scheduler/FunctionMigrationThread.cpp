@@ -11,7 +11,7 @@ void FunctionMigrationThread::start(int wakeUpPeriodSecondsIn)
     isShutdown.store(false, std::memory_order_release);
 
     // Main work loop
-    workThread = std::make_unique<std::thread>([&] {
+    workThread = std::make_unique<std::jthread>([&] {
         // As we only check for migration opportunities every (possibly user-
         // defined) timeout, we also support stopping the main thread through
         // a condition variable.
