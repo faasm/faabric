@@ -435,12 +435,12 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int rB = 0;
 
     // Set up two threads to await the results
-    std::thread tA([&rA, threadIdA] {
+    std::jthread tA([&rA, threadIdA] {
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
         rA = sch.awaitThreadResult(threadIdA);
     });
 
-    std::thread tB([&rB, threadIdB] {
+    std::jthread tB([&rB, threadIdB] {
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
         rB = sch.awaitThreadResult(threadIdB);
     });

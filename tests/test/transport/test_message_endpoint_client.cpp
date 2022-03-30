@@ -50,7 +50,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     auto latch = faabric::util::Latch::create(2);
 
-    std::thread recvThread([&latch, expectedMsg] {
+    std::jthread recvThread([&latch, expectedMsg] {
         // Make sure this only runs once the send has been done
         latch->wait();
 
@@ -79,7 +79,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
     std::string expectedMsg = "Hello ";
     std::string expectedResponse = "world!";
 
-    std::thread senderThread([expectedMsg, expectedResponse] {
+    std::jthread senderThread([expectedMsg, expectedResponse] {
         // Open the source endpoint client
         SyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
 
@@ -122,7 +122,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     std::string baseMsg = "Hello ";
     uint8_t dummyHeader = 8;
 
-    std::thread senderThread([numMessages, dummyHeader, baseMsg] {
+    std::jthread senderThread([numMessages, dummyHeader, baseMsg] {
         // Open the source endpoint client
         AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
         for (int i = 0; i < numMessages; i++) {
@@ -160,14 +160,14 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     int numMessages = 10000;
     int numSenders = 10;
     std::string expectedMsg = "Hello from client";
-    std::vector<std::thread> senderThreads;
+    std::vector<std::jthread> senderThreads;
     const uint8_t* msg = BYTES_CONST(expectedMsg.c_str());
 
     uint8_t dummyHeader = 5;
 
     for (int j = 0; j < numSenders; j++) {
         senderThreads.emplace_back(
-          std::thread([msg, dummyHeader, numMessages, expectedMsg] {
+          std::jthread([msg, dummyHeader, numMessages, expectedMsg] {
               // Open the source endpoint client
               AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
               for (int i = 0; i < numMessages; i++) {
@@ -272,8 +272,8 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     std::shared_ptr<faabric::util::Latch> startLatch =
       faabric::util::Latch::create(nPairs + 1);
 
-    std::vector<std::thread> senders;
-    std::vector<std::thread> receivers;
+    std::vector<std::jthread> senders;
+    std::vector<std::jthread> receivers;
 
     for (int i = 0; i < nPairs; i++) {
         senders.emplace_back(

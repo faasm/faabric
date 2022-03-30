@@ -169,7 +169,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
     std::vector<int> sendData = { 0, 1, 2 };
     std::vector<int> recvData = { -1, -1, -1 };
 
-    std::thread senderThread([&world, rankA1, rankA2, &sendData, &recvData] {
+    std::jthread senderThread([&world, rankA1, rankA2, &sendData, &recvData] {
         world.send(
           rankA1, rankA2, BYTES(sendData.data()), MPI_INT, sendData.size());
 
@@ -270,7 +270,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test sendrecv", "[mpi]")
 
     // sendRecv is blocking, so we run two threads.
     // Run sendrecv from A
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     threads.emplace_back([&] {
         world.sendRecv(BYTES(messageDataAB.data()),
                        messageDataAB.size(),
@@ -318,7 +318,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test ring sendrecv", "[mpi]")
     MPI_Status status{};
 
     // Run shift operator. In a ring, send to right receive from left.
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int i = 0; i < ranks.size(); i++) {
         int rank = ranks[i];
         int left = rank > 0 ? rank - 1 : ranks.size() - 1;
@@ -663,7 +663,7 @@ void doReduceTest(scheduler::MpiWorld& world,
 
     // ---- Allreduce ----
     // Run all as threads
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int r = 0; r < thisWorldSize; r++) {
         threads.emplace_back([&, r, inPlace] {
             std::vector<T> thisRankData = rankData[r];
@@ -1116,7 +1116,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
         SECTION("Not in place") { isInPlace = false; }
 
         // Run allgather in threads
-        std::vector<std::thread> threads;
+        std::vector<std::jthread> threads;
         for (int r = 0; r < worldSize; r++) {
             threads.emplace_back([&, r, isInPlace] {
                 if (isInPlace) {
@@ -1233,7 +1233,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test all-to-all", "[mpi]")
         { 6, 7, 16, 17, 26, 27, 36, 37 },
     };
 
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int r = 0; r < worldSize; r++) {
         threads.emplace_back([&, r] {
             std::vector<int> actual(8, 0);

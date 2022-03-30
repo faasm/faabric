@@ -19,9 +19,9 @@ TEST_CASE("Test multithreaded gid generation", "[util]")
 
     std::vector<unsigned int> generated;
     std::mutex mx;
-    std::vector<std::thread> threads(nThreads);
+    std::vector<std::jthread> threads(nThreads);
     for (int i = 0; i < nThreads; i++) {
-        threads.emplace_back(std::thread([&generated, &mx, nLoops] {
+        threads.emplace_back(std::jthread([&generated, &mx, nLoops] {
             for (int j = 0; j < nLoops; j++) {
                 faabric::util::UniqueLock lock(mx);
                 generated.push_back(faabric::util::generateGid());

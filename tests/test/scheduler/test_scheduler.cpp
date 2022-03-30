@@ -642,7 +642,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     int nWaiters = 10;
     int nWaiterMessages = 4;
 
-    std::vector<std::thread> waiterThreads;
+    std::vector<std::jthread> waiterThreads;
 
     // Create waiters that will submit messages and await their results
     for (int i = 0; i < nWaiters; i++) {

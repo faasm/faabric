@@ -66,7 +66,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
     thisWorld.broadcastHostsToRanks();
 
     // Background thread to receive the allocation
-    std::thread otherWorldThread([this] {
+    std::jthread otherWorldThread([this] {
         otherWorld.initialiseFromMsg(msg);
 
         assert(otherWorld.getHostForRank(0) == thisHost);
@@ -103,7 +103,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
     thisWorld.broadcastHostsToRanks();
 
     // Start the "remote" world in the background
-    std::thread otherWorldThread([this, rankA, rankB, &messageData] {
+    std::jthread otherWorldThread([this, rankA, rankB, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
         // Receive the message for the given rank
@@ -150,7 +150,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     faabric::util::setMockMode(false);
     thisWorld.broadcastHostsToRanks();
 
-    std::thread otherWorldThread(
+    std::jthread otherWorldThread(
       [this, rankA, rankB, &messageData, &messageData2] {
           otherWorld.initialiseFromMsg(msg);
 
@@ -221,7 +221,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 
     thisWorld.broadcastHostsToRanks();
 
-    std::thread otherWorldThread([this, rankA, rankB, numMessages] {
+    std::jthread otherWorldThread([this, rankA, rankB, numMessages] {
         otherWorld.initialiseFromMsg(msg);
 
         for (int i = 0; i < numMessages; i++) {
@@ -260,7 +260,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
 
     std::vector<int> messageData = { 0, 1, 2 };
 
-    std::thread otherWorldThread([this, &messageData] {
+    std::jthread otherWorldThread([this, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
         // Broadcast a message from the root first
@@ -334,7 +334,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     std::vector<int> messageData = { 0, 1, 2 };
     int recvRank = 0;
 
-    std::thread otherWorldThread([this, recvRank, &messageData] {
+    std::jthread otherWorldThread([this, recvRank, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
         // Call reduce from two non-local-leader ranks (they just send)
@@ -421,7 +421,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
     int recvRank = 0;
     int numRepeats = 10;
 
-    std::thread otherWorldThread([this, recvRank, numRepeats, &messageData] {
+    std::jthread otherWorldThread([this, recvRank, numRepeats, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
         std::vector<int> sendRanksInOrder = { 4, 5, 3 };
@@ -498,7 +498,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         messageData[i] = i;
     }
 
-    std::thread otherWorldThread([this, nPerRank, &messageData] {
+    std::jthread otherWorldThread([this, nPerRank, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
         // Do the scatter (when send rank == recv rank)
@@ -641,7 +641,7 @@ TEST_CASE_METHOD(RemoteCollectiveTestFixture,
         orderedLocalGatherRanks = { 1, 2, 0 };
     }
 
-    std::thread otherWorldThread([this, root, &rankData, nPerRank] {
+    std::jthread otherWorldThread([this, root, &rankData, nPerRank] {
         otherWorld.initialiseFromMsg(msg);
 
         std::vector<int> orderedRemoteGatherRanks = { 4, 5, 3 };
@@ -711,7 +711,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     faabric::util::setMockMode(false);
     thisWorld.broadcastHostsToRanks();
 
-    std::thread otherWorldThread([this, sendRank, recvRank, &messageData] {
+    std::jthread otherWorldThread([this, sendRank, recvRank, &messageData] {
         otherWorld.initialiseFromMsg(msg);
 
         // Send message twice
@@ -777,7 +777,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     faabric::util::setMockMode(false);
     thisWorld.broadcastHostsToRanks();
 
-    std::thread otherWorldThread([this, sendRank, recvRank] {
+    std::jthread otherWorldThread([this, sendRank, recvRank] {
         otherWorld.initialiseFromMsg(msg);
 
         // Send different messages
@@ -841,7 +841,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     faabric::util::setMockMode(false);
     thisWorld.broadcastHostsToRanks();
 
-    std::thread otherWorldThread([this, worldSize] {
+    std::jthread otherWorldThread([this, worldSize] {
         std::vector<int> otherHostRanks = { 1, 2 };
         otherWorld.initialiseFromMsg(msg);
 
@@ -911,7 +911,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     faabric::util::setMockMode(false);
     thisWorld.broadcastHostsToRanks();
 
-    std::thread otherWorldThread(
+    std::jthread otherWorldThread(
       [this, rankA, rankB, &messageData, &messageData2] {
           otherWorld.initialiseFromMsg(msg);
 
@@ -1014,12 +1014,12 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
     faabric::util::setMockMode(false);
     thisWorld.broadcastHostsToRanks();
 
-    std::thread otherWorldThread([this,
-                                  thisWorldRank,
-                                  otherWorldRank1,
-                                  otherWorldRank2,
-                                  &messageData,
-                                  &messageData2] {
+    std::jthread otherWorldThread([this,
+                                   thisWorldRank,
+                                   otherWorldRank1,
+                                   otherWorldRank2,
+                                   &messageData,
+                                   &messageData2] {
         otherWorld.initialiseFromMsg(msg);
 
         // Send message from one rank

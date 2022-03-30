@@ -448,7 +448,7 @@ static bool uffdWriteProtect = false;
 static bool uffdSigbus = false;
 
 static int closeFd = -1;
-static std::shared_ptr<std::thread> eventThread = nullptr;
+static std::shared_ptr<std::jthread> eventThread = nullptr;
 
 UffdDirtyTracker::UffdDirtyTracker(const std::string& modeIn)
   : DirtyTracker(modeIn)
@@ -544,7 +544,7 @@ void UffdDirtyTracker::initUffd()
         }
 
         // Start event thread
-        eventThread = std::make_shared<std::thread>(
+        eventThread = std::make_shared<std::jthread>(
           &UffdDirtyTracker::eventThreadEntrypoint);
     }
 

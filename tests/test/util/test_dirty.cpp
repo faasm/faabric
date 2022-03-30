@@ -329,7 +329,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
         // Start global tracking
         tracker->startTracking(memView);
 
-        std::vector<std::thread> threads;
+        std::vector<std::jthread> threads;
         threads.reserve(nThreads);
         for (int i = 0; i < nThreads; i++) {
             threads.emplace_back(

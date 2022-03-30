@@ -41,7 +41,7 @@ unsigned int getUsableCores()
     unsigned int nCores;
 
     if (conf.overrideCpuCount == 0) {
-        nCores = std::thread::hardware_concurrency();
+        nCores = std::jthread::hardware_concurrency();
     } else {
         nCores = conf.overrideCpuCount;
     }

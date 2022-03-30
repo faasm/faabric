@@ -103,7 +103,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     std::vector<int> messageData = { 0, 1, 2 };
     auto bufferAllocation = std::make_unique<int[]>(messageData.size());
     auto buffer = bufferAllocation.get();
-    std::thread otherWorldThread([&messageData, &otherMsg, rank, otherRank] {
+    std::jthread otherWorldThread([&messageData, &otherMsg, rank, otherRank] {
         faabric::scheduler::MpiWorld& otherWorld =
           faabric::scheduler::getMpiWorldRegistry().getOrInitialiseWorld(
             otherMsg);

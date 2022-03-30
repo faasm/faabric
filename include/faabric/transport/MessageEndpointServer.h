@@ -33,9 +33,9 @@ class MessageEndpointServerHandler
     const std::string inprocLabel;
     int nThreads;
 
-    std::thread receiverThread;
+    std::jthread receiverThread;
 
-    std::vector<std::thread> workerThreads;
+    std::vector<std::jthread> workerThreads;
 
     std::unique_ptr<SyncFanInMessageEndpoint> syncFanIn = nullptr;
     std::unique_ptr<SyncFanOutMessageEndpoint> syncFanOut = nullptr;

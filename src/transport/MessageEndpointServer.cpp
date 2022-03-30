@@ -36,7 +36,7 @@ void MessageEndpointServerHandler::start(
     // For push/ pull we receive on a pull socket, then proxy with another push
     // to multiple downstream pull sockets
     // In both cases, the downstream fan-out is done over inproc sockets.
-    receiverThread = std::thread([this, latch] {
+    receiverThread = std::jthread([this, latch] {
         int port = async ? server->asyncPort : server->syncPort;
 
         if (async) {

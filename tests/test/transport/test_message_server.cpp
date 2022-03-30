@@ -173,12 +173,12 @@ TEST_CASE("Test multiple clients talking to one server", "[transport]")
     EchoServer server;
     server.start();
 
-    std::vector<std::thread> clientThreads;
+    std::vector<std::jthread> clientThreads;
     int numClients = 10;
     int numMessages = 1000;
 
     for (int i = 0; i < numClients; i++) {
-        clientThreads.emplace_back(std::thread([i, numMessages] {
+        clientThreads.emplace_back(std::jthread([i, numMessages] {
             // Prepare client
             MessageEndpointClient cli(
               LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
@@ -274,7 +274,7 @@ TEST_CASE("Test blocking requests in multi-threaded server", "[transport]")
     bool successes[2] = { false, false };
 
     // Create two background threads to make the blocking requests
-    std::thread tA([&successes] {
+    std::jthread tA([&successes] {
         MessageEndpointClient cli(LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
 
         std::string expectedMsg = "Background thread A";
@@ -293,7 +293,7 @@ TEST_CASE("Test blocking requests in multi-threaded server", "[transport]")
         }
     });
 
-    std::thread tB([&successes] {
+    std::jthread tB([&successes] {
         MessageEndpointClient cli(LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
 
         std::string expectedMsg = "Background thread B";

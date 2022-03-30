@@ -197,7 +197,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
     // Create high contention on the critical var that will be detected if
     // locking isn't working.
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int i = 0; i < nThreads; i++) {
         threads.emplace_back(
           [useLocal, recursive, i, nLoops, &group, &criticalVar, &success] {
@@ -268,7 +268,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     // Spawn n-1 child threads to add to shared sums over several barriers so
     // that the main thread can check all threads have completed after each.
     std::vector<std::atomic<int>> sharedSums(nSums);
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int i = 1; i < nThreads; i++) {
         threads.emplace_back([&group, i, nSums, &sharedSums] {
             for (int s = 0; s < nSums; s++) {
@@ -350,7 +350,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     auto group = setUpGroup(appId, groupId, nThreads);
 
     // Run threads in background to force a wait from the master
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int i = 1; i < nThreads; i++) {
         threads.emplace_back([&group, i, &actual] {
             SLEEP_MS(1000);

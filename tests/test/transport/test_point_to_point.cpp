@@ -117,7 +117,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     // async handling
     broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
 
-    std::thread t([groupId, idxA, idxB, &receivedDataA, &sentDataB] {
+    std::jthread t([groupId, idxA, idxB, &receivedDataA, &sentDataB] {
         PointToPointBroker& broker = getPointToPointBroker();
 
         // Receive the first message
@@ -279,7 +279,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     // Background thread that will eventually enable the app and change the
     // shared integer
-    std::thread t([this, &decision, &sharedInt] {
+    std::jthread t([this, &decision, &sharedInt] {
         SLEEP_MS(1000);
 
         sharedInt.fetch_add(100);

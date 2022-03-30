@@ -1,9 +1,10 @@
 #include <catch2/catch.hpp>
-#include <faabric/util/latch.h>
 
 #include <faabric/util/latch.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/macros.h>
+
+#include <thread>
 
 using namespace faabric::util;
 
@@ -25,8 +26,8 @@ TEST_CASE("Test wait flag", "[util]")
     std::vector<int> expectedUnset(nThreads, 0);
     std::vector<int> expectedSet;
 
-    std::vector<std::thread> threadsA;
-    std::vector<std::thread> threadsB;
+    std::vector<std::jthread> threadsA;
+    std::vector<std::jthread> threadsB;
 
     std::vector<int> resultsA(nThreads, 0);
     std::vector<int> resultsB(nThreads, 0);
