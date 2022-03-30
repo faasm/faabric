@@ -1,8 +1,5 @@
 #pragma once
 
-#include "faabric/util/PeriodicBackgroundThread.h"
-#include "faabric/util/clock.h"
-#include "faabric/util/memory.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
@@ -10,9 +7,12 @@
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/util/PeriodicBackgroundThread.h>
+#include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
@@ -41,6 +41,15 @@ class ExecutorTask
     ExecutorTask(int messageIndexIn,
                  std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
                  std::shared_ptr<std::atomic<int>> batchCounterIn);
+
+    // Delete everything copy-related, default everything move-related
+    ExecutorTask(const ExecutorTask& other) = delete;
+
+    ExecutorTask& operator=(const ExecutorTask& other) = delete;
+
+    ExecutorTask(ExecutorTask&& other) = default;
+
+    ExecutorTask& operator=(ExecutorTask&& other) = default;
 
     std::shared_ptr<faabric::BatchExecuteRequest> req;
     std::shared_ptr<std::atomic<int>> batchCounter;
@@ -123,16 +132,25 @@ class Executor
 
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
-    void threadPoolThread(int threadPoolIdx);
+    void threadPoolThread(std::stop_token st, int threadPoolIdx);
 };
 
-// Background threads
+/**
+ * Background thread that periodically checks if there are migration
+ * opportunities for in-flight apps that have opted in to being checked for
+ * migrations.
+ */
 class FunctionMigrationThread : public faabric::util::PeriodicBackgroundThread
 {
   public:
     void doWork() override;
 };
 
+/**
+ * Background thread that periodically checks to see if any executors have
+ * become stale (i.e. not handled any requests in a given timeout). If any are
+ * found, they are removed.
+ */
 class SchedulerReaperThread : public faabric::util::PeriodicBackgroundThread
 {
   public:
@@ -173,7 +191,7 @@ class Scheduler
 
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
-    const std::set<std::string> &getFunctionRegisteredHosts(
+    const std::set<std::string>& getFunctionRegisteredHosts(
       const std::string& user,
       const std::string& function,
       bool acquireLock = true);

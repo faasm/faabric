@@ -3,7 +3,6 @@
 #include <faabric_utils.h>
 #include <fixtures.h>
 
-#include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/testing.h>

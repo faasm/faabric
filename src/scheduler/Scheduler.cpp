@@ -1,4 +1,3 @@
-#include "faabric/scheduler/FunctionMigrationThread.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -60,7 +59,7 @@ Scheduler::Scheduler()
     thisHostResources.set_slots(cores);
 
     // Start the reaper thread
-    reaperThread.start(conf.schedulerReaperInterval);
+    reaperThread.start(conf.reaperIntervalSeconds);
 }
 
 std::set<std::string> Scheduler::getAvailableHosts()
@@ -1598,13 +1597,13 @@ void Scheduler::doStartFunctionMigrationThread(
     if (startMigrationThread) {
         functionMigrationThread.start(firstMsg.migrationcheckperiod());
     } else if (firstMsg.migrationcheckperiod() !=
-               functionMigrationThread.getWakeUpPeriod()) {
+               functionMigrationThread.getIntervalSeconds()) {
         SPDLOG_WARN("Ignoring migration check period for app {} as the"
                     "migration thread is already running with a different"
                     " check period (provided: {}, current: {})",
                     firstMsg.appid(),
                     firstMsg.migrationcheckperiod(),
-                    functionMigrationThread.getWakeUpPeriod());
+                    functionMigrationThread.getIntervalSeconds());
     }
 }
 }

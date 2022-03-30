@@ -198,6 +198,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     faabric::util::UniqueLock lock(threadsMutex);
 
     // Update the last-executed time for this executor
+    lastExec = faabric::util::startTimer();
 
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -300,7 +301,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
             threadPoolThreads.at(threadPoolIdx) =
               std::make_shared<std::jthread>(
-                &Executor::threadPoolThread, this, threadPoolIdx);
+                std::bind_front(&Executor::threadPoolThread, this),
+                threadPoolIdx);
         }
     }
 }
@@ -359,15 +361,15 @@ void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
     }
 }
 
-void Executor::threadPoolThread(int threadPoolIdx)
+void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 {
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
-    faabric::transport::PointToPointBroker& broker =
-      faabric::transport::getPointToPointBroker();
     const auto& conf = faabric::util::getSystemConfig();
 
-    for (;;) {
+    // We terminate these threads by sending a shutdown message, but having this
+    // check means they won't hang infinitely if destructed.
+    while (!st.stop_requested()) {
         SPDLOG_TRACE("Thread starting loop {}:{}", id, threadPoolIdx);
 
         ExecutorTask task;
@@ -375,12 +377,13 @@ void Executor::threadPoolThread(int threadPoolIdx)
         try {
             task = threadTaskQueues[threadPoolIdx].dequeue(conf.boundTimeout);
         } catch (faabric::util::QueueTimeoutException& ex) {
-            // If the thread has had no messages, it needs to remove itself
-            SPDLOG_TRACE("Thread {}:{} got no messages in timeout {}ms",
-                         id,
-                         threadPoolIdx,
-                         conf.boundTimeout);
-            break;
+            SPDLOG_TRACE(
+              "Thread {}:{} got no messages in timeout {}ms, looping",
+              id,
+              threadPoolIdx,
+              conf.boundTimeout);
+
+            continue;
         }
 
         // If the thread is being killed, the executor itself
@@ -602,13 +605,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             sch.setFunctionResult(msg);
         }
     }
-
-    SPDLOG_DEBUG("Shutting down thread pool thread {}:{}", id, threadPoolIdx);
-
-    faabric::util::UniqueLock threadsLock(threadsMutex);
-
-    // Set this thread to nullptr
-    threadPoolThreads.at(threadPoolIdx) = nullptr;
 }
 
 bool Executor::tryClaim()

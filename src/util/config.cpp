@@ -42,7 +42,8 @@ void SystemConfig::initialise()
     globalMessageTimeout =
       this->getSystemConfIntParam("GLOBAL_MESSAGE_TIMEOUT", "60000");
     boundTimeout = this->getSystemConfIntParam("BOUND_TIMEOUT", "30000");
-    schedulerReaperInterval = this->getSystemConfIntParam("REAPER_INTERVAL", "30000");
+    reaperIntervalSeconds =
+      this->getSystemConfIntParam("REAPER_INTERVAL_SECS", "30");
 
     // MPI
     defaultMpiWorldSize =
