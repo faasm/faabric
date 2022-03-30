@@ -1,9 +1,11 @@
 #pragma once
 
+#include "faabric/util/PeriodicBackgroundThread.h"
+#include "faabric/util/clock.h"
+#include "faabric/util/memory.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -80,7 +82,7 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
-    void updateMainThreadSnapshot();
+    long getMillisSinceLastExec();
 
     virtual std::span<uint8_t> getMemoryView();
 
@@ -104,7 +106,9 @@ class Executor
     uint32_t threadPoolSize = 0;
 
   private:
+    // ---- Accounting ----
     std::atomic<bool> claimed = false;
+    faabric::util::TimePoint lastExec;
 
     // ---- Application threads ----
     std::shared_mutex threadExecutionMutex;
@@ -115,12 +119,22 @@ class Executor
     // ---- Function execution thread pool ----
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::jthread>> threadPoolThreads;
-    std::vector<std::shared_ptr<std::jthread>> deadThreads;
     std::set<int> availablePoolThreads;
 
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
     void threadPoolThread(int threadPoolIdx);
+};
+
+// Background threads
+class FunctionMigrationThread: public faabric::util::PeriodicBackgroundThread {
+public:
+    void doWork() override;
+};
+
+class SchedulerReaperThread: public faabric::util::PeriodicBackgroundThread {
+public:
+    void doWork() override;
 };
 
 class Scheduler
@@ -150,6 +164,10 @@ class Scheduler
 
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
+
+    bool reapDeadExecutors();
+
+    void reapExecutor(std::shared_ptr<Executor> exec);
 
     long getFunctionExecutorCount(const faabric::Message& msg);
 
@@ -199,8 +217,6 @@ class Scheduler
     size_t getCachedMessageCount();
 
     void vacateSlot();
-
-    void notifyExecutorShutdown(Executor* exec, const faabric::Message& msg);
 
     std::string getThisHost();
 
@@ -270,8 +286,6 @@ class Scheduler
     std::shared_mutex mx;
 
     // ---- Executors ----
-    std::vector<std::shared_ptr<Executor>> deadExecutors;
-
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
       executors;
 
@@ -299,6 +313,8 @@ class Scheduler
     faabric::HostResources getHostResources(const std::string& host);
 
     // ---- Actual scheduling ----
+    SchedulerReaperThread reaperThread;
+
     std::set<std::string> availableHostsCache;
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;

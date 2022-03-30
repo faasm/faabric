@@ -1,3 +1,4 @@
+#include "faabric/scheduler/FunctionMigrationThread.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -57,6 +58,9 @@ Scheduler::Scheduler()
     // Set up the initial resources
     int cores = faabric::util::getUsableCores();
     thisHostResources.set_slots(cores);
+
+    // Start the reaper thread
+    reaperThread.start(conf.schedulerReaperInterval);
 }
 
 std::set<std::string> Scheduler::getAvailableHosts()
@@ -94,33 +98,9 @@ void Scheduler::resetThreadLocalCache()
 void Scheduler::reset()
 {
     SPDLOG_DEBUG("Resetting scheduler");
-
     resetThreadLocalCache();
 
-    // Shut down all Executors
-    // Executor shutdown takes a lock itself, so "finish" executors without the
-    // lock.
-    decltype(executors) executorsList;
-    decltype(deadExecutors) deadExecutorsList;
-    {
-        faabric::util::FullLock lock(mx);
-        executorsList = executors;
-    }
-    for (auto& p : executorsList) {
-        for (auto& e : p.second) {
-            e->finish();
-        }
-    }
-    executorsList.clear();
-    {
-        faabric::util::FullLock lock(mx);
-        deadExecutorsList = deadExecutors;
-    }
-    for (auto& e : deadExecutors) {
-        e->finish();
-    }
-    deadExecutorsList.clear();
-
+    // Stop the function migration thread
     functionMigrationThread.stop();
 
     faabric::util::FullLock lock(mx);
@@ -156,7 +136,61 @@ void Scheduler::shutdown()
 {
     reset();
 
+    // Stop the reaper thread
+    reaperThread.stop();
+
     removeHostFromGlobalSet(thisHost);
+}
+
+void SchedulerReaperThread::doWork()
+{
+    getScheduler().reapDeadExecutors();
+}
+
+void Scheduler::reapDeadExecutors()
+{
+    faabric::util::FullLock lock(mx);
+
+    for (auto execPair : executors) {
+        std::vector<std::shared_ptr<Executor>> execs = execPair.second;
+
+        for (auto exec : execs) {
+            long millisSinceLastExec = exec->getMillisSinceLastExec();
+            if (millisSinceLastExec < conf.boundTimeout) {
+                // This executor has had an execution too recently
+                continue;
+            }
+
+            // TODO - make sure the executor isn't executing a long-running task
+            // here, otherwise we'll mistakenly reap it
+        }
+    }
+}
+
+bool Scheduler::reapExecutor(std::shared_ptr<Executor> exec)
+{
+    long millisSinceLastExec = exec->getMillisSinceLastExec();
+    if (millisSinceLastExec < conf.boundTimeout) {
+        // This executor has had an execution too recently
+        return false;
+    }
+
+    SPDLOG_TRACE("Shutting down executor {}", exec->id);
+
+    if (thisExecutors.empty()) {
+        SPDLOG_TRACE("No remaining executors for {}", funcStr);
+
+        // Unregister if this was the last executor for that function
+        bool isMaster = thisHost == msg.masterhost();
+        if (!isMaster) {
+            faabric::UnregisterRequest req;
+            req.set_host(thisHost);
+            *req.mutable_function() = msg;
+
+            getFunctionCallClient(msg.masterhost()).unregister(req);
+        }
+    }
+}
 }
 
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
@@ -196,49 +230,6 @@ void Scheduler::removeRegisteredHost(const std::string& host,
 void Scheduler::vacateSlot()
 {
     thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
-}
-
-void Scheduler::notifyExecutorShutdown(Executor* exec,
-                                       const faabric::Message& msg)
-{
-    faabric::util::FullLock lock(mx);
-
-    SPDLOG_TRACE("Shutting down executor {}", exec->id);
-
-    std::string funcStr = faabric::util::funcToString(msg, false);
-
-    // Find in list of executors
-    int execIdx = -1;
-    std::vector<std::shared_ptr<Executor>>& thisExecutors = executors[funcStr];
-    for (int i = 0; i < thisExecutors.size(); i++) {
-        if (thisExecutors.at(i).get() == exec) {
-            execIdx = i;
-            break;
-        }
-    }
-
-    // We assume it's been found or something has gone very wrong
-    assert(execIdx >= 0);
-
-    // Record as dead, remove from live executors
-    // Note that this is necessary as this method may be called from a worker
-    // thread, so we can't fully clean up the executor without having a deadlock
-    deadExecutors.emplace_back(thisExecutors.at(execIdx));
-    thisExecutors.erase(thisExecutors.begin() + execIdx);
-
-    if (thisExecutors.empty()) {
-        SPDLOG_TRACE("No remaining executors for {}", funcStr);
-
-        // Unregister if this was the last executor for that function
-        bool isMaster = thisHost == msg.masterhost();
-        if (!isMaster) {
-            faabric::UnregisterRequest req;
-            req.set_host(thisHost);
-            *req.mutable_function() = msg;
-
-            getFunctionCallClient(msg.masterhost()).unregister(req);
-        }
-    }
 }
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(
@@ -1335,6 +1326,15 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
     return node;
 }
 
+// ----------------------------------------
+// MIGRATION
+// ----------------------------------------
+
+void FunctionMigrationThread::doWork()
+{
+    getScheduler().checkForMigrationOpportunities();
+}
+
 void Scheduler::checkForMigrationOpportunities()
 {
     std::vector<std::shared_ptr<faabric::PendingMigrations>>
@@ -1571,13 +1571,13 @@ void Scheduler::doStartFunctionMigrationThread(
     if (startMigrationThread) {
         functionMigrationThread.start(firstMsg.migrationcheckperiod());
     } else if (firstMsg.migrationcheckperiod() !=
-               functionMigrationThread.wakeUpPeriodSeconds) {
+               functionMigrationThread.getWakeUpPeriod()) {
         SPDLOG_WARN("Ignoring migration check period for app {} as the"
                     "migration thread is already running with a different"
                     " check period (provided: {}, current: {})",
                     firstMsg.appid(),
                     firstMsg.migrationcheckperiod(),
-                    functionMigrationThread.wakeUpPeriodSeconds);
+                    functionMigrationThread.getWakeUpPeriod());
     }
 }
 }
