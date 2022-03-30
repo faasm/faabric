@@ -4,24 +4,27 @@
 
 namespace faabric::util {
 
-void PeriodicBackgroundThread::start(int wakeUpPeriodSecondsIn)
+void PeriodicBackgroundThread::start(int intervalSecondsIn)
 {
-    wakeUpPeriodSeconds = wakeUpPeriodSecondsIn;
+    intervalSeconds = intervalSecondsIn;
+    SPDLOG_DEBUG("Starting periodic background thread with interval {}s",
+                 intervalSeconds);
 
     workThread = std::make_unique<std::jthread>([&](std::stop_token st) {
         while (!st.stop_requested()) {
             faabric::util::UniqueLock lock(mx);
-
             if (st.stop_requested()) {
                 break;
             }
 
-            std::cv_status returnVal = timeoutCv.wait_for(
-              lock, std::chrono::milliseconds(wakeUpPeriodSeconds * 1000));
+            bool isStopped = timeoutCv.wait_for(
+              lock, std::chrono::milliseconds(intervalSeconds * 1000), [&st] {
+                  return st.stop_requested();
+              });
 
             // If we hit the timeout it means we have not been notified to
             // stop. Thus we can do work
-            if (returnVal == std::cv_status::timeout) {
+            if (!isStopped) {
                 doWork();
             }
         };
@@ -41,7 +44,8 @@ void PeriodicBackgroundThread::stop()
         return;
     }
 
-    faabric::util::UniqueLock lock(mx);
+    SPDLOG_TRACE("Stopping periodic background thread");
+
     workThread->request_stop();
     timeoutCv.notify_one();
 

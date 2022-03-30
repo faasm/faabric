@@ -62,6 +62,11 @@ Scheduler::Scheduler()
     reaperThread.start(conf.reaperIntervalSeconds);
 }
 
+Scheduler::~Scheduler()
+{
+    reaperThread.stop();
+}
+
 std::set<std::string> Scheduler::getAvailableHosts()
 {
     redis::Redis& redis = redis::Redis::getQueue();
@@ -102,8 +107,10 @@ void Scheduler::reset()
     // Stop the function migration thread
     functionMigrationThread.stop();
 
-    faabric::util::FullLock lock(mx);
+    // Wait for the executors themselves to have finished
     executors.clear();
+
+    faabric::util::FullLock lock(mx);
 
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -133,9 +140,6 @@ void Scheduler::reset()
 void Scheduler::shutdown()
 {
     reset();
-
-    // Stop the reaper thread
-    reaperThread.stop();
 
     removeHostFromGlobalSet(thisHost);
 }
@@ -169,6 +173,12 @@ void Scheduler::reapStaleExecutors()
                              exec->id,
                              millisSinceLastExec,
                              conf.boundTimeout);
+                continue;
+            }
+
+            // Check if executor is currently executing
+            if (exec->isExecuting()) {
+                SPDLOG_TRACE("Not reaping {}, currently executing", exec->id);
                 continue;
             }
 

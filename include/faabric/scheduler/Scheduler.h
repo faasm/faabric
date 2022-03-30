@@ -39,8 +39,7 @@ class ExecutorTask
     ExecutorTask() = default;
 
     ExecutorTask(int messageIndexIn,
-                 std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                 std::shared_ptr<std::atomic<int>> batchCounterIn);
+                 std::shared_ptr<faabric::BatchExecuteRequest> reqIn);
 
     // Delete everything copy-related, default everything move-related
     ExecutorTask(const ExecutorTask& other) = delete;
@@ -52,7 +51,6 @@ class ExecutorTask
     ExecutorTask& operator=(ExecutorTask&& other) = default;
 
     std::shared_ptr<faabric::BatchExecuteRequest> req;
-    std::shared_ptr<std::atomic<int>> batchCounter;
     int messageIndex = 0;
 };
 
@@ -91,6 +89,8 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
+    void overrideLastExec(faabric::util::TimePoint tp);
+
     long getMillisSinceLastExec();
 
     virtual std::span<uint8_t> getMemoryView();
@@ -98,6 +98,8 @@ class Executor
     virtual void restore(const std::string& snapshotKey);
 
     faabric::Message& getBoundMessage();
+
+    bool isExecuting();
 
   protected:
     virtual void setMemorySize(size_t newSize);
@@ -117,6 +119,7 @@ class Executor
   private:
     // ---- Accounting ----
     std::atomic<bool> claimed = false;
+    std::atomic<int> batchCounter = 0;
     faabric::util::TimePoint lastExec;
 
     // ---- Application threads ----
@@ -161,6 +164,8 @@ class Scheduler
 {
   public:
     Scheduler();
+    
+    ~Scheduler();
 
     faabric::util::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,

@@ -33,10 +33,8 @@
 namespace faabric::scheduler {
 
 ExecutorTask::ExecutorTask(int messageIndexIn,
-                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                           std::shared_ptr<std::atomic<int>> batchCounterIn)
+                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn)
   : req(std::move(reqIn))
-  , batchCounter(std::move(batchCounterIn))
   , messageIndex(messageIndexIn)
 {}
 
@@ -78,8 +76,7 @@ Executor::~Executor()
 
         // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
-        threadTaskQueues[i].enqueue(
-          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr));
+        threadTaskQueues[i].enqueue(ExecutorTask(POOL_SHUTDOWN, nullptr));
 
         // Wait for thread to terminate
         if (threadPoolThreads[i]->joinable()) {
@@ -246,8 +243,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                      isSingleHost);
     }
 
-    // Set up shared counter for this batch of tasks
-    auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
+    // Initialise batch counter
+    batchCounter.store(msgIdxs.size());
 
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted
@@ -294,8 +291,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         }
 
         // Enqueue the task
-        threadTaskQueues[threadPoolIdx].enqueue(
-          ExecutorTask(msgIdx, req, batchCounter));
+        threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(msgIdx, req));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
@@ -305,6 +301,11 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                 threadPoolIdx);
         }
     }
+}
+
+void Executor::overrideLastExec(faabric::util::TimePoint tp)
+{
+    lastExec = tp;
 }
 
 long Executor::getMillisSinceLastExec()
@@ -483,7 +484,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // guarantee that the other tasks have also finished, and perform any
         // merging or tidying up.
         std::atomic_thread_fence(std::memory_order_release);
-        int oldTaskCount = task.batchCounter->fetch_sub(1);
+        int oldTaskCount = batchCounter.fetch_sub(1);
         assert(oldTaskCount >= 0);
         bool isLastInBatch = oldTaskCount == 1;
 
@@ -654,6 +655,12 @@ size_t Executor::getMaxMemorySize()
 faabric::Message& Executor::getBoundMessage()
 {
     return boundMessage;
+}
+
+bool Executor::isExecuting()
+{
+    int currentCount = batchCounter.load();
+    return currentCount > 0;
 }
 
 void Executor::restore(const std::string& snapshotKey)

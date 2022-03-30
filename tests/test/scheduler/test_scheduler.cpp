@@ -142,7 +142,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     // Initial checks
     REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
-    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()).empty());
 
     faabric::HostResources resCheck = sch.getThisHostResources();
     REQUIRE(resCheck.slots() == nCores);
@@ -157,7 +157,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == nCores);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
-    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
+            expectedHosts);
 
     resCheck = sch.getThisHostResources();
     REQUIRE(resCheck.slots() == nCores);
@@ -168,7 +169,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     // Check scheduler has been cleared
     REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
-    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()).empty());
 
     resCheck = sch.getThisHostResources();
     int actualCores = faabric::util::getUsableCores();
@@ -561,19 +562,21 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test unregistering host", "[scheduler]")
     faabric::Message msg = req->messages().at(0);
 
     // Check other host is added
-    std::set<std::string> expectedHosts = { otherHost };
-    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+    const std::set<std::string>& expectedHosts = { otherHost };
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
+            expectedHosts);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Remove host for another function and check host isn't removed
     faabric::Message otherMsg = faabric::util::messageFactory("foo", "qux");
-    sch.removeRegisteredHost(otherHost, otherMsg);
-    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedHosts);
+    sch.removeRegisteredHost(otherHost, otherMsg.user(), otherMsg.function());
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
+            expectedHosts);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Remove host
-    sch.removeRegisteredHost(otherHost, msg);
-    REQUIRE(sch.getFunctionRegisteredHosts(msg).empty());
+    sch.removeRegisteredHost(otherHost, msg.user(), msg.function());
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()).empty());
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 }
 
@@ -833,7 +836,8 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     // Check other hosts are added
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 2);
 
-    std::set<std::string> expectedHosts = sch.getFunctionRegisteredHosts(msg);
+    std::set<std::string> expectedHosts =
+      sch.getFunctionRegisteredHosts(msg.user(), msg.function());
 
     std::string snapKey = "blahblah";
 

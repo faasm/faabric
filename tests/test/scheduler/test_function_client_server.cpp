@@ -236,7 +236,8 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     // Make the request with a host that's not registered
     faabric::UnregisterRequest reqA;
     reqA.set_host("foobar");
-    *reqA.mutable_function() = msg;
+    reqA.set_user(msg.user());
+    reqA.set_function(msg.function());
 
     // Check that nothing's happened
     server.setRequestLatch();
@@ -247,7 +248,8 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     // Make the request to unregister the actual host
     faabric::UnregisterRequest reqB;
     reqB.set_host(otherHost);
-    *reqB.mutable_function() = msg;
+    reqB.set_user(msg.user());
+    reqB.set_function(msg.function());
 
     server.setRequestLatch();
     cli.unregister(reqB);

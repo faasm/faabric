@@ -756,25 +756,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test executor timing out waiting",
-                 "[executor]")
-{
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("foo", "bar", 1);
-    faabric::Message& msg = req->mutable_messages()->at(0);
-
-    // Set a very short bound timeout so we can check it works
-    conf.boundTimeout = 300;
-
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(req);
-
-    REQUIRE(sch.getFunctionExecutorCount(msg) == 1);
-
-    REQUIRE_RETRY({}, sch.getFunctionExecutorCount(msg) == 0);
-}
-
-TEST_CASE_METHOD(TestExecutorFixture,
                  "Test snapshot diffs returned to master",
                  "[executor]")
 {
@@ -913,7 +894,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Check the other host is registered
     std::set<std::string> expectedRegistered = { otherHost };
-    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedRegistered);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
+            expectedRegistered);
 
     // Check snapshot has been pushed
     auto pushes = faabric::snapshot::getSnapshotPushes();
