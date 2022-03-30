@@ -66,25 +66,26 @@ Executor::Executor(faabric::Message& msg)
     }
 }
 
-void Executor::finish()
+Executor::~Executor()
 {
     SPDLOG_DEBUG("Executor {} shutting down", id);
 
     // Shut down thread pool and wait
     for (int i = 0; i < threadPoolThreads.size(); i++) {
-        // Send a kill message on each queue
+        if (threadPoolThreads[i] == nullptr) {
+            continue;
+        }
+
+        // Send a kill message
         SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
         threadTaskQueues[i].enqueue(
           ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr));
+
+        // Wait for thread to terminate
+        if (threadPoolThreads[i]->joinable()) {
+            threadPoolThreads[i]->join();
+        }
     }
-
-    // Hook
-    this->postFinish();
-
-    // Reset variables
-    boundMessage.Clear();
-
-    claimed = false;
 }
 
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
@@ -633,8 +634,6 @@ int32_t Executor::executeTask(int threadPoolIdx,
     return 0;
 }
 
-void Executor::postFinish() {}
-
 void Executor::reset(faabric::Message& msg) {}
 
 std::span<uint8_t> Executor::getMemoryView()
@@ -654,6 +653,11 @@ size_t Executor::getMaxMemorySize()
     SPDLOG_WARN("Executor has not implemented max memory size method");
 
     return 0;
+}
+
+faabric::Message& Executor::getBoundMessage()
+{
+    return boundMessage;
 }
 
 void Executor::restore(const std::string& snapshotKey)

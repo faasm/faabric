@@ -54,7 +54,7 @@ class Executor
 
     explicit Executor(faabric::Message& msg);
 
-    virtual ~Executor() = default;
+    ~Executor();
 
     std::vector<std::pair<uint32_t, int32_t>> executeThreads(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -88,9 +88,9 @@ class Executor
 
     virtual void restore(const std::string& snapshotKey);
 
-  protected:
-    virtual void postFinish();
+    faabric::Message& getBoundMessage();
 
+  protected:
     virtual void setMemorySize(size_t newSize);
 
     virtual size_t getMaxMemorySize();
@@ -127,13 +127,15 @@ class Executor
 };
 
 // Background threads
-class FunctionMigrationThread: public faabric::util::PeriodicBackgroundThread {
-public:
+class FunctionMigrationThread : public faabric::util::PeriodicBackgroundThread
+{
+  public:
     void doWork() override;
 };
 
-class SchedulerReaperThread: public faabric::util::PeriodicBackgroundThread {
-public:
+class SchedulerReaperThread : public faabric::util::PeriodicBackgroundThread
+{
+  public:
     void doWork() override;
 };
 
@@ -165,16 +167,15 @@ class Scheduler
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
 
-    bool reapDeadExecutors();
-
-    void reapExecutor(std::shared_ptr<Executor> exec);
+    void reapStaleExecutors();
 
     long getFunctionExecutorCount(const faabric::Message& msg);
 
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
-    std::set<std::string> getFunctionRegisteredHosts(
-      const faabric::Message& msg,
+    const std::set<std::string> &getFunctionRegisteredHosts(
+      const std::string& user,
+      const std::string& function,
       bool acquireLock = true);
 
     void broadcastFlush();
@@ -229,7 +230,12 @@ class Scheduler
     void removeHostFromGlobalSet(const std::string& host);
 
     void removeRegisteredHost(const std::string& host,
-                              const faabric::Message& msg);
+                              const std::string& user,
+                              const std::string& function);
+
+    void addRegisteredHost(const std::string& host,
+                           const std::string& user,
+                           const std::string& function);
 
     faabric::HostResources getThisHostResources();
 
@@ -333,7 +339,8 @@ class Scheduler
       faabric::Message& msg,
       faabric::util::FullLock& schedulerLock);
 
-    std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
+    std::vector<std::string> getUnregisteredHosts(const std::string& user,
+                                                  const std::string& function,
                                                   bool noCache = false);
 
     // ---- Accounting and debugging ----

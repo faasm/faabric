@@ -105,7 +105,6 @@ void Scheduler::reset()
 
     faabric::util::FullLock lock(mx);
     executors.clear();
-    deadExecutors.clear();
 
     // Ensure host is set correctly
     thisHost = faabric::util::getSystemConfig().endpointHost;
@@ -144,53 +143,68 @@ void Scheduler::shutdown()
 
 void SchedulerReaperThread::doWork()
 {
-    getScheduler().reapDeadExecutors();
+    getScheduler().reapStaleExecutors();
 }
 
-void Scheduler::reapDeadExecutors()
+void Scheduler::reapStaleExecutors()
 {
     faabric::util::FullLock lock(mx);
 
+    SPDLOG_TRACE("Reaping stale executors");
+
     for (auto execPair : executors) {
-        std::vector<std::shared_ptr<Executor>> execs = execPair.second;
+        std::string key = execPair.first;
+        std::vector<std::shared_ptr<Executor>>& execs = execPair.second;
+        std::vector<std::shared_ptr<Executor>> toRemove;
+
+        faabric::Message& firstMsg = execs.back()->getBoundMessage();
+        std::string user = firstMsg.user();
+        std::string function = firstMsg.function();
+        std::string masterHost = firstMsg.masterhost();
 
         for (auto exec : execs) {
             long millisSinceLastExec = exec->getMillisSinceLastExec();
             if (millisSinceLastExec < conf.boundTimeout) {
                 // This executor has had an execution too recently
+                SPDLOG_TRACE("Not reaping {}, last exec {}ms ago (limit {}ms)",
+                             exec->id,
+                             millisSinceLastExec,
+                             conf.boundTimeout);
                 continue;
             }
 
+            SPDLOG_TRACE("Reaping {}, last exec {}ms ago (limit {}ms)",
+                         exec->id,
+                         millisSinceLastExec,
+                         conf.boundTimeout);
+
             // TODO - make sure the executor isn't executing a long-running task
             // here, otherwise we'll mistakenly reap it
+            toRemove.emplace_back(exec);
+        }
+
+        // Do the remove and erase
+        for (auto exec : toRemove) {
+            auto removed = std::remove(execs.begin(), execs.end(), exec);
+            execs.erase(removed, execs.end());
+        }
+
+        // Unregister this host if no more executors remain on this host, and
+        // it's not the master
+        if (execs.empty()) {
+            SPDLOG_TRACE("No remaining executors for {}", key);
+
+            bool isMaster = thisHost == masterHost;
+            if (!isMaster) {
+                faabric::UnregisterRequest req;
+                req.set_host(thisHost);
+                req.set_user(user);
+                req.set_function(function);
+
+                getFunctionCallClient(masterHost).unregister(req);
+            }
         }
     }
-}
-
-bool Scheduler::reapExecutor(std::shared_ptr<Executor> exec)
-{
-    long millisSinceLastExec = exec->getMillisSinceLastExec();
-    if (millisSinceLastExec < conf.boundTimeout) {
-        // This executor has had an execution too recently
-        return false;
-    }
-
-    SPDLOG_TRACE("Shutting down executor {}", exec->id);
-
-    if (thisExecutors.empty()) {
-        SPDLOG_TRACE("No remaining executors for {}", funcStr);
-
-        // Unregister if this was the last executor for that function
-        bool isMaster = thisHost == msg.masterhost();
-        if (!isMaster) {
-            faabric::UnregisterRequest req;
-            req.set_host(thisHost);
-            *req.mutable_function() = msg;
-
-            getFunctionCallClient(msg.masterhost()).unregister(req);
-        }
-    }
-}
 }
 
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
@@ -203,28 +217,37 @@ long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)
 int Scheduler::getFunctionRegisteredHostCount(const faabric::Message& msg)
 {
     faabric::util::SharedLock lock(mx);
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    return (int)registeredHosts[funcStr].size();
+    return getFunctionRegisteredHosts(msg.user(), msg.function(), false).size();
 }
 
-std::set<std::string> Scheduler::getFunctionRegisteredHosts(
-  const faabric::Message& msg,
+const std::set<std::string>& Scheduler::getFunctionRegisteredHosts(
+  const std::string& user,
+  const std::string& func,
   bool acquireLock)
 {
     faabric::util::SharedLock lock;
     if (acquireLock) {
         lock = faabric::util::SharedLock(mx);
     }
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    return registeredHosts[funcStr];
+    std::string key = user + "/" + func;
+    return registeredHosts[key];
 }
 
 void Scheduler::removeRegisteredHost(const std::string& host,
-                                     const faabric::Message& msg)
+                                     const std::string& user,
+                                     const std::string& function)
 {
     faabric::util::FullLock lock(mx);
-    const std::string funcStr = faabric::util::funcToString(msg, false);
-    registeredHosts[funcStr].erase(host);
+    std::string key = user + "/" + function;
+    registeredHosts[key].erase(host);
+}
+
+void Scheduler::addRegisteredHost(const std::string& host,
+                                  const std::string& user,
+                                  const std::string& function)
+{
+    std::string key = user + "/" + function;
+    registeredHosts[key].insert(host);
 }
 
 void Scheduler::vacateSlot()
@@ -375,8 +398,9 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
         // First try and do so on already registered hosts.
         int remainder = nMessages - nLocally;
         if (remainder > 0) {
-            std::set<std::string>& thisRegisteredHosts =
-              registeredHosts[funcStr];
+            const std::set<std::string>& thisRegisteredHosts =
+              getFunctionRegisteredHosts(
+                firstMsg.user(), firstMsg.function(), false);
 
             for (const auto& h : thisRegisteredHosts) {
                 // Work out resources on the remote host
@@ -417,7 +441,7 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
         // Now schedule to unregistered hosts if there are messages left
         if (remainder > 0) {
             std::vector<std::string> unregisteredHosts =
-              getUnregisteredHosts(funcStr);
+              getUnregisteredHosts(firstMsg.user(), firstMsg.function());
 
             for (const auto& h : unregisteredHosts) {
                 // Skip if this host
@@ -449,7 +473,7 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
 
                 // Register the host if it's exected a function
                 if (nOnThisHost > 0) {
-                    registeredHosts[funcStr].insert(h);
+                    addRegisteredHost(h, firstMsg.user(), firstMsg.function());
                 }
 
                 for (int i = 0; i < nOnThisHost; i++) {
@@ -631,7 +655,8 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     if (!snapshotKey.empty()) {
         auto snap = reg.getSnapshot(snapshotKey);
 
-        for (const auto& host : getFunctionRegisteredHosts(firstMsg, false)) {
+        for (const auto& host : getFunctionRegisteredHosts(
+               firstMsg.user(), firstMsg.function(), false)) {
             SnapshotClient& c = getSnapshotClient(host);
 
             // See if we've already pushed this snapshot to the given host,
@@ -797,7 +822,8 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
 }
 
 std::vector<std::string> Scheduler::getUnregisteredHosts(
-  const std::string& funcStr,
+  const std::string& user,
+  const std::string& function,
   bool noCache)
 {
     // Load the list of available hosts
@@ -806,7 +832,8 @@ std::vector<std::string> Scheduler::getUnregisteredHosts(
     }
 
     // At this point we know we need to enlist unregistered hosts
-    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+    const std::set<std::string>& thisRegisteredHosts =
+      getFunctionRegisteredHosts(user, function, false);
 
     std::vector<std::string> unregisteredHosts;
 
@@ -819,7 +846,7 @@ std::vector<std::string> Scheduler::getUnregisteredHosts(
 
     // If we've not got any, try again without caching
     if (unregisteredHosts.empty() && !noCache) {
-        return getUnregisteredHosts(funcStr, true);
+        return getUnregisteredHosts(user, function, true);
     }
 
     return unregisteredHosts;
@@ -828,8 +855,8 @@ std::vector<std::string> Scheduler::getUnregisteredHosts(
 void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
                                         const std::string& snapshotKey)
 {
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+    const std::set<std::string>& thisRegisteredHosts =
+      getFunctionRegisteredHosts(msg.user(), msg.function(), false);
 
     for (auto host : thisRegisteredHosts) {
         SnapshotClient& c = getSnapshotClient(host);
@@ -1366,8 +1393,8 @@ void Scheduler::broadcastPendingMigrations(
 {
     // Get all hosts for the to-be migrated app
     auto msg = pendingMigrations->migrations().at(0).msg();
-    std::string funcStr = faabric::util::funcToString(msg, false);
-    std::set<std::string>& thisRegisteredHosts = registeredHosts[funcStr];
+    const std::set<std::string>& thisRegisteredHosts =
+      getFunctionRegisteredHosts(msg.user(), msg.function(), false);
 
     // Remove this host from the set
     registeredHosts.erase(thisHost);
