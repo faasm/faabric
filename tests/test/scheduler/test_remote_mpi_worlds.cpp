@@ -1015,11 +1015,11 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test UMB creation", "[mpi]")
     thisWorld.broadcastHostsToRanks();
 
     std::jthread otherWorldThread([this,
-                                  thisWorldRank,
-                                  otherWorldRank1,
-                                  otherWorldRank2,
-                                  &messageData,
-                                  &messageData2] {
+                                   thisWorldRank,
+                                   otherWorldRank1,
+                                   otherWorldRank2,
+                                   &messageData,
+                                   &messageData2] {
         otherWorld.initialiseFromMsg(msg);
 
         // Send message from one rank

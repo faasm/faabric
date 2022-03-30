@@ -319,8 +319,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
-            threadPoolThreads.at(threadPoolIdx) = std::make_shared<std::jthread>(
-              &Executor::threadPoolThread, this, threadPoolIdx);
+            threadPoolThreads.at(threadPoolIdx) =
+              std::make_shared<std::jthread>(
+                &Executor::threadPoolThread, this, threadPoolIdx);
         }
     }
 }
