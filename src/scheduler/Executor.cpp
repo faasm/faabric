@@ -66,6 +66,10 @@ Executor::Executor(faabric::Message& msg)
 
 Executor::~Executor()
 {
+    // This destructor will be called during the scheduler reset and destructor,
+    // hence it cannot rely on the presence of the scheduler or any of its
+    // state.
+
     SPDLOG_DEBUG("Executor {} shutting down", id);
 
     // Shut down thread pool and wait

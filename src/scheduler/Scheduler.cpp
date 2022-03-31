@@ -107,7 +107,7 @@ void Scheduler::reset()
     // Stop the function migration thread
     functionMigrationThread.stop();
 
-    // Wait for the executors themselves to have finished
+    // Remove executors
     executors.clear();
 
     faabric::util::FullLock lock(mx);
@@ -149,13 +149,14 @@ void SchedulerReaperThread::doWork()
     getScheduler().reapStaleExecutors();
 }
 
-void Scheduler::reapStaleExecutors()
+int Scheduler::reapStaleExecutors()
 {
     faabric::util::FullLock lock(mx);
 
-    SPDLOG_TRACE("Reaping stale executors");
+    SPDLOG_DEBUG("Reaping stale executors");
 
-    for (auto execPair : executors) {
+    int nReaped = 0;
+    for (auto& execPair : executors) {
         std::string key = execPair.first;
         std::vector<std::shared_ptr<Executor>>& execs = execPair.second;
         std::vector<std::shared_ptr<Executor>> toRemove;
@@ -187,9 +188,8 @@ void Scheduler::reapStaleExecutors()
                          millisSinceLastExec,
                          conf.boundTimeout);
 
-            // TODO - make sure the executor isn't executing a long-running task
-            // here, otherwise we'll mistakenly reap it
             toRemove.emplace_back(exec);
+            nReaped++;
         }
 
         // Do the remove and erase
@@ -214,6 +214,8 @@ void Scheduler::reapStaleExecutors()
             }
         }
     }
+
+    return nReaped;
 }
 
 long Scheduler::getFunctionExecutorCount(const faabric::Message& msg)

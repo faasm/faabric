@@ -164,7 +164,7 @@ class Scheduler
 {
   public:
     Scheduler();
-    
+
     ~Scheduler();
 
     faabric::util::SchedulingDecision makeSchedulingDecision(
@@ -190,7 +190,7 @@ class Scheduler
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
 
-    void reapStaleExecutors();
+    int reapStaleExecutors();
 
     long getFunctionExecutorCount(const faabric::Message& msg);
 
