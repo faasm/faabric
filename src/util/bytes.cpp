@@ -93,4 +93,33 @@ std::string formatByteArrayToIntString(const std::vector<uint8_t>& bytes)
 
     return ss.str();
 }
+
+std::string byteArrayToHexString(const uint8_t* data, int dataSize)
+{
+    std::stringstream ss;
+    ss << std::hex;
+
+    for (int i = 0; i < dataSize; ++i) {
+        ss << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+    }
+
+    return ss.str();
+}
+
+std::vector<uint8_t> hexStringToByteArray(const std::string& hexString)
+{
+    // The hexString has previously been dumped from a byte array, so it will
+    // have an even number of characters.
+    assert(hexString.length() % 2 == 0);
+    std::vector<uint8_t> byteArray;
+    byteArray.reserve(hexString.length() / 2);
+
+    for (int i = 0; i < hexString.length(); i += 2) {
+        std::string byteString = hexString.substr(i, 2);
+        uint8_t byteChar = (uint8_t)strtol(byteString.c_str(), nullptr, 16);
+        byteArray.push_back(byteChar);
+    }
+
+    return byteArray;
+}
 }

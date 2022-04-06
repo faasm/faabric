@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 #include <faabric/util/bytes.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::util;
 
@@ -157,5 +158,63 @@ TEST_CASE("Test format byte array to string", "[util]")
     }
 
     REQUIRE(formatByteArrayToIntString(bytesIn) == expectedString);
+}
+
+// 06/04/2022 - Used this website to cross-check the conversions:
+// https://www.scadacore.com/tools/programming-calculators/online-hex-converter/
+TEST_CASE("Test format byte array to hex string and vice-versa", "[util]")
+{
+    std::vector<uint8_t> bytes;
+    std::string hexString;
+
+    SECTION("Test case 1")
+    {
+        bytes = { 0, 1, 2, 3, 4, 5, 6, 7 };
+        hexString = "0001020304050607";
+    }
+
+    SECTION("Test case 2")
+    {
+        bytes = { 'F', 'O', 'O', 12, 2, 3, 4, 5, 6, 7 };
+        hexString = "464f4f0c020304050607";
+    }
+
+    SECTION("Test case 3")
+    {
+        bytes = { 'F', '*', 12, '_', ')' };
+        hexString = "462a0c5f29";
+    }
+
+    REQUIRE(hexString == byteArrayToHexString(bytes.data(), bytes.size()));
+    REQUIRE(bytes == hexStringToByteArray(hexString));
+}
+
+// 06/04/2022 - Used this website for the expected string (including the
+// padding for each type size):
+// https://www.rapidtables.com/convert/number/decimal-to-hex.html
+TEST_CASE("Test format int to hex string", "[util]")
+{
+    std::string expectedString;
+
+    SECTION("Test case 1")
+    {
+        uint16_t number = 60;
+        expectedString = "003c";
+        REQUIRE(expectedString == intToHexString(number));
+    }
+
+    SECTION("Test case 2")
+    {
+        uint32_t number = 12223;
+        expectedString = "00002fbf";
+        REQUIRE(expectedString == intToHexString(number));
+    }
+
+    SECTION("Test case 3")
+    {
+        uint64_t number = 1234567891011121314;
+        expectedString = "112210f4b2d230a2";
+        REQUIRE(expectedString == intToHexString(number));
+    }
 }
 }

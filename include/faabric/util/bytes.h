@@ -1,8 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <iomanip>
 #include <list>
 #include <span>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -26,6 +28,20 @@ int safeCopyToBuffer(const uint8_t* dataIn,
                      int dataLen,
                      uint8_t* buffer,
                      int bufferLen);
+
+std::string byteArrayToHexString(const uint8_t* data, int dataSize);
+
+std::vector<uint8_t> hexStringToByteArray(const std::string& hexString);
+
+template<typename T>
+std::string intToHexString(T i)
+{
+    std::stringstream ss;
+    ss << std::hex;
+
+    ss << std::setw(sizeof(T) * 2) << std::setfill('0') << i;
+    return ss.str();
+}
 
 template<class T>
 T unalignedRead(const uint8_t* bytes)
