@@ -108,9 +108,13 @@ std::string byteArrayToHexString(const uint8_t* data, int dataSize)
 
 std::vector<uint8_t> hexStringToByteArray(const std::string& hexString)
 {
-    // The hexString has previously been dumped from a byte array, so it will
-    // have an even number of characters.
-    assert(hexString.length() % 2 == 0);
+    if (hexString.length() % 2 != 0) {
+        SPDLOG_ERROR("The provided hex string has not an even number of"
+                     "characters. Can't convert {} to a byte array",
+                     hexString);
+        throw std::runtime_error("Provided hex string has not even length");
+    }
+
     std::vector<uint8_t> byteArray;
     byteArray.reserve(hexString.length() / 2);
 

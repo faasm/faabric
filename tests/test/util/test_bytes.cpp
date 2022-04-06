@@ -1,6 +1,5 @@
 #include <catch2/catch.hpp>
 #include <faabric/util/bytes.h>
-#include <faabric/util/logging.h>
 
 using namespace faabric::util;
 
