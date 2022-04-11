@@ -1,10 +1,10 @@
 #include <catch2/catch.hpp>
 
-#include "faabric/util/memory.h"
 #include "faabric_utils.h"
 
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/func.h>
+#include <faabric/util/memory.h>
 
 using namespace faabric::scheduler;
 
@@ -29,8 +29,26 @@ TEST_CASE_METHOD(SchedulerReapingTestFixture,
                  "Test stale executor reaping"
                  "[scheduler]")
 {
+    int boundTimeoutMs = 0;
+    int sleepTimeMs = 0;
+    bool expectReaped = false;
+
+    SECTION("When executors are stale")
+    {
+        boundTimeoutMs = 10;
+        sleepTimeMs = 1000;
+        expectReaped = true;
+    }
+
+    SECTION("When executors aren't stale")
+    {
+        boundTimeoutMs = 2000;
+        sleepTimeMs = 100;
+        expectReaped = false;
+    }
+
     // Set a short bound timeout so executors become stale quickly
-    conf.boundTimeout = 10;
+    conf.boundTimeout = boundTimeoutMs;
 
     // Cause the scheduler to scale up
     int nMsgs = 10;
@@ -42,11 +60,17 @@ TEST_CASE_METHOD(SchedulerReapingTestFixture,
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);
 
     // Wait until they become stale
-    SLEEP_MS(10 * conf.boundTimeout);
+    SLEEP_MS(sleepTimeMs);
 
     // Do the reaping
     int actual = sch.reapStaleExecutors();
-    REQUIRE(actual == nMsgs);
-    REQUIRE(sch.getFunctionExecutorCount(firstMsg) == 0);
+
+    if (expectReaped) {
+        REQUIRE(actual == nMsgs);
+        REQUIRE(sch.getFunctionExecutorCount(firstMsg) == 0);
+    } else {
+        REQUIRE(actual == 0);
+        REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);
+    }
 }
 }

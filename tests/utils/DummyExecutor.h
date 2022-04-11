@@ -8,6 +8,7 @@ class DummyExecutor final : public Executor
 {
   public:
     DummyExecutor(faabric::Message& msg);
+
   protected:
     int32_t executeTask(
       int threadPoolIdx,

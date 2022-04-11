@@ -89,8 +89,6 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
-    void overrideLastExec(faabric::util::TimePoint tp);
-
     long getMillisSinceLastExec();
 
     virtual std::span<uint8_t> getMemoryView();

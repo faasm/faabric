@@ -307,11 +307,6 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 }
 
-void Executor::overrideLastExec(faabric::util::TimePoint tp)
-{
-    lastExec = tp;
-}
-
 long Executor::getMillisSinceLastExec()
 {
     return faabric::util::getTimeDiffMillis(lastExec);

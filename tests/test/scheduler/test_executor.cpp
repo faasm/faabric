@@ -756,6 +756,36 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
+                 "Check last executed time updated on each execution",
+                 "[executor]")
+{
+    auto req = faabric::util::batchExecFactory("foo", "bar");
+    faabric::Message& msg = *req->mutable_messages(0);
+
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      faabric::scheduler::getExecutorFactory();
+    std::shared_ptr<faabric::scheduler::Executor> exec =
+      fac->createExecutor(msg);
+
+    long millisA = exec->getMillisSinceLastExec();
+
+    long sleepMillis = 100;
+    SLEEP_MS(sleepMillis);
+
+    long millisB = exec->getMillisSinceLastExec();
+
+    // Check delay is roughly correct. Need to allow for some margin for error
+    // on such short timescales
+    REQUIRE(millisB > millisA);
+    REQUIRE((millisB - millisA) > (sleepMillis - 10));
+
+    exec->executeTasks({ 0 }, req);
+
+    long millisC = exec->getMillisSinceLastExec();
+    REQUIRE(millisC < millisB);
+}
+
+TEST_CASE_METHOD(TestExecutorFixture,
                  "Test snapshot diffs returned to master",
                  "[executor]")
 {
