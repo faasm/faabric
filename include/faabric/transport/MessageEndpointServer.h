@@ -23,7 +23,8 @@ class MessageEndpointServerHandler
                                  const std::string& inprocLabelIn,
                                  int nThreadsIn);
 
-    void start(std::shared_ptr<faabric::util::Latch> latch);
+    void start(std::shared_ptr<faabric::util::Latch> latch,
+               int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     void join();
 
@@ -52,7 +53,7 @@ class MessageEndpointServer
                           const std::string& inprocLabelIn,
                           int nThreadsIn);
 
-    virtual void start();
+    virtual void start(int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     virtual void stop();
 
