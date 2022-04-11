@@ -121,7 +121,6 @@ class BlockServer final : public MessageEndpointServer
     std::shared_ptr<faabric::util::Latch> latch = nullptr;
 };
 
-
 namespace tests {
 
 TEST_CASE("Test sending one message to server", "[transport]")
