@@ -79,6 +79,12 @@ void MessageEndpointServerHandler::start(
                             break;
                         }
 
+                        // Loop if timeout
+                        if (body.getResponseCode() ==
+                            MessageResponseCode::TIMEOUT) {
+                            continue;
+                        }
+
                         if (async) {
                             // Server-specific async handling
                             server->doAsyncRecv(body);
