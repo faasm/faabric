@@ -121,6 +121,7 @@ class BlockServer final : public MessageEndpointServer
     std::shared_ptr<faabric::util::Latch> latch = nullptr;
 };
 
+
 namespace tests {
 
 TEST_CASE("Test sending one message to server", "[transport]")
@@ -323,6 +324,39 @@ TEST_CASE("Test blocking requests in multi-threaded server", "[transport]")
 
     REQUIRE(successes[0]);
     REQUIRE(successes[1]);
+
+    server.stop();
+}
+
+TEST_CASE("Test server keeps listening after socket timeout", "[transport]")
+{
+    // Short timeout
+    int timeoutMs = 100;
+
+    DummyServer server;
+    server.start(timeoutMs);
+
+    REQUIRE(server.messageCount == 0);
+    MessageEndpointClient cli(LOCALHOST, TEST_PORT_ASYNC, TEST_PORT_SYNC);
+
+    // Send a message
+    std::string body = "body";
+    const uint8_t* bodyMsg = BYTES_CONST(body.c_str());
+
+    server.setRequestLatch();
+    cli.asyncSend(0, bodyMsg, body.size());
+    server.awaitRequestLatch();
+
+    REQUIRE(server.messageCount == 1);
+
+    // Sleep for longer than the timeout
+    SLEEP_MS(5 * timeoutMs);
+
+    server.setRequestLatch();
+    cli.asyncSend(0, bodyMsg, body.size());
+    server.awaitRequestLatch();
+
+    REQUIRE(server.messageCount == 2);
 
     server.stop();
 }

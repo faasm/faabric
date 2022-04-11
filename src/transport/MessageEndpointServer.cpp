@@ -27,7 +27,8 @@ MessageEndpointServerHandler::MessageEndpointServerHandler(
 {}
 
 void MessageEndpointServerHandler::start(
-  std::shared_ptr<faabric::util::Latch> latch)
+  std::shared_ptr<faabric::util::Latch> latch,
+  int timeoutMs)
 {
     // For both sync and async, we want to fan out the messages to multiple
     // worker threads.
@@ -36,24 +37,24 @@ void MessageEndpointServerHandler::start(
     // For push/ pull we receive on a pull socket, then proxy with another push
     // to multiple downstream pull sockets
     // In both cases, the downstream fan-out is done over inproc sockets.
-    receiverThread = std::jthread([this, latch] {
+    receiverThread = std::jthread([this, latch, timeoutMs] {
         int port = async ? server->asyncPort : server->syncPort;
 
         if (async) {
             // Set up push/ pull pair
             asyncFanIn = std::make_unique<AsyncFanInMessageEndpoint>(port);
-            asyncFanOut =
-              std::make_unique<AsyncFanOutMessageEndpoint>(inprocLabel);
+            asyncFanOut = std::make_unique<AsyncFanOutMessageEndpoint>(
+              inprocLabel, timeoutMs);
         } else {
             // Set up router/ dealer
             syncFanIn = std::make_unique<SyncFanInMessageEndpoint>(port);
-            syncFanOut =
-              std::make_unique<SyncFanOutMessageEndpoint>(inprocLabel);
+            syncFanOut = std::make_unique<SyncFanOutMessageEndpoint>(
+              inprocLabel, timeoutMs);
         }
 
         // Launch worker threads
         for (int i = 0; i < nThreads; i++) {
-            workerThreads.emplace_back([this, i] {
+            workerThreads.emplace_back([this, i, timeoutMs] {
                 // Here we want to isolate all ZeroMQ stuff in its own
                 // context, so we can do things after it's been destroyed
                 {
@@ -62,11 +63,11 @@ void MessageEndpointServerHandler::start(
                     if (async) {
                         // Async workers have a PULL socket
                         endpoint = std::make_unique<AsyncRecvMessageEndpoint>(
-                          inprocLabel);
+                          inprocLabel, timeoutMs);
                     } else {
                         // Sync workers have an in-proc REP socket
                         endpoint = std::make_unique<SyncRecvMessageEndpoint>(
-                          inprocLabel);
+                          inprocLabel, timeoutMs);
                     }
 
                     while (true) {
@@ -79,10 +80,22 @@ void MessageEndpointServerHandler::start(
                             break;
                         }
 
-                        // Loop if timeout
+                        // On timeout we listen again
                         if (body.getResponseCode() ==
                             MessageResponseCode::TIMEOUT) {
                             continue;
+                        }
+
+                        // Catch-all for other forms of unsuccessful message
+                        if (body.getResponseCode() !=
+                            MessageResponseCode::SUCCESS) {
+                            SPDLOG_ERROR(
+                              "Unsuccessful message to server {}: {}",
+                              inprocLabel,
+                              body.getResponseCode());
+
+                            throw std::runtime_error(
+                              "Unsuccessful message to server");
                         }
 
                         if (async) {
@@ -191,7 +204,7 @@ MessageEndpointServer::MessageEndpointServer(int asyncPortIn,
  * We need to guarantee to callers of this function, that when it returns, the
  * server will be ready to use.
  */
-void MessageEndpointServer::start()
+void MessageEndpointServer::start(int timeoutMs)
 {
     started = true;
 
@@ -199,8 +212,8 @@ void MessageEndpointServer::start()
     // start their proxies.
     auto startLatch = faabric::util::Latch::create(3);
 
-    asyncHandler.start(startLatch);
-    syncHandler.start(startLatch);
+    asyncHandler.start(startLatch, timeoutMs);
+    syncHandler.start(startLatch, timeoutMs);
 
     startLatch->wait();
 
