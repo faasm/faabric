@@ -1,6 +1,5 @@
 
 faabric_lib(endpoint
-    Endpoint.cpp
     FaabricEndpoint.cpp
     FaabricEndpointHandler.cpp
 )
