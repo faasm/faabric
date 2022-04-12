@@ -32,5 +32,7 @@ class FaabricEndpoint
 
     std::jthread bgThread;
     std::mutex mx;
+
+    void runEndpoint();
 };
 }

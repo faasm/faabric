@@ -92,7 +92,7 @@ void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
 void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
                             const scheduler::ExecGraph& graphB);
 
-std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
+std::pair<int, std::string> postToUrl(const std::string& host,
                                                   int port,
                                                   const std::string& body);
 }

@@ -39,29 +39,10 @@ void FaabricEndpoint::start(EndpointMode mode)
 
             throw std::runtime_error("Install signal handler failed");
         }
-    } else if (mode == EndpointMode::BG_THREAD) {
-        SPDLOG_INFO(
-          "Starting background endpoint on {}, {} threads", port, threadCount);
-    } else {
-    }
 
-    // Configure endpoint, locking to keep thread sanitiser happy
-    {
-        faabric::util::UniqueLock lock(mx);
-        auto opts = Pistache::Http::Endpoint::options()
-                      .threads(threadCount)
-                      .backlog(256)
-                      .flags(Pistache::Tcp::Options::ReuseAddr);
+        // Start the endpoint
+        runEndpoint();
 
-        httpEndpoint.init(opts);
-
-        // Configure and start endpoint
-        httpEndpoint.setHandler(
-          Pistache::Http::make_handler<FaabricEndpointHandler>());
-        httpEndpoint.serveThreaded();
-    }
-
-    if (mode == EndpointMode::SIGNAL) {
         // Wait for a signal
         SPDLOG_INFO("Awaiting signal");
         int signal = 0;
@@ -74,7 +55,32 @@ void FaabricEndpoint::start(EndpointMode mode)
 
         faabric::util::UniqueLock lock(mx);
         httpEndpoint.shutdown();
+    } else if (mode == EndpointMode::BG_THREAD) {
+        SPDLOG_INFO(
+          "Starting background endpoint on {}, {} threads", port, threadCount);
+
+        runEndpoint();
+    } else {
+        SPDLOG_ERROR("Unrecognised endpoint mode: {}", mode);
+        throw std::runtime_error("Unrecognised endpoint mode");
     }
+}
+
+void FaabricEndpoint::runEndpoint()
+{
+    faabric::util::UniqueLock lock(mx);
+
+    auto opts = Pistache::Http::Endpoint::options()
+                  .threads(threadCount)
+                  .backlog(256)
+                  .flags(Pistache::Tcp::Options::ReuseAddr);
+
+    httpEndpoint.init(opts);
+
+    // Configure and start endpoint in background
+    httpEndpoint.setHandler(
+      Pistache::Http::make_handler<FaabricEndpointHandler>());
+    httpEndpoint.serveThreaded();
 }
 
 void FaabricEndpoint::stop()
