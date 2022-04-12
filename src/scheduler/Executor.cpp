@@ -64,16 +64,16 @@ Executor::Executor(faabric::Message& msg)
     }
 }
 
-Executor::~Executor()
+void Executor::shutdown()
 {
-    // This destructor will be called during the scheduler reset and destructor,
+    // This method will be called during the scheduler reset and destructor,
     // hence it cannot rely on the presence of the scheduler or any of its
     // state.
 
     SPDLOG_DEBUG("Executor {} shutting down", id);
 
-    // Shut down thread pool and wait
     for (int i = 0; i < threadPoolThreads.size(); i++) {
+        // Skip any uninitialised, or already remove threads
         if (threadPoolThreads[i] == nullptr) {
             continue;
         }
@@ -86,7 +86,18 @@ Executor::~Executor()
         if (threadPoolThreads[i]->joinable()) {
             threadPoolThreads[i]->join();
         }
+
+        // Mark as killed
+        threadPoolThreads[i] = nullptr;
     }
+}
+
+Executor::~Executor()
+{
+    // This destructor will be called during the scheduler reset and destructor,
+    // hence it cannot rely on the presence of the scheduler or any of its
+    // state.
+    shutdown();
 }
 
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(

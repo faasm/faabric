@@ -210,6 +210,7 @@ int32_t TestExecutor::executeTask(
         if (!msg.inputdata().empty()) {
             timeToSleepMs = std::stoi(msg.inputdata());
         }
+
         SPDLOG_DEBUG("Sleep test function going to sleep for {} ms",
                      timeToSleepMs);
         SLEEP_MS(timeToSleepMs);

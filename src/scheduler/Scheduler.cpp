@@ -107,7 +107,12 @@ void Scheduler::reset()
     // Stop the function migration thread
     functionMigrationThread.stop();
 
-    // Remove executors
+    // Shut down, then clear executors
+    for (auto& ep : executors) {
+        for (auto& e : ep.second) {
+            e->shutdown();
+        }
+    }
     executors.clear();
 
     faabric::util::FullLock lock(mx);

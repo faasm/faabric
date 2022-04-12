@@ -395,6 +395,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     // Clear MPI registries
     getMpiWorldRegistry().clear();
 
+    // Make sure that the check period is much less than the sleep period
     auto req = faabric::util::batchExecFactory("mpi", "sleep", 1);
     int checkPeriodSecs = 1;
     int timeToSleep = 4 * checkPeriodSecs * 1000;
@@ -422,6 +423,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     // Build expected migrations
     std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
+
     // We need to add to the original request the ones that will be
     // chained by MPI (this is only needed to build the expectation).
     // NOTE: we do it in a copy of the original request, as otherwise TSAN
@@ -430,6 +432,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     for (int i = 0; i < worldSize; i++) {
         reqCopy->mutable_messages(i)->set_appid(firstMsg->appid());
     }
+
     std::vector<std::pair<int, int>> migrations = { { 1, 0 }, { 1, 0 } };
     expectedMigrations =
       buildPendingMigrationsExpectation(reqCopy, hosts, migrations);
@@ -440,7 +443,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     SLEEP_MS(2 * checkPeriodSecs * 1000);
 
     // When checking that a migration has taken place in MPI, we skip the msg
-    // id check. Part of the request is build by the runtime, and therefore
+    // id check. Part of the request is built by the runtime, and therefore
     // we don't have access to the actual messages scheduled.
     auto actualMigrations = sch.getPendingAppMigrations(appId);
     checkPendingMigrationsExpectation(
