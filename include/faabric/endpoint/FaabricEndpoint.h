@@ -6,6 +6,13 @@
 #include <faabric/util/config.h>
 
 namespace faabric::endpoint {
+
+enum EndpointMode
+{
+    SIGNAL,
+    BG_THREAD
+};
+
 class FaabricEndpoint
 {
   public:
@@ -13,16 +20,17 @@ class FaabricEndpoint
 
     FaabricEndpoint(int portIn, int threadCountIn);
 
-    void start(bool awaitSignal = true);
+    void start(EndpointMode mode);
 
     void stop();
-
-    std::shared_ptr<Pistache::Http::Handler> getHandler();
 
   private:
     int port = faabric::util::getSystemConfig().endpointPort;
     int threadCount = faabric::util::getSystemConfig().endpointNumThreads;
 
     Pistache::Http::Endpoint httpEndpoint;
+
+    std::jthread bgThread;
+    std::mutex mx;
 };
 }
