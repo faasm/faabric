@@ -17,6 +17,7 @@ target_include_directories(faabric_test_utils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(faabric_test_utils PUBLIC
     faabric::common_dependencies
     faabric::faabric
+    curl
     Catch2::Catch2
 )
 

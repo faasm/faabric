@@ -13,10 +13,9 @@
 #define ANY_HOST "0.0.0.0"
 
 // These timeouts should be long enough to permit sending and receiving large
-// messages, note that they also determine the period on which endpoints will
-// re-poll.
-#define DEFAULT_RECV_TIMEOUT_MS 60000
-#define DEFAULT_SEND_TIMEOUT_MS 60000
+// messages, but also determine the period on which endpoints will re-poll, so
+// they can be fairly long.
+#define DEFAULT_SOCKET_TIMEOUT_MS 60000
 
 // How long undelivered messages will hang around when the socket is closed,
 // which also determines how long the context will hang for when closing if
@@ -85,7 +84,7 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
   public:
     AsyncSendMessageEndpoint(const std::string& hostIn,
                              int portIn,
-                             int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
+                             int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     void send(uint8_t header, const uint8_t* data, size_t dataSize);
 
@@ -97,7 +96,7 @@ class AsyncInternalSendMessageEndpoint final : public MessageEndpoint
 {
   public:
     AsyncInternalSendMessageEndpoint(const std::string& inProcLabel,
-                                     int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                                     int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     void send(uint8_t header, const uint8_t* data, size_t dataSize);
 
@@ -110,7 +109,7 @@ class SyncSendMessageEndpoint final : public MessageEndpoint
   public:
     SyncSendMessageEndpoint(const std::string& hostIn,
                             int portIn,
-                            int timeoutMs = DEFAULT_SEND_TIMEOUT_MS);
+                            int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     void sendRaw(const uint8_t* data, size_t dataSize);
 
@@ -168,7 +167,7 @@ class AsyncFanOutMessageEndpoint final : public MessageEndpoint
 {
   public:
     AsyncFanOutMessageEndpoint(const std::string& inProcLabel,
-                               int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                               int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     zmq::socket_t socket;
 };
@@ -177,31 +176,31 @@ class AsyncFanInMessageEndpoint final : public FanInMessageEndpoint
 {
   public:
     AsyncFanInMessageEndpoint(int portIn,
-                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                              int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 };
 
 class SyncFanOutMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
     SyncFanOutMessageEndpoint(const std::string& inProcLabel,
-                              int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                              int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 };
 
 class SyncFanInMessageEndpoint final : public FanInMessageEndpoint
 {
   public:
     SyncFanInMessageEndpoint(int portIn,
-                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                             int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 };
 
 class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
     AsyncRecvMessageEndpoint(const std::string& inprocLabel,
-                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                             int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     AsyncRecvMessageEndpoint(int portIn,
-                             int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                             int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     Message recv() override;
 };
@@ -210,7 +209,7 @@ class AsyncInternalRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
     AsyncInternalRecvMessageEndpoint(const std::string& inprocLabel,
-                                     int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                                     int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     Message recv() override;
 };
@@ -219,10 +218,10 @@ class SyncRecvMessageEndpoint final : public RecvMessageEndpoint
 {
   public:
     SyncRecvMessageEndpoint(const std::string& inprocLabel,
-                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                            int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     SyncRecvMessageEndpoint(int portIn,
-                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                            int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     Message recv() override;
 
@@ -233,7 +232,7 @@ class AsyncDirectRecvEndpoint final : public RecvMessageEndpoint
 {
   public:
     AsyncDirectRecvEndpoint(const std::string& inprocLabel,
-                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                            int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     Message recv() override;
 };
@@ -242,7 +241,7 @@ class AsyncDirectSendEndpoint final : public MessageEndpoint
 {
   public:
     AsyncDirectSendEndpoint(const std::string& inProcLabel,
-                            int timeoutMs = DEFAULT_RECV_TIMEOUT_MS);
+                            int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     void send(uint8_t header, const uint8_t* data, size_t dataSize);
 

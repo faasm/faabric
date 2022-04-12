@@ -1214,10 +1214,12 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
         } else {
             fut.wait();
         }
+
         {
             faabric::util::UniqueLock resultsLock(localResultsMutex);
             localResults.erase(messageId);
         }
+
         return *fut.get();
     } while (0);
 

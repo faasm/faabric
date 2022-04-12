@@ -18,7 +18,7 @@ void FaabricEndpointHandler::onTimeout(const Pistache::Http::Request& request,
 void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
                                        Pistache::Http::ResponseWriter response)
 {
-    SPDLOG_DEBUG("Faabric handler received request");
+    SPDLOG_TRACE("Handler received request: {}", request.body());
 
     // Very permissive CORS
     response.headers().add<Pistache::Http::Header::AccessControlAllowOrigin>(
@@ -32,17 +32,13 @@ void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
     response.headers().add<Pistache::Http::Header::ContentType>(
       Pistache::Http::Mime::MediaType("text/plain"));
 
-    PROF_START(endpointRoundTrip)
-
     // Set response timeout
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     response.timeoutAfter(std::chrono::milliseconds(conf.globalMessageTimeout));
 
     // Parse message from JSON in request
-    const std::string requestStr = request.body();
-    std::pair<int, std::string> result = handleFunction(requestStr);
+    std::pair<int, std::string> result = handleFunction(request.body());
 
-    PROF_END(endpointRoundTrip)
     Pistache::Http::Code responseCode = Pistache::Http::Code::Ok;
     if (result.first > 0) {
         responseCode = Pistache::Http::Code::Internal_Server_Error;
