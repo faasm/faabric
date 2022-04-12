@@ -93,6 +93,6 @@ void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
                             const scheduler::ExecGraph& graphB);
 
 std::pair<int, std::string> postToUrl(const std::string& host,
-                                                  int port,
-                                                  const std::string& body);
+                                      int port,
+                                      const std::string& body);
 }

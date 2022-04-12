@@ -30,7 +30,6 @@ class FaabricEndpoint
 
     Pistache::Http::Endpoint httpEndpoint;
 
-    std::jthread bgThread;
     std::mutex mx;
 
     void runEndpoint();
