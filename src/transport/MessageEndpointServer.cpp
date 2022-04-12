@@ -26,9 +26,7 @@ MessageEndpointServerHandler::MessageEndpointServerHandler(
   , nThreads(nThreadsIn)
 {}
 
-void MessageEndpointServerHandler::start(
-  std::shared_ptr<faabric::util::Latch> latch,
-  int timeoutMs)
+void MessageEndpointServerHandler::start(int timeoutMs)
 {
     // For both sync and async, we want to fan out the messages to multiple
     // worker threads.
@@ -37,7 +35,16 @@ void MessageEndpointServerHandler::start(
     // For push/ pull we receive on a pull socket, then proxy with another push
     // to multiple downstream pull sockets
     // In both cases, the downstream fan-out is done over inproc sockets.
-    receiverThread = std::jthread([this, latch, timeoutMs] {
+
+    // Latch to make sure we can control the order of the setup
+    std::shared_ptr<faabric::util::Latch> startupLatch =
+      faabric::util::Latch::create(nThreads + 2);
+
+    SPDLOG_TRACE("Setting up endpoint server {} with {} worker threads",
+                 inprocLabel,
+                 nThreads);
+
+    receiverThread = std::jthread([this, timeoutMs, startupLatch] {
         int port = async ? server->asyncPort : server->syncPort;
 
         // Connect the relevant fan-in/ out sockets (these will run until
@@ -47,26 +54,30 @@ void MessageEndpointServerHandler::start(
             asyncFanIn = std::make_unique<AsyncFanInMessageEndpoint>(port);
             asyncFanOut = std::make_unique<AsyncFanOutMessageEndpoint>(
               inprocLabel, timeoutMs);
-
-            asyncFanIn->attachFanOut(asyncFanOut->socket);
         } else {
             // Set up router/ dealer
             syncFanIn = std::make_unique<SyncFanInMessageEndpoint>(port);
             syncFanOut = std::make_unique<SyncFanOutMessageEndpoint>(
               inprocLabel, timeoutMs);
-
-            syncFanIn->attachFanOut(syncFanOut->socket);
         }
 
-        // Wait on the start-up latch passed in by the caller. This means that
-        // once the latch is freed, this handler is just about to start its
-        // proxy, so a short sleep should mean things are ready to go.
-        latch->wait();
+        SPDLOG_TRACE("Endpoint server {} receiver thread set up", inprocLabel);
+
+        // Wait until the workers are set up
+        startupLatch->wait();
+
+        SPDLOG_TRACE("Endpoint server {} connecting fan-out", inprocLabel);
+
+        // This will block the receiver thread until it's killed
+        if (async) {
+            asyncFanIn->attachFanOut(asyncFanOut->socket);
+        } else {
+            syncFanIn->attachFanOut(syncFanOut->socket);
+        }
     });
 
-    // Launch worker threads
     for (int i = 0; i < nThreads; i++) {
-        workerThreads.emplace_back([this, i, timeoutMs] {
+        workerThreads.emplace_back([this, i, timeoutMs, startupLatch] {
             // Here we want to isolate all ZeroMQ stuff in its own
             // context, so we can do things after it's been destroyed
             {
@@ -81,6 +92,13 @@ void MessageEndpointServerHandler::start(
                     endpoint = std::make_unique<SyncRecvMessageEndpoint>(
                       inprocLabel, timeoutMs);
                 }
+
+                // Notify receiver that this worker is set up
+                SPDLOG_TRACE("Endpoint server {} worker {} endpoint created",
+                             inprocLabel,
+                             i);
+
+                startupLatch->wait();
 
                 while (true) {
                     // Receive the message
@@ -152,6 +170,13 @@ void MessageEndpointServerHandler::start(
             }
         });
     }
+
+    // Wait for the workers and receiver to be set up
+    startupLatch->wait();
+
+    SPDLOG_TRACE("Endpoint server {} finished setup with {} worker threads",
+                 inprocLabel,
+                 nThreads);
 }
 
 void MessageEndpointServerHandler::join()
@@ -201,14 +226,8 @@ void MessageEndpointServer::start(int timeoutMs)
 {
     started = true;
 
-    // This latch allows use to block on the handlers until _just_ before they
-    // start their proxies.
-    auto startLatch = faabric::util::Latch::create(3);
-
-    asyncHandler.start(startLatch, timeoutMs);
-    syncHandler.start(startLatch, timeoutMs);
-
-    startLatch->wait();
+    asyncHandler.start(timeoutMs);
+    syncHandler.start(timeoutMs);
 
     // Unfortunately we can't know precisely when the proxies have started,
     // hence have to add a sleep.
