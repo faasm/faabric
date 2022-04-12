@@ -368,8 +368,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
                  "Test executing function repeatedly and flushing",
                  "[executor]")
 {
-    // Set the bound timeout to something short so the test runs fast
-    conf.boundTimeout = 100;
+    // Set the bound timeout to long enough that we don't end up flushing
+    // between invocations
+    conf.boundTimeout = 2000;
 
     int numRepeats = 10;
     for (int i = 0; i < numRepeats; i++) {
@@ -383,10 +384,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
         std::string expected =
           fmt::format("Simple function {} executed", msgId);
         REQUIRE(result.outputdata() == expected);
-
-        // We sleep for the same timeout threads have, to force a race condition
-        // between the scheduler's flush and the thread's own cleanup timeout
-        SLEEP_MS(conf.boundTimeout);
 
         // Flush
         sch.flushLocally();

@@ -61,7 +61,12 @@ class Executor
 
     explicit Executor(faabric::Message& msg);
 
-    ~Executor();
+    /**
+     * Executor destructor, clears up and waits for thread pool to finish.
+     *
+     * Must be marked virtual to permit proper calling of subclass destructors.
+     */
+    virtual ~Executor();
 
     std::vector<std::pair<uint32_t, int32_t>> executeThreads(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
