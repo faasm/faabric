@@ -95,12 +95,20 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(msgs.at(1).function() == "bar");
     sch.clearRecordedMessages();
 
+    // Wait for functions to finish
+    sch.getFunctionResult(msgA.id(), 2000);
+    sch.getFunctionResult(msgB.id(), 2000);
+
+    // Check executors present
+    REQUIRE(sch.getFunctionExecutorCount(msgA) == 1);
+    REQUIRE(sch.getFunctionExecutorCount(msgB) == 1);
+
     // Send flush message (which is synchronous)
     cli.sendFlush();
 
     // Check the scheduler has been flushed
-    REQUIRE(sch.getFunctionRegisteredHostCount(msgA) == 0);
-    REQUIRE(sch.getFunctionRegisteredHostCount(msgB) == 0);
+    REQUIRE(sch.getFunctionExecutorCount(msgA) == 0);
+    REQUIRE(sch.getFunctionExecutorCount(msgB) == 0);
 
     // Check state has been cleared
     REQUIRE(state.getKVCount() == 0);

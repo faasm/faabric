@@ -40,125 +40,118 @@ void MessageEndpointServerHandler::start(
     receiverThread = std::jthread([this, latch, timeoutMs] {
         int port = async ? server->asyncPort : server->syncPort;
 
+        // Connect the relevant fan-in/ out sockets (these will run until
+        // they receive a terminate message)
         if (async) {
             // Set up push/ pull pair
             asyncFanIn = std::make_unique<AsyncFanInMessageEndpoint>(port);
             asyncFanOut = std::make_unique<AsyncFanOutMessageEndpoint>(
               inprocLabel, timeoutMs);
+
+            asyncFanIn->attachFanOut(asyncFanOut->socket);
         } else {
             // Set up router/ dealer
             syncFanIn = std::make_unique<SyncFanInMessageEndpoint>(port);
             syncFanOut = std::make_unique<SyncFanOutMessageEndpoint>(
               inprocLabel, timeoutMs);
-        }
 
-        // Launch worker threads
-        for (int i = 0; i < nThreads; i++) {
-            workerThreads.emplace_back([this, i, timeoutMs] {
-                // Here we want to isolate all ZeroMQ stuff in its own
-                // context, so we can do things after it's been destroyed
-                {
-                    std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
-
-                    if (async) {
-                        // Async workers have a PULL socket
-                        endpoint = std::make_unique<AsyncRecvMessageEndpoint>(
-                          inprocLabel, timeoutMs);
-                    } else {
-                        // Sync workers have an in-proc REP socket
-                        endpoint = std::make_unique<SyncRecvMessageEndpoint>(
-                          inprocLabel, timeoutMs);
-                    }
-
-                    while (true) {
-                        // Receive the message
-                        Message body = endpoint->recv();
-
-                        // Shut down if necessary
-                        if (body.getResponseCode() ==
-                            MessageResponseCode::TERM) {
-                            break;
-                        }
-
-                        // On timeout we listen again
-                        if (body.getResponseCode() ==
-                            MessageResponseCode::TIMEOUT) {
-                            continue;
-                        }
-
-                        // Catch-all for other forms of unsuccessful message
-                        if (body.getResponseCode() !=
-                            MessageResponseCode::SUCCESS) {
-                            SPDLOG_ERROR(
-                              "Unsuccessful message to server {}: {}",
-                              inprocLabel,
-                              body.getResponseCode());
-
-                            throw std::runtime_error(
-                              "Unsuccessful message to server");
-                        }
-
-                        if (async) {
-                            // Server-specific async handling
-                            server->doAsyncRecv(body);
-                        } else {
-                            // Server-specific sync handling
-                            std::unique_ptr<google::protobuf::Message> resp =
-                              server->doSyncRecv(body);
-
-                            size_t respSize = resp->ByteSizeLong();
-
-                            uint8_t buffer[respSize];
-                            if (!resp->SerializeToArray(buffer, respSize)) {
-                                throw std::runtime_error(
-                                  "Error serialising message");
-                            }
-
-                            // Return the response
-                            static_cast<SyncRecvMessageEndpoint*>(
-                              endpoint.get())
-                              ->sendResponse(NO_HEADER, buffer, respSize);
-                        }
-
-                        // Wait on the request latch if necessary
-                        auto requestLatch = std::atomic_load_explicit(
-                          &server->requestLatch, std::memory_order_acquire);
-                        if (requestLatch != nullptr) {
-                            SPDLOG_TRACE(
-                              "Server thread waiting on worker latch");
-                            requestLatch->wait();
-                        }
-                    }
-                }
-
-                // Perform the tidy-up
-                server->onWorkerStop();
-
-                // Just before the thread dies, check if there's something
-                // waiting on the shutdown latch
-                auto shutdownLatch = std::atomic_load_explicit(
-                  &server->shutdownLatch, std::memory_order_acquire);
-                if (shutdownLatch != nullptr) {
-                    SPDLOG_TRACE("Server thread {} waiting on shutdown latch",
-                                 i);
-                    shutdownLatch->wait();
-                }
-            });
+            syncFanIn->attachFanOut(syncFanOut->socket);
         }
 
         // Wait on the start-up latch passed in by the caller. This means that
         // once the latch is freed, this handler is just about to start its
         // proxy, so a short sleep should mean things are ready to go.
         latch->wait();
-
-        // Connect the relevant fan-in/ out sockets (these will run until
-        // they receive a terminate message)
-        if (async) {
-            asyncFanIn->attachFanOut(asyncFanOut->socket);
-        } else {
-            syncFanIn->attachFanOut(syncFanOut->socket);
-        }
     });
+
+    // Launch worker threads
+    for (int i = 0; i < nThreads; i++) {
+        workerThreads.emplace_back([this, i, timeoutMs] {
+            // Here we want to isolate all ZeroMQ stuff in its own
+            // context, so we can do things after it's been destroyed
+            {
+                std::unique_ptr<RecvMessageEndpoint> endpoint = nullptr;
+
+                if (async) {
+                    // Async workers have a PULL socket
+                    endpoint = std::make_unique<AsyncRecvMessageEndpoint>(
+                      inprocLabel, timeoutMs);
+                } else {
+                    // Sync workers have an in-proc REP socket
+                    endpoint = std::make_unique<SyncRecvMessageEndpoint>(
+                      inprocLabel, timeoutMs);
+                }
+
+                while (true) {
+                    // Receive the message
+                    Message body = endpoint->recv();
+
+                    // Shut down if necessary
+                    if (body.getResponseCode() == MessageResponseCode::TERM) {
+                        break;
+                    }
+
+                    // On timeout we listen again
+                    if (body.getResponseCode() ==
+                        MessageResponseCode::TIMEOUT) {
+                        continue;
+                    }
+
+                    // Catch-all for other forms of unsuccessful message
+                    if (body.getResponseCode() !=
+                        MessageResponseCode::SUCCESS) {
+                        SPDLOG_ERROR("Unsuccessful message to server {}: {}",
+                                     inprocLabel,
+                                     body.getResponseCode());
+
+                        throw std::runtime_error(
+                          "Unsuccessful message to server");
+                    }
+
+                    if (async) {
+                        // Server-specific async handling
+                        server->doAsyncRecv(body);
+                    } else {
+                        // Server-specific sync handling
+                        std::unique_ptr<google::protobuf::Message> resp =
+                          server->doSyncRecv(body);
+
+                        size_t respSize = resp->ByteSizeLong();
+
+                        uint8_t buffer[respSize];
+                        if (!resp->SerializeToArray(buffer, respSize)) {
+                            throw std::runtime_error(
+                              "Error serialising message");
+                        }
+
+                        // Return the response
+                        static_cast<SyncRecvMessageEndpoint*>(endpoint.get())
+                          ->sendResponse(NO_HEADER, buffer, respSize);
+                    }
+
+                    // Wait on the request latch if necessary
+                    auto requestLatch = std::atomic_load_explicit(
+                      &server->requestLatch, std::memory_order_acquire);
+                    if (requestLatch != nullptr) {
+                        SPDLOG_TRACE("Server thread waiting on worker latch");
+                        requestLatch->wait();
+                    }
+                }
+            }
+
+            // Perform the tidy-up
+            server->onWorkerStop();
+
+            // Just before the thread dies, check if there's something
+            // waiting on the shutdown latch
+            auto shutdownLatch = std::atomic_load_explicit(
+              &server->shutdownLatch, std::memory_order_acquire);
+            if (shutdownLatch != nullptr) {
+                SPDLOG_TRACE("Server thread {} waiting on shutdown latch", i);
+                shutdownLatch->wait();
+            }
+        });
+    }
 }
 
 void MessageEndpointServerHandler::join()
