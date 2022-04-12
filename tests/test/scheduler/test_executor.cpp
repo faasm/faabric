@@ -780,6 +780,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     long millisC = exec->getMillisSinceLastExec();
     REQUIRE(millisC < millisB);
+
+    // Wait for execution to finish
+    sch.getFunctionResult(req->messages().at(0).id(), 2000);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
