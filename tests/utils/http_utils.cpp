@@ -1,11 +1,7 @@
 #include <faabric/util/bytes.h>
 #include <faabric/util/logging.h>
 
-#include <pistache/async.h>
-#include <pistache/client.h>
-#include <pistache/http.h>
-#include <pistache/http_header.h>
-#include <pistache/net.h>
+#include <curl/curl.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -14,47 +10,75 @@
 #include <sstream>
 #include <string>
 
-using namespace Pistache;
-
 #define HTTP_REQ_TIMEOUT 5000
 
 namespace tests {
 
-std::pair<int, std::string> submitGetRequestToUrl(const std::string& host,
-                                                  int port,
-                                                  const std::string& body)
+static size_t writerCallback(void* contents,
+                             size_t elemSize,
+                             size_t nElems,
+                             void* arg)
 {
-    Http::Experimental::Client client;
-    client.init();
+    size_t contentSize = elemSize * nElems;
+    auto* resp = (std::vector<char>*)arg;
+
+    size_t initialSize = resp->size();
+    resp->resize(initialSize + contentSize + 1);
+
+    std::copy((char*)contents,
+              ((char*)contents) + contentSize,
+              resp->data() + initialSize);
+
+    resp->at(initialSize + contentSize) = 0;
+
+    return contentSize;
+}
+
+std::pair<int, std::string> postToUrl(const std::string& host,
+                                      int port,
+                                      const std::string& body)
+{
+    curl_global_init(CURL_GLOBAL_ALL);
 
     std::string fullUrl = fmt::format("{}:{}", host, port);
-    SPDLOG_DEBUG("Making HTTP GET request to {}", fullUrl);
+    SPDLOG_TRACE("Making HTTP GET request to {}", fullUrl);
 
-    // Set up the request and callbacks
-    auto requestBuilder = client.get(fullUrl);
-    if (!body.empty()) {
-        requestBuilder.body(body);
+    CURL* curl = curl_easy_init();
+    if (curl == nullptr) {
+        throw std::runtime_error("Failed to initialise libcurl");
     }
-    Async::Promise<Http::Response> resp =
-      requestBuilder.timeout(std::chrono::milliseconds(HTTP_REQ_TIMEOUT))
-        .send();
 
-    std::stringstream out;
-    Http::Code respCode;
-    resp.then(
-      [&](Http::Response response) {
-          respCode = response.code();
-          out << response.body();
-      },
-      Async::Throw);
+    // Url
+    curl_easy_setopt(curl, CURLOPT_URL, fullUrl.c_str());
 
-    // Make calls synchronous
-    Async::Barrier<Http::Response> barrier(resp);
-    std::chrono::milliseconds timeout(HTTP_REQ_TIMEOUT);
-    barrier.wait_for(timeout);
+    // Writer
+    std::vector<char> respData;
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writerCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&respData);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "faabric-test/1.0");
 
-    client.shutdown();
+    // Post data
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, body.size());
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 
-    return std::make_pair((int)respCode, out.str());
+    // Make the request
+    CURLcode res = curl_easy_perform(curl);
+
+    // Get response code and response body
+    long respCode = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &respCode);
+    std::string out(respData.data());
+
+    SPDLOG_TRACE("HTTP response {}: {}", respCode, out);
+
+    if (res != CURLE_OK) {
+        SPDLOG_ERROR(
+          "Getting from {} failed: {}", fullUrl, curl_easy_strerror(res));
+    }
+
+    curl_easy_cleanup(curl);
+    curl_global_cleanup();
+
+    return std::make_pair((int)respCode, out.c_str());
 }
 }

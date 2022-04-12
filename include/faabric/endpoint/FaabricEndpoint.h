@@ -1,16 +1,37 @@
 #pragma once
 
-#include <faabric/endpoint/Endpoint.h>
+#include <pistache/endpoint.h>
+#include <pistache/http.h>
+
 #include <faabric/util/config.h>
 
 namespace faabric::endpoint {
-class FaabricEndpoint : public Endpoint
+
+enum EndpointMode
+{
+    SIGNAL,
+    BG_THREAD
+};
+
+class FaabricEndpoint
 {
   public:
     FaabricEndpoint();
 
-    FaabricEndpoint(int port, int threadCount);
+    FaabricEndpoint(int portIn, int threadCountIn);
 
-    std::shared_ptr<Pistache::Http::Handler> getHandler() override;
+    void start(EndpointMode mode);
+
+    void stop();
+
+  private:
+    int port = faabric::util::getSystemConfig().endpointPort;
+    int threadCount = faabric::util::getSystemConfig().endpointNumThreads;
+
+    Pistache::Http::Endpoint httpEndpoint;
+
+    std::mutex mx;
+
+    void runEndpoint();
 };
 }
