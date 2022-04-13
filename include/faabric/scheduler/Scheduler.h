@@ -189,6 +189,8 @@ class Scheduler
 
     void shutdown();
 
+    bool isShutdown() { return _isShutdown; }
+
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
 
@@ -315,6 +317,8 @@ class Scheduler
     faabric::util::SystemConfig& conf;
 
     std::shared_mutex mx;
+
+    std::atomic<bool> _isShutdown = false;
 
     // ---- Executors ----
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>

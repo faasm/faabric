@@ -106,7 +106,7 @@ void Executor::shutdown()
 Executor::~Executor()
 {
     if (!_isShutdown) {
-        SPDLOG_ERROR("Executor {} destructed without being shut down", id);
+        SPDLOG_ERROR("Destructing Executor {} without shutting down first", id);
     }
 }
 

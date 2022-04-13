@@ -64,7 +64,9 @@ Scheduler::Scheduler()
 
 Scheduler::~Scheduler()
 {
-    reaperThread.stop();
+    if (!_isShutdown) {
+        SPDLOG_ERROR("Destructing scheduler without shutting down first");
+    }
 }
 
 std::set<std::string> Scheduler::getAvailableHosts()
@@ -107,6 +109,9 @@ void Scheduler::reset()
     // Stop the function migration thread
     functionMigrationThread.stop();
 
+    // Stop the reaper thread
+    reaperThread.stop();
+
     // Shut down, then clear executors
     for (auto& ep : executors) {
         for (auto& e : ep.second) {
@@ -140,13 +145,20 @@ void Scheduler::reset()
     recordedMessagesAll.clear();
     recordedMessagesLocal.clear();
     recordedMessagesShared.clear();
+
+    // Restart reaper thread
+    reaperThread.start(conf.reaperIntervalSeconds);
 }
 
 void Scheduler::shutdown()
 {
     reset();
 
+    reaperThread.stop();
+
     removeHostFromGlobalSet(thisHost);
+
+    _isShutdown = true;
 }
 
 void SchedulerReaperThread::doWork()
