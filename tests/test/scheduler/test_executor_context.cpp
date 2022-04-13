@@ -62,5 +62,7 @@ TEST_CASE_METHOD(ExecutorContextTestFixture,
 
     ExecutorContext::unset();
     REQUIRE_THROWS(ExecutorContext::get());
+
+    exec->shutdown();
 }
 }

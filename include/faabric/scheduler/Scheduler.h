@@ -61,11 +61,7 @@ class Executor
 
     explicit Executor(faabric::Message& msg);
 
-    /**
-     * Executor destructor, clears up and waits for thread pool to finish.
-     *
-     * Must be marked virtual to permit proper calling of subclass destructors.
-     */
+    // Must be marked virtual to permit proper calling of subclass destructors
     virtual ~Executor();
 
     std::vector<std::pair<uint32_t, int32_t>> executeThreads(
@@ -104,6 +100,8 @@ class Executor
 
     bool isExecuting();
 
+    bool isShutdown() { return _isShutdown; }
+
   protected:
     virtual void setMemorySize(size_t newSize);
 
@@ -122,6 +120,7 @@ class Executor
   private:
     // ---- Accounting ----
     std::atomic<bool> claimed = false;
+    std::atomic<bool> _isShutdown = false;
     std::atomic<int> batchCounter = 0;
     faabric::util::TimePoint lastExec;
 

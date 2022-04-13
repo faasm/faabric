@@ -197,8 +197,12 @@ int Scheduler::reapStaleExecutors()
             nReaped++;
         }
 
-        // Do the remove and erase
+        // Remove those that need to be removed
         for (auto exec : toRemove) {
+            // Shut down the executor
+            exec->shutdown();
+
+            // Remove and erase
             auto removed = std::remove(execs.begin(), execs.end(), exec);
             execs.erase(removed, execs.end());
         }

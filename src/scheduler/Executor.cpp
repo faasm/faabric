@@ -64,6 +64,15 @@ Executor::Executor(faabric::Message& msg)
     }
 }
 
+/**
+ * Shuts down the executor and clears all its state, including its thread pool.
+ *
+ * This must be called before destructing an executor. This is because the
+ * tidy-up requires implementations of virtual methods held in subclasses, that
+ * may depend on state that those subclass instances hold. Because destructors
+ * run in inheritance order, this means that state may have been destructed
+ * before the executor destructor runs.
+ */
 void Executor::shutdown()
 {
     // This method will be called during the scheduler reset and destructor,
@@ -90,14 +99,15 @@ void Executor::shutdown()
         // Mark as killed
         threadPoolThreads[i] = nullptr;
     }
+
+    _isShutdown = true;
 }
 
 Executor::~Executor()
 {
-    // This destructor will be called during the scheduler reset and destructor,
-    // hence it cannot rely on the presence of the scheduler or any of its
-    // state.
-    shutdown();
+    if (!_isShutdown) {
+        SPDLOG_ERROR("Executor {} destructed without being shut down", id);
+    }
 }
 
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(

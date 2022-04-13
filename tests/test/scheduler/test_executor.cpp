@@ -751,6 +751,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     REQUIRE(execA->tryClaim());
     REQUIRE(!execB->tryClaim());
+
+    execA->shutdown();
+    execB->shutdown();
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -784,6 +787,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Wait for execution to finish
     sch.getFunctionResult(req->messages().at(0).id(), 2000);
+
+    exec->shutdown();
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -1172,6 +1177,8 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test executor restore", "[executor]")
 
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
+
+    exec->shutdown();
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -1238,6 +1245,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
         // Check they are actually the same
         REQUIRE(actualSnap == existingSnap);
     }
+
+    testExec->shutdown();
 }
 
 }
