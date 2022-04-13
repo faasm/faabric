@@ -3,14 +3,16 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/FunctionMigrationThread.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/util/PeriodicBackgroundThread.h>
+#include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
+#include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
@@ -37,11 +39,18 @@ class ExecutorTask
     ExecutorTask() = default;
 
     ExecutorTask(int messageIndexIn,
-                 std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                 std::shared_ptr<std::atomic<int>> batchCounterIn);
+                 std::shared_ptr<faabric::BatchExecuteRequest> reqIn);
+
+    // Delete everything copy-related, default everything move-related
+    ExecutorTask(const ExecutorTask& other) = delete;
+
+    ExecutorTask& operator=(const ExecutorTask& other) = delete;
+
+    ExecutorTask(ExecutorTask&& other) = default;
+
+    ExecutorTask& operator=(ExecutorTask&& other) = default;
 
     std::shared_ptr<faabric::BatchExecuteRequest> req;
-    std::shared_ptr<std::atomic<int>> batchCounter;
     int messageIndex = 0;
 };
 
@@ -52,7 +61,8 @@ class Executor
 
     explicit Executor(faabric::Message& msg);
 
-    virtual ~Executor() = default;
+    // Must be marked virtual to permit proper calling of subclass destructors
+    virtual ~Executor();
 
     std::vector<std::pair<uint32_t, int32_t>> executeThreads(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -61,7 +71,7 @@ class Executor
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    void finish();
+    void shutdown();
 
     virtual void reset(faabric::Message& msg);
 
@@ -80,15 +90,19 @@ class Executor
       faabric::Message& msg,
       bool createIfNotExists = false);
 
-    void updateMainThreadSnapshot();
+    long getMillisSinceLastExec();
 
     virtual std::span<uint8_t> getMemoryView();
 
     virtual void restore(const std::string& snapshotKey);
 
-  protected:
-    virtual void postFinish();
+    faabric::Message& getBoundMessage();
 
+    bool isExecuting();
+
+    bool isShutdown() { return _isShutdown; }
+
+  protected:
     virtual void setMemorySize(size_t newSize);
 
     virtual size_t getMaxMemorySize();
@@ -104,7 +118,11 @@ class Executor
     uint32_t threadPoolSize = 0;
 
   private:
+    // ---- Accounting ----
     std::atomic<bool> claimed = false;
+    std::atomic<bool> _isShutdown = false;
+    std::atomic<int> batchCounter = 0;
+    faabric::util::TimePoint lastExec;
 
     // ---- Application threads ----
     std::shared_mutex threadExecutionMutex;
@@ -115,18 +133,41 @@ class Executor
     // ---- Function execution thread pool ----
     std::mutex threadsMutex;
     std::vector<std::shared_ptr<std::jthread>> threadPoolThreads;
-    std::vector<std::shared_ptr<std::jthread>> deadThreads;
     std::set<int> availablePoolThreads;
 
     std::vector<faabric::util::Queue<ExecutorTask>> threadTaskQueues;
 
-    void threadPoolThread(int threadPoolIdx);
+    void threadPoolThread(std::stop_token st, int threadPoolIdx);
+};
+
+/**
+ * Background thread that periodically checks if there are migration
+ * opportunities for in-flight apps that have opted in to being checked for
+ * migrations.
+ */
+class FunctionMigrationThread : public faabric::util::PeriodicBackgroundThread
+{
+  public:
+    void doWork() override;
+};
+
+/**
+ * Background thread that periodically checks to see if any executors have
+ * become stale (i.e. not handled any requests in a given timeout). If any are
+ * found, they are removed.
+ */
+class SchedulerReaperThread : public faabric::util::PeriodicBackgroundThread
+{
+  public:
+    void doWork() override;
 };
 
 class Scheduler
 {
   public:
     Scheduler();
+
+    ~Scheduler();
 
     faabric::util::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -148,15 +189,20 @@ class Scheduler
 
     void shutdown();
 
+    bool isShutdown() { return _isShutdown; }
+
     void broadcastSnapshotDelete(const faabric::Message& msg,
                                  const std::string& snapshotKey);
+
+    int reapStaleExecutors();
 
     long getFunctionExecutorCount(const faabric::Message& msg);
 
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
-    std::set<std::string> getFunctionRegisteredHosts(
-      const faabric::Message& msg,
+    const std::set<std::string>& getFunctionRegisteredHosts(
+      const std::string& user,
+      const std::string& function,
       bool acquireLock = true);
 
     void broadcastFlush();
@@ -200,8 +246,6 @@ class Scheduler
 
     void vacateSlot();
 
-    void notifyExecutorShutdown(Executor* exec, const faabric::Message& msg);
-
     std::string getThisHost();
 
     std::set<std::string> getAvailableHosts();
@@ -213,7 +257,12 @@ class Scheduler
     void removeHostFromGlobalSet(const std::string& host);
 
     void removeRegisteredHost(const std::string& host,
-                              const faabric::Message& msg);
+                              const std::string& user,
+                              const std::string& function);
+
+    void addRegisteredHost(const std::string& host,
+                           const std::string& user,
+                           const std::string& function);
 
     faabric::HostResources getThisHostResources();
 
@@ -269,9 +318,9 @@ class Scheduler
 
     std::shared_mutex mx;
 
-    // ---- Executors ----
-    std::vector<std::shared_ptr<Executor>> deadExecutors;
+    std::atomic<bool> _isShutdown = false;
 
+    // ---- Executors ----
     std::unordered_map<std::string, std::vector<std::shared_ptr<Executor>>>
       executors;
 
@@ -299,6 +348,8 @@ class Scheduler
     faabric::HostResources getHostResources(const std::string& host);
 
     // ---- Actual scheduling ----
+    SchedulerReaperThread reaperThread;
+
     std::set<std::string> availableHostsCache;
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
@@ -317,7 +368,8 @@ class Scheduler
       faabric::Message& msg,
       faabric::util::FullLock& schedulerLock);
 
-    std::vector<std::string> getUnregisteredHosts(const std::string& funcStr,
+    std::vector<std::string> getUnregisteredHosts(const std::string& user,
+                                                  const std::string& function,
                                                   bool noCache = false);
 
     // ---- Accounting and debugging ----

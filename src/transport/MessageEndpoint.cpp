@@ -241,6 +241,8 @@ void MessageEndpoint::sendMessage(zmq::socket_t& socket,
 
 Message MessageEndpoint::recvMessage(zmq::socket_t& socket, bool async)
 {
+    assert(tid == std::this_thread::get_id());
+
     // Receive header and body
     Message headerMessage = recvBuffer(socket, HEADER_MSG_SIZE);
     if (headerMessage.getResponseCode() == MessageResponseCode::TIMEOUT) {

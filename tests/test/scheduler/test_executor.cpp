@@ -210,6 +210,7 @@ int32_t TestExecutor::executeTask(
         if (!msg.inputdata().empty()) {
             timeToSleepMs = std::stoi(msg.inputdata());
         }
+
         SPDLOG_DEBUG("Sleep test function going to sleep for {} ms",
                      timeToSleepMs);
         SLEEP_MS(timeToSleepMs);
@@ -368,8 +369,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
                  "Test executing function repeatedly and flushing",
                  "[executor]")
 {
-    // Set the bound timeout to something short so the test runs fast
-    conf.boundTimeout = 100;
+    // Set the bound timeout to long enough that we don't end up flushing
+    // between invocations
+    conf.boundTimeout = 2000;
 
     int numRepeats = 10;
     for (int i = 0; i < numRepeats; i++) {
@@ -383,10 +385,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
         std::string expected =
           fmt::format("Simple function {} executed", msgId);
         REQUIRE(result.outputdata() == expected);
-
-        // We sleep for the same timeout threads have, to force a race condition
-        // between the scheduler's flush and the thread's own cleanup timeout
-        SLEEP_MS(conf.boundTimeout);
 
         // Flush
         sch.flushLocally();
@@ -753,25 +751,44 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     REQUIRE(execA->tryClaim());
     REQUIRE(!execB->tryClaim());
+
+    execA->shutdown();
+    execB->shutdown();
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test executor timing out waiting",
+                 "Check last executed time updated on each execution",
                  "[executor]")
 {
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("foo", "bar", 1);
-    faabric::Message& msg = req->mutable_messages()->at(0);
+    auto req = faabric::util::batchExecFactory("foo", "bar");
+    faabric::Message& msg = *req->mutable_messages(0);
 
-    // Set a very short bound timeout so we can check it works
-    conf.boundTimeout = 300;
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      faabric::scheduler::getExecutorFactory();
+    std::shared_ptr<faabric::scheduler::Executor> exec =
+      fac->createExecutor(msg);
 
-    auto& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(req);
+    long millisA = exec->getMillisSinceLastExec();
 
-    REQUIRE(sch.getFunctionExecutorCount(msg) == 1);
+    long sleepMillis = 100;
+    SLEEP_MS(sleepMillis);
 
-    REQUIRE_RETRY({}, sch.getFunctionExecutorCount(msg) == 0);
+    long millisB = exec->getMillisSinceLastExec();
+
+    // Check delay is roughly correct. Need to allow for some margin for error
+    // on such short timescales
+    REQUIRE(millisB > millisA);
+    REQUIRE((millisB - millisA) > (sleepMillis - 10));
+
+    exec->executeTasks({ 0 }, req);
+
+    long millisC = exec->getMillisSinceLastExec();
+    REQUIRE(millisC < millisB);
+
+    // Wait for execution to finish
+    sch.getFunctionResult(req->messages().at(0).id(), 2000);
+
+    exec->shutdown();
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -913,7 +930,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Check the other host is registered
     std::set<std::string> expectedRegistered = { otherHost };
-    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedRegistered);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
+            expectedRegistered);
 
     // Check snapshot has been pushed
     auto pushes = faabric::snapshot::getSnapshotPushes();
@@ -1159,6 +1177,8 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test executor restore", "[executor]")
 
     REQUIRE(actualDataA == dataA);
     REQUIRE(actualDataB == dataB);
+
+    exec->shutdown();
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
@@ -1225,6 +1245,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
         // Check they are actually the same
         REQUIRE(actualSnap == existingSnap);
     }
+
+    testExec->shutdown();
 }
 
 }

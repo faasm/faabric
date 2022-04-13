@@ -34,6 +34,7 @@ class SystemConfig
     // Worker-related timeouts
     int globalMessageTimeout;
     int boundTimeout;
+    int reaperIntervalSeconds;
 
     // MPI
     int defaultMpiWorldSize;

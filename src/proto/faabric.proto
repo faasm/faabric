@@ -51,7 +51,8 @@ message HostResources {
 
 message UnregisterRequest {
     string host = 1;
-    Message function = 2;
+    string user = 2;
+    string function = 3;
 }
 
 message FunctionStatusResponse {

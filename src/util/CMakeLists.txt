@@ -18,6 +18,7 @@ faabric_lib(util
     logging.cpp
     memory.cpp
     network.cpp
+    PeriodicBackgroundThread.cpp
     queue.cpp
     random.cpp
     scheduling.cpp

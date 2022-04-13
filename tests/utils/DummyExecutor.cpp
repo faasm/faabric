@@ -14,8 +14,6 @@ DummyExecutor::DummyExecutor(faabric::Message& msg)
   : Executor(msg)
 {}
 
-DummyExecutor::~DummyExecutor() {}
-
 int32_t DummyExecutor::executeTask(
   int threadPoolIdx,
   int msgIdx,

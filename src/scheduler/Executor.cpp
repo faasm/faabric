@@ -33,10 +33,8 @@
 namespace faabric::scheduler {
 
 ExecutorTask::ExecutorTask(int messageIndexIn,
-                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn,
-                           std::shared_ptr<std::atomic<int>> batchCounterIn)
+                           std::shared_ptr<faabric::BatchExecuteRequest> reqIn)
   : req(std::move(reqIn))
-  , batchCounter(std::move(batchCounterIn))
   , messageIndex(messageIndexIn)
 {}
 
@@ -47,6 +45,7 @@ Executor::Executor(faabric::Message& msg)
   , reg(faabric::snapshot::getSnapshotRegistry())
   , tracker(faabric::util::getDirtyTracker())
   , threadPoolSize(faabric::util::getUsableCores())
+  , lastExec(faabric::util::startTimer())
   , threadPoolThreads(threadPoolSize)
   , threadTaskQueues(threadPoolSize)
 {
@@ -65,50 +64,50 @@ Executor::Executor(faabric::Message& msg)
     }
 }
 
-void Executor::finish()
+/**
+ * Shuts down the executor and clears all its state, including its thread pool.
+ *
+ * This must be called before destructing an executor. This is because the
+ * tidy-up requires implementations of virtual methods held in subclasses, that
+ * may depend on state that those subclass instances hold. Because destructors
+ * run in inheritance order, this means that state may have been destructed
+ * before the executor destructor runs.
+ */
+void Executor::shutdown()
 {
+    // This method will be called during the scheduler reset and destructor,
+    // hence it cannot rely on the presence of the scheduler or any of its
+    // state.
+
     SPDLOG_DEBUG("Executor {} shutting down", id);
 
-    // Shut down thread pools and wait
     for (int i = 0; i < threadPoolThreads.size(); i++) {
-        // Send a kill message
-        SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
-        threadTaskQueues[i].enqueue(
-          ExecutorTask(POOL_SHUTDOWN, nullptr, nullptr));
-
-        faabric::util::UniqueLock threadsLock(threadsMutex);
-        // Copy shared_ptr to avoid racing
-        auto thread = threadPoolThreads.at(i);
-        // If already killed, move to the next thread
-        if (thread == nullptr) {
+        // Skip any uninitialised, or already remove threads
+        if (threadPoolThreads[i] == nullptr) {
             continue;
         }
 
-        // Await the thread
-        if (thread->joinable()) {
-            threadsLock.unlock();
-            thread->join();
+        // Send a kill message
+        SPDLOG_TRACE("Executor {} killing thread pool {}", id, i);
+        threadTaskQueues[i].enqueue(ExecutorTask(POOL_SHUTDOWN, nullptr));
+
+        // Wait for thread to terminate
+        if (threadPoolThreads[i]->joinable()) {
+            threadPoolThreads[i]->join();
         }
+
+        // Mark as killed
+        threadPoolThreads[i] = nullptr;
     }
 
-    // Await dead threads
-    for (auto dt : deadThreads) {
-        if (dt->joinable()) {
-            dt->join();
-        }
+    _isShutdown = true;
+}
+
+Executor::~Executor()
+{
+    if (!_isShutdown) {
+        SPDLOG_ERROR("Destructing Executor {} without shutting down first", id);
     }
-
-    // Hook
-    this->postFinish();
-
-    // Reset variables
-    boundMessage.Clear();
-
-    claimed = false;
-
-    threadPoolThreads.clear();
-    threadTaskQueues.clear();
-    deadThreads.clear();
 }
 
 std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
@@ -220,6 +219,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     // conservative here.
     faabric::util::UniqueLock lock(threadsMutex);
 
+    // Update the last-executed time for this executor
+    lastExec = faabric::util::startTimer();
+
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
@@ -266,8 +268,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                      isSingleHost);
     }
 
-    // Set up shared counter for this batch of tasks
-    auto batchCounter = std::make_shared<std::atomic<int>>(msgIdxs.size());
+    // Initialise batch counter
+    batchCounter.store(msgIdxs.size());
 
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted
@@ -314,16 +316,21 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         }
 
         // Enqueue the task
-        threadTaskQueues[threadPoolIdx].enqueue(
-          ExecutorTask(msgIdx, req, batchCounter));
+        threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(msgIdx, req));
 
         // Lazily create the thread
         if (threadPoolThreads.at(threadPoolIdx) == nullptr) {
             threadPoolThreads.at(threadPoolIdx) =
               std::make_shared<std::jthread>(
-                &Executor::threadPoolThread, this, threadPoolIdx);
+                std::bind_front(&Executor::threadPoolThread, this),
+                threadPoolIdx);
         }
     }
+}
+
+long Executor::getMillisSinceLastExec()
+{
+    return faabric::util::getTimeDiffMillis(lastExec);
 }
 
 std::shared_ptr<faabric::util::SnapshotData> Executor::getMainThreadSnapshot(
@@ -375,17 +382,15 @@ void Executor::deleteMainThreadSnapshot(const faabric::Message& msg)
     }
 }
 
-void Executor::threadPoolThread(int threadPoolIdx)
+void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 {
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
-    faabric::transport::PointToPointBroker& broker =
-      faabric::transport::getPointToPointBroker();
     const auto& conf = faabric::util::getSystemConfig();
 
-    bool selfShutdown = false;
-
-    for (;;) {
+    // We terminate these threads by sending a shutdown message, but having this
+    // check means they won't hang infinitely if destructed.
+    while (!st.stop_requested()) {
         SPDLOG_TRACE("Thread starting loop {}:{}", id, threadPoolIdx);
 
         ExecutorTask task;
@@ -393,21 +398,20 @@ void Executor::threadPoolThread(int threadPoolIdx)
         try {
             task = threadTaskQueues[threadPoolIdx].dequeue(conf.boundTimeout);
         } catch (faabric::util::QueueTimeoutException& ex) {
-            // If the thread has had no messages, it needs to remove itself
-            SPDLOG_TRACE("Thread {}:{} got no messages in timeout {}ms",
-                         id,
-                         threadPoolIdx,
-                         conf.boundTimeout);
-            selfShutdown = true;
-            break;
+            SPDLOG_TRACE(
+              "Thread {}:{} got no messages in timeout {}ms, looping",
+              id,
+              threadPoolIdx,
+              conf.boundTimeout);
+
+            continue;
         }
 
         // If the thread is being killed, the executor itself
         // will handle the clean-up
         if (task.messageIndex == POOL_SHUTDOWN) {
             SPDLOG_DEBUG("Killing thread pool thread {}:{}", id, threadPoolIdx);
-            selfShutdown = false;
-            break;
+            return;
         }
 
         assert(task.req->messages_size() >= task.messageIndex + 1);
@@ -457,7 +461,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             // the normal executor shutdown, but we must NOT set the result for
             // the call.
             migrated = true;
-            selfShutdown = true;
             returnValue = -99;
 
             // MPI migration
@@ -501,7 +504,7 @@ void Executor::threadPoolThread(int threadPoolIdx)
         // guarantee that the other tasks have also finished, and perform any
         // merging or tidying up.
         std::atomic_thread_fence(std::memory_order_release);
-        int oldTaskCount = task.batchCounter->fetch_sub(1);
+        int oldTaskCount = batchCounter.fetch_sub(1);
         assert(oldTaskCount >= 0);
         bool isLastInBatch = oldTaskCount == 1;
 
@@ -623,48 +626,6 @@ void Executor::threadPoolThread(int threadPoolIdx)
             sch.setFunctionResult(msg);
         }
     }
-
-    if (selfShutdown) {
-        SPDLOG_DEBUG(
-          "Shutting down thread pool thread {}:{}", id, threadPoolIdx);
-
-        // We have to keep a record of dead threads so we can join them all when
-        // the executor shuts down
-        bool isFinished = true;
-        {
-            faabric::util::UniqueLock threadsLock(threadsMutex);
-            std::shared_ptr<std::jthread> thisThread =
-              threadPoolThreads.at(threadPoolIdx);
-            deadThreads.emplace_back(thisThread);
-
-            // Make sure we're definitely not still tracking changes
-            std::span<uint8_t> memView = getMemoryView();
-            if (!memView.empty()) {
-                tracker->stopTracking(memView);
-            }
-
-            // Set this thread to nullptr
-            threadPoolThreads.at(threadPoolIdx) = nullptr;
-
-            // See if any threads are still running
-            for (auto t : threadPoolThreads) {
-                if (t != nullptr) {
-                    isFinished = false;
-                    break;
-                }
-            }
-        }
-
-        if (isFinished) {
-            // Notify that this executor is finished
-            sch.notifyExecutorShutdown(this, boundMessage);
-        }
-    }
-
-    // We have to clean up TLS here as this should be the last use of the
-    // scheduler and point-to-point broker from this thread
-    sch.resetThreadLocalCache();
-    broker.resetThreadLocalCache();
 }
 
 bool Executor::tryClaim()
@@ -690,8 +651,6 @@ int32_t Executor::executeTask(int threadPoolIdx,
     return 0;
 }
 
-void Executor::postFinish() {}
-
 void Executor::reset(faabric::Message& msg) {}
 
 std::span<uint8_t> Executor::getMemoryView()
@@ -711,6 +670,17 @@ size_t Executor::getMaxMemorySize()
     SPDLOG_WARN("Executor has not implemented max memory size method");
 
     return 0;
+}
+
+faabric::Message& Executor::getBoundMessage()
+{
+    return boundMessage;
+}
+
+bool Executor::isExecuting()
+{
+    int currentCount = batchCounter.load();
+    return currentCount > 0;
 }
 
 void Executor::restore(const std::string& snapshotKey)

@@ -87,12 +87,14 @@ void FunctionCallServer::recvUnregister(const uint8_t* buffer,
 {
     PARSE_MSG(faabric::UnregisterRequest, buffer, bufferSize)
 
-    std::string funcStr =
-      faabric::util::funcToString(parsedMsg.function(), false);
-    SPDLOG_DEBUG("Unregistering host {} for {}", parsedMsg.host(), funcStr);
+    SPDLOG_DEBUG("Unregistering host {} for {}/{}",
+                 parsedMsg.host(),
+                 parsedMsg.user(),
+                 parsedMsg.function());
 
     // Remove the host from the warm set
-    scheduler.removeRegisteredHost(parsedMsg.host(), parsedMsg.function());
+    scheduler.removeRegisteredHost(
+      parsedMsg.host(), parsedMsg.user(), parsedMsg.function());
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
