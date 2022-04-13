@@ -27,12 +27,12 @@ class DummyPeriodicThread : public PeriodicBackgroundThread
 
     void tidyUp() override {}
 
-    int getWorkCount() { return workCount; }
+    int getWorkCount() { return workCount.load(); }
 
   private:
     std::shared_ptr<Barrier> barrier;
 
-    int workCount = 0;
+    std::atomic<int> workCount = 0;
 };
 
 TEST_CASE("Test periodic background operation", "[util]")
