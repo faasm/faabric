@@ -170,13 +170,25 @@ int Scheduler::reapStaleExecutors()
 {
     faabric::util::FullLock lock(mx);
 
-    SPDLOG_DEBUG("Reaping stale executors");
+    if (executors.empty()) {
+        SPDLOG_DEBUG("No executors to check for reaping");
+        return 0;
+    }
+
+    std::vector<std::string> keysToRemove;
 
     int nReaped = 0;
     for (auto& execPair : executors) {
         std::string key = execPair.first;
         std::vector<std::shared_ptr<Executor>>& execs = execPair.second;
         std::vector<std::shared_ptr<Executor>> toRemove;
+
+        if (execs.empty()) {
+            continue;
+        }
+
+        SPDLOG_TRACE(
+          "Checking {} executors for {} for reaping", execs.size(), key);
 
         faabric::Message& firstMsg = execs.back()->getBoundMessage();
         std::string user = firstMsg.user();
@@ -233,7 +245,16 @@ int Scheduler::reapStaleExecutors()
 
                 getFunctionCallClient(masterHost).unregister(req);
             }
+
+            keysToRemove.emplace_back(key);
         }
+    }
+
+    // Remove and erase
+    for (auto& key : keysToRemove) {
+        SPDLOG_TRACE("Removing scheduler record for {}, no more executors",
+                     key);
+        executors.erase(key);
     }
 
     return nReaped;
