@@ -71,7 +71,7 @@ class Executor
     void executeTasks(std::vector<int> msgIdxs,
                       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    void shutdown();
+    virtual void shutdown();
 
     virtual void reset(faabric::Message& msg);
 
