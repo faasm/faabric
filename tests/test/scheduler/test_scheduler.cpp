@@ -1,7 +1,6 @@
 #include <catch2/catch.hpp>
 
 #include "DummyExecutorFactory.h"
-#include "faabric/util/snapshot.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -19,6 +18,7 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;
@@ -181,8 +181,14 @@ TEST_CASE_METHOD(SlowExecutorFixture,
                  "Test scheduler available hosts",
                  "[scheduler]")
 {
-    // Set up some available hosts
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
+
+    // Check available hosts just has this host to begin with
+    std::set<std::string> initialHosts = sch.getAvailableHosts();
+    std::set<std::string> expectedInitial = { thisHost };
+    REQUIRE(initialHosts == expectedInitial);
+
+    // Set up some available hosts
     std::string hostA = "hostA";
     std::string hostB = "hostB";
     std::string hostC = "hostC";
@@ -203,6 +209,11 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     actualHosts = sch.getAvailableHosts();
 
     REQUIRE(actualHosts == expectedHosts);
+
+    // Clear and check nothing left
+    sch.clearAvailableHosts();
+    std::set<std::string> clearedHosts = sch.getAvailableHosts();
+    REQUIRE(clearedHosts.empty());
 }
 
 TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")

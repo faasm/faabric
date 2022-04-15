@@ -87,6 +87,12 @@ void Scheduler::removeHostFromGlobalSet(const std::string& host)
     redis.srem(AVAILABLE_HOST_SET, host);
 }
 
+void Scheduler::clearAvailableHosts()
+{
+    redis::Redis& redis = redis::Redis::getQueue();
+    redis.del(AVAILABLE_HOST_SET);
+}
+
 void Scheduler::addHostToGlobalSet()
 {
     redis::Redis& redis = redis::Redis::getQueue();
@@ -136,6 +142,9 @@ void Scheduler::reset()
     threadResultMessages.clear();
 
     pushedSnapshotsMap.clear();
+
+    // Make sure host is in available hosts
+    addHostToGlobalSet(thisHost);
 
     // Reset function migration tracking
     inFlightRequests.clear();
@@ -1032,14 +1041,23 @@ std::string Scheduler::getThisHost()
     return thisHost;
 }
 
+/**
+ * Called when a flush message is received. Broadcasts the flush message to all
+ * other hosts.
+ *
+ * This function handles any global flushing tasks, like clearning the available
+ * hosts list.
+ */
 void Scheduler::broadcastFlush()
 {
     faabric::util::FullLock lock(mx);
-    // Get all hosts
-    std::set<std::string> allHosts = getAvailableHosts();
 
-    // Remove this host from the set
+    // Get all hosts and remove this host
+    std::set<std::string> allHosts = getAvailableHosts();
     allHosts.erase(thisHost);
+
+    // Now clear the list
+    clearAvailableHosts();
 
     // Dispatch flush message to all other hosts
     for (auto& otherHost : allHosts) {

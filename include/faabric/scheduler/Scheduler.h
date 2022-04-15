@@ -256,6 +256,8 @@ class Scheduler
 
     void removeHostFromGlobalSet(const std::string& host);
 
+    void clearAvailableHosts();
+
     void removeRegisteredHost(const std::string& host,
                               const std::string& user,
                               const std::string& function);
