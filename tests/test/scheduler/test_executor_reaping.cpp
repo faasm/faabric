@@ -26,12 +26,16 @@ class SchedulerReapingTestFixture
 };
 
 TEST_CASE_METHOD(SchedulerReapingTestFixture,
-                 "Test stale executor reaping"
+                 "Test stale executor reaping",
                  "[scheduler]")
 {
     int boundTimeoutMs = 0;
     int sleepTimeMs = 0;
     bool expectReaped = false;
+
+    // Check nothing happens by default
+    int actualBefore = sch.reapStaleExecutors();
+    REQUIRE(actualBefore == 0);
 
     SECTION("When executors are stale")
     {
@@ -70,6 +74,15 @@ TEST_CASE_METHOD(SchedulerReapingTestFixture,
         REQUIRE(sch.getFunctionExecutorCount(firstMsg) == 0);
     } else {
         REQUIRE(actual == 0);
+        REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);
+    }
+
+    // Run again, check same result
+    int actualTwo = sch.reapStaleExecutors();
+    REQUIRE(actualTwo == 0);
+    if (expectReaped) {
+        REQUIRE(sch.getFunctionExecutorCount(firstMsg) == 0);
+    } else {
         REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);
     }
 }
