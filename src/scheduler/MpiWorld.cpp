@@ -1670,7 +1670,7 @@ MpiWorld::recvBatchReturnLast(int sendRank, int recvRank, int batchSize)
     return ourMsg;
 }
 
-int MpiWorld::getIndexForRanks(int sendRank, int recvRank)
+int MpiWorld::getIndexForRanks(int sendRank, int recvRank) const
 {
     int index = sendRank * size + recvRank;
     assert(index >= 0 && index < size * size);

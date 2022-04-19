@@ -231,7 +231,7 @@ class MpiWorld
 
     // Track at which host each rank lives
     std::vector<std::string> hostForRank;
-    int getIndexForRanks(int sendRank, int recvRank);
+    int getIndexForRanks(int sendRank, int recvRank) const;
 
     // Store the ranks that live in each host
     std::map<std::string, std::vector<int>> ranksForHost;
