@@ -73,6 +73,9 @@ MpiWorld::MpiWorld()
   , cartProcsPerDim(2)
 {}
 
+// TODO(MultiWorld MPI): both methods `recvMpiHostRankMsg` and
+// `sendMpiHostRankMsg` will also have to use the p2p messaging layer as they
+// always use the base port for communicating.
 faabric::MpiHostsToRanksMessage MpiWorld::recvMpiHostRankMsg()
 {
     if (faabric::util::isMockMode()) {

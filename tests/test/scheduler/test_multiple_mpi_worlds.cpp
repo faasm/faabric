@@ -41,6 +41,31 @@ class MultiWorldMpiTestFixture : public MpiBaseTestFixture
     int worldSizeB = 3;
 };
 
+class RemoteMultiWorldMpiTestFixture : public RemoteMpiTestFixture
+{
+  public:
+    RemoteMultiWorldMpiTestFixture()
+    {
+        otherWorldA.overrideHost(otherHost);
+        otherWorldB.overrideHost(otherHost);
+
+        msgA.set_mpiworldid(worldIdA);
+        msgB.set_mpiworldid(worldIdB);
+    }
+
+    ~RemoteMultiWorldMpiTestFixture() {}
+
+    faabric::Message msgA;
+    faabric::Message msgB;
+    int worldIdA = 123;
+    int worldIdB = 245;
+
+    // Instances to access worldA and world B from this world and the mocked
+    // other (remote) world
+    MpiWorld otherWorldA;
+    MpiWorld otherWorldB;
+};
+
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
 {
     // Create the world
@@ -148,7 +173,7 @@ TEST_CASE_METHOD(MultiWorldMpiTestFixture,
     {
         MPI_Status status{};
         auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-        auto *buffer = bufferAllocation.get();
+        auto* buffer = bufferAllocation.get();
 
         // Check for world A
         worldA.recv(
@@ -168,5 +193,99 @@ TEST_CASE_METHOD(MultiWorldMpiTestFixture,
         REQUIRE(status.MPI_SOURCE == rankA1);
         REQUIRE(status.bytesSize == messageData.size() * sizeof(int));
     }
+}
+
+TEST_CASE_METHOD(RemoteMultiWorldMpiTestFixture,
+                 "Test send and recv on different host from co-located worlds",
+                 "[mpi]")
+{
+    int worldSize = 4;
+    int sendRank = 0;
+    int recvRank = 2;
+    std::vector<int> messageData = { 0, 1, 2 };
+
+    // Prepare the first world
+    setWorldSizes(worldSize, 2, 2);
+    // TODO - initialise msgA and msB in the constructor?
+    msgA.set_mpiworldsize(worldSize);
+    MpiWorld& thisWorldA = getMpiWorldRegistry().createWorld(msg, worldIdA);
+
+    // Force that the second MPI world also gets scheduled between two worlds
+    setWorldSizes(worldSize, 2, 2);
+    msgB.set_mpiworldsize(worldSize);
+    MpiWorld& thisWorldB = getMpiWorldRegistry().createWorld(msg, worldIdB);
+
+    // Broadcast mappings so that execution can start
+    faabric::util::setMockMode(false);
+    thisWorldA.broadcastHostsToRanks();
+    thisWorldB.broadcastHostsToRanks();
+
+    // Start other worlds in two separate threads
+    std::jthread otherWorldAThread([this, sendRank, recvRank, &messageData] {
+        // TODO - this will already fail as both worlds will try to receive
+        // the hostsToRanks message by binding to the same port.
+        otherWorldA.initialiseFromMsg(msgA);
+
+        MPI_Status status{};
+        auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+        auto* buffer = bufferAllocation.get();
+        otherWorldA.recv(sendRank,
+                         recvRank,
+                         BYTES(buffer),
+                         MPI_INT,
+                         messageData.size(),
+                         &status);
+
+        std::vector<int> actual(buffer, buffer + messageData.size());
+        assert(actual == messageData);
+        assert(status.MPI_SOURCE = sendRank);
+        assert(status.MPI_ERROR = MPI_SUCCESS);
+        assert(status.bytesSize == messageData.size() * sizeof(int));
+
+        otherWorldA.destroy();
+    });
+
+    std::jthread otherWorldBThread([this, sendRank, recvRank, &messageData] {
+        otherWorldB.initialiseFromMsg(msgA);
+
+        MPI_Status status{};
+        auto bufferAllocation = std::make_unique<int[]>(messageData.size());
+        auto* buffer = bufferAllocation.get();
+        otherWorldB.recv(sendRank,
+                         recvRank,
+                         BYTES(buffer),
+                         MPI_INT,
+                         messageData.size(),
+                         &status);
+
+        std::vector<int> actual(buffer, buffer + messageData.size());
+        assert(actual == messageData);
+        assert(status.MPI_SOURCE = sendRank);
+        assert(status.MPI_ERROR = MPI_SUCCESS);
+        assert(status.bytesSize == messageData.size() * sizeof(int));
+
+        otherWorldB.destroy();
+    });
+
+    thisWorldA.send(sendRank,
+                    recvRank,
+                    BYTES(messageData.data()),
+                    MPI_INT,
+                    messageData.size());
+    thisWorldB.send(sendRank,
+                    recvRank,
+                    BYTES(messageData.data()),
+                    MPI_INT,
+                    messageData.size());
+
+    if (otherWorldAThread.joinable()) {
+        otherWorldAThread.join();
+    }
+    if (otherWorldBThread.joinable()) {
+        otherWorldBThread.join();
+    }
+
+    thisWorldA.destroy();
+    thisWorldB.destroy();
 }
 }
