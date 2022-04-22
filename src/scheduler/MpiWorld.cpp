@@ -27,13 +27,12 @@ static thread_local int localMsgCount = 1;
 // These long-lived sockets are used by each world to communicate rank-to-host
 // mappings. They are thread-local to ensure separation between concurrent
 // worlds executing on the same host
-static thread_local std::unique_ptr<
-  faabric::transport::AsyncRecvMessageEndpoint>
+static thread_local std::unique_ptr<faabric::transport::SyncRecvMessageEndpoint>
   ranksRecvEndpoint;
 
 static thread_local std::unordered_map<
   std::string,
-  std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
+  std::unique_ptr<faabric::transport::SyncSendMessageEndpoint>>
   ranksSendEndpoints;
 
 // Id of the message that created this thread-local instance
@@ -84,12 +83,21 @@ faabric::MpiHostsToRanksMessage MpiWorld::recvMpiHostRankMsg()
 
     if (ranksRecvEndpoint == nullptr) {
         ranksRecvEndpoint =
-          std::make_unique<faabric::transport::AsyncRecvMessageEndpoint>(
+          std::make_unique<faabric::transport::SyncRecvMessageEndpoint>(
             basePort);
     }
 
-    SPDLOG_TRACE("Receiving MPI host ranks on {}", basePort);
+    SPDLOG_INFO("Receiving MPI host ranks on {}", basePort);
     faabric::transport::Message m = ranksRecvEndpoint->recv();
+    faabric::EmptyResponse response;
+    size_t responseSize = response.ByteSizeLong();
+    uint8_t buffer[responseSize];
+    if (!response.SerializeToArray(buffer, responseSize)) {
+        SPDLOG_ERROR("Error serialising empty response");
+        throw std::runtime_error("Error serialising empty response");
+    }
+    ranksRecvEndpoint->sendResponse(NO_HEADER, buffer, responseSize);
+    SPDLOG_INFO("Finished receiving on {}", basePort);
     PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
 
     return parsedMsg;
@@ -106,14 +114,15 @@ void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
     if (ranksSendEndpoints.find(hostIn) == ranksSendEndpoints.end()) {
         ranksSendEndpoints.emplace(
           hostIn,
-          std::make_unique<faabric::transport::AsyncSendMessageEndpoint>(
+          std::make_unique<faabric::transport::SyncSendMessageEndpoint>(
             hostIn, basePort));
     }
 
-    SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, basePort);
+    SPDLOG_INFO("Sending MPI host ranks to {}:{}", hostIn, basePort);
     SERIALISE_MSG(msg)
-    ranksSendEndpoints[hostIn]->send(
+    ranksSendEndpoints[hostIn]->sendAwaitResponse(
       NO_HEADER, serialisedBuffer, serialisedSize);
+    SPDLOG_INFO("Finished sending");
 }
 
 void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)
@@ -352,6 +361,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     assert(hostForRank.empty());
     assert(basePorts.empty());
 
+    SPDLOG_INFO("Host rank msg size: {}", hostRankMsg.hosts().size());
     assert(hostRankMsg.hosts().size() == size);
     assert(hostRankMsg.baseports().size() == size);
 

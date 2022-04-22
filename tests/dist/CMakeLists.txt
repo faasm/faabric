@@ -1,16 +1,19 @@
 file(GLOB_RECURSE TEST_FILES ${CMAKE_CURRENT_LIST_DIR} test_*.cpp)
 
+add_subdirectory(mpi)
+
 # Shared
 add_library(faabric_dist_tests_lib
     init.h
     init.cpp
     DistTestExecutor.h
     DistTestExecutor.cpp
+    ${MPI_DIST_TEST_SOURCES}
     scheduler/functions.cpp
     transport/functions.cpp
     )
 
-target_link_libraries(faabric_dist_tests_lib PUBLIC faabric::test_utils)
+target_link_libraries(faabric_dist_tests_lib PUBLIC faabric::test_utils faabric_dist_tests_mpinative_lib)
 target_include_directories(faabric_dist_tests_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Tests
