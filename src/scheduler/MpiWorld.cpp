@@ -71,6 +71,7 @@ MpiWorld::MpiWorld()
   , basePort(faabric::util::getSystemConfig().mpiBasePort)
   , creationTime(faabric::util::startTimer())
   , cartProcsPerDim(2)
+  , broker(faabric::transport::getPointToPointBroker())
 {}
 
 // TODO(MultiWorld MPI): both methods `recvMpiHostRankMsg` and
@@ -154,32 +155,18 @@ void MpiWorld::sendRemoteMpiMessage(
   int recvRank,
   const std::shared_ptr<faabric::MPIMessage>& msg)
 {
-    // Get the index for the rank-host pair
-    // Note - message endpoints are identified by a (localRank, remoteRank)
-    // pair, not a (sendRank, recvRank) one
-    int index = getIndexForRanks(sendRank, recvRank);
-
-    if (mpiMessageEndpoints.empty() || mpiMessageEndpoints[index] == nullptr) {
-        initRemoteMpiEndpoint(sendRank, recvRank);
-    }
-
-    mpiMessageEndpoints[index]->sendMpiMessage(msg);
+    SERIALISE_MSG_PTR(msg);
+    broker.sendMessage(
+      id, sendRank, recvRank, serialisedBuffer, serialisedSize);
 }
 
 std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
   int sendRank,
   int recvRank)
 {
-    // Get the index for the rank-host pair
-    // Note - message endpoints are identified by a (localRank, remoteRank)
-    // pair, not a (sendRank, recvRank) one
-    int index = getIndexForRanks(recvRank, sendRank);
-
-    if (mpiMessageEndpoints.empty() || mpiMessageEndpoints[index] == nullptr) {
-        initRemoteMpiEndpoint(recvRank, sendRank);
-    }
-
-    return mpiMessageEndpoints[index]->recvMpiMessage();
+    auto msg = broker.recvMessage(id, sendRank, recvRank);
+    PARSE_MSG(faabric::MPIMessage, msg.data(), msg.size());
+    return std::make_shared<faabric::MPIMessage>(parsedMsg);
 }
 
 std::shared_ptr<faabric::scheduler::MpiMessageBuffer>
@@ -225,6 +212,9 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
+        // Set group ids for remote messaging
+        msg.set_groupid(msg.mpiworldid());
+        msg.set_groupidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
             msg.set_appid(thisRankMsg->appid());
@@ -374,6 +364,7 @@ void MpiWorld::setMsgForRank(faabric::Message& msg)
     thisRankMsg = &msg;
 }
 
+// MPITOPTP - this information may also be available in the broker
 std::string MpiWorld::getHostForRank(int rank)
 {
     assert(hostForRank.size() == size);

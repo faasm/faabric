@@ -630,7 +630,20 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     bool isForceLocal =
       topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
     if (!isForceLocal && (firstMsg.groupid() > 0)) {
-        broker.setAndSendMappingsFromSchedulingDecision(decision);
+        if (firstMsg.ismpi()) {
+            // If we are scheduling an MPI message, we want rank 0 to be in the
+            // group. However, rank 0 is the one calling this method to schedule
+            // the remaining worldSize - 1 functions. We can not change the
+            // scheduling decision, as this would affect the downstream method,
+            // but we can make a special copy just for the broker.
+            auto decisionCopy = decision;
+            auto msgCopy = firstMsg;
+            msgCopy.set_groupidx(0);
+            decisionCopy.addMessage(thisHost, msgCopy);
+            broker.setAndSendMappingsFromSchedulingDecision(decisionCopy);
+        } else {
+            broker.setAndSendMappingsFromSchedulingDecision(decision);
+        }
     }
 
     // Record in-flight request if function desires to be migrated

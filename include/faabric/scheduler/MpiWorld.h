@@ -5,7 +5,9 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiMessageBuffer.h>
+// MPITOPTP - can we remove the MpiMessageEndpoint altogether?
 #include <faabric/transport/MpiMessageEndpoint.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
@@ -247,6 +249,7 @@ class MpiWorld
     void initLocalQueues();
 
     // Rank-to-rank sockets for remote messaging
+    // MPITOPTP - remove me
     std::vector<int> basePorts;
     std::vector<int> initLocalBasePorts(
       const std::vector<std::string>& executedAt);
@@ -255,19 +258,23 @@ class MpiWorld
 
     std::pair<int, int> getPortForRanks(int localRank, int remoteRank);
 
-    void sendRemoteMpiMessage(int sendRank,
-                              int recvRank,
-                              const std::shared_ptr<faabric::MPIMessage>& msg);
-
-    std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
-                                                              int recvRank);
-
     faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
 
     void sendMpiHostRankMsg(const std::string& hostIn,
                             const faabric::MpiHostsToRanksMessage msg);
 
     void closeMpiMessageEndpoints();
+    // MPITOPTPT - finish removal
+
+    // Remote messaging using the PTP layer
+    faabric::transport::PointToPointBroker& broker;
+
+    void sendRemoteMpiMessage(int sendRank,
+                              int recvRank,
+                              const std::shared_ptr<faabric::MPIMessage>& msg);
+
+    std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
+                                                              int recvRank);
 
     // Support for asyncrhonous communications
     std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,

@@ -91,25 +91,40 @@ TEST_CASE_METHOD(RemoteMpiTestFixture, "Test rank allocation", "[mpi]")
 
 TEST_CASE_METHOD(RemoteMpiTestFixture, "Test send across hosts", "[mpi]")
 {
-    // Register two ranks (one on each host)
-    setWorldSizes(4, 2, 2);
     int rankA = 0;
     int rankB = 2;
     std::vector<int> messageData = { 0, 1, 2 };
 
-    // Init worlds
+    // Register four ranks (two on each host)  and initialise the local world.
+    // Note that we must do these two steps in Mock mode, as otherwise the
+    // scheduler won't schedule functions as expected (i.e. two locally and
+    // two remote).
+    setWorldSizes(4, 2, 2);
+    msg.set_groupid(msg.mpiworldid());
     MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
     faabric::util::setMockMode(false);
+    broker.overrideHost(thisHost);
+
+    // Once the functions (i.e. MPI ranks) have been correctly scheduled we
+    // don't need Mock mode any more.
     thisWorld.broadcastHostsToRanks();
 
     // Start the "remote" world in the background
     std::jthread otherWorldThread([this, rankA, rankB, &messageData] {
+        // We must change the endpoint host for the "other" world. Otherwise,
+        // the PTP message broker (shared among both threads) will think local
+        // messages are remote ones and the other way around.
+        // conf.endpointHost = otherHost;
+        // FIXME FIXME FIXME
+        // The problem with this approach is that many threads use the broker
+        // and only some see the thread local update.
+        broker.overrideHost(otherHost);
         otherWorld.initialiseFromMsg(msg);
 
         // Receive the message for the given rank
         MPI_Status status{};
         auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-        auto buffer = bufferAllocation.get();
+        auto* buffer = bufferAllocation.get();
         otherWorld.recv(
           rankA, rankB, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
@@ -152,6 +167,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 
     std::jthread otherWorldThread(
       [this, rankA, rankB, &messageData, &messageData2] {
+          conf.endpointHost = otherHost;
           otherWorld.initialiseFromMsg(msg);
 
           // Send a message that should get sent to this host
@@ -163,7 +179,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 
           // Now recv
           auto bufferAllocation = std::make_unique<int[]>(messageData2.size());
-          auto buffer = bufferAllocation.get();
+          auto* buffer = bufferAllocation.get();
           otherWorld.recv(rankA,
                           rankB,
                           BYTES(buffer),
@@ -181,7 +197,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     // Receive the message for the given rank
     MPI_Status status{};
     auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-    auto buffer = bufferAllocation.get();
+    auto* buffer = bufferAllocation.get();
     thisWorld.recv(
       rankB, rankA, BYTES(buffer), MPI_INT, messageData.size(), &status);
     std::vector<int> actual(buffer, buffer + messageData.size());

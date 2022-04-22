@@ -253,7 +253,12 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     RemoteMpiTestFixture()
       : thisHost(faabric::util::getSystemConfig().endpointHost)
       , testLatch(faabric::util::Latch::create(2))
+      , broker(faabric::transport::getPointToPointBroker())
     {
+        // Initialise P2P components
+        broker.clear();
+        server.start();
+
         otherWorld.overrideHost(otherHost);
 
         faabric::util::setMockMode(true);
@@ -264,6 +269,12 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         faabric::util::setMockMode(false);
 
         faabric::scheduler::getMpiWorldRegistry().clear();
+
+        // Shutdown PTP components
+        server.stop();
+        broker.resetThreadLocalCache();
+        faabric::transport::clearSentMessages();
+        broker.clear();
     }
 
     void setWorldSizes(int worldSize, int ranksThisWorld, int ranksOtherWorld)
@@ -296,6 +307,9 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     std::shared_ptr<faabric::util::Latch> testLatch;
 
     faabric::scheduler::MpiWorld otherWorld;
+
+    faabric::transport::PointToPointBroker& broker;
+    faabric::transport::PointToPointServer server;
 };
 
 class PointToPointTestFixture
