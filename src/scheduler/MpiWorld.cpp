@@ -142,6 +142,13 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     if (size > 1) {
         faabric::util::SchedulingDecision decision = sch.callFunctions(req);
         assert(decision.hosts.size() == size - 1);
+    } else {
+        // If world has size one, create the communication group (of size one)
+        // manually.
+        faabric::util::SchedulingDecision decision(id, id);
+        call.set_groupidx(0);
+        decision.addMessage(thisHost, call);
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
 
     // Record which ranks are local to this world, and query for all leaders
@@ -239,6 +246,9 @@ void MpiWorld::initLocalRemoteLeaders()
     // to, as it is queried frequently and asking the ptp broker involves
     // acquiring a lock.
     auto rankIds = broker.getIdxsRegisteredForGroup(id);
+    if (rankIds.size() != size) {
+        SPDLOG_ERROR("rankIds != size ({} != {})", rankIds.size(), size);
+    }
     assert(rankIds.size() == size);
     hostForRank.resize(size);
     for (const auto& rankId : rankIds) {

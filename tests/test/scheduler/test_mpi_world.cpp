@@ -137,7 +137,9 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test cartesian communicator", "[mpi]")
     for (int i = 0; i < dims[0]; i++) {
         for (int j = 0; j < dims[1]; j++) {
             std::vector<int> coords = { i, j, 0 };
-            int rank, src, dst;
+            int rank;
+            int src;
+            int dst;
             world.getRankFromCoords(&rank, coords.data());
             // Test first dimension
             world.shiftCartesianCoords(rank, 0, 1, &src, &dst);
@@ -206,7 +208,7 @@ void checkMessage(faabric::MPIMessage& actualMessage,
     REQUIRE(actualMessage.type() == FAABRIC_INT);
 
     // Check data
-    auto* rawInts =
+    const auto* rawInts =
       reinterpret_cast<const int*>(actualMessage.buffer().c_str());
     size_t nInts = actualMessage.buffer().size() / sizeof(int);
     std::vector<int> actualData(rawInts, rawInts + nInts);
@@ -242,7 +244,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send and recv on same host", "[mpi]")
         // Receive the message
         MPI_Status status{};
         auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-        auto buffer = bufferAllocation.get();
+        auto* buffer = bufferAllocation.get();
         world.recv(
           rankA1, rankA2, BYTES(buffer), MPI_INT, messageData.size(), &status);
 
@@ -420,7 +422,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test recv with partial data", "[mpi]")
     MPI_Status status{};
     unsigned long requestedSize = actualSize + 5;
     auto bufferAllocation = std::make_unique<int[]>(requestedSize);
-    auto buffer = bufferAllocation.get();
+    auto* buffer = bufferAllocation.get();
     world.recv(1, 2, BYTES(buffer), MPI_INT, requestedSize, &status);
 
     // Check status reports only the values that were sent
@@ -458,7 +460,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[.]")
 
     // Receive the message
     auto bufferAAllocation = std::make_unique<int[]>(sizeA);
-    auto bufferA = bufferAAllocation.get();
+    auto* bufferA = bufferAAllocation.get();
     world.recv(1, 2, BYTES(bufferA), MPI_INT, sizeA * sizeof(int), nullptr);
 
     // Probe the next message
@@ -469,7 +471,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[.]")
 
     // Receive the next message
     auto bufferBAllocation = std::make_unique<int[]>(sizeB);
-    auto bufferB = bufferBAllocation.get();
+    auto* bufferB = bufferBAllocation.get();
     world.recv(1, 2, BYTES(bufferB), MPI_INT, sizeB * sizeof(int), nullptr);
 }
 
