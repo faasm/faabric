@@ -50,4 +50,3 @@ int typeSize();
 
 int winCreate();
 }
-

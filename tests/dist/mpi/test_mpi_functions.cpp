@@ -8,7 +8,6 @@
 
 namespace tests {
 
-/*
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all gather", "[mpi]")
 {
     // Set up this host's resources
@@ -81,7 +80,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI cartesian", "[mpi]")
     checkAllocationAndResult(req);
 }
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[.]")
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[mpi]")
 {
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
@@ -92,9 +91,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[.]")
 
     checkAllocationAndResult(req);
 }
-*/
 
-// TODO - there's something wrong with gather, check implementation against faasm
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")
 {
     // Set up this host's resources
@@ -119,7 +116,6 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI hello world", "[mpi]")
     checkAllocationAndResult(req);
 }
 
-/*
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI async. send recv", "[mpi]")
 {
     // Set up this host's resources
@@ -132,35 +128,11 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI async. send recv", "[mpi]")
     checkAllocationAndResult(req);
 }
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI one sided comms.", "[.]")
-{
-    // Set up this host's resources
-    setLocalSlots(nLocalSlots);
-    auto req = setRequest("onesided");
-
-    // Call the functions
-    sch.callFunctions(req);
-
-    checkAllocationAndResult(req);
-}
-
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI order", "[mpi]")
 {
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
     auto req = setRequest("order");
-
-    // Call the functions
-    sch.callFunctions(req);
-
-    checkAllocationAndResult(req);
-}
-
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI probe", "[mpi]")
-{
-    // Set up this host's resources
-    setLocalSlots(nLocalSlots);
-    auto req = setRequest("probe");
 
     // Call the functions
     sch.callFunctions(req);
@@ -251,17 +223,4 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI types sizes", "[mpi]")
 
     checkAllocationAndResult(req);
 }
-
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI window creation", "[.]")
-{
-    // Set up this host's resources
-    setLocalSlots(nLocalSlots);
-    auto req = setRequest("win-create");
-
-    // Call the functions
-    sch.callFunctions(req);
-
-    checkAllocationAndResult(req);
-}
-*/
 }

@@ -5,7 +5,9 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiMessageBuffer.h>
+// MPITOPTP - can we remove the MpiMessageEndpoint altogether?
 #include <faabric/transport/MpiMessageEndpoint.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
 
@@ -230,15 +232,14 @@ class MpiWorld
     /* MPI internal messaging layer */
 
     // Track at which host each rank lives
-    std::vector<std::string> hostForRank;
-    int getIndexForRanks(int sendRank, int recvRank);
+    int getIndexForRanks(int sendRank, int recvRank) const;
 
-    // Store the ranks that live in each host
+    // Store the ranks that live in each host and host for each rank
     std::map<std::string, std::vector<int>> ranksForHost;
+    std::vector<std::string> hostForRank;
 
     // Track local and remote leaders. The leader is stored in the first
     // position of the host to ranks map.
-    // MPITOPTP - this information exists in the broker
     int localLeader = -1;
     void initLocalRemoteLeaders();
 
@@ -246,14 +247,8 @@ class MpiWorld
     std::vector<std::shared_ptr<InMemoryMpiQueue>> localQueues;
     void initLocalQueues();
 
-    // Rank-to-rank sockets for remote messaging
-    std::vector<int> basePorts;
-    std::vector<int> initLocalBasePorts(
-      const std::vector<std::string>& executedAt);
-
-    void initRemoteMpiEndpoint(int localRank, int remoteRank);
-
-    std::pair<int, int> getPortForRanks(int localRank, int remoteRank);
+    // Remote messaging using the PTP layer
+    faabric::transport::PointToPointBroker& broker;
 
     void sendRemoteMpiMessage(int sendRank,
                               int recvRank,
@@ -261,13 +256,6 @@ class MpiWorld
 
     std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
                                                               int recvRank);
-
-    faabric::MpiHostsToRanksMessage recvMpiHostRankMsg();
-
-    void sendMpiHostRankMsg(const std::string& hostIn,
-                            const faabric::MpiHostsToRanksMessage msg);
-
-    void closeMpiMessageEndpoints();
 
     // Support for asyncrhonous communications
     std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,

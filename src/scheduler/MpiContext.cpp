@@ -25,10 +25,7 @@ int MpiContext::createWorld(faabric::Message& msg)
 
     // Create the MPI world
     scheduler::MpiWorldRegistry& reg = scheduler::getMpiWorldRegistry();
-    scheduler::MpiWorld& world = reg.createWorld(msg, worldId);
-
-    // Broadcast setup to other hosts
-    world.broadcastHostsToRanks();
+    reg.createWorld(msg, worldId);
 
     // Set up this context
     isMpi = true;

@@ -39,7 +39,6 @@ int terminateMpi()
     return MPI_SUCCESS;
 }
 
-
 int MPI_Init(int* argc, char*** argv)
 {
     faabric::Message* call = getExecutingCall();
@@ -56,7 +55,8 @@ int MPI_Init(int* argc, char*** argv)
 
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
-    SPDLOG_DEBUG("Initialised world (id: {}) for rank: {}", call->mpiworldid(), thisRank);
+    SPDLOG_DEBUG(
+      "Initialised world (id: {}) for rank: {}", call->mpiworldid(), thisRank);
 
     return MPI_SUCCESS;
 }
@@ -80,7 +80,8 @@ int MPI_Comm_size(MPI_Comm comm, int* size)
 
 int MPI_Finalize()
 {
-    SPDLOG_DEBUG("MPI - MPI_Finalize");
+    int rank = executingContext.getRank();
+    SPDLOG_DEBUG("MPI - MPI_Finalize (rank: {})", rank);
 
     return terminateMpi();
 }
@@ -221,28 +222,16 @@ int MPI_Bcast(void* buffer,
               int root,
               MPI_Comm comm)
 {
-    /*
     faabric::scheduler::MpiWorld& world = getExecutingWorld();
 
     int rank = executingContext.getRank();
-    if (rank == root) {
-        SPDLOG_DEBUG(fmt::format("MPI_Bcast {} -> all", rank));
-        world.broadcast(
-          rank, (uint8_t*)buffer, datatype, count, faabric::MPIMessage::NORMAL);
-    } else {
-        SPDLOG_DEBUG(fmt::format("MPI_Bcast {} <- {}", rank, root));
-        world.recv(root,
-                   rank,
-                   (uint8_t*)buffer,
-                   datatype,
-                   count,
-                   nullptr,
-                   faabric::MPIMessage::NORMAL);
-    }
+    world.broadcast(root,
+                    rank,
+                    (uint8_t*)buffer,
+                    datatype,
+                    count,
+                    faabric::MPIMessage::BROADCAST);
     return MPI_SUCCESS;
-    */
-    // TODO - copy new implementation from Faasm
-    throw std::runtime_error("MPI_Bcast not implemented");
 }
 
 int MPI_Scatter(const void* sendbuf,

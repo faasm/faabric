@@ -13,7 +13,6 @@ namespace tests {
 
 faabric::Message* tests::mpi::executingCall;
 
-/*
 int handleMpiAllGather(tests::DistTestExecutor* exec,
                        int threadPoolIdx,
                        int msgIdx,
@@ -84,7 +83,6 @@ int handleMpiChecks(tests::DistTestExecutor* exec,
     return checks();
 }
 
-*/
 int handleMpiGather(tests::DistTestExecutor* exec,
                     int threadPoolIdx,
                     int msgIdx,
@@ -105,7 +103,6 @@ int handleMpiHelloWorld(tests::DistTestExecutor* exec,
     return helloWorld();
 }
 
-/*
 int handleMpiISendRecv(tests::DistTestExecutor* exec,
                        int threadPoolIdx,
                        int msgIdx,
@@ -116,16 +113,6 @@ int handleMpiISendRecv(tests::DistTestExecutor* exec,
     return iSendRecv();
 }
 
-int handleMpiOneSided(tests::DistTestExecutor* exec,
-                      int threadPoolIdx,
-                      int msgIdx,
-                      std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
-    return oneSided();
-}
-
 int handleMpiOrder(tests::DistTestExecutor* exec,
                    int threadPoolIdx,
                    int msgIdx,
@@ -134,16 +121,6 @@ int handleMpiOrder(tests::DistTestExecutor* exec,
     executingCall = &req->mutable_messages()->at(msgIdx);
 
     return order();
-}
-
-int handleMpiProbe(tests::DistTestExecutor* exec,
-                   int threadPoolIdx,
-                   int msgIdx,
-                   std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
-    return probe();
 }
 
 int handleMpiReduce(tests::DistTestExecutor* exec,
@@ -216,20 +193,8 @@ int handleMpiTypeSize(tests::DistTestExecutor* exec,
     return typeSize();
 }
 
-int handleMpiWinCreate(tests::DistTestExecutor* exec,
-                       int threadPoolIdx,
-                       int msgIdx,
-                       std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    executingCall = &req->mutable_messages()->at(msgIdx);
-
-    return winCreate();
-}
-*/
-
 void registerMpiTestFunctions()
 {
-    /*
     registerDistTestExecutorCallback("mpi", "allgather", handleMpiAllGather);
     registerDistTestExecutorCallback("mpi", "allreduce", handleMpiAllReduce);
     registerDistTestExecutorCallback("mpi", "alltoall", handleMpiAllToAll);
@@ -237,14 +202,10 @@ void registerMpiTestFunctions()
     registerDistTestExecutorCallback("mpi", "cart-create", handleMpiCartCreate);
     registerDistTestExecutorCallback("mpi", "cartesian", handleMpiCartesian);
     registerDistTestExecutorCallback("mpi", "checks", handleMpiChecks);
-    */
     registerDistTestExecutorCallback("mpi", "gather", handleMpiGather);
     registerDistTestExecutorCallback("mpi", "hello-world", handleMpiHelloWorld);
-    /*
     registerDistTestExecutorCallback("mpi", "isendrecv", handleMpiISendRecv);
-    registerDistTestExecutorCallback("mpi", "onesided", handleMpiOneSided);
     registerDistTestExecutorCallback("mpi", "order", handleMpiOrder);
-    registerDistTestExecutorCallback("mpi", "probe", handleMpiProbe);
     registerDistTestExecutorCallback("mpi", "reduce", handleMpiReduce);
     registerDistTestExecutorCallback("mpi", "scan", handleMpiScan);
     registerDistTestExecutorCallback("mpi", "scatter", handleMpiScatter);
@@ -252,7 +213,5 @@ void registerMpiTestFunctions()
     registerDistTestExecutorCallback("mpi", "sendrecv", handleMpiSendRecv);
     registerDistTestExecutorCallback("mpi", "status", handleMpiStatus);
     registerDistTestExecutorCallback("mpi", "typesize", handleMpiTypeSize);
-    registerDistTestExecutorCallback("mpi", "win-create", handleMpiWinCreate);
-    */
 }
 }
