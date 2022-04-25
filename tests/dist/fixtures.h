@@ -93,8 +93,6 @@ class MpiDistTestsFixture : public DistTestsFixture
       const faabric::scheduler::ExecGraph& execGraph)
     {
         // Build the expectation
-        // Note - here we assume that MPI functions DON'T use the `NEVER_ALONE`
-        // scheduling topology hint. TODO change when #184 is merged in
         std::vector<std::string> expecedHosts;
         // The distributed server is hardcoded to have four slots
         int remoteSlots = 4;
@@ -105,14 +103,14 @@ class MpiDistTestsFixture : public DistTestsFixture
             expecedHosts.push_back(localIp);
         }
         // Second, allocate remotely as much as we can
-        int alocateRemotely =
+        int allocateRemotely =
           std::min<int>(worldSize - nLocalSlots, remoteSlots);
-        for (int i = 0; i < alocateRemotely; i++) {
+        for (int i = 0; i < allocateRemotely; i++) {
             expecedHosts.push_back(remoteIp);
         }
         // Lastly, overload the master with all the ranks we haven't been able
         // to allocate anywhere
-        int overloadMaster = worldSize - nLocalSlots - alocateRemotely;
+        int overloadMaster = worldSize - nLocalSlots - allocateRemotely;
         for (int i = 0; i < overloadMaster; i++) {
             expecedHosts.push_back(localIp);
         }

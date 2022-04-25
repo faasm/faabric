@@ -133,6 +133,16 @@ int handleMpiReduce(tests::DistTestExecutor* exec,
     return reduce();
 }
 
+int handleMpiReduceMany(tests::DistTestExecutor* exec,
+                        int threadPoolIdx,
+                        int msgIdx,
+                        std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    return reduceMany();
+}
+
 int handleMpiScan(tests::DistTestExecutor* exec,
                   int threadPoolIdx,
                   int msgIdx,
@@ -161,6 +171,26 @@ int handleMpiSend(tests::DistTestExecutor* exec,
     executingCall = &req->mutable_messages()->at(msgIdx);
 
     return send();
+}
+
+int handleMpiSendMany(tests::DistTestExecutor* exec,
+                      int threadPoolIdx,
+                      int msgIdx,
+                      std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    return sendMany();
+}
+
+int handleMpiSendSyncAsync(tests::DistTestExecutor* exec,
+                           int threadPoolIdx,
+                           int msgIdx,
+                           std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    return sendSyncAsync();
 }
 
 int handleMpiSendRecv(tests::DistTestExecutor* exec,
@@ -207,9 +237,13 @@ void registerMpiTestFunctions()
     registerDistTestExecutorCallback("mpi", "isendrecv", handleMpiISendRecv);
     registerDistTestExecutorCallback("mpi", "order", handleMpiOrder);
     registerDistTestExecutorCallback("mpi", "reduce", handleMpiReduce);
+    registerDistTestExecutorCallback("mpi", "reduce-many", handleMpiReduceMany);
     registerDistTestExecutorCallback("mpi", "scan", handleMpiScan);
     registerDistTestExecutorCallback("mpi", "scatter", handleMpiScatter);
     registerDistTestExecutorCallback("mpi", "send", handleMpiSend);
+    registerDistTestExecutorCallback("mpi", "send-many", handleMpiSendMany);
+    registerDistTestExecutorCallback(
+      "mpi", "send-sync-async", handleMpiSendSyncAsync);
     registerDistTestExecutorCallback("mpi", "sendrecv", handleMpiSendRecv);
     registerDistTestExecutorCallback("mpi", "status", handleMpiStatus);
     registerDistTestExecutorCallback("mpi", "typesize", handleMpiTypeSize);

@@ -293,6 +293,62 @@ class MpiTestFixture : public MpiBaseTestFixture
     faabric::scheduler::MpiWorld world;
 };
 
+// Note that this test has two worlds, which each "think" that the other is
+// remote. This is done by allowing one to have the IP of this host, the other
+// to have the localhost IP, i.e. 127.0.0.1.
+// This fixture must only be used in mocking mode. To test a real MPI execution
+// across different hosts you must write a distributed test.
+class RemoteMpiTestFixture : public MpiBaseTestFixture
+{
+  public:
+    RemoteMpiTestFixture()
+      : thisHost(faabric::util::getSystemConfig().endpointHost)
+      , testLatch(faabric::util::Latch::create(2))
+    {
+        otherWorld.overrideHost(otherHost);
+
+        faabric::util::setMockMode(true);
+    }
+
+    ~RemoteMpiTestFixture()
+    {
+        faabric::util::setMockMode(false);
+
+        faabric::scheduler::getMpiWorldRegistry().clear();
+    }
+
+    void setWorldSizes(int worldSize, int ranksThisWorld, int ranksOtherWorld)
+    {
+        // Update message
+        msg.set_mpiworldsize(worldSize);
+
+        // Set up the first world, holding the master rank (which already takes
+        // one slot).
+        // Note that any excess ranks will also be allocated to this world when
+        // the scheduler is overloaded.
+        faabric::HostResources thisResources;
+        thisResources.set_slots(ranksThisWorld);
+        thisResources.set_usedslots(1);
+        sch.setThisHostResources(thisResources);
+
+        // Set up the other world and add it to the global set of hosts
+        faabric::HostResources otherResources;
+        otherResources.set_slots(ranksOtherWorld);
+        sch.addHostToGlobalSet(otherHost);
+
+        // Queue the resource response for this other host
+        faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+    }
+
+  protected:
+    std::string thisHost;
+    std::string otherHost = LOCALHOST;
+
+    std::shared_ptr<faabric::util::Latch> testLatch;
+
+    faabric::scheduler::MpiWorld otherWorld;
+};
+
 class ExecutorContextTestFixture
 {
   public:

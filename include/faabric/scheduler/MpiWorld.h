@@ -26,8 +26,6 @@ namespace faabric::scheduler {
 // -----------------------------------
 // MPITOPTP - mocking at the MPI level won't be needed when using the PTP broker
 // as the broker already has mocking capabilities
-std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages();
-
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
   int sendRank);
 

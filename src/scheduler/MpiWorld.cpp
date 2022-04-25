@@ -31,18 +31,10 @@ namespace faabric::scheduler {
 // -----------------------------------
 static std::mutex mockMutex;
 
-static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
-
 // The identifier in this map is the sending rank. For the receiver's rank
 // we can inspect the MPIMessage object
 static std::map<int, std::vector<std::shared_ptr<faabric::MPIMessage>>>
   mpiMockedMessages;
-
-std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages()
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    return rankMessages;
-}
 
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
   int sendRank)
@@ -201,7 +193,6 @@ void MpiWorld::destroy()
     }
 
     // Clear structures used for mocking
-    rankMessages.clear();
     mpiMockedMessages.clear();
 }
 

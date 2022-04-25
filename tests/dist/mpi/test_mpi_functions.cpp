@@ -152,6 +152,18 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI reduce", "[mpi]")
     checkAllocationAndResult(req);
 }
 
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI reduce many times", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("reduce-many");
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI scan", "[mpi]")
 {
     // Set up this host's resources
@@ -181,6 +193,32 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI send", "[mpi]")
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
     auto req = setRequest("send");
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Test sending sync and async messages",
+                 "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("send-sync-async");
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test sending many MPI messages", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("send-many");
 
     // Call the functions
     sch.callFunctions(req);

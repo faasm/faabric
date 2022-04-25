@@ -20,9 +20,12 @@ set(ALL_MPI_EXAMPLES
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_isendrecv.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_order.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_reduce.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_reduce_many.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_scan.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_scatter.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_send.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_send_many.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_send_sync_async.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_sendrecv.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_status.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_typesize.cpp

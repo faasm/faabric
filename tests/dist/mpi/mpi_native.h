@@ -36,13 +36,19 @@ int probe();
 
 int reduce();
 
+int reduceMany();
+
 int scan();
 
 int scatter();
 
 int send();
 
+int sendMany();
+
 int sendRecv();
+
+int sendSyncAsync();
 
 int status();
 
