@@ -5,8 +5,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/scheduler/MpiMessageBuffer.h>
-// MPITOPTP - can we remove the MpiMessageEndpoint altogether?
-#include <faabric/transport/MpiMessageEndpoint.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>

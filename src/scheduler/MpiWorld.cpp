@@ -1,5 +1,6 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>

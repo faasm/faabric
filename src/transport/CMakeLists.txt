@@ -8,7 +8,6 @@ faabric_lib(transport
     MessageEndpoint.cpp
     MessageEndpointClient.cpp
     MessageEndpointServer.cpp
-    MpiMessageEndpoint.cpp
     PointToPointBroker.cpp
     PointToPointClient.cpp
     PointToPointServer.cpp
