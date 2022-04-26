@@ -62,6 +62,50 @@ int handlePointToPointFunction(
     return 0;
 }
 
+int handleManyPointToPointMsgFunction(
+  tests::DistTestExecutor* exec,
+  int threadPoolIdx,
+  int msgIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
+    int groupId = msg.groupid();
+    uint8_t groupIdx = (uint8_t)msg.groupidx();
+    int numMsg = 10000;
+
+    auto& broker = faabric::transport::getPointToPointBroker();
+
+    int sendIdx = 1;
+    int recvIdx = 0;
+    if (groupIdx == sendIdx) {
+        // Send loop
+        for (int i = 0; i < numMsg; i++) {
+            std::vector<uint8_t> sendData(5, i);
+            broker.sendMessage(
+              groupId, sendIdx, recvIdx, sendData.data(), sendData.size());
+        }
+    } else if (groupIdx == recvIdx) {
+        // Recv loop
+        for (int i = 0; i < numMsg; i++) {
+            std::vector<uint8_t> expectedData(5, i);
+            auto actualData = broker.recvMessage(groupId, sendIdx, recvIdx);
+            if (actualData != expectedData) {
+                SPDLOG_ERROR(
+                  "Out-of-order message reception (got: {}, expected: {})",
+                  actualData.at(0),
+                  expectedData.at(0));
+                return 1;
+            }
+        }
+    } else {
+        SPDLOG_ERROR("Unexpected group index: {}", groupIdx);
+        return 1;
+    }
+
+    return 0;
+}
+
 int handleDistributedLock(tests::DistTestExecutor* exec,
                           int threadPoolIdx,
                           int msgIdx,
@@ -408,6 +452,9 @@ void registerTransportTestFunctions()
 {
     registerDistTestExecutorCallback(
       "ptp", "simple", handlePointToPointFunction);
+
+    registerDistTestExecutorCallback(
+      "ptp", "many-msg", handleManyPointToPointMsgFunction);
 
     registerDistTestExecutorCallback(
       "ptp", "barrier", handleDistributedBarrier);
