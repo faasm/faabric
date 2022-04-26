@@ -630,6 +630,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     bool isForceLocal =
       topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
     if (!isForceLocal && (firstMsg.groupid() > 0)) {
+        // TODO - we must handle the case of function migration differently
         if (firstMsg.ismpi()) {
             // If we are scheduling an MPI message, we want rank 0 to be in the
             // group. However, rank 0 is the one calling this method to schedule

@@ -3,6 +3,7 @@
 
 #include "fixtures.h"
 #include "init.h"
+#include "mpi/mpi_native.h"
 
 #include <faabric/scheduler/Scheduler.h>
 
@@ -37,6 +38,18 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[mpi]")
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
     auto req = setRequest("alltoall");
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI barrier", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("barrier");
 
     // Call the functions
     sch.callFunctions(req);
@@ -85,6 +98,24 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[mpi]")
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
     auto req = setRequest("checks");
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    checkAllocationAndResult(req);
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
+{
+    // We fist distribute the execution, and update the local slots
+    // mid-execution to fit all ranks, and create a migration opportunity.
+    setLocalSlots(nLocalSlots);
+
+    auto req = setRequest("migration");
+    auto& msg = req->mutable_messages()->at(0);
+
+    msg.set_migrationcheckperiod(5);
+    msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
     // Call the functions
     sch.callFunctions(req);

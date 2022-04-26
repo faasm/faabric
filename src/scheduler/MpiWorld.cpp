@@ -474,10 +474,12 @@ void MpiWorld::send(int sendRank,
 
     // Dispatch the message locally or globally
     if (isLocal) {
-        SPDLOG_TRACE("MPI - send {} -> {}", sendRank, recvRank);
+        SPDLOG_INFO(
+          "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
         getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
-        SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
+        SPDLOG_INFO(
+          "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
         sendRemoteMpiMessage(sendRank, recvRank, m);
     }
 
@@ -505,6 +507,7 @@ void MpiWorld::recv(int sendRank,
                     MPI_Status* status,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
+    SPDLOG_INFO("MPI recv {} -> {} ({})", sendRank, recvRank, messageType);
     // Sanity-check input parameters
     checkRanksRange(sendRank, recvRank);
 
@@ -530,6 +533,11 @@ void MpiWorld::doRecv(std::shared_ptr<faabric::MPIMessage>& m,
 {
     // Assert message integrity
     // Note - this checks won't happen in Release builds
+    if (m->messagetype() != messageType) {
+        SPDLOG_ERROR("Different message types (got: {}, expected: {})",
+                     m->messagetype(),
+                     messageType);
+    }
     assert(m->messagetype() == messageType);
     assert(m->count() <= count);
 
@@ -1315,6 +1323,8 @@ void MpiWorld::allToAll(int rank,
              nullptr,
              faabric::MPIMessage::ALLTOALL);
     }
+
+    SPDLOG_INFO("All to all finished");
 }
 
 // 30/12/21 - Probe is now broken after the switch to a different type of
@@ -1340,18 +1350,18 @@ void MpiWorld::barrier(int thisRank)
     // Rank 0 coordinates the barrier operation
     if (thisRank == 0) {
         // This is the root, hence waits for all ranks to get to the barrier
-        SPDLOG_TRACE("MPI - barrier init {}", thisRank);
+        SPDLOG_INFO("MPI - barrier init {}", thisRank);
 
         // Await messages from all others
         for (int r = 1; r < size; r++) {
             MPI_Status s{};
             recv(
               r, 0, nullptr, MPI_INT, 0, &s, faabric::MPIMessage::BARRIER_JOIN);
-            SPDLOG_TRACE("MPI - recv barrier join {}", s.MPI_SOURCE);
+            SPDLOG_INFO("MPI - recv barrier join {}", s.MPI_SOURCE);
         }
     } else {
         // Tell the root that we're waiting
-        SPDLOG_TRACE("MPI - barrier join {}", thisRank);
+        SPDLOG_INFO("MPI - barrier join {}", thisRank);
         send(
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
     }
@@ -1371,7 +1381,7 @@ void MpiWorld::barrier(int thisRank)
     // Rank 0 broadcasts that the barrier is done (the others block here)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
-    SPDLOG_TRACE("MPI - barrier done {}", thisRank);
+    SPDLOG_INFO("MPI - barrier done {}", thisRank);
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,

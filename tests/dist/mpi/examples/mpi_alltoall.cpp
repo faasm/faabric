@@ -7,7 +7,8 @@ int allToAll()
 {
     MPI_Init(NULL, NULL);
 
-    int rank, worldSize;
+    int rank;
+    int worldSize;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
 

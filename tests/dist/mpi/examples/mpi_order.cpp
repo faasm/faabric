@@ -41,10 +41,8 @@ int order()
                    out[1],
                    out[2]);
             return 1;
-        } else {
-            printf("MPI order check successful\n");
         }
-
+        printf("MPI order check successful\n");
     } else if (rank > 0 && rank <= 3) {
         // Echo message back to master
         int receivedNumber = 0;

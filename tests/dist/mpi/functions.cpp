@@ -43,6 +43,16 @@ int handleMpiAllToAll(tests::DistTestExecutor* exec,
     return allToAll();
 }
 
+int handleMpiBarrier(tests::DistTestExecutor* exec,
+                     int threadPoolIdx,
+                     int msgIdx,
+                     std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    return barrier();
+}
+
 int handleMpiBcast(tests::DistTestExecutor* exec,
                    int threadPoolIdx,
                    int msgIdx,
@@ -111,6 +121,16 @@ int handleMpiISendRecv(tests::DistTestExecutor* exec,
     executingCall = &req->mutable_messages()->at(msgIdx);
 
     return iSendRecv();
+}
+
+int handleMpiMigration(tests::DistTestExecutor* exec,
+                       int threadPoolIdx,
+                       int msgIdx,
+                       std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    return migration(std::stoi(executingCall->inputdata()));
 }
 
 int handleMpiOrder(tests::DistTestExecutor* exec,
@@ -228,6 +248,7 @@ void registerMpiTestFunctions()
     registerDistTestExecutorCallback("mpi", "allgather", handleMpiAllGather);
     registerDistTestExecutorCallback("mpi", "allreduce", handleMpiAllReduce);
     registerDistTestExecutorCallback("mpi", "alltoall", handleMpiAllToAll);
+    registerDistTestExecutorCallback("mpi", "barrier", handleMpiBarrier);
     registerDistTestExecutorCallback("mpi", "bcast", handleMpiBcast);
     registerDistTestExecutorCallback("mpi", "cart-create", handleMpiCartCreate);
     registerDistTestExecutorCallback("mpi", "cartesian", handleMpiCartesian);
@@ -235,6 +256,7 @@ void registerMpiTestFunctions()
     registerDistTestExecutorCallback("mpi", "gather", handleMpiGather);
     registerDistTestExecutorCallback("mpi", "hello-world", handleMpiHelloWorld);
     registerDistTestExecutorCallback("mpi", "isendrecv", handleMpiISendRecv);
+    registerDistTestExecutorCallback("mpi", "migration", handleMpiMigration);
     registerDistTestExecutorCallback("mpi", "order", handleMpiOrder);
     registerDistTestExecutorCallback("mpi", "reduce", handleMpiReduce);
     registerDistTestExecutorCallback("mpi", "reduce-many", handleMpiReduceMany);

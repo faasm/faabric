@@ -1,8 +1,11 @@
 #include "mpi_native.h"
 
 #include <faabric/mpi/mpi.h>
+#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorld.h>
+#include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/compare.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
@@ -751,4 +754,144 @@ int MPI_Op_free(MPI_Op* op)
     notImplemented("MPI_Op_free");
 
     return MPI_SUCCESS;
+}
+
+namespace tests::mpi {
+// ----- Helper functions -----
+// Mocked version to the migration point defined in Faasm's host interface to
+// run migration tests for MPI also in faabric
+void mpiMigrationPoint(int entrypointFuncArg)
+{
+    SPDLOG_DEBUG("MPI migration point with argument: {}", entrypointFuncArg);
+
+    auto* call = &faabric::scheduler::ExecutorContext::get()->getMsg();
+    auto& sch = faabric::scheduler::getScheduler();
+
+    // Detect if there is a pending migration for the current app
+    auto pendingMigrations = sch.getPendingAppMigrations(call->appid());
+    bool appMustMigrate = pendingMigrations != nullptr;
+
+    // Detect if this particular function needs to be migrated or not
+    bool funcMustMigrate = false;
+    std::string hostToMigrateTo = "otherHost";
+    if (appMustMigrate) {
+        for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
+            auto m = pendingMigrations->mutable_migrations()->at(i);
+            if (m.msg().id() == call->id()) {
+                funcMustMigrate = true;
+                hostToMigrateTo = m.dsthost();
+                break;
+            }
+        }
+    }
+
+    // Regardless if we have to individually migrate or not, we need to prepare
+    // for the app migration
+    if (appMustMigrate && call->ismpi()) {
+        auto& mpiWorld = faabric::scheduler::getMpiWorldRegistry().getWorld(
+          call->mpiworldid());
+        // TODO - update our broker records here?
+        mpiWorld.prepareMigration(call->mpirank(), pendingMigrations);
+    }
+
+    // Do actual migration
+    if (funcMustMigrate) {
+        std::string argStr = std::to_string(entrypointFuncArg);
+        std::vector<uint8_t> inputData(argStr.begin(), argStr.end());
+
+        std::string user = call->user();
+
+        std::shared_ptr<faabric::BatchExecuteRequest> req =
+          faabric::util::batchExecFactory(call->user(), call->function(), 1);
+
+        faabric::Message& msg = req->mutable_messages()->at(0);
+        msg.set_inputdata(inputData.data(), inputData.size());
+
+        // Take snapshot of function and send it to the host we are migrating
+        // to. Note that the scheduler only pushes snapshots as part of function
+        // chaining from the master host of the app, and
+        // we are most likely migrating from a non-master host. Thus, we must
+        // take and push the snapshot manually.
+        auto* exec = faabric::scheduler::ExecutorContext::get()->getExecutor();
+        auto snap =
+          std::make_shared<faabric::util::SnapshotData>(exec->getMemoryView());
+        std::string snapKey = "migration_" + std::to_string(msg.id());
+        auto& reg = faabric::snapshot::getSnapshotRegistry();
+        reg.registerSnapshot(snapKey, snap);
+        sch.getSnapshotClient(hostToMigrateTo).pushSnapshot(snapKey, snap);
+
+        // Propagate the app ID and set the _same_ message ID
+        msg.set_id(call->id());
+        msg.set_groupid(call->groupid());
+        // TODO - this is new
+        msg.set_groupidx(call->groupidx());
+        msg.set_appid(call->appid());
+
+        // If message is MPI, propagate the necessary MPI bits
+        if (call->ismpi()) {
+            msg.set_ismpi(true);
+            msg.set_mpiworldid(call->mpiworldid());
+            msg.set_mpiworldsize(call->mpiworldsize());
+            msg.set_mpirank(call->mpirank());
+        }
+
+        if (call->recordexecgraph()) {
+            msg.set_recordexecgraph(true);
+        }
+
+        SPDLOG_INFO("Migrating {}/{} {} to {}",
+                    msg.user(),
+                    msg.function(),
+                    call->id(),
+                    hostToMigrateTo);
+
+        // Build decision and send
+        faabric::util::SchedulingDecision decision(msg.appid(), msg.groupid());
+        decision.addMessage(hostToMigrateTo, msg);
+        sch.callFunctions(req, decision);
+
+        if (call->recordexecgraph()) {
+            sch.logChainedFunction(call->id(), msg.id());
+        }
+
+        // Throw an exception to be caught by the executor and terminate
+        throw faabric::util::FunctionMigratedException("Migrating MPI rank");
+    }
+}
+
+int doAllToAll(int rank, int worldSize, int i)
+{
+    int retVal = 0;
+    int chunkSize = 2;
+    int fullSize = worldSize * chunkSize;
+
+    // Arrays for sending and receiving
+    int* sendBuf = new int[fullSize];
+    int* expected = new int[fullSize];
+    int* actual = new int[fullSize];
+
+    // Populate data
+    for (int i = 0; i < fullSize; i++) {
+        // Send buffer from this rank
+        sendBuf[i] = (rank * 10) + i;
+
+        // Work out which rank this chunk of the expectation will come from
+        int rankOffset = (rank * chunkSize) + (i % chunkSize);
+        int recvRank = i / chunkSize;
+        expected[i] = (recvRank * 10) + rankOffset;
+    }
+
+    MPI_Alltoall(
+      sendBuf, chunkSize, MPI_INT, actual, chunkSize, MPI_INT, MPI_COMM_WORLD);
+
+    if (!faabric::util::compareArrays<int>(actual, expected, fullSize)) {
+        retVal = 1;
+    }
+
+    delete[] sendBuf;
+    delete[] actual;
+    delete[] expected;
+
+    return retVal;
+}
 }

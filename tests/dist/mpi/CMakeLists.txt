@@ -12,12 +12,14 @@ set(ALL_MPI_EXAMPLES
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_allreduce.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_alltoall.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_bcast.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_barrier.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_cart_create.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_cartesian.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_checks.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_gather.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_helloworld.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_isendrecv.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_migration.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_order.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_reduce.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_reduce_many.cpp
