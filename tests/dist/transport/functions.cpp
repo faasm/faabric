@@ -84,12 +84,23 @@ int handleManyPointToPointMsgFunction(
             std::vector<uint8_t> sendData(5, i);
             broker.sendMessage(
               groupId, sendIdx, recvIdx, sendData.data(), sendData.size());
+            // SLEEP_MS(50);
         }
     } else if (groupIdx == recvIdx) {
         // Recv loop
         for (int i = 0; i < numMsg; i++) {
             std::vector<uint8_t> expectedData(5, i);
             auto actualData = broker.recvMessage(groupId, sendIdx, recvIdx);
+            /*
+            if (actualData.size() != expectedData.size()) {
+                SPDLOG_INFO("Different sizes, actual: {}, expected: {}",
+            actualData.size(), expectedData.size());
+            }
+            for (int i = 0; i < actualData.size(); i++) {
+                SPDLOG_INFO("actual: {} - expected: {}", actualData.at(i),
+            expectedData.at(i));
+            }
+            */
             if (actualData != expectedData) {
                 SPDLOG_ERROR(
                   "Out-of-order message reception (got: {}, expected: {})",
@@ -102,6 +113,125 @@ int handleManyPointToPointMsgFunction(
         SPDLOG_ERROR("Unexpected group index: {}", groupIdx);
         return 1;
     }
+
+    return 0;
+}
+
+void doExperiment(std::map<std::string, std::vector<double>>& results,
+                  const std::string& expKey,
+                  int numRounds,
+                  int numMsg,
+                  int groupId,
+                  int groupIdx)
+{
+    auto& broker = faabric::transport::getPointToPointBroker();
+
+    // Prepare message
+    int sendIdx = 1;
+    int recvIdx = 0;
+    int worldId = 1337;
+    auto mpiMsg = std::make_shared<faabric::MPIMessage>();
+    std::vector<uint8_t> sendData(5, 1);
+    mpiMsg->set_id(1);
+    mpiMsg->set_worldid(worldId);
+    mpiMsg->set_sender(1);
+    mpiMsg->set_destination(0);
+    mpiMsg->set_buffer(sendData.data(), sendData.size());
+    SERIALISE_MSG_PTR(mpiMsg);
+
+    // Run experiments
+    results[expKey].resize(numRounds);
+    for (int nr = 0; nr < numRounds; nr++) {
+        if (groupIdx == sendIdx) {
+            // Send loop
+            for (int i = 0; i < numMsg; i++) {
+                broker.sendMessage(
+                  groupId, sendIdx, recvIdx, serialisedBuffer, serialisedSize);
+            }
+            SPDLOG_INFO("Finished send loop");
+        } else if (groupIdx == recvIdx) {
+            // Recv loop
+            auto startTime = faabric::util::startTimer();
+            for (int i = 0; i < numMsg; i++) {
+                auto actualData = broker.recvMessage(groupId, sendIdx, recvIdx);
+                try {
+                    PARSE_MSG(faabric::MPIMessage,
+                              actualData.data(),
+                              actualData.size());
+                    assert(parsedMsg.worldid() == worldId);
+                } catch (std::runtime_error& e) {
+                    SPDLOG_ERROR(
+                      "Caught exception deserialising msg number: {}", i);
+                    throw e;
+                }
+            }
+            auto elapsedTime = faabric::util::getTimeDiffMillis(startTime);
+            SPDLOG_INFO("Finished recv loop in {} ms ({:.6} k msg/sec)",
+                        elapsedTime,
+                        numMsg / elapsedTime);
+            results[expKey].at(nr) = numMsg / elapsedTime;
+        } else {
+            SPDLOG_ERROR("Unexpected group index: {}", groupIdx);
+            throw std::runtime_error("Unexpected group index");
+        }
+    }
+}
+
+int handleManyPointToPointMpiMsgFunction(
+  tests::DistTestExecutor* exec,
+  int threadPoolIdx,
+  int msgIdx,
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& msg = req->mutable_messages()->at(msgIdx);
+
+    int groupId = msg.groupid();
+    uint8_t groupIdx = (uint8_t)msg.groupidx();
+
+    int numRounds = 2;
+    int numMsg = 1e6;
+    int interTestSleepMs = 500;
+    auto& broker = faabric::transport::getPointToPointBroker();
+    std::map<std::string, std::vector<double>> results;
+
+    // Configuration 1: multi-threaded ptp broker without ordering
+    /*
+    broker.setMustOrderMessages(false);
+    doExperiment(results, "mt-wout-order", numRounds, numMsg, groupId,
+    groupIdx); SPDLOG_INFO("Finished experiment");
+
+    SLEEP_MS(interTestSleepMs);
+    */
+
+    // Configuration 2: single-threaded ptp broker without ordering (single
+    // threading enforced through configuration)
+    broker.setMustOrderMessages(true);
+    doExperiment(results, "mt-w-order", numRounds, numMsg, groupId, groupIdx);
+
+    // Post-process the results
+    SPDLOG_INFO("----------------------- Results ------------------------");
+    SPDLOG_INFO("conf\t\tavg (k msg/sec)\t\tstdev");
+    // TODO - so far it is not clear how to change the initialisation parameters
+    // (i.e. pointToPointServerThreads) without re-running the experiment. So
+    // I hardcode the results of running the same experiment as `mt-wout-order`
+    // with just one worker thread in the server. Results obtained with
+    // `numRuns = 5`.
+    SPDLOG_INFO("st-no-opt\t\t123.377\t\t\t4.421249");
+    for (const auto& key : results) {
+        double sum = std::accumulate(key.second.begin(), key.second.end(), 0.0);
+        double mean = sum / key.second.size();
+
+        std::vector<double> diff(key.second.size());
+        std::transform(key.second.begin(),
+                       key.second.end(),
+                       diff.begin(),
+                       [mean](double x) { return x - mean; });
+        double sqSum =
+          std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+        double stdev = std::sqrt(sqSum / key.second.size());
+        SPDLOG_INFO("{}\t{:.6}\t\t\t{:.6f}", key.first, mean, stdev);
+    }
+    SPDLOG_INFO("--------------------------------------------------------");
 
     return 0;
 }
@@ -455,6 +585,9 @@ void registerTransportTestFunctions()
 
     registerDistTestExecutorCallback(
       "ptp", "many-msg", handleManyPointToPointMsgFunction);
+
+    registerDistTestExecutorCallback(
+      "ptp", "many-mpi", handleManyPointToPointMpiMsgFunction);
 
     registerDistTestExecutorCallback(
       "ptp", "barrier", handleDistributedBarrier);

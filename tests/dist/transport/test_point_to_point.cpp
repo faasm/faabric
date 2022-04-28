@@ -123,6 +123,58 @@ TEST_CASE_METHOD(DistTestsFixture,
     }
 }
 
+TEST_CASE_METHOD(DistTestsFixture, "Test many MPI messages", "[ptp][transport]")
+{
+    std::set<std::string> actualAvailable = sch.getAvailableHosts();
+    std::set<std::string> expectedAvailable = { getMasterIP(), getWorkerIP() };
+    REQUIRE(actualAvailable == expectedAvailable);
+
+    int appId = 222;
+    int groupId = 333;
+
+    // Set up this host's resources
+    // Make sure some functions execute remotely, some locally
+    int nLocalSlots = 1;
+    int nFuncs = 2;
+
+    faabric::HostResources res;
+    res.set_slots(nLocalSlots);
+    sch.setThisHostResources(res);
+
+    // Set up batch request
+    std::shared_ptr<faabric::BatchExecuteRequest> req =
+      faabric::util::batchExecFactory("ptp", "many-mpi", nFuncs);
+
+    // Prepare expected decision
+    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
+    std::vector<std::string> expectedHosts = { getMasterIP(), getWorkerIP() };
+
+    // Set up individual messages
+    for (int i = 0; i < nFuncs; i++) {
+        faabric::Message& msg = req->mutable_messages()->at(i);
+
+        msg.set_appid(appId);
+        msg.set_appidx(i);
+        msg.set_groupid(groupId);
+        msg.set_groupidx(i);
+
+        // Add to expected decision
+        expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
+    }
+
+    // Call the functions
+    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    checkSchedulingDecisionEquality(actualDecision, expectedDecision);
+
+    // Check functions executed successfully
+    for (int i = 0; i < nFuncs; i++) {
+        faabric::Message& m = req->mutable_messages()->at(i);
+
+        sch.getFunctionResult(m.id(), 100000);
+        REQUIRE(m.returnvalue() == 0);
+    }
+}
+
 TEST_CASE_METHOD(DistTestsFixture,
                  "Test distributed coordination",
                  "[ptp][transport]")

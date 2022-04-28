@@ -4,6 +4,7 @@
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -27,12 +28,25 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
             PARSE_MSG(
               faabric::PointToPointMessage, message.udata(), message.size())
 
-            // Send the message locally to the downstream socket
-            broker.sendMessage(parsedMsg.groupid(),
-                               parsedMsg.sendidx(),
-                               parsedMsg.recvidx(),
-                               BYTES_CONST(parsedMsg.data().c_str()),
-                               parsedMsg.data().size());
+            if (parsedMsg.seqnum() > 0) {
+                // Send the message locally to the downstream socket, piggy-back
+                // sequence number for in-order reception
+                // TODO - this could poitentially be doing another copy
+                std::vector<uint8_t> parsedData(parsedMsg.data().begin(),
+                                                parsedMsg.data().end());
+                faabric::util::appendBytesOf(parsedData, parsedMsg.seqnum());
+                broker.sendMessage(parsedMsg.groupid(),
+                                   parsedMsg.sendidx(),
+                                   parsedMsg.recvidx(),
+                                   BYTES_CONST(parsedData.data()),
+                                   parsedData.size());
+            } else {
+                broker.sendMessage(parsedMsg.groupid(),
+                                   parsedMsg.sendidx(),
+                                   parsedMsg.recvidx(),
+                                   BYTES_CONST(parsedMsg.data().c_str()),
+                                   parsedMsg.data().size());
+            }
             break;
         }
         case faabric::transport::PointToPointCall::LOCK_GROUP: {

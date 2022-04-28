@@ -116,6 +116,8 @@ class PointToPointBroker
 
     void resetThreadLocalCache();
 
+    void setMustOrderMessages(bool mustOrderMsgs);
+
   private:
     faabric::util::SystemConfig& conf;
 
@@ -128,6 +130,18 @@ class PointToPointBroker
       groupFlags;
 
     std::shared_ptr<faabric::util::FlagWaiter> getGroupFlag(int groupId);
+
+    std::vector<uint8_t> doRecvMessage(int groupId, int sendIdx, int recvIdx);
+
+    std::atomic<bool> orderMsg;
+
+    void incrementSentMsgCount(faabric::PointToPointMessage& msg,
+                               int groupId,
+                               int recvIdx);
+
+    void incrementRecvMsgCount(int groupId, int sendIdx);
+
+    int getExpectedSeqNum(int groupId, int sendIdx);
 };
 
 PointToPointBroker& getPointToPointBroker();

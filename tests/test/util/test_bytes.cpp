@@ -216,4 +216,31 @@ TEST_CASE("Test format int to hex string", "[util]")
         REQUIRE(expectedString == intToHexString(number));
     }
 }
+
+TEST_CASE("Test adding int to the end of a byte array", "[util]")
+{
+    std::vector<uint8_t> bytes;
+}
+
+TEST_CASE("Test adding and trimming int from the end of a byte array", "[util]")
+{
+    std::vector<uint8_t> bytes = stringToBytes("foobarbaz");
+    int expectedInt = 0;
+
+    SECTION("Test case 1")
+    {
+        expectedInt = 5;
+        appendBytesOf(bytes, expectedInt);
+    }
+
+    SECTION("Test case 2")
+    {
+        expectedInt = 32;
+        appendBytesOf(bytes, expectedInt);
+    }
+
+    int outValue;
+    readBytesOf(bytes, bytes.size() - sizeof(int), &outValue);
+    REQUIRE(outValue == expectedInt);
+}
 }
