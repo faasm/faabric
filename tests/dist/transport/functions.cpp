@@ -74,7 +74,9 @@ int handleManyPointToPointMsgFunction(
     uint8_t groupIdx = (uint8_t)msg.groupidx();
     int numMsg = 10000;
 
+    // Set the broker to receive messages in order
     auto& broker = faabric::transport::getPointToPointBroker();
+    broker.setMustOrderMessages(true);
 
     int sendIdx = 1;
     int recvIdx = 0;
@@ -84,23 +86,12 @@ int handleManyPointToPointMsgFunction(
             std::vector<uint8_t> sendData(5, i);
             broker.sendMessage(
               groupId, sendIdx, recvIdx, sendData.data(), sendData.size());
-            // SLEEP_MS(50);
         }
     } else if (groupIdx == recvIdx) {
         // Recv loop
         for (int i = 0; i < numMsg; i++) {
             std::vector<uint8_t> expectedData(5, i);
             auto actualData = broker.recvMessage(groupId, sendIdx, recvIdx);
-            /*
-            if (actualData.size() != expectedData.size()) {
-                SPDLOG_INFO("Different sizes, actual: {}, expected: {}",
-            actualData.size(), expectedData.size());
-            }
-            for (int i = 0; i < actualData.size(); i++) {
-                SPDLOG_INFO("actual: {} - expected: {}", actualData.at(i),
-            expectedData.at(i));
-            }
-            */
             if (actualData != expectedData) {
                 SPDLOG_ERROR(
                   "Out-of-order message reception (got: {}, expected: {})",
@@ -195,13 +186,12 @@ int handleManyPointToPointMpiMsgFunction(
     std::map<std::string, std::vector<double>> results;
 
     // Configuration 1: multi-threaded ptp broker without ordering
-    /*
     broker.setMustOrderMessages(false);
-    doExperiment(results, "mt-wout-order", numRounds, numMsg, groupId,
-    groupIdx); SPDLOG_INFO("Finished experiment");
+    doExperiment(
+      results, "mt-wout-order", numRounds, numMsg, groupId, groupIdx);
+    SPDLOG_INFO("Finished experiment");
 
     SLEEP_MS(interTestSleepMs);
-    */
 
     // Configuration 2: single-threaded ptp broker without ordering (single
     // threading enforced through configuration)
@@ -216,7 +206,7 @@ int handleManyPointToPointMpiMsgFunction(
     // I hardcode the results of running the same experiment as `mt-wout-order`
     // with just one worker thread in the server. Results obtained with
     // `numRuns = 5`.
-    SPDLOG_INFO("st-no-opt\t\t123.377\t\t\t4.421249");
+    SPDLOG_INFO("st-no-opt\t123.377\t\t\t4.421249");
     for (const auto& key : results) {
         double sum = std::accumulate(key.second.begin(), key.second.end(), 0.0);
         double mean = sum / key.second.size();

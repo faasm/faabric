@@ -29,17 +29,14 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
               faabric::PointToPointMessage, message.udata(), message.size())
 
             if (parsedMsg.seqnum() > 0) {
-                // Send the message locally to the downstream socket, piggy-back
+                // Send the message locally to the downstream socket, add the
                 // sequence number for in-order reception
-                // TODO - this could poitentially be doing another copy
-                std::vector<uint8_t> parsedData(parsedMsg.data().begin(),
-                                                parsedMsg.data().end());
-                faabric::util::appendBytesOf(parsedData, parsedMsg.seqnum());
                 broker.sendMessage(parsedMsg.groupid(),
                                    parsedMsg.sendidx(),
                                    parsedMsg.recvidx(),
-                                   BYTES_CONST(parsedData.data()),
-                                   parsedData.size());
+                                   BYTES_CONST(parsedMsg.data().c_str()),
+                                   parsedMsg.data().size(),
+                                   parsedMsg.seqnum());
             } else {
                 broker.sendMessage(parsedMsg.groupid(),
                                    parsedMsg.sendidx(),

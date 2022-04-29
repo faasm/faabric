@@ -106,7 +106,8 @@ class PointToPointBroker
                      int sendIdx,
                      int recvIdx,
                      const uint8_t* buffer,
-                     size_t bufferSize);
+                     size_t bufferSize,
+                     int sequenceNum = -1);
 
     std::vector<uint8_t> recvMessage(int groupId, int sendIdx, int recvIdx);
 
@@ -131,9 +132,11 @@ class PointToPointBroker
 
     std::shared_ptr<faabric::util::FlagWaiter> getGroupFlag(int groupId);
 
-    std::vector<uint8_t> doRecvMessage(int groupId, int sendIdx, int recvIdx);
+    Message doRecvMessage(int groupId, int sendIdx, int recvIdx);
 
     std::atomic<bool> orderMsg;
+
+    void initSequenceCounters(int groupId);
 
     void incrementSentMsgCount(faabric::PointToPointMessage& msg,
                                int groupId,

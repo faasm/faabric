@@ -52,7 +52,11 @@ class Message
 
     void setHeader(uint8_t header) { _header = header; };
 
-    uint8_t getHeader() { return _header; };
+    uint8_t getHeader() const { return _header; };
+
+    void setSequenceNum(int sequenceNum) { _sequenceNum = sequenceNum; };
+
+    int getSequenceNum() const { return _sequenceNum; };
 
   private:
     std::vector<uint8_t> buffer;
@@ -60,5 +64,7 @@ class Message
     MessageResponseCode responseCode = MessageResponseCode::SUCCESS;
 
     uint8_t _header = 0;
+
+    int _sequenceNum = -1;
 };
 }

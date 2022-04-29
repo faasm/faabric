@@ -170,7 +170,7 @@ TEST_CASE_METHOD(DistTestsFixture, "Test many MPI messages", "[ptp][transport]")
     for (int i = 0; i < nFuncs; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
 
-        sch.getFunctionResult(m.id(), 100000);
+        sch.getFunctionResult(m.id(), 60000);
         REQUIRE(m.returnvalue() == 0);
     }
 }

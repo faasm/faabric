@@ -44,12 +44,11 @@ thread_local int currentGroupId = NO_CURRENT_GROUP_ID;
 
 // Note that on the sent message count we index by receiving rank and on the
 // receive message count we index by sending rank.
-thread_local std::unique_ptr<std::vector<int>> sentMsgCount;
+thread_local std::vector<int> sentMsgCount;
 
-thread_local std::unique_ptr<std::vector<int>> recvMsgCount;
+thread_local std::vector<int> recvMsgCount;
 
-thread_local std::list<std::pair<int, std::shared_ptr<std::vector<uint8_t>>>>
-  outOfOrderMsgs;
+thread_local std::list<Message> outOfOrderMsgs;
 
 static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
 {
@@ -519,92 +518,60 @@ std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)
     return groupIdIdxsMap[groupId];
 }
 
+void PointToPointBroker::initSequenceCounters(int groupId)
+{
+    if (currentGroupId != NO_CURRENT_GROUP_ID) {
+        SPDLOG_WARN("Changing the current group Id in PTP broker ({} -> {})",
+                    currentGroupId,
+                    groupId);
+    }
+    currentGroupId = groupId;
+    int groupSize = getIdxsRegisteredForGroup(groupId).size();
+    // We assume that group indexes will always go from 0 to `groupSize - 1`
+    // We also want to start counting from one. This way, an unset sequence
+    // number (0 by default in protobuf) will indicate that it is unset.
+    // Also, we initialise both counters at the same time, as we only know
+    // once per thread when we have changed group id.
+    sentMsgCount = std::vector<int>(groupSize, 1);
+    recvMsgCount = std::vector<int>(groupSize, 1);
+}
+
 void PointToPointBroker::incrementSentMsgCount(
   faabric::PointToPointMessage& msg,
   int groupId,
   int recvIdx)
 {
     if (groupId != currentGroupId) {
-        if (currentGroupId != NO_CURRENT_GROUP_ID) {
-            SPDLOG_WARN(
-              "Changing the current group Id in PTP broker ({} -> {})",
-              currentGroupId,
-              groupId);
-        }
-        currentGroupId = groupId;
-        int groupSize = getIdxsRegisteredForGroup(groupId).size();
-        // We assume that group indexes will always go from 0 to `groupSize - 1`
-        // We also want to start counting from one. This way, an unset sequence
-        // number (0 by default in protobuf) will indicate that it is unset.
-        if (sentMsgCount != nullptr) {
-            sentMsgCount->clear();
-            sentMsgCount->resize(groupSize, 1);
-        } else {
-            sentMsgCount = std::make_unique<std::vector<int>>(groupSize, 1);
-        }
+        initSequenceCounters(groupId);
     }
 
-    assert(recvIdx < sentMsgCount->size());
-    msg.set_seqnum(sentMsgCount->at(recvIdx)++);
+    msg.set_seqnum(sentMsgCount.at(recvIdx)++);
 }
 
 int PointToPointBroker::getExpectedSeqNum(int groupId, int sendIdx)
 {
     if (groupId != currentGroupId) {
-        if (currentGroupId != NO_CURRENT_GROUP_ID) {
-            SPDLOG_WARN(
-              "Changing the current group Id in PTP broker ({} -> {})",
-              currentGroupId,
-              groupId);
-        }
-        currentGroupId = groupId;
-        int groupSize = getIdxsRegisteredForGroup(groupId).size();
-        // We assume that group indexes will always go from 0 to `groupSize - 1`
-        // We also want to start counting from one. This way, an unset sequence
-        // number (0 by default in protobuf) will indicate that it is unset.
-        if (recvMsgCount != nullptr) {
-            recvMsgCount->clear();
-            recvMsgCount->resize(groupSize, 1);
-        } else {
-            recvMsgCount = std::make_unique<std::vector<int>>(groupSize, 1);
-        }
+        initSequenceCounters(groupId);
     }
 
-    assert(sendIdx < recvMsgCount->size());
-    return recvMsgCount->at(sendIdx);
+    return recvMsgCount.at(sendIdx);
 }
 
 void PointToPointBroker::incrementRecvMsgCount(int groupId, int sendIdx)
 {
     if (groupId != currentGroupId) {
-        if (currentGroupId != NO_CURRENT_GROUP_ID) {
-            SPDLOG_WARN(
-              "Changing the current group Id in PTP broker ({} -> {})",
-              currentGroupId,
-              groupId);
-        }
-        currentGroupId = groupId;
-        int groupSize = getIdxsRegisteredForGroup(groupId).size();
-        // We assume that group indexes will always go from 0 to `groupSize - 1`
-        // We also want to start counting from one. This way, an unset sequence
-        // number (0 by default in protobuf) will indicate that it is unset.
-        if (recvMsgCount != nullptr) {
-            recvMsgCount->clear();
-            recvMsgCount->resize(groupSize, 1);
-        } else {
-            recvMsgCount = std::make_unique<std::vector<int>>(groupSize, 1);
-        }
+        initSequenceCounters(groupId);
     }
 
-    assert(sendIdx < recvMsgCount->size());
-    recvMsgCount->at(sendIdx)++;
+    recvMsgCount.at(sendIdx)++;
 }
 
 void PointToPointBroker::sendMessage(int groupId,
                                      int sendIdx,
                                      int recvIdx,
                                      const uint8_t* buffer,
-                                     size_t bufferSize)
+                                     size_t bufferSize,
+                                     int sequenceNum)
 {
     waitForMappingsOnThisHost(groupId);
 
@@ -628,7 +595,7 @@ void PointToPointBroker::sendMessage(int groupId,
                      recvIdx,
                      sendEndpoints[label]->getAddress());
 
-        sendEndpoints[label]->send(NO_HEADER, buffer, bufferSize);
+        sendEndpoints[label]->send(NO_HEADER, buffer, bufferSize, sequenceNum);
 
     } else {
         auto cli = getClient(host);
@@ -656,9 +623,7 @@ void PointToPointBroker::sendMessage(int groupId,
     }
 }
 
-std::vector<uint8_t> PointToPointBroker::doRecvMessage(int groupId,
-                                                       int sendIdx,
-                                                       int recvIdx)
+Message PointToPointBroker::doRecvMessage(int groupId, int sendIdx, int recvIdx)
 {
     std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
@@ -670,9 +635,7 @@ std::vector<uint8_t> PointToPointBroker::doRecvMessage(int groupId,
                      recvEndpoints[label]->getAddress());
     }
 
-    Message message = recvEndpoints[label]->recv();
-
-    return message.dataCopy();
+    return recvEndpoints[label]->recv();
 }
 
 std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
@@ -681,63 +644,45 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
 {
     // If we don't need to receive messages in order, return here
     if (!orderMsg.load(std::memory_order_acquire)) {
-        return doRecvMessage(groupId, sendIdx, recvIdx);
+        // TODO - can we avoid this copy?
+        return doRecvMessage(groupId, sendIdx, recvIdx).dataCopy();
     }
 
+    // Get the sequence number we expect to receive
     int expectedSeqNum = getExpectedSeqNum(groupId, sendIdx);
-    std::vector<uint8_t> recvData;
-    std::vector<uint8_t> returnData;
 
-    // Loop to receive the right sequence number
+    // We first check if we have already received the message. We only need to
+    // check this once.
+    auto wantedIt =
+      std::find_if(outOfOrderMsgs.begin(),
+                   outOfOrderMsgs.end(),
+                   [expectedSeqNum](const Message& msg) {
+                       return msg.getSequenceNum() == expectedSeqNum;
+                   });
+    if (wantedIt != outOfOrderMsgs.end()) {
+        incrementRecvMsgCount(groupId, sendIdx);
+        Message returnMsg = std::move(*wantedIt);
+        outOfOrderMsgs.erase(wantedIt);
+        return returnMsg.dataCopy();
+    }
+
+    // Given that we don't have the message, we query the transport layer until
+    // we receive it
     while (true) {
-        // First, receive from the transport layer
-        recvData = doRecvMessage(groupId, sendIdx, recvIdx);
-
-        // Second, get the sequence number from the received message
-        int seqNum;
-        faabric::util::readBytesOf(
-          recvData, recvData.size() - sizeof(int), &seqNum);
-        recvData.resize(recvData.size() - sizeof(int));
+        // Receive from the transport layer
+        Message recvMsg = doRecvMessage(groupId, sendIdx, recvIdx);
 
         // If the sequence numbers match, exit the loop
+        int seqNum = recvMsg.getSequenceNum();
         if (seqNum == expectedSeqNum) {
-            returnData = std::move(recvData);
-            break;
+            incrementRecvMsgCount(groupId, sendIdx);
+            return recvMsg.dataCopy();
         }
 
         // If not, we must insert the received message in the out of order
-        // received messages. We must also check if the sequence number we want
-        // is in the list.
-
-        // First insert
-        auto insertIt = std::find_if(
-          outOfOrderMsgs.begin(),
-          outOfOrderMsgs.end(),
-          [&seqNum](const std::pair<int, std::shared_ptr<std::vector<uint8_t>>>&
-                      element) { return element.first > seqNum; });
-        outOfOrderMsgs.emplace(
-          insertIt,
-          std::make_pair(seqNum,
-                         std::make_shared<std::vector<uint8_t>>(recvData)));
-
-        // Then look for the desired value
-        auto wantedIt = std::find_if(
-          outOfOrderMsgs.begin(),
-          outOfOrderMsgs.end(),
-          [expectedSeqNum](
-            const std::pair<int, std::shared_ptr<std::vector<uint8_t>>>&
-              element) { return element.first == expectedSeqNum; });
-        if (wantedIt != outOfOrderMsgs.end()) {
-            returnData = *(wantedIt->second);
-            outOfOrderMsgs.erase(wantedIt);
-            break;
-        }
+        // received messages.
+        outOfOrderMsgs.emplace_back(std::move(recvMsg));
     }
-
-    // Before returning, increment the received message count
-    incrementRecvMsgCount(groupId, sendIdx);
-
-    return returnData;
 }
 
 void PointToPointBroker::clearGroup(int groupId)

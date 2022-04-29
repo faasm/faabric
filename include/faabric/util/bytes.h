@@ -11,6 +11,9 @@
 
 #include <faabric/util/macros.h>
 
+// REMOVE ME
+#include <faabric/util/logging.h>
+
 namespace faabric::util {
 std::vector<uint8_t> stringToBytes(const std::string& str);
 
@@ -72,6 +75,10 @@ size_t readBytesOf(const std::vector<uint8_t>& container,
                    T* outValue)
 {
     if (offset >= container.size() || offset + sizeof(T) > container.size()) {
+        SPDLOG_ERROR("Container size: {} - Offset: {} - Sizeof(T): {}",
+                     container.size(),
+                     offset,
+                     sizeof(T));
         throw std::range_error("Trying to read bytes out of container range");
     }
     // use byte pointers to make sure there are no alignment issues
