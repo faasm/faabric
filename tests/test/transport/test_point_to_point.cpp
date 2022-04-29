@@ -220,6 +220,8 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         t.join();
     }
 
+    broker.setMustOrderMessages(false);
+
     conf.reset();
 }
 
