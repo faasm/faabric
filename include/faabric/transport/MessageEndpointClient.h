@@ -14,9 +14,14 @@ class MessageEndpointClient
                           int syncPort,
                           int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
-    void asyncSend(int header, google::protobuf::Message* msg);
+    void asyncSend(int header,
+                   google::protobuf::Message* msg,
+                   int sequenceNum = -1);
 
-    void asyncSend(int header, const uint8_t* buffer, size_t bufferSize);
+    void asyncSend(int header,
+                   const uint8_t* buffer,
+                   size_t bufferSize,
+                   int sequenceNum = -1);
 
     void syncSend(int header,
                   google::protobuf::Message* msg,

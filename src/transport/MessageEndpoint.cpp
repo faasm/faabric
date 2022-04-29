@@ -230,13 +230,13 @@ void MessageEndpoint::sendMessage(zmq::socket_t& socket,
                                   uint8_t header,
                                   const uint8_t* data,
                                   size_t dataSize,
-                                  int sequenceNumber)
+                                  int sequenceNum)
 {
     uint8_t buffer[HEADER_MSG_SIZE];
     faabric::util::unalignedWrite<uint8_t>(header, buffer);
     faabric::util::unalignedWrite<size_t>(dataSize, buffer + sizeof(uint8_t));
     faabric::util::unalignedWrite<int>(
-      sequenceNumber, buffer + sizeof(uint8_t) + sizeof(size_t));
+      sequenceNum, buffer + sizeof(uint8_t) + sizeof(size_t));
 
     sendBuffer(socket, buffer, HEADER_MSG_SIZE, true);
     sendBuffer(socket, data, dataSize, false);
@@ -372,10 +372,11 @@ AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
 
 void AsyncSendMessageEndpoint::send(uint8_t header,
                                     const uint8_t* data,
-                                    size_t dataSize)
+                                    size_t dataSize,
+                                    int sequenceNum)
 {
     SPDLOG_TRACE("PUSH {} ({} bytes)", address, dataSize);
-    sendMessage(socket, header, data, dataSize);
+    sendMessage(socket, header, data, dataSize, sequenceNum);
 }
 
 AsyncInternalSendMessageEndpoint::AsyncInternalSendMessageEndpoint(
@@ -390,10 +391,10 @@ AsyncInternalSendMessageEndpoint::AsyncInternalSendMessageEndpoint(
 void AsyncInternalSendMessageEndpoint::send(uint8_t header,
                                             const uint8_t* data,
                                             size_t dataSize,
-                                            int sequenceNumber)
+                                            int sequenceNum)
 {
     SPDLOG_TRACE("PUSH {} ({} bytes)", address, dataSize);
-    sendMessage(socket, header, data, dataSize, sequenceNumber);
+    sendMessage(socket, header, data, dataSize, sequenceNum);
 }
 
 // ----------------------------------------------

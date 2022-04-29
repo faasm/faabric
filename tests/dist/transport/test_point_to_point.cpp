@@ -123,7 +123,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     }
 }
 
-TEST_CASE_METHOD(DistTestsFixture, "Test many MPI messages", "[ptp][transport]")
+TEST_CASE_METHOD(DistTestsFixture, "Test many MPI messages", "[.]")
 {
     std::set<std::string> actualAvailable = sch.getAvailableHosts();
     std::set<std::string> expectedAvailable = { getMasterIP(), getWorkerIP() };

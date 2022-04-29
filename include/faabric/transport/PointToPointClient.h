@@ -26,7 +26,7 @@ class PointToPointClient : public faabric::transport::MessageEndpointClient
 
     void sendMappings(faabric::PointToPointMappings& mappings);
 
-    void sendMessage(faabric::PointToPointMessage& msg);
+    void sendMessage(faabric::PointToPointMessage& msg, int sequenceNum = -1);
 
     void groupLock(int appId,
                    int groupId,

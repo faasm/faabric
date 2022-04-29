@@ -229,8 +229,7 @@ message PointToPointMessage {
     int32 groupId = 2;
     int32 sendIdx = 3;
     int32 recvIdx = 4;
-    int32 seqNum = 5;
-    bytes data = 6;
+    bytes data = 5;
 }
 
 message PointToPointMappings {

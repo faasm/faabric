@@ -138,9 +138,7 @@ class PointToPointBroker
 
     void initSequenceCounters(int groupId);
 
-    void incrementSentMsgCount(faabric::PointToPointMessage& msg,
-                               int groupId,
-                               int recvIdx);
+    int getAndIncrementSentMsgCount(int groupId, int recvIdx);
 
     void incrementRecvMsgCount(int groupId, int sendIdx);
 

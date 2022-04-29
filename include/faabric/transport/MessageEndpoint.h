@@ -91,7 +91,10 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
                              int portIn,
                              int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
-    void send(uint8_t header, const uint8_t* data, size_t dataSize);
+    void send(uint8_t header,
+              const uint8_t* data,
+              size_t dataSize,
+              int sequenceNum = -1);
 
   protected:
     zmq::socket_t socket;

@@ -115,6 +115,10 @@ void doExperiment(std::map<std::string, std::vector<double>>& results,
                   int groupId,
                   int groupIdx)
 {
+    SPDLOG_INFO("Running experiment {} for {} rounds with {} messages each",
+                expKey,
+                numRounds,
+                numMsg);
     auto& broker = faabric::transport::getPointToPointBroker();
 
     // Prepare message
@@ -139,28 +143,19 @@ void doExperiment(std::map<std::string, std::vector<double>>& results,
                 broker.sendMessage(
                   groupId, sendIdx, recvIdx, serialisedBuffer, serialisedSize);
             }
-            SPDLOG_INFO("Finished send loop");
         } else if (groupIdx == recvIdx) {
             // Recv loop
             auto startTime = faabric::util::startTimer();
             for (int i = 0; i < numMsg; i++) {
                 auto actualData = broker.recvMessage(groupId, sendIdx, recvIdx);
-                try {
-                    PARSE_MSG(faabric::MPIMessage,
-                              actualData.data(),
-                              actualData.size());
-                    assert(parsedMsg.worldid() == worldId);
-                } catch (std::runtime_error& e) {
-                    SPDLOG_ERROR(
-                      "Caught exception deserialising msg number: {}", i);
-                    throw e;
-                }
+                PARSE_MSG(
+                  faabric::MPIMessage, actualData.data(), actualData.size());
+                assert(parsedMsg.worldid() == worldId);
             }
             auto elapsedTime = faabric::util::getTimeDiffMillis(startTime);
-            SPDLOG_INFO("Finished recv loop in {} ms ({:.6} k msg/sec)",
-                        elapsedTime,
-                        numMsg / elapsedTime);
             results[expKey].at(nr) = numMsg / elapsedTime;
+            SPDLOG_INFO(
+              "Finished run {}/{} of experiment {}", nr + 1, numRounds, expKey);
         } else {
             SPDLOG_ERROR("Unexpected group index: {}", groupIdx);
             throw std::runtime_error("Unexpected group index");
@@ -189,7 +184,6 @@ int handleManyPointToPointMpiMsgFunction(
     broker.setMustOrderMessages(false);
     doExperiment(
       results, "mt-wout-order", numRounds, numMsg, groupId, groupIdx);
-    SPDLOG_INFO("Finished experiment");
 
     SLEEP_MS(interTestSleepMs);
 
@@ -201,12 +195,6 @@ int handleManyPointToPointMpiMsgFunction(
     // Post-process the results
     SPDLOG_INFO("----------------------- Results ------------------------");
     SPDLOG_INFO("conf\t\tavg (k msg/sec)\t\tstdev");
-    // TODO - so far it is not clear how to change the initialisation parameters
-    // (i.e. pointToPointServerThreads) without re-running the experiment. So
-    // I hardcode the results of running the same experiment as `mt-wout-order`
-    // with just one worker thread in the server. Results obtained with
-    // `numRuns = 5`.
-    SPDLOG_INFO("st-no-opt\t123.377\t\t\t4.421249");
     for (const auto& key : results) {
         double sum = std::accumulate(key.second.begin(), key.second.end(), 0.0);
         double mean = sum / key.second.size();

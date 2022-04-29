@@ -536,16 +536,15 @@ void PointToPointBroker::initSequenceCounters(int groupId)
     recvMsgCount = std::vector<int>(groupSize, 1);
 }
 
-void PointToPointBroker::incrementSentMsgCount(
-  faabric::PointToPointMessage& msg,
-  int groupId,
-  int recvIdx)
+int PointToPointBroker::getAndIncrementSentMsgCount(int groupId, int recvIdx)
 {
     if (groupId != currentGroupId) {
         initSequenceCounters(groupId);
     }
 
-    msg.set_seqnum(sentMsgCount.at(recvIdx)++);
+    int retSeqNum = sentMsgCount.at(recvIdx)++;
+
+    return retSeqNum;
 }
 
 int PointToPointBroker::getExpectedSeqNum(int groupId, int sendIdx)
@@ -577,6 +576,15 @@ void PointToPointBroker::sendMessage(int groupId,
 
     std::string host = getHostForReceiver(groupId, recvIdx);
 
+    // When sending a remote message, this method is called once from the
+    // outbound socket, and another time from the downstream in-proc socket in
+    // the receiving host. We must only add a sequence number to the message
+    // once: in the in-proc socket when sending a local message, and in the
+    // outbound one when sending a remote message. If the sequence number has
+    // already been set, the value will be different than -1.
+    bool mustSetSequenceNum =
+      orderMsg.load(std::memory_order_acquire) && sequenceNum == -1;
+
     if (host == conf.endpointHost) {
         std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
@@ -595,7 +603,12 @@ void PointToPointBroker::sendMessage(int groupId,
                      recvIdx,
                      sendEndpoints[label]->getAddress());
 
-        sendEndpoints[label]->send(NO_HEADER, buffer, bufferSize, sequenceNum);
+        sendEndpoints[label]->send(
+          NO_HEADER,
+          buffer,
+          bufferSize,
+          mustSetSequenceNum ? getAndIncrementSentMsgCount(groupId, recvIdx)
+                             : sequenceNum);
 
     } else {
         auto cli = getClient(host);
@@ -605,21 +618,16 @@ void PointToPointBroker::sendMessage(int groupId,
         msg.set_recvidx(recvIdx);
         msg.set_data(buffer, bufferSize);
 
-        // Note that we only increment the sequence number when sending a
-        // remote message
-        // TODO - should we do it all the time? i.e. not only for remote
-        // messages
-        if (orderMsg.load(std::memory_order_acquire)) {
-            incrementSentMsgCount(msg, groupId, recvIdx);
-        }
-
         SPDLOG_TRACE("Remote point-to-point message {}:{}:{} to {}",
                      groupId,
                      sendIdx,
                      recvIdx,
                      host);
 
-        cli->sendMessage(msg);
+        cli->sendMessage(msg,
+                         mustSetSequenceNum
+                           ? getAndIncrementSentMsgCount(groupId, recvIdx)
+                           : -1);
     }
 }
 
