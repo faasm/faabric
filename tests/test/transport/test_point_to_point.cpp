@@ -118,26 +118,36 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     std::vector<uint8_t> receivedDataA;
     std::vector<uint8_t> sentDataB = { 3, 4, 5 };
     std::vector<uint8_t> receivedDataB;
+    std::vector<uint8_t> sentDataC = { 6, 7, 8 };
+    std::vector<uint8_t> receivedDataC;
 
     // Make sure we send the message before a receiver is available to check
     // async handling
     broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
 
-    std::jthread t([groupId, idxA, idxB, &receivedDataA, &sentDataB] {
-        PointToPointBroker& broker = getPointToPointBroker();
+    std::jthread t(
+      [groupId, idxA, idxB, &receivedDataA, &sentDataB, &sentDataC] {
+          PointToPointBroker& broker = getPointToPointBroker();
 
-        // Receive the first message
-        receivedDataA = broker.recvMessage(groupId, idxA, idxB);
+          // Receive the first message
+          receivedDataA = broker.recvMessage(groupId, idxA, idxB);
 
-        // Send a message back
-        broker.sendMessage(
-          groupId, idxB, idxA, sentDataB.data(), sentDataB.size());
+          // Send a message back
+          broker.sendMessage(
+            groupId, idxB, idxA, sentDataB.data(), sentDataB.size());
 
-        broker.resetThreadLocalCache();
-    });
+          // Lastly, send another message specifying the recepient host to avoid
+          // an extra check in the broker
+          broker.sendMessage(
+            groupId, idxB, idxA, sentDataC.data(), sentDataC.size(), LOCALHOST);
 
-    // Receive the message sent back
+          broker.resetThreadLocalCache();
+      });
+
+    // Receive the two messages sent back
+    // TODO - this also relies on in-order ptp messging
     receivedDataB = broker.recvMessage(groupId, idxB, idxA);
+    receivedDataC = broker.recvMessage(groupId, idxB, idxA);
 
     if (t.joinable()) {
         t.join();
@@ -145,6 +155,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     REQUIRE(receivedDataA == sentDataA);
     REQUIRE(receivedDataB == sentDataB);
+    REQUIRE(receivedDataC == sentDataC);
 
     conf.reset();
 }

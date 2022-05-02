@@ -52,13 +52,14 @@ MpiWorld::MpiWorld()
 {}
 
 void MpiWorld::sendRemoteMpiMessage(
+  std::string dstHost,
   int sendRank,
   int recvRank,
   const std::shared_ptr<faabric::MPIMessage>& msg)
 {
     SERIALISE_MSG_PTR(msg);
     broker.sendMessage(
-      id, sendRank, recvRank, serialisedBuffer, serialisedSize);
+      id, sendRank, recvRank, serialisedBuffer, serialisedSize, dstHost);
 }
 
 std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
@@ -480,7 +481,7 @@ void MpiWorld::send(int sendRank,
     } else {
         SPDLOG_TRACE(
           "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
-        sendRemoteMpiMessage(sendRank, recvRank, m);
+        sendRemoteMpiMessage(otherHost, sendRank, recvRank, m);
     }
 
     /* 02/05/2022 - The following bit of code fails randomly with a protobuf

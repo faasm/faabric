@@ -246,7 +246,8 @@ class MpiWorld
     // Remote messaging using the PTP layer
     faabric::transport::PointToPointBroker& broker;
 
-    void sendRemoteMpiMessage(int sendRank,
+    void sendRemoteMpiMessage(std::string dstHost,
+                              int sendRank,
                               int recvRank,
                               const std::shared_ptr<faabric::MPIMessage>& msg);
 

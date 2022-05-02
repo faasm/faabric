@@ -109,7 +109,8 @@ class PointToPointBroker
                      int recvIdx,
                      const uint8_t* buffer,
                      size_t bufferSize,
-                     int sequenceNum = NO_SEQUENCE_NUM);
+                     int sequenceNum = NO_SEQUENCE_NUM,
+                     std::string hostHint = "");
 
     std::vector<uint8_t> recvMessage(int groupId, int sendIdx, int recvIdx);
 

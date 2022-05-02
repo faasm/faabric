@@ -584,7 +584,8 @@ void PointToPointBroker::sendMessage(int groupId,
                                      int recvIdx,
                                      const uint8_t* buffer,
                                      size_t bufferSize,
-                                     int sequenceNum)
+                                     int sequenceNum,
+                                     std::string hostHint)
 {
     // When sending a remote message, this method is called once from the
     // sender thread, and another time from the point-to-point server to route
@@ -592,7 +593,11 @@ void PointToPointBroker::sendMessage(int groupId,
 
     waitForMappingsOnThisHost(groupId);
 
-    std::string host = getHostForReceiver(groupId, recvIdx);
+    // If the application code knows which host does the receiver live in
+    // (cached for performance) we allow it to provide a hint to avoid
+    // acquiring a shared lock here
+    std::string host =
+      hostHint.empty() ? getHostForReceiver(groupId, recvIdx) : hostHint;
 
     // Set the sequence number if we need ordering and one is not provided
     bool mustSetSequenceNum =
