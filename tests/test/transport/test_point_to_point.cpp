@@ -75,6 +75,11 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA1) == hostA);
     REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA2) == hostB);
     REQUIRE(broker.getHostForReceiver(groupIdB, groupIdxB1) == hostA);
+
+    // Test updating the host for one group id
+    std::string newHost = "new-host";
+    broker.updateHostForIdx(groupIdA, groupIdxA1, newHost);
+    REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA1) == newHost);
 }
 
 TEST_CASE_METHOD(PointToPointClientServerFixture,
