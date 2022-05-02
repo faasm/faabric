@@ -83,6 +83,7 @@ class MpiDistTestsFixture : public DistTestsFixture
     {
         auto req = faabric::util::batchExecFactory("mpi", function, 1);
         faabric::Message& msg = req->mutable_messages()->at(0);
+        msg.set_ismpi(true);
         msg.set_mpiworldsize(worldSize);
         msg.set_recordexecgraph(true);
 
@@ -121,15 +122,19 @@ class MpiDistTestsFixture : public DistTestsFixture
     }
 
     void checkAllocationAndResult(
-      std::shared_ptr<faabric::BatchExecuteRequest> req)
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      int timeoutMs = 1000,
+      bool skipExecGraphCheck = false)
     {
         faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = sch.getFunctionResult(msg.id(), 1000);
+        faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
         REQUIRE(result.returnvalue() == 0);
         // TODO - remove this sleep when #181 is merged and rebased
         SLEEP_MS(1000);
-        auto execGraph = sch.getFunctionExecGraph(msg.id());
-        checkSchedulingFromExecGraph(execGraph);
+        if (!skipExecGraphCheck) {
+            auto execGraph = sch.getFunctionExecGraph(msg.id());
+            checkSchedulingFromExecGraph(execGraph);
+        }
     }
 };
 }

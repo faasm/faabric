@@ -39,18 +39,13 @@ int migration(int nLoops)
     }
 
     for (int i = 0; i < nLoops; i++) {
-        // if (rank == 0 && i % (nLoops / 10) == 0) {
-        if (true) {
-            SPDLOG_INFO("Starting iteration {}/{}", i, nLoops);
-        }
-
         // Make sure everyone is in sync (including those ranks that have been
         // migrated)
         MPI_Barrier(MPI_COMM_WORLD);
 
         tests::mpi::doAllToAll(rank, worldSize, i);
 
-        if (mustCheck && i % CHECK_EVERY == 0 && i / CHECK_EVERY > 0) {
+        if (mustCheck && (i % CHECK_EVERY == 0) && (i / CHECK_EVERY > 0)) {
             mustCheck = false;
             if (rank == 0) {
                 SPDLOG_INFO(
@@ -64,7 +59,7 @@ int migration(int nLoops)
         }
     }
 
-    SPDLOG_INFO("Rank {} exitting the migration loop", rank);
+    SPDLOG_DEBUG("Rank {} exitting the migration loop", rank);
     MPI_Barrier(MPI_COMM_WORLD);
 
     // Shutdown

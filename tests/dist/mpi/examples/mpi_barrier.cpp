@@ -15,7 +15,7 @@ int barrier()
 
     // Call barrier multiple times. Note that there are assertions in the code
     // that check that the barrier works alright.
-    int numBarriers = 5;
+    int numBarriers = 100;
     for (int i = 0; i < numBarriers; i++) {
         MPI_Barrier(MPI_COMM_WORLD);
         doAllToAll(rank, worldSize, i);

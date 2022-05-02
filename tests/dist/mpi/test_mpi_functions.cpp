@@ -120,7 +120,10 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
     // Call the functions
     sch.callFunctions(req);
 
-    checkAllocationAndResult(req);
+    // The current function migration approach breaks the execution graph, as
+    // some messages are left dangling (deliberately) without return value
+    bool skipExecGraphCheck = true;
+    checkAllocationAndResult(req, 60000, skipExecGraphCheck);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")

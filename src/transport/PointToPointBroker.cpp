@@ -562,6 +562,23 @@ void PointToPointBroker::incrementRecvMsgCount(int groupId, int sendIdx)
     recvMsgCount.at(sendIdx)++;
 }
 
+void PointToPointBroker::updateHostForIdx(int groupId,
+                                          int groupIdx,
+                                          std::string newHost)
+{
+    faabric::util::FullLock lock(brokerMutex);
+
+    std::string key = getPointToPointKey(groupId, groupIdx);
+
+    SPDLOG_DEBUG("Updating point-to-point mapping for {}:{} from {} to {}",
+                 groupId,
+                 groupIdx,
+                 mappings[key],
+                 newHost);
+
+    mappings[key] = newHost;
+}
+
 void PointToPointBroker::sendMessage(int groupId,
                                      int sendIdx,
                                      int recvIdx,

@@ -474,15 +474,17 @@ void MpiWorld::send(int sendRank,
 
     // Dispatch the message locally or globally
     if (isLocal) {
-        SPDLOG_INFO(
+        SPDLOG_TRACE(
           "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
         getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
-        SPDLOG_INFO(
+        SPDLOG_TRACE(
           "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
         sendRemoteMpiMessage(sendRank, recvRank, m);
     }
 
+    /* 02/05/2022 - The following bit of code fails randomly with a protobuf
+     * assertion error
     // If the message is set and recording on, track we have sent this message
     if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
         faabric::util::exec_graph::incrementCounter(
@@ -497,6 +499,7 @@ void MpiWorld::send(int sendRank,
                       std::to_string(messageType),
                       std::to_string(recvRank)));
     }
+    */
 }
 
 void MpiWorld::recv(int sendRank,
@@ -507,7 +510,7 @@ void MpiWorld::recv(int sendRank,
                     MPI_Status* status,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
-    SPDLOG_INFO("MPI recv {} -> {} ({})", sendRank, recvRank, messageType);
+    // SPDLOG_TRACE("MPI recv {} -> {} ({})", sendRank, recvRank, messageType);
     // Sanity-check input parameters
     checkRanksRange(sendRank, recvRank);
 
@@ -1323,8 +1326,6 @@ void MpiWorld::allToAll(int rank,
              nullptr,
              faabric::MPIMessage::ALLTOALL);
     }
-
-    SPDLOG_INFO("All to all finished");
 }
 
 // 30/12/21 - Probe is now broken after the switch to a different type of
@@ -1350,18 +1351,18 @@ void MpiWorld::barrier(int thisRank)
     // Rank 0 coordinates the barrier operation
     if (thisRank == 0) {
         // This is the root, hence waits for all ranks to get to the barrier
-        SPDLOG_INFO("MPI - barrier init {}", thisRank);
+        SPDLOG_TRACE("MPI - barrier init {}", thisRank);
 
         // Await messages from all others
         for (int r = 1; r < size; r++) {
             MPI_Status s{};
             recv(
               r, 0, nullptr, MPI_INT, 0, &s, faabric::MPIMessage::BARRIER_JOIN);
-            SPDLOG_INFO("MPI - recv barrier join {}", s.MPI_SOURCE);
+            SPDLOG_TRACE("MPI - recv barrier join {}", s.MPI_SOURCE);
         }
     } else {
         // Tell the root that we're waiting
-        SPDLOG_INFO("MPI - barrier join {}", thisRank);
+        SPDLOG_TRACE("MPI - barrier join {}", thisRank);
         send(
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
     }
@@ -1381,7 +1382,7 @@ void MpiWorld::barrier(int thisRank)
     // Rank 0 broadcasts that the barrier is done (the others block here)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
-    SPDLOG_INFO("MPI - barrier done {}", thisRank);
+    SPDLOG_TRACE("MPI - barrier done {}", thisRank);
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
@@ -1538,7 +1539,6 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
-// TODO - make migration work with P2P broker
 void MpiWorld::prepareMigration(
   int thisRank,
   std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
@@ -1566,11 +1566,15 @@ void MpiWorld::prepareMigration(
           "Migrating with pending async messages is not supported");
     }
 
+    // Update local records
     if (thisRank == localLeader) {
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
             assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
             hostForRank.at(m.msg().mpirank()) = m.dsthost();
+            // This could be made more efficient as the broker method acquires
+            // a full lock every time
+            broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
         }
 
         // Set the migration flag

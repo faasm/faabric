@@ -2,8 +2,8 @@
 
 #include <faabric/proto/faabric.pb.h>
 
-#define NUM_MIGRATION_LOOPS 50000
-#define CHECK_EVERY 25000
+#define NUM_MIGRATION_LOOPS 10000
+#define CHECK_EVERY 5000
 
 namespace tests::mpi {
 
@@ -33,7 +33,7 @@ int helloWorld();
 
 int iSendRecv();
 
-int migration(int checkEveryIn);
+int migration(int nLoops);
 
 int oneSided();
 
