@@ -76,7 +76,7 @@ int handleManyPointToPointMsgFunction(
 
     // Set the broker to receive messages in order
     auto& broker = faabric::transport::getPointToPointBroker();
-    broker.setMustOrderMessages(true);
+    bool origIsMsgOrderingOn = broker.setIsMessageOrderingOn(true);
 
     int sendIdx = 1;
     int recvIdx = 0;
@@ -104,6 +104,8 @@ int handleManyPointToPointMsgFunction(
         SPDLOG_ERROR("Unexpected group index: {}", groupIdx);
         return 1;
     }
+
+    broker.setIsMessageOrderingOn(origIsMsgOrderingOn);
 
     return 0;
 }

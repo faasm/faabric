@@ -175,7 +175,15 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     // Set up the mappings and configure in-order delivery
     broker.setAndSendMappingsFromSchedulingDecision(decision);
-    broker.setMustOrderMessages(true);
+
+    bool isMessageOrderingOn;
+
+    SECTION("Ordering on") { isMessageOrderingOn = true; }
+
+    SECTION("Ordering off") { isMessageOrderingOn = false; }
+
+    bool origIsMsgOrderingOn =
+      broker.setIsMessageOrderingOn(isMessageOrderingOn);
 
     int numMsg = 1e3;
 
@@ -220,7 +228,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         t.join();
     }
 
-    broker.setMustOrderMessages(false);
+    broker.setIsMessageOrderingOn(origIsMsgOrderingOn);
 
     conf.reset();
 }

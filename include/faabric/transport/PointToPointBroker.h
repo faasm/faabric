@@ -117,7 +117,7 @@ class PointToPointBroker
 
     void resetThreadLocalCache();
 
-    void setMustOrderMessages(bool mustOrderMsgs);
+    bool setIsMessageOrderingOn(bool mustOrderMsgs);
 
   private:
     faabric::util::SystemConfig& conf;
@@ -134,7 +134,7 @@ class PointToPointBroker
 
     Message doRecvMessage(int groupId, int sendIdx, int recvIdx);
 
-    std::atomic<bool> orderMsg;
+    std::atomic<bool> _isMessageOrderingOn;
 
     void initSequenceCounters(int groupId);
 

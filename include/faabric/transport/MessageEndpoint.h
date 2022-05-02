@@ -28,6 +28,7 @@
 // - Message sequence number of in-order message delivery default -1 (int)
 #define NO_HEADER 0
 #define HEADER_MSG_SIZE (sizeof(uint8_t) + sizeof(size_t) + sizeof(int))
+#define NO_SEQUENCE_NUM -1
 
 #define SHUTDOWN_HEADER 220
 static const std::vector<uint8_t> shutdownPayload = { 0, 0, 1, 1 };
@@ -71,7 +72,7 @@ class MessageEndpoint
                      uint8_t header,
                      const uint8_t* data,
                      size_t dataSize,
-                     int sequenceNumber = -1);
+                     int sequenceNumber = NO_SEQUENCE_NUM);
 
     Message recvMessage(zmq::socket_t& socket, bool async);
 
@@ -94,7 +95,7 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
     void send(uint8_t header,
               const uint8_t* data,
               size_t dataSize,
-              int sequenceNum = -1);
+              int sequenceNum = NO_SEQUENCE_NUM);
 
   protected:
     zmq::socket_t socket;
@@ -109,7 +110,7 @@ class AsyncInternalSendMessageEndpoint final : public MessageEndpoint
     void send(uint8_t header,
               const uint8_t* data,
               size_t dataSize,
-              int sequenceNumber = -1);
+              int sequenceNumber = NO_SEQUENCE_NUM);
 
   protected:
     zmq::socket_t socket;

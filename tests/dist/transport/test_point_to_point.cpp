@@ -13,114 +13,120 @@
 
 namespace tests {
 
-TEST_CASE_METHOD(DistTestsFixture,
+class PointToPointDistTestFixture : public DistTestsFixture
+{
+  public:
+    PointToPointDistTestFixture()
+    {
+        // Check the available hosts
+        std::set<std::string> actualAvailable = sch.getAvailableHosts();
+        std::set<std::string> expectedAvailable = { getMasterIP(),
+                                                    getWorkerIP() };
+        REQUIRE(actualAvailable == expectedAvailable);
+    }
+
+    ~PointToPointDistTestFixture() = default;
+
+    void setSlotsAndNumFuncs(int nLocalSlotsIn, int nFuncsIn)
+    {
+        nLocalSlots = nLocalSlotsIn;
+        nFuncs = nFuncsIn;
+
+        // Set local resources
+        faabric::HostResources res;
+        res.set_slots(nLocalSlots);
+        sch.setThisHostResources(res);
+    }
+
+    faabric::util::SchedulingDecision prepareRequestReturnDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req)
+    {
+        // Prepare expected decision
+        faabric::util::SchedulingDecision expectedDecision(appId, groupId);
+        std::vector<std::string> expectedHosts(nFuncs, getWorkerIP());
+        for (int i = 0; i < nLocalSlots; i++) {
+            expectedHosts.at(i) = getMasterIP();
+        }
+
+        // Set up individual messages
+        for (int i = 0; i < nFuncs; i++) {
+            faabric::Message& msg = req->mutable_messages()->at(i);
+
+            msg.set_appid(appId);
+            msg.set_appidx(i);
+            msg.set_groupid(groupId);
+            msg.set_groupidx(i);
+
+            // Add to expected decision
+            expectedDecision.addMessage(expectedHosts.at(i),
+                                        req->messages().at(i));
+        }
+
+        return expectedDecision;
+    }
+
+    void checkReturnCodesAndSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingDecision& expectedDecision,
+      faabric::util::SchedulingDecision& actualDecision)
+    {
+        checkSchedulingDecisionEquality(actualDecision, expectedDecision);
+
+        // Check functions executed successfully
+        for (int i = 0; i < nFuncs; i++) {
+            faabric::Message& m = req->mutable_messages()->at(i);
+
+            sch.getFunctionResult(m.id(), 2000);
+            REQUIRE(m.returnvalue() == 0);
+        }
+    }
+
+  protected:
+    int appId = 222;
+    int groupId = 333;
+
+    int nLocalSlots;
+    int nFuncs;
+};
+
+TEST_CASE_METHOD(PointToPointDistTestFixture,
                  "Test point-to-point messaging on multiple hosts",
                  "[ptp][transport]")
 {
-    std::set<std::string> actualAvailable = sch.getAvailableHosts();
-    std::set<std::string> expectedAvailable = { getMasterIP(), getWorkerIP() };
-    REQUIRE(actualAvailable == expectedAvailable);
+    setSlotsAndNumFuncs(1, 4);
 
-    int appId = 222;
-    int groupId = 333;
-
-    // Set up this host's resources
-    // Make sure some functions execute remotely, some locally
-    int nLocalSlots = 1;
-    int nFuncs = 4;
-
-    faabric::HostResources res;
-    res.set_slots(nLocalSlots);
-    sch.setThisHostResources(res);
-
-    // Set up batch request
+    // Set up batch request and scheduling decision
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("ptp", "simple", nFuncs);
-
-    // Prepare expected decision
-    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
-    std::vector<std::string> expectedHosts = {
-        getMasterIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
-    };
-
-    // Set up individual messages
-    for (int i = 0; i < nFuncs; i++) {
-        faabric::Message& msg = req->mutable_messages()->at(i);
-
-        msg.set_appid(appId);
-        msg.set_appidx(i);
-        msg.set_groupid(groupId);
-        msg.set_groupidx(i);
-
-        // Add to expected decision
-        expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
-    }
+    faabric::util::SchedulingDecision expectedDecision =
+      prepareRequestReturnDecision(req);
 
     // Call the functions
     faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
-    checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
-    // Check functions executed successfully
-    for (int i = 0; i < nFuncs; i++) {
-        faabric::Message& m = req->mutable_messages()->at(i);
-
-        sch.getFunctionResult(m.id(), 2000);
-        REQUIRE(m.returnvalue() == 0);
-    }
+    // Check for equality
+    checkReturnCodesAndSchedulingDecision(
+      req, expectedDecision, actualDecision);
 }
 
-TEST_CASE_METHOD(DistTestsFixture,
+TEST_CASE_METHOD(PointToPointDistTestFixture,
                  "Test many in-order point-to-point messages",
                  "[ptp][transport]")
 {
-    std::set<std::string> actualAvailable = sch.getAvailableHosts();
-    std::set<std::string> expectedAvailable = { getMasterIP(), getWorkerIP() };
-    REQUIRE(actualAvailable == expectedAvailable);
-
-    int appId = 222;
-    int groupId = 333;
-
-    // Set up this host's resources
-    // Make sure some functions execute remotely, some locally
-    int nLocalSlots = 1;
-    int nFuncs = 2;
-
-    faabric::HostResources res;
-    res.set_slots(nLocalSlots);
-    sch.setThisHostResources(res);
+    setSlotsAndNumFuncs(1, 2);
 
     // Set up batch request
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("ptp", "many-msg", nFuncs);
-
-    // Prepare expected decision
-    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
-    std::vector<std::string> expectedHosts = { getMasterIP(), getWorkerIP() };
-
-    // Set up individual messages
-    for (int i = 0; i < nFuncs; i++) {
-        faabric::Message& msg = req->mutable_messages()->at(i);
-
-        msg.set_appid(appId);
-        msg.set_appidx(i);
-        msg.set_groupid(groupId);
-        msg.set_groupidx(i);
-
-        // Add to expected decision
-        expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
-    }
+    faabric::util::SchedulingDecision expectedDecision =
+      prepareRequestReturnDecision(req);
 
     // Call the functions
     faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
-    checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
-    // Check functions executed successfully
-    for (int i = 0; i < nFuncs; i++) {
-        faabric::Message& m = req->mutable_messages()->at(i);
-
-        sch.getFunctionResult(m.id(), 2000);
-        REQUIRE(m.returnvalue() == 0);
-    }
+    // Check for equality
+    checkReturnCodesAndSchedulingDecision(
+      req, expectedDecision, actualDecision);
 }
 
 TEST_CASE_METHOD(DistTestsFixture,

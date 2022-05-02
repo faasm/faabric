@@ -42,8 +42,8 @@ thread_local std::unordered_map<std::string,
 // Thread local data structures for in-order message delivery
 thread_local int currentGroupId = NO_CURRENT_GROUP_ID;
 
-// Note that on the sent message count we index by receiving rank and on the
-// receive message count we index by sending rank.
+// On the sent message count we index by receiving rank and on the receive
+// message count we index by sending rank
 thread_local std::vector<int> sentMsgCount;
 
 thread_local std::vector<int> recvMsgCount;
@@ -527,13 +527,10 @@ void PointToPointBroker::initSequenceCounters(int groupId)
     }
     currentGroupId = groupId;
     int groupSize = getIdxsRegisteredForGroup(groupId).size();
-    // We assume that group indexes will always go from 0 to `groupSize - 1`
-    // We also want to start counting from one. This way, an unset sequence
-    // number (0 by default in protobuf) will indicate that it is unset.
-    // Also, we initialise both counters at the same time, as we only know
-    // once per thread when we have changed group id.
-    sentMsgCount = std::vector<int>(groupSize, 1);
-    recvMsgCount = std::vector<int>(groupSize, 1);
+    // We initialise both counters at the same time, as we only know once per
+    // thread when we have changed group id
+    sentMsgCount = std::vector<int>(groupSize, 0);
+    recvMsgCount = std::vector<int>(groupSize, 0);
 }
 
 int PointToPointBroker::getAndIncrementSentMsgCount(int groupId, int recvIdx)
@@ -572,18 +569,18 @@ void PointToPointBroker::sendMessage(int groupId,
                                      size_t bufferSize,
                                      int sequenceNum)
 {
+    // When sending a remote message, this method is called once from the
+    // sender thread, and another time from the point-to-point server to route
+    // it to the receiver thread
+
     waitForMappingsOnThisHost(groupId);
 
     std::string host = getHostForReceiver(groupId, recvIdx);
 
-    // When sending a remote message, this method is called once from the
-    // outbound socket, and another time from the downstream in-proc socket in
-    // the receiving host. We must only add a sequence number to the message
-    // once: in the in-proc socket when sending a local message, and in the
-    // outbound one when sending a remote message. If the sequence number has
-    // already been set, the value will be different than -1.
+    // Set the sequence number if we need ordering and one is not provided
     bool mustSetSequenceNum =
-      orderMsg.load(std::memory_order_acquire) && sequenceNum == -1;
+      _isMessageOrderingOn.load(std::memory_order_acquire) &&
+      sequenceNum == NO_SEQUENCE_NUM;
 
     if (host == conf.endpointHost) {
         std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
@@ -597,18 +594,23 @@ void PointToPointBroker::sendMessage(int groupId,
                          sendEndpoints[label]->getAddress());
         }
 
-        SPDLOG_TRACE("Local point-to-point message {}:{}:{} to {}",
+        // When sending a local message, if called from the PTP server we
+        // forward whatever sequence number the server passed, if called from
+        // the sender thread we add a sequence number (if needed)
+        int localSendSeqNum = sequenceNum;
+        if (mustSetSequenceNum) {
+            localSendSeqNum = getAndIncrementSentMsgCount(groupId, recvIdx);
+        }
+
+        SPDLOG_TRACE("Local point-to-point message {}:{}:{} (seq: {}) to {}",
                      groupId,
                      sendIdx,
                      recvIdx,
+                     localSendSeqNum,
                      sendEndpoints[label]->getAddress());
 
         sendEndpoints[label]->send(
-          NO_HEADER,
-          buffer,
-          bufferSize,
-          mustSetSequenceNum ? getAndIncrementSentMsgCount(groupId, recvIdx)
-                             : sequenceNum);
+          NO_HEADER, buffer, bufferSize, localSendSeqNum);
 
     } else {
         auto cli = getClient(host);
@@ -618,16 +620,20 @@ void PointToPointBroker::sendMessage(int groupId,
         msg.set_recvidx(recvIdx);
         msg.set_data(buffer, bufferSize);
 
-        SPDLOG_TRACE("Remote point-to-point message {}:{}:{} to {}",
+        // When sending a remote message, we set a sequence number if required
+        int remoteSendSeqNum = NO_SEQUENCE_NUM;
+        if (mustSetSequenceNum) {
+            remoteSendSeqNum = getAndIncrementSentMsgCount(groupId, recvIdx);
+        }
+
+        SPDLOG_TRACE("Remote point-to-point message {}:{}:{} (seq: {}) to {}",
                      groupId,
                      sendIdx,
                      recvIdx,
+                     remoteSendSeqNum,
                      host);
 
-        cli->sendMessage(msg,
-                         mustSetSequenceNum
-                           ? getAndIncrementSentMsgCount(groupId, recvIdx)
-                           : -1);
+        cli->sendMessage(msg, remoteSendSeqNum);
     }
 }
 
@@ -651,7 +657,7 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
                                                      int recvIdx)
 {
     // If we don't need to receive messages in order, return here
-    if (!orderMsg.load(std::memory_order_acquire)) {
+    if (!_isMessageOrderingOn.load(std::memory_order_acquire)) {
         // TODO - can we avoid this copy?
         return doRecvMessage(groupId, sendIdx, recvIdx).dataCopy();
     }
@@ -661,34 +667,40 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
 
     // We first check if we have already received the message. We only need to
     // check this once.
-    auto wantedIt =
+    auto foundIterator =
       std::find_if(outOfOrderMsgs.begin(),
                    outOfOrderMsgs.end(),
                    [expectedSeqNum](const Message& msg) {
                        return msg.getSequenceNum() == expectedSeqNum;
                    });
-    if (wantedIt != outOfOrderMsgs.end()) {
+    if (foundIterator != outOfOrderMsgs.end()) {
         incrementRecvMsgCount(groupId, sendIdx);
-        Message returnMsg = std::move(*wantedIt);
-        outOfOrderMsgs.erase(wantedIt);
+        Message returnMsg = std::move(*foundIterator);
+        outOfOrderMsgs.erase(foundIterator);
         return returnMsg.dataCopy();
     }
 
     // Given that we don't have the message, we query the transport layer until
     // we receive it
     while (true) {
+        SPDLOG_TRACE("Entering loop to query the transport layer for messages");
         // Receive from the transport layer
         Message recvMsg = doRecvMessage(groupId, sendIdx, recvIdx);
 
         // If the sequence numbers match, exit the loop
         int seqNum = recvMsg.getSequenceNum();
         if (seqNum == expectedSeqNum) {
+            SPDLOG_TRACE("Received the expected message w/ seq. num: {}",
+                         seqNum);
             incrementRecvMsgCount(groupId, sendIdx);
             return recvMsg.dataCopy();
         }
 
         // If not, we must insert the received message in the out of order
-        // received messages.
+        // received messages
+        SPDLOG_TRACE("Received out-of-order message (expected: {} - got: {})",
+                     expectedSeqNum,
+                     seqNum);
         outOfOrderMsgs.emplace_back(std::move(recvMsg));
     }
 }
@@ -734,9 +746,11 @@ void PointToPointBroker::resetThreadLocalCache()
     clients.clear();
 }
 
-void PointToPointBroker::setMustOrderMessages(bool mustOrderMsgs)
+bool PointToPointBroker::setIsMessageOrderingOn(bool mustOrderMsgs)
 {
-    orderMsg.store(mustOrderMsgs, std::memory_order_release);
+    bool oldValue = _isMessageOrderingOn.load(std::memory_order_acquire);
+    _isMessageOrderingOn.store(mustOrderMsgs, std::memory_order_release);
+    return oldValue;
 }
 
 PointToPointBroker& getPointToPointBroker()

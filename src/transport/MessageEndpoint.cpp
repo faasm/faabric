@@ -393,7 +393,7 @@ void AsyncInternalSendMessageEndpoint::send(uint8_t header,
                                             size_t dataSize,
                                             int sequenceNum)
 {
-    SPDLOG_TRACE("PUSH {} ({} bytes)", address, dataSize);
+    SPDLOG_TRACE("PUSH {} ({} bytes)", address, sequenceNum, dataSize);
     sendMessage(socket, header, data, dataSize, sequenceNum);
 }
 
