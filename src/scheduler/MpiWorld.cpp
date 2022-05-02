@@ -511,7 +511,6 @@ void MpiWorld::recv(int sendRank,
                     MPI_Status* status,
                     faabric::MPIMessage::MPIMessageType messageType)
 {
-    // SPDLOG_TRACE("MPI recv {} -> {} ({})", sendRank, recvRank, messageType);
     // Sanity-check input parameters
     checkRanksRange(sendRank, recvRank);
 

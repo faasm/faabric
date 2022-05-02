@@ -21,7 +21,6 @@ class DistTestsFixture
     DistTestsFixture()
     {
         // Make sure the host list is up to date
-        sch.removeHostFromGlobalSet(LOCALHOST);
         sch.addHostToGlobalSet(getMasterIP());
         sch.addHostToGlobalSet(getWorkerIP());
 
@@ -129,7 +128,6 @@ class MpiDistTestsFixture : public DistTestsFixture
         faabric::Message& msg = req->mutable_messages()->at(0);
         faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
         REQUIRE(result.returnvalue() == 0);
-        // TODO - remove this sleep when #181 is merged and rebased
         SLEEP_MS(1000);
         if (!skipExecGraphCheck) {
             auto execGraph = sch.getFunctionExecGraph(msg.id());
