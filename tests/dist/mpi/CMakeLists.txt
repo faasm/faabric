@@ -11,6 +11,7 @@ set(ALL_MPI_EXAMPLES
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_allgather.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_allreduce.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_alltoall.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_alltoall_sleep.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_bcast.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_barrier.cpp
     ${CMAKE_CURRENT_LIST_DIR}/examples/mpi_cart_create.cpp

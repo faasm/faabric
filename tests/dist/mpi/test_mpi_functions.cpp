@@ -45,6 +45,19 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[mpi]")
     checkAllocationAndResult(req);
 }
 
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all and sleep", "[mpi]")
+{
+    // Set up this host's resources
+    setLocalSlots(nLocalSlots);
+    auto req = setRequest("alltoall-sleep");
+
+    // Call the functions
+    sch.callFunctions(req);
+
+    // Wait for extra time as the test will sleep for five seconds
+    checkAllocationAndResult(req, 20000);
+}
+
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI barrier", "[mpi]")
 {
     // Set up this host's resources

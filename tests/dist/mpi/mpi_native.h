@@ -17,6 +17,8 @@ int allReduce();
 
 int allToAll();
 
+int allToAllAndSleep();
+
 int barrier();
 
 int broadcast();

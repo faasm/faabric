@@ -43,6 +43,16 @@ int handleMpiAllToAll(tests::DistTestExecutor* exec,
     return allToAll();
 }
 
+int handleMpiAllToAllAndSleep(tests::DistTestExecutor* exec,
+                              int threadPoolIdx,
+                              int msgIdx,
+                              std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    executingCall = &req->mutable_messages()->at(msgIdx);
+
+    return allToAllAndSleep();
+}
+
 int handleMpiBarrier(tests::DistTestExecutor* exec,
                      int threadPoolIdx,
                      int msgIdx,
@@ -248,6 +258,8 @@ void registerMpiTestFunctions()
     registerDistTestExecutorCallback("mpi", "allgather", handleMpiAllGather);
     registerDistTestExecutorCallback("mpi", "allreduce", handleMpiAllReduce);
     registerDistTestExecutorCallback("mpi", "alltoall", handleMpiAllToAll);
+    registerDistTestExecutorCallback(
+      "mpi", "alltoall-sleep", handleMpiAllToAllAndSleep);
     registerDistTestExecutorCallback("mpi", "barrier", handleMpiBarrier);
     registerDistTestExecutorCallback("mpi", "bcast", handleMpiBcast);
     registerDistTestExecutorCallback("mpi", "cart-create", handleMpiCartCreate);

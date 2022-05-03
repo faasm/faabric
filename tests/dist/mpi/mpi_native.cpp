@@ -24,7 +24,7 @@ faabric::scheduler::MpiWorld& getExecutingWorld()
 {
     faabric::scheduler::MpiWorldRegistry& reg =
       faabric::scheduler::getMpiWorldRegistry();
-    return reg.getOrInitialiseWorld(*getExecutingCall());
+    return reg.getWorld(executingContext.getWorldId());
 }
 
 static void notImplemented(const std::string& funcName)
