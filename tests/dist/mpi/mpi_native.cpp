@@ -819,11 +819,10 @@ void mpiMigrationPoint(int entrypointFuncArg)
         sch.getSnapshotClient(hostToMigrateTo).pushSnapshot(snapKey, snap);
         msg.set_snapshotkey(snapKey);
 
-        // Propagate the app ID and set the _same_ message ID
-        msg.set_id(call->id());
+        // Propagate the id's and indices
+        msg.set_appid(call->appid());
         msg.set_groupid(call->groupid());
         msg.set_groupidx(call->groupidx());
-        msg.set_appid(call->appid());
 
         // If message is MPI, propagate the necessary MPI bits
         if (call->ismpi()) {

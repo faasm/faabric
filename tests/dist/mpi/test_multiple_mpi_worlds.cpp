@@ -59,6 +59,10 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     // Skip the automated exec graph check, and check manually
     bool skipExecGraphCheck = true;
     checkAllocationAndResult(req1, 15000, skipExecGraphCheck);
+    std::vector<std::string> hostsBeforeMigration = {
+        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+    };
+    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
     checkAllocationAndResult(req2, 15000, skipExecGraphCheck);
 
     // Check exec graph for first request
@@ -78,5 +82,40 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
                                                 getWorkerIP(), getWorkerIP() };
     REQUIRE(expectedHosts2 ==
             faabric::scheduler::getMpiRankHostsFromExecGraph(execGraph2));
+}
+
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Test MPI migration with two MPI worlds",
+                 "[mpi]")
+{
+    // Set the slots for the first request
+    int worldSize = 4;
+    setLocalSlots(2, worldSize);
+
+    // Prepare both requests
+    auto req1 = setRequest("alltoall-sleep");
+    auto req2 = setRequest("migration");
+    auto& msg = req2->mutable_messages()->at(0);
+    msg.set_migrationcheckperiod(5);
+    msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
+
+    // The first request will schedule two functions on each host
+    sch.callFunctions(req1);
+
+    // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
+    SLEEP_MS(200);
+
+    // Override the local slots so that when the first application finishes,
+    // a migration opportunity appears
+    setLocalSlots(2, worldSize);
+    sch.callFunctions(req2);
+
+    checkAllocationAndResult(req1, 15000);
+    std::vector<std::string> hostsBeforeMigration = {
+        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+    };
+    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
+    checkAllocationAndResultMigration(
+      req2, hostsBeforeMigration, hostsAfterMigration, 15000);
 }
 }

@@ -135,8 +135,12 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
 
     // The current function migration approach breaks the execution graph, as
     // some messages are left dangling (deliberately) without return value
-    bool skipExecGraphCheck = true;
-    checkAllocationAndResult(req, 60000, skipExecGraphCheck);
+    std::vector<std::string> hostsBeforeMigration = {
+        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+    };
+    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
+    checkAllocationAndResultMigration(
+      req, hostsBeforeMigration, hostsAfterMigration, 15000);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")
