@@ -521,9 +521,9 @@ std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)
 void PointToPointBroker::initSequenceCounters(int groupId)
 {
     if (currentGroupId != NO_CURRENT_GROUP_ID) {
-        SPDLOG_WARN("Changing the current group Id in PTP broker ({} -> {})",
-                    currentGroupId,
-                    groupId);
+        SPDLOG_DEBUG("Changing the current group Id in PTP broker ({} -> {})",
+                     currentGroupId,
+                     groupId);
     }
     currentGroupId = groupId;
     int groupSize = getIdxsRegisteredForGroup(groupId).size();
@@ -748,9 +748,7 @@ void PointToPointBroker::resetThreadLocalCache()
 
 bool PointToPointBroker::setIsMessageOrderingOn(bool mustOrderMsgs)
 {
-    bool oldValue = _isMessageOrderingOn.load(std::memory_order_acquire);
-    _isMessageOrderingOn.store(mustOrderMsgs, std::memory_order_release);
-    return oldValue;
+    return _isMessageOrderingOn.exchange(mustOrderMsgs);
 }
 
 PointToPointBroker& getPointToPointBroker()

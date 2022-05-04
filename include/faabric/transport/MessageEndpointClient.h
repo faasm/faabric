@@ -16,12 +16,12 @@ class MessageEndpointClient
 
     void asyncSend(int header,
                    google::protobuf::Message* msg,
-                   int sequenceNum = -1);
+                   int sequenceNum = NO_SEQUENCE_NUM);
 
     void asyncSend(int header,
                    const uint8_t* buffer,
                    size_t bufferSize,
-                   int sequenceNum = -1);
+                   int sequenceNum = NO_SEQUENCE_NUM);
 
     void syncSend(int header,
                   google::protobuf::Message* msg,

@@ -3,6 +3,8 @@
 #include <string>
 #include <zmq.hpp>
 
+#define NO_SEQUENCE_NUM -1
+
 namespace faabric::transport {
 
 /**
@@ -65,6 +67,6 @@ class Message
 
     uint8_t _header = 0;
 
-    int _sequenceNum = -1;
+    int _sequenceNum = NO_SEQUENCE_NUM;
 };
 }
