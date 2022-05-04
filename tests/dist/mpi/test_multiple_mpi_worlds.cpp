@@ -88,25 +88,36 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
                  "Test MPI migration with two MPI worlds",
                  "[mpi]")
 {
-    // Set the slots for the first request
+    // Set the slots for the first request: 2 locally and 2 remote
     int worldSize = 4;
     setLocalSlots(2, worldSize);
 
-    // Prepare both requests
+    // Prepare both requests:
+    // - The first will do work, sleep for five seconds, and do work again
+    // - The second will do work and check for migration opportunities
     auto req1 = setRequest("alltoall-sleep");
     auto req2 = setRequest("migration");
     auto& msg = req2->mutable_messages()->at(0);
-    msg.set_migrationcheckperiod(5);
+    msg.set_migrationcheckperiod(1);
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
     // The first request will schedule two functions on each host
     sch.callFunctions(req1);
 
-    // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
-    SLEEP_MS(200);
+    // Sleep for a while so that:
+    // - When we schedule the second application the first one is already
+    //   running
+    // - When the first application finishes, the function migration thread
+    //   picks up a migration opportunity
+    // - The previous point happens before the second application has checked
+    //   for migration opportunities internally
+    SLEEP_MS(5000);
 
-    // Override the local slots so that when the first application finishes,
-    // a migration opportunity appears
+    // The previous three points are likely to be out-of-sync in a GHA test so:
+    // - We sleep for a very long time (almost the duration of the first app)
+    // - Even though we don't need it, we overwrite the local slots in case in
+    //   a GHA run we have slept so long that the first application has already
+    //   finished
     setLocalSlots(2, worldSize);
     sch.callFunctions(req2);
 

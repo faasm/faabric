@@ -122,16 +122,27 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
 {
     // We fist distribute the execution, and update the local slots
     // mid-execution to fit all ranks, and create a migration opportunity.
-    setLocalSlots(nLocalSlots);
+    int localSlots = 2;
+    int worldSize = 4;
+    setLocalSlots(localSlots, worldSize);
 
     auto req = setRequest("migration");
     auto& msg = req->mutable_messages()->at(0);
 
-    msg.set_migrationcheckperiod(5);
+    // Check very often for migration opportunities so that we detect it
+    // right away
+    msg.set_migrationcheckperiod(1);
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
     // Call the functions
     sch.callFunctions(req);
+
+    // Sleep for a while to let the scheduler schedule the MPI calls
+    SLEEP_MS(500);
+
+    // Update the local slots so that a migration opportunity appears
+    int newLocalSlots = worldSize;
+    setLocalSlots(newLocalSlots, worldSize);
 
     // The current function migration approach breaks the execution graph, as
     // some messages are left dangling (deliberately) without return value

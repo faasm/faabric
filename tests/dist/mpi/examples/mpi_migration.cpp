@@ -7,14 +7,6 @@
 
 namespace tests::mpi {
 
-static void setLocalSlots(int newNumLocalSlots)
-{
-    SPDLOG_INFO("Overwriting local slots from migration function");
-    faabric::HostResources res;
-    res.set_slots(newNumLocalSlots);
-    faabric::scheduler::getScheduler().setThisHostResources(res);
-}
-
 // Outer wrapper, and re-entry point after migration
 int migration(int nLoops)
 {
@@ -31,12 +23,6 @@ int migration(int nLoops)
     int worldSize;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &worldSize);
-
-    // After initialisation, update the local slots so that a migration
-    // opportunity appears.
-    if (rank == 0) {
-        setLocalSlots(worldSize);
-    }
 
     for (int i = 0; i < nLoops; i++) {
         // Make sure everyone is in sync (including those ranks that have been
