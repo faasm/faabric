@@ -145,7 +145,6 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
       });
 
     // Receive the two messages sent back
-    // TODO - this also relies on in-order ptp messging
     receivedDataB = broker.recvMessage(groupId, idxB, idxA);
     receivedDataC = broker.recvMessage(groupId, idxB, idxA);
 
