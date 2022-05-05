@@ -64,12 +64,13 @@ void PointToPointClient::sendMappings(faabric::PointToPointMappings& mappings)
     }
 }
 
-void PointToPointClient::sendMessage(faabric::PointToPointMessage& msg)
+void PointToPointClient::sendMessage(faabric::PointToPointMessage& msg,
+                                     int sequenceNum)
 {
     if (faabric::util::isMockMode()) {
         sentMessages.emplace_back(host, msg);
     } else {
-        asyncSend(PointToPointCall::MESSAGE, &msg);
+        asyncSend(PointToPointCall::MESSAGE, &msg, sequenceNum);
     }
 }
 

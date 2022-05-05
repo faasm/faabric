@@ -22,8 +22,12 @@
 // things haven't yet completed (usually only when there's an error).
 #define LINGER_MS 100
 
+// The header structure is:
+// - Message code (uint8_t)
+// - Message body size (size_t)
+// - Message sequence number of in-order message delivery default -1 (int)
 #define NO_HEADER 0
-#define HEADER_MSG_SIZE (sizeof(uint8_t) + sizeof(size_t))
+#define HEADER_MSG_SIZE (sizeof(uint8_t) + sizeof(size_t) + sizeof(int))
 
 #define SHUTDOWN_HEADER 220
 static const std::vector<uint8_t> shutdownPayload = { 0, 0, 1, 1 };
@@ -66,7 +70,8 @@ class MessageEndpoint
     void sendMessage(zmq::socket_t& socket,
                      uint8_t header,
                      const uint8_t* data,
-                     size_t dataSize);
+                     size_t dataSize,
+                     int sequenceNumber = NO_SEQUENCE_NUM);
 
     Message recvMessage(zmq::socket_t& socket, bool async);
 
@@ -86,7 +91,10 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
                              int portIn,
                              int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
-    void send(uint8_t header, const uint8_t* data, size_t dataSize);
+    void send(uint8_t header,
+              const uint8_t* data,
+              size_t dataSize,
+              int sequenceNum = NO_SEQUENCE_NUM);
 
   protected:
     zmq::socket_t socket;
@@ -98,7 +106,10 @@ class AsyncInternalSendMessageEndpoint final : public MessageEndpoint
     AsyncInternalSendMessageEndpoint(const std::string& inProcLabel,
                                      int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
-    void send(uint8_t header, const uint8_t* data, size_t dataSize);
+    void send(uint8_t header,
+              const uint8_t* data,
+              size_t dataSize,
+              int sequenceNumber = NO_SEQUENCE_NUM);
 
   protected:
     zmq::socket_t socket;

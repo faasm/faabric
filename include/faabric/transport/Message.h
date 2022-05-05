@@ -3,6 +3,8 @@
 #include <string>
 #include <zmq.hpp>
 
+#define NO_SEQUENCE_NUM -1
+
 namespace faabric::transport {
 
 /**
@@ -52,7 +54,11 @@ class Message
 
     void setHeader(uint8_t header) { _header = header; };
 
-    uint8_t getHeader() { return _header; };
+    uint8_t getHeader() const { return _header; };
+
+    void setSequenceNum(int sequenceNum) { _sequenceNum = sequenceNum; };
+
+    int getSequenceNum() const { return _sequenceNum; };
 
   private:
     std::vector<uint8_t> buffer;
@@ -60,5 +66,7 @@ class Message
     MessageResponseCode responseCode = MessageResponseCode::SUCCESS;
 
     uint8_t _header = 0;
+
+    int _sequenceNum = NO_SEQUENCE_NUM;
 };
 }

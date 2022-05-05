@@ -9,6 +9,7 @@
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+#include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>
 
@@ -139,6 +140,95 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     REQUIRE(receivedDataA == sentDataA);
     REQUIRE(receivedDataB == sentDataB);
+
+    conf.reset();
+}
+
+TEST_CASE_METHOD(PointToPointClientServerFixture,
+                 "Test point-to-point in-order message delivery",
+                 "[transport][ptp]")
+{
+    int appId = 123;
+    int groupId = 345;
+    int idxA = 0;
+    int idxB = 1;
+
+    // Ensure this host is set to localhost
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    conf.endpointHost = LOCALHOST;
+
+    // Register both indexes on this host
+    faabric::util::SchedulingDecision decision(appId, groupId);
+
+    faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
+    msgA.set_appid(appId);
+    msgA.set_groupid(groupId);
+    msgA.set_groupidx(idxA);
+
+    faabric::Message msgB = faabric::util::messageFactory("foo", "bar");
+    msgB.set_appid(appId);
+    msgB.set_groupid(groupId);
+    msgB.set_groupidx(idxB);
+
+    decision.addMessage(LOCALHOST, msgA);
+    decision.addMessage(LOCALHOST, msgB);
+
+    // Set up the mappings and configure in-order delivery
+    broker.setAndSendMappingsFromSchedulingDecision(decision);
+
+    bool isMessageOrderingOn;
+
+    SECTION("Ordering on") { isMessageOrderingOn = true; }
+
+    SECTION("Ordering off") { isMessageOrderingOn = false; }
+
+    bool origIsMsgOrderingOn =
+      broker.setIsMessageOrderingOn(isMessageOrderingOn);
+
+    int numMsg = 1e3;
+
+    // This thread first receives, then sends.
+    std::jthread t([groupId, idxA, idxB, numMsg] {
+        PointToPointBroker& broker = getPointToPointBroker();
+
+        std::vector<uint8_t> sendData;
+        std::vector<uint8_t> recvData;
+
+        for (int i = 0; i < numMsg; i++) {
+            recvData = broker.recvMessage(groupId, idxA, idxB);
+            sendData = std::vector<uint8_t>(3, i);
+            assert(recvData == sendData);
+        }
+
+        for (int i = 0; i < numMsg; i++) {
+            sendData = std::vector<uint8_t>(3, i);
+            broker.sendMessage(
+              groupId, idxB, idxA, sendData.data(), sendData.size());
+        }
+
+        broker.resetThreadLocalCache();
+    });
+
+    std::vector<uint8_t> sendData;
+    std::vector<uint8_t> recvData;
+
+    for (int i = 0; i < numMsg; i++) {
+        sendData = std::vector<uint8_t>(3, i);
+        broker.sendMessage(
+          groupId, idxA, idxB, sendData.data(), sendData.size());
+    }
+
+    for (int i = 0; i < numMsg; i++) {
+        sendData = std::vector<uint8_t>(3, i);
+        recvData = broker.recvMessage(groupId, idxB, idxA);
+        REQUIRE(sendData == recvData);
+    }
+
+    if (t.joinable()) {
+        t.join();
+    }
+
+    broker.setIsMessageOrderingOn(origIsMsgOrderingOn);
 
     conf.reset();
 }
