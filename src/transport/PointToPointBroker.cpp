@@ -48,7 +48,7 @@ thread_local std::vector<int> sentMsgCount;
 
 thread_local std::vector<int> recvMsgCount;
 
-thread_local std::list<Message> outOfOrderMsgs;
+thread_local std::vector<std::list<Message>> outOfOrderMsgs;
 
 static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
 {
@@ -531,6 +531,7 @@ void PointToPointBroker::initSequenceCounters(int groupId)
     // thread when we have changed group id
     sentMsgCount = std::vector<int>(groupSize, 0);
     recvMsgCount = std::vector<int>(groupSize, 0);
+    outOfOrderMsgs.resize(groupSize);
 }
 
 int PointToPointBroker::getAndIncrementSentMsgCount(int groupId, int recvIdx)
@@ -577,6 +578,17 @@ void PointToPointBroker::updateHostForIdx(int groupId,
                  newHost);
 
     mappings[key] = newHost;
+}
+
+void PointToPointBroker::sendMessage(int groupId,
+                                     int sendIdx,
+                                     int recvIdx,
+                                     const uint8_t* buffer,
+                                     size_t bufferSize,
+                                     std::string hostHint)
+{
+    sendMessage(
+      groupId, sendIdx, recvIdx, buffer, bufferSize, NO_SEQUENCE_NUM, hostHint);
 }
 
 void PointToPointBroker::sendMessage(int groupId,
@@ -690,40 +702,55 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
     // We first check if we have already received the message. We only need to
     // check this once.
     auto foundIterator =
-      std::find_if(outOfOrderMsgs.begin(),
-                   outOfOrderMsgs.end(),
+      std::find_if(outOfOrderMsgs.at(sendIdx).begin(),
+                   outOfOrderMsgs.at(sendIdx).end(),
                    [expectedSeqNum](const Message& msg) {
                        return msg.getSequenceNum() == expectedSeqNum;
                    });
-    if (foundIterator != outOfOrderMsgs.end()) {
+    if (foundIterator != outOfOrderMsgs.at(sendIdx).end()) {
+        SPDLOG_TRACE("Retrieved the expected message ({}:{} seq: {}) from the "
+                     "out-of-order buffer",
+                     sendIdx,
+                     recvIdx,
+                     expectedSeqNum);
         incrementRecvMsgCount(groupId, sendIdx);
         Message returnMsg = std::move(*foundIterator);
-        outOfOrderMsgs.erase(foundIterator);
+        outOfOrderMsgs.at(sendIdx).erase(foundIterator);
         return returnMsg.dataCopy();
     }
 
     // Given that we don't have the message, we query the transport layer until
     // we receive it
     while (true) {
-        SPDLOG_TRACE("Entering loop to query the transport layer for messages");
+        SPDLOG_TRACE(
+          "Entering loop to query transport layer for msg ({}:{} seq: {})",
+          sendIdx,
+          recvIdx,
+          expectedSeqNum);
         // Receive from the transport layer
         Message recvMsg = doRecvMessage(groupId, sendIdx, recvIdx);
 
         // If the sequence numbers match, exit the loop
         int seqNum = recvMsg.getSequenceNum();
         if (seqNum == expectedSeqNum) {
-            SPDLOG_TRACE("Received the expected message w/ seq. num: {}",
-                         seqNum);
+            SPDLOG_TRACE("Received the expected message ({}:{} seq: {})",
+                         sendIdx,
+                         recvIdx,
+                         expectedSeqNum);
             incrementRecvMsgCount(groupId, sendIdx);
             return recvMsg.dataCopy();
         }
 
         // If not, we must insert the received message in the out of order
         // received messages
-        SPDLOG_TRACE("Received out-of-order message (expected: {} - got: {})",
+        SPDLOG_TRACE("Received out-of-order message ({}:{} seq: {}) (expected: "
+                     "{} - got: {})",
+                     sendIdx,
+                     recvIdx,
+                     seqNum,
                      expectedSeqNum,
                      seqNum);
-        outOfOrderMsgs.emplace_back(std::move(recvMsg));
+        outOfOrderMsgs.at(sendIdx).emplace_back(std::move(recvMsg));
     }
 }
 

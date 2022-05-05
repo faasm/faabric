@@ -109,6 +109,13 @@ class PointToPointBroker
                      int recvIdx,
                      const uint8_t* buffer,
                      size_t bufferSize,
+                     std::string hostHint);
+
+    void sendMessage(int groupId,
+                     int sendIdx,
+                     int recvIdx,
+                     const uint8_t* buffer,
+                     size_t bufferSize,
                      int sequenceNum = NO_SEQUENCE_NUM,
                      std::string hostHint = "");
 

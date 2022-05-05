@@ -15,8 +15,7 @@ PointToPointServer::PointToPointServer()
       POINT_TO_POINT_ASYNC_PORT,
       POINT_TO_POINT_SYNC_PORT,
       POINT_TO_POINT_INPROC_LABEL,
-      // TODO - when #261 is merged in change this back to the config variable
-      1) // faabric::util::getSystemConfig().pointToPointServerThreads)
+      faabric::util::getSystemConfig().pointToPointServerThreads)
   , broker(getPointToPointBroker())
 {}
 
