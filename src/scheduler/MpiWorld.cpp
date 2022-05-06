@@ -49,10 +49,7 @@ MpiWorld::MpiWorld()
   , creationTime(faabric::util::startTimer())
   , cartProcsPerDim(2)
   , broker(faabric::transport::getPointToPointBroker())
-{
-    // If we instantiate an MPI world, we want to set the PTP broker ordering
-    broker.setIsMessageOrderingOn(true);
-}
+{}
 
 void MpiWorld::sendRemoteMpiMessage(
   std::string dstHost,
@@ -198,6 +195,9 @@ void MpiWorld::destroy()
 
     // Clear structures used for mocking
     mpiMockedMessages.clear();
+
+    // Unset the message ordering for this rank.
+    broker.setIsMessageOrderingOn(false);
 }
 
 void MpiWorld::initialiseFromMsg(faabric::Message& msg)

@@ -197,14 +197,19 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     SECTION("Ordering off") { isMessageOrderingOn = false; }
 
+    // Set ordering on one thread
     bool origIsMsgOrderingOn =
       broker.setIsMessageOrderingOn(isMessageOrderingOn);
 
     int numMsg = 1e3;
 
     // This thread first receives, then sends.
-    std::jthread t([groupId, idxA, idxB, numMsg] {
+    std::jthread t([groupId, idxA, idxB, numMsg, isMessageOrderingOn] {
         PointToPointBroker& broker = getPointToPointBroker();
+
+        // Set ordering on the other thread
+        bool origIsMsgOrderingOn =
+          broker.setIsMessageOrderingOn(isMessageOrderingOn);
 
         std::vector<uint8_t> sendData;
         std::vector<uint8_t> recvData;
@@ -220,6 +225,9 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
             broker.sendMessage(
               groupId, idxB, idxA, sendData.data(), sendData.size());
         }
+
+        // Reset message ordering
+        broker.setIsMessageOrderingOn(origIsMsgOrderingOn);
 
         broker.resetThreadLocalCache();
     });
@@ -243,6 +251,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
         t.join();
     }
 
+    // Reset message ordering
     broker.setIsMessageOrderingOn(origIsMsgOrderingOn);
 
     conf.reset();

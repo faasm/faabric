@@ -144,8 +144,6 @@ class PointToPointBroker
 
     Message doRecvMessage(int groupId, int sendIdx, int recvIdx);
 
-    std::atomic<bool> _isMessageOrderingOn;
-
     void initSequenceCounters(int groupId);
 
     int getAndIncrementSentMsgCount(int groupId, int recvIdx);
