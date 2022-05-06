@@ -76,7 +76,6 @@ int handleManyPointToPointMsgFunction(
 
     // Set the broker to receive messages in order
     auto& broker = faabric::transport::getPointToPointBroker();
-    bool origIsMsgOrderingOn = broker.setIsMessageOrderingOn(true);
 
     int sendIdx = 1;
     int recvIdx = 0;
@@ -84,14 +83,19 @@ int handleManyPointToPointMsgFunction(
         // Send loop
         for (int i = 0; i < numMsg; i++) {
             std::vector<uint8_t> sendData(5, i);
-            broker.sendMessage(
-              groupId, sendIdx, recvIdx, sendData.data(), sendData.size());
+            broker.sendMessage(groupId,
+                               sendIdx,
+                               recvIdx,
+                               sendData.data(),
+                               sendData.size(),
+                               true);
         }
     } else if (groupIdx == recvIdx) {
         // Recv loop
         for (int i = 0; i < numMsg; i++) {
             std::vector<uint8_t> expectedData(5, i);
-            auto actualData = broker.recvMessage(groupId, sendIdx, recvIdx);
+            auto actualData =
+              broker.recvMessage(groupId, sendIdx, recvIdx, true);
             if (actualData != expectedData) {
                 SPDLOG_ERROR(
                   "Out-of-order message reception (got: {}, expected: {})",
@@ -104,8 +108,6 @@ int handleManyPointToPointMsgFunction(
         SPDLOG_ERROR("Unexpected group index: {}", groupIdx);
         return 1;
     }
-
-    broker.setIsMessageOrderingOn(origIsMsgOrderingOn);
 
     return 0;
 }

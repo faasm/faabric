@@ -59,14 +59,14 @@ void MpiWorld::sendRemoteMpiMessage(
 {
     SERIALISE_MSG_PTR(msg);
     broker.sendMessage(
-      id, sendRank, recvRank, serialisedBuffer, serialisedSize, dstHost);
+      id, sendRank, recvRank, serialisedBuffer, serialisedSize, dstHost, true);
 }
 
 std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
   int sendRank,
   int recvRank)
 {
-    auto msg = broker.recvMessage(id, sendRank, recvRank);
+    auto msg = broker.recvMessage(id, sendRank, recvRank, true);
     PARSE_MSG(faabric::MPIMessage, msg.data(), msg.size());
     return std::make_shared<faabric::MPIMessage>(parsedMsg);
 }
@@ -195,9 +195,6 @@ void MpiWorld::destroy()
 
     // Clear structures used for mocking
     mpiMockedMessages.clear();
-
-    // Unset the message ordering for this rank.
-    broker.setIsMessageOrderingOn(false);
 }
 
 void MpiWorld::initialiseFromMsg(faabric::Message& msg)

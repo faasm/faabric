@@ -28,6 +28,10 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
             PARSE_MSG(
               faabric::PointToPointMessage, message.udata(), message.size())
 
+            // If the sequence number is set, we must also set the ordering
+            // flag
+            bool mustOrderMsg = sequenceNum != -1;
+
             // Send the message locally to the downstream socket, add the
             // sequence number for in-order reception
             broker.sendMessage(parsedMsg.groupid(),
@@ -35,6 +39,7 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
                                parsedMsg.recvidx(),
                                BYTES_CONST(parsedMsg.data().c_str()),
                                parsedMsg.data().size(),
+                               mustOrderMsg,
                                sequenceNum);
             break;
         }

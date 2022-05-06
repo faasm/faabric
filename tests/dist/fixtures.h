@@ -23,6 +23,7 @@ class DistTestsFixture
         // Make sure the host list is up to date
         sch.addHostToGlobalSet(getMasterIP());
         sch.addHostToGlobalSet(getWorkerIP());
+        sch.removeHostFromGlobalSet(LOCALHOST);
 
         // Set up executor
         std::shared_ptr<tests::DistTestExecutorFactory> fac =
@@ -63,6 +64,7 @@ class MpiDistTestsFixture : public DistTestsFixture
   protected:
     int nLocalSlots = 2;
     int worldSize = 4;
+    bool origIsMsgOrderingOn;
 
     // The server has four slots, therefore by setting the number of local slots
     // and the world size we are able to infer the expected scheduling decision

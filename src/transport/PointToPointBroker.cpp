@@ -40,8 +40,6 @@ thread_local std::unordered_map<std::string,
   clients;
 
 // Thread local data structures for in-order message delivery
-thread_local bool _isMessageOrderingOn;
-
 thread_local int currentGroupId = NO_CURRENT_GROUP_ID;
 
 // On the sent message count we index by receiving rank and on the receive
@@ -587,10 +585,17 @@ void PointToPointBroker::sendMessage(int groupId,
                                      int recvIdx,
                                      const uint8_t* buffer,
                                      size_t bufferSize,
-                                     std::string hostHint)
+                                     std::string hostHint,
+                                     bool mustOrderMsg)
 {
-    sendMessage(
-      groupId, sendIdx, recvIdx, buffer, bufferSize, NO_SEQUENCE_NUM, hostHint);
+    sendMessage(groupId,
+                sendIdx,
+                recvIdx,
+                buffer,
+                bufferSize,
+                mustOrderMsg,
+                NO_SEQUENCE_NUM,
+                hostHint);
 }
 
 void PointToPointBroker::sendMessage(int groupId,
@@ -598,6 +603,7 @@ void PointToPointBroker::sendMessage(int groupId,
                                      int recvIdx,
                                      const uint8_t* buffer,
                                      size_t bufferSize,
+                                     bool mustOrderMsg,
                                      int sequenceNum,
                                      std::string hostHint)
 {
@@ -614,8 +620,7 @@ void PointToPointBroker::sendMessage(int groupId,
       hostHint.empty() ? getHostForReceiver(groupId, recvIdx) : hostHint;
 
     // Set the sequence number if we need ordering and one is not provided
-    bool mustSetSequenceNum =
-      _isMessageOrderingOn && sequenceNum == NO_SEQUENCE_NUM;
+    bool mustSetSequenceNum = mustOrderMsg && sequenceNum == NO_SEQUENCE_NUM;
 
     if (host == conf.endpointHost) {
         std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
@@ -689,10 +694,11 @@ Message PointToPointBroker::doRecvMessage(int groupId, int sendIdx, int recvIdx)
 
 std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
                                                      int sendIdx,
-                                                     int recvIdx)
+                                                     int recvIdx,
+                                                     bool mustOrderMsg)
 {
     // If we don't need to receive messages in order, return here
-    if (!_isMessageOrderingOn) {
+    if (!mustOrderMsg) {
         // TODO - can we avoid this copy?
         return doRecvMessage(groupId, sendIdx, recvIdx).dataCopy();
     }
@@ -794,11 +800,6 @@ void PointToPointBroker::resetThreadLocalCache()
     sendEndpoints.clear();
     recvEndpoints.clear();
     clients.clear();
-}
-
-bool PointToPointBroker::setIsMessageOrderingOn(bool mustOrderMsgs)
-{
-    return std::exchange(_isMessageOrderingOn, mustOrderMsgs);
 }
 
 PointToPointBroker& getPointToPointBroker()

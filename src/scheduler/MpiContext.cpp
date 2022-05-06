@@ -31,9 +31,6 @@ int MpiContext::createWorld(faabric::Message& msg)
     isMpi = true;
     rank = 0;
 
-    // Set in-order messaging for this rank
-    faabric::transport::getPointToPointBroker().setIsMessageOrderingOn(true);
-
     // Return the world id to store it in the original message
     return worldId;
 }
@@ -48,9 +45,6 @@ void MpiContext::joinWorld(faabric::Message& msg)
     isMpi = true;
     worldId = msg.mpiworldid();
     rank = msg.mpirank();
-
-    // Set in-order messaging for this rank
-    faabric::transport::getPointToPointBroker().setIsMessageOrderingOn(true);
 
     // Register with the world
     MpiWorldRegistry& registry = getMpiWorldRegistry();

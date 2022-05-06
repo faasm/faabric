@@ -109,25 +109,28 @@ class PointToPointBroker
                      int recvIdx,
                      const uint8_t* buffer,
                      size_t bufferSize,
-                     std::string hostHint);
+                     std::string hostHint,
+                     bool mustOrderMsg = false);
 
     void sendMessage(int groupId,
                      int sendIdx,
                      int recvIdx,
                      const uint8_t* buffer,
                      size_t bufferSize,
+                     bool mustOrderMsg = false,
                      int sequenceNum = NO_SEQUENCE_NUM,
                      std::string hostHint = "");
 
-    std::vector<uint8_t> recvMessage(int groupId, int sendIdx, int recvIdx);
+    std::vector<uint8_t> recvMessage(int groupId,
+                                     int sendIdx,
+                                     int recvIdx,
+                                     bool mustOrderMsg = false);
 
     void clearGroup(int groupId);
 
     void clear();
 
     void resetThreadLocalCache();
-
-    bool setIsMessageOrderingOn(bool mustOrderMsgs);
 
   private:
     faabric::util::SystemConfig& conf;
