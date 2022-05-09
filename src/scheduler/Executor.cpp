@@ -588,9 +588,6 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             releaseClaim();
         }
 
-        // Clear the thread local PTP cache
-        faabric::transport::getPointToPointBroker().resetThreadLocalCache();
-
         // Return this thread index to the pool available for scheduling
         {
             faabric::util::UniqueLock lock(threadsMutex);
