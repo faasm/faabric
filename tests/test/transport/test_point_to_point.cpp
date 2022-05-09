@@ -160,6 +160,13 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(receivedDataB == sentDataB);
     REQUIRE(receivedDataC == sentDataC);
 
+    // Clear local records
+    broker.resetThreadLocalCache();
+
+    // Clear broker
+    broker.clear();
+    REQUIRE(broker.getIdxsRegisteredForGroup(groupId).empty());
+
     conf.reset();
 }
 
