@@ -120,6 +120,9 @@ void Scheduler::reset()
     }
     executors.clear();
 
+    // Clear the point to point broker
+    broker.clear();
+
     faabric::util::FullLock lock(mx);
 
     // Ensure host is set correctly
