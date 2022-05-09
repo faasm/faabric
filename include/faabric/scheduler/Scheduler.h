@@ -22,6 +22,7 @@
 #include <shared_mutex>
 
 #define AVAILABLE_HOST_SET "available_hosts"
+#define MIGRATED_FUNCTION_RETURN_VALUE -99
 
 namespace faabric::scheduler {
 

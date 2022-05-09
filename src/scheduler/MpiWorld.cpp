@@ -1,5 +1,6 @@
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>
@@ -11,10 +12,6 @@
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
 // per-rank data structures
 static thread_local std::vector<
-  std::unique_ptr<faabric::transport::MpiMessageEndpoint>>
-  mpiMessageEndpoints;
-
-static thread_local std::vector<
   std::shared_ptr<faabric::scheduler::MpiMessageBuffer>>
   unackedMessageBuffers;
 
@@ -23,18 +20,6 @@ static thread_local std::set<int> iSendRequests;
 static thread_local std::map<int, std::pair<int, int>> reqIdToRanks;
 
 static thread_local int localMsgCount = 1;
-
-// These long-lived sockets are used by each world to communicate rank-to-host
-// mappings. They are thread-local to ensure separation between concurrent
-// worlds executing on the same host
-static thread_local std::unique_ptr<
-  faabric::transport::AsyncRecvMessageEndpoint>
-  ranksRecvEndpoint;
-
-static thread_local std::unordered_map<
-  std::string,
-  std::unique_ptr<faabric::transport::AsyncSendMessageEndpoint>>
-  ranksSendEndpoints;
 
 // Id of the message that created this thread-local instance
 static thread_local faabric::Message* thisRankMsg = nullptr;
@@ -46,18 +31,10 @@ namespace faabric::scheduler {
 // -----------------------------------
 static std::mutex mockMutex;
 
-static std::vector<faabric::MpiHostsToRanksMessage> rankMessages;
-
 // The identifier in this map is the sending rank. For the receiver's rank
 // we can inspect the MPIMessage object
 static std::map<int, std::vector<std::shared_ptr<faabric::MPIMessage>>>
   mpiMockedMessages;
-
-std::vector<faabric::MpiHostsToRanksMessage> getMpiHostsToRanksMessages()
-{
-    faabric::util::UniqueLock lock(mockMutex);
-    return rankMessages;
-}
 
 std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
   int sendRank)
@@ -71,112 +48,27 @@ MpiWorld::MpiWorld()
   , basePort(faabric::util::getSystemConfig().mpiBasePort)
   , creationTime(faabric::util::startTimer())
   , cartProcsPerDim(2)
+  , broker(faabric::transport::getPointToPointBroker())
 {}
 
-faabric::MpiHostsToRanksMessage MpiWorld::recvMpiHostRankMsg()
-{
-    if (faabric::util::isMockMode()) {
-        assert(!rankMessages.empty());
-        faabric::MpiHostsToRanksMessage msg = rankMessages.back();
-        rankMessages.pop_back();
-        return msg;
-    }
-
-    if (ranksRecvEndpoint == nullptr) {
-        ranksRecvEndpoint =
-          std::make_unique<faabric::transport::AsyncRecvMessageEndpoint>(
-            basePort);
-    }
-
-    SPDLOG_TRACE("Receiving MPI host ranks on {}", basePort);
-    faabric::transport::Message m = ranksRecvEndpoint->recv();
-    PARSE_MSG(faabric::MpiHostsToRanksMessage, m.data(), m.size());
-
-    return parsedMsg;
-}
-
-void MpiWorld::sendMpiHostRankMsg(const std::string& hostIn,
-                                  const faabric::MpiHostsToRanksMessage msg)
-{
-    if (faabric::util::isMockMode()) {
-        rankMessages.push_back(msg);
-        return;
-    }
-
-    if (ranksSendEndpoints.find(hostIn) == ranksSendEndpoints.end()) {
-        ranksSendEndpoints.emplace(
-          hostIn,
-          std::make_unique<faabric::transport::AsyncSendMessageEndpoint>(
-            hostIn, basePort));
-    }
-
-    SPDLOG_TRACE("Sending MPI host ranks to {}:{}", hostIn, basePort);
-    SERIALISE_MSG(msg)
-    ranksSendEndpoints[hostIn]->send(
-      NO_HEADER, serialisedBuffer, serialisedSize);
-}
-
-void MpiWorld::initRemoteMpiEndpoint(int localRank, int remoteRank)
-{
-    SPDLOG_TRACE("Open MPI endpoint between ranks (local-remote) {} - {}",
-                 localRank,
-                 remoteRank);
-
-    // Resize the message endpoint vector and initialise to null. Note that we
-    // allocate size x size slots to cover all possible (sendRank, recvRank)
-    // pairs
-    if (mpiMessageEndpoints.empty()) {
-        for (int i = 0; i < size * size; i++) {
-            mpiMessageEndpoints.emplace_back(nullptr);
-        }
-    }
-
-    // Get host for remote rank
-    std::string otherHost = getHostForRank(remoteRank);
-
-    // Get the index for the rank-host pair
-    int index = getIndexForRanks(localRank, remoteRank);
-
-    // Get port for send-recv pair
-    std::pair<int, int> sendRecvPorts = getPortForRanks(localRank, remoteRank);
-
-    // Create MPI message endpoint
-    mpiMessageEndpoints.at(index) =
-      std::make_unique<faabric::transport::MpiMessageEndpoint>(
-        otherHost, sendRecvPorts.first, sendRecvPorts.second);
-}
-
 void MpiWorld::sendRemoteMpiMessage(
+  std::string dstHost,
   int sendRank,
   int recvRank,
   const std::shared_ptr<faabric::MPIMessage>& msg)
 {
-    // Get the index for the rank-host pair
-    // Note - message endpoints are identified by a (localRank, remoteRank)
-    // pair, not a (sendRank, recvRank) one
-    int index = getIndexForRanks(sendRank, recvRank);
-
-    if (mpiMessageEndpoints.empty() || mpiMessageEndpoints[index] == nullptr) {
-        initRemoteMpiEndpoint(sendRank, recvRank);
-    }
-
-    mpiMessageEndpoints[index]->sendMpiMessage(msg);
+    SERIALISE_MSG_PTR(msg);
+    broker.sendMessage(
+      id, sendRank, recvRank, serialisedBuffer, serialisedSize, dstHost, true);
 }
 
 std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
   int sendRank,
   int recvRank)
 {
-    // Get the index for the rank-host pair
-    // Note - message endpoints are identified by a (localRank, remoteRank)
-    // pair, not a (sendRank, recvRank) one
-    int index = getIndexForRanks(recvRank, sendRank);
-
-    if (mpiMessageEndpoints.empty() || mpiMessageEndpoints[index] == nullptr) {
-        initRemoteMpiEndpoint(recvRank, sendRank);
-    }
-
-    return mpiMessageEndpoints[index]->recvMpiMessage();
+    auto msg = broker.recvMessage(id, sendRank, recvRank, true);
+    PARSE_MSG(faabric::MPIMessage, msg.data(), msg.size());
+    return std::make_shared<faabric::MPIMessage>(parsedMsg);
 }
 
 std::shared_ptr<faabric::scheduler::MpiMessageBuffer>
@@ -222,6 +114,9 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
+        // Set group ids for remote messaging
+        msg.set_groupid(msg.mpiworldid());
+        msg.set_groupidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
             msg.set_appid(thisRankMsg->appid());
@@ -236,19 +131,19 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         }
     }
 
-    std::vector<std::string> executedAt;
+    // As a result of the call to the scheduler, a point-to-point communcation
+    // group will have been created with id equal to the MPI world's id.
     if (size > 1) {
         faabric::util::SchedulingDecision decision = sch.callFunctions(req);
-        executedAt = decision.hosts;
+        assert(decision.hosts.size() == size - 1);
+    } else {
+        // If world has size one, create the communication group (of size one)
+        // manually.
+        faabric::util::SchedulingDecision decision(id, id);
+        call.set_groupidx(0);
+        decision.addMessage(thisHost, call);
+        broker.setAndSendMappingsFromSchedulingDecision(decision);
     }
-    assert(executedAt.size() == size - 1);
-
-    // Prepend this host for rank 0
-    executedAt.insert(executedAt.begin(), thisHost);
-
-    // Record rank-to-host mapping and base ports
-    hostForRank = executedAt;
-    basePorts = initLocalBasePorts(executedAt);
 
     // Record which ranks are local to this world, and query for all leaders
     initLocalRemoteLeaders();
@@ -260,42 +155,11 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     initLocalQueues();
 }
 
-void MpiWorld::broadcastHostsToRanks()
-{
-    // Set up a list of hosts to broadcast to (excluding this host)
-    std::set<std::string> targetHosts(hostForRank.begin(), hostForRank.end());
-    targetHosts.erase(thisHost);
-
-    if (targetHosts.empty()) {
-        SPDLOG_DEBUG("Not broadcasting rank-to-host mapping, no other hosts");
-        return;
-    }
-
-    // Register hosts to rank mappings on this host
-    faabric::MpiHostsToRanksMessage hostRankMsg;
-    *hostRankMsg.mutable_hosts() = { hostForRank.begin(), hostForRank.end() };
-
-    // Prepare the base port for each rank
-    *hostRankMsg.mutable_baseports() = { basePorts.begin(), basePorts.end() };
-
-    // Do the broadcast
-    for (const auto& h : targetHosts) {
-        sendMpiHostRankMsg(h, hostRankMsg);
-    }
-}
-
 void MpiWorld::destroy()
 {
     SPDLOG_TRACE("Destroying MPI world {}", id);
 
     // Note that all ranks will call this function.
-
-    // We must force the destructors for all message endpoints to run here
-    // rather than at the end of their global thread-local lifespan. If we
-    // don't, the ZMQ shutdown can hang.
-    mpiMessageEndpoints.clear();
-    ranksRecvEndpoint = nullptr;
-    ranksSendEndpoints.clear();
 
     // Unacked message buffers
     if (!unackedMessageBuffers.empty()) {
@@ -330,7 +194,6 @@ void MpiWorld::destroy()
     }
 
     // Clear structures used for mocking
-    rankMessages.clear();
     mpiMockedMessages.clear();
 }
 
@@ -340,24 +203,6 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
-
-    // Block until we receive
-    faabric::MpiHostsToRanksMessage hostRankMsg = recvMpiHostRankMsg();
-
-    // Prepare the host-rank map with a vector containing _all_ ranks
-    // Note - this method should be called by only one rank. This is
-    // enforced in the world registry.
-
-    // Assert we are only setting the values once
-    assert(hostForRank.empty());
-    assert(basePorts.empty());
-
-    assert(hostRankMsg.hosts().size() == size);
-    assert(hostRankMsg.baseports().size() == size);
-
-    hostForRank = { hostRankMsg.hosts().begin(), hostRankMsg.hosts().end() };
-    basePorts = { hostRankMsg.baseports().begin(),
-                  hostRankMsg.baseports().end() };
 
     // Record which ranks are local to this world, and query for all leaders
     initLocalRemoteLeaders();
@@ -373,15 +218,10 @@ void MpiWorld::setMsgForRank(faabric::Message& msg)
 
 std::string MpiWorld::getHostForRank(int rank)
 {
-    assert(hostForRank.size() == size);
-
-    std::string host = hostForRank[rank];
-    if (host.empty()) {
-        throw std::runtime_error(
-          fmt::format("No host found for rank {}", rank));
-    }
-
-    return host;
+    // This method may be called a lot, so we query our cached records instead
+    // of the point-to-point broker, where we need to acquire a shared lock for
+    // every query.
+    return hostForRank.at(rank);
 }
 
 // The local leader for an MPI world is defined as the lowest rank assigned to
@@ -389,15 +229,25 @@ std::string MpiWorld::getHostForRank(int rank)
 // in the ranks to hosts map.
 void MpiWorld::initLocalRemoteLeaders()
 {
-    // First, group the ranks per host they belong to for convinience
-    assert(hostForRank.size() == size);
     // Clear the existing map in case we are calling this method during a
     // migration
     ranksForHost.clear();
+    hostForRank.clear();
 
-    for (int rank = 0; rank < hostForRank.size(); rank++) {
-        std::string host = hostForRank.at(rank);
-        ranksForHost[host].push_back(rank);
+    // First, group the ranks per host they belong to for convinience. We also
+    // keep a record of the opposite mapping, the host that each rank belongs
+    // to, as it is queried frequently and asking the ptp broker involves
+    // acquiring a lock.
+    auto rankIds = broker.getIdxsRegisteredForGroup(id);
+    if (rankIds.size() != size) {
+        SPDLOG_ERROR("rankIds != size ({} != {})", rankIds.size(), size);
+    }
+    assert(rankIds.size() == size);
+    hostForRank.resize(size);
+    for (const auto& rankId : rankIds) {
+        std::string host = broker.getHostForReceiver(id, rankId);
+        ranksForHost[host].push_back(rankId);
+        hostForRank.at(rankId) = host;
     }
 
     // Second, put the local leader for each host (currently lowest rank) at the
@@ -411,38 +261,6 @@ void MpiWorld::initLocalRemoteLeaders()
         std::iter_swap(it.second.begin(),
                        std::min_element(it.second.begin(), it.second.end()));
     }
-}
-
-// Returns a pair (sendPort, recvPort)
-// To assign the send and recv ports, we follow a protocol establishing:
-// 1) Port range (offset) corresponding to the world that receives
-// 2) Within a world's port range, port corresponding to the outcome of
-//    getIndexForRanks(localRank, remoteRank) Where local and remote are
-//    relative to the world whose port range we are in
-std::pair<int, int> MpiWorld::getPortForRanks(int localRank, int remoteRank)
-{
-    std::pair<int, int> sendRecvPortPair;
-
-    // Get base port for local and remote worlds
-    int localBasePort = basePorts[localRank];
-    int remoteBasePort = basePorts[remoteRank];
-    assert(localBasePort != remoteBasePort);
-
-    // Assign send port
-    // 1) Port range corresponding to remote world, as they are receiving
-    // 2) Index switching localRank and remoteRank, as remote rank is "local"
-    //    to the remote world
-    sendRecvPortPair.first =
-      remoteBasePort + getIndexForRanks(remoteRank, localRank);
-
-    // Assign recv port
-    // 1) Port range corresponding to our world, as we are the one's receiving
-    // 2) Port using our local rank as `localRank`, as we are in the local
-    //    offset
-    sendRecvPortPair.second =
-      localBasePort + getIndexForRanks(localRank, remoteRank);
-
-    return sendRecvPortPair;
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -657,13 +475,17 @@ void MpiWorld::send(int sendRank,
 
     // Dispatch the message locally or globally
     if (isLocal) {
-        SPDLOG_TRACE("MPI - send {} -> {}", sendRank, recvRank);
+        SPDLOG_TRACE(
+          "MPI - send {} -> {} ({})", sendRank, recvRank, messageType);
         getLocalQueue(sendRank, recvRank)->enqueue(std::move(m));
     } else {
-        SPDLOG_TRACE("MPI - send remote {} -> {}", sendRank, recvRank);
-        sendRemoteMpiMessage(sendRank, recvRank, m);
+        SPDLOG_TRACE(
+          "MPI - send remote {} -> {} ({})", sendRank, recvRank, messageType);
+        sendRemoteMpiMessage(otherHost, sendRank, recvRank, m);
     }
 
+    /* 02/05/2022 - The following bit of code fails randomly with a protobuf
+     * assertion error
     // If the message is set and recording on, track we have sent this message
     if (thisRankMsg != nullptr && thisRankMsg->recordexecgraph()) {
         faabric::util::exec_graph::incrementCounter(
@@ -678,6 +500,7 @@ void MpiWorld::send(int sendRank,
                       std::to_string(messageType),
                       std::to_string(recvRank)));
     }
+    */
 }
 
 void MpiWorld::recv(int sendRank,
@@ -713,6 +536,11 @@ void MpiWorld::doRecv(std::shared_ptr<faabric::MPIMessage>& m,
 {
     // Assert message integrity
     // Note - this checks won't happen in Release builds
+    if (m->messagetype() != messageType) {
+        SPDLOG_ERROR("Different message types (got: {}, expected: {})",
+                     m->messagetype(),
+                     messageType);
+    }
     assert(m->messagetype() == messageType);
     assert(m->count() <= count);
 
@@ -1583,34 +1411,6 @@ void MpiWorld::initLocalQueues()
     }
 }
 
-// Here we rely on the scheduler returning a list of hosts where equal
-// hosts are always contiguous with the exception of the master host
-// (thisHost) which may appear repeated at the end if the system is
-// overloaded.
-std::vector<int> MpiWorld::initLocalBasePorts(
-  const std::vector<std::string>& executedAt)
-{
-    std::vector<int> basePortForRank;
-    basePortForRank.reserve(size);
-
-    std::string lastHost = thisHost;
-    int lastPort = basePort;
-    for (const auto& host : executedAt) {
-        if (host == thisHost) {
-            basePortForRank.push_back(basePort);
-        } else if (host == lastHost) {
-            basePortForRank.push_back(lastPort);
-        } else {
-            lastHost = host;
-            lastPort += size * size;
-            basePortForRank.push_back(lastPort);
-        }
-    }
-
-    assert(basePortForRank.size() == size);
-    return basePortForRank;
-}
-
 std::shared_ptr<faabric::MPIMessage>
 MpiWorld::recvBatchReturnLast(int sendRank, int recvRank, int batchSize)
 {
@@ -1670,7 +1470,7 @@ MpiWorld::recvBatchReturnLast(int sendRank, int recvRank, int batchSize)
     return ourMsg;
 }
 
-int MpiWorld::getIndexForRanks(int sendRank, int recvRank)
+int MpiWorld::getIndexForRanks(int sendRank, int recvRank) const
 {
     int index = sendRank * size + recvRank;
     assert(index >= 0 && index < size * size);
@@ -1688,16 +1488,6 @@ double MpiWorld::getWTime()
 {
     double t = faabric::util::getTimeDiffMillis(creationTime);
     return t / 1000.0;
-}
-
-std::vector<bool> MpiWorld::getInitedRemoteMpiEndpoints()
-{
-    std::vector<bool> retVec(mpiMessageEndpoints.size());
-    for (int i = 0; i < mpiMessageEndpoints.size(); i++) {
-        retVec.at(i) = mpiMessageEndpoints.at(i) != nullptr;
-    }
-
-    return retVec;
 }
 
 std::vector<bool> MpiWorld::getInitedUMB()
@@ -1776,18 +1566,21 @@ void MpiWorld::prepareMigration(
           "Migrating with pending async messages is not supported");
     }
 
+    // Update local records
     if (thisRank == localLeader) {
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
             assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
             hostForRank.at(m.msg().mpirank()) = m.dsthost();
+            // This could be made more efficient as the broker method acquires
+            // a full lock every time
+            broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
         }
 
         // Set the migration flag
         hasBeenMigrated = true;
 
         // Reset the internal mappings.
-        initLocalBasePorts(hostForRank);
         initLocalRemoteLeaders();
 
         // Add the necessary new local messaging queues

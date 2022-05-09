@@ -75,6 +75,11 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA1) == hostA);
     REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA2) == hostB);
     REQUIRE(broker.getHostForReceiver(groupIdB, groupIdxB1) == hostA);
+
+    // Test updating the host for one group id
+    std::string newHost = "new-host";
+    broker.updateHostForIdx(groupIdA, groupIdxA1, newHost);
+    REQUIRE(broker.getHostForReceiver(groupIdA, groupIdxA1) == newHost);
 }
 
 TEST_CASE_METHOD(PointToPointClientServerFixture,
@@ -113,26 +118,39 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     std::vector<uint8_t> receivedDataA;
     std::vector<uint8_t> sentDataB = { 3, 4, 5 };
     std::vector<uint8_t> receivedDataB;
+    std::vector<uint8_t> sentDataC = { 6, 7, 8 };
+    std::vector<uint8_t> receivedDataC;
 
     // Make sure we send the message before a receiver is available to check
     // async handling
     broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
 
-    std::jthread t([groupId, idxA, idxB, &receivedDataA, &sentDataB] {
-        PointToPointBroker& broker = getPointToPointBroker();
+    std::jthread t(
+      [groupId, idxA, idxB, &receivedDataA, &sentDataB, &sentDataC] {
+          PointToPointBroker& broker = getPointToPointBroker();
 
-        // Receive the first message
-        receivedDataA = broker.recvMessage(groupId, idxA, idxB);
+          // Receive the first message
+          receivedDataA = broker.recvMessage(groupId, idxA, idxB);
 
-        // Send a message back
-        broker.sendMessage(
-          groupId, idxB, idxA, sentDataB.data(), sentDataB.size());
+          // Send a message back
+          broker.sendMessage(
+            groupId, idxB, idxA, sentDataB.data(), sentDataB.size());
 
-        broker.resetThreadLocalCache();
-    });
+          // Lastly, send another message specifying the recepient host to avoid
+          // an extra check in the broker
+          broker.sendMessage(groupId,
+                             idxB,
+                             idxA,
+                             sentDataC.data(),
+                             sentDataC.size(),
+                             std::string(LOCALHOST));
 
-    // Receive the message sent back
+          broker.resetThreadLocalCache();
+      });
+
+    // Receive the two messages sent back
     receivedDataB = broker.recvMessage(groupId, idxB, idxA);
+    receivedDataC = broker.recvMessage(groupId, idxB, idxA);
 
     if (t.joinable()) {
         t.join();
@@ -140,6 +158,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     REQUIRE(receivedDataA == sentDataA);
     REQUIRE(receivedDataB == sentDataB);
+    REQUIRE(receivedDataC == sentDataC);
 
     conf.reset();
 }
@@ -182,28 +201,30 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     SECTION("Ordering off") { isMessageOrderingOn = false; }
 
-    bool origIsMsgOrderingOn =
-      broker.setIsMessageOrderingOn(isMessageOrderingOn);
-
     int numMsg = 1e3;
 
     // This thread first receives, then sends.
-    std::jthread t([groupId, idxA, idxB, numMsg] {
+    std::jthread t([groupId, idxA, idxB, numMsg, isMessageOrderingOn] {
         PointToPointBroker& broker = getPointToPointBroker();
 
         std::vector<uint8_t> sendData;
         std::vector<uint8_t> recvData;
 
         for (int i = 0; i < numMsg; i++) {
-            recvData = broker.recvMessage(groupId, idxA, idxB);
+            recvData =
+              broker.recvMessage(groupId, idxA, idxB, isMessageOrderingOn);
             sendData = std::vector<uint8_t>(3, i);
             assert(recvData == sendData);
         }
 
         for (int i = 0; i < numMsg; i++) {
             sendData = std::vector<uint8_t>(3, i);
-            broker.sendMessage(
-              groupId, idxB, idxA, sendData.data(), sendData.size());
+            broker.sendMessage(groupId,
+                               idxB,
+                               idxA,
+                               sendData.data(),
+                               sendData.size(),
+                               isMessageOrderingOn);
         }
 
         broker.resetThreadLocalCache();
@@ -214,21 +235,23 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     for (int i = 0; i < numMsg; i++) {
         sendData = std::vector<uint8_t>(3, i);
-        broker.sendMessage(
-          groupId, idxA, idxB, sendData.data(), sendData.size());
+        broker.sendMessage(groupId,
+                           idxA,
+                           idxB,
+                           sendData.data(),
+                           sendData.size(),
+                           isMessageOrderingOn);
     }
 
     for (int i = 0; i < numMsg; i++) {
         sendData = std::vector<uint8_t>(3, i);
-        recvData = broker.recvMessage(groupId, idxB, idxA);
+        recvData = broker.recvMessage(groupId, idxB, idxA, isMessageOrderingOn);
         REQUIRE(sendData == recvData);
     }
 
     if (t.joinable()) {
         t.join();
     }
-
-    broker.setIsMessageOrderingOn(origIsMsgOrderingOn);
 
     conf.reset();
 }

@@ -8,6 +8,8 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 
+#define INTER_MPI_TEST_SLEEP 1500
+
 namespace tests {
 class DistTestsFixture
   : public SchedulerTestFixture
@@ -21,6 +23,7 @@ class DistTestsFixture
         // Make sure the host list is up to date
         sch.addHostToGlobalSet(getMasterIP());
         sch.addHostToGlobalSet(getWorkerIP());
+        sch.removeHostFromGlobalSet(LOCALHOST);
 
         // Set up executor
         std::shared_ptr<tests::DistTestExecutorFactory> fac =
@@ -44,5 +47,158 @@ class DistTestsFixture
   private:
     std::string workerIP;
     std::string masterIP;
+};
+
+class MpiDistTestsFixture : public DistTestsFixture
+{
+  public:
+    MpiDistTestsFixture()
+    {
+        // Flush before each execution to ensure a clean start
+        sch.broadcastFlush();
+        SLEEP_MS(INTER_MPI_TEST_SLEEP);
+    }
+
+    ~MpiDistTestsFixture() = default;
+
+  protected:
+    int nLocalSlots = 2;
+    int worldSize = 4;
+    bool origIsMsgOrderingOn;
+
+    // The server has four slots, therefore by setting the number of local slots
+    // and the world size we are able to infer the expected scheduling decision
+    void setLocalSlots(int numSlots, int worldSizeIn = 0)
+    {
+        faabric::HostResources res;
+        res.set_slots(numSlots);
+        sch.setThisHostResources(res);
+
+        if (worldSizeIn > 0) {
+            worldSize = worldSizeIn;
+        }
+    }
+
+    std::shared_ptr<faabric::BatchExecuteRequest> setRequest(
+      const std::string& function)
+    {
+        auto req = faabric::util::batchExecFactory("mpi", function, 1);
+        faabric::Message& msg = req->mutable_messages()->at(0);
+        msg.set_ismpi(true);
+        msg.set_mpiworldsize(worldSize);
+        msg.set_recordexecgraph(true);
+
+        return req;
+    }
+
+    void checkSchedulingFromExecGraph(
+      const faabric::scheduler::ExecGraph& execGraph)
+    {
+        // Build the expectation
+        std::vector<std::string> expecedHosts;
+        // The distributed server is hardcoded to have four slots
+        int remoteSlots = 4;
+        std::string remoteIp = getWorkerIP();
+        std::string localIp = getMasterIP();
+        // First, allocate locally as much as we can
+        for (int i = 0; i < nLocalSlots; i++) {
+            expecedHosts.push_back(localIp);
+        }
+        // Second, allocate remotely as much as we can
+        int allocateRemotely =
+          std::min<int>(worldSize - nLocalSlots, remoteSlots);
+        for (int i = 0; i < allocateRemotely; i++) {
+            expecedHosts.push_back(remoteIp);
+        }
+        // Lastly, overload the master with all the ranks we haven't been able
+        // to allocate anywhere
+        int overloadMaster = worldSize - nLocalSlots - allocateRemotely;
+        for (int i = 0; i < overloadMaster; i++) {
+            expecedHosts.push_back(localIp);
+        }
+
+        // Check against the actual scheduling decision
+        REQUIRE(expecedHosts ==
+                faabric::scheduler::getMpiRankHostsFromExecGraph(execGraph));
+    }
+
+    // Specialisation for migration tests
+    void checkSchedulingFromExecGraph(
+      const faabric::scheduler::ExecGraph& execGraph,
+      const std::vector<std::string> expectedHostsBefore,
+      const std::vector<std::string> expectedHostsAfter)
+    {
+        std::vector<std::string> actualHostsBefore(
+          execGraph.rootNode.msg.mpiworldsize());
+        std::vector<std::string> actualHostsAfter(
+          execGraph.rootNode.msg.mpiworldsize());
+
+        std::queue<faabric::scheduler::ExecGraphNode> nodeList;
+        nodeList.push(execGraph.rootNode);
+        while (!nodeList.empty()) {
+            // Process the node at the front
+            auto node = nodeList.front();
+            int returnValue = node.msg.returnvalue();
+            int rank = node.msg.mpirank();
+            std::string executedHost = node.msg.executedhost();
+            if (returnValue == 0) {
+                // We don't know if this particular rank has been migrated or
+                // not. Thus we only write in the before vector if no-one has
+                // written to that rank before
+                if (actualHostsBefore.at(rank).empty()) {
+                    actualHostsBefore.at(rank) = executedHost;
+                }
+                actualHostsAfter.at(rank) = executedHost;
+            } else if (returnValue == MIGRATED_FUNCTION_RETURN_VALUE) {
+                // When we process a message that has been migrated we always
+                // overwrite the contents of the before vector
+                actualHostsBefore.at(rank) = executedHost;
+            } else {
+                SPDLOG_ERROR("Unexpected return value {} for message id {}",
+                             returnValue,
+                             node.msg.id());
+                throw std::runtime_error("Unexpected return value");
+            }
+            nodeList.pop();
+
+            // Add children to the queue
+            for (auto c : node.children) {
+                nodeList.push(c);
+            }
+        }
+
+        REQUIRE(actualHostsBefore == expectedHostsBefore);
+        REQUIRE(actualHostsAfter == expectedHostsAfter);
+    }
+
+    void checkAllocationAndResult(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      int timeoutMs = 1000,
+      bool skipExecGraphCheck = false)
+    {
+        faabric::Message& msg = req->mutable_messages()->at(0);
+        faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
+        REQUIRE(result.returnvalue() == 0);
+        SLEEP_MS(1000);
+        if (!skipExecGraphCheck) {
+            auto execGraph = sch.getFunctionExecGraph(msg.id());
+            checkSchedulingFromExecGraph(execGraph);
+        }
+    }
+
+    void checkAllocationAndResultMigration(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      const std::vector<std::string>& expectedHostsBefore,
+      const std::vector<std::string>& expectedHostsAfter,
+      int timeoutMs = 1000)
+    {
+        faabric::Message& msg = req->mutable_messages()->at(0);
+        faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
+        REQUIRE(result.returnvalue() == 0);
+        SLEEP_MS(1000);
+        auto execGraph = sch.getFunctionExecGraph(msg.id());
+        checkSchedulingFromExecGraph(
+          execGraph, expectedHostsBefore, expectedHostsAfter);
+    }
 };
 }

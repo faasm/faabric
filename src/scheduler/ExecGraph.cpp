@@ -43,6 +43,33 @@ std::set<std::string> getExecGraphHosts(const ExecGraph& graph)
     return getExecGraphHostsForNode(graph.rootNode);
 }
 
+std::vector<std::string> getMpiRankHostsFromExecGraphNode(
+  const ExecGraphNode& node)
+{
+    std::vector<std::string> rankHosts(node.msg.mpiworldsize());
+    int rank = node.msg.mpirank();
+    std::string host = node.msg.executedhost();
+    rankHosts.at(rank) = host;
+
+    for (auto c : node.children) {
+        std::vector<std::string> nodeRankHosts =
+          getMpiRankHostsFromExecGraphNode(c);
+        assert(nodeRankHosts.size() == rankHosts.size());
+        for (int i = 0; i < rankHosts.size(); i++) {
+            if (!nodeRankHosts.at(i).empty()) {
+                rankHosts.at(i) = nodeRankHosts.at(i);
+            }
+        }
+    }
+
+    return rankHosts;
+}
+
+std::vector<std::string> getMpiRankHostsFromExecGraph(const ExecGraph& graph)
+{
+    return getMpiRankHostsFromExecGraphNode(graph.rootNode);
+}
+
 // ----------------------------------------
 // TODO - do this with RapidJson and not sstream
 // ----------------------------------------

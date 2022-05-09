@@ -195,9 +195,54 @@ class ConfTestFixture
     faabric::util::SystemConfig& conf;
 };
 
+class PointToPointTestFixture
+{
+  public:
+    PointToPointTestFixture()
+      : broker(faabric::transport::getPointToPointBroker())
+    {
+        faabric::util::setMockMode(false);
+        broker.clear();
+    }
+
+    ~PointToPointTestFixture()
+    {
+        // Here we reset the thread-local cache for the test thread. If other
+        // threads are used in the tests, they too must do this.
+        broker.resetThreadLocalCache();
+
+        faabric::transport::clearSentMessages();
+
+        broker.clear();
+        faabric::util::setMockMode(false);
+    }
+
+  protected:
+    faabric::transport::PointToPointBroker& broker;
+};
+
+class PointToPointClientServerFixture
+  : public PointToPointTestFixture
+  , SchedulerTestFixture
+{
+  public:
+    PointToPointClientServerFixture()
+      : cli(LOCALHOST)
+    {
+        server.start();
+    }
+
+    ~PointToPointClientServerFixture() { server.stop(); }
+
+  protected:
+    faabric::transport::PointToPointClient cli;
+    faabric::transport::PointToPointServer server;
+};
+
 class MpiBaseTestFixture
   : public SchedulerTestFixture
   , public ConfTestFixture
+  , public PointToPointTestFixture
 {
   public:
     MpiBaseTestFixture()
@@ -220,6 +265,10 @@ class MpiBaseTestFixture
 
     ~MpiBaseTestFixture()
     {
+        // TODO - without this sleep, we sometimes clear the PTP broker before
+        // all the executor threads have been set up, and when trying to query
+        // for the comm. group we throw a runtime error.
+        SLEEP_MS(200);
         auto& mpiRegistry = faabric::scheduler::getMpiWorldRegistry();
         mpiRegistry.clear();
     }
@@ -247,6 +296,8 @@ class MpiTestFixture : public MpiBaseTestFixture
 // Note that this test has two worlds, which each "think" that the other is
 // remote. This is done by allowing one to have the IP of this host, the other
 // to have the localhost IP, i.e. 127.0.0.1.
+// This fixture must only be used in mocking mode. To test a real MPI execution
+// across different hosts you must write a distributed test.
 class RemoteMpiTestFixture : public MpiBaseTestFixture
 {
   public:
@@ -296,50 +347,6 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     std::shared_ptr<faabric::util::Latch> testLatch;
 
     faabric::scheduler::MpiWorld otherWorld;
-};
-
-class PointToPointTestFixture
-{
-  public:
-    PointToPointTestFixture()
-      : broker(faabric::transport::getPointToPointBroker())
-    {
-        faabric::util::setMockMode(false);
-        broker.clear();
-    }
-
-    ~PointToPointTestFixture()
-    {
-        // Here we reset the thread-local cache for the test thread. If other
-        // threads are used in the tests, they too must do this.
-        broker.resetThreadLocalCache();
-
-        faabric::transport::clearSentMessages();
-
-        broker.clear();
-        faabric::util::setMockMode(false);
-    }
-
-  protected:
-    faabric::transport::PointToPointBroker& broker;
-};
-
-class PointToPointClientServerFixture
-  : public PointToPointTestFixture
-  , SchedulerTestFixture
-{
-  public:
-    PointToPointClientServerFixture()
-      : cli(LOCALHOST)
-    {
-        server.start();
-    }
-
-    ~PointToPointClientServerFixture() { server.stop(); }
-
-  protected:
-    faabric::transport::PointToPointClient cli;
-    faabric::transport::PointToPointServer server;
 };
 
 class ExecutorContextTestFixture

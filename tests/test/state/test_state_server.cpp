@@ -5,6 +5,7 @@
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>
 #include <faabric/state/StateClient.h>
+#include <faabric/transport/common.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/config.h>
 #include <faabric/util/macros.h>
