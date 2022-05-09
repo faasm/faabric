@@ -70,6 +70,28 @@ class PointToPointGroupFixture
 };
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
+                 "Test removing mappings from point-to-point broker",
+                 "[transport][ptp]")
+{
+    int appId = 123;
+    int groupId = 456;
+    int groupSize = 3;
+
+    auto group = setUpGroup(appId, groupId, groupSize);
+
+    REQUIRE(broker.getIdxsRegisteredForGroup(groupId).size() == groupSize);
+
+    SECTION("Clear through broker") { broker.clear(); }
+
+    SECTION("Clear through scheduler reset")
+    {
+        faabric::scheduler::getScheduler().reset();
+    }
+
+    REQUIRE(broker.getIdxsRegisteredForGroup(groupId).empty());
+}
+
+TEST_CASE_METHOD(PointToPointGroupFixture,
                  "Test lock requests",
                  "[ptp][transport]")
 {
