@@ -584,11 +584,12 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             } else {
                 reset(msg);
             }
-            // Clear the thread local PTP cache
-            faabric::transport::getPointToPointBroker().resetThreadLocalCache();
 
             releaseClaim();
         }
+
+        // Clear the thread local PTP cache
+        faabric::transport::getPointToPointBroker().resetThreadLocalCache();
 
         // Return this thread index to the pool available for scheduling
         {
