@@ -45,6 +45,29 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[mpi]")
     checkAllocationAndResult(req);
 }
 
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all many times", "[mpi]")
+{
+    int numRuns = 50;
+    int oldNumLocalSlots = nLocalSlots;
+    nLocalSlots = 4;
+    int worldSize = 8;
+    for (int i = 0; i < numRuns; i++) {
+        SPDLOG_INFO("Starting run {}/{}", i + 1, numRuns);
+        // Set up this host's resources
+        setLocalSlots(nLocalSlots, worldSize);
+        auto req = setRequest("alltoall");
+
+        // Call the functions
+        sch.callFunctions(req);
+
+        checkAllocationAndResult(req);
+
+        SLEEP_MS(500);
+    }
+
+    nLocalSlots = oldNumLocalSlots;
+}
+
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all and sleep", "[mpi]")
 {
     // Set up this host's resources
