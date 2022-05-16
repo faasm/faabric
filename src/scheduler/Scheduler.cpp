@@ -432,6 +432,7 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
         // Work out how many we can handle locally
         int slots = thisHostResources.slots();
         if (topologyHint == faabric::util::SchedulingTopologyHint::UNDERFULL) {
+            SPDLOG_WARN("Underfilling local slots according to topology hint");
             slots = slots / 2;
         }
 
@@ -1529,6 +1530,7 @@ Scheduler::doCheckForMigrationOpportunities(
 
         // If we have already recorded a pending migration for this req,
         // skip
+        // TODO - we may want to change this
         if (getPendingAppMigrations(originalDecision.appId) != nullptr) {
             SPDLOG_TRACE("Skipping app {} as migration opportunity has "
                          "already been recorded",
