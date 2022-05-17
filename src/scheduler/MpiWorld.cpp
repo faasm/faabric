@@ -614,7 +614,7 @@ void MpiWorld::broadcast(int sendRank,
                          int count,
                          faabric::MPIMessage::MPIMessageType messageType)
 {
-    SPDLOG_TRACE("MPI - bcast {} -> all", sendRank);
+    SPDLOG_TRACE("MPI - bcast {} -> {}", sendRank, recvRank);
 
     if (recvRank == sendRank) {
         for (auto it : ranksForHost) {
@@ -1572,7 +1572,31 @@ void MpiWorld::prepareMigration(
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
             assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
+            // Update the host for this rank. We only update the positions of
+            // the to-be migrated ranks, avoiding race conditions with not-
+            // migrated ranks
             hostForRank.at(m.msg().mpirank()) = m.dsthost();
+            // Update the ranks for host. This structure is used when doing
+            // collective communications by all ranks. At this point, all non-
+            // leader ranks will be hitting a barrier, for which they don't
+            // need the ranks for host map, therefore it is safe to modify it
+            if (m.dsthost() == thisHost && m.msg().mpirank() < localLeader) {
+                SPDLOG_WARN("Changing local leader {} -> {}",
+                            localLeader,
+                            m.msg().mpirank());
+                localLeader = m.msg().mpirank();
+                ranksForHost[m.dsthost()].insert(
+                  ranksForHost[m.dsthost()].begin(), m.msg().mpirank());
+            }
+            ranksForHost[m.dsthost()].push_back(m.msg().mpirank());
+            ranksForHost[m.srchost()].erase(
+              std::remove(ranksForHost[m.srchost()].begin(),
+                          ranksForHost[m.srchost()].end(),
+                          m.msg().mpirank()),
+              ranksForHost[m.srchost()].end());
+            if (ranksForHost[m.srchost()].empty()) {
+                ranksForHost.erase(m.srchost());
+            }
             // This could be made more efficient as the broker method acquires
             // a full lock every time
             broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
@@ -1580,9 +1604,6 @@ void MpiWorld::prepareMigration(
 
         // Set the migration flag
         hasBeenMigrated = true;
-
-        // Reset the internal mappings.
-        initLocalRemoteLeaders();
 
         // Add the necessary new local messaging queues
         initLocalQueues();
