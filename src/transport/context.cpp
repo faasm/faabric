@@ -16,7 +16,8 @@ void initGlobalMessageContext()
     }
 
     SPDLOG_TRACE("Initialising global ZeroMQ context");
-    instance = std::make_shared<zmq::context_t>(ZMQ_CONTEXT_IO_THREADS, FAASM_ZMQ_MAX_SOCKETS);
+    instance = std::make_shared<zmq::context_t>(ZMQ_CONTEXT_IO_THREADS,
+                                                FAASM_ZMQ_MAX_SOCKETS);
 }
 
 std::shared_ptr<zmq::context_t> getGlobalMessageContext()
