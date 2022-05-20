@@ -1,4 +1,5 @@
 #include <faabric/scheduler/ExecGraph.h>
+#include <faabric/scheduler/Scheduler.h>
 
 #include <faabric/util/json.h>
 #include <sstream>
@@ -68,6 +69,45 @@ std::vector<std::string> getMpiRankHostsFromExecGraphNode(
 std::vector<std::string> getMpiRankHostsFromExecGraph(const ExecGraph& graph)
 {
     return getMpiRankHostsFromExecGraphNode(graph.rootNode);
+}
+
+void getMigratedMpiRankHostsFromExecGraph(const ExecGraph& graph,
+                                          std::vector<std::string>& hostsBefore,
+                                          std::vector<std::string>& hostsAfter)
+{
+    std::queue<faabric::scheduler::ExecGraphNode> nodeList;
+    nodeList.push(graph.rootNode);
+    while (!nodeList.empty()) {
+        // Process the node at the front
+        auto node = nodeList.front();
+        int returnValue = node.msg.returnvalue();
+        int rank = node.msg.mpirank();
+        std::string executedHost = node.msg.executedhost();
+        if (returnValue == 0) {
+            // We don't know if this particular rank has been migrated or
+            // not. Thus we only write in the before vector if no-one has
+            // written to that rank before
+            if (hostsBefore.at(rank).empty()) {
+                hostsBefore.at(rank) = executedHost;
+            }
+            hostsAfter.at(rank) = executedHost;
+        } else if (returnValue == MIGRATED_FUNCTION_RETURN_VALUE) {
+            // When we process a message that has been migrated we always
+            // overwrite the contents of the before vector
+            hostsBefore.at(rank) = executedHost;
+        } else {
+            SPDLOG_ERROR("Unexpected return value {} for message id {}",
+                         returnValue,
+                         node.msg.id());
+            throw std::runtime_error("Unexpected return value");
+        }
+        nodeList.pop();
+
+        // Add children to the queue
+        for (auto c : node.children) {
+            nodeList.push(c);
+        }
+    }
 }
 
 // ----------------------------------------
