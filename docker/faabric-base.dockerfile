@@ -8,9 +8,8 @@ RUN add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-foca
 RUN add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main"
 RUN add-apt-repository -y -n "deb https://apt.kitware.com/ubuntu/ focal main"
 RUN add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
-RUN apt-get update
 
-RUN apt install -y \
+RUN apt update -y && apt install -y \
     autoconf \
     automake \
     build-essential \
@@ -50,7 +49,7 @@ RUN apt install -y \
     sudo \
     unzip
 
-RUN curl -s -L -o /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.43.0/conan-ubuntu-64.deb && sudo dpkg -i /tmp/conan-latest.deb && rm -f /tmp/conan-latest.deb
+RUN curl -s -L -o /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.48.1/conan-ubuntu-64.deb && sudo dpkg -i /tmp/conan-latest.deb && rm -f /tmp/conan-latest.deb
 
 # Update pip
 RUN pip install -U pip
