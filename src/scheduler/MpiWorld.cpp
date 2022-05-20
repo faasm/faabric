@@ -123,7 +123,12 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
             msg.set_cmdline(thisRankMsg->cmdline());
             msg.set_inputdata(thisRankMsg->inputdata());
             msg.set_migrationcheckperiod(thisRankMsg->migrationcheckperiod());
-            msg.set_topologyhint(thisRankMsg->topologyhint());
+            // To run migration experiments easily, we may want to propagate
+            // the `UNDERFULL` topology hint. In general however, we don't
+            // need to propagate this field
+            if (msg.topologyhint() == "UNDERFULL") {
+                msg.set_topologyhint(thisRankMsg->topologyhint());
+            }
             // Log chained functions to generate execution graphs
             if (thisRankMsg->recordexecgraph()) {
                 sch.logChainedFunction(call.id(), msg.id());

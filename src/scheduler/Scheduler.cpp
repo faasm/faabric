@@ -1530,7 +1530,6 @@ Scheduler::doCheckForMigrationOpportunities(
 
         // If we have already recorded a pending migration for this req,
         // skip
-        // TODO - we may want to change this
         if (getPendingAppMigrations(originalDecision.appId) != nullptr) {
             SPDLOG_TRACE("Skipping app {} as migration opportunity has "
                          "already been recorded",
