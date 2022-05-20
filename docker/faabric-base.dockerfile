@@ -8,9 +8,8 @@ RUN add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-foca
 RUN add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main"
 RUN add-apt-repository -y -n "deb https://apt.kitware.com/ubuntu/ focal main"
 RUN add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
-RUN apt-get update
 
-RUN apt install -y \
+RUN apt update -y && apt install -y \
     autoconf \
     automake \
     build-essential \
