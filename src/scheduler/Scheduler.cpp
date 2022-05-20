@@ -432,7 +432,6 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
         // Work out how many we can handle locally
         int slots = thisHostResources.slots();
         if (topologyHint == faabric::util::SchedulingTopologyHint::UNDERFULL) {
-            SPDLOG_WARN("Underfilling local slots according to topology hint");
             slots = slots / 2;
         }
 
