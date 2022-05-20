@@ -126,7 +126,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
             // To run migration experiments easily, we may want to propagate
             // the `UNDERFULL` topology hint. In general however, we don't
             // need to propagate this field
-            if (msg.topologyhint() == "UNDERFULL") {
+            if (thisRankMsg->topologyhint() == "UNDERFULL") {
                 msg.set_topologyhint(thisRankMsg->topologyhint());
             }
             // Log chained functions to generate execution graphs
