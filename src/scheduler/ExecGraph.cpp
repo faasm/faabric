@@ -71,22 +71,31 @@ std::vector<std::string> getMpiRankHostsFromExecGraph(const ExecGraph& graph)
     return getMpiRankHostsFromExecGraphNode(graph.rootNode);
 }
 
-void getMigratedMpiRankHostsFromExecGraph(const ExecGraph& graph,
-                                          std::vector<std::string>& hostsBefore,
-                                          std::vector<std::string>& hostsAfter)
+std::pair<std::vector<std::string>, std::vector<std::string>>
+getMigratedMpiRankHostsFromExecGraph(const ExecGraph& graph)
 {
+    // Initialise return vectors
+    std::vector<std::string> hostsBefore(graph.rootNode.msg.mpiworldsize());
+    std::vector<std::string> hostsAfter(graph.rootNode.msg.mpiworldsize());
+
     std::queue<faabric::scheduler::ExecGraphNode> nodeList;
     nodeList.push(graph.rootNode);
+
+    // Instead of iterating the execution graph recursively, we do it
+    // sequentially as it is easier to populate the two returned vectors
     while (!nodeList.empty()) {
-        // Process the node at the front
         auto node = nodeList.front();
         int returnValue = node.msg.returnvalue();
         int rank = node.msg.mpirank();
         std::string executedHost = node.msg.executedhost();
+
+        // Each function in the execution graph (i.e. MPI rank) that has
+        // finished succesfully has either been migrated or not. Each migrated
+        // rank accounts for two functions: one that has been stopped to be
+        // migrated and one that has finished succesfully.
         if (returnValue == 0) {
-            // We don't know if this particular rank has been migrated or
-            // not. Thus we only write in the before vector if no-one has
-            // written to that rank before
+            // If the function has finished succesfully it is either the second
+            // function for the same rank (i.e. it has been migrated) or not
             if (hostsBefore.at(rank).empty()) {
                 hostsBefore.at(rank) = executedHost;
             }
@@ -108,6 +117,8 @@ void getMigratedMpiRankHostsFromExecGraph(const ExecGraph& graph,
             nodeList.push(c);
         }
     }
+
+    return std::make_pair(hostsBefore, hostsAfter);
 }
 
 // ----------------------------------------
