@@ -99,6 +99,7 @@ getMigratedMpiRankHostsFromExecGraph(const ExecGraph& graph)
             if (hostsBefore.at(rank).empty()) {
                 hostsBefore.at(rank) = executedHost;
             }
+
             hostsAfter.at(rank) = executedHost;
         } else if (returnValue == MIGRATED_FUNCTION_RETURN_VALUE) {
             // When we process a message that has been migrated we always

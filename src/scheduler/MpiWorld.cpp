@@ -114,6 +114,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
+
         // Set group ids for remote messaging
         msg.set_groupid(msg.mpiworldid());
         msg.set_groupidx(msg.mpirank());
@@ -123,6 +124,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
             msg.set_cmdline(thisRankMsg->cmdline());
             msg.set_inputdata(thisRankMsg->inputdata());
             msg.set_migrationcheckperiod(thisRankMsg->migrationcheckperiod());
+
             // To run migration experiments easily, we may want to propagate
             // the UNDERFULL topology hint. In general however, we don't
             // need to propagate this field
@@ -1578,10 +1580,12 @@ void MpiWorld::prepareMigration(
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
             assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
+
             // Update the host for this rank. We only update the positions of
             // the to-be migrated ranks, avoiding race conditions with not-
             // migrated ranks
             hostForRank.at(m.msg().mpirank()) = m.dsthost();
+
             // Update the ranks for host. This structure is used when doing
             // collective communications by all ranks. At this point, all non-
             // leader ranks will be hitting a barrier, for which they don't
@@ -1594,15 +1598,18 @@ void MpiWorld::prepareMigration(
                 ranksForHost[m.dsthost()].insert(
                   ranksForHost[m.dsthost()].begin(), m.msg().mpirank());
             }
+
             ranksForHost[m.dsthost()].push_back(m.msg().mpirank());
             ranksForHost[m.srchost()].erase(
               std::remove(ranksForHost[m.srchost()].begin(),
                           ranksForHost[m.srchost()].end(),
                           m.msg().mpirank()),
               ranksForHost[m.srchost()].end());
+
             if (ranksForHost[m.srchost()].empty()) {
                 ranksForHost.erase(m.srchost());
             }
+
             // This could be made more efficient as the broker method acquires
             // a full lock every time
             broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
