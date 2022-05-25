@@ -8,6 +8,7 @@
 // https://zguide.zeromq.org/docs/chapter2/#I-O-Threads
 
 #define ZMQ_CONTEXT_IO_THREADS 1
+#define FAASM_ZMQ_MAX_SOCKETS 1024 * 1024
 
 namespace faabric::transport {
 
