@@ -8,6 +8,6 @@ PROJ_ROOT=${THIS_DIR}/..
 pushd ${PROJ_ROOT} > /dev/null
 
 echo "Stopping Faabric CLI"
-docker-compose -p faabric-dev -f docker/docker-compose-cli.yml stop
+docker compose -p faabric-dev -f docker/docker compose-cli.yml stop
 
 popd > /dev/null
