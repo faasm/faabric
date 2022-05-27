@@ -13,14 +13,14 @@ INNER_SHELL=${SHELL:-"/bin/bash"}
 
 # Make sure the CLI is running already in the background (avoids creating a new
 # container every time)
-docker-compose \
+docker compose \
     up \
     --no-recreate \
     -d \
     cli
 
 # Attach to the CLI container
-docker-compose \
+docker compose \
     exec \
     cli \
     ${INNER_SHELL}

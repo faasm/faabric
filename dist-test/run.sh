@@ -8,13 +8,13 @@ RETURN_VAL=0
 export OVERRIDE_CPU_COUNT=4
 
 # Run the test server in the background
-docker-compose \
+docker compose \
     up \
     -d \
     dist-test-server
 
 # Run the tests directly
-docker-compose \
+docker compose \
     run \
     --rm \
     cli \
@@ -25,10 +25,10 @@ RETURN_VAL=$?
 echo "-------------------------------------------"
 echo "                SERVER LOGS                "
 echo "-------------------------------------------"
-docker-compose logs dist-test-server
+docker compose logs dist-test-server
 
 # Stop everything
-docker-compose stop
+docker compose stop
 
 popd >> /dev/null
 
