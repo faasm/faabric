@@ -49,7 +49,7 @@ RUN apt update -y && apt install -y \
     sudo \
     unzip
 
-RUN curl -s -L -o /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.51.0/conan-ubuntu-64.deb && sudo dpkg -i /tmp/conan-latest.deb && rm -f /tmp/conan-latest.deb
+RUN curl -s -L -o /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.52.0/conan-ubuntu-64.deb && sudo dpkg -i /tmp/conan-latest.deb && rm -f /tmp/conan-latest.deb
 
 # Update pip
 RUN pip install -U pip
