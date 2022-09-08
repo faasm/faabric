@@ -49,7 +49,7 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    int sendReservation(int requestedSlots);
+    int tryReservation(int requestedSlots);
 
     void unregister(faabric::UnregisterRequest& req);
 };

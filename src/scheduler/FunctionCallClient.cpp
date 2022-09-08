@@ -171,7 +171,7 @@ void FunctionCallClient::executeFunctions(
     }
 }
 
-int FunctionCallClient::sendReservation(int numRequestedSlots)
+int FunctionCallClient::tryReservation(int numRequestedSlots)
 {
     faabric::ReservationRequest request;
     faabric::ReservationResponse response;
