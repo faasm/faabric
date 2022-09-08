@@ -131,7 +131,7 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvReservation(
     
     auto msgPtr = std::make_shared<faabric::ReservationRequest>(parsedMsg);
 
-    int allocated = scheduler.reserveSlots(msgPtr->slots());
+    int allocated = scheduler.tryReserveSlots(msgPtr->slots());
     
     faabric::ReservationResponse res;
     res.set_allocatedslots(allocated);

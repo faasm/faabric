@@ -247,7 +247,7 @@ class Scheduler
 
     void vacateSlot();
 
-    int reserveSlots(int slotsRequested);
+    int tryReserveSlots(int slotsRequested);
 
     std::string getThisHost();
 

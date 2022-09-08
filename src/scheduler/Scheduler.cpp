@@ -314,7 +314,7 @@ void Scheduler::vacateSlot()
 }
 
 // Attempts to reserve slots, returns the number of actually allocated slots.
-int Scheduler::reserveSlots(int slotsRequested)
+int Scheduler::tryReserveSlots(int slotsRequested)
 {
     int availableSlots =
       thisHostResources.slots() -
