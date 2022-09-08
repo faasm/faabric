@@ -51,7 +51,7 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::PendingMigrations: {
             return recvPendingMigrations(message.udata(), message.size());
         }
-        case faabric::scheduler::FunctionCalls::Reservation {
+        case faabric::scheduler::FunctionCalls::Reservation: {
             return recvReservation(message.udata(), message.size());
         }
         default: {
