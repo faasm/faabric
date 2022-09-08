@@ -49,6 +49,7 @@ void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
 std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
   const std::string& requestStr)
 {
+    SPDLOG_DEBUG("### handleFunction");
     std::pair<int, std::string> response;
     if (requestStr.empty()) {
         SPDLOG_ERROR("Faabric handler received empty request");
@@ -59,7 +60,7 @@ std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
           faabric::scheduler::getScheduler();
 
         if (msg.isstatusrequest()) {
-            SPDLOG_DEBUG("Processing status request");
+            SPDLOG_DEBUG("Processing status request (modified)");
             const faabric::Message result =
               sched.getFunctionResult(msg.id(), 0);
 
@@ -83,6 +84,7 @@ std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
             sched.broadcastFlush();
             response = std::make_pair(0, "Flush sent");
         } else {
+            SPDLOG_DEBUG("Executing Function");
             response = executeFunction(msg);
         }
     }
@@ -93,6 +95,7 @@ std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
 std::pair<int, std::string> FaabricEndpointHandler::executeFunction(
   faabric::Message& msg)
 {
+    SPDLOG_DEBUG("### executeFunction");
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
 
     if (msg.user().empty()) {

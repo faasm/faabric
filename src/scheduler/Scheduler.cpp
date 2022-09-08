@@ -477,6 +477,8 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                     continue;
                 }
 
+                // TODO: reserve RPC call. If failed, continue in loop.
+
                 SPDLOG_TRACE("Scheduling {}/{} of {} on {} (registered)",
                              nOnThisHost,
                              nMessages,
@@ -520,6 +522,9 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                     nOnThisHost < 2) {
                     continue;
                 }
+
+
+                // TODO: reserve RPC call. If failed, continue in loop.
 
                 SPDLOG_TRACE("Scheduling {}/{} of {} on {} (unregistered)",
                              nOnThisHost,
@@ -795,6 +800,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                          funcStr);
 
             // Update slots
+            // TODO remove this.
             this->thisHostUsedSlots.fetch_add(thisHostIdxs.size(),
                                               std::memory_order_acquire);
 
@@ -845,7 +851,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             // -------------------------------------------
             // REMOTE EXECTUION
             // -------------------------------------------
-            SPDLOG_DEBUG("Scheduling {}/{} calls to {} on {}",
+            SPDLOG_DEBUG("Scheduling (hi) {}/{} calls to {} on {}",
                          thisHostIdxs.size(),
                          nMessages,
                          funcStr,
