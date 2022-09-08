@@ -171,6 +171,21 @@ void FunctionCallClient::executeFunctions(
     }
 }
 
+faabric::EmptyResponse FunctionCallClient::sendReservation()
+{
+    faabric::EmptyRequest request;
+    faabric::EmptyResponse response;
+
+    if (faabric::util::isMockMode()) {
+        // TODO not sure what to do here.
+    } else {
+        syncSend(
+          faabric::scheduler::FunctionCalls::Reservation, &request, &response);
+    }
+
+    return response;
+}
+
 void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
 {
     if (faabric::util::isMockMode()) {

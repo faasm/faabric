@@ -49,6 +49,8 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
+    faabric::EmptyResponse sendReservation();
+
     void unregister(faabric::UnregisterRequest& req);
 };
 }

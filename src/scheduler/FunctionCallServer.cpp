@@ -50,6 +50,9 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::PendingMigrations: {
             return recvPendingMigrations(message.udata(), message.size());
         }
+        case faabric::scheduler::FunctionCalls::Reservation {
+            return recvReservation(message.udata(), message.size());
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized sync call header: {}", header));
@@ -118,4 +121,13 @@ FunctionCallServer::recvPendingMigrations(const uint8_t* buffer,
 
     return std::make_unique<faabric::EmptyResponse>();
 }
+
+std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvReservation(
+  const uint8_t* buffer,
+  size_t bufferSize)
+{
+    // TODO reservation logic
+    return std::make_unique<faabric::EmptyResponse>();
+}
+
 }
