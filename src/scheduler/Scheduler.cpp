@@ -1,3 +1,4 @@
+#include <atomic>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -19,6 +20,7 @@
 #include <faabric/util/testing.h>
 #include <faabric/util/timing.h>
 
+#include <spdlog/spdlog.h>
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
@@ -311,6 +313,20 @@ void Scheduler::vacateSlot()
     thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
 }
 
+// Attempts to reserve slots, returns the number of actually allocated slots.
+int Scheduler::reserveSlots(int slotsRequested)
+{
+    int availableSlots =
+      thisHostResources.slots() -
+      this->thisHostUsedSlots.load(std::memory_order_acquire);
+
+    int allocatedSlots = std::min(availableSlots, slotsRequested);
+
+    thisHostUsedSlots.fetch_add(allocatedSlots, std::memory_order_acq_rel);
+
+    return allocatedSlots;
+}
+
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -467,7 +483,15 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 // overloaded, in which case its used slots will be greater than
                 // its available slots.
                 available = std::max<int>(0, available);
-                int nOnThisHost = std::min<int>(available, remainder);
+
+                // TODO: reserve RPC call. If failed, continue in loop.
+                int availableReserved = reserveHostResources(h, available);
+                if (availableReserved <= 0) {
+                    // no available slots reserved.
+                    continue;
+                }
+
+                int nOnThisHost = std::min<int>(availableReserved, remainder);
 
                 // Under the NEVER_ALONE topology hint, we never choose a host
                 // unless we can schedule at least two requests in it.
@@ -476,8 +500,6 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                     nOnThisHost < 2) {
                     continue;
                 }
-
-                // TODO: reserve RPC call. If failed, continue in loop.
 
                 SPDLOG_TRACE("Scheduling {}/{} of {} on {} (registered)",
                              nOnThisHost,
@@ -515,16 +537,21 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 // overloaded, in which case its used slots will be greater than
                 // its available slots.
                 available = std::max<int>(0, available);
-                int nOnThisHost = std::min(available, remainder);
+
+                // TODO: reserve RPC call. If failed, continue in loop.
+                int availableReserved = reserveHostResources(h, available);
+                if (availableReserved <= 0) {
+                    // no available slots reserved.
+                    continue;
+                }
+
+                int nOnThisHost = std::min(availableReserved, remainder);
 
                 if (topologyHint ==
                       faabric::util::SchedulingTopologyHint::NEVER_ALONE &&
                     nOnThisHost < 2) {
                     continue;
                 }
-
-
-                // TODO: reserve RPC call. If failed, continue in loop.
 
                 SPDLOG_TRACE("Scheduling {}/{} of {} on {} (unregistered)",
                              nOnThisHost,
@@ -800,9 +827,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                          funcStr);
 
             // Update slots
-            // TODO remove this.
+            /*
             this->thisHostUsedSlots.fetch_add(thisHostIdxs.size(),
                                               std::memory_order_acquire);
+            */
 
             if (isThreads) {
                 // Threads use the existing executor. We assume there's only
@@ -1340,6 +1368,13 @@ faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
     SPDLOG_TRACE("Requesting resources from {}", host);
     return getFunctionCallClient(host).getResources();
+}
+
+int Scheduler::reserveHostResources(const std::string& host, int requestedSlots)
+{
+    SPDLOG_TRACE("Reserving {} resources on host {}", requestedSlots, host);
+    // host is remote host.
+    return getFunctionCallClient(host).sendReservation(requestedSlots);
 }
 
 // --------------------------------------------

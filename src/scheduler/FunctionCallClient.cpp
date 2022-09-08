@@ -171,10 +171,10 @@ void FunctionCallClient::executeFunctions(
     }
 }
 
-faabric::EmptyResponse FunctionCallClient::sendReservation()
+int FunctionCallClient::sendReservation(int numRequestedSlots)
 {
-    faabric::EmptyRequest request;
-    faabric::EmptyResponse response;
+    faabric::ReservationRequest request;
+    faabric::ReservationResponse response;
 
     if (faabric::util::isMockMode()) {
         // TODO not sure what to do here.
@@ -183,7 +183,7 @@ faabric::EmptyResponse FunctionCallClient::sendReservation()
           faabric::scheduler::FunctionCalls::Reservation, &request, &response);
     }
 
-    return response;
+    return response.allocatedslots();
 }
 
 void FunctionCallClient::unregister(faabric::UnregisterRequest& req)

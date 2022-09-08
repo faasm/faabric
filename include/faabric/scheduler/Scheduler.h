@@ -247,6 +247,8 @@ class Scheduler
 
     void vacateSlot();
 
+    int reserveSlots(int slotsRequested);
+
     std::string getThisHost();
 
     std::set<std::string> getAvailableHosts();
@@ -347,6 +349,7 @@ class Scheduler
     void updateHostResources();
 
     faabric::HostResources getHostResources(const std::string& host);
+    int reserveHostResources(const std::string& host, int slots);
 
     // ---- Actual scheduling ----
     SchedulerReaperThread reaperThread;

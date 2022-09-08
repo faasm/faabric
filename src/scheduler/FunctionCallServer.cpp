@@ -1,3 +1,4 @@
+#include "faabric/proto/faabric.pb.h"
 #include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -126,8 +127,16 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvReservation(
   const uint8_t* buffer,
   size_t bufferSize)
 {
-    // TODO reservation logic
-    return std::make_unique<faabric::EmptyResponse>();
+    PARSE_MSG(faabric::ReservationRequest, buffer, bufferSize);
+    
+    auto msgPtr = std::make_shared<faabric::ReservationRequest>(parsedMsg);
+
+    int allocated = scheduler.reserveSlots(msgPtr->slots());
+    
+    faabric::ReservationResponse res;
+    res.set_allocatedslots(allocated);
+
+    return std::make_unique<faabric::ReservationResponse>(res);
 }
 
 }
