@@ -486,7 +486,7 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
 
                 // TODO: reserve RPC call. If failed, continue in loop.
                 SPDLOG_TRACE("Reserving {} slots on {}", available, h);
-                int availableReserved = tryReserveHostResources(h, available);
+                int availableReserved = tryReserveHostSlots(h, available);
                 SPDLOG_TRACE("Got response: reserved {} slots on {}", available, h);
                 if (availableReserved <= 0) {
                     // no available slots reserved.
@@ -541,7 +541,7 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 available = std::max<int>(0, available);
 
                 // TODO: reserve RPC call. If failed, continue in loop.
-                int availableReserved = tryReserveHostResources(h, available);
+                int availableReserved = tryReserveHostSlots(h, available);
                 if (availableReserved <= 0) {
                     // no available slots reserved.
                     continue;
@@ -1372,11 +1372,11 @@ faabric::HostResources Scheduler::getHostResources(const std::string& host)
     return getFunctionCallClient(host).getResources();
 }
 
-int Scheduler::tryReserveHostResources(const std::string& host, int requestedSlots)
+int Scheduler::tryReserveHostSlots(const std::string& host, int requestedSlots)
 {
     SPDLOG_TRACE("Reserving {} resources on host {}", requestedSlots, host);
     // host is remote host.
-    return getFunctionCallClient(host).tryReservation(requestedSlots);
+    return getFunctionCallClient(host).tryReserve(requestedSlots);
 }
 
 // --------------------------------------------

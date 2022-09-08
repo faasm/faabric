@@ -349,7 +349,7 @@ class Scheduler
     void updateHostResources();
 
     faabric::HostResources getHostResources(const std::string& host);
-    int tryReserveHostResources(const std::string& host, int slots);
+    int tryReserveHostSlots(const std::string& host, int slots);
 
     // ---- Actual scheduling ----
     SchedulerReaperThread reaperThread;
