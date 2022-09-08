@@ -46,7 +46,7 @@ void setUpCrashHandler(int sig)
         fputs("Testing crash handler backtrace:\n", stderr);
         fflush(stderr);
         crashHandler(TEST_SIGNAL);
-        SPDLOG_INFO("(modified!) Installing crash handler");
+        SPDLOG_INFO("Installing crash handler");
 
         // We don't handle SIGSEGV here because segfault handling is
         // necessary for dirty tracking and if this handler gets initialised

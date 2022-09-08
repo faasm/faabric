@@ -484,10 +484,10 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 // its available slots.
                 available = std::max<int>(0, available);
 
-                // TODO: reserve RPC call. If failed, continue in loop.
-                SPDLOG_TRACE("Reserving {} slots on {}", available, h);
+                // reserve RPC call. If failed, continue in loop.
+                SPDLOG_DEBUG("Reserving {} slots on {}", available, h);
                 int availableReserved = tryReserveHostSlots(h, available);
-                SPDLOG_TRACE("Got response: reserved {} slots on {}", available, h);
+                SPDLOG_DEBUG("Got response: reserved {} slots on {}", available, h);
                 if (availableReserved <= 0) {
                     // no available slots reserved.
                     continue;
@@ -540,8 +540,11 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 // its available slots.
                 available = std::max<int>(0, available);
 
-                // TODO: reserve RPC call. If failed, continue in loop.
+                // Reserve RPC call. If failed, continue in loop.
+                SPDLOG_DEBUG("Reserving {} slots on {}", available, h);
                 int availableReserved = tryReserveHostSlots(h, available);
+                SPDLOG_DEBUG("Got response: reserved {} slots on {}", available, h);
+
                 if (availableReserved <= 0) {
                     // no available slots reserved.
                     continue;
@@ -881,7 +884,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             // -------------------------------------------
             // REMOTE EXECTUION
             // -------------------------------------------
-            SPDLOG_DEBUG("Scheduling (hi) {}/{} calls to {} on {}",
+            SPDLOG_DEBUG("Scheduling {}/{} calls to {} on {}",
                          thisHostIdxs.size(),
                          nMessages,
                          funcStr,

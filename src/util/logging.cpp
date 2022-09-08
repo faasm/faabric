@@ -26,7 +26,7 @@ void initLogging()
         // Check the minimum level permits debug logging
 #if SPDLOG_ACTIVE_LEVEL > SPDLOG_LEVEL_DEBUG
         SPDLOG_WARN(
-          "CHANGEEEE Logging set to debug but minimum log level set too high ({})",
+          "Logging set to debug but minimum log level set too high ({})",
           SPDLOG_ACTIVE_LEVEL);
 #endif
     } else {

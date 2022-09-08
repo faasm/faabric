@@ -49,7 +49,7 @@ void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
 std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
   const std::string& requestStr)
 {
-    SPDLOG_DEBUG("### handleFunction");
+    SPDLOG_DEBUG("entering handleFunction");
     std::pair<int, std::string> response;
     if (requestStr.empty()) {
         SPDLOG_ERROR("Faabric handler received empty request");
