@@ -8,7 +8,7 @@ PROJ_ROOT=${THIS_DIR}/..
 # Set different virtual environment paths so that these don't clash when
 # mounting the code in a development container
 VENV_PATH="undetected"
-if [[ -z "$FAASM_DOCKER" ]]; then
+if [[ -z "$FAABRIC_DOCKER" ]]; then
     VENV_PATH="${PROJ_ROOT}/venv-bm"
 else
     VENV_PATH="/usr/local/code/faasm/venv"
