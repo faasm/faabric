@@ -25,7 +25,7 @@ jobs:
         with:
            directory: /code/faabric
       - name: "Build dependencies to be shared by all runs"
-        run: inv dev.cmake -b Debug
+        run: ./bin/inv_wrapper.sh dev.cmake -b Debug
 
   docs:
     if: github.event.pull_request.draft == false
@@ -41,7 +41,7 @@ jobs:
       - name: "Check out branch"
         run: git checkout --force ci-branch
       - name: "Build docs"
-        run: inv docs
+        run: ./bin/inv_wrapper.sh docs
 
   formatting:
     if: github.event.pull_request.draft == false
@@ -96,9 +96,9 @@ jobs:
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
-        run: inv dev.cmake --build=Debug --sanitiser ${{ matrix.sanitiser }}
+        run: ./bin/inv_wrapper.sh dev.cmake --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
-        run: inv dev.cc faabric_tests
+        run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
         run: ./bin/faabric_tests
         working-directory: /build/faabric/static
@@ -144,12 +144,12 @@ jobs:
           build-type: "release"
           directory: /code/faabric
       - name: "Run cmake shared"
-        run: inv dev.cmake --shared --build=Release
+        run: ./bin/inv_wrapper.sh dev.cmake --shared --build=Release
       - name: "Build Faabric shared library"
-        run: inv dev.cc faabric --shared
+        run: ./bin/inv_wrapper.sh dev.cc faabric --shared
       - name: "Install Faabric shared library"
-        run: inv dev.install faabric --shared
+        run: ./bin/inv_wrapper.sh dev.install faabric --shared
       - name: "Build examples"
-        run: inv examples
+        run: ./bin/inv_wrapper.sh examples
       - name: "Run example to check"
-        run: inv examples.execute check
+        run: ./bin/inv_wrapper.sh examples.execute check
