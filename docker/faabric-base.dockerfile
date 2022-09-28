@@ -39,8 +39,6 @@ RUN apt update \
         "deb [signed-by=/etc/apt/keyrings/kitware-archive-latest.gpg] https://apt.kitware.com/ubuntu/ jammy main" \
         >> /etc/apt/sources.list.d/archive_uri-https_apt_kitware_com_ubuntu_jammy_-jammy.list
 
-# RUN add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
-
 # Install APT packages
 RUN apt update && apt install -y \
     autoconf \
