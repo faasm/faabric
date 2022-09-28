@@ -129,12 +129,18 @@ docker compose stop
 
 ## Creating a new tag
 
-Create a new branch, then find and replace the current version with the relevant
-bumped version. It should appear in:
+Create a new branch, then bump the code version:
 
-- `VERSION`
-- `.env`
-- `.github/workflows/tests.yml`.
+```bash
+inv git.bump
+```
+
+This will increment the minor version, to bump the code to an arbitrary version
+you can run:
+
+```bash
+inv git.bum --ver=<new_version>
+```
 
 Once done, commit and push, then run:
 
