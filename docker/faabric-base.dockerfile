@@ -23,9 +23,6 @@ RUN apt update \
     && echo \
         "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main" \
         >> /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_focal_-jammy.list \
-    && echo \
-        "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main" \
-        >> /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_focal_-jammy.list \
     && wget -O /tmp/kitware-archive-latest.asc \
         https://apt.kitware.com/keys/kitware-archive-latest.asc \
     && gpg --no-default-keyring \
