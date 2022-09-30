@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
 # Configure APT repositories
 RUN apt update \
@@ -8,38 +8,18 @@ RUN apt update \
         gpg \
         software-properties-common \
         wget \
-    # apt-key add is now deprecated for security reasons, we add individual
-    # keys manually.
-    # https://askubuntu.com/questions/1286545/what-commands-exactly-should-replace-the-deprecated-apt-key
-    && wget -O /tmp/llvm-snapshot.gpg.key \
-        https://apt.llvm.org/llvm-snapshot.gpg.key \
-    && gpg --no-default-keyring \
-        --keyring /tmp/tmp-key.gpg \
-        --import /tmp/llvm-snapshot.gpg.key \
-    && gpg --no-default-keyring \
-        --keyring /tmp/tmp-key.gpg \
-        --export --output /etc/apt/keyrings/llvm-snapshot.gpg \
-    && rm /tmp/tmp-key.gpg \
-    && echo \
-        "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main" \
-        >> /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_focal_-jammy.list \
-    && wget -O /tmp/kitware-archive-latest.asc \
-        https://apt.kitware.com/keys/kitware-archive-latest.asc \
-    && gpg --no-default-keyring \
-        --keyring /tmp/tmp-key.gpg \
-        --import /tmp/kitware-archive-latest.asc \
-    && gpg --no-default-keyring \
-        --keyring /tmp/tmp-key.gpg \
-        --export --output /etc/apt/keyrings/kitware-archive-latest.gpg \
-    && rm /tmp/tmp-key.gpg \
-    && echo \
-        "deb [signed-by=/etc/apt/keyrings/kitware-archive-latest.gpg] https://apt.kitware.com/ubuntu/ jammy main" \
-        >> /etc/apt/sources.list.d/archive_uri-https_apt_kitware_com_ubuntu_jammy_-jammy.list
+    && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|apt-key add - \
+    && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add - \
+    && add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main" \
+    && add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main" \
+    && add-apt-repository -y -n "deb https://apt.kitware.com/ubuntu/ focal main" \
+    && add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
 
 # Install APT packages
 RUN apt update && apt install -y \
     autoconf \
     automake \
+    build-essential \
     clang-10 \
     clang-13 \
     clang-format-10 \
@@ -63,6 +43,7 @@ RUN apt update && apt install -y \
     libtool \
     libunwind-13-dev \
     libz-dev \
+    linux-generic-hwe-20.04 \
     lld-13 \
     lldb-13 \
     make \
@@ -82,4 +63,5 @@ RUN curl -s -L -o \
     && rm -f /tmp/conan-latest.deb
 
 # Tidy up
-RUN apt clean autoclean && apt autoremove
+RUN apt clean autoclean -y \
+    && apt autoremove -y
