@@ -52,7 +52,7 @@ def _do_push(name):
 @task(iterable=["c"])
 def build(ctx, c, nocache=False, push=False):
     """
-    Build current version of faabric container
+    Build containers for faabric. Targets are: `faabric`, and `faabric-base`
     """
     for ctr in c:
         if ctr == "faabric":
@@ -69,7 +69,7 @@ def build(ctx, c, nocache=False, push=False):
 @task(iterable=["c"])
 def push(ctx, c):
     """
-    Push current version of faabric container
+    Push containers for faabric. Targets are: `faabric`, and `faabric-base`
     """
     for ctr in c:
         if ctr == "faabric":
