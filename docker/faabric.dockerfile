@@ -13,7 +13,7 @@ RUN git clone -b v${FAABRIC_VERSION} https://github.com/faasm/faabric
 
 WORKDIR /code/faabric
 
-# Python set-up and static and builds
+# Python set-up and code builds
 RUN ./bin/create_venv.sh \
     && source venv/bin/activate \
     # Static build
