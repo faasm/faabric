@@ -177,13 +177,17 @@ To build the main container, run:
 source bin/workon.sh
 
 # Build
-inv container.build
+inv docker.build -c faabric [--push]
+```
 
-# Push
-inv container.push
+The base container is not re-built often, and not re-built as part of Github
+Actions. If you ever need to add an APT dependency, or update the Conan
+version, run:
 
-# Build and push
-inv container.build --push
+```bash
+source bin/workon.sh
+
+inv docker.build -c faabric-base [--push]
 ```
 
 ## Publishing a release
