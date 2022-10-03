@@ -57,9 +57,15 @@ jobs:
         run: git fetch origin ${GITHUB_REF}:ci-branch
       - name: "Check out branch"
         run: git checkout --force ci-branch
+      - name: "Update python deps"
+        run: |
+          source venv/bin/activate
+          pip3 install -r requirements.txt
       # --- Formatting checks ---
       - name: "Python formatting check"
-        run: ./bin/check_python.sh
+        run: |
+          source venv/bin/activate
+          ./bin/check_python.sh
       - name: "Run C/C++ formatting"
         run: ./bin/run_clang_format.sh
       - name: "Check C/C++ formatting changes"
