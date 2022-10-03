@@ -1,15 +1,22 @@
 FROM ubuntu:20.04
 
-RUN apt-get update
-RUN apt-get install -y software-properties-common gpg wget curl
-RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|apt-key add -
-RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add -
-RUN add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main"
-RUN add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main"
-RUN add-apt-repository -y -n "deb https://apt.kitware.com/ubuntu/ focal main"
-RUN add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
+# Configure APT repositories
+RUN apt update \
+    && apt upgrade -y \
+    && apt install -y \
+        curl \
+        gpg \
+        software-properties-common \
+        wget \
+    && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|apt-key add - \
+    && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add - \
+    && add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main" \
+    && add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main" \
+    && add-apt-repository -y -n "deb https://apt.kitware.com/ubuntu/ focal main" \
+    && add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
 
-RUN apt update -y && apt install -y \
+# Install APT packages
+RUN apt update && apt install -y \
     autoconf \
     automake \
     build-essential \
@@ -49,11 +56,12 @@ RUN apt update -y && apt install -y \
     sudo \
     unzip
 
-RUN curl -s -L -o /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.52.0/conan-ubuntu-64.deb && sudo dpkg -i /tmp/conan-latest.deb && rm -f /tmp/conan-latest.deb
-
-# Update pip
-RUN pip install -U pip
+# Install Conan
+RUN curl -s -L -o \
+        /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.52.0/conan-ubuntu-64.deb \
+    && sudo dpkg -i /tmp/conan-latest.deb \
+    && rm -f /tmp/conan-latest.deb
 
 # Tidy up
-RUN apt-get clean autoclean
-RUN apt-get autoremove
+RUN apt clean autoclean -y \
+    && apt autoremove -y

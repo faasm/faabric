@@ -129,12 +129,18 @@ docker compose stop
 
 ## Creating a new tag
 
-Create a new branch, then find and replace the current version with the relevant
-bumped version. It should appear in:
+Create a new branch, then bump the code version:
 
-- `VERSION`
-- `.env`
-- `.github/workflows/tests.yml`.
+```bash
+inv git.bump
+```
+
+This will increment the minor version, to bump the code to an arbitrary version
+you can run:
+
+```bash
+inv git.bump --ver=<new_version>
+```
 
 Once done, commit and push, then run:
 
@@ -171,13 +177,17 @@ To build the main container, run:
 source bin/workon.sh
 
 # Build
-inv container.build
+inv docker.build -c faabric [--push]
+```
 
-# Push
-inv container.push
+The base container is not re-built often, and not re-built as part of Github
+Actions. If you ever need to add an APT dependency, or update the Conan
+version, run:
 
-# Build and push
-inv container.build --push
+```bash
+source bin/workon.sh
+
+inv docker.build -c faabric-base [--push]
 ```
 
 ## Publishing a release

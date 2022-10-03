@@ -49,33 +49,35 @@ def _do_push(name):
     run(cmd, shell=True, check=True)
 
 
-@task(default=True)
-def build(ctx, nocache=False, push=False):
+@task(iterable=["c"])
+def build(ctx, c, nocache=False, push=False):
     """
-    Build current version of faabric container
+    Build containers for faabric. Targets are: `faabric`, and `faabric-base`
     """
-    _do_container_build(FAABRIC_IMAGE_NAME, nocache=nocache, push=push)
+    for ctr in c:
+        if ctr == "faabric":
+            img_name = FAABRIC_IMAGE_NAME
+        elif ctr == "faabric-base":
+            img_name = FAABRIC_BASE_IMAGE_NAME
+        else:
+            print("Unrecognised container name: {}".format(ctr))
+            raise RuntimeError("Unrecognised container name")
+
+        _do_container_build(img_name, nocache=nocache, push=push)
 
 
-@task
-def build_base(ctx, nocache=False, push=False):
+@task(iterable=["c"])
+def push(ctx, c):
     """
-    Build faabric's base container
+    Push containers for faabric. Targets are: `faabric`, and `faabric-base`
     """
-    _do_container_build(FAABRIC_BASE_IMAGE_NAME, nocache=nocache, push=push)
+    for ctr in c:
+        if ctr == "faabric":
+            img_name = FAABRIC_IMAGE_NAME
+        elif ctr == "faabric-base":
+            img_name = FAABRIC_BASE_IMAGE_NAME
+        else:
+            print("Unrecognised container name: {}".format(ctr))
+            raise RuntimeError("Unrecognised container name")
 
-
-@task
-def push(ctx):
-    """
-    Push current version of faabric container
-    """
-    _do_push(FAABRIC_IMAGE_NAME)
-
-
-@task
-def push_base(ctx):
-    """
-    Push faabric's base container
-    """
-    _do_push(FAABRIC_BASE_IMAGE_NAME)
+        _do_push(img_name)
