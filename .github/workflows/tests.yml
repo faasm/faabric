@@ -9,6 +9,7 @@ on:
 
 defaults:
   run:
+    working-directory: /code/faabric
     shell: bash
 
 jobs:
@@ -17,9 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm/faabric:0.3.5
-    defaults:
-      run:
-        working-directory: /code/faabric
     steps:
       - uses: faasm/conan-cache-action@v1
         with:
@@ -32,9 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm/faabric:0.3.5
-    defaults:
-      run:
-        working-directory: /code/faabric
     steps:
       - name: "Fetch ref"
         run: git fetch origin ${GITHUB_REF}:ci-branch
@@ -48,18 +43,21 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm/faabric:0.3.5
-    defaults:
-      run:
-        working-directory: /code/faabric
     steps:
       # --- Code update ---
       - name: "Fetch ref"
         run: git fetch origin ${GITHUB_REF}:ci-branch
       - name: "Check out branch"
         run: git checkout --force ci-branch
+      - name: "Update python deps"
+        run: |
+          source venv/bin/activate
+          pip3 install -r requirements.txt
       # --- Formatting checks ---
       - name: "Python formatting check"
-        run: ./bin/check_python.sh
+        run: |
+          source venv/bin/activate
+          ./bin/check_python.sh
       - name: "Run C/C++ formatting"
         run: ./bin/run_clang_format.sh
       - name: "Check C/C++ formatting changes"
@@ -83,9 +81,6 @@ jobs:
     container:
       image: faasm/faabric:0.3.5
       options: --privileged
-    defaults:
-      run:
-        working-directory: /code/faabric
     services:
       redis:
         image: redis
@@ -109,6 +104,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       # --- Code update ---
       - name: "Check out code"
@@ -132,9 +130,6 @@ jobs:
       REDIS_STATE_HOST: redis
     container:
       image: faasm/faabric:0.3.5
-    defaults:
-      run:
-        working-directory: /code/faabric
     services:
       redis:
         image: redis
