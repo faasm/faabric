@@ -8,6 +8,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/PeriodicBackgroundThread.h>
+#include <faabric/util/asio.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
@@ -153,6 +154,33 @@ class FunctionMigrationThread : public faabric::util::PeriodicBackgroundThread
 };
 
 /**
+ * A promise for a future message result with an associated eventfd for use with
+ * asio.
+ */
+struct MessageLocalResult final
+{
+    std::promise<std::unique_ptr<faabric::Message>> promise;
+    int event_fd = -1;
+
+    MessageLocalResult();
+    MessageLocalResult(const MessageLocalResult&) = delete;
+    inline MessageLocalResult(MessageLocalResult&& other)
+    {
+        this->operator=(std::move(other));
+    }
+    MessageLocalResult& operator=(const MessageLocalResult&) = delete;
+    inline MessageLocalResult& operator=(MessageLocalResult&& other)
+    {
+        this->promise = std::move(other.promise);
+        this->event_fd = other.event_fd;
+        other.event_fd = -1;
+        return *this;
+    }
+    ~MessageLocalResult();
+    void set_value(std::unique_ptr<faabric::Message>&& msg);
+};
+
+/**
  * Background thread that periodically checks to see if any executors have
  * become stale (i.e. not handled any requests in a given timeout). If any are
  * found, they are removed.
@@ -213,6 +241,12 @@ class Scheduler
     void setFunctionResult(faabric::Message& msg);
 
     faabric::Message getFunctionResult(unsigned int messageId, int timeout);
+
+    void getFunctionResultAsync(unsigned int messageId,
+                                int timeoutMs,
+                                asio::io_context& ioc,
+                                asio::any_io_executor& executor,
+                                std::function<void(faabric::Message&)> handler);
 
     void setThreadResult(const faabric::Message& msg,
                          int32_t returnValue,
@@ -332,8 +366,7 @@ class Scheduler
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
 
-    std::unordered_map<uint32_t,
-                       std::promise<std::unique_ptr<faabric::Message>>>
+    std::unordered_map<uint32_t, std::shared_ptr<MessageLocalResult>>
       localResults;
 
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
