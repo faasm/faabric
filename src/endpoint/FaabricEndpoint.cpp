@@ -9,22 +9,32 @@
 #include <thread>
 #include <vector>
 
+// Closely follows the example async Beast HTTP server from
+// https://www.boost.org/doc/libs/1_80_0/libs/beast/example/http/server/async/http_server_async.cpp
+
 namespace faabric::endpoint {
 
 namespace detail {
-struct EndpointState
+class EndpointState
 {
+  public:
     EndpointState(int threadCountIn)
       : ioc(threadCountIn)
     {}
+
     asio::io_context ioc;
     std::vector<std::jthread> ioThreads;
 };
 }
 
 namespace {
+/**
+ * Wrapper around the Boost::Beast HTTP parser to keep the connection state
+ * alive in-between asynchronous calls.
+ */
 class HttpConnection : public std::enable_shared_from_this<HttpConnection>
 {
+  private:
     asio::io_context& ioc;
     beast::tcp_stream stream;
     beast::flat_buffer buffer;
@@ -88,7 +98,7 @@ class HttpConnection : public std::enable_shared_from_this<HttpConnection>
 
     void sendResponse(faabric::util::BeastHttpResponse&& response)
     {
-        // response needs to be freed after the send completes
+        // Response needs to be freed after the send completes
         auto ownedResponse = std::make_shared<faabric::util::BeastHttpResponse>(
           std::move(response));
         ownedResponse->prepare_payload();
@@ -115,7 +125,7 @@ class HttpConnection : public std::enable_shared_from_this<HttpConnection>
             doClose();
             return;
         }
-        // reset parser to a fresh object, it has no copy/move assignment
+        // Reset parser to a fresh object, it has no copy/move assignment
         parser.~parser();
         new (&parser) decltype(parser)();
         doRead();
@@ -125,12 +135,17 @@ class HttpConnection : public std::enable_shared_from_this<HttpConnection>
     {
         beast::error_code ec;
         stream.socket().shutdown(asio::socket_base::shutdown_send, ec);
-        // ignore errors on connection closing
+        // Ignore errors on connection closing
     }
 };
 
+/**
+ * Keeps the TCP connection alive inside of the Asio asynchronous executor and
+ * creates HttpConnection objects for incoming connections.
+ */
 class EndpointListener : public std::enable_shared_from_this<EndpointListener>
 {
+  private:
     asio::io_context& ioc;
     asio::ip::tcp::acceptor acceptor;
     std::shared_ptr<HttpRequestHandler> handler;
@@ -174,7 +189,7 @@ class EndpointListener : public std::enable_shared_from_this<EndpointListener>
 
     void handleAccept(beast::error_code ec, asio::ip::tcp::socket socket)
     {
-        SPDLOG_DEBUG("handleAccept");
+        SPDLOG_TRACE("handleAccept");
         if (ec) {
             SPDLOG_ERROR("Failed accept(): {}", ec.message());
         } else {
@@ -221,11 +236,16 @@ void FaabricEndpoint::start(EndpointMode mode)
     const auto address = asio::ip::make_address_v4("0.0.0.0");
     const auto port = static_cast<uint16_t>(this->port);
 
+    // Create a TCP listener and transfer its (shared) ownership to the Asio
+    // event queue
     std::make_shared<EndpointListener>(state->ioc,
                                        asio::ip::tcp::endpoint{ address, port },
                                        this->requestHandler)
       ->run();
 
+    // Create a simple Asio task that awaits incoming signals and tells the
+    // event queue to shut down (bringing down all the previously created tasks
+    // with it) when they are received.
     std::optional<asio::signal_set> signals;
     if (mode == EndpointMode::SIGNAL) {
         signals.emplace(state->ioc, SIGINT, SIGTERM, SIGQUIT);
@@ -237,8 +257,11 @@ void FaabricEndpoint::start(EndpointMode mode)
         });
     }
 
-    int extraThreads =
-      std::max((mode == EndpointMode::SIGNAL) ? 0 : 1, this->threadCount - 1);
+    // Make sure the total number of worker threads is this->threadCount, when
+    // in SIGNAL mode the main thread is also used as a worker thread.
+    int extraThreads = (mode == EndpointMode::SIGNAL)
+                         ? std::max(0, this->threadCount - 1)
+                         : std::max(1, this->threadCount);
     state->ioThreads.reserve(extraThreads);
     auto ioc_run = [&ioc{ state->ioc }]() { ioc.run(); };
     for (int i = 0; i < extraThreads; i++) {

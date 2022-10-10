@@ -48,20 +48,20 @@ static thread_local std::unordered_map<std::string,
 
 MessageLocalResult::MessageLocalResult()
 {
-    event_fd = eventfd(0, EFD_CLOEXEC);
+    eventFd = eventfd(0, EFD_CLOEXEC);
 }
 
 MessageLocalResult::~MessageLocalResult()
 {
-    if (event_fd >= 0) {
-        close(event_fd);
+    if (eventFd >= 0) {
+        close(eventFd);
     }
 }
 
-void MessageLocalResult::set_value(std::unique_ptr<faabric::Message>&& msg)
+void MessageLocalResult::setValue(std::unique_ptr<faabric::Message>&& msg)
 {
     this->promise.set_value(std::move(msg));
-    eventfd_write(this->event_fd, (eventfd_t)1);
+    eventfd_write(this->eventFd, (eventfd_t)1);
 }
 
 Scheduler& getScheduler()
@@ -1114,7 +1114,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
         auto it = localResults.find(msg.id());
         if (it != localResults.end()) {
-            it->second->set_value(std::make_unique<faabric::Message>(msg));
+            it->second->setValue(std::make_unique<faabric::Message>(msg));
         }
 
         // Sync messages can't have their results read twice, so skip
@@ -1358,13 +1358,15 @@ void Scheduler::getFunctionResultAsync(
             mlr = it->second;
         }
         // Asio wrapper for the MLR eventfd
-        struct MlrAwaiter : public std::enable_shared_from_this<MlrAwaiter>
+        class MlrAwaiter : public std::enable_shared_from_this<MlrAwaiter>
         {
+          public:
             unsigned int messageId;
             Scheduler* sched;
             std::shared_ptr<MessageLocalResult> mlr;
             asio::posix::stream_descriptor dsc;
             std::function<void(faabric::Message&)> handler;
+
             MlrAwaiter(unsigned int messageId,
                        Scheduler* sched,
                        std::shared_ptr<MessageLocalResult> mlr,
@@ -1376,12 +1378,14 @@ void Scheduler::getFunctionResultAsync(
               , dsc(std::move(dsc))
               , handler(handler)
             {}
+
             ~MlrAwaiter()
             {
                 // Ensure that Asio doesn't close the eventfd, to prevent a
                 // double-close in the MLR destructor
                 dsc.release();
             }
+
             void await(const boost::system::error_code& ec)
             {
                 if (!ec) {
@@ -1398,6 +1402,7 @@ void Scheduler::getFunctionResultAsync(
                     doAwait();
                 }
             }
+
             // Schedule this task waiting on the eventfd in the Asio queue
             void doAwait()
             {
@@ -1410,7 +1415,7 @@ void Scheduler::getFunctionResultAsync(
           messageId,
           this,
           mlr,
-          asio::posix::stream_descriptor(ioc, mlr->event_fd),
+          asio::posix::stream_descriptor(ioc, mlr->eventFd),
           std::move(handler));
         awaiter->doAwait();
         return;

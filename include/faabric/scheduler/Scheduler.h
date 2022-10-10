@@ -157,27 +157,34 @@ class FunctionMigrationThread : public faabric::util::PeriodicBackgroundThread
  * A promise for a future message result with an associated eventfd for use with
  * asio.
  */
-struct MessageLocalResult final
+class MessageLocalResult final
 {
+  public:
     std::promise<std::unique_ptr<faabric::Message>> promise;
-    int event_fd = -1;
+    int eventFd = -1;
 
     MessageLocalResult();
+
     MessageLocalResult(const MessageLocalResult&) = delete;
+
     inline MessageLocalResult(MessageLocalResult&& other)
     {
         this->operator=(std::move(other));
     }
+
     MessageLocalResult& operator=(const MessageLocalResult&) = delete;
+
     inline MessageLocalResult& operator=(MessageLocalResult&& other)
     {
         this->promise = std::move(other.promise);
-        this->event_fd = other.event_fd;
-        other.event_fd = -1;
+        this->eventFd = other.eventFd;
+        other.eventFd = -1;
         return *this;
     }
+
     ~MessageLocalResult();
-    void set_value(std::unique_ptr<faabric::Message>&& msg);
+
+    void setValue(std::unique_ptr<faabric::Message>&& msg);
 };
 
 /**

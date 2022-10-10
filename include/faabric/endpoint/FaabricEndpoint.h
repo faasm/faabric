@@ -37,15 +37,20 @@ class FaabricEndpoint
 {
   public:
     FaabricEndpoint();
+
     FaabricEndpoint(
       int port,
       int threadCount,
       std::shared_ptr<HttpRequestHandler> requestHandlerIn = nullptr);
 
     FaabricEndpoint(const FaabricEndpoint&) = delete;
+
     FaabricEndpoint(FaabricEndpoint&&) = delete;
+
     FaabricEndpoint& operator=(const FaabricEndpoint&) = delete;
+
     FaabricEndpoint& operator=(FaabricEndpoint&&) = delete;
+
     virtual ~FaabricEndpoint();
 
     void start(EndpointMode mode = EndpointMode::SIGNAL);
