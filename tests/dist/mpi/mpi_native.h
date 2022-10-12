@@ -1,13 +1,14 @@
 #pragma once
 
 #include <faabric/proto/faabric.pb.h>
+#include <atomic>
 
 #define NUM_MIGRATION_LOOPS 10000
 #define CHECK_EVERY 5000
 
 namespace tests::mpi {
 
-extern faabric::Message* executingCall;
+extern std::atomic<faabric::Message*> executingCall;
 
 // --- List of MPI functions ---
 
