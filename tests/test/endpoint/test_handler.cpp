@@ -9,8 +9,6 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/json.h>
 
-using namespace Pistache;
-
 namespace tests {
 
 class EndpointHandlerTestFixture : public SchedulerTestFixture
@@ -28,6 +26,29 @@ class EndpointHandlerTestFixture : public SchedulerTestFixture
   protected:
     std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
 };
+
+// Taking in a shared_ptr by reference to ensure the handler was constructed
+// with std::make_shared
+std::pair<int, std::string> synchronouslyHandleFunction(
+  std::shared_ptr<endpoint::FaabricEndpointHandler>& handler,
+  std::string requestStr)
+{
+    asio::io_context ioc(1);
+    asio::strand strand = asio::make_strand(ioc);
+    faabric::util::BeastHttpResponse response;
+    faabric::util::BeastHttpRequest req(beast::http::verb::get, "/", 10);
+    req.body() = requestStr;
+    faabric::endpoint::HttpRequestContext ctx{
+        ioc,
+        strand,
+        [&](faabric::util::BeastHttpResponse&& resp) {
+            response = std::move(resp);
+        }
+    };
+    handler->onRequest(std::move(ctx), std::move(req));
+    ioc.run();
+    return std::make_pair(response.result_int(), response.body());
+}
 
 TEST_CASE_METHOD(EndpointHandlerTestFixture,
                  "Test valid calls to endpoint",
@@ -53,10 +74,12 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
     const std::string& requestStr = faabric::util::messageToJson(call);
 
     // Handle the function
-    endpoint::FaabricEndpointHandler handler;
-    std::pair<int, std::string> response = handler.handleFunction(requestStr);
+    std::shared_ptr handler =
+      std::make_shared<endpoint::FaabricEndpointHandler>();
+    std::pair<int, std::string> response =
+      synchronouslyHandleFunction(handler, requestStr);
 
-    REQUIRE(response.first == 0);
+    REQUIRE(response.first == 200);
     std::string responseStr = response.second;
 
     // Check actual call has right details including the ID returned to the
@@ -75,10 +98,12 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
 
 TEST_CASE("Test empty invocation", "[endpoint]")
 {
-    endpoint::FaabricEndpointHandler handler;
-    std::pair<int, std::string> actual = handler.handleFunction("");
+    std::shared_ptr handler =
+      std::make_shared<endpoint::FaabricEndpointHandler>();
+    std::pair<int, std::string> actual =
+      synchronouslyHandleFunction(handler, "");
 
-    REQUIRE(actual.first == 1);
+    REQUIRE(actual.first == 400);
     REQUIRE(actual.second == "Empty request");
 }
 
@@ -101,11 +126,13 @@ TEST_CASE("Test empty JSON invocation", "[endpoint]")
         call.set_user("demo");
     }
 
-    endpoint::FaabricEndpointHandler handler;
+    std::shared_ptr handler =
+      std::make_shared<endpoint::FaabricEndpointHandler>();
     const std::string& requestStr = faabric::util::messageToJson(call);
-    std::pair<int, std::string> actual = handler.handleFunction(requestStr);
+    std::pair<int, std::string> actual =
+      synchronouslyHandleFunction(handler, requestStr);
 
-    REQUIRE(actual.first == 1);
+    REQUIRE(actual.first == 400);
     REQUIRE(actual.second == expected);
 }
 
@@ -116,7 +143,7 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
     // Create a message
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
-    int expectedReturnCode = 0;
+    int expectedReturnCode = 200;
     std::string expectedOutput;
 
     SECTION("Running") { expectedOutput = "RUNNING"; }
@@ -128,7 +155,7 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
         msg.set_returnvalue(1);
         sch.setFunctionResult(msg);
 
-        expectedReturnCode = 1;
+        expectedReturnCode = 500;
 
         expectedOutput = "FAILED: " + errorMsg;
     }
@@ -145,9 +172,11 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
 
     msg.set_isstatusrequest(true);
 
-    endpoint::FaabricEndpointHandler handler;
+    std::shared_ptr handler =
+      std::make_shared<endpoint::FaabricEndpointHandler>();
     const std::string& requestStr = faabric::util::messageToJson(msg);
-    std::pair<int, std::string> actual = handler.handleFunction(requestStr);
+    std::pair<int, std::string> actual =
+      synchronouslyHandleFunction(handler, requestStr);
 
     REQUIRE(actual.first == expectedReturnCode);
     REQUIRE(actual.second == expectedOutput);

@@ -9,7 +9,6 @@
 #include <faabric/util/json.h>
 #include <faabric/util/macros.h>
 
-using namespace Pistache;
 using namespace faabric::scheduler;
 
 namespace tests {
@@ -103,7 +102,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
 
     SECTION("Empty request")
     {
-        expectedReturnCode = 500;
+        expectedReturnCode = 400;
         expectedResponseBody = "Empty request";
     }
 
@@ -113,7 +112,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         body = faabric::util::messageToJson(msg);
         expectedReturnCode = 200;
         expectedResponseBody =
-          fmt::format("Endpoint API test executed {}\n", msg.id());
+          fmt::format("Endpoint API test executed {}", msg.id());
     }
 
     SECTION("Error request")
@@ -122,7 +121,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         body = faabric::util::messageToJson(msg);
         expectedReturnCode = 500;
         expectedResponseBody =
-          fmt::format("Endpoint API returning 1 for {}\n", msg.id());
+          fmt::format("Endpoint API returning 1 for {}", msg.id());
     }
 
     SECTION("Invalid function")
@@ -131,7 +130,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         body = faabric::util::messageToJson(msg);
         expectedReturnCode = 500;
         expectedResponseBody = fmt::format(
-          "Task {} threw exception. What: Endpoint API error\n", msg.id());
+          "Task {} threw exception. What: Endpoint API error", msg.id());
     }
 
     std::pair<int, std::string> result = postToUrl(LOCALHOST, port, body);

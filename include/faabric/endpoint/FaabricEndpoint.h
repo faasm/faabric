@@ -1,16 +1,36 @@
 #pragma once
 
-#include <pistache/endpoint.h>
-#include <pistache/http.h>
+#include <functional>
+#include <memory>
 
+#include <faabric/proto/faabric.pb.h>
+#include <faabric/util/asio.h>
 #include <faabric/util/config.h>
 
 namespace faabric::endpoint {
 
-enum EndpointMode
+enum class EndpointMode
 {
     SIGNAL,
     BG_THREAD
+};
+
+namespace detail {
+struct EndpointState;
+}
+
+struct HttpRequestContext
+{
+    asio::io_context& ioc;
+    asio::any_io_executor executor;
+    std::function<void(faabric::util::BeastHttpResponse&&)> sendFunction;
+};
+
+class HttpRequestHandler
+{
+  public:
+    virtual void onRequest(HttpRequestContext&& ctx,
+                           faabric::util::BeastHttpRequest&& request) = 0;
 };
 
 class FaabricEndpoint
@@ -18,20 +38,29 @@ class FaabricEndpoint
   public:
     FaabricEndpoint();
 
-    FaabricEndpoint(int portIn, int threadCountIn);
+    FaabricEndpoint(
+      int port,
+      int threadCount,
+      std::shared_ptr<HttpRequestHandler> requestHandlerIn = nullptr);
 
-    void start(EndpointMode mode);
+    FaabricEndpoint(const FaabricEndpoint&) = delete;
+
+    FaabricEndpoint(FaabricEndpoint&&) = delete;
+
+    FaabricEndpoint& operator=(const FaabricEndpoint&) = delete;
+
+    FaabricEndpoint& operator=(FaabricEndpoint&&) = delete;
+
+    virtual ~FaabricEndpoint();
+
+    void start(EndpointMode mode = EndpointMode::SIGNAL);
 
     void stop();
 
   private:
-    int port = faabric::util::getSystemConfig().endpointPort;
-    int threadCount = faabric::util::getSystemConfig().endpointNumThreads;
-
-    Pistache::Http::Endpoint httpEndpoint;
-
-    std::mutex mx;
-
-    void runEndpoint();
+    int port;
+    int threadCount;
+    std::unique_ptr<detail::EndpointState> state;
+    std::shared_ptr<HttpRequestHandler> requestHandler;
 };
 }
