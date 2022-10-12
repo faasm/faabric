@@ -1,7 +1,7 @@
 #pragma once
 
-#include <faabric/proto/faabric.pb.h>
 #include <atomic>
+#include <faabric/proto/faabric.pb.h>
 
 #define NUM_MIGRATION_LOOPS 10000
 #define CHECK_EVERY 5000

@@ -45,7 +45,9 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[.][mpi]")
     checkAllocationAndResult(req);
 }
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all many times", "[.][mpi]")
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Test MPI all to all many times",
+                 "[.][mpi]")
 {
     int numRuns = 50;
     int oldNumLocalSlots = nLocalSlots;
@@ -66,7 +68,9 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all many times", "[.][mpi
     nLocalSlots = oldNumLocalSlots;
 }
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all and sleep", "[.][mpi]")
+TEST_CASE_METHOD(MpiDistTestsFixture,
+                 "Test MPI all to all and sleep",
+                 "[.][mpi]")
 {
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
