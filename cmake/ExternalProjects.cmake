@@ -93,15 +93,6 @@ find_package(hiredis REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(readerwriterqueue REQUIRED)
 
-# Pistache - Conan version is out of date and doesn't support clang
-FetchContent_Declare(pistache_ext
-    GIT_REPOSITORY "https://github.com/pistacheio/pistache.git"
-    GIT_TAG "ff9db0d9439a4411b24541d97a937968f384a4d3"
-)
-
-FetchContent_MakeAvailable(pistache_ext)
-add_library(pistache::pistache ALIAS pistache_static)
-
 # zstd (Conan version not customizable enough)
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
@@ -142,7 +133,6 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     cppzmq::cppzmq
     flatbuffers::flatbuffers
     hiredis::hiredis
-    pistache::pistache
     protobuf::libprotobuf
     RapidJSON::RapidJSON
     readerwriterqueue::readerwriterqueue
