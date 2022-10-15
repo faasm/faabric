@@ -560,6 +560,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // If this is not a threads request and last in its batch, it may be
         // the main function in a threaded application, in which case we
         // want to stop any tracking and delete the main thread snapshot
+        /* TODO: This is causing tracking to stop, even if it never started
         if (!isThreads && isLastInBatch) {
             // Stop tracking memory
             std::span<uint8_t> memView = getMemoryView();
@@ -572,6 +573,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
                 deleteMainThreadSnapshot(msg);
             }
         }
+        */
 
         // If this batch is finished, reset the executor and release its
         // claim. Note that we have to release the claim _after_ resetting,
