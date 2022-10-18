@@ -13,3 +13,5 @@ build_type=Release
 [env]
 CC=/usr/bin/clang-13
 CXX=/usr/bin/clang++-13
+[conf]
+tools.build:defines=["BOOST_NO_TYPEID=1"]
