@@ -26,8 +26,6 @@ jobs:
       image: faasm/faabric:0.3.5
     steps:
       - uses: faasm/conan-cache-action@v1
-        with:
-           directory: /code/faabric
       - name: "Build dependencies to be shared by all runs"
         run: ./bin/inv_wrapper.sh dev.cmake -b Debug
 
