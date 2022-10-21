@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: faasm/conan-cache-action@v1
       - name: "Build dependencies to be shared by all runs"
-        run: ./bin/inv_wrapper.sh dev.cmake -b Debug
+        run: ./bin/inv_wrapper.sh dev.cmake -b Debug --clean
 
   docs:
     if: github.event.pull_request.draft == false
