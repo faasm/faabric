@@ -9,10 +9,16 @@ on:
 
 defaults:
   run:
-    working-directory: /code/faabric
     shell: bash
 
 jobs:
+  # Cancel previous running actions for the same PR
+  cancel_previous:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Workflow Action
+        uses: styfle/cancel-workflow-action@0.11.0
+
   conan-cache:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -31,10 +37,8 @@ jobs:
     container:
       image: faasm/faabric:0.3.5
     steps:
-      - name: "Fetch ref"
-        run: git fetch origin ${GITHUB_REF}:ci-branch
-      - name: "Check out branch"
-        run: git checkout --force ci-branch
+      - name: "Check out code"
+        uses: actions/checkout@v3
       - name: "Build docs"
         run: ./bin/inv_wrapper.sh docs
 
@@ -44,24 +48,10 @@ jobs:
     container:
       image: faasm/faabric:0.3.5
     steps:
-      # --- Code update ---
-      - name: "Fetch ref"
-        run: git fetch origin ${GITHUB_REF}:ci-branch
-      - name: "Check out branch"
-        run: git checkout --force ci-branch
-      - name: "Update python deps"
-        run: |
-          source venv/bin/activate
-          pip3 install -r requirements.txt
-      # --- Formatting checks ---
-      - name: "Python formatting check"
-        run: |
-          source venv/bin/activate
-          ./bin/check_python.sh
-      - name: "Run C/C++ formatting"
-        run: ./bin/run_clang_format.sh
-      - name: "Check C/C++ formatting changes"
-        run: git diff --exit-code
+      - name: "Check out code"
+        uses: actions/checkout@v3
+      - name: "Code formatting checks"
+        run: ./bin/inv_wrapper.sh format-code
 
   tests:
     if: github.event.pull_request.draft == false
