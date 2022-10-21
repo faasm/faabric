@@ -11,7 +11,7 @@ VENV_PATH="undetected"
 if [[ -z "$FAABRIC_DOCKER" ]]; then
     VENV_PATH="${PROJ_ROOT}/venv-bm"
 else
-    VENV_PATH="/code/faabric/venv"
+    VENV_PATH="${PROJ_ROOT}/venv"
 fi
 
 PIP=${VENV_PATH}/bin/pip3
