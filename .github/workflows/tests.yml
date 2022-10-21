@@ -76,8 +76,6 @@ jobs:
         image: redis
     steps:
       - uses: faasm/conan-cache-action@v1
-        with:
-          directory: /code/faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
