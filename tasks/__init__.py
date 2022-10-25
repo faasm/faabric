@@ -6,6 +6,7 @@ from . import docker
 from . import docs
 from . import examples
 from . import git
+from . import format_code
 
 ns = Collection(
     call,
@@ -14,4 +15,5 @@ ns = Collection(
     docs,
     examples,
     git,
+    format_code,
 )

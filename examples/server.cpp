@@ -51,7 +51,7 @@ int main()
     // Start endpoint, will block until it receives a signal
     SPDLOG_INFO("Starting endpoint");
     faabric::endpoint::FaabricEndpoint endpoint;
-    endpoint.start(faabric::endpoint::SIGNAL);
+    endpoint.start(faabric::endpoint::EndpointMode::SIGNAL);
 
     SPDLOG_INFO("Shutting down endpoint");
     m.shutdown();

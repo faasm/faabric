@@ -9,10 +9,16 @@ on:
 
 defaults:
   run:
-    working-directory: /code/faabric
     shell: bash
 
 jobs:
+  # Cancel previous running actions for the same PR
+  cancel_previous:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Workflow Action
+        uses: styfle/cancel-workflow-action@0.11.0
+
   conan-cache:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -20,10 +26,6 @@ jobs:
       image: faasm/faabric:0.3.5
     steps:
       - uses: faasm/conan-cache-action@v1
-        with:
-           directory: /code/faabric
-      - name: "Build dependencies to be shared by all runs"
-        run: ./bin/inv_wrapper.sh dev.cmake -b Debug
 
   docs:
     if: github.event.pull_request.draft == false
@@ -31,10 +33,8 @@ jobs:
     container:
       image: faasm/faabric:0.3.5
     steps:
-      - name: "Fetch ref"
-        run: git fetch origin ${GITHUB_REF}:ci-branch
-      - name: "Check out branch"
-        run: git checkout --force ci-branch
+      - name: "Check out code"
+        uses: actions/checkout@v3
       - name: "Build docs"
         run: ./bin/inv_wrapper.sh docs
 
@@ -44,24 +44,14 @@ jobs:
     container:
       image: faasm/faabric:0.3.5
     steps:
-      # --- Code update ---
-      - name: "Fetch ref"
-        run: git fetch origin ${GITHUB_REF}:ci-branch
-      - name: "Check out branch"
-        run: git checkout --force ci-branch
-      - name: "Update python deps"
-        run: |
-          source venv/bin/activate
-          pip3 install -r requirements.txt
-      # --- Formatting checks ---
-      - name: "Python formatting check"
-        run: |
-          source venv/bin/activate
-          ./bin/check_python.sh
-      - name: "Run C/C++ formatting"
-        run: ./bin/run_clang_format.sh
-      - name: "Check C/C++ formatting changes"
-        run: git diff --exit-code
+      - name: "Check out code"
+        uses: actions/checkout@v3
+        # We need to set the safe git directory as formatting relies on git-ls
+        # See actions/checkout#766
+      - name: "Set the GH workspace as a safe git directory"
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: "Code formatting checks"
+        run: ./bin/inv_wrapper.sh format-code
 
   tests:
     if: github.event.pull_request.draft == false
@@ -86,12 +76,10 @@ jobs:
         image: redis
     steps:
       - uses: faasm/conan-cache-action@v1
-        with:
-          directory: /code/faabric
       - name: "Ping redis"
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
-        run: ./bin/inv_wrapper.sh dev.cmake --build=Debug --sanitiser ${{ matrix.sanitiser }}
+        run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
@@ -104,17 +92,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
     steps:
       # --- Code update ---
       - name: "Check out code"
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: "Conan cache"
         uses: faasm/conan-cache-action@v1
-        with:
-          directory: ${{ github.workspace }}
       - name: "Build distributed tests"
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
@@ -137,9 +120,8 @@ jobs:
       - uses: faasm/conan-cache-action@v1
         with:
           build-type: "release"
-          directory: /code/faabric
       - name: "Run cmake shared"
-        run: ./bin/inv_wrapper.sh dev.cmake --shared --build=Release
+        run: ./bin/inv_wrapper.sh dev.cmake --clean --shared --build=Release
       - name: "Build Faabric shared library"
         run: ./bin/inv_wrapper.sh dev.cc faabric --shared
       - name: "Install Faabric shared library"

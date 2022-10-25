@@ -4,25 +4,20 @@
 # Container-specific settings
 # ----------------------------
 
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-${(%):-%x}}" )" >/dev/null 2>&1 && pwd )"
+PROJ_ROOT="${THIS_DIR}/.."
 MODE="undetected"
 if [[ -z "$FAABRIC_DOCKER" ]]; then
-
-    THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-${(%):-%x}}" )" >/dev/null 2>&1 && pwd )"
-    PROJ_ROOT="${THIS_DIR}/.."
     VENV_PATH="${PROJ_ROOT}/venv-bm"
     export FAABRIC_BUILD_DIR="${PROJ_ROOT}/build"
-
     # Normal terminal
     MODE="terminal"
 else
     # Running inside the container, we know the project root
-    PROJ_ROOT="/code/faabric"
     VENV_PATH="${PROJ_ROOT}/venv"
     export FAABRIC_BUILD_DIR="/build/faabric"
-
     # Use containerised redis
     alias redis-cli="redis-cli -h redis"
-
     MODE="container"
 fi
 
