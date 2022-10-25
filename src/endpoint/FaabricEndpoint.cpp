@@ -1,284 +1,92 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/endpoint/FaabricEndpointHandler.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/config.h>
+#include <faabric/util/locks.h>
+#include <faabric/util/logging.h>
+#include <faabric/util/timing.h>
 
-#include <functional>
-#include <optional>
 #include <signal.h>
-#include <stdexcept>
-#include <thread>
-#include <vector>
-
-// Closely follows the example async Beast HTTP server from
-// https://www.boost.org/doc/libs/1_80_0/libs/beast/example/http/server/async/http_server_async.cpp
 
 namespace faabric::endpoint {
 
-namespace detail {
-class EndpointState
-{
-  public:
-    EndpointState(int threadCountIn)
-      : ioc(threadCountIn)
-    {}
-
-    asio::io_context ioc;
-    std::vector<std::jthread> ioThreads;
-};
-}
-
-namespace {
-/**
- * Wrapper around the Boost::Beast HTTP parser to keep the connection state
- * alive in-between asynchronous calls.
- */
-class HttpConnection : public std::enable_shared_from_this<HttpConnection>
-{
-  private:
-    asio::io_context& ioc;
-    beast::tcp_stream stream;
-    beast::flat_buffer buffer;
-    beast::http::request_parser<beast::http::string_body> parser;
-    std::shared_ptr<HttpRequestHandler> handler;
-
-  public:
-    HttpConnection(asio::io_context& iocIn,
-                   asio::ip::tcp::socket&& socket,
-                   std::shared_ptr<HttpRequestHandler> handlerIn)
-      : ioc(iocIn)
-      , stream(std::move(socket))
-      , buffer()
-      , parser()
-      , handler(handlerIn)
-    {}
-
-    void run()
-    {
-        asio::dispatch(
-          stream.get_executor(),
-          std::bind_front(&HttpConnection::doRead, this->shared_from_this()));
-    }
-
-  private:
-    void doRead()
-    {
-        parser.body_limit(boost::none);
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        stream.expires_after(std::chrono::seconds(conf.globalMessageTimeout));
-        beast::http::async_read(
-          stream,
-          buffer,
-          parser,
-          std::bind_front(&HttpConnection::onRead, this->shared_from_this()));
-    }
-
-    void handleRequest(faabric::util::BeastHttpRequest msg)
-    {
-        HttpRequestContext hrc{ ioc,
-                                stream.get_executor(),
-                                std::bind_front(&HttpConnection::sendResponse,
-                                                this->shared_from_this()) };
-        handler->onRequest(std::move(hrc), std::move(msg));
-    }
-
-    void onRead(beast::error_code ec, size_t bytesTransferred)
-    {
-        UNUSED(bytesTransferred);
-        if (ec == beast::http::error::end_of_stream) {
-            doClose();
-            return;
-        }
-        if (ec) {
-            SPDLOG_ERROR("Error reading an HTTP request: {}", ec.message());
-            return;
-        }
-        SPDLOG_TRACE("Read HTTP request of {} bytes", bytesTransferred);
-        handleRequest(parser.release());
-    }
-
-    void sendResponse(faabric::util::BeastHttpResponse&& response)
-    {
-        // Response needs to be freed after the send completes
-        auto ownedResponse = std::make_shared<faabric::util::BeastHttpResponse>(
-          std::move(response));
-        ownedResponse->prepare_payload();
-        beast::http::async_write(stream,
-                                 *ownedResponse,
-                                 std::bind_front(&HttpConnection::onWrite,
-                                                 this->shared_from_this(),
-                                                 ownedResponse));
-    }
-
-    void onWrite(std::shared_ptr<faabric::util::BeastHttpResponse> response,
-                 beast::error_code ec,
-                 size_t bytesTransferred)
-    {
-        bool needsEof = response->need_eof();
-        response.reset();
-        UNUSED(bytesTransferred);
-        if (ec) {
-            SPDLOG_ERROR("Couldn't write HTTP response: {}", ec.message());
-            return;
-        }
-        SPDLOG_TRACE("Write HTTP response of {} bytes", bytesTransferred);
-        if (needsEof) {
-            doClose();
-            return;
-        }
-        // Reset parser to a fresh object, it has no copy/move assignment
-        parser.~parser();
-        new (&parser) decltype(parser)();
-        doRead();
-    }
-
-    void doClose()
-    {
-        beast::error_code ec;
-        stream.socket().shutdown(asio::socket_base::shutdown_send, ec);
-        // Ignore errors on connection closing
-    }
-};
-
-/**
- * Keeps the TCP connection alive inside of the Asio asynchronous executor and
- * creates HttpConnection objects for incoming connections.
- */
-class EndpointListener : public std::enable_shared_from_this<EndpointListener>
-{
-  private:
-    asio::io_context& ioc;
-    asio::ip::tcp::acceptor acceptor;
-    std::shared_ptr<HttpRequestHandler> handler;
-
-  public:
-    EndpointListener(asio::io_context& iocIn,
-                     asio::ip::tcp::endpoint endpoint,
-                     std::shared_ptr<HttpRequestHandler> handlerIn)
-      : ioc(iocIn)
-      , acceptor(asio::make_strand(iocIn))
-      , handler(handlerIn)
-    {
-        try {
-            acceptor.open(endpoint.protocol());
-            acceptor.set_option(asio::socket_base::reuse_address(true));
-            acceptor.bind(endpoint);
-            acceptor.listen(asio::socket_base::max_listen_connections);
-        } catch (std::runtime_error& e) {
-            SPDLOG_CRITICAL(
-              "Couldn't listen on port {}: {}", endpoint.port(), e.what());
-            throw;
-        }
-    }
-
-    void run()
-    {
-        asio::dispatch(acceptor.get_executor(),
-                       std::bind_front(&EndpointListener::doAccept,
-                                       this->shared_from_this()));
-    }
-
-  private:
-    void doAccept()
-    {
-        // create a new strand (forces all related tasks to happen on one
-        // thread)
-        acceptor.async_accept(asio::make_strand(ioc),
-                              std::bind_front(&EndpointListener::handleAccept,
-                                              this->shared_from_this()));
-    }
-
-    void handleAccept(beast::error_code ec, asio::ip::tcp::socket socket)
-    {
-        SPDLOG_TRACE("handleAccept");
-        if (ec) {
-            SPDLOG_ERROR("Failed accept(): {}", ec.message());
-        } else {
-            std::make_shared<HttpConnection>(ioc, std::move(socket), handler)
-              ->run();
-        }
-        doAccept();
-    }
-};
-}
-
 FaabricEndpoint::FaabricEndpoint()
   : FaabricEndpoint(faabric::util::getSystemConfig().endpointPort,
-                    faabric::util::getSystemConfig().endpointNumThreads,
-                    nullptr)
+                    faabric::util::getSystemConfig().endpointNumThreads)
 {}
 
-FaabricEndpoint::FaabricEndpoint(
-  int portIn,
-  int threadCountIn,
-  std::shared_ptr<HttpRequestHandler> requestHandlerIn)
+FaabricEndpoint::FaabricEndpoint(int portIn, int threadCountIn)
   : port(portIn)
   , threadCount(threadCountIn)
-  , state(nullptr)
-  , requestHandler(requestHandlerIn)
-{
-    if (!requestHandler) {
-        requestHandler =
-          std::make_shared<faabric::endpoint::FaabricEndpointHandler>();
-    }
-}
-
-FaabricEndpoint::~FaabricEndpoint()
-{
-    this->stop();
-}
+  , httpEndpoint(
+      Pistache::Address(Pistache::Ipv4::any(), Pistache::Port(portIn)))
+{}
 
 void FaabricEndpoint::start(EndpointMode mode)
 {
-    SPDLOG_INFO("Starting HTTP endpoint on {}, {} threads", port, threadCount);
+    sigset_t signals;
 
-    this->state = std::make_unique<detail::EndpointState>(this->threadCount);
-
-    const auto address = asio::ip::make_address_v4("0.0.0.0");
-    const auto port = static_cast<uint16_t>(this->port);
-
-    // Create a TCP listener and transfer its (shared) ownership to the Asio
-    // event queue
-    std::make_shared<EndpointListener>(state->ioc,
-                                       asio::ip::tcp::endpoint{ address, port },
-                                       this->requestHandler)
-      ->run();
-
-    // Create a simple Asio task that awaits incoming signals and tells the
-    // event queue to shut down (bringing down all the previously created tasks
-    // with it) when they are received.
-    std::optional<asio::signal_set> signals;
     if (mode == EndpointMode::SIGNAL) {
-        signals.emplace(state->ioc, SIGINT, SIGTERM, SIGQUIT);
-        signals->async_wait([&](beast::error_code const& ec, int sig) {
-            if (!ec) {
-                SPDLOG_INFO("Received signal: {}", sig);
-                state->ioc.stop();
-            }
-        });
-    }
+        SPDLOG_INFO(
+          "Starting blocking endpoint on {}, {} threads", port, threadCount);
 
-    // Make sure the total number of worker threads is this->threadCount, when
-    // in SIGNAL mode the main thread is also used as a worker thread.
-    int extraThreads = (mode == EndpointMode::SIGNAL)
-                         ? std::max(0, this->threadCount - 1)
-                         : std::max(1, this->threadCount);
-    state->ioThreads.reserve(extraThreads);
-    auto ioc_run = [&ioc{ state->ioc }]() { ioc.run(); };
-    for (int i = 0; i < extraThreads; i++) {
-        state->ioThreads.emplace_back(ioc_run);
+        // Set up signal handler
+        if (sigemptyset(&signals) != 0 || sigaddset(&signals, SIGTERM) != 0 ||
+            sigaddset(&signals, SIGKILL) != 0 ||
+            sigaddset(&signals, SIGINT) != 0 ||
+            sigaddset(&signals, SIGHUP) != 0 ||
+            sigaddset(&signals, SIGQUIT) != 0 ||
+            pthread_sigmask(SIG_BLOCK, &signals, nullptr) != 0) {
+
+            throw std::runtime_error("Install signal handler failed");
+        }
+
+        // Start the endpoint
+        runEndpoint();
+
+        // Wait for a signal
+        SPDLOG_INFO("Awaiting signal");
+        int signal = 0;
+        int status = sigwait(&signals, &signal);
+        if (status == 0) {
+            SPDLOG_INFO("Received signal: {}", signal);
+        } else {
+            SPDLOG_INFO("Sigwait return value: {}", signal);
+        }
+
+        faabric::util::UniqueLock lock(mx);
+        httpEndpoint.shutdown();
+    } else if (mode == EndpointMode::BG_THREAD) {
+        SPDLOG_INFO(
+          "Starting background endpoint on {}, {} threads", port, threadCount);
+
+        runEndpoint();
+    } else {
+        SPDLOG_ERROR("Unrecognised endpoint mode: {}", mode);
+        throw std::runtime_error("Unrecognised endpoint mode");
     }
-    if (mode == EndpointMode::SIGNAL) {
-        ioc_run();
-    }
+}
+
+void FaabricEndpoint::runEndpoint()
+{
+    faabric::util::UniqueLock lock(mx);
+
+    auto opts = Pistache::Http::Endpoint::options()
+                  .threads(threadCount)
+                  .backlog(256)
+                  .flags(Pistache::Tcp::Options::ReuseAddr);
+
+    httpEndpoint.init(opts);
+
+    // Configure and start endpoint in background
+    httpEndpoint.setHandler(
+      Pistache::Http::make_handler<FaabricEndpointHandler>());
+    httpEndpoint.serveThreaded();
 }
 
 void FaabricEndpoint::stop()
 {
     SPDLOG_INFO("Shutting down endpoint on {}", port);
-    state->ioc.stop();
-    for (auto& thread : state->ioThreads) {
-        thread.join();
-    }
-    state->ioThreads.clear();
+    faabric::util::UniqueLock lock(mx);
+    httpEndpoint.shutdown();
 }
 }

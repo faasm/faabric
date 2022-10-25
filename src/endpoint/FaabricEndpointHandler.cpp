@@ -9,42 +9,52 @@
 #include <syscall.h>
 
 namespace faabric::endpoint {
-
-using header = beast::http::field;
-
-void FaabricEndpointHandler::onRequest(
-  HttpRequestContext&& ctx,
-  faabric::util::BeastHttpRequest&& request)
+void FaabricEndpointHandler::onTimeout(const Pistache::Http::Request& request,
+                                       Pistache::Http::ResponseWriter writer)
 {
-    SPDLOG_TRACE("Faabric handler received request");
+    writer.send(Pistache::Http::Code::No_Content);
+}
+
+void FaabricEndpointHandler::onRequest(const Pistache::Http::Request& request,
+                                       Pistache::Http::ResponseWriter response)
+{
+    SPDLOG_TRACE("Handler received request: {}", request.body());
 
     // Very permissive CORS
-    faabric::util::BeastHttpResponse response;
-    response.keep_alive(request.keep_alive());
-    response.set(header::server, "Faabric endpoint");
-    response.set(header::access_control_allow_origin, "*");
-    response.set(header::access_control_allow_methods, "GET,POST,PUT,OPTIONS");
-    response.set(header::access_control_allow_headers,
-                 "User-Agent,Content-Type");
+    response.headers().add<Pistache::Http::Header::AccessControlAllowOrigin>(
+      "*");
+    response.headers().add<Pistache::Http::Header::AccessControlAllowMethods>(
+      "GET,POST,PUT,OPTIONS");
+    response.headers().add<Pistache::Http::Header::AccessControlAllowHeaders>(
+      "User-Agent,Content-Type");
 
     // Text response type
-    response.set(header::content_type, "text/plain");
+    response.headers().add<Pistache::Http::Header::ContentType>(
+      Pistache::Http::Mime::MediaType("text/plain"));
 
-    PROF_START(endpointRoundTrip)
+    // Set response timeout
+    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+    response.timeoutAfter(std::chrono::milliseconds(conf.globalMessageTimeout));
 
     // Parse message from JSON in request
-    const std::string& requestStr = request.body();
+    std::pair<int, std::string> result = handleFunction(request.body());
 
-    // Handle JSON
+    Pistache::Http::Code responseCode = Pistache::Http::Code::Ok;
+    if (result.first > 0) {
+        responseCode = Pistache::Http::Code::Internal_Server_Error;
+    }
+    response.send(responseCode, result.second);
+}
+
+std::pair<int, std::string> FaabricEndpointHandler::handleFunction(
+  const std::string& requestStr)
+{
+    std::pair<int, std::string> response;
     if (requestStr.empty()) {
         SPDLOG_ERROR("Faabric handler received empty request");
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty request");
+        response = std::make_pair(1, "Empty request");
     } else {
-        auto req = faabric::util::batchExecFactory();
-        req->set_type(req->FUNCTIONS);
-        faabric::Message& msg = *req->add_messages();
-        msg = faabric::util::jsonToMessage(requestStr);
+        faabric::Message msg = faabric::util::jsonToMessage(requestStr);
         faabric::scheduler::Scheduler& sched =
           faabric::scheduler::getScheduler();
 
@@ -54,57 +64,43 @@ void FaabricEndpointHandler::onRequest(
               sched.getFunctionResult(msg.id(), 0);
 
             if (result.type() == faabric::Message_MessageType_EMPTY) {
-                response.result(beast::http::status::ok);
-                response.body() = std::string("RUNNING");
+                response = std::make_pair(0, "RUNNING");
             } else if (result.returnvalue() == 0) {
-                response.result(beast::http::status::ok);
-                response.body() = faabric::util::messageToJson(result);
+                response =
+                  std::make_pair(0, faabric::util::messageToJson(result));
             } else {
-                response.result(beast::http::status::internal_server_error);
-                response.body() = "FAILED: " + result.outputdata();
+                response = std::make_pair(1, "FAILED: " + result.outputdata());
             }
         } else if (msg.isexecgraphrequest()) {
             SPDLOG_DEBUG("Processing execution graph request");
             faabric::scheduler::ExecGraph execGraph =
               sched.getFunctionExecGraph(msg.id());
-            response.result(beast::http::status::ok);
-            response.body() = faabric::scheduler::execGraphToJson(execGraph);
+            response =
+              std::make_pair(0, faabric::scheduler::execGraphToJson(execGraph));
 
         } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
             SPDLOG_DEBUG("Broadcasting flush request");
             sched.broadcastFlush();
-            response.result(beast::http::status::ok);
-            response.body() = std::string("Flush sent");
+            response = std::make_pair(0, "Flush sent");
         } else {
-            executeFunction(
-              std::move(ctx), std::move(response), std::move(req), 0);
-            return;
+            response = executeFunction(msg);
         }
     }
 
-    PROF_END(endpointRoundTrip)
-    ctx.sendFunction(std::move(response));
+    return response;
 }
 
-void FaabricEndpointHandler::executeFunction(
-  HttpRequestContext&& ctx,
-  faabric::util::BeastHttpResponse&& response,
-  std::shared_ptr<faabric::BatchExecuteRequest> ber,
-  size_t messageIndex)
+std::pair<int, std::string> FaabricEndpointHandler::executeFunction(
+  faabric::Message& msg)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    faabric::Message& msg = *ber->mutable_messages(messageIndex);
 
     if (msg.user().empty()) {
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty user");
-        return ctx.sendFunction(std::move(response));
+        return std::make_pair(1, "Empty user");
     }
 
     if (msg.function().empty()) {
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty function");
-        return ctx.sendFunction(std::move(response));
+        return std::make_pair(1, "Empty function");
     }
 
     // Set message ID and master host
@@ -117,48 +113,29 @@ void FaabricEndpointHandler::executeFunction(
         msg.set_executeslocally(true);
     }
 
-    auto tid = gettid();
+    auto tid = (pid_t)syscall(SYS_gettid);
     const std::string funcStr = faabric::util::funcToString(msg, true);
     SPDLOG_DEBUG("Worker HTTP thread {} scheduling {}", tid, funcStr);
 
     // Schedule it
     faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(ber);
+    sch.callFunction(msg);
 
     // Await result on global bus (may have been executed on a different worker)
     if (msg.isasync()) {
-        response.result(beast::http::status::ok);
-        response.body() = faabric::util::buildAsyncResponse(msg);
-        return ctx.sendFunction(std::move(response));
+        return std::make_pair(0, faabric::util::buildAsyncResponse(msg));
     }
 
     SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
-    sch.getFunctionResultAsync(
-      msg.id(),
-      conf.globalMessageTimeout,
-      ctx.ioc,
-      ctx.executor,
-      beast::bind_front_handler(&FaabricEndpointHandler::onFunctionResult,
-                                this->shared_from_this(),
-                                std::move(ctx),
-                                std::move(response)));
+
+    try {
+        const faabric::Message result =
+          sch.getFunctionResult(msg.id(), conf.globalMessageTimeout);
+        SPDLOG_DEBUG("Worker thread {} result {}", tid, funcStr);
+
+        return std::make_pair(result.returnvalue(), result.outputdata() + "\n");
+    } catch (faabric::redis::RedisNoResponseException& ex) {
+        return std::make_pair(1, "No response from function\n");
+    }
 }
-
-void FaabricEndpointHandler::onFunctionResult(
-  HttpRequestContext&& ctx,
-  faabric::util::BeastHttpResponse&& response,
-  faabric::Message& result)
-{
-    beast::http::status statusCode =
-      (result.returnvalue() == 0) ? beast::http::status::ok
-                                  : beast::http::status::internal_server_error;
-    response.result(statusCode);
-    SPDLOG_DEBUG("Worker thread {} result {}",
-                 gettid(),
-                 faabric::util::funcToString(result, true));
-
-    response.body() = result.outputdata();
-    return ctx.sendFunction(std::move(response));
-}
-
 }

@@ -11,7 +11,7 @@ using namespace tests::mpi;
 
 namespace tests {
 
-std::atomic<faabric::Message*> tests::mpi::executingCall;
+faabric::Message* tests::mpi::executingCall;
 
 int handleMpiAllGather(tests::DistTestExecutor* exec,
                        int threadPoolIdx,
@@ -140,7 +140,7 @@ int handleMpiMigration(tests::DistTestExecutor* exec,
 {
     executingCall = &req->mutable_messages()->at(msgIdx);
 
-    return migration(std::stoi(executingCall.load()->inputdata()));
+    return migration(std::stoi(executingCall->inputdata()));
 }
 
 int handleMpiOrder(tests::DistTestExecutor* exec,

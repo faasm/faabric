@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <faabric/proto/faabric.pb.h>
 
 #define NUM_MIGRATION_LOOPS 10000
@@ -8,7 +7,7 @@
 
 namespace tests::mpi {
 
-extern std::atomic<faabric::Message*> executingCall;
+extern faabric::Message* executingCall;
 
 // --- List of MPI functions ---
 

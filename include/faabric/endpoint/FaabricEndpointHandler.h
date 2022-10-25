@@ -1,25 +1,23 @@
 #pragma once
 
-#include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/proto/faabric.pb.h>
+#include <pistache/http.h>
 
 namespace faabric::endpoint {
-class FaabricEndpointHandler final
-  : public HttpRequestHandler
-  , public std::enable_shared_from_this<FaabricEndpointHandler>
+class FaabricEndpointHandler : public Pistache::Http::Handler
 {
   public:
-    void onRequest(HttpRequestContext&& ctx,
-                   faabric::util::BeastHttpRequest&& request) override;
+    HTTP_PROTOTYPE(FaabricEndpointHandler)
+
+    void onTimeout(const Pistache::Http::Request& request,
+                   Pistache::Http::ResponseWriter writer) override;
+
+    void onRequest(const Pistache::Http::Request& request,
+                   Pistache::Http::ResponseWriter response) override;
+
+    std::pair<int, std::string> handleFunction(const std::string& requestStr);
 
   private:
-    void executeFunction(HttpRequestContext&& ctx,
-                         faabric::util::BeastHttpResponse&& partialResponse,
-                         std::shared_ptr<faabric::BatchExecuteRequest> ber,
-                         size_t messageIndex);
-
-    void onFunctionResult(HttpRequestContext&& ctx,
-                          faabric::util::BeastHttpResponse&& partialResponse,
-                          faabric::Message& msg);
+    std::pair<int, std::string> executeFunction(faabric::Message& msg);
 };
 }
