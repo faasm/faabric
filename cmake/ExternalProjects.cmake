@@ -142,6 +142,5 @@ target_link_libraries(faabric_common_dependencies INTERFACE
 )
 target_compile_definitions(faabric_common_dependencies INTERFACE
     FMT_DEPRECATED= # Suppress warnings about use of deprecated api by spdlog
-    BOOST_NO_TYPEID=1 # Prevent odd crashes within asio implementation
 )
 add_library(faabric::common_dependencies ALIAS faabric_common_dependencies)
