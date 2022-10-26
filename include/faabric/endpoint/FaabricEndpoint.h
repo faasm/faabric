@@ -16,7 +16,7 @@ enum class EndpointMode
 };
 
 namespace detail {
-struct EndpointState;
+class EndpointState;
 }
 
 struct HttpRequestContext
