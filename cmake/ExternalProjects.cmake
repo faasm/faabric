@@ -32,14 +32,13 @@ conan_cmake_configure(
         "catch2/2.13.9@#8793d3e6287d3684201418de556d98fe"
         "cppcodec/0.2@#f6385611ce2f7cff954ac8b16e25c4fa"
         "cpprestsdk/2.10.18@#ed9788e9d202d6eadd92581368ddfc2f"
-        "cppzmq/4.8.1@#010df8fa1c5ebbc615704e8c16693bac"
         "flatbuffers/2.0.5@#c6a9508bd476da080f7aecbe7a094b68"
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
+        "nng/1.5.2@#9c7e1aea4ad924dbad38f6551dd4949b"
         "protobuf/3.20.0@#8e4de7081bea093469c9e6076149b2b4"
         "rapidjson/cci.20211112@#65b4e5feb6f1edfc8cbac0f669acaf17"
         "readerwriterqueue/1.0.6@#a95c8da3d68822dec4d4c13fff4b5c96"
         "spdlog/1.10.0@#6406c337028e15e56cd6a070cbac54c4"
-        "zeromq/4.3.4@#d4fe4001f6c2e5960e58c251687c5b2f"
         "zlib/1.2.12@#3b9e037ae1c615d045a06c67d88491ae"
     GENERATORS
         cmake_find_package
@@ -62,7 +61,6 @@ conan_cmake_configure(
         boost:without_test=True
         boost:without_wave=True
         cpprestsdk:with_websockets=False
-        zeromq:encryption=None
 )
 
 conan_cmake_autodetect(FAABRIC_CONAN_SETTINGS)
@@ -78,20 +76,19 @@ conan_cmake_install(PATH_OR_REFERENCE .
 
 include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 
-find_package(Boost 1.79.0 REQUIRED)
+find_package(Boost 1.80.0 REQUIRED)
 find_package(Catch2 REQUIRED)
-find_package(FlatBuffers REQUIRED)
-find_package(Protobuf 3.20.0 REQUIRED)
-find_package(RapidJSON REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(ZeroMQ REQUIRED)
 find_package(cppcodec REQUIRED)
 find_package(cpprestsdk REQUIRED)
-find_package(cppzmq REQUIRED)
+find_package(FlatBuffers REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
-find_package(spdlog REQUIRED)
+find_package(nng REQUIRED)
+find_package(Protobuf 3.20.0 REQUIRED)
+find_package(RapidJSON REQUIRED)
 find_package(readerwriterqueue REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(ZLIB REQUIRED)
 
 # zstd (Conan version not customizable enough)
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
@@ -130,9 +127,9 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     Boost::system
     cppcodec::cppcodec
     cpprestsdk::cpprestsdk
-    cppzmq::cppzmq
     flatbuffers::flatbuffers
     hiredis::hiredis
+    nng::nng
     protobuf::libprotobuf
     RapidJSON::RapidJSON
     readerwriterqueue::readerwriterqueue
