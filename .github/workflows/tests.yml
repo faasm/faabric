@@ -60,7 +60,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitiser: [None, Address, Thread, Undefined, Leak]
+        sanitiser: [None, Address, Thread, Undefined]
     env:
       HOST_TYPE: ci
       REDIS_QUEUE_HOST: redis
