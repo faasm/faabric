@@ -134,17 +134,18 @@ void MessageEndpointServerHandler::start(int timeoutMs)
                         std::unique_ptr<google::protobuf::Message> resp =
                           server->doSyncRecv(body);
 
-                        size_t respSize = resp->ByteSizeLong();
-
-                        uint8_t buffer[respSize];
-                        if (!resp->SerializeToArray(buffer, respSize)) {
+                        std::string buffer;
+                        if (!resp->SerializeToString(&buffer)) {
                             throw std::runtime_error(
                               "Error serialising message");
                         }
 
                         // Return the response
                         static_cast<SyncRecvMessageEndpoint*>(endpoint.get())
-                          ->sendResponse(NO_HEADER, buffer, respSize);
+                          ->sendResponse(
+                            NO_HEADER,
+                            reinterpret_cast<uint8_t*>(buffer.data()),
+                            buffer.size());
                     }
 
                     // Wait on the request latch if necessary
