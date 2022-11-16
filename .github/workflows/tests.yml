@@ -66,7 +66,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
       ASAN_OPTIONS: "verbosity=1:halt_on_error=1"
-      TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt:history_size=7"
+      TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=2"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
       image: faasm/faabric:0.4.0
