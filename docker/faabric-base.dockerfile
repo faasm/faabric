@@ -10,7 +10,6 @@ RUN apt update \
         wget \
     && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|apt-key add - \
     && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add - \
-    && add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-10 main" \
     && add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main" \
     && add-apt-repository -y -n "deb https://apt.kitware.com/ubuntu/ focal main" \
     && add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
@@ -20,11 +19,8 @@ RUN apt update && apt install -y \
     autoconf \
     automake \
     build-essential \
-    clang-10 \
     clang-13 \
-    clang-format-10 \
     clang-format-13 \
-    clang-tidy-10 \
     clang-tidy-13 \
     clang-tools-13 \
     cmake \
