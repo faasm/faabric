@@ -8,3 +8,6 @@ race:moodycamel::BlockingReaderWriterCircularBuffer*
 
 # TODO: Remove: There's something weird going on with MPI code I don't understand
 race:faabric::scheduler::MpiWorld::*
+
+# Race in ReaderWriterQueue
+race:moodycamel::*
