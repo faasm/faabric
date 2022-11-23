@@ -62,14 +62,14 @@ class Message final
 
     Message& operator=(Message&& other)
     {
-        other.nngMsg = nngMsg;
-        other.responseCode = responseCode;
-        other._header = _header;
-        other._sequenceNum = _sequenceNum;
-        nngMsg = nullptr;
-        responseCode = MessageResponseCode::SUCCESS;
-        _header = 0;
-        _sequenceNum = NO_SEQUENCE_NUM;
+        nngMsg = other.nngMsg;
+        responseCode = other.responseCode;
+        _header = other._header;
+        _sequenceNum = other._sequenceNum;
+        other.nngMsg = nullptr;
+        other.responseCode = MessageResponseCode::SUCCESS;
+        other._header = 0;
+        other._sequenceNum = NO_SEQUENCE_NUM;
         return *this;
     }
 
