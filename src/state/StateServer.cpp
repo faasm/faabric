@@ -32,25 +32,25 @@ std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
     uint8_t header = message.getHeader();
     switch (header) {
         case faabric::state::StateCalls::Pull: {
-            return recvPull(message.udata(), message.size());
+            return recvPull(message.udata());
         }
         case faabric::state::StateCalls::Push: {
-            return recvPush(message.udata(), message.size());
+            return recvPush(message.udata());
         }
         case faabric::state::StateCalls::Size: {
-            return recvSize(message.udata(), message.size());
+            return recvSize(message.udata());
         }
         case faabric::state::StateCalls::Append: {
-            return recvAppend(message.udata(), message.size());
+            return recvAppend(message.udata());
         }
         case faabric::state::StateCalls::ClearAppended: {
-            return recvClearAppended(message.udata(), message.size());
+            return recvClearAppended(message.udata());
         }
         case faabric::state::StateCalls::PullAppended: {
-            return recvPullAppended(message.udata(), message.size());
+            return recvPullAppended(message.udata());
         }
         case faabric::state::StateCalls::Delete: {
-            return recvDelete(message.udata(), message.size());
+            return recvDelete(message.udata());
         }
         default: {
             throw std::runtime_error(
@@ -60,10 +60,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvSize(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::StateRequest, buffer.data(), buffer.size())
 
     // Prepare the response
     SPDLOG_TRACE("Received size {}/{}", parsedMsg.user(), parsedMsg.key());
@@ -77,10 +76,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvSize(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvPull(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::StateChunkRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::StateChunkRequest, buffer.data(), buffer.size())
 
     SPDLOG_TRACE("Received pull {}/{} ({}->{})",
                  parsedMsg.user(),
@@ -105,10 +103,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPull(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvPush(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::StatePart, buffer, bufferSize)
+    PARSE_MSG(faabric::StatePart, buffer.data(), buffer.size())
 
     // Update the KV store
     SPDLOG_TRACE("Received push {}/{} ({}->{})",
@@ -127,10 +124,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPush(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvAppend(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::StateRequest, buffer.data(), buffer.size())
 
     // Update the KV
     KV_FROM_REQUEST(parsedMsg)
@@ -143,10 +139,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvAppend(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvPullAppended(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::StateAppendedRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::StateAppendedRequest, buffer.data(), buffer.size())
 
     // Prepare response
     SPDLOG_TRACE(
@@ -167,10 +162,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvPullAppended(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvDelete(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::StateRequest, buffer.data(), buffer.size())
 
     // Delete value
     SPDLOG_TRACE("Received delete {}/{}", parsedMsg.user(), parsedMsg.key());
@@ -181,10 +175,9 @@ std::unique_ptr<google::protobuf::Message> StateServer::recvDelete(
 }
 
 std::unique_ptr<google::protobuf::Message> StateServer::recvClearAppended(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::StateRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::StateRequest, buffer.data(), buffer.size())
 
     // Perform operation
     SPDLOG_TRACE(

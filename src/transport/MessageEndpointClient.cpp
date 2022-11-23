@@ -61,7 +61,8 @@ void MessageEndpointClient::syncSend(int header,
       syncEndpoint.sendAwaitResponse(header, buffer, bufferSize);
 
     // Deserialise response
-    if (!response->ParseFromArray(responseMsg.data(), responseMsg.size())) {
+    if (!response->ParseFromArray(responseMsg.data().data(),
+                                  responseMsg.data().size())) {
         throw std::runtime_error("Error deserialising message");
     }
 }

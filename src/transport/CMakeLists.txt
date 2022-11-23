@@ -3,7 +3,6 @@
 # ----------------------------------------------
 
 faabric_lib(transport
-    context.cpp
     Message.cpp
     MessageEndpoint.cpp
     MessageEndpointClient.cpp

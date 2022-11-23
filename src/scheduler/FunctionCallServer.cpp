@@ -22,11 +22,11 @@ void FunctionCallServer::doAsyncRecv(transport::Message& message)
     uint8_t header = message.getHeader();
     switch (header) {
         case faabric::scheduler::FunctionCalls::ExecuteFunctions: {
-            recvExecuteFunctions(message.udata(), message.size());
+            recvExecuteFunctions(message.udata());
             break;
         }
         case faabric::scheduler::FunctionCalls::Unregister: {
-            recvUnregister(message.udata(), message.size());
+            recvUnregister(message.udata());
             break;
         }
         default: {
@@ -42,13 +42,13 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
     uint8_t header = message.getHeader();
     switch (header) {
         case faabric::scheduler::FunctionCalls::Flush: {
-            return recvFlush(message.udata(), message.size());
+            return recvFlush(message.udata());
         }
         case faabric::scheduler::FunctionCalls::GetResources: {
-            return recvGetResources(message.udata(), message.size());
+            return recvGetResources(message.udata());
         }
         case faabric::scheduler::FunctionCalls::PendingMigrations: {
-            return recvPendingMigrations(message.udata(), message.size());
+            return recvPendingMigrations(message.udata());
         }
         default: {
             throw std::runtime_error(
@@ -58,8 +58,7 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
     // Clear out any cached state
     faabric::state::getGlobalState().forceClearAll(false);
@@ -70,10 +69,9 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvFlush(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,
-                                              size_t bufferSize)
+void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::BatchExecuteRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::BatchExecuteRequest, buffer.data(), buffer.size())
 
     // This host has now been told to execute these functions no matter what
     // TODO - avoid this copy
@@ -82,10 +80,9 @@ void FunctionCallServer::recvExecuteFunctions(const uint8_t* buffer,
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }
 
-void FunctionCallServer::recvUnregister(const uint8_t* buffer,
-                                        size_t bufferSize)
+void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::UnregisterRequest, buffer, bufferSize)
+    PARSE_MSG(faabric::UnregisterRequest, buffer.data(), buffer.size())
 
     SPDLOG_DEBUG("Unregistering host {} for {}/{}",
                  parsedMsg.host(),
@@ -98,8 +95,7 @@ void FunctionCallServer::recvUnregister(const uint8_t* buffer,
 }
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
     auto response = std::make_unique<faabric::HostResources>(
       scheduler.getThisHostResources());
@@ -107,10 +103,9 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
 }
 
 std::unique_ptr<google::protobuf::Message>
-FunctionCallServer::recvPendingMigrations(const uint8_t* buffer,
-                                          size_t bufferSize)
+FunctionCallServer::recvPendingMigrations(std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
+    PARSE_MSG(faabric::PendingMigrations, buffer.data(), buffer.size());
 
     auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
 

@@ -35,8 +35,8 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     // Receive message
     faabric::transport::Message recvMsg = dst.recv();
     REQUIRE(recvMsg.getHeader() == dummyHeader);
-    REQUIRE(recvMsg.size() == expectedMsg.size());
-    std::string actualMsg(recvMsg.data(), recvMsg.size());
+    REQUIRE(recvMsg.data().size() == expectedMsg.size());
+    std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
     REQUIRE(actualMsg == expectedMsg);
 }
 
@@ -58,8 +58,8 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         AsyncRecvMessageEndpoint dst(TEST_PORT);
         faabric::transport::Message recvMsg = dst.recv();
 
-        assert(recvMsg.size() == expectedMsg.size());
-        std::string actualMsg(recvMsg.data(), recvMsg.size());
+        assert(recvMsg.data().size() == expectedMsg.size());
+        std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
         assert(actualMsg == expectedMsg);
     });
 
@@ -92,16 +92,17 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
           src.sendAwaitResponse(NO_HEADER, bytes.data(), bytes.size());
 
         // Block waiting for a response
-        assert(recvMsg.size() == expectedResponse.size());
-        std::string actualResponse(recvMsg.data(), recvMsg.size());
+        assert(recvMsg.data().size() == expectedResponse.size());
+        std::string actualResponse(recvMsg.data().begin(),
+                                   recvMsg.data().end());
         assert(actualResponse == expectedResponse);
     });
 
     // Receive message
     SyncRecvMessageEndpoint dst(TEST_PORT);
     faabric::transport::Message recvMsg = dst.recv();
-    REQUIRE(recvMsg.size() == expectedMsg.size());
-    std::string actualMsg(recvMsg.data(), recvMsg.size());
+    REQUIRE(recvMsg.data().size() == expectedMsg.size());
+    std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
     REQUIRE(actualMsg == expectedMsg);
 
     // Send response
@@ -140,9 +141,9 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         // This implicitly tests in-order message delivery
         if ((i % (numMessages / 10)) == 0) {
             std::string expectedMsg = baseMsg + std::to_string(i);
-            REQUIRE(recvMsg.size() == expectedMsg.size());
+            REQUIRE(recvMsg.data().size() == expectedMsg.size());
             REQUIRE(recvMsg.getHeader() == dummyHeader);
-            std::string actualMsg(recvMsg.data(), recvMsg.size());
+            std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
             REQUIRE(actualMsg == expectedMsg);
         }
     }
@@ -182,9 +183,9 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         faabric::transport::Message recvMsg = dst.recv();
         // Check just a subset of the messages
         if ((i % numMessages) == 0) {
-            REQUIRE(recvMsg.size() == expectedMsg.size());
+            REQUIRE(recvMsg.data().size() == expectedMsg.size());
             REQUIRE(recvMsg.getHeader() == dummyHeader);
-            std::string actualMsg(recvMsg.data(), recvMsg.size());
+            std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
             REQUIRE(actualMsg == expectedMsg);
         }
     }
@@ -256,7 +257,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test direct messaging", "[transport]")
 
     REQUIRE(recvMsg.getHeader() == dummyHeader);
 
-    actual = std::string(recvMsg.data(), recvMsg.size());
+    actual = std::string(recvMsg.data().begin(), recvMsg.data().end());
     REQUIRE(actual == expected);
 }
 
@@ -312,7 +313,8 @@ TEST_CASE_METHOD(SchedulerTestFixture,
             // Receive messages
             for (int m = 0; m < nMessages; m++) {
                 faabric::transport::Message recvMsg = receiver.recv();
-                std::string actual(recvMsg.data(), recvMsg.size());
+                std::string actual(recvMsg.data().begin(),
+                                   recvMsg.data().end());
 
                 std::string expected =
                   "Direct hello " + std::to_string(i) + "_" + std::to_string(m);

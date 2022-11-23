@@ -1,5 +1,3 @@
-# Ignore ZeroMQ races
-race:zmq::*
 # Config only changes in tests, and in places where being slightly racy doesn't matter
 race:faabric::util::SystemConfig::*
 # Catch2 allocates in its signal handler, this prevents showing the wrong crash report

@@ -53,10 +53,10 @@ class EchoServer final : public MessageEndpointServer
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
       transport::Message& message) override
     {
-        SPDLOG_TRACE("Echo server received {} bytes", message.size());
+        SPDLOG_TRACE("Echo server received {} bytes", message.data().size());
 
         auto response = std::make_unique<faabric::StatePart>();
-        response->set_data(message.udata(), message.size());
+        response->set_data(message.udata().data(), message.udata().size());
 
         return response;
     }
@@ -80,7 +80,7 @@ class SleepServer final : public MessageEndpointServer
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
       transport::Message& message) override
     {
-        int* sleepTimeMs = (int*)message.udata();
+        int* sleepTimeMs = (int*)message.udata().data();
         SPDLOG_DEBUG("Sleep server sleeping for {}ms", *sleepTimeMs);
         SLEEP_MS(*sleepTimeMs);
 
@@ -113,7 +113,7 @@ class BlockServer final : public MessageEndpointServer
 
         // Echo input data
         auto response = std::make_unique<faabric::StatePart>();
-        response->set_data(message.udata(), message.size());
+        response->set_data(message.udata().data(), message.udata().size());
         return response;
     }
 

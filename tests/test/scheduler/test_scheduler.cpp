@@ -1101,7 +1101,7 @@ TEST_CASE_METHOD(DummyExecutorFixture,
         faabric::transport::Message msg(bufferSize);
 
         // Get a pointer to the message data
-        msgData = msg.udata();
+        msgData = msg.udata().data();
 
         // Write something
         msgData[0] = 1;

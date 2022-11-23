@@ -3,12 +3,13 @@
 #include <faabric/transport/Message.h>
 #include <faabric/util/exception.h>
 
+#include <array>
+#include <nng/nng.h>
 #include <optional>
+#include <string>
 #include <thread>
-#include <zmq.hpp>
-
-// Defined in libzmq/include/zmq.h
-#define ZMQ_ETERM ETERM
+#include <variant>
+#include <vector>
 
 #define ANY_HOST "0.0.0.0"
 
@@ -22,22 +23,51 @@
 // things haven't yet completed (usually only when there's an error).
 #define LINGER_MS 100
 
-// The header structure is:
-// - Message code (uint8_t)
-// - Message body size (size_t)
-// - Message sequence number of in-order message delivery default -1 (int)
-#define NO_HEADER 0
-#define HEADER_MSG_SIZE (sizeof(uint8_t) + sizeof(size_t) + sizeof(int))
-
-#define SHUTDOWN_HEADER 220
-static const std::vector<uint8_t> shutdownPayload = { 0, 0, 1, 1 };
-
 namespace faabric::transport {
 
 enum MessageEndpointConnectType
 {
     BIND = 0,
     CONNECT = 1,
+};
+
+enum class SocketType
+{
+    pair,
+    pub,
+    sub,
+    pull,
+    push,
+    rep,
+    req
+};
+
+// Simple wrapper around nng_context handling its lifetime.
+class MessageContext final
+{
+  public:
+    MessageContext() = default;
+    explicit MessageContext(nng_ctx context)
+      : context(context)
+    {}
+    MessageContext(const MessageContext&) = delete;
+    MessageContext& operator=(const MessageContext&) = delete;
+    MessageContext(MessageContext&& rhs) { *this = std::move(rhs); }
+    MessageContext& operator=(MessageContext&& rhs)
+    {
+        context = rhs.context;
+        rhs.context = NNG_CTX_INITIALIZER;
+        return *this;
+    }
+
+    ~MessageContext()
+    {
+        if (context.id != 0) {
+            nng_ctx_close(context);
+        }
+    }
+
+    nng_ctx context = NNG_CTX_INITIALIZER;
 };
 
 // Note: sockets must be open-ed and close-ed from the _same_ thread. In a given
@@ -56,32 +86,39 @@ class MessageEndpoint
 
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
 
+    virtual ~MessageEndpoint()
+    {
+        if (socket.id != 0) {
+            close();
+        }
+    }
+
     std::string getAddress();
 
   protected:
     const std::string address;
-    const int timeoutMs;
+    const int timeoutMs = -1;
     const std::thread::id tid;
-    const int id;
+    const int id = -1;
 
-    zmq::socket_t setUpSocket(zmq::socket_type socketType,
-                              MessageEndpointConnectType connectType);
+    nng_socket socket = NNG_SOCKET_INITIALIZER;
+    std::variant<std::monostate, nng_dialer, nng_listener> connectionManager;
 
-    void sendMessage(zmq::socket_t& socket,
-                     uint8_t header,
+    void setUpSocket(SocketType socketType,
+                     MessageEndpointConnectType connectType);
+
+    void sendMessage(uint8_t header,
                      const uint8_t* data,
                      size_t dataSize,
-                     int sequenceNumber = NO_SEQUENCE_NUM);
+                     int sequenceNumber = NO_SEQUENCE_NUM,
+                     std::optional<nng_ctx> context = std::nullopt);
 
-    Message recvMessage(zmq::socket_t& socket, bool async);
+    Message recvMessage(bool async,
+                        std::optional<nng_ctx> context = std::nullopt);
 
-  private:
-    Message recvBuffer(zmq::socket_t& socket, size_t size);
+    MessageContext createContext();
 
-    void sendBuffer(zmq::socket_t& socket,
-                    const uint8_t* data,
-                    size_t dataSize,
-                    bool more);
+    void close();
 };
 
 class AsyncSendMessageEndpoint final : public MessageEndpoint
@@ -95,9 +132,6 @@ class AsyncSendMessageEndpoint final : public MessageEndpoint
               const uint8_t* data,
               size_t dataSize,
               int sequenceNum = NO_SEQUENCE_NUM);
-
-  protected:
-    zmq::socket_t socket;
 };
 
 class AsyncInternalSendMessageEndpoint final : public MessageEndpoint
@@ -110,9 +144,6 @@ class AsyncInternalSendMessageEndpoint final : public MessageEndpoint
               const uint8_t* data,
               size_t dataSize,
               int sequenceNumber = NO_SEQUENCE_NUM);
-
-  protected:
-    zmq::socket_t socket;
 };
 
 class SyncSendMessageEndpoint final : public MessageEndpoint
@@ -127,9 +158,6 @@ class SyncSendMessageEndpoint final : public MessageEndpoint
     Message sendAwaitResponse(uint8_t header,
                               const uint8_t* data,
                               size_t dataSize);
-
-  private:
-    zmq::socket_t reqSocket;
 };
 
 class RecvMessageEndpoint : public MessageEndpoint
@@ -138,70 +166,60 @@ class RecvMessageEndpoint : public MessageEndpoint
     /**
      * Constructor for external TCP sockets
      */
-    RecvMessageEndpoint(int portIn, int timeoutMs, zmq::socket_type socketType);
+    RecvMessageEndpoint(int portIn, int timeoutMs, SocketType socketType);
 
     /**
      * Constructor for internal inproc sockets
      */
     RecvMessageEndpoint(std::string inProcLabel,
                         int timeoutMs,
-                        zmq::socket_type socketType,
+                        SocketType socketType,
                         MessageEndpointConnectType connectType);
 
     virtual ~RecvMessageEndpoint(){};
 
     virtual Message recv();
 
-    zmq::socket_t socket;
-
   protected:
     Message doRecv(bool async);
 };
 
-class FanInMessageEndpoint : public RecvMessageEndpoint
+class FanMessageEndpoint : public MessageEndpoint
 {
   public:
-    FanInMessageEndpoint(int portIn,
-                         int timeoutMs,
-                         zmq::socket_type socketType);
+    FanMessageEndpoint(int portIn,
+                       int timeoutMs,
+                       SocketType socketType,
+                       bool isAsync);
 
-    void attachFanOut(zmq::socket_t& fanOutSock);
+    MessageContext attachFanOut();
+
+    Message recv(const MessageContext& ctx);
+
+    void sendResponse(const MessageContext& ctx,
+                      uint8_t header,
+                      const uint8_t* data,
+                      size_t dataSize);
 
     void stop();
 
   private:
-    zmq::socket_t controlSock;
     std::string controlSockAddress;
+    bool isAsync;
 };
 
-class AsyncFanOutMessageEndpoint final : public MessageEndpoint
+class AsyncFanMessageEndpoint final : public FanMessageEndpoint
 {
   public:
-    AsyncFanOutMessageEndpoint(const std::string& inProcLabel,
-                               int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
-
-    zmq::socket_t socket;
+    AsyncFanMessageEndpoint(int portIn,
+                            int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 };
 
-class AsyncFanInMessageEndpoint final : public FanInMessageEndpoint
+class SyncFanMessageEndpoint final : public FanMessageEndpoint
 {
   public:
-    AsyncFanInMessageEndpoint(int portIn,
-                              int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
-};
-
-class SyncFanOutMessageEndpoint final : public RecvMessageEndpoint
-{
-  public:
-    SyncFanOutMessageEndpoint(const std::string& inProcLabel,
-                              int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
-};
-
-class SyncFanInMessageEndpoint final : public FanInMessageEndpoint
-{
-  public:
-    SyncFanInMessageEndpoint(int portIn,
-                             int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
+    SyncFanMessageEndpoint(int portIn,
+                           int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 };
 
 class AsyncRecvMessageEndpoint final : public RecvMessageEndpoint
@@ -255,9 +273,6 @@ class AsyncDirectSendEndpoint final : public MessageEndpoint
                             int timeoutMs = DEFAULT_SOCKET_TIMEOUT_MS);
 
     void send(uint8_t header, const uint8_t* data, size_t dataSize);
-
-  protected:
-    zmq::socket_t socket;
 };
 
 class MessageTimeoutException final : public faabric::util::FaabricException
