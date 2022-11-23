@@ -8,6 +8,7 @@
 
 #include <array>
 #include <concepts>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <unistd.h>
@@ -297,7 +298,7 @@ Message MessageEndpoint::recvMessage(bool async, std::optional<nng_ctx> context)
         return Message(MessageResponseCode::TIMEOUT);
     }
     if (ec == NNG_ECLOSED) {
-        SPDLOG_WARN("Endpoint {} received ECLOSED on recv", address);
+        SPDLOG_DEBUG("Endpoint {} received ECLOSED on recv", address);
         return Message(MessageResponseCode::TERM);
     }
     checkNngError(ec, "recvBuffer", address);
@@ -340,8 +341,7 @@ Message MessageEndpoint::recvMessage(bool async, std::optional<nng_ctx> context)
             // (otherwise upstream socket will hang)
             if (!async) {
                 std::array<uint8_t, 4> empty{ 0 };
-                static_cast<SyncRecvMessageEndpoint*>(this)->sendResponse(
-                  0, empty.data(), empty.size());
+                this->sendMessage(0, empty.data(), empty.size());
             }
 
             return Message(MessageResponseCode::TERM);
@@ -520,7 +520,8 @@ void FanMessageEndpoint::stop()
 
 Message FanMessageEndpoint::recv(const MessageContext& ctx)
 {
-    return recvMessage(isAsync, ctx.context);
+    // Async (PULL) fan endpoints don't support context objects, a simple receive is enough.
+    return recvMessage(isAsync, isAsync ? std::nullopt : std::optional(ctx.context));
 }
 
 void FanMessageEndpoint::sendResponse(const MessageContext& ctx,
