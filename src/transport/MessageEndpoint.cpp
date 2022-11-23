@@ -217,8 +217,8 @@ void MessageEndpoint::setUpSocket(SocketType socketType,
                 }
             }
             nng_dialer dialer;
-            checkNngError(nng_dial(socket, address.c_str(), &dialer, 0),
-                          "nng_listen",
+            checkNngError(nng_dial(socket, address.c_str(), &dialer, NNG_FLAG_NONBLOCK),
+                          "nng_dial",
                           address);
             connectionManager = dialer;
             break;
