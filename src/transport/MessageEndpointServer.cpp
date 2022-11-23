@@ -143,7 +143,6 @@ void MessageEndpointServerHandler::join()
     // Shut down the sockets to gracefully terminate all worker threads.
     if (fan != nullptr) {
         fan->stop();
-        fan = nullptr;
     }
 
     // Join each worker
@@ -157,6 +156,8 @@ void MessageEndpointServerHandler::join()
     if (receiverThread.joinable()) {
         receiverThread.join();
     }
+
+    fan = nullptr;
 }
 
 MessageEndpointServer::MessageEndpointServer(int asyncPortIn,
