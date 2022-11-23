@@ -1,4 +1,6 @@
+#include "faabric/util/testing.h"
 #include <faabric/transport/MessageEndpointClient.h>
+#include <optional>
 
 namespace faabric::transport {
 
@@ -9,9 +11,14 @@ MessageEndpointClient::MessageEndpointClient(std::string hostIn,
   : host(hostIn)
   , asyncPort(asyncPortIn)
   , syncPort(syncPortIn)
-  , asyncEndpoint(host, asyncPort, timeoutMs)
-  , syncEndpoint(host, syncPort, timeoutMs)
-{}
+  , asyncEndpoint(std::nullopt)
+  , syncEndpoint(std::nullopt)
+{
+    if (!faabric::util::isMockMode()) {
+        asyncEndpoint.emplace(host, asyncPort, timeoutMs);
+        syncEndpoint.emplace(host, syncPort, timeoutMs);
+    }
+}
 
 void MessageEndpointClient::asyncSend(int header,
                                       google::protobuf::Message* msg,
@@ -34,7 +41,9 @@ void MessageEndpointClient::asyncSend(int header,
                                       size_t bufferSize,
                                       int sequenceNum)
 {
-    asyncEndpoint.send(header, buffer, bufferSize, sequenceNum);
+    if (asyncEndpoint.has_value()) {
+        asyncEndpoint->send(header, buffer, bufferSize, sequenceNum);
+    }
 }
 
 void MessageEndpointClient::syncSend(int header,
@@ -57,13 +66,15 @@ void MessageEndpointClient::syncSend(int header,
                                      const size_t bufferSize,
                                      google::protobuf::Message* response)
 {
-    Message responseMsg =
-      syncEndpoint.sendAwaitResponse(header, buffer, bufferSize);
+    if (syncEndpoint.has_value()) {
+        Message responseMsg =
+          syncEndpoint->sendAwaitResponse(header, buffer, bufferSize);
 
-    // Deserialise response
-    if (!response->ParseFromArray(responseMsg.data().data(),
-                                  responseMsg.data().size())) {
-        throw std::runtime_error("Error deserialising message");
+        // Deserialise response
+        if (!response->ParseFromArray(responseMsg.data().data(),
+                                      responseMsg.data().size())) {
+            throw std::runtime_error("Error deserialising message");
+        }
     }
 }
 }
