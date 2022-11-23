@@ -1109,6 +1109,12 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
 
+    // Remove the app from in-flight map if still there, and this host is the
+    // master host for the message
+    if (msg.masterhost() == thisHost) {
+        removePendingMigration(msg.appid());
+    }
+
     if (msg.executeslocally()) {
         faabric::util::UniqueLock resultsLock(localResultsMutex);
 
@@ -1127,12 +1133,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     std::string key = msg.resultkey();
     if (key.empty()) {
         throw std::runtime_error("Result key empty. Cannot publish result");
-    }
-
-    // Remove the app from in-flight map if still there, and this host is the
-    // master host for the message
-    if (msg.masterhost() == thisHost) {
-        removePendingMigration(msg.appid());
     }
 
     // Write the successful result to the result queue

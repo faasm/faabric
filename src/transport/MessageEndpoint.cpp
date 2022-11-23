@@ -241,7 +241,7 @@ void MessageEndpoint::sendMessage(uint8_t header,
                                   std::optional<nng_ctx> context)
 {
     const size_t allocSize = HEADER_MSG_SIZE + dataSize;
-    nng_msg* msg;
+    nng_msg* msg = nullptr;
     checkNngError(nng_msg_alloc(&msg, allocSize), "msg_alloc", address);
     uint8_t* buffer = reinterpret_cast<uint8_t*>(nng_msg_body(msg));
     faabric::util::unalignedWrite<uint8_t>(header, buffer);
@@ -269,8 +269,8 @@ void MessageEndpoint::sendMessage(uint8_t header,
     nng_aio_wait(aio);
     int ec = nng_aio_result(aio);
     nng_aio_free(aio);
-    nng_msg_free(msg);
     if (ec != 0) {
+        nng_msg_free(msg); // Owned by the socket if succeeded
         checkNngError(ec, "sendMessage", address);
     }
 }

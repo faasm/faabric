@@ -39,8 +39,10 @@ std::span<char> Message::data()
 
 std::span<uint8_t> Message::udata()
 {
-    return allData().subspan(sizeof(uint8_t) + sizeof(uint64_t) +
-                             sizeof(int32_t));
+    return allData().size() < HEADER_MSG_SIZE
+             ? std::span<uint8_t>()
+             : allData().subspan(sizeof(uint8_t) + sizeof(uint64_t) +
+                                 sizeof(int32_t));
 }
 
 std::vector<uint8_t> Message::dataCopy() const

@@ -356,6 +356,8 @@ TEST_CASE_METHOD(
       sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
+    SLEEP_MS(100);
+
     // Check that after the result is set, the app can't be migrated no more
     sch.checkForMigrationOpportunities();
     REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
