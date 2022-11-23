@@ -540,7 +540,7 @@ AsyncFanMessageEndpoint::AsyncFanMessageEndpoint(int portIn, int timeoutMs)
 // ----------------------------------------------
 
 SyncFanMessageEndpoint::SyncFanMessageEndpoint(int portIn, int timeoutMs)
-  : FanMessageEndpoint(portIn, timeoutMs, SocketType::req, false)
+  : FanMessageEndpoint(portIn, timeoutMs, SocketType::rep, false)
 {}
 
 // ----------------------------------------------

@@ -48,16 +48,16 @@ void MessageEndpointServerHandler::start(int timeoutMs)
     // they receive a terminate message)
     if (async) {
         // Set up push/ pull pair
-        fan = std::make_shared<AsyncFanMessageEndpoint>(port);
+        fan = std::make_shared<AsyncFanMessageEndpoint>(port, timeoutMs);
     } else {
         // Set up router/ dealer
-        fan = std::make_shared<SyncFanMessageEndpoint>(port);
+        fan = std::make_shared<SyncFanMessageEndpoint>(port, timeoutMs);
     }
 
     SPDLOG_TRACE("Endpoint server {} receiver set up", port);
 
     for (int i = 0; i < nThreads; i++) {
-        workerThreads.emplace_back([this, i, timeoutMs, startupLatch] {
+        workerThreads.emplace_back([this, startupLatch] {
             // Here we want to isolate all ZeroMQ stuff in its own
             // context, so we can do things after it's been destroyed
             {
@@ -127,15 +127,6 @@ void MessageEndpointServerHandler::start(int timeoutMs)
 
             // Perform the tidy-up
             server->onWorkerStop();
-
-            // Just before the thread dies, check if there's something
-            // waiting on the shutdown latch
-            auto shutdownLatch = std::atomic_load_explicit(
-              &server->shutdownLatch, std::memory_order_acquire);
-            if (shutdownLatch != nullptr) {
-                SPDLOG_TRACE("Server thread {} waiting on shutdown latch", i);
-                shutdownLatch->wait();
-            }
         });
     }
 
@@ -178,8 +169,6 @@ MessageEndpointServer::MessageEndpointServer(int asyncPortIn,
   , nThreads(nThreadsIn)
   , asyncHandler(this, true, inprocLabel + "-async", nThreadsIn)
   , syncHandler(this, false, inprocLabel, nThreadsIn)
-  , asyncShutdownSender(LOCALHOST, asyncPort)
-  , syncShutdownSender(LOCALHOST, syncPort)
 {}
 
 /**
@@ -205,58 +194,7 @@ void MessageEndpointServer::stop()
         return;
     }
 
-    // Here we send shutdown messages to each worker in turn, however, because
-    // they're all connected on the same inproc port, we have to wait until each
-    // one has shut down fully (i.e. the zmq socket has gone out of scope),
-    // before sending the next shutdown message.
-    // If we don't do this, zmq will direct messages to sockets that are in the
-    // process of shutting down and cause errors.
-    // To ensure each socket has closed, we use a latch with two slots, where
-    // this thread takes one of the slots, and the worker thread takes the other
-    // once it's finished shutting down.
-    for (int i = 0; i < nThreads; i++) {
-        SPDLOG_TRACE("Sending async shutdown message {}/{} to port {}",
-                     i + 1,
-                     nThreads,
-                     asyncPort);
-
-        std::atomic_store_explicit(&shutdownLatch,
-                                   faabric::util::Latch::create(2),
-                                   std::memory_order_release);
-
-        asyncShutdownSender.send(
-          SHUTDOWN_HEADER, shutdownPayload.data(), shutdownPayload.size());
-
-        std::atomic_load_explicit(&shutdownLatch, std::memory_order_acquire)
-          ->wait();
-        std::atomic_store_explicit(
-          &shutdownLatch,
-          std::shared_ptr<faabric::util::Latch>(nullptr),
-          std::memory_order_release);
-    }
-
-    for (int i = 0; i < nThreads; i++) {
-        SPDLOG_TRACE("Sending sync shutdown message {}/{} to port {}",
-                     i + 1,
-                     nThreads,
-                     syncPort);
-
-        std::atomic_store_explicit(&shutdownLatch,
-                                   faabric::util::Latch::create(2),
-                                   std::memory_order_release);
-
-        syncShutdownSender.sendAwaitResponse(
-          SHUTDOWN_HEADER, shutdownPayload.data(), shutdownPayload.size());
-
-        std::atomic_load_explicit(&shutdownLatch, std::memory_order_acquire)
-          ->wait();
-        std::atomic_store_explicit(
-          &shutdownLatch,
-          std::shared_ptr<faabric::util::Latch>(nullptr),
-          std::memory_order_release);
-    }
-
-    // Join the handlers
+    // Shut down and join the handlers
     asyncHandler.join();
     syncHandler.join();
 
