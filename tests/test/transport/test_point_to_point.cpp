@@ -1,5 +1,6 @@
 #include <catch2/catch.hpp>
 
+#include "faabric/util/latch.h"
 #include "faabric_utils.h"
 
 #include <sys/mman.h>
@@ -121,16 +122,16 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     std::vector<uint8_t> sentDataC = { 6, 7, 8 };
     std::vector<uint8_t> receivedDataC;
 
-    // Make sure we send the message before a receiver is available to check
-    // async handling
-    broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
+    std::shared_ptr msgLatch = std::make_shared<faabric::util::Latch>(2, 1000);
 
     std::jthread t(
-      [groupId, idxA, idxB, &receivedDataA, &sentDataB, &sentDataC] {
+      [groupId, idxA, idxB, &receivedDataA, &sentDataB, &sentDataC, msgLatch] {
           PointToPointBroker& broker = getPointToPointBroker();
 
           // Receive the first message
           receivedDataA = broker.recvMessage(groupId, idxA, idxB);
+
+          msgLatch->wait();
 
           // Send a message back
           broker.sendMessage(
@@ -148,6 +149,10 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
           broker.resetThreadLocalCache();
       });
 
+    // Only send the message after the thread creates a receiving socket to avoid deadlock
+    broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
+    // Wait for the thread to handle the message
+    msgLatch->wait();
     // Receive the two messages sent back
     receivedDataB = broker.recvMessage(groupId, idxB, idxA);
     receivedDataC = broker.recvMessage(groupId, idxB, idxA);
@@ -210,8 +215,11 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
 
     int numMsg = 1e3;
 
+    // Latch in between send&recv phases to fix nondeterministic failures
+    std::shared_ptr msgLatch = std::make_shared<faabric::util::Latch>(2, 1000);
+
     // This thread first receives, then sends.
-    std::jthread t([groupId, idxA, idxB, numMsg, isMessageOrderingOn] {
+    std::jthread t([groupId, idxA, idxB, numMsg, isMessageOrderingOn, msgLatch] {
         PointToPointBroker& broker = getPointToPointBroker();
 
         std::vector<uint8_t> sendData;
@@ -221,8 +229,10 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
             recvData =
               broker.recvMessage(groupId, idxA, idxB, isMessageOrderingOn);
             sendData = std::vector<uint8_t>(3, i);
-            assert(recvData == sendData);
+            REQUIRE(recvData == sendData);
         }
+
+        msgLatch->wait();
 
         for (int i = 0; i < numMsg; i++) {
             sendData = std::vector<uint8_t>(3, i);
@@ -249,6 +259,8 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
                            sendData.size(),
                            isMessageOrderingOn);
     }
+
+    msgLatch->wait();
 
     for (int i = 0; i < numMsg; i++) {
         sendData = std::vector<uint8_t>(3, i);
