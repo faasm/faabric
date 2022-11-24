@@ -95,8 +95,10 @@ class Message final
     }
 
     std::span<char> data();
+    std::span<const char> data() const;
 
     std::span<uint8_t> udata();
+    std::span<const uint8_t> udata() const;
 
     std::vector<uint8_t> dataCopy() const;
 

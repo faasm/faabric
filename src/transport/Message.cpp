@@ -37,6 +37,12 @@ std::span<char> Message::data()
     return std::span(reinterpret_cast<char*>(udat.data()), udat.size_bytes());
 }
 
+std::span<const char> Message::data() const
+{
+    auto udat = udata();
+    return std::span(reinterpret_cast<const char*>(udat.data()), udat.size_bytes());
+}
+
 std::span<uint8_t> Message::udata()
 {
     return allData().size() < HEADER_MSG_SIZE
@@ -45,8 +51,16 @@ std::span<uint8_t> Message::udata()
                                  sizeof(int32_t));
 }
 
+std::span<const uint8_t> Message::udata() const
+{
+    return allData().size() < HEADER_MSG_SIZE
+             ? std::span<const uint8_t>()
+             : allData().subspan(sizeof(uint8_t) + sizeof(uint64_t) +
+                                 sizeof(int32_t));
+}
+
 std::vector<uint8_t> Message::dataCopy() const
 {
-    return std::vector<uint8_t>(allData().begin(), allData().end());
+    return std::vector<uint8_t>(udata().begin(), udata().end());
 }
 }
