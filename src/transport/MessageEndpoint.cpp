@@ -217,9 +217,10 @@ void MessageEndpoint::setUpSocket(SocketType socketType,
                 }
             }
             nng_dialer dialer;
-            checkNngError(nng_dial(socket, address.c_str(), &dialer, NNG_FLAG_NONBLOCK),
-                          "nng_dial",
-                          address);
+            checkNngError(
+              nng_dial(socket, address.c_str(), &dialer, NNG_FLAG_NONBLOCK),
+              "nng_dial",
+              address);
             connectionManager = dialer;
             break;
         }
@@ -520,8 +521,10 @@ void FanMessageEndpoint::stop()
 
 Message FanMessageEndpoint::recv(const MessageContext& ctx)
 {
-    // Async (PULL) fan endpoints don't support context objects, a simple receive is enough.
-    return recvMessage(isAsync, isAsync ? std::nullopt : std::optional(ctx.context));
+    // Async (PULL) fan endpoints don't support context objects, a simple
+    // receive is enough.
+    return recvMessage(isAsync,
+                       isAsync ? std::nullopt : std::optional(ctx.context));
 }
 
 void FanMessageEndpoint::sendResponse(const MessageContext& ctx,

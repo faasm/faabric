@@ -40,7 +40,8 @@ std::span<char> Message::data()
 std::span<const char> Message::data() const
 {
     auto udat = udata();
-    return std::span(reinterpret_cast<const char*>(udat.data()), udat.size_bytes());
+    return std::span(reinterpret_cast<const char*>(udat.data()),
+                     udat.size_bytes());
 }
 
 std::span<uint8_t> Message::udata()

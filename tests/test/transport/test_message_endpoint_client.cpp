@@ -277,22 +277,21 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     std::vector<std::jthread> receivers;
 
     for (int i = 0; i < nPairs; i++) {
-        senders.emplace_back(
-          [i, dummyHeader, nMessages, inprocLabel] {
-              std::string thisLabel = inprocLabel + std::to_string(i);
-              AsyncDirectSendEndpoint sender(thisLabel);
+        senders.emplace_back([i, dummyHeader, nMessages, inprocLabel] {
+            std::string thisLabel = inprocLabel + std::to_string(i);
+            AsyncDirectSendEndpoint sender(thisLabel);
 
-              for (int m = 0; m < nMessages; m++) {
-                  std::string expected = "Direct hello " + std::to_string(i) +
-                                         "_" + std::to_string(m);
-                  const uint8_t* msg = BYTES_CONST(expected.c_str());
-                  sender.send(dummyHeader, msg, expected.size());
+            for (int m = 0; m < nMessages; m++) {
+                std::string expected =
+                  "Direct hello " + std::to_string(i) + "_" + std::to_string(m);
+                const uint8_t* msg = BYTES_CONST(expected.c_str());
+                sender.send(dummyHeader, msg, expected.size());
 
-                  if (m % 100 == 0) {
-                      SLEEP_MS(10);
-                  }
-              }
-          });
+                if (m % 100 == 0) {
+                    SLEEP_MS(10);
+                }
+            }
+        });
     }
 
     std::atomic<bool> success = true;

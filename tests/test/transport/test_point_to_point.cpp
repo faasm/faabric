@@ -149,7 +149,8 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
           broker.resetThreadLocalCache();
       });
 
-    // Only send the message after the thread creates a receiving socket to avoid deadlock
+    // Only send the message after the thread creates a receiving socket to
+    // avoid deadlock
     broker.sendMessage(groupId, idxA, idxB, sentDataA.data(), sentDataA.size());
     // Wait for the thread to handle the message
     msgLatch->wait();
@@ -219,33 +220,34 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     std::shared_ptr msgLatch = std::make_shared<faabric::util::Latch>(2, 1000);
 
     // This thread first receives, then sends.
-    std::jthread t([groupId, idxA, idxB, numMsg, isMessageOrderingOn, msgLatch] {
-        PointToPointBroker& broker = getPointToPointBroker();
+    std::jthread t(
+      [groupId, idxA, idxB, numMsg, isMessageOrderingOn, msgLatch] {
+          PointToPointBroker& broker = getPointToPointBroker();
 
-        std::vector<uint8_t> sendData;
-        std::vector<uint8_t> recvData;
+          std::vector<uint8_t> sendData;
+          std::vector<uint8_t> recvData;
 
-        for (int i = 0; i < numMsg; i++) {
-            recvData =
-              broker.recvMessage(groupId, idxA, idxB, isMessageOrderingOn);
-            sendData = std::vector<uint8_t>(3, i);
-            REQUIRE(recvData == sendData);
-        }
+          for (int i = 0; i < numMsg; i++) {
+              recvData =
+                broker.recvMessage(groupId, idxA, idxB, isMessageOrderingOn);
+              sendData = std::vector<uint8_t>(3, i);
+              REQUIRE(recvData == sendData);
+          }
 
-        msgLatch->wait();
+          msgLatch->wait();
 
-        for (int i = 0; i < numMsg; i++) {
-            sendData = std::vector<uint8_t>(3, i);
-            broker.sendMessage(groupId,
-                               idxB,
-                               idxA,
-                               sendData.data(),
-                               sendData.size(),
-                               isMessageOrderingOn);
-        }
+          for (int i = 0; i < numMsg; i++) {
+              sendData = std::vector<uint8_t>(3, i);
+              broker.sendMessage(groupId,
+                                 idxB,
+                                 idxA,
+                                 sendData.data(),
+                                 sendData.size(),
+                                 isMessageOrderingOn);
+          }
 
-        broker.resetThreadLocalCache();
-    });
+          broker.resetThreadLocalCache();
+      });
 
     std::vector<uint8_t> sendData;
     std::vector<uint8_t> recvData;

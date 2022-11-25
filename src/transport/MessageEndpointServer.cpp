@@ -24,8 +24,7 @@ MessageEndpointServerHandler::MessageEndpointServerHandler(
   , async(asyncIn)
   , inprocLabel(inprocLabelIn)
   , nThreads(nThreadsIn)
-{
-}
+{}
 
 void MessageEndpointServerHandler::start(int timeoutMs)
 {
