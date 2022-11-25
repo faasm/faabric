@@ -5,7 +5,7 @@
 namespace faabric::util {
 std::string randomString(int len)
 {
-    char result[len];
+    std::string result(len, '\0');
 
     static const char alphanum[] = "123456789"
                                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -23,7 +23,7 @@ std::string randomString(int len)
         result[i] = alphanum[r];
     }
 
-    return std::string(result, result + len);
+    return result;
 }
 
 std::string randomStringFromSet(const std::unordered_set<std::string>& s)

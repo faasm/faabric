@@ -17,14 +17,16 @@ void MessageEndpointClient::asyncSend(int header,
                                       google::protobuf::Message* msg,
                                       int sequenceNum)
 {
-    size_t msgSize = msg->ByteSizeLong();
-    uint8_t buffer[msgSize];
+    std::string buffer;
 
-    if (!msg->SerializeToArray(buffer, msgSize)) {
+    if (!msg->SerializeToString(&buffer)) {
         throw std::runtime_error("Error serialising message");
     }
 
-    asyncSend(header, buffer, msgSize, sequenceNum);
+    asyncSend(header,
+              reinterpret_cast<uint8_t*>(buffer.data()),
+              buffer.size(),
+              sequenceNum);
 }
 
 void MessageEndpointClient::asyncSend(int header,
@@ -39,13 +41,15 @@ void MessageEndpointClient::syncSend(int header,
                                      google::protobuf::Message* msg,
                                      google::protobuf::Message* response)
 {
-    size_t msgSize = msg->ByteSizeLong();
-    uint8_t buffer[msgSize];
-    if (!msg->SerializeToArray(buffer, msgSize)) {
+    std::string buffer;
+    if (!msg->SerializeToString(&buffer)) {
         throw std::runtime_error("Error serialising message");
     }
 
-    syncSend(header, buffer, msgSize, response);
+    syncSend(header,
+             reinterpret_cast<uint8_t*>(buffer.data()),
+             buffer.size(),
+             response);
 }
 
 void MessageEndpointClient::syncSend(int header,

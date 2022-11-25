@@ -6,20 +6,6 @@
         throw std::runtime_error("Error deserialising message");               \
     }
 
-#define SERIALISE_MSG(_msg)                                                    \
-    size_t serialisedSize = _msg.ByteSizeLong();                               \
-    uint8_t serialisedBuffer[serialisedSize];                                  \
-    if (!_msg.SerializeToArray(serialisedBuffer, serialisedSize)) {            \
-        throw std::runtime_error("Error serialising message");                 \
-    }
-
-#define SERIALISE_MSG_PTR(_msg)                                                \
-    size_t serialisedSize = _msg->ByteSizeLong();                              \
-    uint8_t serialisedBuffer[serialisedSize];                                  \
-    if (!_msg->SerializeToArray(serialisedBuffer, serialisedSize)) {           \
-        throw std::runtime_error("Error serialising message");                 \
-    }
-
 #define SEND_FB_MSG(T, _mb)                                                    \
     {                                                                          \
         const uint8_t* _buffer = _mb.GetBufferPointer();                       \

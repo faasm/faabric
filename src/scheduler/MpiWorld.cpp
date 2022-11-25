@@ -57,9 +57,18 @@ void MpiWorld::sendRemoteMpiMessage(
   int recvRank,
   const std::shared_ptr<faabric::MPIMessage>& msg)
 {
-    SERIALISE_MSG_PTR(msg);
+    std::string serialisedBuffer;
+    if (!msg->SerializeToString(&serialisedBuffer)) {
+        throw std::runtime_error("Error serialising message");
+    }
     broker.sendMessage(
-      id, sendRank, recvRank, serialisedBuffer, serialisedSize, dstHost, true);
+      id,
+      sendRank,
+      recvRank,
+      reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
+      serialisedBuffer.size(),
+      dstHost,
+      true);
 }
 
 std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(

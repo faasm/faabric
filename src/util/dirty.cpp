@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
@@ -590,8 +591,7 @@ void UffdDirtyTracker::eventThreadEntrypoint()
 {
     SPDLOG_TRACE(
       "Starting uffd event thread (uffd={}, closeFd={})", uffd, closeFd);
-    int nFds = 2;
-    struct pollfd pollfds[nFds];
+    std::array<struct pollfd, 2> pollfds;
 
     pollfds[0].fd = uffd;
     pollfds[0].events = POLLIN;
@@ -600,7 +600,7 @@ void UffdDirtyTracker::eventThreadEntrypoint()
     pollfds[1].events = POLLIN;
 
     for (;;) {
-        int nReady = poll(pollfds, nFds, -1);
+        int nReady = poll(pollfds.data(), pollfds.size(), -1);
         if (nReady == -1) {
             SPDLOG_ERROR("Poll failed: {} ({})", errno, strerror(errno));
             throw std::runtime_error("Poll failed");
