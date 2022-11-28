@@ -3,6 +3,7 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -17,9 +18,7 @@
 
 namespace faabric::transport {
 
-static std::unordered_map<int, std::shared_ptr<PointToPointGroup>> groups;
-
-static std::shared_mutex groupsMutex;
+static faabric::util::ConcurrentMap<int, std::shared_ptr<PointToPointGroup>> groups;
 
 // Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be closed
 // before the global context. However, in this case it's worth it to cache the
@@ -76,14 +75,14 @@ std::string getPointToPointKey(int groupId, int recvIdx)
 
 std::shared_ptr<PointToPointGroup> PointToPointGroup::getGroup(int groupId)
 {
-    faabric::util::SharedLock lock(groupsMutex);
+    auto group = groups.get(groupId);
 
-    if (groups.find(groupId) == groups.end()) {
+    if (!group.has_value()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
         throw std::runtime_error("Group ID not found on host");
     }
 
-    return groups.at(groupId);
+    return *group;
 }
 
 std::shared_ptr<PointToPointGroup> PointToPointGroup::getOrAwaitGroup(
@@ -96,43 +95,28 @@ std::shared_ptr<PointToPointGroup> PointToPointGroup::getOrAwaitGroup(
 
 bool PointToPointGroup::groupExists(int groupId)
 {
-    faabric::util::SharedLock lock(groupsMutex);
-    return groups.find(groupId) != groups.end();
+    return groups.contains(groupId);
 }
 
 void PointToPointGroup::addGroup(int appId, int groupId, int groupSize)
 {
-    faabric::util::FullLock lock(groupsMutex);
-
-    if (groups.find(groupId) == groups.end()) {
-        groups.emplace(std::make_pair(
-          groupId,
-          std::make_shared<PointToPointGroup>(appId, groupId, groupSize)));
-    }
+    groups.tryEmplaceShared(groupId, appId, groupId, groupSize);
 }
 
 void PointToPointGroup::addGroupIfNotExists(int appId,
                                             int groupId,
                                             int groupSize)
 {
-    if (groupExists(groupId)) {
-        return;
-    }
-
     addGroup(appId, groupId, groupSize);
 }
 
 void PointToPointGroup::clearGroup(int groupId)
 {
-    faabric::util::FullLock lock(groupsMutex);
-
     groups.erase(groupId);
 }
 
 void PointToPointGroup::clear()
 {
-    faabric::util::FullLock lock(groupsMutex);
-
     groups.clear();
 }
 
