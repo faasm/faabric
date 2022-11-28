@@ -816,7 +816,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
         std::string snapKey = "migration_" + std::to_string(msg.id());
         auto& reg = faabric::snapshot::getSnapshotRegistry();
         reg.registerSnapshot(snapKey, snap);
-        sch.getSnapshotClient(hostToMigrateTo).pushSnapshot(snapKey, snap);
+        sch.getSnapshotClient(hostToMigrateTo)->pushSnapshot(snapKey, snap);
         msg.set_snapshotkey(snapKey);
 
         // Propagate the id's and indices
