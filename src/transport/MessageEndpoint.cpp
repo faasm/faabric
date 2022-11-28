@@ -459,11 +459,12 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
                                                    size_t dataSize)
 {
     SPDLOG_TRACE("REQ {} ({} bytes)", address, dataSize);
-    sendMessage(header, data, dataSize);
+    auto ctx = createContext();
+    sendMessage(header, data, dataSize, NO_SEQUENCE_NUM, ctx.context);
 
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", address);
-    Message msg = recvMessage(false);
+    Message msg = recvMessage(false, ctx.context);
     if (msg.getResponseCode() != MessageResponseCode::SUCCESS) {
         SPDLOG_ERROR("Failed getting response on {}: code {}",
                      address,
