@@ -17,6 +17,18 @@
 
 namespace faabric::util {
 
+namespace detail {
+
+template<typename>
+struct is_shared_ptr : std::false_type
+{};
+
+template<typename Pointee>
+struct is_shared_ptr<std::shared_ptr<Pointee>> : std::true_type
+{};
+
+}
+
 // A thread-safe wrapper around a hashmap
 //
 // Supports heterogeneous lookup, e.g. Key==std::string, lookup with
@@ -138,6 +150,22 @@ class ConcurrentMap final
         FullLock lock{ mutex };
         auto [it, inserted] =
           map.try_emplace(std::forward<K>(key), std::forward<Args>(args)...);
+        return inserted;
+    }
+
+    // Constructs a <Key, Value(std::make_shared<>(args))> pair in the map if
+    // there isn't already one. Returns whether the insertion happened.
+    template<class K = Key, class... Args>
+    bool tryEmplaceShared(K&& key, Args&&... args)
+        requires detail::is_shared_ptr<Value>::value
+    {
+        FullLock lock{ mutex };
+        auto [it, inserted] =
+          map.try_emplace(std::forward<K>(key), std::nullptr_t);
+        if (inserted) {
+            it->second = std::make_shared<Value::element_type>(
+              std::forward<Args>(args)...);
+        }
         return inserted;
     }
 
