@@ -156,7 +156,7 @@ class ConcurrentMap final
     // Constructs a <Key, Value(std::make_shared<>(args))> pair in the map if
     // there isn't already one. Returns whether the insertion happened.
     template<class K = Key, class... Args>
-    bool tryEmplaceShared(K&& key, Args&&... args)
+    std::pair<bool, Value> tryEmplaceShared(K&& key, Args&&... args)
         requires detail::is_shared_ptr<Value>::value
     {
         FullLock lock{ mutex };
@@ -165,7 +165,7 @@ class ConcurrentMap final
             it->second = std::make_shared<typename Value::element_type>(
               std::forward<Args>(args)...);
         }
-        return inserted;
+        return std::make_pair(inserted, it->second);
     }
 
     // Constructs a <Key, Value(args)> pair in the map if there isn't already

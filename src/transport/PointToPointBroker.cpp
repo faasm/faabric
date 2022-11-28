@@ -37,7 +37,7 @@ static faabric::util::ConcurrentMap<
   endpoints;
 thread_local absl::flat_hash_set<std::string> threadEndpoints;
 
-thread_local std::unordered_map<std::string,
+static faabric::util::ConcurrentMap<std::string,
                                 std::shared_ptr<PointToPointClient>>
   clients;
 
@@ -54,16 +54,12 @@ thread_local std::vector<std::list<Message>> outOfOrderMsgs;
 
 static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
 {
-    // This map is thread-local so no locking required
-    if (clients.find(host) == clients.end()) {
-        clients.insert(
-          std::pair<std::string, std::shared_ptr<PointToPointClient>>(
-            host, std::make_shared<PointToPointClient>(host)));
-
+    auto client = clients.get(host).value_or(nullptr);
+    if (client == nullptr) {
+        client = clients.tryEmplaceShared(host, host).second;
         SPDLOG_TRACE("Created new point-to-point client {}", host);
     }
-
-    return clients.at(host);
+    return client;
 }
 
 std::string getPointToPointKey(int groupId, int sendIdx, int recvIdx)
@@ -809,7 +805,6 @@ void PointToPointBroker::resetThreadLocalCache()
         }
     }
     threadEndpoints.clear();
-    clients.clear();
 }
 
 PointToPointBroker& getPointToPointBroker()
