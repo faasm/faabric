@@ -38,7 +38,7 @@ static faabric::util::ConcurrentMap<
 thread_local absl::flat_hash_set<std::string> threadEndpoints;
 
 static faabric::util::ConcurrentMap<std::string,
-                                std::shared_ptr<PointToPointClient>>
+                                    std::shared_ptr<PointToPointClient>>
   clients;
 
 // Thread local data structures for in-order message delivery
