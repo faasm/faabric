@@ -1,3 +1,4 @@
+#include <chrono>
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
@@ -10,6 +11,7 @@
 #include <concepts>
 #include <optional>
 #include <stdexcept>
+#include <thread>
 #include <type_traits>
 #include <unistd.h>
 #include <variant>
@@ -88,6 +90,15 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn,
   : MessageEndpoint("tcp://" + hostIn + ":" + std::to_string(portIn),
                     timeoutMsIn)
 {}
+
+MessageEndpoint::~MessageEndpoint() {
+    if (socket.id != 0) {
+        if (lingerMs > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(lingerMs));
+        }
+        close();
+    }
+}
 
 std::string MessageEndpoint::getAddress()
 {
@@ -232,7 +243,7 @@ void MessageEndpoint::setUpSocket(SocketType socketType,
 
     nng_socket_set_ms(socket, NNG_OPT_RECVTIMEO, timeoutMs);
     nng_socket_set_ms(socket, NNG_OPT_SENDTIMEO, timeoutMs);
-    // TODO: implement linger
+    this->lingerMs = LINGER_MS;
 }
 
 void MessageEndpoint::sendMessage(uint8_t header,
@@ -245,6 +256,7 @@ void MessageEndpoint::sendMessage(uint8_t header,
     nng_msg* msg = nullptr;
     checkNngError(nng_msg_alloc(&msg, allocSize), "msg_alloc", address);
     uint8_t* buffer = reinterpret_cast<uint8_t*>(nng_msg_body(msg));
+    std::uninitialized_fill_n(buffer, HEADER_MSG_SIZE, uint8_t(0));
     faabric::util::unalignedWrite<uint8_t>(header, buffer);
     faabric::util::unalignedWrite<uint64_t>(static_cast<uint64_t>(dataSize),
                                             buffer + sizeof(uint8_t));
@@ -314,8 +326,7 @@ Message MessageEndpoint::recvMessage(bool async, std::optional<nng_ctx> context)
           HEADER_MSG_SIZE);
         throw std::runtime_error("Message too small");
     }
-    std::span<const uint8_t> dataBytes = msg.allData().subspan(
-      sizeof(uint8_t) + sizeof(uint64_t) + sizeof(int32_t));
+    std::span<const uint8_t> dataBytes = msg.udata();
 
     if (dataBytes.size_bytes() != msg.getDeclaredDataSize()) {
         SPDLOG_ERROR("Received a different number of bytes {} than specified "

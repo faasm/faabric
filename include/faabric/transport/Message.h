@@ -8,11 +8,15 @@
 #include <nng/nng.h>
 
 // The header structure is:
-// - Message code (uint8_t)
-// - Message body size (uint64_t)
-// - Message sequence number of in-order message delivery default -1 (int32_t)
+// 1 byte - Message code (uint8_t)
+// 8 bytes - Message body size (uint64_t)
+// 4 bytes - Message sequence number of in-order message delivery default -1
+// (int32_t) 3 bytes - Padding to 8-align the message contents
 #define NO_HEADER 0
-#define HEADER_MSG_SIZE (sizeof(uint8_t) + sizeof(uint64_t) + sizeof(int32_t))
+#define HEADER_MSG_SIZE                                                        \
+    (sizeof(uint8_t) + sizeof(uint64_t) + sizeof(int32_t) + 3)
+static_assert((HEADER_MSG_SIZE % 8) == 0,
+              "Message header size must be 8-aligned!");
 
 #define SHUTDOWN_HEADER 220
 static constexpr std::array<uint8_t, 4> shutdownPayload = { 0, 0, 1, 1 };

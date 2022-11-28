@@ -86,12 +86,7 @@ class MessageEndpoint
 
     MessageEndpoint(const MessageEndpoint& ctx) = delete;
 
-    virtual ~MessageEndpoint()
-    {
-        if (socket.id != 0) {
-            close();
-        }
-    }
+    virtual ~MessageEndpoint();
 
     std::string getAddress();
 
@@ -100,6 +95,7 @@ class MessageEndpoint
     const int timeoutMs = -1;
     const std::thread::id tid;
     const int id = -1;
+    int lingerMs = -1;
 
     nng_socket socket = NNG_SOCKET_INITIALIZER;
     std::variant<std::monostate, nng_dialer, nng_listener> connectionManager;
