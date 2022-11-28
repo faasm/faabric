@@ -1,3 +1,4 @@
+#include "faabric/transport/MessageEndpoint.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
@@ -8,7 +9,11 @@
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
+#include <absl/container/flat_hash_set.h>
+#include <atomic>
 #include <list>
+#include <string>
+#include <tuple>
 
 #define NO_LOCK_OWNER_IDX -1
 
@@ -18,21 +23,19 @@
 
 namespace faabric::transport {
 
-static faabric::util::ConcurrentMap<int, std::shared_ptr<PointToPointGroup>> groups;
+static faabric::util::ConcurrentMap<int, std::shared_ptr<PointToPointGroup>>
+  groups;
 
-// Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be closed
-// before the global context. However, in this case it's worth it to cache the
-// sockets across messages, as otherwise we'd be creating and destroying a lot
-// of them under high throughput. To ensure things are cleared up, see the
-// thread-local tidy-up message on this class and its usage in the rest of the
-// codebase.
-thread_local std::
-  unordered_map<std::string, std::unique_ptr<AsyncInternalRecvMessageEndpoint>>
-    recvEndpoints;
-
-thread_local std::
-  unordered_map<std::string, std::unique_ptr<AsyncInternalSendMessageEndpoint>>
-    sendEndpoints;
+// To ensure things are cleared up, see the thread-local tidy-up message on this
+// class and its usage in the rest of the codebase, the atomic int counts
+// threads with active references to an endpoint pair.
+static faabric::util::ConcurrentMap<
+  std::string,
+  std::shared_ptr<std::tuple<AsyncInternalRecvMessageEndpoint,
+                             AsyncInternalSendMessageEndpoint,
+                             std::atomic_int32_t>>>
+  endpoints;
+thread_local absl::flat_hash_set<std::string> threadEndpoints;
 
 thread_local std::unordered_map<std::string,
                                 std::shared_ptr<PointToPointClient>>
@@ -582,6 +585,31 @@ void PointToPointBroker::sendMessage(int groupId,
                 hostHint);
 }
 
+auto getEndpointPtrs(const std::string& label)
+{
+    auto maybeEndpoint = endpoints.get(label);
+    std::shared_ptr endpointPtrs = maybeEndpoint.value_or(nullptr);
+    if (!maybeEndpoint.has_value()) {
+        endpointPtrs = endpoints.tryEmplaceThenMutate(
+          label,
+          [&]<class T>(bool inserted, std::shared_ptr<T>& ptr) {
+              if (inserted) {
+                  ptr = std::make_shared<T>(label, label, 0);
+                  SPDLOG_TRACE("Created new internal endpoints: {}",
+                               std::get<0>(*ptr).getAddress());
+              }
+              // Ensure a copy and not a reference is returned
+              return std::shared_ptr(ptr);
+          },
+          nullptr);
+    }
+    auto& refcount = std::get<std::atomic_int32_t>(*endpointPtrs);
+    if (threadEndpoints.emplace(label).second) {
+        refcount.fetch_add(1);
+    }
+    return endpointPtrs;
+}
+
 void PointToPointBroker::sendMessage(int groupId,
                                      int sendIdx,
                                      int recvIdx,
@@ -609,14 +637,9 @@ void PointToPointBroker::sendMessage(int groupId,
     if (host == conf.endpointHost) {
         std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
-        // This map is thread-local so no locking required
-        if (sendEndpoints.find(label) == sendEndpoints.end()) {
-            sendEndpoints[label] =
-              std::make_unique<AsyncInternalSendMessageEndpoint>(label);
-
-            SPDLOG_TRACE("Created new internal send endpoint {}",
-                         sendEndpoints[label]->getAddress());
-        }
+        auto endpointPtrs = getEndpointPtrs(label);
+        auto& endpoint =
+          std::get<AsyncInternalSendMessageEndpoint>(*endpointPtrs);
 
         // When sending a local message, if called from the PTP server we
         // forward whatever sequence number the server passed, if called from
@@ -631,10 +654,9 @@ void PointToPointBroker::sendMessage(int groupId,
                      sendIdx,
                      recvIdx,
                      localSendSeqNum,
-                     sendEndpoints[label]->getAddress());
+                     endpoint.getAddress());
 
-        sendEndpoints[label]->send(
-          NO_HEADER, buffer, bufferSize, localSendSeqNum);
+        endpoint.send(NO_HEADER, buffer, bufferSize, localSendSeqNum);
 
     } else {
         auto cli = getClient(host);
@@ -665,15 +687,10 @@ Message PointToPointBroker::doRecvMessage(int groupId, int sendIdx, int recvIdx)
 {
     std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
-    // Note: this map is thread-local so no locking required
-    if (recvEndpoints.find(label) == recvEndpoints.end()) {
-        recvEndpoints[label] =
-          std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
-        SPDLOG_TRACE("Created new internal recv endpoint {}",
-                     recvEndpoints[label]->getAddress());
-    }
+    auto endpointPtrs = getEndpointPtrs(label);
+    auto& endpoint = std::get<AsyncInternalRecvMessageEndpoint>(*endpointPtrs);
 
-    return recvEndpoints[label]->recv();
+    return endpoint.recv();
 }
 
 std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
@@ -781,8 +798,17 @@ void PointToPointBroker::clear()
 void PointToPointBroker::resetThreadLocalCache()
 {
     SPDLOG_TRACE("Resetting point-to-point thread-local cache");
-    sendEndpoints.clear();
-    recvEndpoints.clear();
+    for (const std::string& key : threadEndpoints) {
+        auto maybeEndpointPtrs = endpoints.get(key);
+        if (maybeEndpointPtrs.has_value()) {
+            auto& endpointPtrs = *maybeEndpointPtrs;
+            auto& refcount = std::get<std::atomic_int32_t>(*endpointPtrs);
+            if (refcount.fetch_sub(1) <= 1) {
+                endpoints.erase(key);
+            }
+        }
+    }
+    threadEndpoints.clear();
     clients.clear();
 }
 

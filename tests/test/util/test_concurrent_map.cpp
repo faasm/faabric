@@ -148,7 +148,7 @@ TEST_CASE("Test insertion from many threads", "[util][concurrent_map]")
     REQUIRE(map.isEmpty());
     std::vector<std::jthread> workers;
     for (int thread = 0; thread < nThreads; thread++) {
-        workers.emplace_back([nThreads, thread, nValues, &map]() {
+        workers.emplace_back([thread, &map]() {
             for (int i = 0; i < nValues; i++) {
                 map.tryEmplace(nThreads * i + thread, i);
             }

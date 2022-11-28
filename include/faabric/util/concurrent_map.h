@@ -160,10 +160,9 @@ class ConcurrentMap final
         requires detail::is_shared_ptr<Value>::value
     {
         FullLock lock{ mutex };
-        auto [it, inserted] =
-          map.try_emplace(std::forward<K>(key), std::nullptr_t);
+        auto [it, inserted] = map.try_emplace(std::forward<K>(key), nullptr);
         if (inserted) {
-            it->second = std::make_shared<Value::element_type>(
+            it->second = std::make_shared<typename Value::element_type>(
               std::forward<Args>(args)...);
         }
         return inserted;
@@ -271,9 +270,9 @@ class ConcurrentMap final
     void eraseIf(F predicate)
     {
         FullLock lock{ mutex };
-        map.erase_if([&](typename UnderlyingMap::iterator it) {
-            const Key& key = it->first;
-            const Value& value = it->second;
+        absl::erase_if(map, [&](const typename UnderlyingMap::value_type& it) {
+            const Key& key = it.first;
+            const Value& value = it.second;
             return std::invoke(predicate, key, value);
         });
     }
