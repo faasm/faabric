@@ -1,3 +1,4 @@
+#include "faabric/transport/Message.h"
 #include "faabric/transport/MessageEndpoint.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -12,6 +13,8 @@
 #include <absl/container/flat_hash_set.h>
 #include <atomic>
 #include <list>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 
@@ -31,8 +34,8 @@ static faabric::util::ConcurrentMap<int, std::shared_ptr<PointToPointGroup>>
 // threads with active references to an endpoint pair.
 static faabric::util::ConcurrentMap<
   std::string,
-  std::shared_ptr<std::tuple<AsyncInternalRecvMessageEndpoint,
-                             AsyncInternalSendMessageEndpoint,
+  std::shared_ptr<std::tuple<std::unique_ptr<AsyncInternalRecvMessageEndpoint>,
+                             std::unique_ptr<AsyncInternalSendMessageEndpoint>,
                              std::atomic_int32_t>>>
   endpoints;
 thread_local absl::flat_hash_set<std::string> threadEndpoints;
@@ -590,9 +593,15 @@ auto getEndpointPtrs(const std::string& label)
           label,
           [&]<class T>(bool inserted, std::shared_ptr<T>& ptr) {
               if (inserted) {
-                  ptr = std::make_shared<T>(label, label, 0);
+                  ptr = std::make_shared<T>(nullptr, nullptr, 0);
+                  // Tuple construction order is unspecified, so make sure to
+                  // create recv before send.
+                  std::get<0>(*ptr) =
+                    std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
+                  std::get<1>(*ptr) =
+                    std::make_unique<AsyncInternalSendMessageEndpoint>(label);
                   SPDLOG_TRACE("Created new internal endpoints: {}",
-                               std::get<0>(*ptr).getAddress());
+                               std::get<0>(*ptr)->getAddress());
               }
               // Ensure a copy and not a reference is returned
               return std::shared_ptr(ptr);
@@ -635,7 +644,8 @@ void PointToPointBroker::sendMessage(int groupId,
 
         auto endpointPtrs = getEndpointPtrs(label);
         auto& endpoint =
-          std::get<AsyncInternalSendMessageEndpoint>(*endpointPtrs);
+          *std::get<std::unique_ptr<AsyncInternalSendMessageEndpoint>>(
+            *endpointPtrs);
 
         // When sending a local message, if called from the PTP server we
         // forward whatever sequence number the server passed, if called from
@@ -684,7 +694,9 @@ Message PointToPointBroker::doRecvMessage(int groupId, int sendIdx, int recvIdx)
     std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
     auto endpointPtrs = getEndpointPtrs(label);
-    auto& endpoint = std::get<AsyncInternalRecvMessageEndpoint>(*endpointPtrs);
+    auto& endpoint =
+      *std::get<std::unique_ptr<AsyncInternalRecvMessageEndpoint>>(
+        *endpointPtrs);
 
     return endpoint.recv();
 }
@@ -733,6 +745,19 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
           expectedSeqNum);
         // Receive from the transport layer
         Message recvMsg = doRecvMessage(groupId, sendIdx, recvIdx);
+
+        // If the receive was not successful, exit the loop
+        if (recvMsg.getResponseCode() !=
+            faabric::transport::MessageResponseCode::SUCCESS) {
+            SPDLOG_WARN(
+              "Error {} when awaiting a message ({}:{} seq: {} label: {})",
+              static_cast<int>(recvMsg.getResponseCode()),
+              sendIdx,
+              recvIdx,
+              expectedSeqNum,
+              getPointToPointKey(groupId, sendIdx, recvIdx));
+            throw std::runtime_error("Error when awaiting a PTP message");
+        }
 
         // If the sequence numbers match, exit the loop
         int seqNum = recvMsg.getSequenceNum();

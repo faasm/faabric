@@ -91,8 +91,11 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn,
                     timeoutMsIn)
 {}
 
-MessageEndpoint::~MessageEndpoint() {
+MessageEndpoint::~MessageEndpoint()
+{
     if (socket.id != 0) {
+        SPDLOG_TRACE(
+          "Closing message endpoint {}, lingering {} ms", address, lingerMs);
         if (lingerMs > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(lingerMs));
         }
@@ -210,6 +213,9 @@ void MessageEndpoint::setUpSocket(SocketType socketType,
                       [&]() { return nng_req0_open(&socket); },
                       "connect",
                       address);
+                    // Make sure to basically never resend messages
+                    nng_socket_set_ms(
+                      socket, NNG_OPT_REQ_RESENDTIME, 60'000'000);
                     break;
                 }
                 case SocketType::sub: {
@@ -243,7 +249,9 @@ void MessageEndpoint::setUpSocket(SocketType socketType,
 
     nng_socket_set_ms(socket, NNG_OPT_RECVTIMEO, timeoutMs);
     nng_socket_set_ms(socket, NNG_OPT_SENDTIMEO, timeoutMs);
-    this->lingerMs = LINGER_MS;
+    if (!address.starts_with("inproc:")) {
+        this->lingerMs = LINGER_MS;
+    }
 }
 
 void MessageEndpoint::sendMessage(uint8_t header,
@@ -594,7 +602,7 @@ AsyncInternalRecvMessageEndpoint::AsyncInternalRecvMessageEndpoint(
 Message AsyncInternalRecvMessageEndpoint::recv()
 {
     SPDLOG_TRACE("PULL {}", address);
-    return RecvMessageEndpoint::recv();
+    return RecvMessageEndpoint::recvMessage(true);
 }
 
 // ----------------------------------------------
