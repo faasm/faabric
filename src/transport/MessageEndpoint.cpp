@@ -94,8 +94,6 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn,
 MessageEndpoint::~MessageEndpoint()
 {
     if (socket.id != 0) {
-        SPDLOG_TRACE(
-          "Closing message endpoint {}, lingering {} ms", address, lingerMs);
         if (lingerMs > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(lingerMs));
         }
