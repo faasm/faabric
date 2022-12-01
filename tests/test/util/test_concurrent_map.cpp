@@ -29,9 +29,20 @@ TEST_CASE("Test basic map operations in a single thread",
     REQUIRE(map.capacity() >= initialCapacity);
     REQUIRE(map.sortedKvPairs().empty());
 
+    map.reserve(2 * initialCapacity);
+    REQUIRE(map.capacity() >= 2 * initialCapacity);
+
     REQUIRE(map.insert(std::make_pair(1, 10)));
     REQUIRE(!map.insert(std::make_pair(1, 20))); // no-op
     REQUIRE(map.insert(std::make_pair(3, 30)));
+
+    REQUIRE(!map.isEmpty());
+    REQUIRE(map.size() == 2);
+    REQUIRE_THAT(
+      map.sortedKvPairs(),
+      Equals(std::vector<std::pair<int, int>>{ { 1, 10 }, { 3, 30 } }));
+
+    map.rehash(0);
 
     REQUIRE(!map.isEmpty());
     REQUIRE(map.size() == 2);
@@ -58,13 +69,21 @@ TEST_CASE("Test basic map operations in a single thread",
                  Equals(std::vector<std::pair<int, int>>{
                    { 1, 20 }, { 2, 20 }, { 3, 30 }, { 4, 40 }, { 5, 50 } }));
 
+    map.erase(1);
+
+    REQUIRE(!map.isEmpty());
+    REQUIRE(map.size() == 4);
+    REQUIRE_THAT(map.sortedKvPairs(),
+                 Equals(std::vector<std::pair<int, int>>{
+                   { 2, 20 }, { 3, 30 }, { 4, 40 }, { 5, 50 } }));
+
     int called = 0;
     map.tryEmplaceThenMutate(
       1,
       [&](bool placed, int& val) {
           called++;
-          REQUIRE(!placed);
-          REQUIRE(val == 20);
+          REQUIRE(placed);
+          REQUIRE(val == 0);
           val = 10;
       },
       0);
@@ -133,9 +152,21 @@ TEST_CASE("Test basic map operations in a single thread",
         value /= 10;
     });
     REQUIRE(called == 5);
+    REQUIRE(map.size() == 5);
     REQUIRE_THAT(map.sortedKvPairs(),
                  Equals(std::vector<std::pair<int, int>>{
                    { 1, 1 }, { 2, 2 }, { 3, 3 }, { 4, 4 }, { 5, 5 } }));
+
+    map.eraseIf([](const int& key, const int& value) { return key <= 3; });
+    REQUIRE(map.size() == 2);
+    REQUIRE_THAT(
+      map.sortedKvPairs(),
+      Equals(std::vector<std::pair<int, int>>{ { 4, 4 }, { 5, 5 } }));
+
+    map.clear();
+    REQUIRE(map.isEmpty());
+    REQUIRE(map.size() == 0);
+    REQUIRE(map.sortedKvPairs().empty());
 }
 
 TEST_CASE("Test insertion from many threads", "[util][concurrent_map]")
