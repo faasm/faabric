@@ -1,11 +1,11 @@
 #pragma once
 
+#include <nng/nng.h>
 #include <span>
 #include <string>
 #include <vector>
 
 #include <faabric/util/bytes.h>
-#include <nng/nng.h>
 
 // The header structure is:
 // 1 byte - Message code (uint8_t)
@@ -106,7 +106,7 @@ class Message final
 
     std::vector<uint8_t> dataCopy() const;
 
-    uint8_t getHeader() const
+    uint8_t getMessageCode() const
     {
         return nngMsg == nullptr ? 0 : allData().data()[0];
     }

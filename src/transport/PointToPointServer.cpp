@@ -21,7 +21,7 @@ PointToPointServer::PointToPointServer()
 
 void PointToPointServer::doAsyncRecv(transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     int sequenceNum = message.getSequenceNum();
     switch (header) {
         case (faabric::transport::PointToPointCall::MESSAGE): {
@@ -70,7 +70,7 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
 std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
   transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     switch (header) {
         case (faabric::transport::PointToPointCall::MAPPING): {
             return doRecvMappings(message.udata());

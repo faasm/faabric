@@ -1,4 +1,3 @@
-#include <chrono>
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
@@ -8,6 +7,7 @@
 #include <faabric/util/macros.h>
 
 #include <array>
+#include <chrono>
 #include <concepts>
 #include <optional>
 #include <stdexcept>
@@ -343,11 +343,11 @@ Message MessageEndpoint::recvMessage(bool async, std::optional<nng_ctx> context)
     }
 
     SPDLOG_TRACE("Received message with header {} size {} on {}",
-                 msg.getHeader(),
+                 msg.getMessageCode(),
                  msg.udata().size(),
                  getAddress());
 
-    if (msg.getHeader() == SHUTDOWN_HEADER) {
+    if (msg.getMessageCode() == SHUTDOWN_HEADER) {
         if (std::equal(dataBytes.begin(),
                        dataBytes.end(),
                        shutdownPayload.cbegin(),
@@ -378,6 +378,8 @@ MessageContext MessageEndpoint::createContext()
 
 void MessageEndpoint::close()
 {
+    // Switch depending on the type in the variant, closing the dialer or
+    // listener depending on which one this socket was opened with.
     std::visit(
       [](auto&& value) {
           // see example at

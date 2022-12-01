@@ -34,7 +34,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
 
     // Receive message
     faabric::transport::Message recvMsg = dst.recv();
-    REQUIRE(recvMsg.getHeader() == dummyHeader);
+    REQUIRE(recvMsg.getMessageCode() == dummyHeader);
     REQUIRE(recvMsg.data().size() == expectedMsg.size());
     std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
     REQUIRE(actualMsg == expectedMsg);
@@ -145,7 +145,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         if ((i % (numMessages / 10)) == 0) {
             std::string expectedMsg = baseMsg + std::to_string(i);
             REQUIRE(recvMsg.data().size() == expectedMsg.size());
-            REQUIRE(recvMsg.getHeader() == dummyHeader);
+            REQUIRE(recvMsg.getMessageCode() == dummyHeader);
             std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
             REQUIRE(actualMsg == expectedMsg);
         }
@@ -187,7 +187,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
         // Check just a subset of the messages
         if ((i % (numMessages / 10)) == 0) {
             REQUIRE(recvMsg.data().size() == expectedMsg.size());
-            REQUIRE(recvMsg.getHeader() == dummyHeader);
+            REQUIRE(recvMsg.getMessageCode() == dummyHeader);
             std::string actualMsg(recvMsg.data().begin(), recvMsg.data().end());
             REQUIRE(actualMsg == expectedMsg);
         }
@@ -258,7 +258,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test direct messaging", "[transport]")
     std::string actual;
     faabric::transport::Message recvMsg = receiver.recv();
 
-    REQUIRE(recvMsg.getHeader() == dummyHeader);
+    REQUIRE(recvMsg.getMessageCode() == dummyHeader);
 
     actual = std::string(recvMsg.data().begin(), recvMsg.data().end());
     REQUIRE(actual == expected);

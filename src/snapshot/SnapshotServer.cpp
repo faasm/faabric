@@ -27,7 +27,7 @@ SnapshotServer::SnapshotServer()
 
 void SnapshotServer::doAsyncRecv(transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     switch (header) {
         case faabric::snapshot::SnapshotCalls::DeleteSnapshot: {
             recvDeleteSnapshot(message.udata());
@@ -43,7 +43,7 @@ void SnapshotServer::doAsyncRecv(transport::Message& message)
 std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
   transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     switch (header) {
         case faabric::snapshot::SnapshotCalls::PushSnapshot: {
             return recvPushSnapshot(message.udata());

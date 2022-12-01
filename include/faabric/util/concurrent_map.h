@@ -1,19 +1,18 @@
 #pragma once
 
+#include <absl/container/flat_hash_map.h>
+#include <boost/type_traits.hpp>
 #include <concepts>
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 
 #include <faabric/util/locks.h>
-
-#include <absl/container/flat_hash_map.h>
-#include <boost/type_traits.hpp>
-#include <shared_mutex>
-#include <utility>
 
 namespace faabric::util {
 
@@ -29,15 +28,17 @@ struct is_shared_ptr<std::shared_ptr<Pointee>> : std::true_type
 
 }
 
-// A thread-safe wrapper around a hashmap
-//
-// Supports heterogeneous lookup, e.g. Key==std::string, lookup with
-// std::string_view
-//
-// Most such maps in faasm/faabric don't need to scale to many writers, so for
-// simplicity a shared_mutex is simply used instead of a more sophisticated
-// lock-free structure, but the underlying map could be swapped in the future if
-// needed.
+/*
+ * A thread-safe wrapper around a hashmap
+ *
+ * Supports heterogeneous lookup, e.g. Key==std::string, lookup with
+ * std::string_view
+ *
+ * Most such maps in faasm/faabric don't need to scale to many writers, so for
+ * simplicity a shared_mutex is simply used instead of a more sophisticated
+ * lock-free structure, but the underlying map could be swapped in the future if
+ * needed.
+ */
 template<class Key, class Value>
 class ConcurrentMap final
 {
@@ -82,21 +83,25 @@ class ConcurrentMap final
         SharedLock lock{ mutex };
         return map.empty();
     }
+
     size_t size() const
     {
         SharedLock lock{ mutex };
         return map.size();
     }
+
     size_t capacity() const
     {
         SharedLock lock{ mutex };
         return map.capacity();
     }
+
     void reserve(size_t count)
     {
         FullLock lock{ mutex };
         map.reserve(count);
     }
+
     // Rehashes the `flat_hash_map`, setting the number of slots to be at least
     // the passed value. Pass 0 to force a simple rehash.
     void rehash(size_t count)

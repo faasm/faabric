@@ -70,9 +70,10 @@ class MessageContext final
     nng_ctx context = NNG_CTX_INITIALIZER;
 };
 
-// Note: sockets must be open-ed and close-ed from the _same_ thread. In a given
-// communication group, one socket may bind, and all the rest must connect.
-// Order does not matter.
+// Note: In a given communication group, one socket may bind, and all the rest
+// must connect. The bound socket should be created before the connecting
+// sockets, otherwise the first sendMessage call will block, waiting for the
+// socket to connect.
 class MessageEndpoint
 {
   public:
@@ -81,7 +82,7 @@ class MessageEndpoint
     MessageEndpoint(const std::string& addressIn, int timeoutMsIn);
 
     // Delete assignment and copy-constructor as we need to be very careful with
-    // scoping and same-thread instantiation
+    // scoping.
     MessageEndpoint& operator=(const MessageEndpoint&) = delete;
 
     MessageEndpoint(const MessageEndpoint& ctx) = delete;

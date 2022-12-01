@@ -1,7 +1,7 @@
-#include "faabric/transport/Message.h"
-#include "faabric/transport/MessageEndpoint.h"
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/Message.h>
+#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/bytes.h>
@@ -584,6 +584,10 @@ void PointToPointBroker::sendMessage(int groupId,
                 hostHint);
 }
 
+// Gets or creates a pair of inproc endpoints (recv&send) in the endpoints map.
+// Ensures the receiving endpoint gets created first. A reference counter is
+// also allocated with the pair to keep track of how many threads are using the
+// endpoint pair for cleanup later.
 auto getEndpointPtrs(const std::string& label)
 {
     auto maybeEndpoint = endpoints.get(label);

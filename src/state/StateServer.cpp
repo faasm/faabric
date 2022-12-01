@@ -29,7 +29,7 @@ void StateServer::doAsyncRecv(transport::Message& message)
 std::unique_ptr<google::protobuf::Message> StateServer::doSyncRecv(
   transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     switch (header) {
         case faabric::state::StateCalls::Pull: {
             return recvPull(message.udata());

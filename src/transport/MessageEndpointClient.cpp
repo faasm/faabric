@@ -1,5 +1,5 @@
-#include "faabric/util/testing.h"
 #include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/util/testing.h>
 #include <optional>
 
 namespace faabric::transport {
