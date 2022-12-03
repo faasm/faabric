@@ -1615,11 +1615,7 @@ void Scheduler::addPendingMigration(
 
     auto msg = pMigration->migrations().at(0).msg();
     if (pendingMigrations.find(msg.appid()) != pendingMigrations.end()) {
-        SPDLOG_ERROR("Received remote request to add a pending migration for "
-                     "app {}, but already recorded another migration request"
-                     " for the same app.",
-                     msg.appid());
-        throw std::runtime_error("Remote request for app already there");
+        SPDLOG_TRACE("Overwriting pending migration for app {}", msg.appid());
     }
 
     pendingMigrations[msg.appid()] = pMigration;
@@ -1646,13 +1642,13 @@ Scheduler::doCheckForMigrationOpportunities(
         auto req = app.second.first;
         auto originalDecision = *app.second.second;
 
-        // If we have already recorded a pending migration for this req,
-        // skip
+        // At every migration check period we overwrite _all_ pending
+        // migrations. Otherwise, pending migrations may become stale: the free
+        // slots that they used can be taken up. Overwritting them is not a
+        // catch-all neither, as slots can be occupied between migration checks
         if (getPendingAppMigrations(originalDecision.appId) != nullptr) {
-            SPDLOG_TRACE("Skipping app {} as migration opportunity has "
-                         "already been recorded",
+            SPDLOG_TRACE("Overwriting migration opportunity for app {}",
                          originalDecision.appId);
-            continue;
         }
 
         faabric::PendingMigrations msg;

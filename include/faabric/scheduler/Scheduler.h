@@ -340,7 +340,8 @@ class Scheduler
     std::shared_ptr<faabric::PendingMigrations> getPendingAppMigrations(
       uint32_t appId);
 
-    void addPendingMigration(std::shared_ptr<faabric::PendingMigrations> msg);
+    void addPendingMigration(
+      std::shared_ptr<faabric::PendingMigrations> pMigration);
 
     void removePendingMigration(uint32_t appId);
 
