@@ -1562,30 +1562,52 @@ void FunctionMigrationThread::doWork()
     getScheduler().checkForMigrationOpportunities();
 }
 
+// We check for migration opportunities for all apps for which this host is the
+// main host. Yet, all hosts executing a function in the app must be aware of
+// the most up to date migration for it. This method periodically checks if
+// the scheduling for the app could be improved according to a scheduling
+// policy. At each check period, it will update the pending migrations it has
+// detected and notify all hosts involved. A notification might be an update,
+// or a removal
 void Scheduler::checkForMigrationOpportunities()
 {
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-      tmpPendingMigrations;
+    std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
+      newPendingMigrations;
 
     {
         // Acquire a shared lock to read from the in-flight requests map
         faabric::util::SharedLock lock(mx);
 
-        tmpPendingMigrations = doCheckForMigrationOpportunities();
+        newPendingMigrations = doCheckForMigrationOpportunities();
     }
 
     {
         // Acquire full lock to write to the pending migrations map
         faabric::util::FullLock lock(mx);
 
-        // Remove existing pending migrations
+        // We need to remove all the pending migrations that are now stale.
+        // This is, the pending migrations that we had recorded, but we have
+        // not detected now
+        for (auto [appId, msgPtr] : pendingMigrations) {
+            if (newPendingMigrations.find(appId) == newPendingMigrations.end()) {
+                SPDLOG_INFO("Removing migration opportunity for app: {}", appId);
+                broadcastRemovePendingMigrations(msgPtr);
+            }
+        }
+
+        // Now it is safe to clear the existing pending migrations, as they
+        // only contain either stale migrations, or migrations that we have
+        // captured in the new check
         pendingMigrations.clear();
 
-        for (auto msgPtr : tmpPendingMigrations) {
+        // TODO - we could be smarter here, and only broadcast pending
+        // migrations that have actually changed
+        for (auto [appId, msgPtr] : newPendingMigrations) {
             // First, broadcast the pending migrations to other hosts
+            SPDLOG_INFO("Broadcasting migration opportunity for app: {}", appId);
             broadcastPendingMigrations(msgPtr);
             // Second, update our local records
-            pendingMigrations[msgPtr->appid()] = std::move(msgPtr);
+            pendingMigrations[appId] = std::move(msgPtr);
         }
     }
 }
@@ -1754,12 +1776,12 @@ bool Scheduler::doReserveSlotsForPendingMigrations(int numSlots) {
     return false;
 }
 
-std::vector<std::shared_ptr<faabric::PendingMigrations>>
+std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
 Scheduler::doCheckForMigrationOpportunities(
   faabric::util::MigrationStrategy migrationStrategy)
 {
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-      pendingMigrationsVec;
+    std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
+      newPendingMigrations;
 
     // For each in-flight request that has opted in to be migrated,
     // check if there is an opportunity to migrate
@@ -1844,8 +1866,8 @@ Scheduler::doCheckForMigrationOpportunities(
         }
 
         if (msg.migrations_size() > 0) {
-            pendingMigrationsVec.emplace_back(
-              std::make_shared<faabric::PendingMigrations>(msg));
+            newPendingMigrations[msg.appid()] =
+              std::make_shared<faabric::PendingMigrations>(msg);
             SPDLOG_DEBUG("Detected migration opportunity for app: {} (gid: {})",
                          msg.appid(), msg.groupid());
         } else {
@@ -1854,7 +1876,7 @@ Scheduler::doCheckForMigrationOpportunities(
         }
     }
 
-    return pendingMigrationsVec;
+    return newPendingMigrations;
 }
 
 // Start the function migration thread if necessary

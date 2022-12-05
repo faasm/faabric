@@ -429,11 +429,11 @@ class Scheduler
 
     // ---- Function migration ----
     FunctionMigrationThread functionMigrationThread;
-    std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
-    std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
+    std::map<uint32_t, InFlightPair> inFlightRequests;
+    std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
       pendingMigrations;
 
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
+    std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
     doCheckForMigrationOpportunities(
       faabric::util::MigrationStrategy migrationStrategy =
         faabric::util::MigrationStrategy::BIN_PACK);
