@@ -63,6 +63,14 @@ message FunctionStatusResponse {
     FunctionStatus status = 1;
 }
 
+message ReserveSlotsRequest {
+    int32 slots = 1;
+}
+
+message ReserveSlotsResponse {
+    bool success = 1;
+}
+
 // ---------------------------------------------
 // MPI
 // ---------------------------------------------

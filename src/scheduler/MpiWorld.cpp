@@ -102,6 +102,8 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     return unackedMessageBuffers[index];
 }
 
+// Create the MPI world. This method is executed once per MPI world by the
+// first message (usually rank 0)
 void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 {
     id = newId;
@@ -112,6 +114,14 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     size = newSize;
 
     auto& sch = faabric::scheduler::getScheduler();
+
+    // Set the parameters for the calling message as sanity check
+    call.set_ismpi(true);
+    call.set_mpirank(0);
+    call.set_mpiworldid(id);
+    call.set_mpiworldsize(size);
+    call.set_groupid(call.mpiworldid());
+    call.set_groupidx(call.mpirank());
 
     // Dispatch all the chained calls. With the master being rank zero, we want
     // to spawn (size - 1) new functions starting with rank 1
@@ -1391,7 +1401,7 @@ void MpiWorld::barrier(int thisRank)
     if (thisRank == localLeader && hasBeenMigrated) {
         hasBeenMigrated = false;
         if (thisRankMsg != nullptr) {
-            faabric::scheduler::getScheduler().removePendingMigration(
+            faabric::scheduler::getScheduler().removePendingMigrations(
               thisRankMsg->appid());
         } else {
             SPDLOG_ERROR("App has been migrated but rank ({}) message not set",

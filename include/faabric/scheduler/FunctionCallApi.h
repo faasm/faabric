@@ -8,6 +8,8 @@ enum FunctionCalls
     Flush = 2,
     Unregister = 3,
     GetResources = 4,
-    PendingMigrations = 5
+    PendingMigrations = 5,
+    RemovePendingMigrations = 6,
+    ReserveSlots = 7
 };
 }

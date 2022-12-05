@@ -23,7 +23,6 @@
 #include <sys/eventfd.h>
 #include <sys/file.h>
 #include <sys/syscall.h>
-
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
@@ -627,7 +626,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
-    bool isMaster = thisHost == firstMsg.masterhost();
+    bool isMain = thisHost == firstMsg.masterhost();
     bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
 
     if (decision.hosts.size() != nMessages) {
@@ -666,8 +665,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         }
     }
 
-    // Record in-flight request if function desires to be migrated
-    if (!isMigration && firstMsg.migrationcheckperiod() > 0) {
+    // Record in-flight request if function desires to be migrated. Note that
+    // we only check for migration oportunities of applications for which we
+    // are the main host
+    if (isMain && !isMigration && firstMsg.migrationcheckperiod() > 0) {
         doStartFunctionMigrationThread(req, decision);
     }
 
@@ -685,7 +686,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
         // Mark the request as being single-host if necessary
         if (conf.noSingleHostOptimisations == 0) {
             std::set<std::string> thisHostUniset = { thisHost };
-            isSingleHost = (uniqueHosts == thisHostUniset) && isMaster;
+            isSingleHost = (uniqueHosts == thisHostUniset) && isMain;
             req->set_singlehost(isSingleHost);
         }
 
@@ -811,9 +812,12 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                          nMessages,
                          funcStr);
 
-            // Update slots
-            this->thisHostUsedSlots.fetch_add(thisHostIdxs.size(),
-                                              std::memory_order_acquire);
+            // Update slots. If we are migrating, we have already added the
+            // used slots preemptively through a reservation
+            if (!isMigration) {
+                this->thisHostUsedSlots.fetch_add(thisHostIdxs.size(),
+                                                  std::memory_order_acquire);
+            }
 
             if (isThreads) {
                 // Threads use the existing executor. We assume there's only
@@ -1129,6 +1133,12 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     std::string key = msg.resultkey();
     if (key.empty()) {
         throw std::runtime_error("Result key empty. Cannot publish result");
+    }
+
+    // Remove the app from in-flight map if still there, and this host is the
+    // master host for the message
+    if (msg.masterhost() == thisHost) {
+        removePendingMigrations(msg.appid());
     }
 
     // Write the successful result to the result queue
@@ -1564,10 +1574,12 @@ void Scheduler::checkForMigrationOpportunities()
         tmpPendingMigrations = doCheckForMigrationOpportunities();
     }
 
-    // If we find migration opportunites
-    if (tmpPendingMigrations.size() > 0) {
+    {
         // Acquire full lock to write to the pending migrations map
         faabric::util::FullLock lock(mx);
+
+        // Remove existing pending migrations
+        pendingMigrations.clear();
 
         for (auto msgPtr : tmpPendingMigrations) {
             // First, broadcast the pending migrations to other hosts
@@ -1590,43 +1602,156 @@ void Scheduler::broadcastPendingMigrations(
     registeredHosts.erase(thisHost);
 
     // Send pending migrations to all involved hosts
-    for (auto& otherHost : thisRegisteredHosts) {
-        getFunctionCallClient(otherHost)->sendPendingMigrations(
+    for (const auto& otherHost : thisRegisteredHosts) {
+        getFunctionCallClient(otherHost).sendPendingMigrations(
           pendingMigrations);
     }
 }
 
-std::shared_ptr<faabric::PendingMigrations> Scheduler::getPendingAppMigrations(
-  uint32_t appId)
+void Scheduler::broadcastRemovePendingMigrations(
+  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
 {
+    // Get all hosts for the to-be migrated app
+    auto msg = pendingMigrations->migrations().at(0).msg();
+    const std::set<std::string>& thisRegisteredHosts =
+      getFunctionRegisteredHosts(msg.user(), msg.function(), false);
+
+    // Remove this host from the set
+    registeredHosts.erase(thisHost);
+
+    // Send pending migrations to all involved hosts
+    for (const auto& otherHost : thisRegisteredHosts) {
+        getFunctionCallClient(otherHost).sendRemovePendingMigrations(
+          pendingMigrations);
+    }
+}
+
+// This method checks if the specified app can be migrated according to a
+// pending migration. We detect migration opportunities in the background, and
+// it may happen that the opportunities are not there by the time we try to
+// execute them. This method is called right before running the migration, and
+// makes sure that the migration can actually be executed by reserving slots
+// in the destination hosts
+std::shared_ptr<faabric::PendingMigrations> Scheduler::getPendingAppMigrations(
+  uint32_t appId, uint32_t groupId, uint32_t groupIdx)
+{
+    // First, just check if the app can be migrated at all
     faabric::util::SharedLock lock(mx);
 
     if (pendingMigrations.find(appId) == pendingMigrations.end()) {
         return nullptr;
     }
 
-    return pendingMigrations[appId];
+    return pendingMigrations.at(appId);
 }
 
-void Scheduler::addPendingMigration(
+/* TODO: this is a quite complex way to avoid a race condition where the
+ * migration opportunity has been taken up by a new incoming request.
+    auto group = faabric::transport::PointToPointGroup::getGroup(groupId);
+
+    // If we are not the master index, wait for the master to work out if the
+    // migration can take place or not
+    if (groupIdx != POINT_TO_POINT_MASTER_IDX) {
+        // Hit a barrier until the master finishes
+        group->barrier(groupIdx);
+
+        // Then check whether the migration can move forward or not
+        faabric::util::SharedLock lock(mx);
+
+        if (pendingMigrations.find(appId) == pendingMigrations.end()) {
+            return nullptr;
+        }
+
+        return pendingMigrations.at(appId);
+    }
+
+    // If we are the master index, acquire a write lock to
+    faabric::util::FullLock lock(mx);
+
+    if (pendingMigrations.find(appId) == pendingMigrations.end()) {
+        throw std::runtime_error(fmt::format("Can't find pending migration for app: {}", appId));
+    }
+    auto pMigration = pendingMigrations.at(appId);
+
+    // For each host we are gonna migrate to, we send a reservation request
+    // for as many functions we want to migrate. If the receiving host
+    // accepts, then we are guaranteed that the slots will be free by the
+    // time we migrate
+    std::map<std::string, int> dstHostCount;
+    for (int i = 0; i < pMigration->migrations_size(); i++) {
+        auto m = pMigration->mutable_migrations()->at(i);
+        // We just book one slot where we are migrating to, we don't vacate
+        // the slot we occupy, this happens as part of the executor shutdown
+        auto dstHost = m.dsthost();
+        if (dstHostCount.find(dstHost) == dstHostCount.end()) {
+            dstHostCount[dstHost] = 0;
+        }
+        dstHostCount.at(dstHost) += 1;
+    }
+
+    // TODO - fix the abortion so that it is not black and white
+    for (auto& [dstHost, count] : dstHostCount) {
+        faabric::ReserveSlotsRequest resReq;
+        resReq.set_slots(count);
+        bool success = false;
+        if (dstHost == thisHost) {
+            success = doReserveSlotsForPendingMigrations(count);
+        } else {
+            auto response = getFunctionCallClient(dstHost).sendReserveSlots(
+              std::make_shared<faabric::ReserveSlotsRequest>(resReq));
+            success = response.success();
+        }
+        if (!success) {
+            // Tell other hosts involved to remove the pending migration
+            broadcastRemovePendingMigrations(pMigration);
+            // Remove the migration from our records
+            inFlightRequests.erase(appId);
+            pendingMigrations.erase(appId);
+            pMigration = nullptr;
+            break;
+        }
+    }
+
+    group->barrier(POINT_TO_POINT_MASTER_IDX);
+    return pMigration;
+}
+*/
+
+void Scheduler::addPendingMigrations(
   std::shared_ptr<faabric::PendingMigrations> pMigration)
 {
     faabric::util::FullLock lock(mx);
 
     auto msg = pMigration->migrations().at(0).msg();
     if (pendingMigrations.find(msg.appid()) != pendingMigrations.end()) {
-        SPDLOG_TRACE("Overwriting pending migration for app {}", msg.appid());
+        SPDLOG_DEBUG("Overwriting pending migration for app {}", msg.appid());
     }
 
     pendingMigrations[msg.appid()] = pMigration;
 }
 
-void Scheduler::removePendingMigration(uint32_t appId)
+void Scheduler::removePendingMigrations(uint32_t appId)
 {
     faabric::util::FullLock lock(mx);
 
     inFlightRequests.erase(appId);
     pendingMigrations.erase(appId);
+}
+
+bool Scheduler::reserveSlotsForPendingMigrations(int numSlots)
+{
+    faabric::util::FullLock lock(mx);
+
+    return doReserveSlotsForPendingMigrations(numSlots);
+}
+
+bool Scheduler::doReserveSlotsForPendingMigrations(int numSlots) {
+    if (thisHostResources.slots() - thisHostUsedSlots >= numSlots) {
+        this->thisHostUsedSlots += numSlots;
+        SPDLOG_WARN("Host {} booking {} slots for a pending migration", thisHost, numSlots);
+        return true;
+    }
+    return false;
 }
 
 std::vector<std::shared_ptr<faabric::PendingMigrations>>
@@ -1646,13 +1771,10 @@ Scheduler::doCheckForMigrationOpportunities(
         // migrations. Otherwise, pending migrations may become stale: the free
         // slots that they used can be taken up. Overwritting them is not a
         // catch-all neither, as slots can be occupied between migration checks
-        if (getPendingAppMigrations(originalDecision.appId) != nullptr) {
-            SPDLOG_TRACE("Overwriting migration opportunity for app {}",
-                         originalDecision.appId);
-        }
 
         faabric::PendingMigrations msg;
         msg.set_appid(originalDecision.appId);
+        msg.set_groupid(req->mutable_messages()->at(0).mpiworldid());
 
         if (migrationStrategy == faabric::util::MigrationStrategy::BIN_PACK) {
             // We assume the batch was originally scheduled using
@@ -1724,8 +1846,8 @@ Scheduler::doCheckForMigrationOpportunities(
         if (msg.migrations_size() > 0) {
             pendingMigrationsVec.emplace_back(
               std::make_shared<faabric::PendingMigrations>(msg));
-            SPDLOG_DEBUG("Detected migration opportunity for app: {}",
-                         msg.appid());
+            SPDLOG_DEBUG("Detected migration opportunity for app: {} (gid: {})",
+                         msg.appid(), msg.groupid());
         } else {
             SPDLOG_DEBUG("No migration opportunity detected for app: {}",
                          msg.appid());
@@ -1744,7 +1866,7 @@ void Scheduler::doStartFunctionMigrationThread(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingDecision& decision)
 {
-    bool startMigrationThread = inFlightRequests.size() == 0;
+    bool startMigrationThread = inFlightRequests.empty();
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
 
     if (inFlightRequests.find(decision.appId) != inFlightRequests.end()) {

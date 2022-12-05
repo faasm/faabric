@@ -32,6 +32,10 @@ static std::vector<
   std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
   pendingMigrationsRequests;
 
+static std::vector<
+  std::pair<std::string, std::shared_ptr<faabric::PendingMigrations>>>
+  removePendingMigrationsRequests;
+
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
@@ -157,6 +161,37 @@ void FunctionCallClient::sendPendingMigrations(
                  req.get(),
                  &response);
     }
+}
+
+void FunctionCallClient::sendRemovePendingMigrations(
+  std::shared_ptr<faabric::PendingMigrations> req)
+{
+    faabric::EmptyResponse response;
+
+    if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
+        removePendingMigrationsRequests.emplace_back(host, req);
+    } else {
+        syncSend(faabric::scheduler::FunctionCalls::RemovePendingMigrations,
+                 req.get(),
+                 &response);
+    }
+}
+
+faabric::ReserveSlotsResponse FunctionCallClient::sendReserveSlots(
+  std::shared_ptr<faabric::ReserveSlotsRequest> req)
+{
+    faabric::ReserveSlotsResponse response;
+
+    if (faabric::util::isMockMode()) {
+        // TODO
+    } else {
+        syncSend(faabric::scheduler::FunctionCalls::ReserveSlots,
+                 req.get(),
+                 &response);
+    }
+
+    return response;
 }
 
 void FunctionCallClient::executeFunctions(

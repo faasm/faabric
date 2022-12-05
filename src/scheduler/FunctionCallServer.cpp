@@ -50,6 +50,12 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::PendingMigrations: {
             return recvPendingMigrations(message.udata());
         }
+        case faabric::scheduler::FunctionCalls::RemovePendingMigrations: {
+            return recvRemovePendingMigrations(message.udata(), message.size());
+        }
+        case faabric::scheduler::FunctionCalls::ReserveSlots: {
+            return recvReserveSlots(message.udata(), message.size());
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized sync call header: {}", header));
@@ -109,8 +115,37 @@ FunctionCallServer::recvPendingMigrations(std::span<const uint8_t> buffer)
 
     auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
 
-    scheduler.addPendingMigration(msgPtr);
+    scheduler.addPendingMigrations(msgPtr);
 
     return std::make_unique<faabric::EmptyResponse>();
+}
+
+std::unique_ptr<google::protobuf::Message>
+FunctionCallServer::recvRemovePendingMigrations(const uint8_t* buffer,
+                                                size_t bufferSize)
+{
+    PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
+
+    auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
+
+    scheduler.removePendingMigrations(msgPtr->appid());
+
+    return std::make_unique<faabric::EmptyResponse>();
+}
+
+std::unique_ptr<google::protobuf::Message>
+FunctionCallServer::recvReserveSlots(const uint8_t* buffer,
+                                     size_t bufferSize)
+{
+    PARSE_MSG(faabric::ReserveSlotsRequest, buffer, bufferSize);
+
+    auto msgPtr = std::make_shared<faabric::ReserveSlotsRequest>(parsedMsg);
+
+    bool success = scheduler.reserveSlotsForPendingMigrations(msgPtr->slots());
+
+    faabric::ReserveSlotsResponse response;
+    response.set_success(success);
+
+    return std::make_unique<faabric::ReserveSlotsResponse>(response);
 }
 }

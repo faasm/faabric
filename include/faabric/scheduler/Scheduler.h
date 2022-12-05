@@ -338,12 +338,14 @@ class Scheduler
     void checkForMigrationOpportunities();
 
     std::shared_ptr<faabric::PendingMigrations> getPendingAppMigrations(
-      uint32_t appId);
+      uint32_t appId, uint32_t groupId, uint32_t groupIdx);
 
-    void addPendingMigration(
+    void addPendingMigrations(
       std::shared_ptr<faabric::PendingMigrations> pMigration);
 
-    void removePendingMigration(uint32_t appId);
+    void removePendingMigrations(uint32_t appId);
+
+    bool reserveSlotsForPendingMigrations(int numSlots);
 
     // ----------------------------------
     // Clients
@@ -439,9 +441,14 @@ class Scheduler
     void broadcastPendingMigrations(
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 
+    void broadcastRemovePendingMigrations(
+      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
     void doStartFunctionMigrationThread(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingDecision& decision);
+
+    bool doReserveSlotsForPendingMigrations(int numSlots);
 };
 
 }
