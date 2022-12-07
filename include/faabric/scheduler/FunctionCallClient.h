@@ -49,8 +49,6 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     void sendRemovePendingMigrations(std::shared_ptr<faabric::PendingMigrations> req);
 
-    faabric::ReserveSlotsResponse sendReserveSlots(std::shared_ptr<faabric::ReserveSlotsRequest> req);
-
     void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void unregister(faabric::UnregisterRequest& req);

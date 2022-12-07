@@ -27,10 +27,6 @@
 
 namespace faabric::scheduler {
 
-typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
-                  std::shared_ptr<faabric::util::SchedulingDecision>>
-  InFlightPair;
-
 class Scheduler;
 
 Scheduler& getScheduler();
@@ -429,7 +425,7 @@ class Scheduler
 
     // ---- Function migration ----
     FunctionMigrationThread functionMigrationThread;
-    std::map<uint32_t, InFlightPair> inFlightRequests;
+    std::map<uint32_t, std::shared_ptr<BatchExecuteRequest>> inFlightRequests;
     std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
       pendingMigrations;
 
@@ -445,8 +441,7 @@ class Scheduler
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 
     void doStartFunctionMigrationThread(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& decision);
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     bool doReserveSlotsForPendingMigrations(int numSlots);
 };

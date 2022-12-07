@@ -472,7 +472,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             returnValue = 1;
 
             std::string errorMessage = fmt::format(
-              "Task {} threw exception. What: {}", msg.id(), ex.what());
+              "Task {}:{}:{} threw exception. What: {}", msg.appid(), msg.groupid(), msg.groupidx(), ex.what());
             SPDLOG_ERROR(errorMessage);
             msg.set_outputdata(errorMessage);
         }

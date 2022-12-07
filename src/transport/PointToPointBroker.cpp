@@ -100,7 +100,7 @@ bool PointToPointGroup::groupExists(int groupId)
     return groups.contains(groupId);
 }
 
-void PointToPointGroup::addGroup(int appId, int groupId, int groupSize)
+void PointToPointGroup::addGroup(int appId, int groupId, int groupSize, int numLocalIdxs)
 {
     groups.tryEmplaceShared(groupId, appId, groupId, groupSize);
 }
@@ -130,7 +130,23 @@ PointToPointGroup::PointToPointGroup(int appIdIn,
   , groupId(groupIdIn)
   , groupSize(groupSizeIn)
   , ptpBroker(faabric::transport::getPointToPointBroker())
-{}
+{
+}
+
+// TODO: use the previous constructor
+PointToPointGroup::PointToPointGroup(int appIdIn,
+                                     int groupIdIn,
+                                     int groupSizeIn,
+                                     int numLocalIdxsIn)
+  : conf(faabric::util::getSystemConfig())
+  , appId(appIdIn)
+  , groupId(groupIdIn)
+  , groupSize(groupSizeIn)
+  , numLocalIdxs(numLocalIdxsIn)
+  , ptpBroker(faabric::transport::getPointToPointBroker())
+{
+    localBarrierPrivate = faabric::util::Barrier::create(numLocalIdxsIn);
+}
 
 void PointToPointGroup::lock(int groupIdx, bool recursive)
 {
@@ -228,6 +244,16 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
 
         ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
     }
+}
+
+void PointToPointGroup::localBarrier()
+{
+    if (localBarrierPrivate == nullptr) {
+        SPDLOG_ERROR("Local barrier for group {} is not initialised", groupId);
+        throw std::runtime_error("Local barrier is not initialised");
+    }
+
+    localBarrierPrivate->wait();
 }
 
 void PointToPointGroup::localLock()
@@ -403,6 +429,8 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
     {
         faabric::util::FullLock lock(brokerMutex);
 
+        int numLocalIdxs = 0;
+
         // Set up the mappings
         for (int i = 0; i < decision.nFunctions; i++) {
             int groupIdx = decision.groupIdxs.at(i);
@@ -424,12 +452,14 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
             // If it's not this host, add to set of returned hosts
             if (host != conf.endpointHost) {
                 hosts.insert(host);
+            } else {
+                numLocalIdxs++;
             }
         }
 
         // Register the group
         PointToPointGroup::addGroup(
-          decision.appId, groupId, decision.nFunctions);
+          decision.appId, groupId, decision.nFunctions, numLocalIdxs);
     }
 
     SPDLOG_TRACE(
@@ -557,13 +587,20 @@ void PointToPointBroker::updateHostForIdx(int groupId,
 
     std::string key = getPointToPointKey(groupId, groupIdx);
 
-    SPDLOG_DEBUG("Updating point-to-point mapping for {}:{} from {} to {}",
+    SPDLOG_INFO("Updating point-to-point mapping for {}:{} from {} to {}",
                  groupId,
                  groupIdx,
                  mappings[key],
                  newHost);
 
     mappings[key] = newHost;
+
+    /* TODO - update the number of local indexes
+    if (newHost == conf.endpointHost) {
+        numLocalIdxs += 1;
+        localBarrierPrivate = faabric::util::Barrier::create(numLocalIdxs);
+    }
+    */
 }
 
 void PointToPointBroker::sendMessage(int groupId,
@@ -835,6 +872,207 @@ void PointToPointBroker::resetThreadLocalCache()
     }
     threadEndpoints.clear();
 }
+
+std::vector<std::pair<std::string, int>> PointToPointBroker::sortGroupHostsByFrequency(int groupId)
+{
+    faabric::util::SharedLock lock(brokerMutex);
+
+    std::vector<std::pair<std::string, int>> sortedHosts;
+
+    // If the group does not exist, return an empty list
+    if (!PointToPointGroup::groupExists(groupId)) {
+        SPDLOG_WARN("Group {} does not exist", groupId);
+        return sortedHosts;
+    }
+
+    std::set<int> groupIdxs = getIdxsRegisteredForGroup(groupId);
+    assert(groupIdxs.size() == groupSize);
+    std::map<std::string, int> hostCount;
+
+    for (const auto& idx : groupIdxs) {
+        auto host = getHostForReceiver(groupId, idx);
+        if (hostCount.find(host) == hostCount.end()) {
+            hostCount[host] = 0;
+        }
+        hostCount.at(host) += 1;
+        sortedHosts.push_back(std::make_pair(host, idx));
+    }
+
+    // Sort the pair list using the frequency map as helper
+    std::sort(sortedHosts.begin(), sortedHosts.end(), [hostCount](std::pair<std::string, int> pairA, std::pair<std::string, int> pairB) {
+        // If hosts are different, return the host with the highest frequency
+        // count
+        std::string hostA = pairA.first;
+        std::string hostB = pairB.first;
+        if (hostA != hostB) {
+            return hostCount.at(hostA) > hostCount.at(hostB);
+        }
+
+        // If hosts are the same, put the smaller index first
+        int idxA = pairA.second;
+        int idxB = pairB.second;
+        return idxA < idxB;
+    });
+
+    return sortedHosts;
+}
+
+// We need to update two kinds of records when migrating a function that uses
+// the PTP broker: the host to idx mapping, and the sequence number counters
+void PointToPointBroker::preMigrationHook(
+  int groupId, int groupIdx, std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+{
+    // TODO: check for out-of-order messages
+    if (pendingMigrations->groupid() != groupId) {
+        SPDLOG_ERROR("make me an assertion");
+        throw std::runtime_error("make me an assertion");
+    }
+
+    InFlightMigType inFlightMapPtr = nullptr;
+    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
+        faabric::util::FullLock lock(brokerMutex);
+
+        if (inFlightMigrations.find(groupId) != inFlightMigrations.end()) {
+            SPDLOG_ERROR("Migration already in flight for group {}!", groupId);
+            throw std::runtime_error("Migration already in flight!");
+        }
+
+        inFlightMigrations[groupId] =
+          std::make_shared<std::unordered_map<int, std::shared_ptr<faabric::MigratedFuncMetadata>>>();
+
+        inFlightMapPtr = inFlightMigrations.at(groupId);
+    }
+
+    auto thisHost = conf.endpointHost;
+    // TODO: we could pass a hint on whether this function must migrate or not
+    for (const auto& m : pendingMigrations->migrations()) {
+        // The send/recv counters are thread local, so we can only access them
+        // from the right function in the right host
+        if ((m.srchost() == thisHost) && m.msg().groupidx() == groupIdx) {
+            // Send the main idx our send and recv counters
+            faabric::MigratedFuncMetadata metadata;
+            auto* migrationPtr = metadata.mutable_migration();
+            *migrationPtr = m;
+
+            // Copy the thread local counts into the message
+            for (const auto& sentCount : sentMsgCount) {
+                metadata.add_sentmsgcount(sentCount);
+            }
+            for (const auto& recvCount : recvMsgCount) {
+                metadata.add_recvmsgcount(recvCount);
+            }
+            std::string buffer;
+            if (!metadata.SerializeToString(&buffer)) {
+                throw std::runtime_error("Error serialising message");
+            }
+
+            SPDLOG_INFO("{}:{} sending function migration metadata to {}:{} (sent size: {} - recv size: {})",
+                        groupId,
+                        groupIdx,
+                        groupId,
+                        POINT_TO_POINT_MASTER_IDX,
+                        metadata.sentmsgcount_size(),
+                        metadata.recvmsgcount_size());
+            sendMessage(groupId,
+                        groupIdx,
+                        POINT_TO_POINT_MASTER_IDX,
+                        reinterpret_cast<uint8_t*>(buffer.data()),
+                        buffer.size());
+
+            break;
+        }
+
+        // If we are the main index, we receive metadata for _all_ migrated
+        // funcs. Note that this means that we can not migrate the main idx
+        if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
+            if (m.msg().mpirank() == groupIdx) {
+                throw std::runtime_error("Can not migrate main PTP index!");
+            }
+
+            auto rawMsg = recvMessage(groupId, m.msg().mpirank(), groupIdx);
+            PARSE_MSG(faabric::MigratedFuncMetadata, rawMsg.data(), rawMsg.size());
+
+            if (inFlightMapPtr == nullptr) {
+                throw std::runtime_error("making meh an assertion porfavor");
+            }
+            SPDLOG_INFO("Adding in-flight migration metadata for rank: {}", m.msg().mpirank());
+            inFlightMapPtr->operator[](m.msg().mpirank()) =
+              std::make_shared<faabric::MigratedFuncMetadata>(parsedMsg);
+        }
+    }
+
+    // Hit a local-barrier before we exit the pre-migration hook so that after
+    // the barrier it is safe to update the host mappings
+    PointToPointGroup::getGroup(groupId)->localBarrier();
+}
+
+void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
+{
+    InFlightMigType inFlightMapPtr = nullptr;
+    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
+        faabric::util::FullLock lock(brokerMutex);
+
+        if (inFlightMigrations.find(groupId) == inFlightMigrations.end()) {
+            SPDLOG_ERROR("Migration not in flight during port-hook! ({})", groupId);
+            throw std::runtime_error("Migration not in flight!");
+        }
+
+        inFlightMapPtr = inFlightMigrations.at(groupId);
+    }
+
+    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
+        // If we are the main index, send the corresponding message to all ranks
+        auto idxs = getIdxsRegisteredForGroup(groupId);
+        for (const auto& idx : idxs) {
+            std::string buffer;
+
+            // If we have migration metadata, send it, otherwise send an empty
+            // request
+            if (inFlightMapPtr->find(idx) != inFlightMapPtr->end()) {
+                if (!inFlightMapPtr->at(idx)->SerializeToString(&buffer)) {
+                    throw std::runtime_error("Error serialising message");
+                }
+            } else {
+                // TODO: could we avoid sending this placeholder?
+                faabric::MigratedFuncMetadata placeholder;
+                placeholder.SerializeToString(&buffer);
+            }
+            sendMessage(groupId,
+                        groupIdx,
+                        idx,
+                        reinterpret_cast<uint8_t*>(buffer.data()),
+                        buffer.size());
+            inFlightMapPtr->erase(idx);
+        }
+        // Finally null-out the pointer and remove it from the map
+        inFlightMapPtr = nullptr;
+        {
+            faabric::util::FullLock lock(brokerMutex);
+
+            inFlightMigrations.erase(groupId);
+        }
+    } else {
+        // If we are not the main index, receive the message from the main index
+        // containing the migrated function metadata (or a placeholder)
+        auto rawMsg = recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+        PARSE_MSG(faabric::MigratedFuncMetadata, rawMsg.data(), rawMsg.size());
+
+        if (parsedMsg.sentmsgcount_size() != 0) {
+            if (groupId != currentGroupId) {
+                initSequenceCounters(groupId);
+            }
+            SPDLOG_INFO("Updating message counters for {}:{}", groupId, groupIdx);
+        }
+
+        for (int i = 0; i < parsedMsg.sentmsgcount_size(); i++) {
+            sentMsgCount.at(i) = parsedMsg.sentmsgcount().at(i);
+        }
+        for (int i = 0; i < parsedMsg.recvmsgcount_size(); i++) {
+            recvMsgCount.at(i) = parsedMsg.recvmsgcount().at(i);
+        }
+    }
+}
+
 
 PointToPointBroker& getPointToPointBroker()
 {

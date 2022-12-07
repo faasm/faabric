@@ -10,6 +10,5 @@ enum FunctionCalls
     GetResources = 4,
     PendingMigrations = 5,
     RemovePendingMigrations = 6,
-    ReserveSlots = 7
 };
 }

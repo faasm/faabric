@@ -178,22 +178,6 @@ void FunctionCallClient::sendRemovePendingMigrations(
     }
 }
 
-faabric::ReserveSlotsResponse FunctionCallClient::sendReserveSlots(
-  std::shared_ptr<faabric::ReserveSlotsRequest> req)
-{
-    faabric::ReserveSlotsResponse response;
-
-    if (faabric::util::isMockMode()) {
-        // TODO
-    } else {
-        syncSend(faabric::scheduler::FunctionCalls::ReserveSlots,
-                 req.get(),
-                 &response);
-    }
-
-    return response;
-}
-
 void FunctionCallClient::executeFunctions(
   const std::shared_ptr<faabric::BatchExecuteRequest> req)
 {

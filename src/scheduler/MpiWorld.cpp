@@ -265,11 +265,12 @@ void MpiWorld::initLocalRemoteLeaders()
     ranksForHost.clear();
     hostForRank.clear();
 
-    // First, group the ranks per host they belong to for convinience. We also
+    // Group the ranks per host they belong to for convinience. We also
     // keep a record of the opposite mapping, the host that each rank belongs
     // to, as it is queried frequently and asking the ptp broker involves
     // acquiring a lock.
     auto rankIds = broker.getIdxsRegisteredForGroup(id);
+    // TODO - remove this check
     if (rankIds.size() != size) {
         SPDLOG_ERROR("rankIds != size ({} != {})", rankIds.size(), size);
     }
@@ -277,12 +278,21 @@ void MpiWorld::initLocalRemoteLeaders()
     hostForRank.resize(size);
     for (const auto& rankId : rankIds) {
         std::string host = broker.getHostForReceiver(id, rankId);
-        ranksForHost[host].push_back(rankId);
+        // ranksForHost[host].push_back(rankId);
+        ranksForHost[host].insert(
+            std::upper_bound(ranksForHost[host].begin(),
+                             ranksForHost[host].end(),
+                             rankId),
+            rankId);
         hostForRank.at(rankId) = host;
     }
 
+    // Second, set our local leader
+    localLeader = ranksForHost.at(thisHost).front();
+
     // Second, put the local leader for each host (currently lowest rank) at the
     // front.
+    /*
     for (auto it : ranksForHost) {
         // Persist the local leader in this host for further use
         if (it.first == thisHost) {
@@ -292,6 +302,7 @@ void MpiWorld::initLocalRemoteLeaders()
         std::iter_swap(it.second.begin(),
                        std::min_element(it.second.begin(), it.second.end()));
     }
+    */
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -1383,37 +1394,44 @@ void MpiWorld::barrier(int thisRank)
     if (thisRank == 0) {
         // This is the root, hence waits for all ranks to get to the barrier
         SPDLOG_TRACE("MPI - barrier init {}", thisRank);
+        if (hasBeenMigrated) {
+            SPDLOG_INFO("MPI - barrier init {}", thisRank);
+        }
 
         // Await messages from all others
         for (int r = 1; r < size; r++) {
             MPI_Status s{};
+            if (hasBeenMigrated) {
+                SPDLOG_INFO("Rank 0 (host: {}) receiving barrier join from {} (host: {})", thisHost, r, getHostForRank(r));
+            }
             recv(
               r, 0, nullptr, MPI_INT, 0, &s, faabric::MPIMessage::BARRIER_JOIN);
             SPDLOG_TRACE("MPI - recv barrier join {}", s.MPI_SOURCE);
+            if (hasBeenMigrated) {
+                SPDLOG_INFO("MPI - post recv barrier join {}", s.MPI_SOURCE);
+            }
         }
     } else {
         // Tell the root that we're waiting
         SPDLOG_TRACE("MPI - barrier join {}", thisRank);
+        if (hasBeenMigrated) {
+            SPDLOG_INFO("Rank {} (host: {}) sending barrier join to 0 (host: {})", thisRank, thisHost, getHostForRank(0));
+        }
         send(
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
     }
 
-    if (thisRank == localLeader && hasBeenMigrated) {
-        hasBeenMigrated = false;
-        if (thisRankMsg != nullptr) {
-            faabric::scheduler::getScheduler().removePendingMigrations(
-              thisRankMsg->appid());
-        } else {
-            SPDLOG_ERROR("App has been migrated but rank ({}) message not set",
-                         thisRank);
-            throw std::runtime_error("App migrated but rank message not set");
-        }
+    if (hasBeenMigrated) {
+        SPDLOG_INFO("MPI - barrier halfway {}", thisRank);
     }
 
     // Rank 0 broadcasts that the barrier is done (the others block here)
     broadcast(
       0, thisRank, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_DONE);
     SPDLOG_TRACE("MPI - barrier done {}", thisRank);
+    if (hasBeenMigrated) {
+        SPDLOG_INFO("MPI - barrier done {}", thisRank);
+    }
 }
 
 std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
@@ -1485,6 +1503,10 @@ MpiWorld::recvBatchReturnLast(int sendRank, int recvRank, int batchSize)
         for (int i = 0; i < batchSize - 1; i++) {
             SPDLOG_TRACE(
               "MPI - pending remote recv {} -> {}", sendRank, recvRank);
+            if (hasBeenMigrated) {
+                SPDLOG_INFO(
+                  "MPI - pending remote recv {} -> {}", sendRank, recvRank);
+            }
             auto pendingMsg = recvRemoteMpiMessage(sendRank, recvRank);
 
             // Put the unacked message in the UMB
@@ -1570,6 +1592,30 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
+// TODO - remove this method
+static void printAndCheckRanksForHost(
+    std::map<std::string, std::vector<int>> ranksForHost,
+    int worldId,
+    int expectedWorldSize)
+{
+    SPDLOG_INFO("------------------------------------------------------------");
+    SPDLOG_INFO("Ranks for host for world {}", worldId);
+    int sizeCount = 0;
+    for (const auto& [host, idxs] : ranksForHost) {
+        sizeCount += idxs.size();
+        for (const auto& idx : idxs) {
+            SPDLOG_INFO("{}:{}", host, idx);
+        }
+    }
+    if (sizeCount == expectedWorldSize) {
+        SPDLOG_INFO("World sizes match: {} = {}", sizeCount, expectedWorldSize);
+    } else {
+        SPDLOG_INFO("!!!! World sizes dont match: {} != {}!!!!", sizeCount, expectedWorldSize);
+        throw std::runtime_error("bleh bleh");
+    }
+    SPDLOG_INFO("------------------------------------------------------------");
+}
+
 void MpiWorld::prepareMigration(
   int thisRank,
   std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
@@ -1598,7 +1644,13 @@ void MpiWorld::prepareMigration(
     }
 
     // Update local records
+    // TODO: eventually merge this with the PTP management
+    bool isTricky = false;
     if (thisRank == localLeader) {
+        SPDLOG_INFO("Rank {} preparing migration for host {}", thisRank, thisHost);
+        // TODO - remove me Print ranks for host and sanity check
+        // printAndCheckRanksForHost(ranksForHost, id, size);
+
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
             assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
@@ -1611,17 +1663,41 @@ void MpiWorld::prepareMigration(
             // Update the ranks for host. This structure is used when doing
             // collective communications by all ranks. At this point, all non-
             // leader ranks will be hitting a barrier, for which they don't
-            // need the ranks for host map, therefore it is safe to modify it
-            if (m.dsthost() == thisHost && m.msg().mpirank() < localLeader) {
-                SPDLOG_WARN("Changing local leader {} -> {}",
+            // need the ranks for host map, therefore it is safe to modify it.
+            // We must treat the cases where we are migrating a local leader
+            // with special care
+
+            // First, update the records for the destination host (inserting
+            // the rank in order)
+            ranksForHost[m.dsthost()].insert(
+                std::upper_bound(ranksForHost[m.dsthost()].begin(),
+                                 ranksForHost[m.dsthost()].end(),
+                                 m.msg().mpirank()),
+                m.msg().mpirank());
+            // If we are receiving a new rank that must be our new local
+            // leader, update our records
+            if ((m.dsthost() == thisHost) && (m.msg().mpirank() < localLeader)) {
+                SPDLOG_WARN("Changing local leader (DOWN) {} -> {}",
                             localLeader,
                             m.msg().mpirank());
                 localLeader = m.msg().mpirank();
-                ranksForHost[m.dsthost()].insert(
-                  ranksForHost[m.dsthost()].begin(), m.msg().mpirank());
+                if (ranksForHost[m.dsthost()].front() != localLeader) {
+                    SPDLOG_ERROR("Error setting local leader! {} != {}",
+                                 ranksForHost[m.dsthost()].front(),
+                                 localLeader);
+                    throw std::runtime_error("Make me an assertion plz");
+                }
+                isTricky = true;
+            }
+            // TODO - remove me
+            if ((m.dsthost() == thisHost) && (thisRank != 0)) {
+                isTricky = true;
+            }
+            if ((m.dsthost() != thisHost) && (thisRank == 0)) {
+                isTricky = true;
             }
 
-            ranksForHost[m.dsthost()].push_back(m.msg().mpirank());
+            // Second, update the records for the source host
             ranksForHost[m.srchost()].erase(
               std::remove(ranksForHost[m.srchost()].begin(),
                           ranksForHost[m.srchost()].end(),
@@ -1629,16 +1705,35 @@ void MpiWorld::prepareMigration(
               ranksForHost[m.srchost()].end());
 
             if (ranksForHost[m.srchost()].empty()) {
+                SPDLOG_WARN("Removing completely host {} from MPI world {}", m.srchost(), id);
                 ranksForHost.erase(m.srchost());
+            } else {
+                // If we are the source rank, and our local leader is being
+                // migrated elsewhere, update our local leadedr
+                if ((m.srchost() == thisHost) && (m.msg().mpirank() == localLeader)) {
+                    localLeader = *std::min_element(ranksForHost[m.srchost()].begin(),
+                                                    ranksForHost[m.dsthost()].end());
+                    SPDLOG_WARN("Changing local leader (UP) {} -> {}",
+                                m.msg().mpirank(),
+                                localLeader);
+                    isTricky = true;
+                }
             }
 
-            // This could be made more efficient as the broker method acquires
-            // a full lock every time
+            // When to call this?
+            // TODO - move this to the PTP broker pre/post hook logic
             broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
         }
 
+        // TODO - remove me Print ranks for host and sanity check
+        // printAndCheckRanksForHost(ranksForHost, id, size);
+
         // Set the migration flag
+        // TODO: remove me
         hasBeenMigrated = true;
+        if (isTricky) {
+            broker.hasBeenMigrated = true;
+        }
 
         // Add the necessary new local messaging queues
         initLocalQueues();

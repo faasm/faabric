@@ -63,14 +63,6 @@ message FunctionStatusResponse {
     FunctionStatus status = 1;
 }
 
-message ReserveSlotsRequest {
-    int32 slots = 1;
-}
-
-message ReserveSlotsResponse {
-    bool success = 1;
-}
-
 // ---------------------------------------------
 // MPI
 // ---------------------------------------------
@@ -250,15 +242,22 @@ message PointToPointMappings {
 // FUNCTION MIGRATIONS
 // ---------------------------------------------
 
+message PendingMigration {
+    Message msg = 1;
+    string srcHost = 2;
+    string dstHost = 3;
+}
+
 message PendingMigrations {
     int32 appId = 1;
     int32 groupId = 2;
 
-    message PendingMigration {
-        Message msg = 1;
-        string srcHost = 2;
-        string dstHost = 3;
-    }
-
     repeated PendingMigration migrations = 3;
+}
+
+message MigratedFuncMetadata {
+    PendingMigration migration = 1;
+
+    repeated int32 sentMsgCount = 2;
+    repeated int32 recvMsgCount = 3;
 }

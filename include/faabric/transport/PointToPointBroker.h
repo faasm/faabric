@@ -1,6 +1,7 @@
 #pragma once
 
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/util/barrier.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/scheduling.h>
@@ -18,6 +19,7 @@
 #define DEFAULT_DISTRIBUTED_TIMEOUT_MS 30000
 
 #define POINT_TO_POINT_MASTER_IDX 0
+#define NUM_LOCAL_IDXS_UNUSED -1
 
 namespace faabric::transport {
 
@@ -32,7 +34,7 @@ class PointToPointGroup
 
     static bool groupExists(int groupId);
 
-    static void addGroup(int appId, int groupId, int groupSize);
+    static void addGroup(int appId, int groupId, int groupSize, int numLocalIdxs = NUM_LOCAL_IDXS_UNUSED);
 
     static void addGroupIfNotExists(int appId, int groupId, int groupSize);
 
@@ -41,6 +43,8 @@ class PointToPointGroup
     static void clear();
 
     PointToPointGroup(int appId, int groupIdIn, int groupSizeIn);
+
+    PointToPointGroup(int appId, int groupIdIn, int groupSizeIn, int numLocalIdxsIn);
 
     void lock(int groupIdx, bool recursive);
 
@@ -60,6 +64,8 @@ class PointToPointGroup
 
     int getNotifyCount();
 
+    void localBarrier();
+
   private:
     faabric::util::SystemConfig& conf;
 
@@ -67,11 +73,15 @@ class PointToPointGroup
     int appId = 0;
     int groupId = 0;
     int groupSize = 0;
+    int numLocalIdxs = 0;
 
     std::shared_mutex mx;
 
     // Transport
     faabric::transport::PointToPointBroker& ptpBroker;
+
+    // Local barrier
+    std::shared_ptr<faabric::util::Barrier> localBarrierPrivate = nullptr;
 
     // Local lock
     std::timed_mutex localMx;
@@ -84,6 +94,8 @@ class PointToPointGroup
 
     void notifyLocked(int groupIdx);
 };
+
+typedef std::shared_ptr<std::unordered_map<int, std::shared_ptr<faabric::MigratedFuncMetadata>>> InFlightMigType;
 
 class PointToPointBroker
 {
@@ -132,6 +144,18 @@ class PointToPointBroker
 
     void resetThreadLocalCache();
 
+    std::vector<std::pair<std::string, int>> sortGroupHostsByFrequency(int groupId);
+
+    // --- Function migration ---
+
+    void preMigrationHook(int groupId,
+                          int groupIdx,
+                          std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+
+    void postMigrationHook(int groupId, int groupIdx);
+
+    bool hasBeenMigrated = false;
+
   private:
     faabric::util::SystemConfig& conf;
 
@@ -154,6 +178,12 @@ class PointToPointBroker
     void incrementRecvMsgCount(int groupId, int sendIdx);
 
     int getExpectedSeqNum(int groupId, int sendIdx);
+
+    // Structure to keep track of the in-flight migrations for each group id.
+    // Each key (i.e. group id) is only populated by the main PTP index for
+    // that group id, and it records the migrated function metadata for each
+    // migrated group idx
+    std::unordered_map<int, InFlightMigType> inFlightMigrations;
 };
 
 PointToPointBroker& getPointToPointBroker();
