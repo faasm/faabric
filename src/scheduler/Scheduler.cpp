@@ -324,6 +324,7 @@ void Scheduler::addRegisteredHost(const std::string& host,
 
 void Scheduler::vacateSlot()
 {
+    SPDLOG_INFO("[{}] Vacating one slot", thisHost);
     thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
 }
 
@@ -572,7 +573,7 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
                 overloadedHost = hosts.back();
             }
 
-            SPDLOG_DEBUG("Overloading {}/{} {} {}",
+            SPDLOG_TRACE("Overloading {}/{} {} {}",
                          remainder,
                          nMessages,
                          funcStr,
@@ -628,6 +629,14 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     int nMessages = req->messages_size();
     bool isMain = thisHost == firstMsg.masterhost();
     bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
+    // TODO - remove me
+    if (isMigration) {
+        SPDLOG_INFO("[{}] Migration call for {}:{}:{}",
+                    thisHost,
+                    firstMsg.appid(),
+                    firstMsg.groupid(),
+                    firstMsg.groupidx());
+    }
 
     if (decision.hosts.size() != nMessages) {
         SPDLOG_ERROR(
@@ -1100,6 +1109,8 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 {
     redis::Redis& redis = redis::Redis::getQueue();
 
+    SPDLOG_INFO("[{}] Setting function result for {}:{}:{}", thisHost, msg.appid(), msg.groupid(), msg.groupidx());
+
     // Record which host did the execution
     msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
 
@@ -1134,16 +1145,28 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // Remove the app from in-flight map if still there, and we are the leader
     // for the app
+    // TODO - could we monitor then the request is done differently?
     if ((msg.migrationcheckperiod() > 0) && (msg.mpirank() == 0)) {
-        faabric::util::FullLock lock(mx);
+        SPDLOG_INFO("[{}] Start remove from in-flight {}:{}:{}", thisHost, msg.appid(), msg.groupid(), msg.groupidx());
+        {
+            // Acquire a lock to write on the in-flight-requests map
+            faabric::util::FullLock lock(migrationThreadMx);
+            inFlightRequests.erase(msg.appid());
+        }
 
-        inFlightRequests.erase(msg.appid());
+        // Now that the in-flight request is not in the map anymore, we can
+        // safely remove the pending migration without a lock, as pending
+        // migrations are only modified by reading the in-flight-requests first
         if (pendingMigrations.find(msg.appid()) != pendingMigrations.end()) {
-            SPDLOG_INFO("[{}] Removing migration opportunity for app: {} (as it has finished)", thisHost, msg.appid());
+            SPDLOG_INFO("[{}] Removing migration opportunity for app: {} (as it has finished)",
+                            thisHost,
+                            msg.appid());
             broadcastRemovePendingMigrations(pendingMigrations.at(msg.appid()));
             pendingMigrations.erase(msg.appid());
         }
+        SPDLOG_INFO("[{}] Done remove from in-flight {}:{}:{}", thisHost, msg.appid(), msg.groupid(), msg.groupidx());
     }
+
 
     // Write the successful result to the result queue
     std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
@@ -1449,8 +1472,11 @@ void Scheduler::getFunctionResultAsync(
 
 faabric::HostResources Scheduler::getThisHostResources()
 {
-    faabric::util::SharedLock lock(mx);
-    faabric::HostResources hostResources = thisHostResources;
+    // faabric::util::SharedLock lock(mx);
+    // faabric::HostResources hostResources = thisHostResources;
+    // Reset this every time instead of acquiring a lock
+    faabric::HostResources hostResources = faabric::HostResources();
+    hostResources.set_slots(faabric::util::getUsableCores());
     hostResources.set_usedslots(
       this->thisHostUsedSlots.load(std::memory_order_acquire));
     return hostResources;
@@ -1566,6 +1592,36 @@ void FunctionMigrationThread::doWork()
     getScheduler().checkForMigrationOpportunities();
 }
 
+static bool arePendingMigrationsEqual(
+    std::shared_ptr<faabric::PendingMigrations> pMigrationsA,
+    std::shared_ptr<faabric::PendingMigrations> pMigrationsB)
+{
+    if (pMigrationsA->appid() != pMigrationsB->appid()) {
+        return false;
+    }
+    if (pMigrationsA->groupid() != pMigrationsB->groupid()) {
+        return false;
+    }
+    if (pMigrationsA->migrations_size() != pMigrationsB->migrations_size()) {
+        return false;
+    }
+    for (int i = 0; i < pMigrationsA->migrations_size(); i++) {
+        if (pMigrationsA->migrations().at(i).msg().mpirank()
+          != pMigrationsB->migrations().at(i).msg().mpirank()) {
+            return false;
+        }
+        if (pMigrationsA->migrations().at(i).srchost()
+          != pMigrationsB->migrations().at(i).srchost()) {
+            return false;
+        }
+        if (pMigrationsA->migrations().at(i).dsthost()
+          != pMigrationsB->migrations().at(i).dsthost()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // We check for migration opportunities for all apps for which this host is the
 // main host. Yet, all hosts executing a function in the app must be aware of
 // the most up to date migration for it. This method periodically checks if
@@ -1577,52 +1633,125 @@ void Scheduler::checkForMigrationOpportunities()
 {
     std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
       newPendingMigrations;
+    typedef std::pair<uint32_t, std::shared_ptr<faabric::PendingMigrations>> AppPair;
+    std::vector<AppPair> appIdsToRemove;
+    std::vector<AppPair> appIdsToBroadcast;
 
     {
         // Acquire a shared lock to read from the in-flight requests map
-        faabric::util::SharedLock lock(mx);
+        faabric::util::SharedLock lock(migrationThreadMx);
 
         // Check for migration opportunities of all in-flight requests (i.e.
         // requests for which this host is the main host)
         newPendingMigrations = doCheckForMigrationOpportunities();
+
+        // Work out the diff between the old pending migrations and the new
+        // ones
+        auto newPendMigIt = newPendingMigrations.begin();
+        auto oldPendMigIt = pendingMigrations.begin();
+        while ((newPendMigIt != newPendingMigrations.end()) &&
+          (oldPendMigIt != pendingMigrations.end())) {
+            if (newPendMigIt->first == oldPendMigIt->first) {
+                // If the same app is in the old and the new pending migrations
+                // we check if both of them are the same. In this case we
+                // must not remove the pending migration, as it is still valid,
+                // but we can skip broadcasting it, as the other hosts are
+                // already aware of it. If they are not the same, the migration
+                // for the app has changed between check periods and we need
+                // to _both_ remove the old one, and broadcast the new one
+                if (arePendingMigrationsEqual(newPendMigIt->second,
+                                              oldPendMigIt->second)) {
+                    SPDLOG_INFO("[{}] Repeated migration opportunity for app: {}",
+                                    thisHost,
+                                    newPendMigIt->first);
+                } else {
+                    // We will overwrite the migration, we don't need to
+                    // remove it
+                    SPDLOG_INFO("Pushing back overwritten migration for app: {}",
+                                newPendMigIt->first);
+                    appIdsToBroadcast.emplace_back(
+                      std::make_pair(newPendMigIt->first, newPendMigIt->second));
+                }
+                // Advance both iterators
+                newPendMigIt++;
+                oldPendMigIt++;
+            } else if (newPendMigIt->first < oldPendMigIt->first) {
+                // If we are here, it means that there is a new app in the
+                // new set that is not in the old set, we want to broadcast
+                // this one
+                SPDLOG_INFO("Pushing back migration for app: {}",
+                            newPendMigIt->first);
+                appIdsToBroadcast.emplace_back(
+                  std::make_pair(newPendMigIt->first, newPendMigIt->second));
+                newPendMigIt++;
+            } else {
+                // If we are here, it means that there is an app in the old
+                // set that it is not in the new set. This means that the
+                // opportunity is stale if the app belongs to us (i.e. is part
+                // of our in-flight requests)
+                if (inFlightRequests.find(oldPendMigIt->first) != inFlightRequests.end()) {
+                    appIdsToRemove.emplace_back(
+                      std::make_pair(oldPendMigIt->first, oldPendMigIt->second));
+                    oldPendMigIt++;
+                }
+            }
+        }
+
+        // Flush out the remaining arrays according to the same logic
+        while (newPendMigIt != newPendingMigrations.end()) {
+            // If we still have apps left in the new set, we want to broadcast
+            // all of them
+            SPDLOG_INFO("Pushing back migration for app: {}",
+                        newPendMigIt->first);
+            appIdsToBroadcast.emplace_back(
+              std::make_pair(newPendMigIt->first, newPendMigIt->second));
+            newPendMigIt++;
+        }
+        while (oldPendMigIt != pendingMigrations.end()) {
+            // If we still have apps left in the old set, we want to remove
+            // all of the ones that are also in our in-flight map
+            if (inFlightRequests.find(oldPendMigIt->first) != inFlightRequests.end()) {
+                appIdsToRemove.emplace_back(
+                  std::make_pair(oldPendMigIt->first, oldPendMigIt->second));
+                oldPendMigIt++;
+            }
+        }
     }
 
     {
         // Acquire full lock to write to the pending migrations map
-        faabric::util::FullLock lock(mx);
+        faabric::util::FullLock lock(migrationThreadMx);
 
-        // We need to remove all the pending migrations that are now stale.
-        // This is, the pending migrations that we had recorded, but we have
-        // not detected now. However, we must be careful not to remove apps for
-        // which we are not the main host
-        std::vector<uint32_t> appIdsToRemove;
-        for (auto& [appId, msgPtr] : pendingMigrations) {
-            // If we are main host AND migration is stale, remove
-            if ((inFlightRequests.find(appId) != inFlightRequests.end())
-              && (newPendingMigrations.find(appId) == newPendingMigrations.end())) {
-                SPDLOG_INFO("[{}] Removing migration opportunity for app: {}", thisHost, appId);
-                broadcastRemovePendingMigrations(msgPtr);
-                appIdsToRemove.push_back(appId);
-            }
-        }
-
-        // Now it is safe to clear the existing pending migrations, as they
-        // only contain either stale migrations, or migrations that we have
-        // captured in the new check
-        for (auto& appId : appIdsToRemove) {
+        // Erase the pending migrations that are now stale
+        for (const auto& [appId, msgPtr] : appIdsToRemove) {
+            SPDLOG_INFO("[{}] Removing migration opportunity for app: {}",
+                        thisHost,
+                        appId);
             pendingMigrations.erase(appId);
         }
 
-        // TODO - we could be smarter here, and only broadcast pending
-        // migrations that have actually changed
-        for (auto [appId, msgPtr] : newPendingMigrations) {
-            // First, broadcast the pending migrations to other hosts
-            SPDLOG_INFO("[{}] Broadcasting migration opportunity for app: {}", thisHost, appId);
-            broadcastPendingMigrations(msgPtr);
+        // Broadcast the pending migrations that are new
+        for (const auto& [appId, msgPtr] : appIdsToBroadcast) {
+            SPDLOG_INFO("[{}] Broadcasting migration opportunity for app: {}",
+                        thisHost,
+                        appId);
             printMigration(msgPtr);
-            // Second, update our local records
             pendingMigrations[appId] = std::move(msgPtr);
         }
+    }
+
+    // Lastly, send broadcast messages without any lock
+    // TODO: potentially send less messages here (i.e. put together remove
+    // and add)
+
+    // Broadcast the deletion of the pending migrations that are now stale
+    for (const auto& [appId, msgPtr] : appIdsToRemove) {
+        broadcastRemovePendingMigrations(msgPtr);
+    }
+
+    // Broadcast the pending migrations that are new
+    for (const auto& [appId, msgPtr] : appIdsToBroadcast) {
+        broadcastPendingMigrations(msgPtr);
     }
 }
 
@@ -1656,23 +1785,17 @@ void Scheduler::broadcastRemovePendingMigrations(
     registeredHosts.erase(thisHost);
 
     // Send pending migrations to all involved hosts
+    // TODO: actually we could just send the appid here
     for (const auto& otherHost : thisRegisteredHosts) {
         getFunctionCallClient(otherHost).sendRemovePendingMigrations(
           pendingMigrations);
     }
 }
 
-// This method checks if the specified app can be migrated according to a
-// pending migration. We detect migration opportunities in the background, and
-// it may happen that the opportunities are not there by the time we try to
-// execute them. This method is called right before running the migration, and
-// makes sure that the migration can actually be executed by reserving slots
-// in the destination hosts
 std::shared_ptr<faabric::PendingMigrations> Scheduler::getPendingAppMigrations(
   uint32_t appId, uint32_t groupId, uint32_t groupIdx)
 {
-    // First, just check if the app can be migrated at all
-    faabric::util::SharedLock lock(mx);
+    faabric::util::SharedLock lock(migrationThreadMx);
 
     if (pendingMigrations.find(appId) == pendingMigrations.end()) {
         return nullptr;
@@ -1756,7 +1879,7 @@ std::shared_ptr<faabric::PendingMigrations> Scheduler::getPendingAppMigrations(
 void Scheduler::addPendingMigrations(
   std::shared_ptr<faabric::PendingMigrations> pMigration)
 {
-    faabric::util::FullLock lock(mx);
+    faabric::util::FullLock lock(migrationThreadMx);
 
     SPDLOG_INFO("[{}] Received req. to add migration opportunity for app: {}", thisHost, pMigration->appid());
     pendingMigrations[pMigration->appid()] = std::move(pMigration);
@@ -1764,7 +1887,7 @@ void Scheduler::addPendingMigrations(
 
 void Scheduler::removePendingMigrations(uint32_t appId)
 {
-    faabric::util::FullLock lock(mx);
+    faabric::util::FullLock lock(migrationThreadMx);
 
     SPDLOG_INFO("[{}] Received req. to remove migration opportunity for app: {}", thisHost, appId);
     if (inFlightRequests.find(appId) != inFlightRequests.end()) {
@@ -1773,24 +1896,6 @@ void Scheduler::removePendingMigrations(uint32_t appId)
     }
     pendingMigrations.erase(appId);
 }
-
-/*
-bool Scheduler::reserveSlotsForPendingMigrations(int numSlots)
-{
-    faabric::util::FullLock lock(mx);
-
-    return doReserveSlotsForPendingMigrations(numSlots);
-}
-
-bool Scheduler::doReserveSlotsForPendingMigrations(int numSlots) {
-    if (thisHostResources.slots() - thisHostUsedSlots >= numSlots) {
-        this->thisHostUsedSlots += numSlots;
-        SPDLOG_WARN("Host {} booking {} slots for a pending migration", thisHost, numSlots);
-        return true;
-    }
-    return false;
-}
-*/
 
 std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
 Scheduler::doCheckForMigrationOpportunities(
@@ -1823,19 +1928,15 @@ Scheduler::doCheckForMigrationOpportunities(
             // reduce fragmentation (i.e. BIN_PACK) we want to move functions
             // from hosts with lower frequency (right) to hosts with higher
             // frequency (left)
+            // TODO: watch out, sorted hosts acquires a broker shared lock whilst
+            // we have a migration thread shared lock here
             auto sortedHosts = broker.sortGroupHostsByFrequency(firstMsg.groupid());
-            // It may happen that we call this method before the application
-            // has fully initialised (and established the PTP group). In this
-            // case we skip this in-flight app
-            if (sortedHosts.empty()) {
-                // TODO - make me DEBUG
-                SPDLOG_WARN("Skipping migration check for app: {} (wid: {})",
-                            appId,
-                            firstMsg.mpiworldid());
-                continue;
-            }
+            assert(sortedHosts.size() == req->messages_size());
             auto left = sortedHosts.begin();
             auto right = sortedHosts.end() - 1;
+            // TODO: getThisHostResources acquires a shared lock on the
+            // scheduler, whilst we hold a shared lock on the migration thread
+            // here. Watch out for potential deadlocks
             faabric::HostResources r = (left->first == thisHost)
                                          ? getThisHostResources()
                                          : getHostResources(left->first);
@@ -1890,7 +1991,7 @@ Scheduler::doCheckForMigrationOpportunities(
                 }
                 // TODO: support main function migration
                 if (right->second == 0) {
-                    SPDLOG_WARN("Avoiding migrating rank 0");
+                    SPDLOG_DEBUG("App {} avoiding migrating rank 0", right->second);
                     --right;
                     continue;
                 }
@@ -1920,7 +2021,6 @@ Scheduler::doCheckForMigrationOpportunities(
               std::make_shared<faabric::PendingMigrations>(msg);
             SPDLOG_DEBUG("Detected migration opportunity for app: {} (gid: {})",
                          msg.appid(), msg.groupid());
-            auto sortedHosts = broker.sortGroupHostsByFrequency(msg.groupid());
         } else {
             SPDLOG_DEBUG("No migration opportunity detected for app: {}",
                          msg.appid());
@@ -1935,17 +2035,14 @@ Scheduler::doCheckForMigrationOpportunities(
 // period, we would have a default one (overwritable through an env.
 // variable), and apps would just opt in/out of being migrated. We set
 // the actual check period instead to ease with experiments.
+// NOTE2: we are here only if req corresponds to the second message of an MPI
+// application, see the place in the code where this method is called for
+// more details
 void Scheduler::doStartFunctionMigrationThread(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
-    bool startMigrationThread = inFlightRequests.empty();
+    bool startMigrationThread = false;
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-
-    if (inFlightRequests.find(firstMsg.appid()) != inFlightRequests.end()) {
-        SPDLOG_ERROR("There is already an in-flight request for app {}",
-                     firstMsg.appid());
-        throw std::runtime_error("App already in-flight");
-    }
 
     // MPI applications are made up of two different requests: the original one
     // (with one message) and the second one (with world size - 1 messages)
@@ -1963,8 +2060,26 @@ void Scheduler::doStartFunctionMigrationThread(
         *msg = req->messages().at(i);
     }
 
-    SPDLOG_INFO("Adding in-flight request for app: {}", firstMsg.appid());
-    inFlightRequests[firstMsg.appid()] = reqCopy;
+    SPDLOG_INFO("[{}] Start add to in-flight {}:{}:{}", thisHost, firstMsg.appid(), firstMsg.groupid(), firstMsg.groupidx());
+    {
+        // Acquire the function migration thread lock to write into the in
+        // flight requests map
+        faabric::util::FullLock lock(migrationThreadMx);
+
+        // Decide if we need to start the migration thread
+        // TODO: could use an atomic bool instead
+        startMigrationThread = inFlightRequests.empty();
+
+        if (inFlightRequests.find(firstMsg.appid()) != inFlightRequests.end()) {
+            SPDLOG_ERROR("There is already an in-flight request for app {}",
+                         firstMsg.appid());
+            throw std::runtime_error("App already in-flight");
+        }
+
+        inFlightRequests[firstMsg.appid()] = reqCopy;
+    }
+    SPDLOG_INFO("[{}] Done add to in-flight {}:{}:{}", thisHost, firstMsg.appid(), firstMsg.groupid(), firstMsg.groupidx());
+
 
     // Decide wether we have to start the migration thread or not
     if (startMigrationThread) {

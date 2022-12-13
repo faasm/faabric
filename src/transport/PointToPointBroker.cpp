@@ -587,7 +587,7 @@ void PointToPointBroker::updateHostForIdx(int groupId,
 
     std::string key = getPointToPointKey(groupId, groupIdx);
 
-    SPDLOG_INFO("Updating point-to-point mapping for {}:{} from {} to {}",
+    SPDLOG_DEBUG("Updating point-to-point mapping for {}:{} from {} to {}",
                  groupId,
                  groupIdx,
                  mappings[key],
@@ -966,7 +966,7 @@ void PointToPointBroker::preMigrationHook(
                 throw std::runtime_error("Error serialising message");
             }
 
-            SPDLOG_INFO("{}:{} sending function migration metadata to {}:{} (sent size: {} - recv size: {})",
+            SPDLOG_DEBUG("Pre-migration: {}:{} sending function migration metadata to {}:{} (sent size: {} - recv size: {})",
                         groupId,
                         groupIdx,
                         groupId,
@@ -995,7 +995,7 @@ void PointToPointBroker::preMigrationHook(
             if (inFlightMapPtr == nullptr) {
                 throw std::runtime_error("making meh an assertion porfavor");
             }
-            SPDLOG_INFO("Adding in-flight migration metadata for rank: {}", m.msg().mpirank());
+            SPDLOG_DEBUG("Pre-migration: adding in-flight migration metadata for rank: {}", m.msg().mpirank());
             inFlightMapPtr->operator[](m.msg().mpirank()) =
               std::make_shared<faabric::MigratedFuncMetadata>(parsedMsg);
         }
@@ -1061,7 +1061,9 @@ void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
             if (groupId != currentGroupId) {
                 initSequenceCounters(groupId);
             }
-            SPDLOG_INFO("Updating message counters for {}:{}", groupId, groupIdx);
+            SPDLOG_INFO("Post-migration: updating message counters for {}:{}", groupId, groupIdx);
+        } else {
+            SPDLOG_INFO("Post-migration: NOT updating message counters for {}:{}", groupId, groupIdx);
         }
 
         for (int i = 0; i < parsedMsg.sentmsgcount_size(); i++) {
@@ -1071,6 +1073,17 @@ void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
             recvMsgCount.at(i) = parsedMsg.recvmsgcount().at(i);
         }
     }
+
+    // Do we need a barrier here just in case?
+    // TODO: maybe this is a bit too cautious?
+    /*
+    SPDLOG_INFO("[{}] {}:{} entering last-most post-migration barrier",
+                conf.endpointHost, groupId, groupIdx);
+    PointToPointGroup::getGroup(groupId)->barrier(groupIdx);
+    SPDLOG_INFO("[{}] {}:{} exitting last-most post-migration barrier",
+                conf.endpointHost, groupId, groupIdx);
+    */
+    // TODO - we should probably remove the pending migration here?
 }
 
 

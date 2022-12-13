@@ -113,6 +113,8 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     size = newSize;
 
+    SPDLOG_INFO("[{}] Creating world with id: {} (size: {})", thisHost, id, size);
+
     auto& sch = faabric::scheduler::getScheduler();
 
     // Set the parameters for the calling message as sanity check
@@ -1644,12 +1646,8 @@ void MpiWorld::prepareMigration(
     }
 
     // Update local records
-    // TODO: eventually merge this with the PTP management
-    bool isTricky = false;
     if (thisRank == localLeader) {
         SPDLOG_INFO("Rank {} preparing migration for host {}", thisRank, thisHost);
-        // TODO - remove me Print ranks for host and sanity check
-        // printAndCheckRanksForHost(ranksForHost, id, size);
 
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
@@ -1677,24 +1675,11 @@ void MpiWorld::prepareMigration(
             // If we are receiving a new rank that must be our new local
             // leader, update our records
             if ((m.dsthost() == thisHost) && (m.msg().mpirank() < localLeader)) {
-                SPDLOG_WARN("Changing local leader (DOWN) {} -> {}",
+                SPDLOG_WARN("Importing a new local leader {} -> {}",
                             localLeader,
                             m.msg().mpirank());
                 localLeader = m.msg().mpirank();
-                if (ranksForHost[m.dsthost()].front() != localLeader) {
-                    SPDLOG_ERROR("Error setting local leader! {} != {}",
-                                 ranksForHost[m.dsthost()].front(),
-                                 localLeader);
-                    throw std::runtime_error("Make me an assertion plz");
-                }
-                isTricky = true;
-            }
-            // TODO - remove me
-            if ((m.dsthost() == thisHost) && (thisRank != 0)) {
-                isTricky = true;
-            }
-            if ((m.dsthost() != thisHost) && (thisRank == 0)) {
-                isTricky = true;
+                assert(ranksForHost[m.dsthost()].front() == localLeader);
             }
 
             // Second, update the records for the source host
@@ -1705,7 +1690,6 @@ void MpiWorld::prepareMigration(
               ranksForHost[m.srchost()].end());
 
             if (ranksForHost[m.srchost()].empty()) {
-                SPDLOG_WARN("Removing completely host {} from MPI world {}", m.srchost(), id);
                 ranksForHost.erase(m.srchost());
             } else {
                 // If we are the source rank, and our local leader is being
@@ -1716,27 +1700,19 @@ void MpiWorld::prepareMigration(
                     SPDLOG_WARN("Changing local leader (UP) {} -> {}",
                                 m.msg().mpirank(),
                                 localLeader);
-                    isTricky = true;
                 }
             }
 
-            // When to call this?
             // TODO - move this to the PTP broker pre/post hook logic
             broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
         }
 
-        // TODO - remove me Print ranks for host and sanity check
-        // printAndCheckRanksForHost(ranksForHost, id, size);
-
-        // Set the migration flag
-        // TODO: remove me
-        hasBeenMigrated = true;
-        if (isTricky) {
-            broker.hasBeenMigrated = true;
-        }
+        // hasBeenMigrated = true;
 
         // Add the necessary new local messaging queues
         initLocalQueues();
+    } else {
+        SPDLOG_INFO("Rank {} NOT preparing migration for host {}", thisRank, thisHost);
     }
 }
 }

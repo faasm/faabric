@@ -151,15 +151,12 @@ void FunctionCallClient::sendPendingMigrations(
   std::shared_ptr<faabric::PendingMigrations> req)
 {
     faabric::PendingMigrations request;
-    faabric::EmptyResponse response;
 
     if (faabric::util::isMockMode()) {
         faabric::util::UniqueLock lock(mockMutex);
         pendingMigrationsRequests.emplace_back(host, req);
     } else {
-        syncSend(faabric::scheduler::FunctionCalls::PendingMigrations,
-                 req.get(),
-                 &response);
+        asyncSend(faabric::scheduler::FunctionCalls::PendingMigrations, req.get());
     }
 }
 
@@ -172,9 +169,7 @@ void FunctionCallClient::sendRemovePendingMigrations(
         faabric::util::UniqueLock lock(mockMutex);
         removePendingMigrationsRequests.emplace_back(host, req);
     } else {
-        syncSend(faabric::scheduler::FunctionCalls::RemovePendingMigrations,
-                 req.get(),
-                 &response);
+        asyncSend(faabric::scheduler::FunctionCalls::RemovePendingMigrations, req.get());
     }
 }
 

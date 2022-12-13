@@ -58,13 +58,13 @@ class PointToPointGroup
 
     bool localTryLock();
 
+    void localBarrier();
+
     void barrier(int groupIdx);
 
     void notify(int groupIdx);
 
     int getNotifyCount();
-
-    void localBarrier();
 
   private:
     faabric::util::SystemConfig& conf;

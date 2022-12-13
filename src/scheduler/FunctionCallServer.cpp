@@ -29,6 +29,14 @@ void FunctionCallServer::doAsyncRecv(transport::Message& message)
             recvUnregister(message.udata());
             break;
         }
+        case faabric::scheduler::FunctionCalls::PendingMigrations: {
+            recvPendingMigrations(message.udata(), message.size());
+            break;
+        }
+        case faabric::scheduler::FunctionCalls::RemovePendingMigrations: {
+            recvRemovePendingMigrations(message.udata(), message.size());
+            break;
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized async call header: {}", header));
@@ -46,12 +54,6 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         }
         case faabric::scheduler::FunctionCalls::GetResources: {
             return recvGetResources(message.udata());
-        }
-        case faabric::scheduler::FunctionCalls::PendingMigrations: {
-            return recvPendingMigrations(message.udata());
-        }
-        case faabric::scheduler::FunctionCalls::RemovePendingMigrations: {
-            return recvRemovePendingMigrations(message.udata(), message.size());
         }
         default: {
             throw std::runtime_error(
@@ -97,36 +99,31 @@ void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
       parsedMsg.host(), parsedMsg.user(), parsedMsg.function());
 }
 
-std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
-  std::span<const uint8_t> buffer)
+void FunctionCallServer::recvPendingMigrations(const uint8_t* buffer,
+                                               size_t bufferSize)
 {
-    auto response = std::make_unique<faabric::HostResources>(
-      scheduler.getThisHostResources());
-    return response;
-}
-
-std::unique_ptr<google::protobuf::Message>
-FunctionCallServer::recvPendingMigrations(std::span<const uint8_t> buffer)
-{
-    PARSE_MSG(faabric::PendingMigrations, buffer.data(), buffer.size());
+    PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
 
     auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
 
     scheduler.addPendingMigrations(msgPtr);
-
-    return std::make_unique<faabric::EmptyResponse>();
 }
 
-std::unique_ptr<google::protobuf::Message>
-FunctionCallServer::recvRemovePendingMigrations(const uint8_t* buffer,
-                                                size_t bufferSize)
+void FunctionCallServer::recvRemovePendingMigrations(const uint8_t* buffer,
+                                                     size_t bufferSize)
 {
     PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
 
     auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
 
     scheduler.removePendingMigrations(msgPtr->appid());
+}
 
-    return std::make_unique<faabric::EmptyResponse>();
+std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
+  std::span<const uint8_t> buffer)
+{
+    auto response = std::make_unique<faabric::HostResources>(
+      scheduler.getThisHostResources());
+    return response;
 }
 }

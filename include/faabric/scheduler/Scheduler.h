@@ -425,6 +425,10 @@ class Scheduler
 
     // ---- Function migration ----
     FunctionMigrationThread functionMigrationThread;
+    // This mutex protects the in-flight requests map and the pending
+    // migrations map that are only ever accessed either by the function
+    // migration thread, or a function checking for migration opportunities
+    std::shared_mutex migrationThreadMx;
     std::map<uint32_t, std::shared_ptr<BatchExecuteRequest>> inFlightRequests;
     std::map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
       pendingMigrations;
