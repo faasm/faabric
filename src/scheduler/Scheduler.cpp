@@ -6,6 +6,7 @@
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/util/concurrent_map.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/locks.h>
@@ -34,17 +35,14 @@ using namespace faabric::snapshot;
 
 namespace faabric::scheduler {
 
-// 0MQ sockets are not thread-safe, and opening them and closing them from
-// different threads messes things up. However, we don't want to constatnly
-// create and recreate them to make calls in the scheduler, therefore we cache
-// them in TLS, and perform thread-specific tidy-up.
-static thread_local std::unordered_map<std::string,
-                                       faabric::scheduler::FunctionCallClient>
+static faabric::util::ConcurrentMap<
+  std::string,
+  std::shared_ptr<faabric::scheduler::FunctionCallClient>>
   functionCallClients;
 
-static thread_local std::unordered_map<std::string,
-                                       faabric::snapshot::SnapshotClient>
-  snapshotClients;
+static faabric::util::
+  ConcurrentMap<std::string, std::shared_ptr<faabric::snapshot::SnapshotClient>>
+    snapshotClients;
 
 MessageLocalResult::MessageLocalResult()
 {
@@ -118,9 +116,6 @@ void Scheduler::addHostToGlobalSet()
 void Scheduler::resetThreadLocalCache()
 {
     SPDLOG_DEBUG("Resetting scheduler thread-local cache");
-
-    functionCallClients.clear();
-    snapshotClients.clear();
 }
 
 void Scheduler::reset()
@@ -268,7 +263,7 @@ int Scheduler::reapStaleExecutors()
                 req.set_user(user);
                 req.set_function(function);
 
-                getFunctionCallClient(masterHost).unregister(req);
+                getFunctionCallClient(masterHost)->unregister(req);
             }
 
             keysToRemove.emplace_back(key);
@@ -356,7 +351,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
         std::string funcStr = faabric::util::funcToString(firstMsg, false);
         SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
 
-        getFunctionCallClient(masterHost).executeFunctions(req);
+        getFunctionCallClient(masterHost)->executeFunctions(req);
         SchedulingDecision decision(firstMsg.appid(), firstMsg.groupid());
         decision.returnHost = masterHost;
         return decision;
@@ -748,7 +743,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
 
         for (const auto& host : getFunctionRegisteredHosts(
                firstMsg.user(), firstMsg.function(), false)) {
-            SnapshotClient& c = getSnapshotClient(host);
+            std::shared_ptr<SnapshotClient> c = getSnapshotClient(host);
 
             // See if we've already pushed this snapshot to the given host,
             // if so, just push the diffs that have occurred in this main thread
@@ -756,9 +751,9 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 std::vector<faabric::util::SnapshotDiff> snapshotDiffs =
                   snap->getTrackedChanges();
 
-                c.pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
+                c->pushSnapshotUpdate(snapshotKey, snap, snapshotDiffs);
             } else {
-                c.pushSnapshot(snapshotKey, snap);
+                c->pushSnapshot(snapshotKey, snap);
                 pushedSnapshotsMap[snapshotKey].insert(host);
             }
         }
@@ -888,7 +883,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             }
 
             // Dispatch the calls
-            getFunctionCallClient(host).executeFunctions(hostRequest);
+            getFunctionCallClient(host)->executeFunctions(hostRequest);
         }
     }
 
@@ -949,8 +944,7 @@ void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
       getFunctionRegisteredHosts(msg.user(), msg.function(), false);
 
     for (auto host : thisRegisteredHosts) {
-        SnapshotClient& c = getSnapshotClient(host);
-        c.deleteSnapshot(snapshotKey);
+        getSnapshotClient(host)->deleteSnapshot(snapshotKey);
     }
 }
 
@@ -991,25 +985,27 @@ std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
     return recordedMessagesLocal;
 }
 
-FunctionCallClient& Scheduler::getFunctionCallClient(
+std::shared_ptr<FunctionCallClient> Scheduler::getFunctionCallClient(
   const std::string& otherHost)
 {
-    if (functionCallClients.find(otherHost) == functionCallClients.end()) {
+    auto client = functionCallClients.get(otherHost).value_or(nullptr);
+    if (client == nullptr) {
         SPDLOG_DEBUG("Adding new function call client for {}", otherHost);
-        functionCallClients.emplace(otherHost, otherHost);
+        client =
+          functionCallClients.tryEmplaceShared(otherHost, otherHost).second;
     }
-
-    return functionCallClients.at(otherHost);
+    return client;
 }
 
-SnapshotClient& Scheduler::getSnapshotClient(const std::string& otherHost)
+std::shared_ptr<SnapshotClient> Scheduler::getSnapshotClient(
+  const std::string& otherHost)
 {
-    if (snapshotClients.find(otherHost) == snapshotClients.end()) {
+    auto client = snapshotClients.get(otherHost).value_or(nullptr);
+    if (client == nullptr) {
         SPDLOG_DEBUG("Adding new snapshot client for {}", otherHost);
-        snapshotClients.emplace(otherHost, otherHost);
+        client = snapshotClients.tryEmplaceShared(otherHost, otherHost).second;
     }
-
-    return snapshotClients.at(otherHost);
+    return client;
 }
 
 std::vector<std::pair<std::string, faabric::Message>>
@@ -1080,7 +1076,7 @@ void Scheduler::broadcastFlush()
 
     // Dispatch flush message to all other hosts
     for (auto& otherHost : allHosts) {
-        getFunctionCallClient(otherHost).sendFlush();
+        getFunctionCallClient(otherHost)->sendFlush();
     }
 
     lock.unlock();
@@ -1109,6 +1105,12 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
 
+    // Remove the app from in-flight map if still there, and this host is the
+    // master host for the message
+    if (msg.masterhost() == thisHost) {
+        removePendingMigration(msg.appid());
+    }
+
     if (msg.executeslocally()) {
         faabric::util::UniqueLock resultsLock(localResultsMutex);
 
@@ -1127,12 +1129,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     std::string key = msg.resultkey();
     if (key.empty()) {
         throw std::runtime_error("Result key empty. Cannot publish result");
-    }
-
-    // Remove the app from in-flight map if still there, and this host is the
-    // master host for the message
-    if (msg.masterhost() == thisHost) {
-        removePendingMigration(msg.appid());
     }
 
     // Write the successful result to the result queue
@@ -1176,8 +1172,8 @@ void Scheduler::setThreadResult(
         setThreadResultLocally(msg.id(), returnValue);
     } else {
         // Push thread result and diffs together
-        SnapshotClient& c = getSnapshotClient(msg.masterhost());
-        c.pushThreadResult(msg.id(), returnValue, key, diffs);
+        getSnapshotClient(msg.masterhost())
+          ->pushThreadResult(msg.id(), returnValue, key, diffs);
     }
 }
 
@@ -1456,7 +1452,7 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
     SPDLOG_TRACE("Requesting resources from {}", host);
-    return getFunctionCallClient(host).getResources();
+    return getFunctionCallClient(host)->getResources();
 }
 
 // --------------------------------------------
@@ -1595,7 +1591,7 @@ void Scheduler::broadcastPendingMigrations(
 
     // Send pending migrations to all involved hosts
     for (auto& otherHost : thisRegisteredHosts) {
-        getFunctionCallClient(otherHost).sendPendingMigrations(
+        getFunctionCallClient(otherHost)->sendPendingMigrations(
           pendingMigrations);
     }
 }

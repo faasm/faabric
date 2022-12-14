@@ -4,7 +4,6 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
-#include <faabric/transport/context.h>
 #include <faabric/util/logging.h>
 
 using namespace faabric::scheduler;
@@ -12,7 +11,7 @@ using namespace faabric::scheduler;
 int main()
 {
     faabric::util::initLogging();
-    faabric::transport::initGlobalMessageContext();
+
     tests::initDistTests();
 
     int slots = 4;
@@ -42,8 +41,5 @@ int main()
         SPDLOG_INFO("Shutting down");
         m.shutdown();
     }
-
-    faabric::transport::closeGlobalMessageContext();
-
     return EXIT_SUCCESS;
 }

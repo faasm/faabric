@@ -37,11 +37,7 @@ class MessageEndpointServerHandler
 
     std::vector<std::jthread> workerThreads;
 
-    std::unique_ptr<SyncFanInMessageEndpoint> syncFanIn = nullptr;
-    std::unique_ptr<SyncFanOutMessageEndpoint> syncFanOut = nullptr;
-
-    std::unique_ptr<AsyncFanInMessageEndpoint> asyncFanIn = nullptr;
-    std::unique_ptr<AsyncFanOutMessageEndpoint> asyncFanOut = nullptr;
+    std::shared_ptr<FanMessageEndpoint> fan = nullptr;
 };
 
 class MessageEndpointServer
@@ -81,11 +77,7 @@ class MessageEndpointServer
     MessageEndpointServerHandler asyncHandler;
     MessageEndpointServerHandler syncHandler;
 
-    AsyncSendMessageEndpoint asyncShutdownSender;
-    SyncSendMessageEndpoint syncShutdownSender;
-
     std::shared_ptr<faabric::util::Latch> requestLatch;
-    std::shared_ptr<faabric::util::Latch> shutdownLatch;
 
     bool started = false;
 };

@@ -18,9 +18,10 @@ void PeriodicBackgroundThread::start(int intervalSecondsIn)
             }
 
             bool isStopped = timeoutCv.wait_for(
-              lock, std::chrono::milliseconds(intervalSeconds * 1000), [&st] {
-                  return st.stop_requested();
-              });
+              lock,
+              st,
+              std::chrono::milliseconds(intervalSeconds * 1000),
+              [&st] { return st.stop_requested(); });
 
             // If we hit the timeout it means we have not been notified to
             // stop. Thus we can do work

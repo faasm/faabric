@@ -1,198 +1,74 @@
 #include <faabric/transport/Message.h>
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/common.h>
-#include <faabric/transport/context.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
+#include <array>
+#include <chrono>
+#include <concepts>
+#include <optional>
+#include <stdexcept>
+#include <thread>
+#include <type_traits>
 #include <unistd.h>
+#include <variant>
+#include <vector>
+
+#include <nng/nng.h>
+#include <nng/protocol/pair1/pair.h>
+#include <nng/protocol/pipeline0/pull.h>
+#include <nng/protocol/pipeline0/push.h>
+#include <nng/protocol/pubsub0/pub.h>
+#include <nng/protocol/pubsub0/sub.h>
+#include <nng/protocol/reqrep0/rep.h>
+#include <nng/protocol/reqrep0/req.h>
 
 #define RETRY_SLEEP_MS 1000
 
-#define CATCH_ZMQ_ERR(op, label)                                               \
-    try {                                                                      \
-        op;                                                                    \
-    } catch (zmq::error_t & e) {                                               \
-        SPDLOG_ERROR("Caught ZeroMQ error for {} on address {}: {} ({})",      \
-                     label,                                                    \
-                     address,                                                  \
-                     e.num(),                                                  \
-                     e.what());                                                \
-        throw;                                                                 \
+void checkNngError(int ec, std::string_view label, std::string_view address)
+{
+    if (ec != 0) {
+        SPDLOG_ERROR("Caught NNG error for {} on address {}: {} ({})",
+                     label,
+                     address,
+                     nng_strerror(ec),
+                     ec);
+        throw std::runtime_error(nng_strerror(ec));
     }
+}
 
-#define CATCH_ZMQ_ERR_RETRY_ONCE(op, label)                                    \
-    try {                                                                      \
-        op;                                                                    \
-    } catch (zmq::error_t & e) {                                               \
-        SPDLOG_WARN("Caught ZeroMQ error for {} on address {}: {} ({})",       \
-                    label,                                                     \
-                    address,                                                   \
-                    e.num(),                                                   \
-                    e.what());                                                 \
-        SPDLOG_WARN("Retrying {} on address {}", label, address);              \
-        SLEEP_MS(RETRY_SLEEP_MS);                                              \
-        try {                                                                  \
-            op;                                                                \
-        } catch (zmq::error_t & e2) {                                          \
-            SPDLOG_ERROR(                                                      \
-              "Caught ZeroMQ error on retry for {} on address {}: {} ({})",    \
-              label,                                                           \
-              address,                                                         \
-              e2.num(),                                                        \
-              e2.what());                                                      \
-            throw;                                                             \
-        }                                                                      \
+template<std::invocable Op>
+void checkNngErrorRetryOnce(Op op,
+                            std::string_view label,
+                            std::string_view address)
+{
+    int ec = op();
+    if (ec != 0) {
+        SPDLOG_WARN("Caught NNG error for {} on address {}: {} ({}), retrying "
+                    "once after {} ms",
+                    label,
+                    address,
+                    nng_strerror(ec),
+                    ec,
+                    RETRY_SLEEP_MS);
+        SLEEP_MS(RETRY_SLEEP_MS);
+        ec = op();
+        if (ec != 0) {
+            SPDLOG_ERROR(
+              "Caught NNG error on retry for {} on address {}: {} ({})",
+              label,
+              address,
+              nng_strerror(ec),
+              ec);
+            throw std::runtime_error(nng_strerror(ec));
+        }
     }
+}
 
 namespace faabric::transport {
-
-/**
- * This is where we set up all our sockets. It handles setting timeouts and
- * catching errors in the creation process, as well as logging and validating
- * our use of socket types and connection types.
- */
-zmq::socket_t socketFactory(zmq::socket_type socketType,
-                            MessageEndpointConnectType connectType,
-                            int timeoutMs,
-                            const std::string& address)
-{
-    zmq::socket_t socket;
-
-    // Create the socket
-    CATCH_ZMQ_ERR(socket =
-                    zmq::socket_t(*getGlobalMessageContext(), socketType),
-                  "socket_create")
-    socket.set(zmq::sockopt::rcvtimeo, timeoutMs);
-    socket.set(zmq::sockopt::sndtimeo, timeoutMs);
-
-    // Setting linger here is essential to avoid infinite hangs
-    socket.set(zmq::sockopt::linger, LINGER_MS);
-
-    switch (connectType) {
-        case (MessageEndpointConnectType::BIND): {
-            switch (socketType) {
-                case zmq::socket_type::dealer: {
-                    SPDLOG_TRACE("Bind socket: dealer {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::pair: {
-                    SPDLOG_TRACE("Bind socket: pair {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::pub: {
-                    SPDLOG_TRACE(
-                      "Bind socket: pub {} (timeout {}ms)", address, timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::pull: {
-                    SPDLOG_TRACE("Bind socket: pull {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::push: {
-                    SPDLOG_TRACE("Bind socket: push {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::rep: {
-                    SPDLOG_TRACE(
-                      "Bind socket: rep {} (timeout {}ms)", address, timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                case zmq::socket_type::router: {
-                    SPDLOG_TRACE("Bind socket: router {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.bind(address), "bind")
-                    break;
-                }
-                default: {
-                    SPDLOG_ERROR("Invalid bind socket type {} ({})",
-                                 static_cast<int>(socketType),
-                                 address);
-                    throw std::runtime_error(
-                      "Binding with invalid socket type");
-                }
-            }
-            break;
-        }
-        case (MessageEndpointConnectType::CONNECT): {
-            switch (socketType) {
-                case zmq::socket_type::pair: {
-                    SPDLOG_TRACE("Connect socket: pair {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::pull: {
-                    SPDLOG_TRACE("Connect socket: pull {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::push: {
-                    SPDLOG_TRACE("Connect socket: push {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::rep: {
-                    SPDLOG_TRACE("Connect socket: rep {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::req: {
-                    SPDLOG_TRACE("Connect socket: req {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                case zmq::socket_type::sub: {
-                    SPDLOG_TRACE("Connect socket: sub {} (timeout {}ms)",
-                                 address,
-                                 timeoutMs);
-                    CATCH_ZMQ_ERR_RETRY_ONCE(socket.connect(address), "connect")
-                    break;
-                }
-                default: {
-                    SPDLOG_ERROR("Invalid connect socket type {} ({})",
-                                 static_cast<int>(socketType),
-                                 address);
-                    throw std::runtime_error(
-                      "Connecting with unrecognized socket type");
-                }
-            }
-            break;
-        }
-        default: {
-            SPDLOG_ERROR("Unrecognised socket connect type {}", connectType);
-            throw std::runtime_error("Unrecognised connect type");
-        }
-    }
-
-    return socket;
-}
 
 MessageEndpoint::MessageEndpoint(const std::string& addressIn, int timeoutMsIn)
   : address(addressIn)
@@ -215,147 +91,319 @@ MessageEndpoint::MessageEndpoint(const std::string& hostIn,
                     timeoutMsIn)
 {}
 
+MessageEndpoint::~MessageEndpoint()
+{
+    if (socket.id != 0) {
+        if (lingerMs > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(lingerMs));
+        }
+        close();
+    }
+}
+
 std::string MessageEndpoint::getAddress()
 {
     return address;
 }
 
-zmq::socket_t MessageEndpoint::setUpSocket(
-  zmq::socket_type socketType,
-  MessageEndpointConnectType connectType)
+/**
+ * This is where we set up all our sockets. It handles setting timeouts and
+ * catching errors in the creation process, as well as logging and validating
+ * our use of socket types and connection types.
+ */
+void MessageEndpoint::setUpSocket(SocketType socketType,
+                                  MessageEndpointConnectType connectType)
 {
-    return socketFactory(socketType, connectType, timeoutMs, address);
-}
-
-void MessageEndpoint::sendMessage(zmq::socket_t& socket,
-                                  uint8_t header,
-                                  const uint8_t* data,
-                                  size_t dataSize,
-                                  int sequenceNum)
-{
-    uint8_t buffer[HEADER_MSG_SIZE];
-    faabric::util::unalignedWrite<uint8_t>(header, buffer);
-    faabric::util::unalignedWrite<size_t>(dataSize, buffer + sizeof(uint8_t));
-    faabric::util::unalignedWrite<int>(
-      sequenceNum, buffer + sizeof(uint8_t) + sizeof(size_t));
-
-    sendBuffer(socket, buffer, HEADER_MSG_SIZE, true);
-    sendBuffer(socket, data, dataSize, false);
-}
-
-Message MessageEndpoint::recvMessage(zmq::socket_t& socket, bool async)
-{
-    assert(tid == std::this_thread::get_id());
-
-    // Receive header and body
-    Message headerMessage = recvBuffer(socket, HEADER_MSG_SIZE);
-    if (headerMessage.getResponseCode() == MessageResponseCode::TIMEOUT) {
-        SPDLOG_TRACE("Server on {}, looping after no message", getAddress());
-        return Message(MessageResponseCode::TIMEOUT);
+    // Create the socket
+    switch (connectType) {
+        case (MessageEndpointConnectType::BIND): {
+            SPDLOG_TRACE("Bind socket: {} {} (timeout {}ms)",
+                         static_cast<int>(socketType),
+                         address,
+                         timeoutMs);
+            switch (socketType) {
+                case SocketType::pair: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_pair1_open(&socket); },
+                      "bind",
+                      address);
+                    break;
+                }
+                case SocketType::pub: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_pub0_open(&socket); },
+                      "bind",
+                      address);
+                    break;
+                }
+                case SocketType::pull: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_pull0_open(&socket); },
+                      "bind",
+                      address);
+                    break;
+                }
+                case SocketType::push: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_push0_open(&socket); },
+                      "bind",
+                      address);
+                    break;
+                }
+                case SocketType::rep: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_rep0_open(&socket); },
+                      "bind",
+                      address);
+                    break;
+                }
+                default: {
+                    SPDLOG_ERROR("Invalid bind socket type {} ({})",
+                                 static_cast<int>(socketType),
+                                 address);
+                    throw std::runtime_error(
+                      "Binding with invalid socket type");
+                }
+            }
+            nng_listener listener;
+            checkNngError(nng_listen(socket, address.c_str(), &listener, 0),
+                          "nng_listen",
+                          address);
+            connectionManager = listener;
+            break;
+        }
+        case (MessageEndpointConnectType::CONNECT): {
+            SPDLOG_TRACE("Connect socket: {} {} (timeout {}ms)",
+                         static_cast<int>(socketType),
+                         address,
+                         timeoutMs);
+            switch (socketType) {
+                case SocketType::pair: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_pair1_open(&socket); },
+                      "connect",
+                      address);
+                    break;
+                }
+                case SocketType::pull: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_pull0_open(&socket); },
+                      "connect",
+                      address);
+                    break;
+                }
+                case SocketType::push: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_push0_open(&socket); },
+                      "connect",
+                      address);
+                    break;
+                }
+                case SocketType::rep: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_rep0_open(&socket); },
+                      "connect",
+                      address);
+                    break;
+                }
+                case SocketType::req: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_req0_open(&socket); },
+                      "connect",
+                      address);
+                    // Make sure to basically never resend messages
+                    nng_socket_set_ms(
+                      socket, NNG_OPT_REQ_RESENDTIME, 60'000'000);
+                    break;
+                }
+                case SocketType::sub: {
+                    checkNngErrorRetryOnce(
+                      [&]() { return nng_sub0_open(&socket); },
+                      "connect",
+                      address);
+                    break;
+                }
+                default: {
+                    SPDLOG_ERROR("Invalid connect socket type {} ({})",
+                                 static_cast<int>(socketType),
+                                 address);
+                    throw std::runtime_error(
+                      "Connecting with unrecognized socket type");
+                }
+            }
+            nng_dialer dialer;
+            checkNngError(
+              nng_dial(socket, address.c_str(), &dialer, NNG_FLAG_NONBLOCK),
+              "nng_dial",
+              address);
+            connectionManager = dialer;
+            break;
+        }
+        default: {
+            SPDLOG_ERROR("Unrecognised socket connect type {}", connectType);
+            throw std::runtime_error("Unrecognised connect type");
+        }
     }
 
-    assert(headerMessage.size() == HEADER_MSG_SIZE);
-    uint8_t header =
-      faabric::util::unalignedRead<uint8_t>(headerMessage.udata());
-    size_t msgSize = faabric::util::unalignedRead<size_t>(
-      headerMessage.udata() + sizeof(uint8_t));
-    int sequenceNum = faabric::util::unalignedRead<int>(
-      headerMessage.udata() + sizeof(uint8_t) + sizeof(size_t));
+    nng_socket_set_ms(socket, NNG_OPT_RECVTIMEO, timeoutMs);
+    nng_socket_set_ms(socket, NNG_OPT_SENDTIMEO, timeoutMs);
+    if (!address.starts_with("inproc:")) {
+        this->lingerMs = LINGER_MS;
+    }
+}
 
-    SPDLOG_TRACE(
-      "Received header {} size {} on {}", header, msgSize, getAddress());
+void MessageEndpoint::sendMessage(uint8_t header,
+                                  const uint8_t* data,
+                                  size_t dataSize,
+                                  int sequenceNum,
+                                  std::optional<nng_ctx> context)
+{
+    const size_t allocSize = HEADER_MSG_SIZE + dataSize;
+    nng_msg* msg = nullptr;
+    checkNngError(nng_msg_alloc(&msg, allocSize), "msg_alloc", address);
+    uint8_t* buffer = reinterpret_cast<uint8_t*>(nng_msg_body(msg));
+    std::uninitialized_fill_n(buffer, HEADER_MSG_SIZE, uint8_t(0));
+    faabric::util::unalignedWrite<uint8_t>(header, buffer);
+    faabric::util::unalignedWrite<uint64_t>(static_cast<uint64_t>(dataSize),
+                                            buffer + sizeof(uint8_t));
+    faabric::util::unalignedWrite<int32_t>(static_cast<int32_t>(sequenceNum),
+                                           buffer + sizeof(uint8_t) +
+                                             sizeof(uint64_t));
+    std::copy_n(data, dataSize, buffer + HEADER_MSG_SIZE);
 
-    Message body = recvBuffer(socket, msgSize);
-    body.setHeader(header);
-    body.setSequenceNum(sequenceNum);
+    nng_aio* aio = nullptr;
+    if (int ec = nng_aio_alloc(&aio, nullptr, nullptr); ec < 0) {
+        nng_msg_free(msg);
+        checkNngError(ec, "nng_aio_alloc", address);
+    }
 
-    if (body.getHeader() == SHUTDOWN_HEADER) {
-        if (body.dataCopy() == shutdownPayload) {
+    nng_aio_set_msg(aio, msg);
+
+    if (context.has_value()) {
+        nng_ctx_send(*context, aio);
+    } else {
+        nng_send_aio(socket, aio);
+    }
+
+    nng_aio_wait(aio);
+    int ec = nng_aio_result(aio);
+    nng_aio_free(aio);
+    if (ec != 0) {
+        nng_msg_free(msg); // Owned by the socket if succeeded
+        checkNngError(ec, "sendMessage", address);
+    }
+}
+
+Message MessageEndpoint::recvMessage(bool async, std::optional<nng_ctx> context)
+{
+    nng_aio* aio = nullptr;
+    checkNngError(
+      nng_aio_alloc(&aio, nullptr, nullptr), "nng_aio_alloc", address);
+
+    if (context.has_value()) {
+        nng_ctx_recv(*context, aio);
+    } else {
+        nng_recv_aio(socket, aio);
+    }
+
+    nng_aio_wait(aio);
+    const int ec = nng_aio_result(aio);
+    nng_msg* rawMsg = nng_aio_get_msg(aio);
+    nng_aio_free(aio);
+
+    if (ec == NNG_ETIMEDOUT) {
+        SPDLOG_TRACE(
+          "Did not receive message within {}ms on {}", timeoutMs, address);
+        return Message(MessageResponseCode::TIMEOUT);
+    }
+    if (ec == NNG_ECLOSED) {
+        SPDLOG_DEBUG("Endpoint {} received ECLOSED on recv", address);
+        return Message(MessageResponseCode::TERM);
+    }
+    checkNngError(ec, "recvBuffer", address);
+
+    // Takes ownership of the nng-allocated buffer and will free it
+    Message msg(rawMsg);
+
+    if (msg.allData().size() < HEADER_MSG_SIZE) {
+        SPDLOG_ERROR(
+          "Received a message that's too short, received: {} required: {}",
+          msg.allData().size(),
+          HEADER_MSG_SIZE);
+        throw std::runtime_error("Message too small");
+    }
+    std::span<const uint8_t> dataBytes = msg.udata();
+
+    if (dataBytes.size_bytes() != msg.getDeclaredDataSize()) {
+        SPDLOG_ERROR("Received a different number of bytes {} than specified "
+                     "in the message header {}",
+                     dataBytes.size_bytes(),
+                     msg.getDeclaredDataSize());
+        throw std::runtime_error("Error receiving message");
+    }
+
+    SPDLOG_TRACE("Received message with header {} size {} on {}",
+                 msg.getMessageCode(),
+                 msg.udata().size(),
+                 getAddress());
+
+    if (msg.getMessageCode() == SHUTDOWN_HEADER) {
+        if (std::equal(dataBytes.begin(),
+                       dataBytes.end(),
+                       shutdownPayload.cbegin(),
+                       shutdownPayload.cend())) {
             SPDLOG_TRACE("Server thread on {} got shutdown message",
                          getAddress());
 
             // Send an empty response if in sync mode
             // (otherwise upstream socket will hang)
             if (!async) {
-                std::vector<uint8_t> empty(4, 0);
-                static_cast<SyncRecvMessageEndpoint*>(this)->sendResponse(
-                  0, empty.data(), empty.size());
+                std::array<uint8_t, 4> empty{ 0 };
+                this->sendMessage(0, empty.data(), empty.size());
             }
 
             return Message(MessageResponseCode::TERM);
         }
     }
 
-    if (body.getResponseCode() != MessageResponseCode::SUCCESS) {
-        SPDLOG_ERROR("Server on port {}, got header, error "
-                     "on body: {}",
-                     getAddress(),
-                     body.getResponseCode());
-        throw MessageTimeoutException("Server, got header, error on body");
-    }
-
-    SPDLOG_TRACE("Received body size {} on {}", body.size(), getAddress());
-
-    return body;
-}
-
-Message MessageEndpoint::recvBuffer(zmq::socket_t& socket, size_t size)
-{
-    Message msg(size);
-
-    CATCH_ZMQ_ERR(
-      try {
-          auto res = socket.recv(zmq::buffer(msg.data(), msg.size()));
-
-          if (!res.has_value()) {
-              SPDLOG_TRACE("Did not receive message size {} within {}ms on {}",
-                           size,
-                           timeoutMs,
-                           address);
-              return Message(MessageResponseCode::TIMEOUT);
-          }
-
-          if (res.has_value() && (res->size != res->untruncated_size)) {
-              SPDLOG_ERROR("Received more bytes than buffer can hold. "
-                           "Received: {}, capacity {}",
-                           res->untruncated_size,
-                           res->size);
-              throw std::runtime_error("Error receiving message");
-          }
-      } catch (zmq::error_t& e) {
-          if (e.num() == ZMQ_ETERM) {
-              SPDLOG_WARN("Endpoint {} received ETERM on recv", address);
-              return Message(MessageResponseCode::TERM);
-          }
-
-          throw;
-      },
-      "recv_buffer")
-
     return msg;
 }
 
-void MessageEndpoint::sendBuffer(zmq::socket_t& socket,
-                                 const uint8_t* data,
-                                 size_t dataSize,
-                                 bool more)
+MessageContext MessageEndpoint::createContext()
 {
-    assert(tid == std::this_thread::get_id());
-    zmq::send_flags sendFlags =
-      more ? zmq::send_flags::sndmore : zmq::send_flags::none;
+    nng_ctx ctx = NNG_CTX_INITIALIZER;
+    nng_ctx_open(&ctx, socket);
+    return MessageContext(ctx);
+}
 
-    CATCH_ZMQ_ERR(
-      {
-          auto res = socket.send(zmq::buffer(data, dataSize), sendFlags);
-          if (res != dataSize) {
-              SPDLOG_ERROR("Sent different bytes than expected (sent "
-                           "{}, expected {})",
-                           res.value_or(0),
-                           dataSize);
-              throw std::runtime_error("Error sending message");
+void MessageEndpoint::close()
+{
+    // Switch depending on the type in the variant, closing the dialer or
+    // listener depending on which one this socket was opened with.
+    std::visit(
+      [](auto&& value) {
+          // see example at
+          // https://en.cppreference.com/w/cpp/utility/variant/visit
+          using T = std::decay_t<decltype(value)>;
+          if constexpr (std::is_same_v<T, nng_dialer>) {
+              nng_dialer_close(value);
+          } else if constexpr (std::is_same_v<T, nng_listener>) {
+              nng_listener_close(value);
+          } else if constexpr (std::is_same_v<T, std::monostate>) {
+              /* no-op */
+          } else {
+              // always false, T-dependent expression
+              static_assert(std::is_same_v<T, T*>, "non-exhaustive visitor");
           }
       },
-      "send")
+      connectionManager);
+    connectionManager = std::monostate();
+
+    int ec = nng_close(socket);
+    if (ec != 0) {
+        SPDLOG_WARN("Error when closing socket: {}", nng_strerror(ec));
+    }
+    socket = NNG_SOCKET_INITIALIZER;
 }
 
 // ----------------------------------------------
@@ -367,8 +415,7 @@ AsyncSendMessageEndpoint::AsyncSendMessageEndpoint(const std::string& hostIn,
                                                    int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    socket =
-      setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::CONNECT);
+    setUpSocket(SocketType::push, MessageEndpointConnectType::CONNECT);
 }
 
 void AsyncSendMessageEndpoint::send(uint8_t header,
@@ -377,7 +424,7 @@ void AsyncSendMessageEndpoint::send(uint8_t header,
                                     int sequenceNum)
 {
     SPDLOG_TRACE("PUSH {} ({} bytes)", address, dataSize);
-    sendMessage(socket, header, data, dataSize, sequenceNum);
+    sendMessage(header, data, dataSize, sequenceNum);
 }
 
 AsyncInternalSendMessageEndpoint::AsyncInternalSendMessageEndpoint(
@@ -385,8 +432,7 @@ AsyncInternalSendMessageEndpoint::AsyncInternalSendMessageEndpoint(
   int timeoutMs)
   : MessageEndpoint("inproc://" + inprocLabel, timeoutMs)
 {
-    socket =
-      setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::CONNECT);
+    setUpSocket(SocketType::push, MessageEndpointConnectType::CONNECT);
 }
 
 void AsyncInternalSendMessageEndpoint::send(uint8_t header,
@@ -395,7 +441,7 @@ void AsyncInternalSendMessageEndpoint::send(uint8_t header,
                                             int sequenceNum)
 {
     SPDLOG_TRACE("PUSH {} ({} bytes)", address, sequenceNum, dataSize);
-    sendMessage(socket, header, data, dataSize, sequenceNum);
+    sendMessage(header, data, dataSize, sequenceNum);
 }
 
 // ----------------------------------------------
@@ -407,14 +453,13 @@ SyncSendMessageEndpoint::SyncSendMessageEndpoint(const std::string& hostIn,
                                                  int timeoutMs)
   : MessageEndpoint(hostIn, portIn, timeoutMs)
 {
-    reqSocket =
-      setUpSocket(zmq::socket_type::req, MessageEndpointConnectType::CONNECT);
+    setUpSocket(SocketType::req, MessageEndpointConnectType::CONNECT);
 }
 
 void SyncSendMessageEndpoint::sendRaw(const uint8_t* data, size_t dataSize)
 {
     SPDLOG_TRACE("REQ {} ({} bytes)", address, dataSize);
-    sendMessage(reqSocket, NO_HEADER, data, dataSize);
+    sendMessage(NO_HEADER, data, dataSize);
 }
 
 Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
@@ -422,15 +467,16 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
                                                    size_t dataSize)
 {
     SPDLOG_TRACE("REQ {} ({} bytes)", address, dataSize);
-    sendMessage(reqSocket, header, data, dataSize);
+    auto ctx = createContext();
+    sendMessage(header, data, dataSize, NO_SEQUENCE_NUM, ctx.context);
 
     // Do the receive
     SPDLOG_TRACE("RECV (REQ) {}", address);
-    Message msg = recvMessage(reqSocket, false);
+    Message msg = recvMessage(false, ctx.context);
     if (msg.getResponseCode() != MessageResponseCode::SUCCESS) {
         SPDLOG_ERROR("Failed getting response on {}: code {}",
                      address,
-                     msg.getResponseCode());
+                     static_cast<int>(msg.getResponseCode()));
         throw MessageTimeoutException("Error on waiting for response.");
     }
 
@@ -443,19 +489,19 @@ Message SyncSendMessageEndpoint::sendAwaitResponse(uint8_t header,
 
 RecvMessageEndpoint::RecvMessageEndpoint(std::string inProcLabel,
                                          int timeoutMs,
-                                         zmq::socket_type socketType,
+                                         SocketType socketType,
                                          MessageEndpointConnectType connectType)
   : MessageEndpoint("inproc://" + inProcLabel, timeoutMs)
 {
-    socket = setUpSocket(socketType, connectType);
+    setUpSocket(socketType, connectType);
 }
 
 RecvMessageEndpoint::RecvMessageEndpoint(int portIn,
                                          int timeoutMs,
-                                         zmq::socket_type socketType)
+                                         SocketType socketType)
   : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
 {
-    socket = setUpSocket(socketType, MessageEndpointConnectType::BIND);
+    setUpSocket(socketType, MessageEndpointConnectType::BIND);
 }
 
 Message RecvMessageEndpoint::recv()
@@ -465,81 +511,60 @@ Message RecvMessageEndpoint::recv()
 
 Message RecvMessageEndpoint::doRecv(bool async)
 {
-    return recvMessage(socket, async);
+    return recvMessage(async);
 }
 
 // ----------------------------------------------
 // ASYNC FAN IN AND FAN OUT
 // ----------------------------------------------
 
-FanInMessageEndpoint::FanInMessageEndpoint(int portIn,
-                                           int timeoutMs,
-                                           zmq::socket_type socketType)
-  : RecvMessageEndpoint(portIn, timeoutMs, socketType)
-  , controlSockAddress("inproc://" + std::to_string(portIn) + "-control")
+FanMessageEndpoint::FanMessageEndpoint(int portIn,
+                                       int timeoutMs,
+                                       SocketType socketType,
+                                       bool isAsync)
+  : MessageEndpoint(ANY_HOST, portIn, timeoutMs)
+  , isAsync(isAsync)
 {
-    // Connect the control sock. Note that even though the control socket lives
-    // longer than the control killer socket, we must *connect* here, not bind.
-    controlSock = socketFactory(zmq::socket_type::sub,
-                                MessageEndpointConnectType::CONNECT,
-                                timeoutMs,
-                                controlSockAddress);
-
-    // Subscribe to all topics
-    controlSock.set(zmq::sockopt::subscribe, zmq::str_buffer(""));
+    setUpSocket(socketType, MessageEndpointConnectType::BIND);
 }
 
-void FanInMessageEndpoint::attachFanOut(zmq::socket_t& fanOutSock)
+MessageContext FanMessageEndpoint::attachFanOut()
 {
-    // Useful discussion on proxy_steerable here:
-    // https://github.com/zeromq/cppzmq/issues/478
-    SPDLOG_TRACE("Connecting proxy on {} ({})", address, controlSockAddress);
-    zmq::proxy_steerable(socket, fanOutSock, zmq::socket_ref(), controlSock);
+    return createContext();
 }
 
-void FanInMessageEndpoint::stop()
+void FanMessageEndpoint::stop()
 {
-    SPDLOG_TRACE("Sending TERMINATE on control socket {}", controlSockAddress);
-    // Note that even though this killer socket is short-lived sending a message
-    // to the control socket, we must *bind* here, not connect.
-    zmq::socket_t controlKillerSock =
-      socketFactory(zmq::socket_type::pub,
-                    MessageEndpointConnectType::BIND,
-                    timeoutMs,
-                    controlSockAddress);
-
-    controlKillerSock.send(zmq::str_buffer("TERMINATE"), zmq::send_flags::none);
-    controlKillerSock.close();
+    SPDLOG_TRACE("Terminating fan socket {}", getAddress());
+    this->close();
 }
 
-AsyncFanOutMessageEndpoint::AsyncFanOutMessageEndpoint(
-  const std::string& inprocLabel,
-  int timeoutMs)
-  : MessageEndpoint("inproc://" + inprocLabel, timeoutMs)
+Message FanMessageEndpoint::recv(const MessageContext& ctx)
 {
-    socket =
-      setUpSocket(zmq::socket_type::push, MessageEndpointConnectType::BIND);
+    // Async (PULL) fan endpoints don't support context objects, a simple
+    // receive is enough.
+    return recvMessage(isAsync,
+                       isAsync ? std::nullopt : std::optional(ctx.context));
 }
 
-AsyncFanInMessageEndpoint::AsyncFanInMessageEndpoint(int portIn, int timeoutMs)
-  : FanInMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
+void FanMessageEndpoint::sendResponse(const MessageContext& ctx,
+                                      uint8_t header,
+                                      const uint8_t* data,
+                                      size_t dataSize)
+{
+    return sendMessage(header, data, dataSize, NO_SEQUENCE_NUM, ctx.context);
+}
+
+AsyncFanMessageEndpoint::AsyncFanMessageEndpoint(int portIn, int timeoutMs)
+  : FanMessageEndpoint(portIn, timeoutMs, SocketType::pull, true)
 {}
 
 // ----------------------------------------------
 // SYNC FAN IN AND FAN OUT
 // ----------------------------------------------
 
-SyncFanOutMessageEndpoint::SyncFanOutMessageEndpoint(
-  const std::string& inProcLabel,
-  int timeoutMs)
-  : RecvMessageEndpoint(inProcLabel,
-                        timeoutMs,
-                        zmq::socket_type::dealer,
-                        MessageEndpointConnectType::BIND)
-{}
-
-SyncFanInMessageEndpoint::SyncFanInMessageEndpoint(int portIn, int timeoutMs)
-  : FanInMessageEndpoint(portIn, timeoutMs, zmq::socket_type::router)
+SyncFanMessageEndpoint::SyncFanMessageEndpoint(int portIn, int timeoutMs)
+  : FanMessageEndpoint(portIn, timeoutMs, SocketType::rep, false)
 {}
 
 // ----------------------------------------------
@@ -551,18 +576,18 @@ AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(
   int timeoutMs)
   : RecvMessageEndpoint(inprocLabel,
                         timeoutMs,
-                        zmq::socket_type::pull,
+                        SocketType::pull,
                         MessageEndpointConnectType::CONNECT)
 {}
 
 AsyncRecvMessageEndpoint::AsyncRecvMessageEndpoint(int portIn, int timeoutMs)
-  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::pull)
+  : RecvMessageEndpoint(portIn, timeoutMs, SocketType::pull)
 {}
 
 Message AsyncRecvMessageEndpoint::recv()
 {
     SPDLOG_TRACE("PULL {}", address);
-    return RecvMessageEndpoint::recvMessage(socket, true);
+    return RecvMessageEndpoint::recvMessage(true);
 }
 
 AsyncInternalRecvMessageEndpoint::AsyncInternalRecvMessageEndpoint(
@@ -570,14 +595,14 @@ AsyncInternalRecvMessageEndpoint::AsyncInternalRecvMessageEndpoint(
   int timeoutMs)
   : RecvMessageEndpoint(inprocLabel,
                         timeoutMs,
-                        zmq::socket_type::pull,
+                        SocketType::pull,
                         MessageEndpointConnectType::BIND)
 {}
 
 Message AsyncInternalRecvMessageEndpoint::recv()
 {
     SPDLOG_TRACE("PULL {}", address);
-    return RecvMessageEndpoint::recv();
+    return RecvMessageEndpoint::recvMessage(true);
 }
 
 // ----------------------------------------------
@@ -588,12 +613,12 @@ SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(const std::string& inprocLabel,
                                                  int timeoutMs)
   : RecvMessageEndpoint(inprocLabel,
                         timeoutMs,
-                        zmq::socket_type::rep,
+                        SocketType::rep,
                         MessageEndpointConnectType::CONNECT)
 {}
 
 SyncRecvMessageEndpoint::SyncRecvMessageEndpoint(int portIn, int timeoutMs)
-  : RecvMessageEndpoint(portIn, timeoutMs, zmq::socket_type::rep)
+  : RecvMessageEndpoint(portIn, timeoutMs, SocketType::rep)
 {}
 
 Message SyncRecvMessageEndpoint::recv()
@@ -607,7 +632,7 @@ void SyncRecvMessageEndpoint::sendResponse(uint8_t header,
                                            size_t size)
 {
     SPDLOG_TRACE("REP {} ({} bytes)", address, size);
-    sendMessage(socket, header, data, size);
+    sendMessage(header, data, size);
 }
 
 // ----------------------------------------------
@@ -618,7 +643,7 @@ AsyncDirectRecvEndpoint::AsyncDirectRecvEndpoint(const std::string& inprocLabel,
                                                  int timeoutMs)
   : RecvMessageEndpoint(inprocLabel,
                         timeoutMs,
-                        zmq::socket_type::pair,
+                        SocketType::pair,
                         MessageEndpointConnectType::BIND)
 {}
 
@@ -632,8 +657,7 @@ AsyncDirectSendEndpoint::AsyncDirectSendEndpoint(const std::string& inprocLabel,
                                                  int timeoutMs)
   : MessageEndpoint("inproc://" + inprocLabel, timeoutMs)
 {
-    socket =
-      setUpSocket(zmq::socket_type::pair, MessageEndpointConnectType::CONNECT);
+    setUpSocket(SocketType::pair, MessageEndpointConnectType::CONNECT);
 }
 
 void AsyncDirectSendEndpoint::send(uint8_t header,
@@ -641,6 +665,6 @@ void AsyncDirectSendEndpoint::send(uint8_t header,
                                    size_t dataSize)
 {
     SPDLOG_TRACE("PAIR send {} ({} bytes)", address, dataSize);
-    sendMessage(socket, header, data, dataSize);
+    sendMessage(header, data, dataSize);
 }
 }

@@ -18,7 +18,7 @@ TEST_CASE("Test message moving", "[transport]")
     size_t msgSize = 100;
 
     faabric::transport::Message m(msgSize);
-    uint8_t* dataPtr = m.udata();
+    uint8_t* dataPtr = m.udata().data();
 
     // Set some data
     dataPtr[0] = 1;
@@ -29,7 +29,10 @@ TEST_CASE("Test message moving", "[transport]")
     faabric::transport::Message mB(std::move(m));
 
     // Check we can still access the pointer
-    REQUIRE(mB.udata() == dataPtr);
+    REQUIRE(mB.udata().data() == dataPtr);
+
+    // Check the old message is no longer accessible
+    REQUIRE(m.udata().data() == nullptr);
 
     REQUIRE(dataPtr[0] == 1);
     REQUIRE(dataPtr[1] == 2);

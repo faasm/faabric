@@ -212,7 +212,10 @@ void MpiWorld::destroy()
     }
 
     // Clear structures used for mocking
-    mpiMockedMessages.clear();
+    {
+        faabric::util::UniqueLock lock(mockMutex);
+        mpiMockedMessages.clear();
+    }
 }
 
 void MpiWorld::initialiseFromMsg(faabric::Message& msg)

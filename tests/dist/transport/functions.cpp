@@ -118,8 +118,8 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
                           std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     // We need sufficient concurrency here to show up bugs every time
-    int nWorkers = 10;
-    int nLoops = 30;
+    const int nWorkers = 10;
+    const int nLoops = 10;
 
     std::string sharedStateKey = "dist-lock-test";
 
@@ -164,7 +164,7 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
                          expectedValue);
             success = false;
         } else {
-            SPDLOG_ERROR("Distributed lock succeeded, result {}", finalValue);
+            SPDLOG_INFO("Distributed lock succeeded, result {}", finalValue);
         }
 
         return success ? 0 : 1;
@@ -185,7 +185,7 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
         int* originalValue = (int*)stateKv->get();
 
         // Short sleep
-        int sleepTimeMs = std::rand() % 50;
+        int sleepTimeMs = std::rand() % 10;
         SLEEP_MS(sleepTimeMs);
 
         // Increment and push

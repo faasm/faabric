@@ -137,7 +137,7 @@ class MpiDistTestsFixture : public DistTestsFixture
 
     void checkAllocationAndResult(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      int timeoutMs = 1000,
+      int timeoutMs = 10000,
       bool skipExecGraphCheck = false)
     {
         faabric::Message& msg = req->mutable_messages()->at(0);

@@ -1,13 +1,22 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/Message.h>
+#include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/bytes.h>
+#include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
+#include <absl/container/flat_hash_set.h>
+#include <atomic>
 #include <list>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <tuple>
 
 #define NO_LOCK_OWNER_IDX -1
 
@@ -17,26 +26,22 @@
 
 namespace faabric::transport {
 
-static std::unordered_map<int, std::shared_ptr<PointToPointGroup>> groups;
+static faabric::util::ConcurrentMap<int, std::shared_ptr<PointToPointGroup>>
+  groups;
 
-static std::shared_mutex groupsMutex;
+// To ensure things are cleared up, see the thread-local tidy-up message on this
+// class and its usage in the rest of the codebase, the atomic int counts
+// threads with active references to an endpoint pair.
+static faabric::util::ConcurrentMap<
+  std::string,
+  std::shared_ptr<std::tuple<std::unique_ptr<AsyncInternalRecvMessageEndpoint>,
+                             std::unique_ptr<AsyncInternalSendMessageEndpoint>,
+                             std::atomic_int32_t>>>
+  endpoints;
+thread_local absl::flat_hash_set<std::string> threadEndpoints;
 
-// Keeping 0MQ sockets in TLS is usually a bad idea, as they _must_ be closed
-// before the global context. However, in this case it's worth it to cache the
-// sockets across messages, as otherwise we'd be creating and destroying a lot
-// of them under high throughput. To ensure things are cleared up, see the
-// thread-local tidy-up message on this class and its usage in the rest of the
-// codebase.
-thread_local std::
-  unordered_map<std::string, std::unique_ptr<AsyncInternalRecvMessageEndpoint>>
-    recvEndpoints;
-
-thread_local std::
-  unordered_map<std::string, std::unique_ptr<AsyncInternalSendMessageEndpoint>>
-    sendEndpoints;
-
-thread_local std::unordered_map<std::string,
-                                std::shared_ptr<PointToPointClient>>
+static faabric::util::ConcurrentMap<std::string,
+                                    std::shared_ptr<PointToPointClient>>
   clients;
 
 // Thread local data structures for in-order message delivery
@@ -52,16 +57,12 @@ thread_local std::vector<std::list<Message>> outOfOrderMsgs;
 
 static std::shared_ptr<PointToPointClient> getClient(const std::string& host)
 {
-    // This map is thread-local so no locking required
-    if (clients.find(host) == clients.end()) {
-        clients.insert(
-          std::pair<std::string, std::shared_ptr<PointToPointClient>>(
-            host, std::make_shared<PointToPointClient>(host)));
-
+    auto client = clients.get(host).value_or(nullptr);
+    if (client == nullptr) {
+        client = clients.tryEmplaceShared(host, host).second;
         SPDLOG_TRACE("Created new point-to-point client {}", host);
     }
-
-    return clients.at(host);
+    return client;
 }
 
 std::string getPointToPointKey(int groupId, int sendIdx, int recvIdx)
@@ -76,14 +77,14 @@ std::string getPointToPointKey(int groupId, int recvIdx)
 
 std::shared_ptr<PointToPointGroup> PointToPointGroup::getGroup(int groupId)
 {
-    faabric::util::SharedLock lock(groupsMutex);
+    auto group = groups.get(groupId);
 
-    if (groups.find(groupId) == groups.end()) {
+    if (!group.has_value()) {
         SPDLOG_ERROR("Did not find group ID {} on this host", groupId);
         throw std::runtime_error("Group ID not found on host");
     }
 
-    return groups.at(groupId);
+    return *group;
 }
 
 std::shared_ptr<PointToPointGroup> PointToPointGroup::getOrAwaitGroup(
@@ -96,43 +97,28 @@ std::shared_ptr<PointToPointGroup> PointToPointGroup::getOrAwaitGroup(
 
 bool PointToPointGroup::groupExists(int groupId)
 {
-    faabric::util::SharedLock lock(groupsMutex);
-    return groups.find(groupId) != groups.end();
+    return groups.contains(groupId);
 }
 
 void PointToPointGroup::addGroup(int appId, int groupId, int groupSize)
 {
-    faabric::util::FullLock lock(groupsMutex);
-
-    if (groups.find(groupId) == groups.end()) {
-        groups.emplace(std::make_pair(
-          groupId,
-          std::make_shared<PointToPointGroup>(appId, groupId, groupSize)));
-    }
+    groups.tryEmplaceShared(groupId, appId, groupId, groupSize);
 }
 
 void PointToPointGroup::addGroupIfNotExists(int appId,
                                             int groupId,
                                             int groupSize)
 {
-    if (groupExists(groupId)) {
-        return;
-    }
-
     addGroup(appId, groupId, groupSize);
 }
 
 void PointToPointGroup::clearGroup(int groupId)
 {
-    faabric::util::FullLock lock(groupsMutex);
-
     groups.erase(groupId);
 }
 
 void PointToPointGroup::clear()
 {
-    faabric::util::FullLock lock(groupsMutex);
-
     groups.clear();
 }
 
@@ -598,6 +584,41 @@ void PointToPointBroker::sendMessage(int groupId,
                 hostHint);
 }
 
+// Gets or creates a pair of inproc endpoints (recv&send) in the endpoints map.
+// Ensures the receiving endpoint gets created first. A reference counter is
+// also allocated with the pair to keep track of how many threads are using the
+// endpoint pair for cleanup later.
+auto getEndpointPtrs(const std::string& label)
+{
+    auto maybeEndpoint = endpoints.get(label);
+    std::shared_ptr endpointPtrs = maybeEndpoint.value_or(nullptr);
+    if (!maybeEndpoint.has_value()) {
+        endpointPtrs = endpoints.tryEmplaceThenMutate(
+          label,
+          [&]<class T>(bool inserted, std::shared_ptr<T>& ptr) {
+              if (inserted) {
+                  ptr = std::make_shared<T>(nullptr, nullptr, 0);
+                  // Tuple construction order is unspecified, so make sure to
+                  // create recv before send.
+                  std::get<0>(*ptr) =
+                    std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
+                  std::get<1>(*ptr) =
+                    std::make_unique<AsyncInternalSendMessageEndpoint>(label);
+                  SPDLOG_TRACE("Created new internal endpoints: {}",
+                               std::get<0>(*ptr)->getAddress());
+              }
+              // Ensure a copy and not a reference is returned
+              return std::shared_ptr(ptr);
+          },
+          nullptr);
+    }
+    auto& refcount = std::get<std::atomic_int32_t>(*endpointPtrs);
+    if (threadEndpoints.emplace(label).second) {
+        refcount.fetch_add(1);
+    }
+    return endpointPtrs;
+}
+
 void PointToPointBroker::sendMessage(int groupId,
                                      int sendIdx,
                                      int recvIdx,
@@ -625,14 +646,10 @@ void PointToPointBroker::sendMessage(int groupId,
     if (host == conf.endpointHost) {
         std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
-        // This map is thread-local so no locking required
-        if (sendEndpoints.find(label) == sendEndpoints.end()) {
-            sendEndpoints[label] =
-              std::make_unique<AsyncInternalSendMessageEndpoint>(label);
-
-            SPDLOG_TRACE("Created new internal send endpoint {}",
-                         sendEndpoints[label]->getAddress());
-        }
+        auto endpointPtrs = getEndpointPtrs(label);
+        auto& endpoint =
+          *std::get<std::unique_ptr<AsyncInternalSendMessageEndpoint>>(
+            *endpointPtrs);
 
         // When sending a local message, if called from the PTP server we
         // forward whatever sequence number the server passed, if called from
@@ -647,10 +664,9 @@ void PointToPointBroker::sendMessage(int groupId,
                      sendIdx,
                      recvIdx,
                      localSendSeqNum,
-                     sendEndpoints[label]->getAddress());
+                     endpoint.getAddress());
 
-        sendEndpoints[label]->send(
-          NO_HEADER, buffer, bufferSize, localSendSeqNum);
+        endpoint.send(NO_HEADER, buffer, bufferSize, localSendSeqNum);
 
     } else {
         auto cli = getClient(host);
@@ -681,15 +697,12 @@ Message PointToPointBroker::doRecvMessage(int groupId, int sendIdx, int recvIdx)
 {
     std::string label = getPointToPointKey(groupId, sendIdx, recvIdx);
 
-    // Note: this map is thread-local so no locking required
-    if (recvEndpoints.find(label) == recvEndpoints.end()) {
-        recvEndpoints[label] =
-          std::make_unique<AsyncInternalRecvMessageEndpoint>(label);
-        SPDLOG_TRACE("Created new internal recv endpoint {}",
-                     recvEndpoints[label]->getAddress());
-    }
+    auto endpointPtrs = getEndpointPtrs(label);
+    auto& endpoint =
+      *std::get<std::unique_ptr<AsyncInternalRecvMessageEndpoint>>(
+        *endpointPtrs);
 
-    return recvEndpoints[label]->recv();
+    return endpoint.recv();
 }
 
 std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
@@ -736,6 +749,19 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
           expectedSeqNum);
         // Receive from the transport layer
         Message recvMsg = doRecvMessage(groupId, sendIdx, recvIdx);
+
+        // If the receive was not successful, exit the loop
+        if (recvMsg.getResponseCode() !=
+            faabric::transport::MessageResponseCode::SUCCESS) {
+            SPDLOG_WARN(
+              "Error {} when awaiting a message ({}:{} seq: {} label: {})",
+              static_cast<int>(recvMsg.getResponseCode()),
+              sendIdx,
+              recvIdx,
+              expectedSeqNum,
+              getPointToPointKey(groupId, sendIdx, recvIdx));
+            throw std::runtime_error("Error when awaiting a PTP message");
+        }
 
         // If the sequence numbers match, exit the loop
         int seqNum = recvMsg.getSequenceNum();
@@ -797,9 +823,17 @@ void PointToPointBroker::clear()
 void PointToPointBroker::resetThreadLocalCache()
 {
     SPDLOG_TRACE("Resetting point-to-point thread-local cache");
-    sendEndpoints.clear();
-    recvEndpoints.clear();
-    clients.clear();
+    for (const std::string& key : threadEndpoints) {
+        auto maybeEndpointPtrs = endpoints.get(key);
+        if (maybeEndpointPtrs.has_value()) {
+            auto& endpointPtrs = *maybeEndpointPtrs;
+            auto& refcount = std::get<std::atomic_int32_t>(*endpointPtrs);
+            if (refcount.fetch_sub(1) <= 1) {
+                endpoints.erase(key);
+            }
+        }
+    }
+    threadEndpoints.clear();
 }
 
 PointToPointBroker& getPointToPointBroker()

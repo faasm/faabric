@@ -347,10 +347,10 @@ class Scheduler
     // ----------------------------------
     // Clients
     // ----------------------------------
-    faabric::scheduler::FunctionCallClient& getFunctionCallClient(
-      const std::string& otherHost);
+    std::shared_ptr<faabric::scheduler::FunctionCallClient>
+    getFunctionCallClient(const std::string& otherHost);
 
-    faabric::snapshot::SnapshotClient& getSnapshotClient(
+    std::shared_ptr<faabric::snapshot::SnapshotClient> getSnapshotClient(
       const std::string& otherHost);
 
   private:

@@ -20,19 +20,17 @@ class FunctionCallServer final
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
       transport::Message& message) override;
 
-    std::unique_ptr<google::protobuf::Message> recvFlush(const uint8_t* buffer,
-                                                         size_t bufferSize);
+    std::unique_ptr<google::protobuf::Message> recvFlush(
+      std::span<const uint8_t> buffer);
 
     std::unique_ptr<google::protobuf::Message> recvGetResources(
-      const uint8_t* buffer,
-      size_t bufferSize);
+      std::span<const uint8_t> buffer);
 
     std::unique_ptr<google::protobuf::Message> recvPendingMigrations(
-      const uint8_t* buffer,
-      size_t bufferSize);
+      std::span<const uint8_t> buffer);
 
-    void recvExecuteFunctions(const uint8_t* buffer, size_t bufferSize);
+    void recvExecuteFunctions(std::span<const uint8_t> buffer);
 
-    void recvUnregister(const uint8_t* buffer, size_t bufferSize);
+    void recvUnregister(std::span<const uint8_t> buffer);
 };
 }

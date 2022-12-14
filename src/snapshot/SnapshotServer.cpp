@@ -27,10 +27,10 @@ SnapshotServer::SnapshotServer()
 
 void SnapshotServer::doAsyncRecv(transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     switch (header) {
         case faabric::snapshot::SnapshotCalls::DeleteSnapshot: {
-            recvDeleteSnapshot(message.udata(), message.size());
+            recvDeleteSnapshot(message.udata());
             break;
         }
         default: {
@@ -43,13 +43,13 @@ void SnapshotServer::doAsyncRecv(transport::Message& message)
 std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
   transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     switch (header) {
         case faabric::snapshot::SnapshotCalls::PushSnapshot: {
-            return recvPushSnapshot(message.udata(), message.size());
+            return recvPushSnapshot(message.udata());
         }
         case faabric::snapshot::SnapshotCalls::PushSnapshotUpdate: {
-            return recvPushSnapshotUpdate(message.udata(), message.size());
+            return recvPushSnapshotUpdate(message.udata());
         }
         case faabric::snapshot::SnapshotCalls::ThreadResult: {
             return recvThreadResult(message);
@@ -62,11 +62,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::doSyncRecv(
 }
 
 std::unique_ptr<google::protobuf::Message> SnapshotServer::recvPushSnapshot(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
     const SnapshotPushRequest* r =
-      flatbuffers::GetRoot<SnapshotPushRequest>(buffer);
+      flatbuffers::GetRoot<SnapshotPushRequest>(buffer.data());
 
     if (r->contents()->size() == 0) {
         SPDLOG_ERROR("Received shapshot {} with zero size", r->key()->c_str());
@@ -106,7 +105,7 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
   faabric::transport::Message& message)
 {
     const ThreadResultRequest* r =
-      flatbuffers::GetRoot<ThreadResultRequest>(message.udata());
+      flatbuffers::GetRoot<ThreadResultRequest>(message.udata().data());
 
     SPDLOG_DEBUG("Receiving thread result {} for message {} with {} diffs",
                  r->return_value(),
@@ -142,10 +141,10 @@ std::unique_ptr<google::protobuf::Message> SnapshotServer::recvThreadResult(
 }
 
 std::unique_ptr<google::protobuf::Message>
-SnapshotServer::recvPushSnapshotUpdate(const uint8_t* buffer, size_t bufferSize)
+SnapshotServer::recvPushSnapshotUpdate(std::span<const uint8_t> buffer)
 {
     const SnapshotUpdateRequest* r =
-      flatbuffers::GetRoot<SnapshotUpdateRequest>(buffer);
+      flatbuffers::GetRoot<SnapshotUpdateRequest>(buffer.data());
 
     SPDLOG_DEBUG(
       "Queueing {} diffs for snapshot {}", r->diffs()->size(), r->key()->str());
@@ -188,11 +187,10 @@ SnapshotServer::recvPushSnapshotUpdate(const uint8_t* buffer, size_t bufferSize)
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void SnapshotServer::recvDeleteSnapshot(const uint8_t* buffer,
-                                        size_t bufferSize)
+void SnapshotServer::recvDeleteSnapshot(std::span<const uint8_t> buffer)
 {
     const SnapshotDeleteRequest* r =
-      flatbuffers::GetRoot<SnapshotDeleteRequest>(buffer);
+      flatbuffers::GetRoot<SnapshotDeleteRequest>(buffer.data());
     SPDLOG_INFO("Deleting shapshot {}", r->key()->c_str());
 
     // Delete the registry entry

@@ -21,12 +21,13 @@ PointToPointServer::PointToPointServer()
 
 void PointToPointServer::doAsyncRecv(transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     int sequenceNum = message.getSequenceNum();
     switch (header) {
         case (faabric::transport::PointToPointCall::MESSAGE): {
-            PARSE_MSG(
-              faabric::PointToPointMessage, message.udata(), message.size())
+            PARSE_MSG(faabric::PointToPointMessage,
+                      message.udata().data(),
+                      message.udata().size())
 
             // If the sequence number is set, we must also set the ordering
             // flag
@@ -44,19 +45,19 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
             break;
         }
         case faabric::transport::PointToPointCall::LOCK_GROUP: {
-            recvGroupLock(message.udata(), message.size(), false);
+            recvGroupLock(message.udata(), false);
             break;
         }
         case faabric::transport::PointToPointCall::LOCK_GROUP_RECURSIVE: {
-            recvGroupLock(message.udata(), message.size(), true);
+            recvGroupLock(message.udata(), true);
             break;
         }
         case faabric::transport::PointToPointCall::UNLOCK_GROUP: {
-            recvGroupUnlock(message.udata(), message.size(), false);
+            recvGroupUnlock(message.udata(), false);
             break;
         }
         case faabric::transport::PointToPointCall::UNLOCK_GROUP_RECURSIVE: {
-            recvGroupUnlock(message.udata(), message.size(), true);
+            recvGroupUnlock(message.udata(), true);
             break;
         }
         default: {
@@ -69,10 +70,10 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
 std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
   transport::Message& message)
 {
-    uint8_t header = message.getHeader();
+    uint8_t header = message.getMessageCode();
     switch (header) {
         case (faabric::transport::PointToPointCall::MAPPING): {
-            return doRecvMappings(message.udata(), message.size());
+            return doRecvMappings(message.udata());
         }
         default: {
             SPDLOG_ERROR("Invalid sync point-to-point header: {}", header);
@@ -82,10 +83,9 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doSyncRecv(
 }
 
 std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
-  const uint8_t* buffer,
-  size_t bufferSize)
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::PointToPointMappings, buffer, bufferSize)
+    PARSE_MSG(faabric::PointToPointMappings, buffer.data(), buffer.size())
 
     faabric::util::SchedulingDecision decision =
       faabric::util::SchedulingDecision::fromPointToPointMappings(parsedMsg);
@@ -97,11 +97,10 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-void PointToPointServer::recvGroupLock(const uint8_t* buffer,
-                                       size_t bufferSize,
+void PointToPointServer::recvGroupLock(std::span<const uint8_t> buffer,
                                        bool recursive)
 {
-    PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
+    PARSE_MSG(faabric::PointToPointMessage, buffer.data(), buffer.size())
     SPDLOG_TRACE("Receiving lock on {} for idx {} (recursive {})",
                  parsedMsg.groupid(),
                  parsedMsg.sendidx(),
@@ -111,11 +110,10 @@ void PointToPointServer::recvGroupLock(const uint8_t* buffer,
       ->lock(parsedMsg.sendidx(), recursive);
 }
 
-void PointToPointServer::recvGroupUnlock(const uint8_t* buffer,
-                                         size_t bufferSize,
+void PointToPointServer::recvGroupUnlock(std::span<const uint8_t> buffer,
                                          bool recursive)
 {
-    PARSE_MSG(faabric::PointToPointMessage, buffer, bufferSize)
+    PARSE_MSG(faabric::PointToPointMessage, buffer.data(), buffer.size())
 
     SPDLOG_TRACE("Receiving unlock on {} for idx {} (recursive {})",
                  parsedMsg.groupid(),

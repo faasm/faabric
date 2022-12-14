@@ -39,6 +39,6 @@ class PeriodicBackgroundThread
 
     std::mutex mx;
 
-    std::condition_variable timeoutCv;
+    std::condition_variable_any timeoutCv;
 };
 }

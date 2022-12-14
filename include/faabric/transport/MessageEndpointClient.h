@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <faabric/flat/faabric_generated.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/Message.h>
@@ -39,8 +41,9 @@ class MessageEndpointClient
 
     const int syncPort;
 
-    faabric::transport::AsyncSendMessageEndpoint asyncEndpoint;
+    // Optional: nullopt in mock mode, to avoid connecting to invalid hosts
+    std::optional<faabric::transport::AsyncSendMessageEndpoint> asyncEndpoint;
 
-    faabric::transport::SyncSendMessageEndpoint syncEndpoint;
+    std::optional<faabric::transport::SyncSendMessageEndpoint> syncEndpoint;
 };
 }

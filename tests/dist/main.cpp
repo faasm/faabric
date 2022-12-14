@@ -11,7 +11,6 @@
 
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
-#include <faabric/transport/context.h>
 #include <faabric/util/crash.h>
 #include <faabric/util/logging.h>
 
@@ -21,7 +20,6 @@ int main(int argc, char* argv[])
 {
     faabric::util::setUpCrashHandler();
 
-    faabric::transport::initGlobalMessageContext();
     faabric::util::initLogging();
     tests::initDistTests();
 
@@ -45,8 +43,5 @@ int main(int argc, char* argv[])
         SPDLOG_INFO("Shutting down");
         m.shutdown();
     }
-
-    faabric::transport::closeGlobalMessageContext();
-
     return result;
 }

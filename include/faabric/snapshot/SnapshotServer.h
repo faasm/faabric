@@ -21,14 +21,12 @@ class SnapshotServer final : public faabric::transport::MessageEndpointServer
       transport::Message& message) override;
 
     std::unique_ptr<google::protobuf::Message> recvPushSnapshot(
-      const uint8_t* buffer,
-      size_t bufferSize);
+      std::span<const uint8_t> buffer);
 
     std::unique_ptr<google::protobuf::Message> recvPushSnapshotUpdate(
-      const uint8_t* buffer,
-      size_t bufferSize);
+      std::span<const uint8_t> buffer);
 
-    void recvDeleteSnapshot(const uint8_t* buffer, size_t bufferSize);
+    void recvDeleteSnapshot(std::span<const uint8_t> buffer);
 
     std::unique_ptr<google::protobuf::Message> recvThreadResult(
       faabric::transport::Message& message);
