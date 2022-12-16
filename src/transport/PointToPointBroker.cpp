@@ -4,6 +4,7 @@
 #include <faabric/transport/MessageEndpoint.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
@@ -100,7 +101,10 @@ bool PointToPointGroup::groupExists(int groupId)
     return groups.contains(groupId);
 }
 
-void PointToPointGroup::addGroup(int appId, int groupId, int groupSize, int numLocalIdxs)
+void PointToPointGroup::addGroup(int appId,
+                                 int groupId,
+                                 int groupSize,
+                                 int numLocalIdxs)
 {
     groups.tryEmplaceShared(groupId, appId, groupId, groupSize);
 }
@@ -130,8 +134,7 @@ PointToPointGroup::PointToPointGroup(int appIdIn,
   , groupId(groupIdIn)
   , groupSize(groupSizeIn)
   , ptpBroker(faabric::transport::getPointToPointBroker())
-{
-}
+{}
 
 // TODO: use the previous constructor
 PointToPointGroup::PointToPointGroup(int appIdIn,
@@ -873,7 +876,8 @@ void PointToPointBroker::resetThreadLocalCache()
     threadEndpoints.clear();
 }
 
-std::vector<std::pair<std::string, int>> PointToPointBroker::sortGroupHostsByFrequency(int groupId)
+std::vector<std::pair<std::string, int>>
+PointToPointBroker::sortGroupHostsByFrequency(int groupId)
 {
     faabric::util::SharedLock lock(brokerMutex);
 
@@ -886,7 +890,6 @@ std::vector<std::pair<std::string, int>> PointToPointBroker::sortGroupHostsByFre
     }
 
     std::set<int> groupIdxs = getIdxsRegisteredForGroup(groupId);
-    assert(groupIdxs.size() == groupSize);
     std::map<std::string, int> hostCount;
 
     for (const auto& idx : groupIdxs) {
@@ -899,20 +902,23 @@ std::vector<std::pair<std::string, int>> PointToPointBroker::sortGroupHostsByFre
     }
 
     // Sort the pair list using the frequency map as helper
-    std::sort(sortedHosts.begin(), sortedHosts.end(), [hostCount](std::pair<std::string, int> pairA, std::pair<std::string, int> pairB) {
-        // If hosts are different, return the host with the highest frequency
-        // count
-        std::string hostA = pairA.first;
-        std::string hostB = pairB.first;
-        if (hostA != hostB) {
-            return hostCount.at(hostA) > hostCount.at(hostB);
-        }
+    std::sort(sortedHosts.begin(),
+              sortedHosts.end(),
+              [hostCount](std::pair<std::string, int> pairA,
+                          std::pair<std::string, int> pairB) {
+                  // If hosts are different, return the host with the highest
+                  // frequency count
+                  std::string hostA = pairA.first;
+                  std::string hostB = pairB.first;
+                  if (hostA != hostB) {
+                      return hostCount.at(hostA) > hostCount.at(hostB);
+                  }
 
-        // If hosts are the same, put the smaller index first
-        int idxA = pairA.second;
-        int idxB = pairB.second;
-        return idxA < idxB;
-    });
+                  // If hosts are the same, put the smaller index first
+                  int idxA = pairA.second;
+                  int idxB = pairB.second;
+                  return idxA < idxB;
+              });
 
     return sortedHosts;
 }
@@ -920,7 +926,9 @@ std::vector<std::pair<std::string, int>> PointToPointBroker::sortGroupHostsByFre
 // We need to update two kinds of records when migrating a function that uses
 // the PTP broker: the host to idx mapping, and the sequence number counters
 void PointToPointBroker::preMigrationHook(
-  int groupId, int groupIdx, std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+  int groupId,
+  int groupIdx,
+  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
 {
     // TODO: check for out-of-order messages
     if (pendingMigrations->groupid() != groupId) {
@@ -937,8 +945,9 @@ void PointToPointBroker::preMigrationHook(
             throw std::runtime_error("Migration already in flight!");
         }
 
-        inFlightMigrations[groupId] =
-          std::make_shared<std::unordered_map<int, std::shared_ptr<faabric::MigratedFuncMetadata>>>();
+        inFlightMigrations[groupId] = std::make_shared<
+          std::unordered_map<int,
+                             std::shared_ptr<faabric::MigratedFuncMetadata>>>();
 
         inFlightMapPtr = inFlightMigrations.at(groupId);
     }
@@ -966,13 +975,14 @@ void PointToPointBroker::preMigrationHook(
                 throw std::runtime_error("Error serialising message");
             }
 
-            SPDLOG_DEBUG("Pre-migration: {}:{} sending function migration metadata to {}:{} (sent size: {} - recv size: {})",
-                        groupId,
-                        groupIdx,
-                        groupId,
-                        POINT_TO_POINT_MASTER_IDX,
-                        metadata.sentmsgcount_size(),
-                        metadata.recvmsgcount_size());
+            SPDLOG_DEBUG("Pre-migration: {}:{} sending function migration "
+                         "metadata to {}:{} (sent size: {} - recv size: {})",
+                         groupId,
+                         groupIdx,
+                         groupId,
+                         POINT_TO_POINT_MASTER_IDX,
+                         metadata.sentmsgcount_size(),
+                         metadata.recvmsgcount_size());
             sendMessage(groupId,
                         groupIdx,
                         POINT_TO_POINT_MASTER_IDX,
@@ -990,12 +1000,15 @@ void PointToPointBroker::preMigrationHook(
             }
 
             auto rawMsg = recvMessage(groupId, m.msg().mpirank(), groupIdx);
-            PARSE_MSG(faabric::MigratedFuncMetadata, rawMsg.data(), rawMsg.size());
+            PARSE_MSG(
+              faabric::MigratedFuncMetadata, rawMsg.data(), rawMsg.size());
 
             if (inFlightMapPtr == nullptr) {
                 throw std::runtime_error("making meh an assertion porfavor");
             }
-            SPDLOG_DEBUG("Pre-migration: adding in-flight migration metadata for rank: {}", m.msg().mpirank());
+            SPDLOG_DEBUG(
+              "Pre-migration: adding in-flight migration metadata for rank: {}",
+              m.msg().mpirank());
             inFlightMapPtr->operator[](m.msg().mpirank()) =
               std::make_shared<faabric::MigratedFuncMetadata>(parsedMsg);
         }
@@ -1013,7 +1026,8 @@ void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
         faabric::util::FullLock lock(brokerMutex);
 
         if (inFlightMigrations.find(groupId) == inFlightMigrations.end()) {
-            SPDLOG_ERROR("Migration not in flight during port-hook! ({})", groupId);
+            SPDLOG_ERROR("Migration not in flight during port-hook! ({})",
+                         groupId);
             throw std::runtime_error("Migration not in flight!");
         }
 
@@ -1061,9 +1075,14 @@ void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
             if (groupId != currentGroupId) {
                 initSequenceCounters(groupId);
             }
-            SPDLOG_INFO("Post-migration: updating message counters for {}:{}", groupId, groupIdx);
+            SPDLOG_INFO("Post-migration: updating message counters for {}:{}",
+                        groupId,
+                        groupIdx);
         } else {
-            SPDLOG_INFO("Post-migration: NOT updating message counters for {}:{}", groupId, groupIdx);
+            SPDLOG_INFO(
+              "Post-migration: NOT updating message counters for {}:{}",
+              groupId,
+              groupIdx);
         }
 
         for (int i = 0; i < parsedMsg.sentmsgcount_size(); i++) {
@@ -1085,7 +1104,6 @@ void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
     */
     // TODO - we should probably remove the pending migration here?
 }
-
 
 PointToPointBroker& getPointToPointBroker()
 {

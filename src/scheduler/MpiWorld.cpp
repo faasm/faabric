@@ -113,7 +113,8 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     size = newSize;
 
-    SPDLOG_INFO("[{}] Creating world with id: {} (size: {})", thisHost, id, size);
+    SPDLOG_INFO(
+      "[{}] Creating world with id: {} (size: {})", thisHost, id, size);
 
     auto& sch = faabric::scheduler::getScheduler();
 
@@ -281,11 +282,10 @@ void MpiWorld::initLocalRemoteLeaders()
     for (const auto& rankId : rankIds) {
         std::string host = broker.getHostForReceiver(id, rankId);
         // ranksForHost[host].push_back(rankId);
-        ranksForHost[host].insert(
-            std::upper_bound(ranksForHost[host].begin(),
-                             ranksForHost[host].end(),
-                             rankId),
-            rankId);
+        ranksForHost[host].insert(std::upper_bound(ranksForHost[host].begin(),
+                                                   ranksForHost[host].end(),
+                                                   rankId),
+                                  rankId);
         hostForRank.at(rankId) = host;
     }
 
@@ -1404,7 +1404,11 @@ void MpiWorld::barrier(int thisRank)
         for (int r = 1; r < size; r++) {
             MPI_Status s{};
             if (hasBeenMigrated) {
-                SPDLOG_INFO("Rank 0 (host: {}) receiving barrier join from {} (host: {})", thisHost, r, getHostForRank(r));
+                SPDLOG_INFO(
+                  "Rank 0 (host: {}) receiving barrier join from {} (host: {})",
+                  thisHost,
+                  r,
+                  getHostForRank(r));
             }
             recv(
               r, 0, nullptr, MPI_INT, 0, &s, faabric::MPIMessage::BARRIER_JOIN);
@@ -1417,7 +1421,11 @@ void MpiWorld::barrier(int thisRank)
         // Tell the root that we're waiting
         SPDLOG_TRACE("MPI - barrier join {}", thisRank);
         if (hasBeenMigrated) {
-            SPDLOG_INFO("Rank {} (host: {}) sending barrier join to 0 (host: {})", thisRank, thisHost, getHostForRank(0));
+            SPDLOG_INFO(
+              "Rank {} (host: {}) sending barrier join to 0 (host: {})",
+              thisRank,
+              thisHost,
+              getHostForRank(0));
         }
         send(
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
@@ -1596,9 +1604,9 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
 
 // TODO - remove this method
 static void printAndCheckRanksForHost(
-    std::map<std::string, std::vector<int>> ranksForHost,
-    int worldId,
-    int expectedWorldSize)
+  std::map<std::string, std::vector<int>> ranksForHost,
+  int worldId,
+  int expectedWorldSize)
 {
     SPDLOG_INFO("------------------------------------------------------------");
     SPDLOG_INFO("Ranks for host for world {}", worldId);
@@ -1612,7 +1620,9 @@ static void printAndCheckRanksForHost(
     if (sizeCount == expectedWorldSize) {
         SPDLOG_INFO("World sizes match: {} = {}", sizeCount, expectedWorldSize);
     } else {
-        SPDLOG_INFO("!!!! World sizes dont match: {} != {}!!!!", sizeCount, expectedWorldSize);
+        SPDLOG_INFO("!!!! World sizes dont match: {} != {}!!!!",
+                    sizeCount,
+                    expectedWorldSize);
         throw std::runtime_error("bleh bleh");
     }
     SPDLOG_INFO("------------------------------------------------------------");
@@ -1647,7 +1657,8 @@ void MpiWorld::prepareMigration(
 
     // Update local records
     if (thisRank == localLeader) {
-        SPDLOG_INFO("Rank {} preparing migration for host {}", thisRank, thisHost);
+        SPDLOG_INFO(
+          "Rank {} preparing migration for host {}", thisRank, thisHost);
 
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
@@ -1668,13 +1679,14 @@ void MpiWorld::prepareMigration(
             // First, update the records for the destination host (inserting
             // the rank in order)
             ranksForHost[m.dsthost()].insert(
-                std::upper_bound(ranksForHost[m.dsthost()].begin(),
-                                 ranksForHost[m.dsthost()].end(),
-                                 m.msg().mpirank()),
-                m.msg().mpirank());
+              std::upper_bound(ranksForHost[m.dsthost()].begin(),
+                               ranksForHost[m.dsthost()].end(),
+                               m.msg().mpirank()),
+              m.msg().mpirank());
             // If we are receiving a new rank that must be our new local
             // leader, update our records
-            if ((m.dsthost() == thisHost) && (m.msg().mpirank() < localLeader)) {
+            if ((m.dsthost() == thisHost) &&
+                (m.msg().mpirank() < localLeader)) {
                 SPDLOG_WARN("Importing a new local leader {} -> {}",
                             localLeader,
                             m.msg().mpirank());
@@ -1694,9 +1706,11 @@ void MpiWorld::prepareMigration(
             } else {
                 // If we are the source rank, and our local leader is being
                 // migrated elsewhere, update our local leadedr
-                if ((m.srchost() == thisHost) && (m.msg().mpirank() == localLeader)) {
-                    localLeader = *std::min_element(ranksForHost[m.srchost()].begin(),
-                                                    ranksForHost[m.dsthost()].end());
+                if ((m.srchost() == thisHost) &&
+                    (m.msg().mpirank() == localLeader)) {
+                    localLeader =
+                      *std::min_element(ranksForHost[m.srchost()].begin(),
+                                        ranksForHost[m.dsthost()].end());
                     SPDLOG_WARN("Changing local leader (UP) {} -> {}",
                                 m.msg().mpirank(),
                                 localLeader);
@@ -1712,7 +1726,8 @@ void MpiWorld::prepareMigration(
         // Add the necessary new local messaging queues
         initLocalQueues();
     } else {
-        SPDLOG_INFO("Rank {} NOT preparing migration for host {}", thisRank, thisHost);
+        SPDLOG_INFO(
+          "Rank {} NOT preparing migration for host {}", thisRank, thisHost);
     }
 }
 }

@@ -61,8 +61,7 @@ class ConcurrentMap final
     ConcurrentMap() = default;
     ConcurrentMap(size_t initialCapacity)
       : map(initialCapacity)
-    {
-    }
+    {}
 
     // Non-copyable but moveable
     ConcurrentMap(const ConcurrentMap&) = delete;
@@ -161,8 +160,9 @@ class ConcurrentMap final
     // Constructs a <Key, Value(std::make_shared<>(args))> pair in the map if
     // there isn't already one. Returns whether the insertion happened.
     template<class K = Key, class... Args>
-    std::pair<bool, Value> tryEmplaceShared(K&& key, Args&&... args)
-        requires detail::is_shared_ptr<Value>::value
+    std::pair<bool, Value> tryEmplaceShared(
+      K&& key,
+      Args&&... args) requires detail::is_shared_ptr<Value>::value
     {
         FullLock lock{ mutex };
         auto [it, inserted] = map.try_emplace(std::forward<K>(key), nullptr);
@@ -225,7 +225,7 @@ class ConcurrentMap final
     // Allows heterogeneous lookup.
     template<class K = Key>
     std::optional<Value> get(const KeyArg<K>& key) const
-        requires std::copy_constructible<Value>
+      requires std::copy_constructible<Value>
     {
         SharedLock lock{ mutex };
         auto it = map.find(key);
@@ -285,8 +285,8 @@ class ConcurrentMap final
     // Makes a copy of all the Key-Value pairs in the container, sorted by key.
     // Mostly for testing and debugging
     std::vector<std::pair<Key, Value>> sortedKvPairs() const
-        requires std::totally_ordered<Key> && std::copy_constructible<Key> &&
-                 std::copy_constructible<Value>
+      requires std::totally_ordered<Key>&& std::copy_constructible<
+        Key>&& std::copy_constructible<Value>
     {
         SharedLock lock{ mutex };
         std::vector<std::pair<Key, Value>> pairs;

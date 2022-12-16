@@ -29,12 +29,12 @@ void FunctionCallServer::doAsyncRecv(transport::Message& message)
             recvUnregister(message.udata());
             break;
         }
-        case faabric::scheduler::FunctionCalls::PendingMigrations: {
-            recvPendingMigrations(message.udata(), message.size());
+        case faabric::scheduler::FunctionCalls::AddPendingMigrations: {
+            recvAddPendingMigrations(message.udata());
             break;
         }
         case faabric::scheduler::FunctionCalls::RemovePendingMigrations: {
-            recvRemovePendingMigrations(message.udata(), message.size());
+            recvRemovePendingMigrations(message.udata());
             break;
         }
         default: {
@@ -99,20 +99,20 @@ void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
       parsedMsg.host(), parsedMsg.user(), parsedMsg.function());
 }
 
-void FunctionCallServer::recvPendingMigrations(const uint8_t* buffer,
-                                               size_t bufferSize)
+void FunctionCallServer::recvAddPendingMigrations(
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
+    PARSE_MSG(faabric::PendingMigrations, buffer.data(), buffer.size());
 
     auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
 
     scheduler.addPendingMigrations(msgPtr);
 }
 
-void FunctionCallServer::recvRemovePendingMigrations(const uint8_t* buffer,
-                                                     size_t bufferSize)
+void FunctionCallServer::recvRemovePendingMigrations(
+  std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::PendingMigrations, buffer, bufferSize);
+    PARSE_MSG(faabric::PendingMigrations, buffer.data(), buffer.size());
 
     auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
 

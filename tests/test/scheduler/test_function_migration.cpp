@@ -376,11 +376,11 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     // Add migration manually
     REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
-    sch.addPendingMigration(expectedMigrations);
+    sch.addPendingMigrations(expectedMigrations);
     REQUIRE(sch.getPendingAppMigrations(appId) == expectedMigrations);
 
     // Remove migration manually
-    sch.removePendingMigration(appId);
+    sch.removePendingMigrations(appId);
     REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
 

@@ -45,9 +45,11 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
 
     faabric::HostResources getResources();
 
-    void sendPendingMigrations(std::shared_ptr<faabric::PendingMigrations> req);
+    void sendAddPendingMigrations(
+      std::shared_ptr<faabric::PendingMigrations> req);
 
-    void sendRemovePendingMigrations(std::shared_ptr<faabric::PendingMigrations> req);
+    void sendRemovePendingMigrations(
+      std::shared_ptr<faabric::PendingMigrations> req);
 
     void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 

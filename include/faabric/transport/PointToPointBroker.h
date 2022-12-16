@@ -34,7 +34,10 @@ class PointToPointGroup
 
     static bool groupExists(int groupId);
 
-    static void addGroup(int appId, int groupId, int groupSize, int numLocalIdxs = NUM_LOCAL_IDXS_UNUSED);
+    static void addGroup(int appId,
+                         int groupId,
+                         int groupSize,
+                         int numLocalIdxs = NUM_LOCAL_IDXS_UNUSED);
 
     static void addGroupIfNotExists(int appId, int groupId, int groupSize);
 
@@ -44,7 +47,10 @@ class PointToPointGroup
 
     PointToPointGroup(int appId, int groupIdIn, int groupSizeIn);
 
-    PointToPointGroup(int appId, int groupIdIn, int groupSizeIn, int numLocalIdxsIn);
+    PointToPointGroup(int appId,
+                      int groupIdIn,
+                      int groupSizeIn,
+                      int numLocalIdxsIn);
 
     void lock(int groupIdx, bool recursive);
 
@@ -95,7 +101,9 @@ class PointToPointGroup
     void notifyLocked(int groupIdx);
 };
 
-typedef std::shared_ptr<std::unordered_map<int, std::shared_ptr<faabric::MigratedFuncMetadata>>> InFlightMigType;
+typedef std::shared_ptr<
+  std::unordered_map<int, std::shared_ptr<faabric::MigratedFuncMetadata>>>
+  InFlightMigType;
 
 class PointToPointBroker
 {
@@ -144,13 +152,15 @@ class PointToPointBroker
 
     void resetThreadLocalCache();
 
-    std::vector<std::pair<std::string, int>> sortGroupHostsByFrequency(int groupId);
+    std::vector<std::pair<std::string, int>> sortGroupHostsByFrequency(
+      int groupId);
 
     // --- Function migration ---
 
-    void preMigrationHook(int groupId,
-                          int groupIdx,
-                          std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+    void preMigrationHook(
+      int groupId,
+      int groupIdx,
+      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 
     void postMigrationHook(int groupId, int groupIdx);
 

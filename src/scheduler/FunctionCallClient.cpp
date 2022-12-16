@@ -147,7 +147,7 @@ faabric::HostResources FunctionCallClient::getResources()
 // This function call is used by the master host of an application to let know
 // other hosts running functions of the same application that a migration
 // opportunity has been found.
-void FunctionCallClient::sendPendingMigrations(
+void FunctionCallClient::sendAddPendingMigrations(
   std::shared_ptr<faabric::PendingMigrations> req)
 {
     faabric::PendingMigrations request;
@@ -156,7 +156,8 @@ void FunctionCallClient::sendPendingMigrations(
         faabric::util::UniqueLock lock(mockMutex);
         pendingMigrationsRequests.emplace_back(host, req);
     } else {
-        asyncSend(faabric::scheduler::FunctionCalls::PendingMigrations, req.get());
+        asyncSend(faabric::scheduler::FunctionCalls::AddPendingMigrations,
+                  req.get());
     }
 }
 
@@ -169,7 +170,8 @@ void FunctionCallClient::sendRemovePendingMigrations(
         faabric::util::UniqueLock lock(mockMutex);
         removePendingMigrationsRequests.emplace_back(host, req);
     } else {
-        asyncSend(faabric::scheduler::FunctionCalls::RemovePendingMigrations, req.get());
+        asyncSend(faabric::scheduler::FunctionCalls::RemovePendingMigrations,
+                  req.get());
     }
 }
 
