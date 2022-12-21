@@ -58,7 +58,7 @@ RUN apt update && apt install -y \
 
 # Install Conan
 RUN curl -s -L -o \
-        /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.52.0/conan-ubuntu-64.deb \
+        /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.53.0/conan-ubuntu-64.deb \
     && sudo dpkg -i /tmp/conan-latest.deb \
     && rm -f /tmp/conan-latest.deb
 
