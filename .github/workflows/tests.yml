@@ -23,7 +23,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.3.6
+      image: faasm/faabric:0.4.0
     steps:
       - uses: faasm/conan-cache-action@v1
 
@@ -31,7 +31,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.3.6
+      image: faasm/faabric:0.4.0
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -42,7 +42,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.3.6
+      image: faasm/faabric:0.4.0
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -66,10 +66,10 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
       ASAN_OPTIONS: "verbosity=1:halt_on_error=1"
-      TSAN_OPTIONS: "verbosity=1:halt_on_error=1:suppressions=/code/faabric/thread-sanitizer-ignorelist.txt:history_size=7"
+      TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
-      image: faasm/faabric:0.3.6
+      image: faasm/faabric:0.4.0
       options: --privileged
     services:
       redis:
@@ -82,9 +82,10 @@ jobs:
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
+      - name: "Test"
+        run: cat ./thread-sanitizer-ignorelist.txt
       - name: "Run tests"
-        run: ./bin/faabric_tests
-        working-directory: /build/faabric/static
+        run: /build/faabric/static/bin/faabric_tests
 
   dist-tests:
     if: github.event.pull_request.draft == false
@@ -112,7 +113,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.3.6
+      image: faasm/faabric:0.4.0
     services:
       redis:
         image: redis
