@@ -23,7 +23,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.4.0
+      image: faasm/faabric:0.4.1
     steps:
       - uses: faasm/conan-cache-action@v1
 
@@ -31,7 +31,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.4.0
+      image: faasm/faabric:0.4.1
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -42,7 +42,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.4.0
+      image: faasm/faabric:0.4.1
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -69,7 +69,7 @@ jobs:
       TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
-      image: faasm/faabric:0.4.0
+      image: faasm/faabric:0.4.1
       options: --privileged
     services:
       redis:
@@ -113,7 +113,7 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.4.0
+      image: faasm/faabric:0.4.1
     services:
       redis:
         image: redis
