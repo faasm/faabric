@@ -36,6 +36,7 @@ conan_cmake_configure(
         "flatbuffers/2.0.5@#c6a9508bd476da080f7aecbe7a094b68"
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
         "nng/1.5.2@#9c7e1aea4ad924dbad38f6551dd4949b"
+        "openssl/3.0.2@#269fa93e5afe8c34bd9a0030d2b8f0fe"
         "protobuf/3.20.0@#8e4de7081bea093469c9e6076149b2b4"
         "rapidjson/cci.20211112@#65b4e5feb6f1edfc8cbac0f669acaf17"
         "readerwriterqueue/1.0.6@#a95c8da3d68822dec4d4c13fff4b5c96"
@@ -86,6 +87,9 @@ find_package(FlatBuffers REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
 find_package(nng REQUIRED)
+# 27/01/2023 - Pin OpenSSL to a specific version to avoid incompatibilities
+# with the system's (i.e. Ubuntu 22.04) OpenSSL
+find_package(OpenSSL 3.0.2 REQUIRED)
 find_package(Protobuf 3.20.0 REQUIRED)
 find_package(RapidJSON REQUIRED)
 find_package(readerwriterqueue REQUIRED)
