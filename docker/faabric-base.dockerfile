@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 # Configure APT repositories
 RUN apt update \
@@ -8,11 +8,21 @@ RUN apt update \
         gpg \
         software-properties-common \
         wget \
-    && wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|apt-key add - \
-    && wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc | apt-key add - \
-    && add-apt-repository -y -n "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main" \
-    && add-apt-repository -y -n "deb https://apt.kitware.com/ubuntu/ focal main" \
-    && add-apt-repository -y -n ppa:ubuntu-toolchain-r/test
+    # apt-key add is now deprecated for security reasons, we add individual
+    # keys manually.
+    # https://askubuntu.com/questions/1286545/what-commands-exactly-should-replace-the-deprecated-apt-key
+    && wget -O /tmp/kitware-archive-latest.asc \
+        https://apt.kitware.com/keys/kitware-archive-latest.asc \
+    && gpg --no-default-keyring \
+        --keyring /tmp/tmp-key.gpg \
+        --import /tmp/kitware-archive-latest.asc \
+    && gpg --no-default-keyring \
+        --keyring /tmp/tmp-key.gpg \
+        --export --output /etc/apt/keyrings/kitware-archive-latest.gpg \
+    && rm /tmp/tmp-key.gpg \
+    && echo \
+        "deb [signed-by=/etc/apt/keyrings/kitware-archive-latest.gpg] https://apt.kitware.com/ubuntu/ jammy main" \
+        >> /etc/apt/sources.list.d/archive_uri-https_apt_kitware_com_ubuntu_jammy_-jammy.list
 
 # Install APT packages
 RUN apt update && apt install -y \
@@ -39,7 +49,6 @@ RUN apt update && apt install -y \
     libtool \
     libunwind-13-dev \
     libz-dev \
-    linux-generic-hwe-20.04 \
     lld-13 \
     lldb-13 \
     make \
@@ -54,7 +63,7 @@ RUN apt update && apt install -y \
 
 # Install Conan
 RUN curl -s -L -o \
-        /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.53.0/conan-ubuntu-64.deb \
+        /tmp/conan-latest.deb https://github.com/conan-io/conan/releases/download/1.57.0/conan-ubuntu-64.deb \
     && sudo dpkg -i /tmp/conan-latest.deb \
     && rm -f /tmp/conan-latest.deb
 
