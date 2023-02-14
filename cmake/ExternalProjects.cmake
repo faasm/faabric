@@ -35,7 +35,7 @@ conan_cmake_configure(
         "cpprestsdk/2.10.18@#ed9788e9d202d6eadd92581368ddfc2f"
         "flatbuffers/2.0.5@#c6a9508bd476da080f7aecbe7a094b68"
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
-        "nng/1.5.2@#9c7e1aea4ad924dbad38f6551dd4949b"
+        # "nng/1.5.2@#9c7e1aea4ad924dbad38f6551dd4949b"
         "openssl/3.0.2@#269fa93e5afe8c34bd9a0030d2b8f0fe"
         "protobuf/3.20.0@#8e4de7081bea093469c9e6076149b2b4"
         "rapidjson/cci.20211112@#65b4e5feb6f1edfc8cbac0f669acaf17"
@@ -86,7 +86,7 @@ find_package(cpprestsdk REQUIRED)
 find_package(FlatBuffers REQUIRED)
 find_package(fmt REQUIRED)
 find_package(hiredis REQUIRED)
-find_package(nng REQUIRED)
+# find_package(nng REQUIRED)
 # 27/01/2023 - Pin OpenSSL to a specific version to avoid incompatibilities
 # with the system's (i.e. Ubuntu 22.04) OpenSSL
 find_package(OpenSSL 3.0.2 REQUIRED)
@@ -95,6 +95,8 @@ find_package(RapidJSON REQUIRED)
 find_package(readerwriterqueue REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(ZLIB REQUIRED)
+
+# Fetch content dependencies
 
 # zstd (Conan version not customizable enough)
 set(ZSTD_BUILD_CONTRIB OFF CACHE INTERNAL "")
@@ -111,16 +113,26 @@ set(ZSTD_ZLIB_SUPPORT OFF CACHE INTERNAL "")
 set(ZSTD_LZMA_SUPPORT OFF CACHE INTERNAL "")
 set(ZSTD_LZ4_SUPPORT OFF CACHE INTERNAL "")
 
+# nng (Conan version out of date)
+set(NNG_TESTS OFF CACHE INTERNAL "")
+
 FetchContent_Declare(zstd_ext
     GIT_REPOSITORY "https://github.com/facebook/zstd"
     GIT_TAG "v1.5.2"
     SOURCE_SUBDIR "build/cmake"
+)
+FetchContent_Declare(nng_ext
+    GIT_REPOSITORY "https://github.com/nanomsg/nng"
+    GIT_TAG "8e1836f57e8bcdb228dd5baadc71dfbf30b544e0"
 )
 
 FetchContent_MakeAvailable(zstd_ext)
 # Work around zstd not declaring its targets properly
 target_include_directories(libzstd_static SYSTEM INTERFACE $<BUILD_INTERFACE:${zstd_ext_SOURCE_DIR}/lib>)
 add_library(zstd::libzstd_static ALIAS libzstd_static)
+
+FetchContent_MakeAvailable(nng_ext)
+add_library(nng::nng ALIAS nng)
 
 # Group all external dependencies into a convenient virtual CMake library
 add_library(faabric_common_dependencies INTERFACE)
