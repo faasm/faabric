@@ -206,7 +206,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     const std::string funcStr = faabric::util::funcToString(req);
-    SPDLOG_TRACE("{} executing {}/{} tasks of {} (single-host={})",
+    SPDLOG_ERROR("{} executing {}/{} tasks of {} (single-host={})",
                  id,
                  msgIdxs.size(),
                  req->messages_size(),
@@ -270,7 +270,8 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 
     // Initialise batch counter
-    batchCounter.store(msgIdxs.size());
+    int oldCount = batchCounter.fetch_add(msgIdxs.size(), std::memory_order_release);
+    SPDLOG_WARN("Batch counter {} -> {}", oldCount, batchCounter.load(std::memory_order_acquire));
 
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted
@@ -437,7 +438,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
               faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
-        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
+        SPDLOG_WARN("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
                      task.messageIndex,
@@ -506,7 +507,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         assert(oldTaskCount >= 0);
         bool isLastInBatch = oldTaskCount == 1;
 
-        SPDLOG_TRACE("Task {} finished by thread {}:{} ({} left)",
+        SPDLOG_WARN("Task {} finished by thread {}:{} ({} left)",
                      faabric::util::funcToString(msg, true),
                      id,
                      threadPoolIdx,
@@ -580,9 +581,11 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             // Threads skip the reset as they will be restored from their
             // respective snapshot on the next execution.
             if (isThreads) {
-                SPDLOG_TRACE("Skipping reset for {}",
-                             faabric::util::funcToString(msg, true));
+                SPDLOG_WARN("Skipping reset for {} ({})",
+                             faabric::util::funcToString(msg, true),
+                             msg.appidx());
             } else {
+                SPDLOG_WARN("resetttting");
                 reset(msg);
             }
 
