@@ -1018,6 +1018,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     int expectedResets = 1;
 
+    std::string user = "dummy";
+    std::string function = "blah";
+
     SECTION("Threads")
     {
         requestType = faabric::BatchExecuteRequest::THREADS;
@@ -1025,10 +1028,15 @@ TEST_CASE_METHOD(TestExecutorFixture,
         expectedResets = 0;
     }
 
-    SECTION("Function") {}
+    SECTION("Simple function") {}
+
+    SECTION("Function that spawns threads")
+    {
+        function = "thread-check";
+    }
 
     std::shared_ptr<BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("dummy", "blah", nMessages);
+      faabric::util::batchExecFactory(user, function, nMessages);
     req->set_type(requestType);
 
     faabric::Message& msg = req->mutable_messages()->at(0);
