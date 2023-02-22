@@ -594,7 +594,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
             // Threads skip the reset as they will be restored from their
             // respective snapshot on the next execution.
             if (isThreads) {
-                SPDLOG_WARN("Skipping reset for {} ({})",
+                SPDLOG_TRACE("Skipping reset for {} ({})",
                              faabric::util::funcToString(msg, true),
                              msg.appidx());
             } else {
