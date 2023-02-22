@@ -206,7 +206,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     const std::string funcStr = faabric::util::funcToString(req);
-    SPDLOG_ERROR("{} executing {}/{} tasks of {} (single-host={})",
+    SPDLOG_TRACE("{} executing {}/{} tasks of {} (single-host={})",
                  id,
                  msgIdxs.size(),
                  req->messages_size(),
@@ -438,7 +438,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
               faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
-        SPDLOG_WARN("Thread {}:{} executing task {} ({}, thread={}, group={})",
+        SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
                      task.messageIndex,
