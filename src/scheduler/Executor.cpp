@@ -513,7 +513,8 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         if (isThreads) {
             oldTaskCount = threadBatchCounter.fetch_sub(1);
             isLastThreadInBatch = oldTaskCount == 1;
-            isLastThreadInExecutor = batchCounter.load(std::memory_order_release) == 0;
+            isLastThreadInExecutor =
+              batchCounter.load(std::memory_order_release) == 0;
         } else {
             oldTaskCount = batchCounter.fetch_sub(1);
             isLastThreadInExecutor = oldTaskCount == 1;

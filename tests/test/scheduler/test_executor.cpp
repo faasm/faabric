@@ -1030,10 +1030,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     SECTION("Simple function") {}
 
-    SECTION("Function that spawns threads")
-    {
-        function = "thread-check";
-    }
+    SECTION("Function that spawns threads") { function = "thread-check"; }
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, nMessages);
