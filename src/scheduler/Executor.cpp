@@ -270,7 +270,11 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     }
 
     // Initialise batch counter
-    batchCounter.store(msgIdxs.size());
+    if (isThreads) {
+        threadBatchCounter.fetch_add(msgIdxs.size(), std::memory_order_release);
+    } else {
+        batchCounter.fetch_add(msgIdxs.size(), std::memory_order_release);
+    }
 
     // Iterate through and invoke tasks. By default, we allocate tasks
     // one-to-one with thread pool threads. Only once the pool is exhausted
@@ -497,14 +501,25 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // Set the return value
         msg.set_returnvalue(returnValue);
 
-        // Decrement the task count. If the counter reaches zero at this point,
-        // all other tasks must also have reached this point, hence we can
-        // guarantee that the other tasks have also finished, and perform any
-        // merging or tidying up.
+        // Decrement the task count. If we are the last thread in a batch of
+        // we can either be in the main host, in which case there's still the
+        // main thread in the same Executor, or in a remote host, in which case
+        // we need to only release the Executor after we are done. If we
+        // are the main thread, we will always reset and release the executor
         std::atomic_thread_fence(std::memory_order_release);
-        int oldTaskCount = batchCounter.fetch_sub(1);
-        assert(oldTaskCount >= 0);
-        bool isLastInBatch = oldTaskCount == 1;
+        int oldTaskCount = 0;
+        bool isLastThreadInBatch = false;
+        bool isLastThreadInExecutor = false;
+        if (isThreads) {
+            oldTaskCount = threadBatchCounter.fetch_sub(1);
+            isLastThreadInBatch = oldTaskCount == 1;
+            isLastThreadInExecutor =
+              batchCounter.load(std::memory_order_release) == 0;
+        } else {
+            oldTaskCount = batchCounter.fetch_sub(1);
+            isLastThreadInExecutor = oldTaskCount == 1;
+        }
+        assert(oldTaskCount >= 1);
 
         SPDLOG_TRACE("Task {} finished by thread {}:{} ({} left)",
                      faabric::util::funcToString(msg, true),
@@ -516,7 +531,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         std::string mainThreadSnapKey =
           faabric::util::getMainThreadSnapshotKey(msg);
         std::vector<faabric::util::SnapshotDiff> diffs;
-        if (isLastInBatch && doDirtyTracking) {
+        if (isLastThreadInBatch && doDirtyTracking) {
             // Stop non-thread-local tracking as we're the last in the batch
             std::span<uint8_t> memView = getMemoryView();
             tracker->stopTracking(memView);
@@ -558,9 +573,9 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         }
 
         // If this is not a threads request and last in its batch, it may be
-        // the main function in a threaded application, in which case we
-        // want to stop any tracking and delete the main thread snapshot
-        if (!isThreads && isLastInBatch) {
+        // the main function (thread) in a threaded application, in which case
+        // we want to stop any tracking and delete the main thread snapshot
+        if (!isThreads && isLastThreadInExecutor) {
             // Stop tracking memory
             std::span<uint8_t> memView = getMemoryView();
             if (!memView.empty()) {
@@ -576,12 +591,13 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // If this batch is finished, reset the executor and release its
         // claim. Note that we have to release the claim _after_ resetting,
         // otherwise the executor won't be ready for reuse
-        if (isLastInBatch) {
+        if (isLastThreadInExecutor) {
             // Threads skip the reset as they will be restored from their
             // respective snapshot on the next execution.
             if (isThreads) {
-                SPDLOG_TRACE("Skipping reset for {}",
-                             faabric::util::funcToString(msg, true));
+                SPDLOG_TRACE("Skipping reset for {} ({})",
+                             faabric::util::funcToString(msg, true),
+                             msg.appidx());
             } else {
                 reset(msg);
             }
@@ -607,7 +623,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // not be reused for a repeat invocation.
         if (isThreads) {
             // Set non-final thread result
-            if (isLastInBatch) {
+            if (isLastThreadInBatch) {
                 // Include diffs if this is the last one
                 sch.setThreadResult(msg, returnValue, mainThreadSnapKey, diffs);
             } else {
@@ -671,7 +687,7 @@ faabric::Message& Executor::getBoundMessage()
 
 bool Executor::isExecuting()
 {
-    int currentCount = batchCounter.load();
+    int currentCount = batchCounter.load(std::memory_order_acquire);
     return currentCount > 0;
 }
 

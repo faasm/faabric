@@ -124,6 +124,7 @@ class Executor
     std::atomic<bool> claimed = false;
     std::atomic<bool> _isShutdown = false;
     std::atomic<int> batchCounter = 0;
+    std::atomic<int> threadBatchCounter = 0;
     faabric::util::TimePoint lastExec;
 
     // ---- Application threads ----
