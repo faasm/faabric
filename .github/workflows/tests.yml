@@ -24,6 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - uses: faasm/conan-cache-action@v1
 
@@ -32,6 +35,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -43,6 +49,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -70,6 +79,9 @@ jobs:
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
       image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       options: --privileged
     services:
       redis:
@@ -114,6 +126,9 @@ jobs:
       REDIS_STATE_HOST: redis
     container:
       image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     services:
       redis:
         image: redis
