@@ -23,7 +23,10 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.4.1
+      image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - uses: faasm/conan-cache-action@v1
 
@@ -31,7 +34,10 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.4.1
+      image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -42,7 +48,10 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
-      image: faasm/faabric:0.4.1
+      image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     steps:
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -69,7 +78,10 @@ jobs:
       TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
       UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
     container:
-      image: faasm/faabric:0.4.1
+      image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       options: --privileged
     services:
       redis:
@@ -94,6 +106,12 @@ jobs:
     env:
       CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
     steps:
+      - name: "Log in to ACR"
+        uses: docker/login-action@v2
+        with:
+          registry: faasm.azurecr.io
+          username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+          password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       # --- Code update ---
       - name: "Check out code"
         uses: actions/checkout@v3
@@ -113,7 +131,10 @@ jobs:
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
-      image: faasm/faabric:0.4.1
+      image: faasm.azurecr.io/faabric:0.4.2
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
     services:
       redis:
         image: redis
