@@ -14,6 +14,8 @@ FAABRIC_INSTALL_PREFIX = join(_FAABRIC_BUILD_DIR, "install")
 
 FAABRIC_CONFIG_FILE = join(PROJ_ROOT, "faabric.ini")
 
+ACR_NAME = "faasm.azurecr.io"
+
 
 def get_version():
     ver_file = join(PROJ_ROOT, "VERSION")
