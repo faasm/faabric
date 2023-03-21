@@ -1,0 +1,39 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  schedule:
+    - cron: '33 23 * * 2'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    container:
+      image: faasm.azurecr.io/faabric:0.4.2
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'cpp', 'python' ]
+    steps:
+    - name: "Checkout repository"
+      uses: actions/checkout@v3
+    - name: "Initialize CodeQL"
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+    - name: "Build code"
+      run: |
+        ./bin/inv_wrapper.sh dev.cmake --clean --build=Release
+        ./bin/inv_wrapper.sh dev.cc faabric faabric_tests
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
