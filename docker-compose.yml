@@ -4,6 +4,9 @@ services:
   redis:
     image: redis
 
+  planner:
+    image faasm.azurecr.io/planner:${FAABRIC_VERSION}
+
   cli:
     image: ${FAABRIC_CLI_IMAGE}
     volumes:
@@ -18,6 +21,7 @@ services:
     privileged: true
     environment:
       - LOG_LEVEL=debug
+      - PLANNER_HOST=planner
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
       - OVERRIDE_CPU_COUNT=${OVERRIDE_CPU_COUNT:-0}
@@ -25,6 +29,7 @@ services:
       - TSAN_OPTIONS="verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
       - UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1
     depends_on:
+      - planner
       - redis
 
   dist-test-server:
