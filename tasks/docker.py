@@ -6,6 +6,7 @@ from tasks.util.env import get_version, ACR_NAME, PROJ_ROOT
 
 FAABRIC_IMAGE_NAME = "faabric"
 FAABRIC_BASE_IMAGE_NAME = "faabric-base"
+FAABRIC_PLANNER_IMAGE_NAME = "planner"
 
 
 def _get_docker_tag(img_name):
@@ -59,6 +60,8 @@ def build(ctx, c, nocache=False, push=False):
             img_name = FAABRIC_IMAGE_NAME
         elif ctr == "faabric-base":
             img_name = FAABRIC_BASE_IMAGE_NAME
+        elif ctr == "planner":
+            img_name = FAABRIC_PLANNER_IMAGE_NAME
         else:
             print("Unrecognised container name: {}".format(ctr))
             raise RuntimeError("Unrecognised container name")
@@ -76,6 +79,8 @@ def push(ctx, c):
             img_name = FAABRIC_IMAGE_NAME
         elif ctr == "faabric-base":
             img_name = FAABRIC_BASE_IMAGE_NAME
+        elif ctr == "planner":
+            img_name = FAABRIC_PLANNER_IMAGE_NAME
         else:
             print("Unrecognised container name: {}".format(ctr))
             raise RuntimeError("Unrecognised container name")
