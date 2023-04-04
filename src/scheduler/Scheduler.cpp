@@ -1075,7 +1075,7 @@ void Scheduler::broadcastFlush()
     allHosts.erase(thisHost);
 
     // Dispatch flush message to all other hosts
-    for (auto& otherHost : allHosts) {
+    for (const auto& otherHost : allHosts) {
         getFunctionCallClient(otherHost)->sendFlush();
     }
 

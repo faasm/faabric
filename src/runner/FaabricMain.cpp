@@ -44,6 +44,8 @@ void FaabricMain::startRunner()
     faabric::redis::Redis::getQueue().ping();
     faabric::redis::Redis::getState().ping();
 
+    // Ensure we can ping the planner
+
     auto& sch = faabric::scheduler::getScheduler();
     sch.addHostToGlobalSet();
 }

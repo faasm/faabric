@@ -93,6 +93,7 @@ endfunction()
 add_subdirectory(src/endpoint)
 add_subdirectory(src/flat)
 add_subdirectory(src/mpi)
+add_subdirectory(src/planner)
 add_subdirectory(src/proto)
 add_subdirectory(src/redis)
 add_subdirectory(src/runner)
@@ -115,6 +116,7 @@ add_library(faabric
     faabric.cpp
     $<TARGET_OBJECTS:endpoint_obj>
     $<TARGET_OBJECTS:flat_obj>
+    $<TARGET_OBJECTS:planner_obj>
     $<TARGET_OBJECTS:proto_obj>
     $<TARGET_OBJECTS:redis_obj>
     $<TARGET_OBJECTS:runner_obj>

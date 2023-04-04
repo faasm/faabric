@@ -51,10 +51,14 @@ class SystemConfig
     int stateServerThreads;
     int snapshotServerThreads;
     int pointToPointServerThreads;
+    int plannerServerThreads;
 
     // Dirty tracking
     std::string dirtyTrackingMode;
     std::string diffingMode;
+
+    // Planner
+    std::string plannerHost;
 
     SystemConfig();
 
