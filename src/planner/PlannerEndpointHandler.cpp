@@ -38,7 +38,6 @@ void PlannerEndpointHandler::onRequest(
         return ctx.sendFunction(std::move(response));
     }
 
-    // TODO: move this to src/util/json.cpp
     faabric::planner::HttpMessage msg;
     try {
         faabric::util::jsonToMessagePb(requestStr, &msg);
@@ -95,84 +94,4 @@ void PlannerEndpointHandler::onRequest(
         }
     }
 }
-
-void PlannerEndpointHandler::executeFunction(
-  faabric::endpoint::HttpRequestContext&& ctx,
-  faabric::util::BeastHttpResponse&& response,
-  std::shared_ptr<faabric::BatchExecuteRequest> ber,
-  size_t messageIndex)
-{
-    /*
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    faabric::Message& msg = *ber->mutable_messages(messageIndex);
-
-    if (msg.user().empty()) {
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty user");
-        return ctx.sendFunction(std::move(response));
-    }
-
-    if (msg.function().empty()) {
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty function");
-        return ctx.sendFunction(std::move(response));
-    }
-
-    // Set message ID and master host
-    faabric::util::setMessageId(msg);
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    msg.set_masterhost(thisHost);
-    // This is set to false by the scheduler if the function ends up being sent
-    // elsewhere
-    if (!msg.isasync()) {
-        msg.set_executeslocally(true);
-    }
-
-    auto tid = gettid();
-    const std::string funcStr = faabric::util::funcToString(msg, true);
-    SPDLOG_DEBUG("Worker HTTP thread {} scheduling {}", tid, funcStr);
-
-    // Schedule it
-    faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-    sch.callFunctions(ber);
-
-    // Await result on global bus (may have been executed on a different worker)
-    if (msg.isasync()) {
-        response.result(beast::http::status::ok);
-        response.body() = faabric::util::buildAsyncResponse(msg);
-        return ctx.sendFunction(std::move(response));
-    }
-
-    SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
-    sch.getFunctionResultAsync(
-      msg.id(),
-      conf.globalMessageTimeout,
-      ctx.ioc,
-      ctx.executor,
-      beast::bind_front_handler(&PlannerEndpointHandler::onFunctionResult,
-                                this->shared_from_this(),
-                                std::move(ctx),
-                                std::move(response)));
-    */
-}
-
-void PlannerEndpointHandler::onFunctionResult(
-  faabric::endpoint::HttpRequestContext&& ctx,
-  faabric::util::BeastHttpResponse&& response,
-  faabric::Message& result)
-{
-    /*
-    beast::http::status statusCode =
-      (result.returnvalue() == 0) ? beast::http::status::ok
-                                  : beast::http::status::internal_server_error;
-    response.result(statusCode);
-    SPDLOG_DEBUG("Worker thread {} result {}",
-                 gettid(),
-                 faabric::util::funcToString(result, true));
-
-    response.body() = result.outputdata();
-    return ctx.sendFunction(std::move(response));
-    */
-}
-
 }

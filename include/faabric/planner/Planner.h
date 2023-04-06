@@ -45,7 +45,7 @@ class Planner
     void removeHost(const Host& hostIn);
 
   private:
-    // There's a singletone instance of the planner running, but it must allow
+    // There's a singleton instance of the planner running, but it must allow
     // concurrent requests
     std::shared_mutex plannerMx;
 
