@@ -1,12 +1,18 @@
 #include <catch2/catch.hpp>
 
+#include "faabric_utils.h"
+#include "fixtures.h"
+
 #include <faabric/planner/planner.pb.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/util/json.h>
+#include <faabric/util/logging.h>
 
 using namespace faabric::planner;
 
 namespace tests {
 class PlannerTestFixture
+  : public ConfTestFixture
 {
   public:
     PlannerTestFixture()
@@ -17,12 +23,22 @@ class PlannerTestFixture
 
     ~PlannerTestFixture()
     {
-        // TODO - don't expose it as an API method, rather an HTTP endpoint
-        // PlannerServer::reset();
+        resetPlanner();
     }
 
   protected:
     PlannerClient cli;
+
+    void resetPlanner()
+    {
+        HttpMessage msg;
+        msg.set_type(HttpMessage_Type_RESET);
+        std::string jsonStr;
+        faabric::util::messageToJsonPb(msg, &jsonStr);
+
+        std::pair<int, std::string> result = postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        assert(result.first == 200);
+    }
 };
 
 TEST_CASE("Test basic planner client operations", "[planner]")

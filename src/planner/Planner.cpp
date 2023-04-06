@@ -18,6 +18,7 @@ Planner::Planner()
     // thread-unsafe)
     config.set_ip(faabric::util::getSystemConfig().endpointHost);
     config.set_hosttimeout(std::stoi(faabric::util::getEnvVar("PLANNER_HOST_KEEPALIVE_TIMEOUT", "5")));
+    config.set_numthreadshttpserver(std::stoi(faabric::util::getEnvVar("PLANNER_HTTP_SERVER_THREADS", "4")));
 
     printConfig();
 }
@@ -33,8 +34,38 @@ PlannerConfig Planner::getConfig()
 
 void Planner::printConfig() const
 {
-    SPDLOG_INFO("--- System ---");
-    SPDLOG_INFO("KEEP_ALIVE_TIMEOUT         {}", config.hosttimeout());
+    SPDLOG_INFO("--- Planner Conifg ---");
+    SPDLOG_INFO("HOST_KEEP_ALIVE_TIMEOUT    {}", config.hosttimeout());
+    SPDLOG_INFO("HTTP_SERVER_THREADS        {}", config.numthreadshttpserver());
+}
+
+bool Planner::reset()
+{
+    SPDLOG_INFO("Resetting planner");
+
+    flushHosts();
+
+    return true;
+}
+
+bool Planner::flush(faabric::planner::FlushType flushType)
+{
+    switch (flushType) {
+        case faabric::planner::FlushType::Hosts:
+            SPDLOG_INFO("Planner flushing available hosts state");
+            flushHosts();
+            return true;
+        default:
+            SPDLOG_ERROR("Unrecognised flush type");
+            return false;
+    }
+}
+
+void Planner::flushHosts()
+{
+    faabric::util::FullLock lock(plannerMx);
+
+    state.hostMap.clear();
 }
 
 // Deliberately take a const reference as an argument to force a copy and take
@@ -65,9 +96,13 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
         state.hostMap.at(hostIn.ip())->set_hostid(*hostId);
     } else if (it->second->hostid() != hostIn.hostid()) {
         SPDLOG_ERROR("Received register request for a registered host, but"
-                     "with different request ids: {} != {} (host: {})",
+                     " with different request ids: {} != {} (host: {})",
                      hostIn.hostid(), it->second->hostid(), hostIn.ip());
         return false;
+    } else {
+        // If the host is already registered, we still want to return the
+        // valid host id
+        *hostId = it->second->hostid();
     }
 
     // Overwrite the timestamp

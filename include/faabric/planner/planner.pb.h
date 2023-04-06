@@ -59,6 +59,9 @@ extern EmptyResponseDefaultTypeInternal _EmptyResponse_default_instance_;
 class Host;
 struct HostDefaultTypeInternal;
 extern HostDefaultTypeInternal _Host_default_instance_;
+class HttpMessage;
+struct HttpMessageDefaultTypeInternal;
+extern HttpMessageDefaultTypeInternal _HttpMessage_default_instance_;
 class PlannerConfig;
 struct PlannerConfigDefaultTypeInternal;
 extern PlannerConfigDefaultTypeInternal _PlannerConfig_default_instance_;
@@ -87,6 +90,7 @@ template<> ::faabric::planner::AvailableHostsResponse* Arena::CreateMaybeMessage
 template<> ::faabric::planner::EmptyRequest* Arena::CreateMaybeMessage<::faabric::planner::EmptyRequest>(Arena*);
 template<> ::faabric::planner::EmptyResponse* Arena::CreateMaybeMessage<::faabric::planner::EmptyResponse>(Arena*);
 template<> ::faabric::planner::Host* Arena::CreateMaybeMessage<::faabric::planner::Host>(Arena*);
+template<> ::faabric::planner::HttpMessage* Arena::CreateMaybeMessage<::faabric::planner::HttpMessage>(Arena*);
 template<> ::faabric::planner::PlannerConfig* Arena::CreateMaybeMessage<::faabric::planner::PlannerConfig>(Arena*);
 template<> ::faabric::planner::RegisterHostRequest* Arena::CreateMaybeMessage<::faabric::planner::RegisterHostRequest>(Arena*);
 template<> ::faabric::planner::RegisterHostResponse* Arena::CreateMaybeMessage<::faabric::planner::RegisterHostResponse>(Arena*);
@@ -122,6 +126,32 @@ inline bool ResponseStatus_Status_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ResponseStatus_Status* value) {
   return ::PROTOBUF_NAMESPACE_ID::internal::ParseNamedEnum<ResponseStatus_Status>(
     ResponseStatus_Status_descriptor(), name, value);
+}
+enum HttpMessage_Type : int {
+  HttpMessage_Type_NO_TYPE = 0,
+  HttpMessage_Type_RESET = 1,
+  HttpMessage_Type_FLUSH_HOSTS = 2,
+  HttpMessage_Type_HttpMessage_Type_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  HttpMessage_Type_HttpMessage_Type_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool HttpMessage_Type_IsValid(int value);
+constexpr HttpMessage_Type HttpMessage_Type_Type_MIN = HttpMessage_Type_NO_TYPE;
+constexpr HttpMessage_Type HttpMessage_Type_Type_MAX = HttpMessage_Type_FLUSH_HOSTS;
+constexpr int HttpMessage_Type_Type_ARRAYSIZE = HttpMessage_Type_Type_MAX + 1;
+
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* HttpMessage_Type_descriptor();
+template<typename T>
+inline const std::string& HttpMessage_Type_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, HttpMessage_Type>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function HttpMessage_Type_Name.");
+  return ::PROTOBUF_NAMESPACE_ID::internal::NameOfEnum(
+    HttpMessage_Type_descriptor(), enum_t_value);
+}
+inline bool HttpMessage_Type_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, HttpMessage_Type* value) {
+  return ::PROTOBUF_NAMESPACE_ID::internal::ParseNamedEnum<HttpMessage_Type>(
+    HttpMessage_Type_descriptor(), name, value);
 }
 // ===================================================================
 
@@ -727,6 +757,181 @@ class Timestamp final :
 };
 // -------------------------------------------------------------------
 
+class HttpMessage final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:faabric.planner.HttpMessage) */ {
+ public:
+  inline HttpMessage() : HttpMessage(nullptr) {}
+  ~HttpMessage() override;
+  explicit PROTOBUF_CONSTEXPR HttpMessage(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  HttpMessage(const HttpMessage& from);
+  HttpMessage(HttpMessage&& from) noexcept
+    : HttpMessage() {
+    *this = ::std::move(from);
+  }
+
+  inline HttpMessage& operator=(const HttpMessage& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HttpMessage& operator=(HttpMessage&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const HttpMessage& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const HttpMessage* internal_default_instance() {
+    return reinterpret_cast<const HttpMessage*>(
+               &_HttpMessage_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    4;
+
+  friend void swap(HttpMessage& a, HttpMessage& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(HttpMessage* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HttpMessage* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HttpMessage* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<HttpMessage>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
+  void CopyFrom(const HttpMessage& from);
+  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
+  void MergeFrom(const HttpMessage& from);
+  private:
+  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to, const ::PROTOBUF_NAMESPACE_ID::Message& from);
+  public:
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(HttpMessage* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "faabric.planner.HttpMessage";
+  }
+  protected:
+  explicit HttpMessage(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  typedef HttpMessage_Type Type;
+  static constexpr Type NO_TYPE =
+    HttpMessage_Type_NO_TYPE;
+  static constexpr Type RESET =
+    HttpMessage_Type_RESET;
+  static constexpr Type FLUSH_HOSTS =
+    HttpMessage_Type_FLUSH_HOSTS;
+  static inline bool Type_IsValid(int value) {
+    return HttpMessage_Type_IsValid(value);
+  }
+  static constexpr Type Type_MIN =
+    HttpMessage_Type_Type_MIN;
+  static constexpr Type Type_MAX =
+    HttpMessage_Type_Type_MAX;
+  static constexpr int Type_ARRAYSIZE =
+    HttpMessage_Type_Type_ARRAYSIZE;
+  static inline const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor*
+  Type_descriptor() {
+    return HttpMessage_Type_descriptor();
+  }
+  template<typename T>
+  static inline const std::string& Type_Name(T enum_t_value) {
+    static_assert(::std::is_same<T, Type>::value ||
+      ::std::is_integral<T>::value,
+      "Incorrect type passed to function Type_Name.");
+    return HttpMessage_Type_Name(enum_t_value);
+  }
+  static inline bool Type_Parse(::PROTOBUF_NAMESPACE_ID::ConstStringParam name,
+      Type* value) {
+    return HttpMessage_Type_Parse(name, value);
+  }
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTypeFieldNumber = 1,
+  };
+  // .faabric.planner.HttpMessage.Type type = 1;
+  void clear_type();
+  ::faabric::planner::HttpMessage_Type type() const;
+  void set_type(::faabric::planner::HttpMessage_Type value);
+  private:
+  ::faabric::planner::HttpMessage_Type _internal_type() const;
+  void _internal_set_type(::faabric::planner::HttpMessage_Type value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:faabric.planner.HttpMessage)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  int type_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_planner_2eproto;
+};
+// -------------------------------------------------------------------
+
 class PlannerConfig final :
     public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:faabric.planner.PlannerConfig) */ {
  public:
@@ -775,7 +980,7 @@ class PlannerConfig final :
                &_PlannerConfig_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    4;
+    5;
 
   friend void swap(PlannerConfig& a, PlannerConfig& b) {
     a.Swap(&b);
@@ -848,6 +1053,7 @@ class PlannerConfig final :
   enum : int {
     kIpFieldNumber = 1,
     kHostTimeoutFieldNumber = 2,
+    kNumThreadsHttpServerFieldNumber = 3,
   };
   // string ip = 1;
   void clear_ip();
@@ -872,6 +1078,15 @@ class PlannerConfig final :
   void _internal_set_hosttimeout(int32_t value);
   public:
 
+  // int32 numThreadsHttpServer = 3;
+  void clear_numthreadshttpserver();
+  int32_t numthreadshttpserver() const;
+  void set_numthreadshttpserver(int32_t value);
+  private:
+  int32_t _internal_numthreadshttpserver() const;
+  void _internal_set_numthreadshttpserver(int32_t value);
+  public:
+
   // @@protoc_insertion_point(class_scope:faabric.planner.PlannerConfig)
  private:
   class _Internal;
@@ -881,6 +1096,7 @@ class PlannerConfig final :
   typedef void DestructorSkippable_;
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr ip_;
   int32_t hosttimeout_;
+  int32_t numthreadshttpserver_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_planner_2eproto;
 };
@@ -934,7 +1150,7 @@ class Host final :
                &_Host_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    5;
+    6;
 
   friend void swap(Host& a, Host& b) {
     a.Swap(&b);
@@ -1124,7 +1340,7 @@ class RegisterHostRequest final :
                &_RegisterHostRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    6;
+    7;
 
   friend void swap(RegisterHostRequest& a, RegisterHostRequest& b) {
     a.Swap(&b);
@@ -1276,7 +1492,7 @@ class RegisterHostResponse final :
                &_RegisterHostResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    7;
+    8;
 
   friend void swap(RegisterHostResponse& a, RegisterHostResponse& b) {
     a.Swap(&b);
@@ -1459,7 +1675,7 @@ class RemoveHostRequest final :
                &_RemoveHostRequest_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    8;
+    9;
 
   friend void swap(RemoveHostRequest& a, RemoveHostRequest& b) {
     a.Swap(&b);
@@ -1611,7 +1827,7 @@ class RemoveHostResponse final :
                &_RemoveHostResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    9;
+    10;
 
   friend void swap(RemoveHostResponse& a, RemoveHostResponse& b) {
     a.Swap(&b);
@@ -1763,7 +1979,7 @@ class AvailableHostsResponse final :
                &_AvailableHostsResponse_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    10;
+    11;
 
   friend void swap(AvailableHostsResponse& a, AvailableHostsResponse& b) {
     a.Swap(&b);
@@ -1970,6 +2186,30 @@ inline void Timestamp::set_epochms(int64_t value) {
 
 // -------------------------------------------------------------------
 
+// HttpMessage
+
+// .faabric.planner.HttpMessage.Type type = 1;
+inline void HttpMessage::clear_type() {
+  type_ = 0;
+}
+inline ::faabric::planner::HttpMessage_Type HttpMessage::_internal_type() const {
+  return static_cast< ::faabric::planner::HttpMessage_Type >(type_);
+}
+inline ::faabric::planner::HttpMessage_Type HttpMessage::type() const {
+  // @@protoc_insertion_point(field_get:faabric.planner.HttpMessage.type)
+  return _internal_type();
+}
+inline void HttpMessage::_internal_set_type(::faabric::planner::HttpMessage_Type value) {
+  
+  type_ = value;
+}
+inline void HttpMessage::set_type(::faabric::planner::HttpMessage_Type value) {
+  _internal_set_type(value);
+  // @@protoc_insertion_point(field_set:faabric.planner.HttpMessage.type)
+}
+
+// -------------------------------------------------------------------
+
 // PlannerConfig
 
 // string ip = 1;
@@ -2040,6 +2280,26 @@ inline void PlannerConfig::_internal_set_hosttimeout(int32_t value) {
 inline void PlannerConfig::set_hosttimeout(int32_t value) {
   _internal_set_hosttimeout(value);
   // @@protoc_insertion_point(field_set:faabric.planner.PlannerConfig.hostTimeout)
+}
+
+// int32 numThreadsHttpServer = 3;
+inline void PlannerConfig::clear_numthreadshttpserver() {
+  numthreadshttpserver_ = 0;
+}
+inline int32_t PlannerConfig::_internal_numthreadshttpserver() const {
+  return numthreadshttpserver_;
+}
+inline int32_t PlannerConfig::numthreadshttpserver() const {
+  // @@protoc_insertion_point(field_get:faabric.planner.PlannerConfig.numThreadsHttpServer)
+  return _internal_numthreadshttpserver();
+}
+inline void PlannerConfig::_internal_set_numthreadshttpserver(int32_t value) {
+  
+  numthreadshttpserver_ = value;
+}
+inline void PlannerConfig::set_numthreadshttpserver(int32_t value) {
+  _internal_set_numthreadshttpserver(value);
+  // @@protoc_insertion_point(field_set:faabric.planner.PlannerConfig.numThreadsHttpServer)
 }
 
 // -------------------------------------------------------------------
@@ -2779,6 +3039,8 @@ AvailableHostsResponse::hosts() const {
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
 
 // @@protoc_insertion_point(namespace_scope)
 
@@ -2791,6 +3053,11 @@ template <> struct is_proto_enum< ::faabric::planner::ResponseStatus_Status> : :
 template <>
 inline const EnumDescriptor* GetEnumDescriptor< ::faabric::planner::ResponseStatus_Status>() {
   return ::faabric::planner::ResponseStatus_Status_descriptor();
+}
+template <> struct is_proto_enum< ::faabric::planner::HttpMessage_Type> : ::std::true_type {};
+template <>
+inline const EnumDescriptor* GetEnumDescriptor< ::faabric::planner::HttpMessage_Type>() {
+  return ::faabric::planner::HttpMessage_Type_descriptor();
 }
 
 PROTOBUF_NAMESPACE_CLOSE

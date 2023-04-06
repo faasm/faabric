@@ -31,16 +31,31 @@ message Timestamp {
 }
 
 // ---------------------------------------------
+// Endpoint Messages
+// ---------------------------------------------
+
+message HttpMessage {
+    enum Type {
+        NO_TYPE = 0;
+        RESET = 1;
+        FLUSH_HOSTS = 2;
+    }
+
+    Type type = 1;
+}
+
+// ---------------------------------------------
 // State/Config Messages
 // ---------------------------------------------
 
 message PlannerConfig {
     string ip = 1;
     int32 hostTimeout = 2;
+    int32 numThreadsHttpServer = 3;
 }
 
 // ---------------------------------------------
-// Host Messages
+// Host Membership RPC Messages
 // ---------------------------------------------
 
 message Host {

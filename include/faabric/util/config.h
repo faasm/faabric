@@ -59,6 +59,7 @@ class SystemConfig
 
     // Planner
     std::string plannerHost;
+    int plannerPort;
 
     SystemConfig();
 

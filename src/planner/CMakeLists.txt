@@ -23,6 +23,7 @@ add_custom_target(
 faabric_lib(planner
     Planner.cpp
     PlannerClient.cpp
+    PlannerEndpointHandler.cpp
     PlannerServer.cpp
     PlannerState.cpp
     ${PB_SRC}

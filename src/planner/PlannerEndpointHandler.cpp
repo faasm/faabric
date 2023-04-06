@@ -1,5 +1,8 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
+#include <faabric/planner/planner.pb.h>
+#include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
+#include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::planner {
@@ -24,52 +27,56 @@ void PlannerEndpointHandler::onRequest(
     // Text response type
     response.set(header::content_type, "text/plain");
 
-    // Parse message from JSON in request
+    // Request body contains a string that is formatted as a JSON
     const std::string& requestStr = request.body();
 
     // Handle JSON
     if (requestStr.empty()) {
-        SPDLOG_ERROR("Faabric handler received empty request");
+        SPDLOG_ERROR("Planner handler received empty request");
         response.result(beast::http::status::bad_request);
         response.body() = std::string("Empty request");
-        return;
+        return ctx.sendFunction(std::move(response));
     }
 
-    msg = faabric::util::jsonToMessage(requestStr);
-    faabric::scheduler::Scheduler& sched =
-      faabric::scheduler::getScheduler();
+    // TODO: move this to src/util/json.cpp
+    faabric::planner::HttpMessage msg;
+    try {
+        faabric::util::jsonToMessagePb(requestStr, &msg);
+    } catch (faabric::util::JsonSerialisationException e) {
+        response.result(beast::http::status::bad_request);
+        response.body() = std::string("Bad JSON in request body");
+        return ctx.sendFunction(std::move(response));
+    }
 
-    if (msg.isstatusrequest()) {
-        SPDLOG_DEBUG("Processing status request");
-        const faabric::Message result =
-          sched.getFunctionResult(msg.id(), 0);
-
-        if (result.type() == faabric::Message_MessageType_EMPTY) {
-            response.result(beast::http::status::ok);
-            response.body() = std::string("RUNNING");
-        } else if (result.returnvalue() == 0) {
-            response.result(beast::http::status::ok);
-            response.body() = faabric::util::messageToJson(result);
-        } else {
-            response.result(beast::http::status::internal_server_error);
-            response.body() = "FAILED: " + result.outputdata();
+    switch (msg.type()) {
+        case faabric::planner::HttpMessage_Type_RESET: {
+            bool success = faabric::planner::getPlanner().reset();
+            if (success) {
+                response.result(beast::http::status::ok);
+                response.body() = std::string("Planner fully reset!");
+            } else {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("Failed to reset planner");
+            }
+            return ctx.sendFunction(std::move(response));
         }
-    } else if (msg.isexecgraphrequest()) {
-        SPDLOG_DEBUG("Processing execution graph request");
-        faabric::scheduler::ExecGraph execGraph =
-          sched.getFunctionExecGraph(msg.id());
-        response.result(beast::http::status::ok);
-        response.body() = faabric::scheduler::execGraphToJson(execGraph);
-
-    } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
-        SPDLOG_DEBUG("Broadcasting flush request");
-        sched.broadcastFlush();
-        response.result(beast::http::status::ok);
-        response.body() = std::string("Flush sent");
-    } else {
-        executeFunction(
-          std::move(ctx), std::move(response), std::move(req), 0);
-        return;
+        case faabric::planner::HttpMessage_Type_FLUSH_HOSTS: {
+            bool success = faabric::planner::getPlanner().flush(faabric::planner::FlushType::Hosts);
+            if (success) {
+                response.result(beast::http::status::ok);
+                response.body() = std::string("Flushed available hosts!");
+            } else {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("Failed flushing available hosts!");
+            }
+            return ctx.sendFunction(std::move(response));
+        }
+        default: {
+            SPDLOG_ERROR("Unrecognised message type {}", msg.type());
+            response.result(beast::http::status::bad_request);
+            response.body() = std::string("Unrecognised message type");
+            return ctx.sendFunction(std::move(response));
+        }
     }
 }
 
@@ -79,6 +86,7 @@ void PlannerEndpointHandler::executeFunction(
   std::shared_ptr<faabric::BatchExecuteRequest> ber,
   size_t messageIndex)
 {
+    /*
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     faabric::Message& msg = *ber->mutable_messages(messageIndex);
 
@@ -129,6 +137,7 @@ void PlannerEndpointHandler::executeFunction(
                                 this->shared_from_this(),
                                 std::move(ctx),
                                 std::move(response)));
+    */
 }
 
 void PlannerEndpointHandler::onFunctionResult(
@@ -136,6 +145,7 @@ void PlannerEndpointHandler::onFunctionResult(
   faabric::util::BeastHttpResponse&& response,
   faabric::Message& result)
 {
+    /*
     beast::http::status statusCode =
       (result.returnvalue() == 0) ? beast::http::status::ok
                                   : beast::http::status::internal_server_error;
@@ -146,6 +156,7 @@ void PlannerEndpointHandler::onFunctionResult(
 
     response.body() = result.outputdata();
     return ctx.sendFunction(std::move(response));
+    */
 }
 
 }

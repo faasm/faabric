@@ -6,17 +6,40 @@
 #include <shared_mutex>
 
 namespace faabric::planner {
+enum FlushType
+{
+    NoFlushType = 0,
+    Hosts = 1,
+};
+
 class Planner
 {
   public:
-    // TODO: initialise config
     Planner();
+
+    // ----------
+    // Planner config
+    // ----------
 
     PlannerConfig getConfig();
 
     void printConfig() const;
 
+    // ----------
+    // Util
+    // ----------
+
+    bool reset();
+
+    bool flush(faabric::planner::FlushType flushType);
+
+    // ----------
+    // Host membership management
+    // ----------
+
     bool registerHost(const Host& hostIn, int* hostId);
+
+    // bool remove Host
 
   private:
     // There's a singletone instance of the planner running, but it must allow
@@ -25,6 +48,8 @@ class Planner
 
     PlannerState state;
     PlannerConfig config;
+
+    void flushHosts();
 };
 
 Planner& getPlanner();
