@@ -24,10 +24,9 @@ int main()
     // We get the port from the global config, but the number of threads from
     // the planner config
     faabric::endpoint::FaabricEndpoint endpoint(
-        faabric::util::getSystemConfig().plannerPort,
-        faabric::planner::getPlanner().getConfig().numthreadshttpserver(),
-        std::make_shared<faabric::planner::PlannerEndpointHandler>()
-    );
+      faabric::util::getSystemConfig().plannerPort,
+      faabric::planner::getPlanner().getConfig().numthreadshttpserver(),
+      std::make_shared<faabric::planner::PlannerEndpointHandler>());
     endpoint.start(faabric::endpoint::EndpointMode::SIGNAL);
 
     SPDLOG_INFO("Planner server shutting down");

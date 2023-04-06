@@ -3,8 +3,8 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <faabric/planner/planner.pb.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/util/json.h>
 
 #include <boost/beast/http/status.hpp>
@@ -15,8 +15,7 @@ using namespace faabric::planner;
  * and only test the external HTTP API
  */
 namespace tests {
-class FaabricPlannerEndpointTestFixture
-  : public ConfTestFixture
+class FaabricPlannerEndpointTestFixture : public ConfTestFixture
 {
   public:
     FaabricPlannerEndpointTestFixture()
@@ -61,12 +60,14 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     faabric::util::messageToJsonPb(msg, &msgJsonStr);
 
     std::pair<int, std::string> result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) == expectedReturnCode);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);
 
     // Check that the set of available hosts is empty after reset
     PlannerClient cli;
-    std::vector<faabric::planner::Host> availableHosts = cli.getAvailableHosts();
+    std::vector<faabric::planner::Host> availableHosts =
+      cli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
 
     // Add a host, reset, and check again
@@ -79,7 +80,8 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
 
     // Reset again
     result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) == expectedReturnCode);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);
 
     // Check count is now zero again
@@ -101,12 +103,14 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
 
     // Send it
     std::pair<int, std::string> result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) == expectedReturnCode);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);
 
     // Check that, initially, there are no available hosts
     PlannerClient cli;
-    std::vector<faabric::planner::Host> availableHosts = cli.getAvailableHosts();
+    std::vector<faabric::planner::Host> availableHosts =
+      cli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
 
     // Add a host, reset, and check again
@@ -119,7 +123,8 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
 
     // Reset again
     result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) == expectedReturnCode);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);
 
     // Check count is now zero again
@@ -139,7 +144,8 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
 
     // Send it
     std::pair<int, std::string> result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) == expectedReturnCode);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
 
     // Check that we can de-serialise the config. Note that if there's a
     // de-serialisation the method will throw an exception

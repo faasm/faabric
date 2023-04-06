@@ -1,7 +1,7 @@
 #pragma once
 
-#include <faabric/planner/planner.pb.h>
 #include <faabric/planner/PlannerState.h>
+#include <faabric/planner/planner.pb.h>
 
 #include <shared_mutex>
 

@@ -1,7 +1,7 @@
 #include <faabric/endpoint/FaabricEndpoint.h>
-#include <faabric/planner/planner.pb.h>
 #include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 
@@ -61,13 +61,15 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_FLUSH_HOSTS: {
-            bool success = faabric::planner::getPlanner().flush(faabric::planner::FlushType::Hosts);
+            bool success = faabric::planner::getPlanner().flush(
+              faabric::planner::FlushType::Hosts);
             if (success) {
                 response.result(beast::http::status::ok);
                 response.body() = std::string("Flushed available hosts!");
             } else {
                 response.result(beast::http::status::internal_server_error);
-                response.body() = std::string("Failed flushing available hosts!");
+                response.body() =
+                  std::string("Failed flushing available hosts!");
             }
             return ctx.sendFunction(std::move(response));
         }

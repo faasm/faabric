@@ -1,6 +1,6 @@
-#include <faabric/planner/planner.pb.h>
 #include <faabric/planner/PlannerApi.h>
 #include <faabric/planner/PlannerServer.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
@@ -63,7 +63,8 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvPing()
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetAvailableHosts()
+std::unique_ptr<google::protobuf::Message>
+PlannerServer::recvGetAvailableHosts()
 {
     auto response = std::make_unique<AvailableHostsResponse>();
 

@@ -1,6 +1,6 @@
-#include <faabric/planner/planner.pb.h>
 #include <faabric/planner/PlannerApi.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/transport/common.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
@@ -9,7 +9,11 @@
 namespace faabric::planner {
 
 PlannerClient::PlannerClient()
-  : faabric::transport::MessageEndpointClient(faabric::util::getIPFromHostname(faabric::util::getSystemConfig().plannerHost), PLANNER_ASYNC_PORT, PLANNER_SYNC_PORT)
+  : faabric::transport::MessageEndpointClient(
+      faabric::util::getIPFromHostname(
+        faabric::util::getSystemConfig().plannerHost),
+      PLANNER_ASYNC_PORT,
+      PLANNER_SYNC_PORT)
 {}
 
 void PlannerClient::ping()
@@ -34,7 +38,8 @@ std::vector<faabric::planner::Host> PlannerClient::getAvailableHosts()
     return availableHosts;
 }
 
-std::pair<int, int> PlannerClient::registerHost(std::shared_ptr<RegisterHostRequest> req)
+std::pair<int, int> PlannerClient::registerHost(
+  std::shared_ptr<RegisterHostRequest> req)
 {
     RegisterHostResponse resp;
     syncSend(PlannerCalls::RegisterHost, req.get(), &resp);

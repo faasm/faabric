@@ -3,8 +3,8 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <faabric/planner/planner.pb.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
@@ -14,8 +14,7 @@
 using namespace faabric::planner;
 
 namespace tests {
-class PlannerTestFixture
-  : public ConfTestFixture
+class PlannerTestFixture : public ConfTestFixture
 {
   public:
     PlannerTestFixture()
@@ -24,10 +23,7 @@ class PlannerTestFixture
         cli.ping();
     }
 
-    ~PlannerTestFixture()
-    {
-        resetPlanner();
-    }
+    ~PlannerTestFixture() { resetPlanner(); }
 
   protected:
     PlannerClient cli;
@@ -39,7 +35,8 @@ class PlannerTestFixture
         std::string jsonStr;
         faabric::util::messageToJsonPb(msg, &jsonStr);
 
-        std::pair<int, std::string> result = postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        std::pair<int, std::string> result =
+          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
         assert(result.first == 200);
     }
 
@@ -51,7 +48,8 @@ class PlannerTestFixture
         std::string jsonStr;
         faabric::util::messageToJsonPb(msg, &jsonStr);
 
-        std::pair<int, std::string> result = postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        std::pair<int, std::string> result =
+          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
         REQUIRE(result.first == 200);
 
         // Check that we can de-serialise the config. Note that if there's a
@@ -100,7 +98,9 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test registering host", "[planner]")
     // will work, but will give us a different id
     std::pair<int, int> diffRetVal;
     int timeToSleep = getPlannerConfig().hosttimeout() * 2;
-    SPDLOG_INFO("Sleeping for {} seconds (twice the timeout) to ensure entries expire", timeToSleep);
+    SPDLOG_INFO(
+      "Sleeping for {} seconds (twice the timeout) to ensure entries expire",
+      timeToSleep);
     SLEEP_MS(timeToSleep * 1000);
     REQUIRE_NOTHROW(diffRetVal = cli.registerHost(regReq));
     // Same timeout
@@ -109,7 +109,9 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test registering host", "[planner]")
     REQUIRE(retVal.second != diffRetVal.second);
 }
 
-TEST_CASE_METHOD(PlannerTestFixture, "Test getting the available hosts", "[planner]")
+TEST_CASE_METHOD(PlannerTestFixture,
+                 "Test getting the available hosts",
+                 "[planner]")
 {
     // We can ask for the number of available hosts even if no host has been
     // registered, initially there's 0 available hosts
@@ -131,7 +133,9 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test getting the available hosts", "[plann
     // If we wait more than the timeout, the host will have expired. We sleep
     // for twice the timeout
     int timeToSleep = getPlannerConfig().hosttimeout() * 2;
-    SPDLOG_INFO("Sleeping for {} seconds (twice the timeout) to ensure entries expire", timeToSleep);
+    SPDLOG_INFO(
+      "Sleeping for {} seconds (twice the timeout) to ensure entries expire",
+      timeToSleep);
     SLEEP_MS(timeToSleep * 1000);
     availableHosts = cli.getAvailableHosts();
     REQUIRE(availableHosts.empty());

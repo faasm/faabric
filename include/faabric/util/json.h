@@ -6,9 +6,11 @@
 #include <google/protobuf/util/json_util.h>
 
 namespace faabric::util {
-void messageToJsonPb(const google::protobuf::Message& msg, std::string* jsonStr);
+void messageToJsonPb(const google::protobuf::Message& msg,
+                     std::string* jsonStr);
 
-void jsonToMessagePb(const std::string& jsonStr, google::protobuf::Message* msg);
+void jsonToMessagePb(const std::string& jsonStr,
+                     google::protobuf::Message* msg);
 
 class JsonSerialisationException : public faabric::util::FaabricException
 {

@@ -1,7 +1,7 @@
 #include <faabric/planner/Planner.h>
+#include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
-#include <faabric/util/clock.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -17,8 +17,10 @@ Planner::Planner()
     // that method from being called elsewhere in the codebase (as it would be
     // thread-unsafe)
     config.set_ip(faabric::util::getSystemConfig().endpointHost);
-    config.set_hosttimeout(std::stoi(faabric::util::getEnvVar("PLANNER_HOST_KEEPALIVE_TIMEOUT", "5")));
-    config.set_numthreadshttpserver(std::stoi(faabric::util::getEnvVar("PLANNER_HTTP_SERVER_THREADS", "4")));
+    config.set_hosttimeout(std::stoi(
+      faabric::util::getEnvVar("PLANNER_HOST_KEEPALIVE_TIMEOUT", "5")));
+    config.set_numthreadshttpserver(
+      std::stoi(faabric::util::getEnvVar("PLANNER_HTTP_SERVER_THREADS", "4")));
 
     printConfig();
 }
@@ -94,9 +96,10 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
 {
     // Sanity check the input argument
     if (hostIn.slots() <= 0) {
-        SPDLOG_ERROR("Received erroneous request to register host {} with {} slots",
-                     hostIn.ip(),
-                     hostIn.slots());
+        SPDLOG_ERROR(
+          "Received erroneous request to register host {} with {} slots",
+          hostIn.ip(),
+          hostIn.slots());
         return false;
     }
 
@@ -116,14 +119,16 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
         SPDLOG_DEBUG("Registering host {} for the first time (host id: {})",
                      hostIn.ip(),
                      *hostId);
-        state.hostMap.emplace(std::make_pair<std::string, std::shared_ptr<Host>>(
-                (std::string) hostIn.ip(),
-                std::make_shared<Host>(hostIn)));
+        state.hostMap.emplace(
+          std::make_pair<std::string, std::shared_ptr<Host>>(
+            (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
         state.hostMap.at(hostIn.ip())->set_hostid(*hostId);
     } else if (it->second->hostid() != hostIn.hostid()) {
         SPDLOG_ERROR("Received register request for a registered host, but"
                      " with different request ids: {} != {} (host: {})",
-                     hostIn.hostid(), it->second->hostid(), hostIn.ip());
+                     hostIn.hostid(),
+                     it->second->hostid(),
+                     hostIn.ip());
         return false;
     } else {
         // If the host is already registered, and not expired,
@@ -135,15 +140,18 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
     SPDLOG_DEBUG("Setting timestamp for host {} (id: {})",
                  hostIn.ip(),
                  state.hostMap.at(hostIn.ip())->hostid());
-    state.hostMap.at(hostIn.ip())->mutable_registerts()->set_epochms(
-      faabric::util::getGlobalClock().epochMillis());
+    state.hostMap.at(hostIn.ip())
+      ->mutable_registerts()
+      ->set_epochms(faabric::util::getGlobalClock().epochMillis());
 
     return true;
 }
 
 void Planner::removeHost(const Host& hostIn)
 {
-    SPDLOG_DEBUG("Planner received request to remove host {} (id: {})", hostIn.ip(), hostIn.hostid());
+    SPDLOG_DEBUG("Planner received request to remove host {} (id: {})",
+                 hostIn.ip(),
+                 hostIn.hostid());
 
     // We could acquire first a read lock to see if the host is in the host
     // map, and then acquire a write lock to remove it, but we don't do it
@@ -152,7 +160,8 @@ void Planner::removeHost(const Host& hostIn)
 
     auto it = state.hostMap.find(hostIn.ip());
     if (it != state.hostMap.end() && it->second->hostid() == hostIn.hostid()) {
-        SPDLOG_INFO("Planner removing host {} (id: {})", hostIn.ip(), hostIn.hostid());
+        SPDLOG_INFO(
+          "Planner removing host {} (id: {})", hostIn.ip(), hostIn.hostid());
         state.hostMap.erase(it);
     }
 }

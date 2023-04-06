@@ -15,19 +15,25 @@ using namespace rapidjson;
 namespace faabric::util {
 void messageToJsonPb(const google::protobuf::Message& msg, std::string* jsonStr)
 {
-    google::protobuf::util::Status status = google::protobuf::util::MessageToJsonString(msg, jsonStr);
+    google::protobuf::util::Status status =
+      google::protobuf::util::MessageToJsonString(msg, jsonStr);
     if (!status.ok()) {
-        SPDLOG_ERROR("Serialising JSON string to protobuf message: {}", status.message().data());
-        throw faabric::util::JsonSerialisationException(status.message().data());
+        SPDLOG_ERROR("Serialising JSON string to protobuf message: {}",
+                     status.message().data());
+        throw faabric::util::JsonSerialisationException(
+          status.message().data());
     }
 }
 
 void jsonToMessagePb(const std::string& jsonStr, google::protobuf::Message* msg)
 {
-    google::protobuf::util::Status status = google::protobuf::util::JsonStringToMessage(jsonStr, msg);
+    google::protobuf::util::Status status =
+      google::protobuf::util::JsonStringToMessage(jsonStr, msg);
     if (!status.ok()) {
-        SPDLOG_ERROR("Deserialising JSON string to protobuf message: {}", status.message().data());
-        throw faabric::util::JsonSerialisationException(status.message().data());
+        SPDLOG_ERROR("Deserialising JSON string to protobuf message: {}",
+                     status.message().data());
+        throw faabric::util::JsonSerialisationException(
+          status.message().data());
     }
 }
 
