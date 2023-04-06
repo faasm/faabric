@@ -1,7 +1,10 @@
+#include <faabric/planner/planner.pb.h>
 #include <faabric/planner/PlannerApi.h>
 #include <faabric/planner/PlannerServer.h>
 #include <faabric/transport/common.h>
+#include <faabric/transport/macros.h>
 #include <faabric/util/config.h>
+#include <faabric/util/logging.h>
 
 #include <fmt/format.h>
 
@@ -62,14 +65,34 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetAvailableHosts(
 {
 
     // Send response
-    return std::make_unique<faabric::EmptyResponse>();
+    return std::make_unique<faabric::planner::AvailableHostsResponse>();
 }
 
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
   std::span<const uint8_t> buffer)
 {
+    PARSE_MSG(faabric::planner::RegisterHostRequest, buffer.data(), buffer.size());
 
-    return std::make_unique<faabric::EmptyResponse>();
+    int hostId;
+    bool success = faabric::planner::getPlanner().registerHost(parsedMsg.host(), &hostId);
+    if (!success) {
+        SPDLOG_ERROR("Error registering host in Planner!");
+    }
+
+    auto response = std::make_unique<faabric::planner::RegisterHostResponse>();
+    *response->mutable_config() = faabric::planner::getPlanner().getConfig();
+    response->set_hostid(hostId);
+
+    // Set response status (TODO: maybe make a macro of ths?)
+    faabric::planner::ResponseStatus status;
+    if (success) {
+        status.set_status(faabric::planner::ResponseStatus_Status_OK);
+    } else {
+        status.set_status(faabric::planner::ResponseStatus_Status_ERROR);
+    }
+    *response->mutable_status() = status;
+
+    return response;
 }
 
 std::unique_ptr<google::protobuf::Message>

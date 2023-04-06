@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package faabric.planner;
+
+// TODO: we could import Timestamp from here
+// import "google/protobuf/timestamp.proto";
+
+// ---------------------------------------------
+// Util Messages
+// ---------------------------------------------
+
+message EmptyResponse {
+    int32 empty = 1;
+}
+
+message EmptyRequest {
+    int32 empty = 1;
+}
+
+message ResponseStatus {
+    enum Status {
+        OK = 0;
+        ERROR = 1;
+    }
+
+    Status status = 1;
+}
+
+message Timestamp {
+    int64 epochMs = 1;
+}
+
+// ---------------------------------------------
+// State/Config Messages
+// ---------------------------------------------
+
+message PlannerConfig {
+    string ip = 1;
+    int32 hostTimeout = 2;
+}
+
+// ---------------------------------------------
+// Host Messages
+// ---------------------------------------------
+
+message Host {
+    string ip = 1;
+    int32 slots = 2;
+    int32 hostId = 3;
+    Timestamp registerTs = 4;
+}
+
+message RegisterHostRequest {
+    Host host = 1;
+}
+
+message RegisterHostResponse {
+    ResponseStatus status = 1;
+    PlannerConfig config = 2;
+    int32 hostId = 3;
+}
+
+message RemoveHostRequest {
+    Host host = 1;
+}
+
+message RemoveHostResponse {
+    ResponseStatus status = 1;
+}
+
+message AvailableHostsResponse {
+    repeated Host hosts = 1;
+}

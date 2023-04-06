@@ -3,11 +3,11 @@ ARG FAABRIC_VERSION
 
 # Flag to say we're in a container
 ENV FAABRIC_DOCKER="on"
+SHELL ["/bin/bash", "-c"]
 
 # Put the code in place
-WORKDIR /code
 RUN rm -rf /code \
-    && mkdir -p /code \
+    && mkdir -p /code/faabric \
     && git clone \
         -b v${FAABRIC_VERSION} \
         https://github.com/faasm/faabric \

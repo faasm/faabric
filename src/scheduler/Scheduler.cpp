@@ -1,3 +1,4 @@
+#include <faabric/planner/PlannerClient.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -97,20 +98,19 @@ std::set<std::string> Scheduler::getAvailableHosts()
 
 void Scheduler::addHostToGlobalSet(const std::string& host)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.sadd(AVAILABLE_HOST_SET, host);
+    faabric::planner::PlannerClient plannerCli;
+    // TODO
+}
+
+void Scheduler::addHostToGlobalSet()
+{
+    addHostToGlobalSet(thisHost);
 }
 
 void Scheduler::removeHostFromGlobalSet(const std::string& host)
 {
     redis::Redis& redis = redis::Redis::getQueue();
     redis.srem(AVAILABLE_HOST_SET, host);
-}
-
-void Scheduler::addHostToGlobalSet()
-{
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.sadd(AVAILABLE_HOST_SET, thisHost);
 }
 
 void Scheduler::resetThreadLocalCache()
