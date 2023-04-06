@@ -22,10 +22,14 @@ void PlannerServer::doAsyncRecv(transport::Message& message)
 {
     uint8_t header = message.getMessageCode();
     switch (header) {
-        // Thus far, no async calls for PlannerServer
+        case PlannerCalls::RemoveHost: {
+            recvRemoveHost(message.udata());
+            break;
+        }
         default: {
-            throw std::runtime_error(
-              fmt::format("Unrecognized async call header: {}", header));
+            // If we don't recognise the header, let the client fail, but don't
+            // crash the planner
+            SPDLOG_ERROR("Unrecognised async call header: {}", header);
         }
     }
 }
@@ -44,12 +48,11 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case faabric::planner::PlannerCalls::RegisterHost: {
             return recvRegisterHost(message.udata());
         }
-        case faabric::planner::PlannerCalls::RemoveHost: {
-            return recvRemoveHost(message.udata());
-        }
         default: {
-            throw std::runtime_error(
-              fmt::format("Unrecognized sync call header: {}", header));
+            // If we don't recognise the header, let the client fail, but don't
+            // crash the planner
+            SPDLOG_ERROR("Unrecognised sync call header: {}", header);
+            return std::make_unique<faabric::EmptyResponse>();
         }
     }
 }
@@ -100,11 +103,12 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
     return response;
 }
 
-std::unique_ptr<google::protobuf::Message>
-PlannerServer::recvRemoveHost(std::span<const uint8_t> buffer)
+void PlannerServer::recvRemoveHost(std::span<const uint8_t> buffer)
 {
+    PARSE_MSG(RemoveHostRequest, buffer.data(), buffer.size());
 
-    // Send response
-    return std::make_unique<faabric::EmptyResponse>();
+    // Removing a host is a best-effort operation, we just try to remove it if
+    // we find it
+    getPlanner().removeHost(parsedMsg.host());
 }
 }

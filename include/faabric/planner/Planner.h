@@ -41,7 +41,8 @@ class Planner
 
     bool registerHost(const Host& hostIn, int* hostId);
 
-    // bool remove Host
+    // Best effort host removal. Don't fail if we can't
+    void removeHost(const Host& hostIn);
 
   private:
     // There's a singletone instance of the planner running, but it must allow

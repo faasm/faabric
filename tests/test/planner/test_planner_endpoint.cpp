@@ -8,7 +8,6 @@
 #include <faabric/util/json.h>
 
 #include <boost/beast/http/status.hpp>
-#include <google/protobuf/util/json_util.h>
 
 using namespace faabric::planner;
 

@@ -141,6 +141,22 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
     return true;
 }
 
+void Planner::removeHost(const Host& hostIn)
+{
+    SPDLOG_DEBUG("Planner received request to remove host {} (id: {})", hostIn.ip(), hostIn.hostid());
+
+    // We could acquire first a read lock to see if the host is in the host
+    // map, and then acquire a write lock to remove it, but we don't do it
+    // as we don't expect that much throughput in the planner
+    faabric::util::FullLock lock(plannerMx);
+
+    auto it = state.hostMap.find(hostIn.ip());
+    if (it != state.hostMap.end() && it->second->hostid() == hostIn.hostid()) {
+        SPDLOG_INFO("Planner removing host {} (id: {})", hostIn.ip(), hostIn.hostid());
+        state.hostMap.erase(it);
+    }
+}
+
 bool Planner::isHostExpired(std::shared_ptr<Host> host, long epochTimeMs)
 {
     // Allow calling the method without a timestamp, and we calculate it now

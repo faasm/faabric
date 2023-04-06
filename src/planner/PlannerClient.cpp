@@ -9,26 +9,24 @@
 namespace faabric::planner {
 
 PlannerClient::PlannerClient()
-  : faabric::transport::MessageEndpointClient(faabric::util::getIPFromHostname(faabric::util::getSystemConfig().plannerHost),
-                                              PLANNER_ASYNC_PORT,
-                                              PLANNER_SYNC_PORT)
+  : faabric::transport::MessageEndpointClient(faabric::util::getIPFromHostname(faabric::util::getSystemConfig().plannerHost), PLANNER_ASYNC_PORT, PLANNER_SYNC_PORT)
 {}
 
 void PlannerClient::ping()
 {
-    faabric::planner::EmptyRequest req;
-    faabric::planner::EmptyResponse resp;
-    syncSend(faabric::planner::PlannerCalls::Ping, &req, &resp);
+    EmptyRequest req;
+    EmptyResponse resp;
+    syncSend(PlannerCalls::Ping, &req, &resp);
 }
 
 std::vector<faabric::planner::Host> PlannerClient::getAvailableHosts()
 {
-    faabric::planner::EmptyRequest req;
-    faabric::planner::AvailableHostsResponse resp;
-    syncSend(faabric::planner::PlannerCalls::GetAvailableHosts, &req, &resp);
+    EmptyRequest req;
+    AvailableHostsResponse resp;
+    syncSend(PlannerCalls::GetAvailableHosts, &req, &resp);
 
     // Copy the repeated array into a more convinient container
-    std::vector<faabric::planner::Host> availableHosts;
+    std::vector<Host> availableHosts;
     for (int i = 0; i < resp.hosts_size(); i++) {
         availableHosts.push_back(resp.hosts(i));
     }
@@ -36,13 +34,12 @@ std::vector<faabric::planner::Host> PlannerClient::getAvailableHosts()
     return availableHosts;
 }
 
-std::pair<int, int> PlannerClient::registerHost(
-  std::shared_ptr<faabric::planner::RegisterHostRequest> req)
+std::pair<int, int> PlannerClient::registerHost(std::shared_ptr<RegisterHostRequest> req)
 {
-    faabric::planner::RegisterHostResponse resp;
-    syncSend(faabric::planner::PlannerCalls::RegisterHost, req.get(), &resp);
+    RegisterHostResponse resp;
+    syncSend(PlannerCalls::RegisterHost, req.get(), &resp);
 
-    if (resp.status().status() != faabric::planner::ResponseStatus_Status_OK) {
+    if (resp.status().status() != ResponseStatus_Status_OK) {
         throw std::runtime_error("Error registering host with planner!");
     }
 
@@ -52,8 +49,8 @@ std::pair<int, int> PlannerClient::registerHost(
     return std::make_pair<int, int>(resp.config().hosttimeout(), resp.hostid());
 }
 
-void PlannerClient::removeHost()
+void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
 {
-    ;
+    asyncSend(PlannerCalls::RemoveHost, req.get());
 }
 }

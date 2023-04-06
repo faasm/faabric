@@ -9,6 +9,8 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
+#define ASYNC_TIMEOUT_MS 500
+
 using namespace faabric::planner;
 
 namespace tests {
@@ -131,6 +133,29 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test getting the available hosts", "[plann
     int timeToSleep = getPlannerConfig().hosttimeout() * 2;
     SPDLOG_INFO("Sleeping for {} seconds (twice the timeout) to ensure entries expire", timeToSleep);
     SLEEP_MS(timeToSleep * 1000);
+    availableHosts = cli.getAvailableHosts();
+    REQUIRE(availableHosts.empty());
+}
+
+TEST_CASE_METHOD(PlannerTestFixture, "Test removing a host", "[planner]")
+{
+    Host thisHost;
+    thisHost.set_ip("foo");
+    thisHost.set_slots(12);
+
+    auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
+    *regReq->mutable_host() = thisHost;
+    std::pair<int, int> retVal = cli.registerHost(regReq);
+    thisHost.set_hostid(retVal.second);
+
+    std::vector<Host> availableHosts = cli.getAvailableHosts();
+    REQUIRE(availableHosts.size() == 1);
+
+    auto remReq = std::make_shared<faabric::planner::RemoveHostRequest>();
+    *remReq->mutable_host() = thisHost;
+    cli.removeHost(remReq);
+    // Give time for the async request to go through
+    SLEEP_MS(ASYNC_TIMEOUT_MS);
     availableHosts = cli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
 }
