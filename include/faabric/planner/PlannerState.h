@@ -10,9 +10,8 @@ namespace faabric::planner {
 struct PlannerState
 {
     // Accounting of the hosts that are registered in the system and responsive
-    // We deliberately use the host's IP as unique key, as if two "hosts" have
-    // the same IP, they are the same host
-    // TODO: should we give a UUID too?
+    // We deliberately use the host's IP as unique key, but assign a unique host
+    // id for redundancy
     std::map<std::string, std::shared_ptr<Host>> hostMap;
 };
 }

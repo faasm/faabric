@@ -14,6 +14,10 @@ faabric.ini
 # Vim
 *.swp
 
+# Protobuf
+*.pb.cc
+*.pb.h
+
 # C
 
 # Prerequisites

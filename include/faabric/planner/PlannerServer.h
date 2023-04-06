@@ -21,7 +21,7 @@ class PlannerServer final : public faabric::transport::MessageEndpointServer
 
     // Synchronous calls
 
-    std::unique_ptr<google::protobuf::Message> recvPing();
+    static std::unique_ptr<google::protobuf::Message> recvPing();
 
     std::unique_ptr<google::protobuf::Message> recvGetAvailableHosts();
 

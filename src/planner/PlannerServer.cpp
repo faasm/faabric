@@ -15,7 +15,7 @@ PlannerServer::PlannerServer()
       PLANNER_SYNC_PORT,
       PLANNER_INPROC_LABEL,
       faabric::util::getSystemConfig().plannerServerThreads)
-  , planner(faabric::planner::getPlanner())
+  , planner(getPlanner())
 {}
 
 void PlannerServer::doAsyncRecv(transport::Message& message)
@@ -39,13 +39,13 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
 {
     uint8_t header = message.getMessageCode();
     switch (header) {
-        case faabric::planner::PlannerCalls::Ping: {
+        case PlannerCalls::Ping: {
             return recvPing();
         }
-        case faabric::planner::PlannerCalls::GetAvailableHosts: {
+        case PlannerCalls::GetAvailableHosts: {
             return recvGetAvailableHosts();
         }
-        case faabric::planner::PlannerCalls::RegisterHost: {
+        case PlannerCalls::RegisterHost: {
             return recvRegisterHost(message.udata());
         }
         default: {
@@ -68,7 +68,7 @@ PlannerServer::recvGetAvailableHosts()
 {
     auto response = std::make_unique<AvailableHostsResponse>();
 
-    auto availableHosts = getPlanner().getAvailableHosts();
+    auto availableHosts = planner.getAvailableHosts();
 
     for (auto host : availableHosts) {
         *response->add_hosts() = *host;
@@ -83,21 +83,21 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
     PARSE_MSG(RegisterHostRequest, buffer.data(), buffer.size());
 
     int hostId;
-    bool success = getPlanner().registerHost(parsedMsg.host(), &hostId);
+    bool success = planner.registerHost(parsedMsg.host(), &hostId);
     if (!success) {
         SPDLOG_ERROR("Error registering host in Planner!");
     }
 
     auto response = std::make_unique<faabric::planner::RegisterHostResponse>();
-    *response->mutable_config() = faabric::planner::getPlanner().getConfig();
+    *response->mutable_config() = planner.getConfig();
     response->set_hostid(hostId);
 
     // Set response status (TODO: maybe make a macro of ths?)
-    faabric::planner::ResponseStatus status;
+    ResponseStatus status;
     if (success) {
-        status.set_status(faabric::planner::ResponseStatus_Status_OK);
+        status.set_status(ResponseStatus_Status_OK);
     } else {
-        status.set_status(faabric::planner::ResponseStatus_Status_ERROR);
+        status.set_status(ResponseStatus_Status_ERROR);
     }
     *response->mutable_status() = status;
 
@@ -110,6 +110,6 @@ void PlannerServer::recvRemoveHost(std::span<const uint8_t> buffer)
 
     // Removing a host is a best-effort operation, we just try to remove it if
     // we find it
-    getPlanner().removeHost(parsedMsg.host());
+    planner.removeHost(parsedMsg.host());
 }
 }
