@@ -39,6 +39,7 @@ message HttpMessage {
         NO_TYPE = 0;
         RESET = 1;
         FLUSH_HOSTS = 2;
+        GET_CONFIG = 3;
     }
 
     Type type = 1;
@@ -50,6 +51,7 @@ message HttpMessage {
 
 message PlannerConfig {
     string ip = 1;
+    // Host keep-alive timeout in seconds
     int32 hostTimeout = 2;
     int32 numThreadsHttpServer = 3;
 }
@@ -62,6 +64,7 @@ message Host {
     string ip = 1;
     int32 slots = 2;
     int32 hostId = 3;
+    // Host register timestamp as epoch time in ms
     Timestamp registerTs = 4;
 }
 

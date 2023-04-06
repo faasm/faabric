@@ -39,7 +39,7 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
             return recvPing();
         }
         case faabric::planner::PlannerCalls::GetAvailableHosts: {
-            return recvGetAvailableHosts(message.udata());
+            return recvGetAvailableHosts();
         }
         case faabric::planner::PlannerCalls::RegisterHost: {
             return recvRegisterHost(message.udata());
@@ -60,21 +60,26 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvPing()
     return std::make_unique<faabric::EmptyResponse>();
 }
 
-std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetAvailableHosts(
-  std::span<const uint8_t> buffer)
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetAvailableHosts()
 {
+    auto response = std::make_unique<AvailableHostsResponse>();
 
-    // Send response
-    return std::make_unique<faabric::planner::AvailableHostsResponse>();
+    auto availableHosts = getPlanner().getAvailableHosts();
+
+    for (auto host : availableHosts) {
+        *response->add_hosts() = *host;
+    }
+
+    return std::move(response);
 }
 
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
   std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(faabric::planner::RegisterHostRequest, buffer.data(), buffer.size());
+    PARSE_MSG(RegisterHostRequest, buffer.data(), buffer.size());
 
     int hostId;
-    bool success = faabric::planner::getPlanner().registerHost(parsedMsg.host(), &hostId);
+    bool success = getPlanner().registerHost(parsedMsg.host(), &hostId);
     if (!success) {
         SPDLOG_ERROR("Error registering host in Planner!");
     }

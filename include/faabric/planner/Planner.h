@@ -37,6 +37,8 @@ class Planner
     // Host membership management
     // ----------
 
+    std::vector<std::shared_ptr<Host>> getAvailableHosts();
+
     bool registerHost(const Host& hostIn, int* hostId);
 
     // bool remove Host
@@ -50,6 +52,9 @@ class Planner
     PlannerConfig config;
 
     void flushHosts();
+
+    // Check if a host's registration timestamp has expired
+    bool isHostExpired(std::shared_ptr<Host> host, long epochTimeMs = 0);
 };
 
 Planner& getPlanner();

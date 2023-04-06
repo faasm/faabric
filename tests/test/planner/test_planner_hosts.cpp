@@ -7,6 +7,7 @@
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 
 using namespace faabric::planner;
 
@@ -38,6 +39,24 @@ class PlannerTestFixture
 
         std::pair<int, std::string> result = postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
         assert(result.first == 200);
+    }
+
+    // TODO: consider setting a short planner config timeout for the tests
+    PlannerConfig getPlannerConfig()
+    {
+        HttpMessage msg;
+        msg.set_type(HttpMessage_Type_GET_CONFIG);
+        std::string jsonStr;
+        faabric::util::messageToJsonPb(msg, &jsonStr);
+
+        std::pair<int, std::string> result = postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        REQUIRE(result.first == 200);
+
+        // Check that we can de-serialise the config. Note that if there's a
+        // de-serialisation the method will throw an exception
+        PlannerConfig config;
+        faabric::util::jsonToMessagePb(result.second, &config);
+        return config;
     }
 };
 
@@ -77,7 +96,15 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test registering host", "[planner]")
 
     // Lastly, if we try to register after the host timeout has expired, it
     // will work, but will give us a different id
-    // TODO
+    std::pair<int, int> diffRetVal;
+    int timeToSleep = getPlannerConfig().hosttimeout() * 2;
+    SPDLOG_INFO("Sleeping for {} seconds (twice the timeout) to ensure entries expire", timeToSleep);
+    SLEEP_MS(timeToSleep * 1000);
+    REQUIRE_NOTHROW(diffRetVal = cli.registerHost(regReq));
+    // Same timeout
+    REQUIRE(retVal.first == diffRetVal.first);
+    // Different host id
+    REQUIRE(retVal.second != diffRetVal.second);
 }
 
 TEST_CASE_METHOD(PlannerTestFixture, "Test getting the available hosts", "[planner]")
@@ -86,7 +113,7 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test getting the available hosts", "[plann
     // registered, initially there's 0 available hosts
     std::vector<faabric::planner::Host> availableHosts;
     REQUIRE_NOTHROW(availableHosts = cli.getAvailableHosts());
-    REQUIRE(availableHosts.size() == 0);
+    REQUIRE(availableHosts.empty());
 
     // Registering one host increases the count by one
     auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
@@ -95,6 +122,16 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test getting the available hosts", "[plann
     std::pair<int, int> retVal = cli.registerHost(regReq);
     int hostId1 = retVal.second;
 
-    REQUIRE_NOTHROW(availableHosts = cli.getAvailableHosts());
+    availableHosts = cli.getAvailableHosts();
+    REQUIRE(availableHosts.size() == 1);
+    REQUIRE(availableHosts.at(0).hostid() == hostId1);
+
+    // If we wait more than the timeout, the host will have expired. We sleep
+    // for twice the timeout
+    int timeToSleep = getPlannerConfig().hosttimeout() * 2;
+    SPDLOG_INFO("Sleeping for {} seconds (twice the timeout) to ensure entries expire", timeToSleep);
+    SLEEP_MS(timeToSleep * 1000);
+    availableHosts = cli.getAvailableHosts();
+    REQUIRE(availableHosts.empty());
 }
 }

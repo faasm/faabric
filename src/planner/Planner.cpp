@@ -25,10 +25,6 @@ Planner::Planner()
 
 PlannerConfig Planner::getConfig()
 {
-    // TODO: the config may not change often, so we may not even need a read
-    // lock here
-    faabric::util::SharedLock lock(plannerMx);
-
     return config;
 }
 
@@ -68,6 +64,30 @@ void Planner::flushHosts()
     state.hostMap.clear();
 }
 
+std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
+{
+    // Acquire a full lock because we will also remove the hosts that have
+    // timed out
+    faabric::util::FullLock lock(plannerMx);
+
+    std::vector<std::string> hostsToRemove;
+    std::vector<std::shared_ptr<Host>> availableHosts;
+    auto timeNowMs = faabric::util::getGlobalClock().epochMillis();
+    for (const auto& [ip, host] : state.hostMap) {
+        if (isHostExpired(host, timeNowMs)) {
+            hostsToRemove.push_back(ip);
+        } else {
+            availableHosts.push_back(host);
+        }
+    }
+
+    for (const auto& host : hostsToRemove) {
+        state.hostMap.erase(host);
+    }
+
+    return availableHosts;
+}
+
 // Deliberately take a const reference as an argument to force a copy and take
 // ownership of the host
 bool Planner::registerHost(const Host& hostIn, int* hostId)
@@ -83,11 +103,17 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
     faabric::util::FullLock lock(plannerMx);
 
     auto it = state.hostMap.find(hostIn.ip());
-    if (it == state.hostMap.end()) {
+    if (it == state.hostMap.end() || isHostExpired(it->second)) {
+        // If the host entry has expired, we remove it and treat the host
+        // as a new one
+        if (it != state.hostMap.end()) {
+            state.hostMap.erase(it);
+        }
+
         // If its the first time we see this IP, give it a UID and add it to
         // the map
         *hostId = faabric::util::generateGid();
-        SPDLOG_DEBUG("Registering host {} for the first time (host id: {}",
+        SPDLOG_DEBUG("Registering host {} for the first time (host id: {})",
                      hostIn.ip(),
                      *hostId);
         state.hostMap.emplace(std::make_pair<std::string, std::shared_ptr<Host>>(
@@ -100,19 +126,30 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
                      hostIn.hostid(), it->second->hostid(), hostIn.ip());
         return false;
     } else {
-        // If the host is already registered, we still want to return the
-        // valid host id
+        // If the host is already registered, and not expired,
+        // we still want to return the valid host id
         *hostId = it->second->hostid();
     }
 
-    // Overwrite the timestamp
-    SPDLOG_DEBUG("Overwriting timestamp for host {} (id: {})",
+    // Irrespective, set the timestamp
+    SPDLOG_DEBUG("Setting timestamp for host {} (id: {})",
                  hostIn.ip(),
                  state.hostMap.at(hostIn.ip())->hostid());
     state.hostMap.at(hostIn.ip())->mutable_registerts()->set_epochms(
       faabric::util::getGlobalClock().epochMillis());
 
     return true;
+}
+
+bool Planner::isHostExpired(std::shared_ptr<Host> host, long epochTimeMs)
+{
+    // Allow calling the method without a timestamp, and we calculate it now
+    if (epochTimeMs == 0) {
+        epochTimeMs = faabric::util::getGlobalClock().epochMillis();
+    }
+
+    long hostTimeoutMs = getConfig().hosttimeout() * 1000;
+    return (epochTimeMs - host->registerts().epochms()) > hostTimeoutMs;
 }
 
 Planner& getPlanner()

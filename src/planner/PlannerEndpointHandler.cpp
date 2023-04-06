@@ -71,6 +71,20 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_GET_CONFIG: {
+            auto config = faabric::planner::getPlanner().getConfig();
+            std::string responseStr;
+            try {
+                faabric::util::messageToJsonPb(config, &responseStr);
+                response.result(beast::http::status::ok);
+                response.body() = responseStr;
+            } catch (faabric::util::JsonSerialisationException& e) {
+                SPDLOG_ERROR("Error processing GET_CONFIG request");
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("Failed getting config!");
+            }
+            return ctx.sendFunction(std::move(response));
+        }
         default: {
             SPDLOG_ERROR("Unrecognised message type {}", msg.type());
             response.result(beast::http::status::bad_request);

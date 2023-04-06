@@ -131,12 +131,13 @@ enum HttpMessage_Type : int {
   HttpMessage_Type_NO_TYPE = 0,
   HttpMessage_Type_RESET = 1,
   HttpMessage_Type_FLUSH_HOSTS = 2,
+  HttpMessage_Type_GET_CONFIG = 3,
   HttpMessage_Type_HttpMessage_Type_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
   HttpMessage_Type_HttpMessage_Type_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
 };
 bool HttpMessage_Type_IsValid(int value);
 constexpr HttpMessage_Type HttpMessage_Type_Type_MIN = HttpMessage_Type_NO_TYPE;
-constexpr HttpMessage_Type HttpMessage_Type_Type_MAX = HttpMessage_Type_FLUSH_HOSTS;
+constexpr HttpMessage_Type HttpMessage_Type_Type_MAX = HttpMessage_Type_GET_CONFIG;
 constexpr int HttpMessage_Type_Type_ARRAYSIZE = HttpMessage_Type_Type_MAX + 1;
 
 const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* HttpMessage_Type_descriptor();
@@ -880,6 +881,8 @@ class HttpMessage final :
     HttpMessage_Type_RESET;
   static constexpr Type FLUSH_HOSTS =
     HttpMessage_Type_FLUSH_HOSTS;
+  static constexpr Type GET_CONFIG =
+    HttpMessage_Type_GET_CONFIG;
   static inline bool Type_IsValid(int value) {
     return HttpMessage_Type_IsValid(value);
   }
