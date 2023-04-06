@@ -84,6 +84,8 @@ jobs:
         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       options: --privileged
     services:
+      planner:
+        image: faasm.azurecr.io/planner:0.4.3
       redis:
         image: redis
     steps:
@@ -94,8 +96,6 @@ jobs:
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
-      - name: "Test"
-        run: cat ./thread-sanitizer-ignorelist.txt
       - name: "Run tests"
         run: /build/faabric/static/bin/faabric_tests
 
