@@ -25,7 +25,6 @@ faabric_lib(planner
     PlannerClient.cpp
     PlannerEndpointHandler.cpp
     PlannerServer.cpp
-    PlannerState.cpp
     ${PB_SRC}
 )
 
@@ -34,9 +33,6 @@ add_dependencies(planner planner_pbh_copied)
 
 target_link_libraries(planner PRIVATE
     faabric::endpoint
-    # TODO: do we want this link-time dependency here?
-    # At this point we need it for the endpoint
-    faabric::scheduler
     faabric::transport
     faabric::util
 )

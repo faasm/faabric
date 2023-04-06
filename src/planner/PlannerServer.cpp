@@ -14,7 +14,7 @@ PlannerServer::PlannerServer()
       PLANNER_ASYNC_PORT,
       PLANNER_SYNC_PORT,
       PLANNER_INPROC_LABEL,
-      faabric::util::getSystemConfig().plannerServerThreads)
+      getPlanner().getConfig().numthreadshttpserver())
   , planner(getPlanner())
 {}
 

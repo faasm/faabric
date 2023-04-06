@@ -215,12 +215,7 @@ FaabricEndpoint::FaabricEndpoint(
   , threadCount(threadCountIn)
   , state(nullptr)
   , requestHandler(requestHandlerIn)
-{
-    if (!requestHandler) {
-        requestHandler =
-          std::make_shared<faabric::endpoint::FaabricEndpointHandler>();
-    }
-}
+{}
 
 FaabricEndpoint::~FaabricEndpoint()
 {

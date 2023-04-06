@@ -2,9 +2,6 @@ syntax = "proto3";
 
 package faabric.planner;
 
-// TODO: we could import Timestamp from here
-// import "google/protobuf/timestamp.proto";
-
 // ---------------------------------------------
 // Util Messages
 // ---------------------------------------------
