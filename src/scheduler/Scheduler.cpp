@@ -114,13 +114,15 @@ void Scheduler::addHostToGlobalSet(const std::string& hostIp)
     // Build register host request
     auto req = std::make_shared<faabric::planner::RegisterHostRequest>();
     req->mutable_host()->set_ip(hostIp);
-    req->mutable_host()->set_slots(thisHostResources.slots());
+    if (hostIp == thisHost) {
+        req->mutable_host()->set_slots(thisHostResources.slots());
+    }
 
     int plannerTimeout = getPlannerClient()->registerHost(req);
 
     // Once the host is registered, set-up a periodic thread to send a heart-
     // beat to the planner. Note that this method may be called multiple times
-    // during the tests, so we only set the scheduler's value if we are
+    // during the tests, so we only set the scheduler's variable if we are
     // actually registering this host
     if (hostIp == thisHost) {
         keepAliveThread.thisHostReq = std::move(req);
