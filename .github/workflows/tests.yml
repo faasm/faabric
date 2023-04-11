@@ -85,6 +85,8 @@ jobs:
         username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       options: --privileged
+      volumes:
+        - build_volume:/build-gha/bin/
     # TODO: somehow manage to use the `planner_server` binary build in the
     # tests below. Best idea is to share the `./build/static` directory, and
     # add an entrypoint in planner that waits for such a binary to exist
@@ -93,6 +95,9 @@ jobs:
         image: faasm.azurecr.io/planner:0.4.3
         env:
           PLANNER_HOST_KEEPALIVE_TIMEOUT: 2
+        volumes:
+          - build_volume:/build-gha/bin/
+        options: --entrypoint /code/faabric/bin/planner_entrypoint.sh /build-gha/bin
       redis:
         image: redis
     steps:
@@ -101,6 +106,13 @@ jobs:
         run: redis-cli -h redis ping
       - name: "Run cmake for tests"
         run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
+      - name: "Build planner binary"
+        run: ./bin/inv_wrapper.sh dev.cc planner_server
+      # We want to pick-up the latest code changes in the planner server in the
+      # tests, yet we run it as a separate container. We fix this by making the
+      # planner service depend on a binary that we build here
+      - name: "Copy planner binary to the expected location"
+        run: cp ${{ github.workspace }}/build/static/bin/planner_server /build-gha/bin
       - name: "Build tests"
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
