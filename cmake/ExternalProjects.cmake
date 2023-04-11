@@ -41,7 +41,6 @@ conan_cmake_configure(
         "hiredis/1.0.2@#370dad964286cadb1f15dc90252e8ef3"
         "openssl/3.0.2@#269fa93e5afe8c34bd9a0030d2b8f0fe"
         "protobuf/3.20.0@#8e4de7081bea093469c9e6076149b2b4"
-        "rapidjson/cci.20211112@#65b4e5feb6f1edfc8cbac0f669acaf17"
         "readerwriterqueue/1.0.6@#a95c8da3d68822dec4d4c13fff4b5c96"
         "spdlog/1.10.0@#6406c337028e15e56cd6a070cbac54c4"
         "zlib/1.2.12@#3b9e037ae1c615d045a06c67d88491ae"
