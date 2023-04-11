@@ -1,7 +1,12 @@
 #pragma once
 
-#include <sys/mman.h>
+#include <catch2/catch.hpp>
 
+#include "DummyExecutorFactory.h"
+#include "faabric_utils.h"
+
+#include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
@@ -17,13 +22,14 @@
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
+#include <faabric/util/json.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
-#include "DummyExecutorFactory.h"
+#include <sys/mman.h>
 
 namespace tests {
 class RedisTestFixture
@@ -79,7 +85,68 @@ class CachedDecisionTestFixture
     faabric::util::DecisionCache& decisionCache;
 };
 
-class SchedulerTestFixture : public CachedDecisionTestFixture
+class ConfTestFixture
+{
+  public:
+    ConfTestFixture()
+      : conf(faabric::util::getSystemConfig()){};
+
+    ~ConfTestFixture() { conf.reset(); };
+
+  protected:
+    faabric::util::SystemConfig& conf;
+};
+
+class PlannerTestFixture
+{
+  public:
+    PlannerTestFixture()
+    {
+        // Ensure the server is reachable
+        cli.ping();
+    }
+
+    ~PlannerTestFixture() { resetPlanner(); }
+
+  protected:
+    faabric::planner::PlannerClient cli;
+
+    void resetPlanner() const
+    {
+        faabric::planner::HttpMessage msg;
+        msg.set_type(faabric::planner::HttpMessage_Type_RESET);
+        std::string jsonStr;
+        faabric::util::messageToJsonPb(msg, &jsonStr);
+
+        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+        std::pair<int, std::string> result =
+          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        assert(result.first == 200);
+    }
+
+    faabric::planner::PlannerConfig getPlannerConfig()
+    {
+        faabric::planner::HttpMessage msg;
+        msg.set_type(faabric::planner::HttpMessage_Type_GET_CONFIG);
+        std::string jsonStr;
+        faabric::util::messageToJsonPb(msg, &jsonStr);
+
+        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+        std::pair<int, std::string> result =
+          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        REQUIRE(result.first == 200);
+
+        // Check that we can de-serialise the config. Note that if there's a
+        // de-serialisation the method will throw an exception
+        faabric::planner::PlannerConfig config;
+        faabric::util::jsonToMessagePb(result.second, &config);
+        return config;
+    }
+};
+
+class SchedulerTestFixture
+  : public CachedDecisionTestFixture
+  , public PlannerTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -181,18 +248,6 @@ class SnapshotTestFixture
 
   protected:
     faabric::snapshot::SnapshotRegistry& reg;
-};
-
-class ConfTestFixture
-{
-  public:
-    ConfTestFixture()
-      : conf(faabric::util::getSystemConfig()){};
-
-    ~ConfTestFixture() { conf.reset(); };
-
-  protected:
-    faabric::util::SystemConfig& conf;
 };
 
 class PointToPointTestFixture

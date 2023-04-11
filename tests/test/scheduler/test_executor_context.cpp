@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/util/func.h>

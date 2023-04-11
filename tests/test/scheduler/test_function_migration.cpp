@@ -51,13 +51,12 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
             resources.set_slots(slotsPerHost.at(i));
             resources.set_usedslots(usedSlotsPerHost.at(i));
 
-            sch.addHostToGlobalSet(registeredHosts.at(i));
-
             // If setting resources for the master host, update the scheduler.
             // Otherwise, queue the resource response
             if (i == 0) {
                 sch.setThisHostResources(resources);
             } else {
+                sch.addHostToGlobalSet(registeredHosts.at(i));
                 faabric::scheduler::queueResourceResponse(registeredHosts.at(i),
                                                           resources);
             }
@@ -145,7 +144,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
 TEST_CASE_METHOD(
   FunctionMigrationTestFixture,
-  "Test migration oportunities are only detected if set in the message",
+  "Test migration opportunities are only detected if set in the message",
   "[scheduler]")
 {
     // First set resources before calling the functions: one will be allocated

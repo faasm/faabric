@@ -1,14 +1,15 @@
 #include <catch2/catch.hpp>
 
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <faabric/redis/Redis.h>
 #include <faabric/state/State.h>
 #include <faabric/util/config.h>
+#include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/state.h>
 
-#include <faabric/util/macros.h>
 #include <sys/mman.h>
 
 using namespace state;

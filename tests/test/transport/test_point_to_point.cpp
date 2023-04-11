@@ -2,6 +2,7 @@
 
 #include "faabric/util/latch.h"
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <sys/mman.h>
 

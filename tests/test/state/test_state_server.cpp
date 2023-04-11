@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <faabric/state/InMemoryStateKeyValue.h>
 #include <faabric/state/State.h>

@@ -1,7 +1,8 @@
 #include <catch2/catch.hpp>
 
-#include <algorithm>
 #include <faabric/util/delta.h>
+
+#include <algorithm>
 
 using namespace faabric::util;
 

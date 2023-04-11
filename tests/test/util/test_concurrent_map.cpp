@@ -8,7 +8,9 @@ std::ostream& operator<<(std::ostream& os, std::pair<int, int> const& value)
 }
 
 #include <catch2/catch.hpp>
+
 #include <faabric/util/concurrent_map.h>
+
 #include <string>
 #include <thread>
 #include <utility>

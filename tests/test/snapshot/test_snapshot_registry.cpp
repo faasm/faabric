@@ -1,11 +1,12 @@
 #include <catch2/catch.hpp>
 
 #include "faabric_utils.h"
-
-#include <sys/mman.h>
+#include "fixtures.h"
 
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/memory.h>
+
+#include <sys/mman.h>
 
 using namespace faabric::snapshot;
 using namespace faabric::util;

@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
-#include <faabric_utils.h>
+#include "faabric_utils.h"
+#include "fixtures.h"
 
 using namespace faabric::scheduler;
 

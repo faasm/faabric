@@ -1,9 +1,9 @@
 #include <catch2/catch.hpp>
 
+#include "DummyExecutor.h"
+#include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
-
-#include <DummyExecutor.h>
-#include <DummyExecutorFactory.h>
+#include "fixtures.h"
 
 #include <faabric/endpoint/FaabricEndpointHandler.h>
 #include <faabric/scheduler/Scheduler.h>

@@ -1,7 +1,7 @@
-#include "faabric/util/bytes.h"
-#include "faabric/util/config.h"
 #include <catch2/catch.hpp>
 
+#include <faabric/util/bytes.h>
+#include <faabric/util/config.h>
 #include <faabric/util/files.h>
 
 using namespace faabric::util;

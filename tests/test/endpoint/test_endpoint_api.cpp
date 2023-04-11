@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/endpoint/FaabricEndpointHandler.h>
@@ -89,7 +90,8 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
 {
     port++;
 
-    faabric::endpoint::FaabricEndpoint endpoint(port, 2);
+    faabric::endpoint::FaabricEndpoint endpoint(
+      port, 2, std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
 
     endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
 
@@ -145,7 +147,8 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
                  "[endpoint]")
 {
     port++;
-    faabric::endpoint::FaabricEndpoint endpoint(port, 2);
+    faabric::endpoint::FaabricEndpoint endpoint(
+      port, 2, std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
 
     endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
 

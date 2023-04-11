@@ -1,10 +1,10 @@
 #include <catch2/catch.hpp>
 
-#include <boost/filesystem.hpp>
-
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
+
+#include <boost/filesystem.hpp>
 
 using namespace boost::filesystem;
 
