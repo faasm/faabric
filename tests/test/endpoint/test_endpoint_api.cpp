@@ -90,8 +90,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
 {
     port++;
 
-    faabric::endpoint::FaabricEndpoint endpoint(
-      port, 2, std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
+    faabric::endpoint::FaabricEndpoint endpoint(port, 2);
 
     endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
 
@@ -147,8 +146,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
                  "[endpoint]")
 {
     port++;
-    faabric::endpoint::FaabricEndpoint endpoint(
-      port, 2, std::make_shared<faabric::endpoint::FaabricEndpointHandler>());
+    faabric::endpoint::FaabricEndpoint endpoint(port, 2);
 
     endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
 
