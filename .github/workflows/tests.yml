@@ -85,6 +85,9 @@ jobs:
         username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
       options: --privileged
+    # TODO: somehow manage to use the `planner_server` binary build in the
+    # tests below. Best idea is to share the `./build/static` directory, and
+    # add an entrypoint in planner that waits for such a binary to exist
     services:
       planner:
         image: faasm.azurecr.io/planner:0.4.3
