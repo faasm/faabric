@@ -7,7 +7,7 @@ set -e
 # Thus, we add a wrapper around the entrypoint command that takes as an input
 # the binary dir, and waits until the binary file exists
 
-BINARY_DIR=${$1:-/build/faabric/static/bin}
+BINARY_DIR=${1:-/build/faabric/static/bin}
 BINARY_FILE=${BINARY_DIR}/planner_server
 
 until test -f ${BINARY_FILE}
