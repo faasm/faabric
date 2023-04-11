@@ -92,7 +92,6 @@ find_package(hiredis REQUIRED)
 # with the system's (i.e. Ubuntu 22.04) OpenSSL
 find_package(OpenSSL 3.0.2 REQUIRED)
 find_package(Protobuf 3.20.0 REQUIRED)
-find_package(RapidJSON REQUIRED)
 find_package(readerwriterqueue REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -157,7 +156,6 @@ target_link_libraries(faabric_common_dependencies INTERFACE
     hiredis::hiredis
     nng::nng
     protobuf::libprotobuf
-    RapidJSON::RapidJSON
     readerwriterqueue::readerwriterqueue
     spdlog::spdlog
     Threads::Threads
