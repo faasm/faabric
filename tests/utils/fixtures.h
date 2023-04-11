@@ -88,18 +88,6 @@ class CachedDecisionTestFixture
     faabric::util::DecisionCache& decisionCache;
 };
 
-class ConfTestFixture
-{
-  public:
-    ConfTestFixture()
-      : conf(faabric::util::getSystemConfig()){};
-
-    ~ConfTestFixture() { conf.reset(); };
-
-  protected:
-    faabric::util::SystemConfig& conf;
-};
-
 class PlannerTestFixture
 {
   public:
@@ -251,6 +239,18 @@ class SnapshotTestFixture
 
   protected:
     faabric::snapshot::SnapshotRegistry& reg;
+};
+
+class ConfTestFixture
+{
+  public:
+    ConfTestFixture()
+      : conf(faabric::util::getSystemConfig()){};
+
+    ~ConfTestFixture() { conf.reset(); };
+
+  protected:
+    faabric::util::SystemConfig& conf;
 };
 
 class PointToPointTestFixture
