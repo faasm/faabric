@@ -25,7 +25,7 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     // Registering a host returns the keep-alive timeout for heartbeats, and
     // the unique host id
-    std::pair<int, int> registerHost(std::shared_ptr<RegisterHostRequest> req);
+    int registerHost(std::shared_ptr<RegisterHostRequest> req);
 
     // Remove host is an asynchronous request that will try to remove the host
     // pointed-to by the remove request

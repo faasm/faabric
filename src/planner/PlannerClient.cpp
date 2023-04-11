@@ -10,7 +10,6 @@ namespace faabric::planner {
 void KeepAliveThread::doWork()
 {
     PlannerClient cli;
-    SPDLOG_INFO("Here: {}", thisHostReq->host().hostid());
     cli.registerHost(thisHostReq);
 }
 
@@ -64,8 +63,7 @@ std::vector<faabric::planner::Host> PlannerClient::getAvailableHosts()
     return availableHosts;
 }
 
-std::pair<int, int> PlannerClient::registerHost(
-  std::shared_ptr<RegisterHostRequest> req)
+int PlannerClient::registerHost(std::shared_ptr<RegisterHostRequest> req)
 {
     RegisterHostResponse resp;
     syncSend(PlannerCalls::RegisterHost, req.get(), &resp);
@@ -74,10 +72,11 @@ std::pair<int, int> PlannerClient::registerHost(
         throw std::runtime_error("Error registering host with planner!");
     }
 
+    // Sanity check
     assert(resp.config().hosttimeout() > 0);
-    assert(resp.hostid() > 0);
 
-    return std::make_pair<int, int>(resp.config().hosttimeout(), resp.hostid());
+    // Return the planner's timeout to set the keep-alive heartbeat
+    return resp.config().hosttimeout();
 }
 
 void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)

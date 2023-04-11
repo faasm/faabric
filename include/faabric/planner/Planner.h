@@ -39,7 +39,7 @@ class Planner
 
     std::vector<std::shared_ptr<Host>> getAvailableHosts();
 
-    bool registerHost(const Host& hostIn, int* hostId);
+    bool registerHost(const Host& hostIn);
 
     // Best effort host removal. Don't fail if we can't
     void removeHost(const Host& hostIn);

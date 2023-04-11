@@ -25,41 +25,17 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test registering host", "[planner]")
     auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
     regReq->mutable_host()->set_ip("foo");
     regReq->mutable_host()->set_slots(12);
-    std::pair<int, int> retVal;
+    int plannerTimeout;
 
-    REQUIRE_NOTHROW(retVal = cli.registerHost(regReq));
+    REQUIRE_NOTHROW(plannerTimeout = cli.registerHost(regReq));
 
-    // A call to register a host returns the keep-alive timeout and the unique
-    // host id
-    REQUIRE(retVal.first > 0);
-    REQUIRE(retVal.second > 0);
+    // A call to register a host returns the keep-alive timeout
+    REQUIRE(plannerTimeout > 0);
 
-    // If we send a register request again without setting our host id, the
-    // planner will return an error as it already knows the IP, but the host
-    // ids don't match
-    REQUIRE_THROWS(retVal = cli.registerHost(regReq));
-
-    // If we send a register request with the right host id, it will overwrite
-    // the timestamp but the return value will be the same
-    std::pair<int, int> newRetVal;
-    regReq->mutable_host()->set_hostid(retVal.second);
-    REQUIRE_NOTHROW(newRetVal = cli.registerHost(regReq));
-    REQUIRE(retVal.first == newRetVal.first);
-    REQUIRE(retVal.second == newRetVal.second);
-
-    // Lastly, if we try to register after the host timeout has expired, it
-    // will work, but will give us a different id
-    std::pair<int, int> diffRetVal;
-    int timeToSleep = getPlannerConfig().hosttimeout() * 2;
-    SPDLOG_INFO(
-      "Sleeping for {} seconds (twice the timeout) to ensure entries expire",
-      timeToSleep);
-    SLEEP_MS(timeToSleep * 1000);
-    REQUIRE_NOTHROW(diffRetVal = cli.registerHost(regReq));
-    // Same timeout
-    REQUIRE(retVal.first == diffRetVal.first);
-    // Different host id
-    REQUIRE(retVal.second != diffRetVal.second);
+    // We can register the host again, and get the same timeout
+    int newTimeout;
+    REQUIRE_NOTHROW(newTimeout = cli.registerHost(regReq));
+    REQUIRE(newTimeout == plannerTimeout);
 }
 
 TEST_CASE_METHOD(PlannerTestFixture,
@@ -76,12 +52,10 @@ TEST_CASE_METHOD(PlannerTestFixture,
     auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
     regReq->mutable_host()->set_ip("foo");
     regReq->mutable_host()->set_slots(12);
-    std::pair<int, int> retVal = cli.registerHost(regReq);
-    int hostId1 = retVal.second;
+    cli.registerHost(regReq);
 
     availableHosts = cli.getAvailableHosts();
     REQUIRE(availableHosts.size() == 1);
-    REQUIRE(availableHosts.at(0).hostid() == hostId1);
 
     // If we wait more than the timeout, the host will have expired. We sleep
     // for twice the timeout
@@ -102,8 +76,7 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test removing a host", "[planner]")
 
     auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
     *regReq->mutable_host() = thisHost;
-    std::pair<int, int> retVal = cli.registerHost(regReq);
-    thisHost.set_hostid(retVal.second);
+    cli.registerHost(regReq);
 
     std::vector<Host> availableHosts = cli.getAvailableHosts();
     REQUIRE(availableHosts.size() == 1);
@@ -111,8 +84,6 @@ TEST_CASE_METHOD(PlannerTestFixture, "Test removing a host", "[planner]")
     auto remReq = std::make_shared<faabric::planner::RemoveHostRequest>();
     *remReq->mutable_host() = thisHost;
     cli.removeHost(remReq);
-    // Give time for the async request to go through
-    SLEEP_MS(ASYNC_TIMEOUT_MS);
     availableHosts = cli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
 }

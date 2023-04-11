@@ -85,15 +85,13 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
     // TODO: probably catch this in a try/catch
     PARSE_MSG(RegisterHostRequest, buffer.data(), buffer.size());
 
-    int hostId;
-    bool success = planner.registerHost(parsedMsg.host(), &hostId);
+    bool success = planner.registerHost(parsedMsg.host());
     if (!success) {
         SPDLOG_ERROR("Error registering host in Planner!");
     }
 
     auto response = std::make_unique<faabric::planner::RegisterHostResponse>();
     *response->mutable_config() = planner.getConfig();
-    response->set_hostid(hostId);
 
     // Set response status
     ResponseStatus status;

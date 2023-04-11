@@ -394,7 +394,6 @@ class Scheduler
 
     // ---- Planner----
     faabric::planner::KeepAliveThread keepAliveThread;
-    int plannerHostId = 0;
 
     // ---- Actual scheduling ----
     SchedulerReaperThread reaperThread;

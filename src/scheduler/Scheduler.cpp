@@ -116,7 +116,7 @@ void Scheduler::addHostToGlobalSet(const std::string& hostIp)
     req->mutable_host()->set_ip(hostIp);
     req->mutable_host()->set_slots(thisHostResources.slots());
 
-    std::pair<int, int> retVal = getPlannerClient()->registerHost(req);
+    int plannerTimeout = getPlannerClient()->registerHost(req);
 
     // Once the host is registered, set-up a periodic thread to send a heart-
     // beat to the planner. Note that this method may be called multiple times
@@ -124,12 +124,10 @@ void Scheduler::addHostToGlobalSet(const std::string& hostIp)
     // actually registering this host
     if (hostIp == thisHost) {
         keepAliveThread.thisHostReq = std::move(req);
-        keepAliveThread.thisHostReq->mutable_host()->set_hostid(retVal.second);
-        plannerHostId = retVal.second;
 
         // Only start the background keep-alive thread if it is not mock mode
         if (!faabric::util::isTestMode()) {
-            keepAliveThread.start(retVal.first / 2);
+            keepAliveThread.start(plannerTimeout / 2);
         }
     }
 }
