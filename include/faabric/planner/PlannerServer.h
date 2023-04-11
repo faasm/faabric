@@ -15,17 +15,16 @@ class PlannerServer final : public faabric::transport::MessageEndpointServer
     std::unique_ptr<google::protobuf::Message> doSyncRecv(
       transport::Message& message) override;
 
-    // Asynchronous calls
-
-    void recvRemoveHost(std::span<const uint8_t> buffer);
-
     // Synchronous calls
 
-    static std::unique_ptr<google::protobuf::Message> recvPing();
+    std::unique_ptr<google::protobuf::Message> recvPing();
 
     std::unique_ptr<google::protobuf::Message> recvGetAvailableHosts();
 
     std::unique_ptr<google::protobuf::Message> recvRegisterHost(
+      std::span<const uint8_t> buffer);
+
+    std::unique_ptr<google::protobuf::Message> recvRemoveHost(
       std::span<const uint8_t> buffer);
 
   private:

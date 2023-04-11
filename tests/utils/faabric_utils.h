@@ -2,7 +2,7 @@
 
 #include <catch2/catch.hpp>
 
-#include "fixtures.h"
+// #include "fixtures.h"
 
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/state/State.h>

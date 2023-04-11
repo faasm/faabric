@@ -7,6 +7,12 @@
 #include <faabric/util/network.h>
 
 namespace faabric::planner {
+void KeepAliveThread::doWork()
+{
+    PlannerClient cli;
+    SPDLOG_INFO("Here: {}", thisHostReq->host().hostid());
+    cli.registerHost(thisHostReq);
+}
 
 PlannerClient::PlannerClient()
   : faabric::transport::MessageEndpointClient(
@@ -14,13 +20,33 @@ PlannerClient::PlannerClient()
         faabric::util::getSystemConfig().plannerHost),
       PLANNER_ASYNC_PORT,
       PLANNER_SYNC_PORT)
-{}
+{
+    SPDLOG_INFO("Initialising planner client with details: {}:{},{}",
+                faabric::util::getIPFromHostname(
+                  faabric::util::getSystemConfig().plannerHost),
+                PLANNER_ASYNC_PORT,
+                PLANNER_SYNC_PORT);
+}
 
 void PlannerClient::ping()
 {
     EmptyRequest req;
-    EmptyResponse resp;
+    PingResponse resp;
     syncSend(PlannerCalls::Ping, &req, &resp);
+
+    // Sanity check
+    auto expectedIp = faabric::util::getIPFromHostname(
+      faabric::util::getSystemConfig().plannerHost);
+    auto gotIp = resp.config().ip();
+    if (expectedIp != gotIp) {
+        SPDLOG_ERROR(
+          "Error pinging the planner server (expected ip: {} - got {})",
+          expectedIp,
+          gotIp);
+        throw std::runtime_error("Error pinging the planner server");
+    }
+
+    SPDLOG_DEBUG("Succesfully pinged the planner server at {}", expectedIp);
 }
 
 std::vector<faabric::planner::Host> PlannerClient::getAvailableHosts()
@@ -56,6 +82,7 @@ std::pair<int, int> PlannerClient::registerHost(
 
 void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
 {
-    asyncSend(PlannerCalls::RemoveHost, req.get());
+    faabric::EmptyResponse response;
+    syncSend(PlannerCalls::RemoveHost, req.get(), &response);
 }
 }

@@ -1,9 +1,11 @@
 #include <catch2/catch.hpp>
 
+#include "faabric_utils.h"
+#include "fixtures.h"
+
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/random.h>
-#include <faabric_utils.h>
 
 using namespace faabric::scheduler;
 

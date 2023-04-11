@@ -1,4 +1,5 @@
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -44,6 +45,13 @@ static faabric::util::ConcurrentMap<
 static faabric::util::
   ConcurrentMap<std::string, std::shared_ptr<faabric::snapshot::SnapshotClient>>
     snapshotClients;
+
+// Even though there's just one planner server, and thus there will only be
+// one client per scheduler instance, using a ConcurrentMap gives us the
+// thread-safe wrapper for free
+static faabric::util::
+  ConcurrentMap<std::string, std::shared_ptr<faabric::planner::PlannerClient>>
+    plannerClient;
 
 MessageLocalResult::MessageLocalResult()
 {
@@ -92,14 +100,38 @@ Scheduler::~Scheduler()
 
 std::set<std::string> Scheduler::getAvailableHosts()
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-    return redis.smembers(AVAILABLE_HOST_SET);
+    auto availableHosts = getPlannerClient()->getAvailableHosts();
+    std::set<std::string> availableHostsIps;
+    for (const auto& host : availableHosts) {
+        availableHostsIps.insert(host.ip());
+    }
+
+    return availableHostsIps;
 }
 
-void Scheduler::addHostToGlobalSet(const std::string& host)
+void Scheduler::addHostToGlobalSet(const std::string& hostIp)
 {
-    faabric::planner::PlannerClient plannerCli;
-    // TODO
+    // Build register host request
+    auto req = std::make_shared<faabric::planner::RegisterHostRequest>();
+    req->mutable_host()->set_ip(hostIp);
+    req->mutable_host()->set_slots(thisHostResources.slots());
+
+    std::pair<int, int> retVal = getPlannerClient()->registerHost(req);
+
+    // Once the host is registered, set-up a periodic thread to send a heart-
+    // beat to the planner. Note that this method may be called multiple times
+    // during the tests, so we only set the scheduler's value if we are
+    // actually registering this host
+    if (hostIp == thisHost) {
+        keepAliveThread.thisHostReq = std::move(req);
+        keepAliveThread.thisHostReq->mutable_host()->set_hostid(retVal.second);
+        plannerHostId = retVal.second;
+
+        // Only start the background keep-alive thread if it is not mock mode
+        if (!faabric::util::isTestMode()) {
+            keepAliveThread.start(retVal.first / 2);
+        }
+    }
 }
 
 void Scheduler::addHostToGlobalSet()
@@ -107,10 +139,22 @@ void Scheduler::addHostToGlobalSet()
     addHostToGlobalSet(thisHost);
 }
 
-void Scheduler::removeHostFromGlobalSet(const std::string& host)
+void Scheduler::removeHostFromGlobalSet(const std::string& hostIp)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.srem(AVAILABLE_HOST_SET, host);
+    auto req = std::make_shared<faabric::planner::RemoveHostRequest>();
+    if (hostIp == thisHost && keepAliveThread.thisHostReq != nullptr) {
+        *req->mutable_host() = *keepAliveThread.thisHostReq->mutable_host();
+        req->mutable_host()->set_ip(hostIp);
+    } else {
+        req->mutable_host()->set_ip(hostIp);
+    }
+
+    getPlannerClient()->removeHost(req);
+
+    // Clear the keep alive thread
+    if (!faabric::util::isTestMode()) {
+        keepAliveThread.stop();
+    }
 }
 
 void Scheduler::resetThreadLocalCache()
@@ -1008,6 +1052,18 @@ std::shared_ptr<SnapshotClient> Scheduler::getSnapshotClient(
     return client;
 }
 
+std::shared_ptr<faabric::planner::PlannerClient> Scheduler::getPlannerClient()
+{
+    auto plannerHost = faabric::util::getIPFromHostname(
+      faabric::util::getSystemConfig().plannerHost);
+    auto client = plannerClient.get(plannerHost).value_or(nullptr);
+    if (client == nullptr) {
+        SPDLOG_DEBUG("Adding new planner client for {}", plannerHost);
+        client = plannerClient.tryEmplaceShared(plannerHost).second;
+    }
+    return client;
+}
+
 std::vector<std::pair<std::string, faabric::Message>>
 Scheduler::getRecordedMessagesShared()
 {
@@ -1065,6 +1121,7 @@ std::string Scheduler::getThisHost()
     return thisHost;
 }
 
+// TODO: remove this method
 void Scheduler::broadcastFlush()
 {
     faabric::util::FullLock lock(mx);

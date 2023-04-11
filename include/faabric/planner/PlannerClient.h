@@ -2,8 +2,18 @@
 
 #include <faabric/planner/planner.pb.h>
 #include <faabric/transport/MessageEndpointClient.h>
+#include <faabric/util/PeriodicBackgroundThread.h>
 
 namespace faabric::planner {
+class KeepAliveThread : public faabric::util::PeriodicBackgroundThread
+{
+  public:
+    void doWork() override;
+
+    // Register request that we can re-use at every check period
+    std::shared_ptr<RegisterHostRequest> thisHostReq = nullptr;
+};
+
 class PlannerClient final : public faabric::transport::MessageEndpointClient
 {
   public:
@@ -13,9 +23,8 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     std::vector<Host> getAvailableHosts();
 
-    // Register this host with the planner. Returns the keep-alive timeout
-    // (i.e. how often do we need to send a keep-alive heartbeat) and our
-    // unique host id to identify further requests (as redundancy over our IP)
+    // Registering a host returns the keep-alive timeout for heartbeats, and
+    // the unique host id
     std::pair<int, int> registerHost(std::shared_ptr<RegisterHostRequest> req);
 
     // Remove host is an asynchronous request that will try to remove the host

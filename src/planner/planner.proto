@@ -65,6 +65,10 @@ message Host {
     Timestamp registerTs = 4;
 }
 
+message PingResponse {
+    PlannerConfig config = 1;
+}
+
 message RegisterHostRequest {
     Host host = 1;
 }

@@ -88,6 +88,8 @@ jobs:
     services:
       planner:
         image: faasm.azurecr.io/planner:0.4.3
+        env:
+          PLANNER_HOST_KEEPALIVE_TIMEOUT: 2
       redis:
         image: redis
     steps:

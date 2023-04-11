@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/util/exec_graph.h>

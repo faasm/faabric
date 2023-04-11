@@ -118,6 +118,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(flushCount == 1);
 }
 
+/* TODO: flushing will be done through the planner
 TEST_CASE_METHOD(ClientServerFixture,
                  "Test broadcasting flush message",
                  "[scheduler]")
@@ -138,8 +139,8 @@ TEST_CASE_METHOD(ClientServerFixture,
     sch.broadcastFlush();
 
     // Make sure messages have been sent
-    auto calls = faabric::scheduler::getFlushCalls();
-    REQUIRE(calls.size() == 3);
+    // auto calls = faabric::scheduler::getFlushCalls();
+    // REQUIRE(calls.size() == 3);
 
     std::vector<std::string> actualHosts;
     for (auto c : calls) {
@@ -149,6 +150,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     faabric::util::setMockMode(false);
     faabric::scheduler::clearMockRequests();
 }
+*/
 
 TEST_CASE_METHOD(ClientServerFixture,
                  "Test client batch execution request",

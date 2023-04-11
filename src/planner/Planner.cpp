@@ -68,6 +68,8 @@ void Planner::flushHosts()
 
 std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
 {
+    SPDLOG_DEBUG("Planner received request to get available hosts");
+
     // Acquire a full lock because we will also remove the hosts that have
     // timed out
     faabric::util::FullLock lock(plannerMx);
@@ -94,6 +96,8 @@ std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
 // ownership of the host
 bool Planner::registerHost(const Host& hostIn, int* hostId)
 {
+    SPDLOG_DEBUG("Planner received request to register host {}", hostIn.ip());
+
     // Sanity check the input argument
     if (hostIn.slots() <= 0) {
         SPDLOG_ERROR(
@@ -124,11 +128,12 @@ bool Planner::registerHost(const Host& hostIn, int* hostId)
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
         state.hostMap.at(hostIn.ip())->set_hostid(*hostId);
     } else if (it->second->hostid() != hostIn.hostid()) {
-        SPDLOG_ERROR("Received register request for a registered host, but"
-                     " with different request ids: {} != {} (host: {})",
-                     hostIn.hostid(),
-                     it->second->hostid(),
-                     hostIn.ip());
+        SPDLOG_ERROR(
+          "Received register request for a registered host, but"
+          " with different request ids. Got: {} != Have: {} (host: {})",
+          hostIn.hostid(),
+          it->second->hostid(),
+          hostIn.ip());
         return false;
     } else {
         // If the host is already registered, and not expired,
@@ -162,6 +167,14 @@ void Planner::removeHost(const Host& hostIn)
     if (it != state.hostMap.end() && it->second->hostid() == hostIn.hostid()) {
         SPDLOG_INFO(
           "Planner removing host {} (id: {})", hostIn.ip(), hostIn.hostid());
+        state.hostMap.erase(it);
+    } else if (it != state.hostMap.end()) {
+        // During the tests, we may remove a host without having its id. We
+        // allow this but print a warning
+        SPDLOG_WARN("Planner removing host {} without the right id ({} != {})",
+                    hostIn.ip(),
+                    hostIn.hostid(),
+                    it->second->hostid());
         state.hostMap.erase(it);
     }
 }

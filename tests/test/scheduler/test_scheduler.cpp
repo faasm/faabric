@@ -1,7 +1,6 @@
 #include <catch2/catch.hpp>
 
 #include "DummyExecutorFactory.h"
-#include "faabric/util/snapshot.h"
 #include "faabric_utils.h"
 #include "fixtures.h"
 
@@ -19,6 +18,7 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>
+#include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric::scheduler;

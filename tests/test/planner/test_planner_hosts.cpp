@@ -1,6 +1,5 @@
 #include <catch2/catch.hpp>
 
-#include "faabric_utils.h"
 #include "fixtures.h"
 
 #include <faabric/planner/PlannerClient.h>
@@ -14,52 +13,6 @@
 using namespace faabric::planner;
 
 namespace tests {
-class PlannerTestFixture : public ConfTestFixture
-{
-  public:
-    PlannerTestFixture()
-    {
-        // Ensure the server is reachable
-        cli.ping();
-    }
-
-    ~PlannerTestFixture() { resetPlanner(); }
-
-  protected:
-    PlannerClient cli;
-
-    void resetPlanner()
-    {
-        HttpMessage msg;
-        msg.set_type(HttpMessage_Type_RESET);
-        std::string jsonStr;
-        faabric::util::messageToJsonPb(msg, &jsonStr);
-
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        assert(result.first == 200);
-    }
-
-    // TODO: consider setting a short planner config timeout for the tests
-    PlannerConfig getPlannerConfig()
-    {
-        HttpMessage msg;
-        msg.set_type(HttpMessage_Type_GET_CONFIG);
-        std::string jsonStr;
-        faabric::util::messageToJsonPb(msg, &jsonStr);
-
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        REQUIRE(result.first == 200);
-
-        // Check that we can de-serialise the config. Note that if there's a
-        // de-serialisation the method will throw an exception
-        PlannerConfig config;
-        faabric::util::jsonToMessagePb(result.second, &config);
-        return config;
-    }
-};
-
 TEST_CASE("Test basic planner client operations", "[planner]")
 {
     PlannerClient cli;

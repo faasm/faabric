@@ -22,10 +22,6 @@ void PlannerServer::doAsyncRecv(transport::Message& message)
 {
     uint8_t header = message.getMessageCode();
     switch (header) {
-        case PlannerCalls::RemoveHost: {
-            recvRemoveHost(message.udata());
-            break;
-        }
         default: {
             // If we don't recognise the header, let the client fail, but don't
             // crash the planner
@@ -48,6 +44,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::RegisterHost: {
             return recvRegisterHost(message.udata());
         }
+        case PlannerCalls::RemoveHost: {
+            return recvRemoveHost(message.udata());
+        }
         default: {
             // If we don't recognise the header, let the client fail, but don't
             // crash the planner
@@ -60,7 +59,10 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvPing()
 {
     // Pong
-    return std::make_unique<faabric::EmptyResponse>();
+    auto response = std::make_unique<faabric::planner::PingResponse>();
+    *response->mutable_config() = planner.getConfig();
+
+    return std::move(response);
 }
 
 std::unique_ptr<google::protobuf::Message>
@@ -80,6 +82,7 @@ PlannerServer::recvGetAvailableHosts()
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
   std::span<const uint8_t> buffer)
 {
+    // TODO: probably catch this in a try/catch
     PARSE_MSG(RegisterHostRequest, buffer.data(), buffer.size());
 
     int hostId;
@@ -92,7 +95,7 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
     *response->mutable_config() = planner.getConfig();
     response->set_hostid(hostId);
 
-    // Set response status (TODO: maybe make a macro of ths?)
+    // Set response status
     ResponseStatus status;
     if (success) {
         status.set_status(ResponseStatus_Status_OK);
@@ -104,12 +107,15 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
     return response;
 }
 
-void PlannerServer::recvRemoveHost(std::span<const uint8_t> buffer)
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvRemoveHost(
+  std::span<const uint8_t> buffer)
 {
     PARSE_MSG(RemoveHostRequest, buffer.data(), buffer.size());
 
     // Removing a host is a best-effort operation, we just try to remove it if
     // we find it
     planner.removeHost(parsedMsg.host());
+
+    return std::make_unique<faabric::EmptyResponse>();
 }
 }
