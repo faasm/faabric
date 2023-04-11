@@ -85,68 +85,7 @@ class CachedDecisionTestFixture
     faabric::util::DecisionCache& decisionCache;
 };
 
-class ConfTestFixture
-{
-  public:
-    ConfTestFixture()
-      : conf(faabric::util::getSystemConfig()){};
-
-    ~ConfTestFixture() { conf.reset(); };
-
-  protected:
-    faabric::util::SystemConfig& conf;
-};
-
-class PlannerTestFixture
-{
-  public:
-    PlannerTestFixture()
-    {
-        // Ensure the server is reachable
-        cli.ping();
-    }
-
-    ~PlannerTestFixture() { resetPlanner(); }
-
-  protected:
-    faabric::planner::PlannerClient cli;
-
-    void resetPlanner() const
-    {
-        faabric::planner::HttpMessage msg;
-        msg.set_type(faabric::planner::HttpMessage_Type_RESET);
-        std::string jsonStr;
-        faabric::util::messageToJsonPb(msg, &jsonStr);
-
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        assert(result.first == 200);
-    }
-
-    faabric::planner::PlannerConfig getPlannerConfig()
-    {
-        faabric::planner::HttpMessage msg;
-        msg.set_type(faabric::planner::HttpMessage_Type_GET_CONFIG);
-        std::string jsonStr;
-        faabric::util::messageToJsonPb(msg, &jsonStr);
-
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        REQUIRE(result.first == 200);
-
-        // Check that we can de-serialise the config. Note that if there's a
-        // de-serialisation the method will throw an exception
-        faabric::planner::PlannerConfig config;
-        faabric::util::jsonToMessagePb(result.second, &config);
-        return config;
-    }
-};
-
-class SchedulerTestFixture
-  : public CachedDecisionTestFixture
-  , public PlannerTestFixture
+class SchedulerTestFixture : public CachedDecisionTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -248,6 +187,18 @@ class SnapshotTestFixture
 
   protected:
     faabric::snapshot::SnapshotRegistry& reg;
+};
+
+class ConfTestFixture
+{
+  public:
+    ConfTestFixture()
+      : conf(faabric::util::getSystemConfig()){};
+
+    ~ConfTestFixture() { conf.reset(); };
+
+  protected:
+    faabric::util::SystemConfig& conf;
 };
 
 class PointToPointTestFixture
