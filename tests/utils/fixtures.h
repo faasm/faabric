@@ -5,8 +5,6 @@
 #include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
 
-#include <faabric/planner/PlannerClient.h>
-#include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
