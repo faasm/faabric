@@ -9,41 +9,57 @@
 using namespace faabric::util;
 
 namespace tests {
-TEST_CASE("Test message to JSON round trip", "[util]")
+class JsonTestFixture
 {
+  public:
+    JsonTestFixture()
+    {
+        msg.set_type(faabric::Message_MessageType_FLUSH);
+        msg.set_user("user 1");
+        msg.set_function("great function");
+        msg.set_executedhost("blah.host.blah");
+        msg.set_finishtimestamp(123456543);
+
+        msg.set_pythonuser("py user");
+        msg.set_pythonfunction("py func");
+        msg.set_pythonentry("py entry");
+
+        msg.set_isasync(true);
+        msg.set_ispython(true);
+        msg.set_isstatusrequest(true);
+        msg.set_isexecgraphrequest(true);
+
+        msg.set_ismpi(true);
+        msg.set_mpiworldid(1234);
+        msg.set_mpirank(5678);
+        msg.set_mpiworldsize(33);
+
+        msg.set_cmdline("some cmdline");
+
+        msg.set_recordexecgraph(true);
+        auto& map = *msg.mutable_execgraphdetails();
+        map["foo"] = "bar";
+        auto& intMap = *msg.mutable_intexecgraphdetails();
+        intMap["foo"] = 0;
+
+        msg.set_migrationcheckperiod(33);
+
+        msg.set_topologyhint("TEST_TOPOLOGY_HINT");
+
+        msg.set_inputdata("foo bar");
+
+        faabric::util::setMessageId(msg);
+
+        REQUIRE(msg.id() > 0);
+        REQUIRE(msg.timestamp() > 0);
+    }
+
+  protected:
     faabric::Message msg;
-    msg.set_type(faabric::Message_MessageType_FLUSH);
-    msg.set_user("user 1");
-    msg.set_function("great function");
-    msg.set_executedhost("blah.host.blah");
-    msg.set_finishtimestamp(123456543);
+};
 
-    msg.set_pythonuser("py user");
-    msg.set_pythonfunction("py func");
-    msg.set_pythonentry("py entry");
-
-    msg.set_isasync(true);
-    msg.set_ispython(true);
-    msg.set_isstatusrequest(true);
-    msg.set_isexecgraphrequest(true);
-
-    msg.set_ismpi(true);
-    msg.set_mpiworldid(1234);
-    msg.set_mpirank(5678);
-    msg.set_mpiworldsize(33);
-
-    msg.set_cmdline("some cmdline");
-
-    msg.set_recordexecgraph(true);
-    auto& map = *msg.mutable_execgraphdetails();
-    map["foo"] = "bar";
-    auto& intMap = *msg.mutable_intexecgraphdetails();
-    intMap["foo"] = 0;
-
-    msg.set_migrationcheckperiod(33);
-
-    msg.set_topologyhint("TEST_TOPOLOGY_HINT");
-
+TEST_CASE_METHOD(JsonTestFixture, "Test message to JSON round trip", "[util]")
+{
     SECTION("Dodgy characters") { msg.set_inputdata("[0], %$ 2233 9"); }
 
     SECTION("Bytes")
@@ -52,38 +68,36 @@ TEST_CASE("Test message to JSON round trip", "[util]")
         msg.set_inputdata(bytes.data(), bytes.size());
     }
 
-    faabric::util::setMessageId(msg);
-
-    REQUIRE(msg.id() > 0);
-    REQUIRE(msg.timestamp() > 0);
-
     std::string jsonString = faabric::util::messageToJson(msg);
 
-    faabric::Message actual = faabric::util::jsonToMessage(jsonString);
+    faabric::Message actual;
+    faabric::util::jsonToMessage(jsonString, &actual);
 
     checkMessageEquality(msg, actual);
 }
 
-TEST_CASE("Test get JSON property from JSON string", "[util]")
+TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
 {
-    // Valid lookups
-    REQUIRE(getValueFromJsonString("foo", "{\"foo\": \"bar\"}") == "bar");
-    REQUIRE(getValueFromJsonString(
-              "foo", "{\"foo\": \"bar\", \"other\": \"value\"}") == "bar");
-    REQUIRE(getValueFromJsonString(
-              "foo", "{\"other\": \"value\", \"foo\": \"abc\"}") == "abc");
+    // We consume the generated JSON files from a variety of places, so this
+    // test ensures that the keywords we use elsewhere are generated as part
+    // of the serialisation process
+    std::vector<std::string> requiredKeys = {
+        "input_data", "finish", "async", "python", "status", "exec_graph",
+        "py_user", "py_func", "mpi", "mpi_world_size", "record_exec_graph",
+        "migration_check_period", "topology_hint"
+    };
+    std::string jsonString = faabric::util::messageToJson(msg);
 
-    // Nothing to return
-    REQUIRE(getValueFromJsonString(
-              "foo", "{\"FOO\": \"aa\", \"blah\": \"xxx\"}") == "");
-    REQUIRE(getValueFromJsonString("foo", "{\"foo\": \"\"}") == "");
-}
+    for (const auto& key : requiredKeys) {
+        // To make sure we are indeed dealing with keywords, we make sure to
+        // quote the keywords and append a colon
+        std::string jsonKey = fmt::format("\"{}\":", key);
+        REQUIRE(jsonString.find(jsonKey) != std::string::npos);
+    }
 
-TEST_CASE("Test with raw string literals", "[util]")
-{
-    const faabric::Message& msg =
-      jsonToMessage(R"({"user": "foo", "function": "bar"})");
-    REQUIRE(msg.user() == "foo");
-    REQUIRE(msg.function() == "bar");
+    // Additionally, make sure that the message type is a number. In
+    // particular a 3, as we set the message type to FLUSH in the constructor
+    std::string flushStr = "\"type\":3,";
+    REQUIRE(jsonString.find(flushStr) != std::string::npos);
 }
 }
