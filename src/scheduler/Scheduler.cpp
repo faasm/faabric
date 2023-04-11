@@ -144,7 +144,6 @@ void Scheduler::removeHostFromGlobalSet(const std::string& hostIp)
     auto req = std::make_shared<faabric::planner::RemoveHostRequest>();
     if (hostIp == thisHost && keepAliveThread.thisHostReq != nullptr) {
         *req->mutable_host() = *keepAliveThread.thisHostReq->mutable_host();
-        req->mutable_host()->set_ip(hostIp);
     } else {
         req->mutable_host()->set_ip(hostIp);
     }
@@ -1121,7 +1120,6 @@ std::string Scheduler::getThisHost()
     return thisHost;
 }
 
-// TODO: remove this method
 void Scheduler::broadcastFlush()
 {
     faabric::util::FullLock lock(mx);

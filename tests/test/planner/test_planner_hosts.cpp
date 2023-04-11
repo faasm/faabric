@@ -8,8 +8,6 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 
-#define ASYNC_TIMEOUT_MS 500
-
 using namespace faabric::planner;
 
 namespace tests {
