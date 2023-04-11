@@ -97,7 +97,7 @@ jobs:
           PLANNER_HOST_KEEPALIVE_TIMEOUT: 2
         volumes:
           - build_volume:/build-gha/bin/
-        options: --entrypoint /code/faabric/bin/planner_entrypoint.sh /build-gha/bin
+        options: --entrypoint "/code/faabric/bin/planner_entrypoint.sh /build-gha/bin"
       redis:
         image: redis
     steps:
