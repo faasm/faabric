@@ -1,7 +1,7 @@
-#include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
-#include "fixtures.h"
+#include "dist_test_fixtures.h"
+#include "faabric_utils.h"
 #include "init.h"
 #include "mpi/mpi_native.h"
 

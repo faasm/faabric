@@ -1,7 +1,7 @@
 #include <catch2/catch.hpp>
 
+#include "dist_test_fixtures.h"
 #include "faabric_utils.h"
-#include "fixtures.h"
 #include "init.h"
 
 #include <faabric/proto/faabric.pb.h>
