@@ -41,7 +41,7 @@ std::pair<int, std::string> postToUrl(const std::string& host,
     curl_global_init(CURL_GLOBAL_ALL);
 
     std::string fullUrl = fmt::format("{}:{}", host, port);
-    SPDLOG_TRACE("Making HTTP GET request to {}", fullUrl);
+    SPDLOG_TRACE("Making HTTP POST request to {}", fullUrl);
 
     CURL* curl = curl_easy_init();
     if (curl == nullptr) {

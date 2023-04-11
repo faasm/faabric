@@ -1,13 +1,14 @@
 #include <catch2/catch.hpp>
 
+#include "faabric_utils.h"
+#include "fixtures.h"
+
 #include <faabric/mpi/mpi.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
-#include <faabric/util/macros.h>
-#include <faabric_utils.h>
-
 #include <faabric/util/logging.h>
+#include <faabric/util/macros.h>
 
 #include <thread>
 

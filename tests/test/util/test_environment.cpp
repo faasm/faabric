@@ -1,5 +1,6 @@
-#include "faabric_utils.h"
 #include <catch2/catch.hpp>
+
+#include "faabric_utils.h"
 
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>

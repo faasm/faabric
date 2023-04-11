@@ -3,8 +3,6 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <sys/mman.h>
-
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/snapshot/SnapshotServer.h>
@@ -17,6 +15,8 @@
 #include <faabric/util/network.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
+
+#include <sys/mman.h>
 
 using namespace faabric::util;
 

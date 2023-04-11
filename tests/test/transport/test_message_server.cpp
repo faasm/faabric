@@ -1,6 +1,6 @@
 #include <catch2/catch.hpp>
 
-#include "faabric_utils.h"
+#include "fixtures.h"
 
 #include <thread>
 
@@ -10,6 +10,7 @@
 #include <faabric/transport/common.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/network.h>
 
 using namespace faabric::transport;
 

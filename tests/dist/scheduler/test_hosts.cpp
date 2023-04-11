@@ -1,7 +1,7 @@
 #include "faabric_utils.h"
 #include <catch2/catch.hpp>
 
-#include "fixtures.h"
+#include "dist_test_fixtures.h"
 #include "init.h"
 
 #include <faabric/scheduler/Scheduler.h>

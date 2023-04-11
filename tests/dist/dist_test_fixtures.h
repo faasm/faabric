@@ -1,6 +1,7 @@
 #pragma once
 
 #include "faabric_utils.h"
+#include "fixtures.h"
 
 #include "DistTestExecutor.h"
 

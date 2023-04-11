@@ -1,8 +1,9 @@
 #include <catch2/catch.hpp>
+
 #include <faabric/util/queue.h>
-#include <thread>
 
 #include <iostream>
+#include <thread>
 
 using namespace faabric::util;
 

@@ -1,4 +1,5 @@
 #include <catch2/catch.hpp>
+
 #include <faabric/util/state.h>
 
 using namespace faabric::util;

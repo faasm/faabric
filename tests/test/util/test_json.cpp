@@ -3,7 +3,6 @@
 #include "faabric_utils.h"
 
 #include <faabric/util/json.h>
-
 #include <faabric/util/logging.h>
 
 using namespace faabric::util;

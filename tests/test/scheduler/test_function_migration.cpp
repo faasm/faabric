@@ -145,7 +145,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
 TEST_CASE_METHOD(
   FunctionMigrationTestFixture,
-  "Test migration oportunities are only detected if set in the message",
+  "Test migration opportunities are only detected if set in the message",
   "[scheduler]")
 {
     // First set resources before calling the functions: one will be allocated

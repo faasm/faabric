@@ -1,6 +1,9 @@
 #pragma once
 
-#include <sys/mman.h>
+#include <catch2/catch.hpp>
+
+#include "DummyExecutorFactory.h"
+#include "faabric_utils.h"
 
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
@@ -17,13 +20,14 @@
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
+#include <faabric/util/json.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
-#include "DummyExecutorFactory.h"
+#include <sys/mman.h>
 
 namespace tests {
 class RedisTestFixture
