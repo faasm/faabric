@@ -38,4 +38,4 @@ target_link_libraries(planner PRIVATE
 )
 
 add_executable(planner_server planner_server.cpp)
-target_link_libraries(planner_server PRIVATE faabric::planner)
+target_link_libraries(planner_server PRIVATE faabric::faabric)
