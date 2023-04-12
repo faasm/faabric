@@ -30,4 +30,6 @@ pip_cmd install -U pip
 pip_cmd install -U setuptools wheel
 pip_cmd install -r requirements.txt
 
+touch ${VENV_PATH}/faabric_venv.BUILT
+
 popd >> /dev/null
