@@ -11,6 +11,7 @@ services:
     # it is built
     command: ${PLANNER_ENTRYPOINT_BINARY:-/build/faabric/static/bin}
     volumes:
+      - ./:/code/faabric
       - ./build:/build/faabric
     environment:
       - LOG_LEVEL=debug
