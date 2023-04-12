@@ -52,4 +52,5 @@ services:
       - OVERRIDE_CPU_COUNT=${OVERRIDE_CPU_COUNT:-0}
     command: ./bin/faabric_dist_test_server
     depends_on:
+      - planner
       - redis
