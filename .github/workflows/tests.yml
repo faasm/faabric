@@ -108,6 +108,8 @@ jobs:
         run: docker compose up -d cli
       - name: "Wait for python venv to be initialised"
         run: ./bin/wait_for_venv.sh
+        env:
+          - FAABRIC_DOCKER: "on"
       - name: "Run cmake for tests"
         run: |
           docker compose exec cli bash -c \
