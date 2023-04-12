@@ -102,22 +102,31 @@ jobs:
     #         image: redis
     steps:
       - name: "Install Conan"
-        run: sudo apt install -y conan
+        run: pip install conan
       - uses: faasm/conan-cache-action@v1
       - name: "Start compose"
         run: docker compose up -d cli
+      - name: "Wait for python venv to be initialised"
+        run: ./bin/wait_for_venv.sh
       - name: "Run cmake for tests"
-        run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
-        shell: docker compose exec cli {0}
+        run: |
+          docker compose exec cli bash -c \
+            './bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}'
       - name: "Build planner binary"
-        run: ./bin/inv_wrapper.sh dev.cc planner_server
-        shell: docker compose exec cli {0}
+        run: |
+          docker compose exec cli bash -c \
+            './bin/inv_wrapper.sh dev.cc planner_server'
       - name: "Build tests"
-        run: ./bin/inv_wrapper.sh dev.cc faabric_tests
-        shell: docker compose exec cli {0}
+        run: |
+          docker compose exec cli bash -c \
+            './bin/inv_wrapper.sh dev.cc faabric_tests'
       - name: "Run tests"
-        run: /build/faabric/static/bin/faabric_tests
-        shell: docker compose exec cli {0}
+        run: |
+          docker compose exec cli bash -c \
+            '/build/faabric/static/bin/faabric_tests'
+      - name: "Print planner logs"
+        if: always()
+        run: docker compose logs planner
 
   dist-tests:
     if: github.event.pull_request.draft == false
