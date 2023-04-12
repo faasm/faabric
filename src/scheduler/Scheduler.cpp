@@ -127,7 +127,7 @@ void Scheduler::addHostToGlobalSet(const std::string& hostIp)
     if (hostIp == thisHost) {
         keepAliveThread.thisHostReq = std::move(req);
 
-        // Only start the background keep-alive thread if it is not mock mode
+        // Only start the background keep-alive thread if not in test mode
         if (!faabric::util::isTestMode()) {
             keepAliveThread.start(plannerTimeout / 2);
         }
@@ -142,7 +142,9 @@ void Scheduler::addHostToGlobalSet()
 void Scheduler::removeHostFromGlobalSet(const std::string& hostIp)
 {
     auto req = std::make_shared<faabric::planner::RemoveHostRequest>();
-    if (hostIp == thisHost && keepAliveThread.thisHostReq != nullptr) {
+    bool isThisHost =
+      hostIp == thisHost && keepAliveThread.thisHostReq != nullptr;
+    if (isThisHost) {
         *req->mutable_host() = *keepAliveThread.thisHostReq->mutable_host();
     } else {
         req->mutable_host()->set_ip(hostIp);
@@ -151,7 +153,7 @@ void Scheduler::removeHostFromGlobalSet(const std::string& hostIp)
     getPlannerClient()->removeHost(req);
 
     // Clear the keep alive thread
-    if (!faabric::util::isTestMode()) {
+    if (isThisHost) {
         keepAliveThread.stop();
     }
 }
