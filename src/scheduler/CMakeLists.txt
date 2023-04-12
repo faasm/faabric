@@ -11,6 +11,5 @@ faabric_lib(scheduler
 target_link_libraries(scheduler PRIVATE
     faabric::snapshot
     faabric::state
-    # faabric::faabricmpi
     faabric::redis
 )
