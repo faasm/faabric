@@ -5,10 +5,16 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/concurrent_map.h>
 
 #include <string>
 
 namespace faabric::planner {
+static faabric::util::ConcurrentMap<
+  std::string,
+  std::shared_ptr<faabric::scheduler::FunctionCallClient>>
+  functionCallClients;
+
 // Planner is used globally as a static variable. This constructor relies on
 // the fact that C++ static variable's initialisation is thread-safe
 Planner::Planner()
@@ -53,6 +59,9 @@ bool Planner::flush(faabric::planner::FlushType flushType)
             SPDLOG_INFO("Planner flushing available hosts state");
             flushHosts();
             return true;
+        case faabric::planner::FlushType::SharedFiles:
+            SPDLOG_INFO("Planner flushing shared files");
+            return flushSharedFiles();
         default:
             SPDLOG_ERROR("Unrecognised flush type");
             return false;
@@ -64,6 +73,18 @@ void Planner::flushHosts()
     faabric::util::FullLock lock(plannerMx);
 
     state.hostMap.clear();
+}
+
+bool Planner::flushSharedFiles()
+{
+    auto availableHosts = getAvailableHosts();
+
+    for (const auto& host : availableHosts) {
+        // Get function call client
+        // send flush
+    }
+
+    return true;
 }
 
 std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()

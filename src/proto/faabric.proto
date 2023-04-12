@@ -104,7 +104,6 @@ message Message {
         CALL = 0;
         KILL = 1;
         EMPTY = 2;
-        FLUSH = 3;
     }
 
     MessageType type = 5;

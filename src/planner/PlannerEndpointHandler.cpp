@@ -72,6 +72,19 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_FLUSH_SHARED_FILES: {
+            bool success = faabric::planner::getPlanner().flush(
+              faabric::planner::FlushType::SharedFiles);
+            if (success) {
+                response.result(beast::http::status::ok);
+                response.body() = std::string("Flushed available hosts!");
+            } else {
+                response.result(beast::http::status::internal_server_error);
+                response.body() =
+                  std::string("Failed flushing available hosts!");
+            }
+            return ctx.sendFunction(std::move(response));
+        }
         case faabric::planner::HttpMessage_Type_GET_CONFIG: {
             auto config = faabric::planner::getPlanner().getConfig();
             std::string responseStr;

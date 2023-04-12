@@ -10,6 +10,7 @@ enum FlushType
 {
     NoFlushType = 0,
     Hosts = 1,
+    SharedFiles = 2,
 };
 
 /* The planner is a standalone component that has a global view of the state
@@ -55,7 +56,13 @@ class Planner
     PlannerState state;
     PlannerConfig config;
 
+    // ----------
+    // Flushing
+    // ----------
+
     void flushHosts();
+
+    bool flushSharedFiles();
 
     // Check if a host's registration timestamp has expired
     bool isHostExpired(std::shared_ptr<Host> host, long epochTimeMs = 0);
