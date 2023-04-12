@@ -3,10 +3,12 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <faabric/scheduler/MpiWorld.h>
+#include <faabric/mpi/MpiWorld.h>
 #include <faabric/util/exec_graph.h>
 #include <faabric/util/json.h>
 #include <faabric/util/macros.h>
+
+using namespace faabric::mpi;
 
 namespace tests {
 /* 03/05/2022 - Disable MPI execution graph tests as Protobuf is giving
@@ -72,7 +74,7 @@ TEST_CASE_METHOD(MpiTestFixture,
 
     std::vector<int> messageData = { 0, 1, 2 };
     auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-    auto buffer = bufferAllocation.get();
+    auto* buffer = bufferAllocation.get();
 
     int numToSend = 10;
     std::string expectedKey =
@@ -112,16 +114,13 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     otherMsg.set_mpirank(otherRank);
     msg.set_mpirank(rank);
 
-    faabric::scheduler::MpiWorld& thisWorld =
-      faabric::scheduler::getMpiWorldRegistry().createWorld(msg, worldId);
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
 
     std::vector<int> messageData = { 0, 1, 2 };
     auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-    auto buffer = bufferAllocation.get();
+    auto* buffer = bufferAllocation.get();
     std::jthread otherWorldThread([&messageData, &otherMsg, rank, otherRank] {
-        faabric::scheduler::MpiWorld& otherWorld =
-          faabric::scheduler::getMpiWorldRegistry().getOrInitialiseWorld(
-            otherMsg);
+        MpiWorld& otherWorld = getMpiWorldRegistry().getOrInitialiseWorld(otherMsg);
 
         otherWorld.send(otherRank,
                         rank,
@@ -161,7 +160,7 @@ TEST_CASE_METHOD(MpiTestFixture,
 
     std::vector<int> messageData = { 0, 1, 2 };
     auto bufferAllocation = std::make_unique<int[]>(messageData.size());
-    auto buffer = bufferAllocation.get();
+    auto* buffer = bufferAllocation.get();
 
     std::string expectedKey;
     int msgCount;

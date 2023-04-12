@@ -3,6 +3,7 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+using namespace faabric::mpi;
 using namespace faabric::scheduler;
 
 namespace tests {

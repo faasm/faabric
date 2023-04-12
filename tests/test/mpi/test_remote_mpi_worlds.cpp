@@ -4,7 +4,7 @@
 #include "fixtures.h"
 
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/logging.h>
@@ -17,6 +17,7 @@
 // _always_ in mocking mode. For truly multi-host MPI tests you must write
 // an actual distributed test.
 
+using namespace faabric::mpi;
 using namespace faabric::scheduler;
 
 namespace tests {

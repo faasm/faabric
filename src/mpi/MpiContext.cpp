@@ -1,10 +1,10 @@
+#include <faabric/mpi/MpiContext.h>
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/MpiContext.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 MpiContext::MpiContext()
   : isMpi(false)
   , rank(-1)
@@ -24,7 +24,7 @@ int MpiContext::createWorld(faabric::Message& msg)
     SPDLOG_DEBUG("Initialising world {}", worldId);
 
     // Create the MPI world
-    scheduler::MpiWorldRegistry& reg = scheduler::getMpiWorldRegistry();
+    MpiWorldRegistry& reg = getMpiWorldRegistry();
     reg.createWorld(msg, worldId);
 
     // Set up this context
@@ -51,17 +51,17 @@ void MpiContext::joinWorld(faabric::Message& msg)
     registry.getOrInitialiseWorld(msg);
 }
 
-bool MpiContext::getIsMpi()
+bool MpiContext::getIsMpi() const
 {
     return isMpi;
 }
 
-int MpiContext::getRank()
+int MpiContext::getRank() const
 {
     return rank;
 }
 
-int MpiContext::getWorldId()
+int MpiContext::getWorldId() const
 {
     return worldId;
 }

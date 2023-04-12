@@ -1,10 +1,10 @@
 #include <catch2/catch.hpp>
 
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/MpiMessageBuffer.h>
+#include <faabric/mpi/MpiMessageBuffer.h>
 #include <faabric/util/gids.h>
 
-using namespace faabric::scheduler;
+using namespace faabric::mpi;
 
 MpiMessageBuffer::PendingAsyncMpiMessage genRandomArguments(
   bool nullMsg = true,

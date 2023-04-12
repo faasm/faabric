@@ -4,7 +4,7 @@
 #include "fixtures.h"
 
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/MpiWorld.h>
+#include <faabric/mpi/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
@@ -12,6 +12,7 @@
 
 #include <thread>
 
+using namespace faabric::mpi;
 using namespace faabric::scheduler;
 
 namespace tests {
@@ -616,7 +617,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
 }
 
 template<typename T>
-void doReduceTest(scheduler::MpiWorld& world,
+void doReduceTest(MpiWorld& world,
                   int root,
                   MPI_Op op,
                   MPI_Datatype datatype,
@@ -701,14 +702,14 @@ void doReduceTest(scheduler::MpiWorld& world,
     }
 }
 
-template void doReduceTest<int>(scheduler::MpiWorld& world,
+template void doReduceTest<int>(MpiWorld& world,
                                 int root,
                                 MPI_Op op,
                                 MPI_Datatype datatype,
                                 std::vector<std::vector<int>> rankData,
                                 std::vector<int>& expected);
 
-template void doReduceTest<double>(scheduler::MpiWorld& world,
+template void doReduceTest<double>(MpiWorld& world,
                                    int root,
                                    MPI_Op op,
                                    MPI_Datatype datatype,

@@ -2,9 +2,9 @@
 
 #include <faabric/mpi/mpi.h>
 
+#include <faabric/mpi/MpiMessageBuffer.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
-#include <faabric/scheduler/MpiMessageBuffer.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
@@ -19,7 +19,7 @@
 #define MPI_MSG_COUNT_PREFIX "mpi-msgcount-torank"
 #define MPI_MSGTYPE_COUNT_PREFIX "mpi-msgtype-torank"
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 
 // -----------------------------------
 // Mocking

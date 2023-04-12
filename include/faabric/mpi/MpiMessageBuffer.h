@@ -4,7 +4,7 @@
 #include <iterator>
 #include <list>
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 /* The MPI message buffer (MMB) keeps track of the asyncrhonous
  * messages that we must have received (i.e. through an irecv call) but we
  * still have not waited on (acknowledged). Messages are acknowledged either

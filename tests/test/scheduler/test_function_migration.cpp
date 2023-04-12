@@ -3,6 +3,8 @@
 #include <faabric_utils.h>
 #include <fixtures.h>
 
+#include <faabric/mpi/MpiWorld.h>
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/testing.h>
@@ -396,7 +398,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     setHostResources(hosts, slots, usedSlots);
 
     // Clear MPI registries
-    getMpiWorldRegistry().clear();
+    faabric::mpi::getMpiWorldRegistry().clear();
 
     // Make sure that the check period is much less than the sleep period
     auto req = faabric::util::batchExecFactory("mpi", "sleep", 1);
@@ -418,7 +420,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 
     // Manually create the world, and trigger a second function invocation in
     // the remote host
-    MpiWorld world;
+    faabric::mpi::MpiWorld world;
     world.create(*firstMsg, worldId, worldSize);
 
     // Update host resources so that a migration opportunity appears

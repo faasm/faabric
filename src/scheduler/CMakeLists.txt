@@ -5,16 +5,12 @@ faabric_lib(scheduler
     Executor.cpp
     FunctionCallClient.cpp
     FunctionCallServer.cpp
-    MpiContext.cpp
-    MpiMessageBuffer.cpp
-    MpiWorld.cpp
-    MpiWorldRegistry.cpp
     Scheduler.cpp
 )
 
 target_link_libraries(scheduler PRIVATE
     faabric::snapshot
     faabric::state
-    faabric::faabricmpi
+    # faabric::faabricmpi
     faabric::redis
 )
