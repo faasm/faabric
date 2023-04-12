@@ -76,7 +76,7 @@ jobs:
       LOG_LEVEL: info
       # Overwritting the entrypoint makes sure that we use the latest version
       # of the planner
-      PLANNER_ENTRYPOINT_BINARY: /code/faabric/build/static/bin/planner_server
+      PLANNER_ENTRYPOINT_BINARY: /code/faabric/build/static/bin
       ASAN_OPTIONS: verbosity=1:halt_on_error=1
       TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
