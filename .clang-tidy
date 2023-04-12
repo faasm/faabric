@@ -10,5 +10,4 @@ Checks: >
     -readability-magic-numbers,
     -readability-redundant-string-cstr,
     -readability-implicit-bool-conversion
-    -readability-function-cognitive-complexity
 

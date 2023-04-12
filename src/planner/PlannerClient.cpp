@@ -19,13 +19,7 @@ PlannerClient::PlannerClient()
         faabric::util::getSystemConfig().plannerHost),
       PLANNER_ASYNC_PORT,
       PLANNER_SYNC_PORT)
-{
-    SPDLOG_INFO("Initialising planner client with details: {}:{},{}",
-                faabric::util::getIPFromHostname(
-                  faabric::util::getSystemConfig().plannerHost),
-                PLANNER_ASYNC_PORT,
-                PLANNER_SYNC_PORT);
-}
+{}
 
 void PlannerClient::ping()
 {
