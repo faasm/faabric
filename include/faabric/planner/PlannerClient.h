@@ -5,6 +5,10 @@
 #include <faabric/util/PeriodicBackgroundThread.h>
 
 namespace faabric::planner {
+/* The planner's implementation of group membership requires clients to send
+ * keep-alive messages. Once started, this background thread will send these
+ * messages
+ */
 class KeepAliveThread : public faabric::util::PeriodicBackgroundThread
 {
   public:
@@ -23,12 +27,9 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     std::vector<Host> getAvailableHosts();
 
-    // Registering a host returns the keep-alive timeout for heartbeats, and
-    // the unique host id
+    // Registering a host returns the keep-alive timeout for heartbeats
     int registerHost(std::shared_ptr<RegisterHostRequest> req);
 
-    // Remove host is an asynchronous request that will try to remove the host
-    // pointed-to by the remove request
     void removeHost(std::shared_ptr<RemoveHostRequest> req);
 };
 }

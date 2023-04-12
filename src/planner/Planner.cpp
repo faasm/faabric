@@ -145,7 +145,7 @@ void Planner::removeHost(const Host& hostIn)
 
     auto it = state.hostMap.find(hostIn.ip());
     if (it != state.hostMap.end()) {
-        SPDLOG_INFO("Planner removing host {}", hostIn.ip());
+        SPDLOG_DEBUG("Planner removing host {}", hostIn.ip());
         state.hostMap.erase(it);
     }
 }

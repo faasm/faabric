@@ -12,6 +12,9 @@ enum FlushType
     Hosts = 1,
 };
 
+/* The planner is a standalone component that has a global view of the state
+ * of a distributed faabric deployment.
+ */
 class Planner
 {
   public:

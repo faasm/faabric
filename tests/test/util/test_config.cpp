@@ -32,6 +32,9 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.mpiBasePort == 10800);
 
     REQUIRE(conf.dirtyTrackingMode == "segfault");
+
+    REQUIRE(conf.plannerHost == "planner");
+    REQUIRE(conf.plannerPort == 8080);
 }
 
 TEST_CASE("Test overriding system config initialisation", "[util]")
@@ -65,6 +68,9 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
 
     std::string dirtyMode = setEnvVar("DIRTY_TRACKING_MODE", "dummy-track");
 
+    std::string plannerHost = setEnvVar("PLANNER_HOST", "dummy-planner");
+    std::string plannerPort = setEnvVar("PLANNER_PORT", "9876");
+
     // Create new conf for test
     SystemConfig conf;
 
@@ -94,6 +100,9 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
 
     REQUIRE(conf.dirtyTrackingMode == "dummy-track");
 
+    REQUIRE(conf.plannerHost == "dummy-planner");
+    REQUIRE(conf.plannerPort == 9876);
+
     // Be careful with host type
     setEnvVar("LOG_LEVEL", logLevel);
     setEnvVar("LOG_FILE", logFile);
@@ -122,6 +131,9 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("MPI_BASE_PORT", mpiPort);
 
     setEnvVar("DIRTY_TRACKING_MODE", dirtyMode);
+
+    setEnvVar("PLANNER_HOST", plannerHost);
+    setEnvVar("PLANNER_PORT", plannerPort);
 }
 
 }

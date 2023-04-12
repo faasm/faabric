@@ -82,7 +82,6 @@ PlannerServer::recvGetAvailableHosts()
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
   std::span<const uint8_t> buffer)
 {
-    // TODO: probably catch this in a try/catch
     PARSE_MSG(RegisterHostRequest, buffer.data(), buffer.size());
 
     bool success = planner.registerHost(parsedMsg.host());

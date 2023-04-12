@@ -40,14 +40,6 @@ class FaabricPlannerEndpointTestFixture : public ConfTestFixture
 };
 
 TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
-                 "Test malformed requests",
-                 "[planner]")
-{
-    // TODO
-    ;
-}
-
-TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
                  "Test planner reset",
                  "[planner]")
 {
