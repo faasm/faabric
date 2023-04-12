@@ -11,8 +11,8 @@ MpiWorldRegistry& getMpiWorldRegistry()
 }
 
 MpiWorld& MpiWorldRegistry::createWorld(faabric::Message& msg,
-                                                   int worldId,
-                                                   std::string hostOverride)
+                                        int worldId,
+                                        std::string hostOverride)
 {
     if (worldMap.count(worldId) > 0) {
         SPDLOG_ERROR("World {} already exists", worldId);

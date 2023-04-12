@@ -3,8 +3,8 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <faabric/mpi/mpi.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
+#include <faabric/mpi/mpi.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/logging.h>

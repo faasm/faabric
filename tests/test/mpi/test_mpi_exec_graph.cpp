@@ -120,7 +120,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture,
     auto bufferAllocation = std::make_unique<int[]>(messageData.size());
     auto* buffer = bufferAllocation.get();
     std::jthread otherWorldThread([&messageData, &otherMsg, rank, otherRank] {
-        MpiWorld& otherWorld = getMpiWorldRegistry().getOrInitialiseWorld(otherMsg);
+        MpiWorld& otherWorld =
+          getMpiWorldRegistry().getOrInitialiseWorld(otherMsg);
 
         otherWorld.send(otherRank,
                         rank,

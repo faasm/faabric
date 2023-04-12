@@ -11,8 +11,7 @@
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
 // per-rank data structures
-static thread_local std::vector<
-  std::shared_ptr<faabric::mpi::MpiMessageBuffer>>
+static thread_local std::vector<std::shared_ptr<faabric::mpi::MpiMessageBuffer>>
   unackedMessageBuffers;
 
 static thread_local std::set<int> iSendRequests;
@@ -80,8 +79,9 @@ std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
     return std::make_shared<faabric::MPIMessage>(parsedMsg);
 }
 
-std::shared_ptr<MpiMessageBuffer>
-MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
+std::shared_ptr<MpiMessageBuffer> MpiWorld::getUnackedMessageBuffer(
+  int sendRank,
+  int recvRank)
 {
     // We want to lazily initialise this data structure because, given its
     // thread local nature, we expect it to be quite sparse (i.e. filled with
@@ -95,8 +95,7 @@ MpiWorld::getUnackedMessageBuffer(int sendRank, int recvRank)
     assert(index >= 0 && index < size * size);
 
     if (unackedMessageBuffers[index] == nullptr) {
-        unackedMessageBuffers.at(index) =
-          std::make_shared<MpiMessageBuffer>();
+        unackedMessageBuffers.at(index) = std::make_shared<MpiMessageBuffer>();
     }
 
     return unackedMessageBuffers[index];
@@ -979,7 +978,8 @@ void MpiWorld::awaitAsyncRequest(int requestId)
     int recvRank = it->second.second;
     reqIdToRanks.erase(it);
 
-    std::shared_ptr<MpiMessageBuffer> umb = getUnackedMessageBuffer(sendRank, recvRank);
+    std::shared_ptr<MpiMessageBuffer> umb =
+      getUnackedMessageBuffer(sendRank, recvRank);
 
     std::list<MpiMessageBuffer::PendingAsyncMpiMessage>::iterator msgIt =
       umb->getRequestPendingMsg(requestId);
@@ -1434,7 +1434,8 @@ void MpiWorld::initLocalQueues()
 std::shared_ptr<faabric::MPIMessage>
 MpiWorld::recvBatchReturnLast(int sendRank, int recvRank, int batchSize)
 {
-    std::shared_ptr<MpiMessageBuffer> umb = getUnackedMessageBuffer(sendRank, recvRank);
+    std::shared_ptr<MpiMessageBuffer> umb =
+      getUnackedMessageBuffer(sendRank, recvRank);
 
     // When calling from recv, we set the batch size to zero and work
     // out the total here. We want to acknowledge _all_ unacknowleged messages

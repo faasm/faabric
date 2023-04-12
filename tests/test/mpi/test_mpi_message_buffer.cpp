@@ -1,7 +1,7 @@
 #include <catch2/catch.hpp>
 
-#include <faabric/mpi/mpi.h>
 #include <faabric/mpi/MpiMessageBuffer.h>
+#include <faabric/mpi/mpi.h>
 #include <faabric/util/gids.h>
 
 using namespace faabric::mpi;
