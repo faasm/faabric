@@ -12,5 +12,6 @@ source ./bin/workon.sh
 inv dev.cmake --build=Debug
 inv dev.cc faabric_dist_tests
 inv dev.cc faabric_dist_test_server
+inv dev.cc planner_server
 
 popd >> /dev/null
