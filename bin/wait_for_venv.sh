@@ -13,7 +13,7 @@ else
     VENV_PATH="${PROJ_ROOT}/venv"
 fi
 
-until test -f ${VENV_ROOT}/faabric_venv.BUILT
+until test -f ${VENV_PATH}/faabric_venv.BUILT
 do
    echo "Waiting for python virtual environment to be ready..."
    sleep 3
