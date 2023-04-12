@@ -133,6 +133,9 @@ jobs:
         run: ./dist-test/build.sh
       - name: "Run the distributed tests"
         run: ./dist-test/run.sh
+      - name: "Print planner logs"
+        if: always()
+        run: docker compose logs planner
 
   examples:
     if: github.event.pull_request.draft == false
