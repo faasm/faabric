@@ -19,6 +19,8 @@ docker compose \
     -d \
     cli
 
+FAABRIC_DOCKER="on" ./bin/wait_for_venv.sh
+
 # Attach to the CLI container
 docker compose \
     exec \
