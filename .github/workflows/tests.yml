@@ -73,34 +73,14 @@ jobs:
     env:
       CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
       HOST_TYPE: ci
+      LOG_LEVEL: info
       PLANNER_HOST: planner
       PLANNER_PORT: 8080
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
-      ASAN_OPTIONS: "verbosity=1:halt_on_error=1"
+      ASAN_OPTIONS: verbosity=1:halt_on_error=1
       TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
-      UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1"
-        #     container:
-        #       image: faasm.azurecr.io/faabric:0.4.3
-        #       credentials:
-        #         username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
-        #         password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
-        #       options: --privileged
-        #       volumes:
-        #         - build_volume:/build-gha/bin/
-    # TODO: somehow manage to use the `planner_server` binary build in the
-    # tests below. Best idea is to share the `./build/static` directory, and
-    # add an entrypoint in planner that waits for such a binary to exist
-    #     services:
-    #       planner:
-    #         image: faasm.azurecr.io/planner:0.4.3
-    #         env:
-    #           PLANNER_HOST_KEEPALIVE_TIMEOUT: 2
-    #         volumes:
-    #           - build_volume:/build-gha/bin/
-    #         options: --entrypoint "/code/faabric/bin/planner_entrypoint.sh /build-gha/bin"
-    #       redis:
-    #         image: redis
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
     steps:
       - name: "Install Conan"
         run: pip install conan
