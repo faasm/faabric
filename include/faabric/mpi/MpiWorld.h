@@ -1,8 +1,8 @@
 #pragma once
 
 #include <faabric/mpi/mpi.h>
-
 #include <faabric/mpi/MpiMessageBuffer.h>
+#include <faabric/mpi/mpi.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/transport/PointToPointBroker.h>
@@ -26,8 +26,7 @@ namespace faabric::mpi {
 // -----------------------------------
 // MPITOPTP - mocking at the MPI level won't be needed when using the PTP broker
 // as the broker already has mocking capabilities
-std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
-  int sendRank);
+std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank);
 
 typedef faabric::util::FixedCapacityQueue<std::shared_ptr<faabric::MPIMessage>>
   InMemoryMpiQueue;

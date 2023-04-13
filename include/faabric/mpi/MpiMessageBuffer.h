@@ -1,5 +1,5 @@
 #include <faabric/mpi/mpi.h>
-#include <faabric/proto/faabric.pb.h>
+#include <faabric/mpi/mpi.pb.h>
 
 #include <iterator>
 #include <list>
@@ -25,18 +25,17 @@ class MpiMessageBuffer
     {
       public:
         int requestId = -1;
-        std::shared_ptr<faabric::MPIMessage> msg = nullptr;
+        std::shared_ptr<MPIMessage> msg = nullptr;
         int sendRank = -1;
         int recvRank = -1;
         uint8_t* buffer = nullptr;
         faabric_datatype_t* dataType = nullptr;
         int count = -1;
-        faabric::MPIMessage::MPIMessageType messageType =
-          faabric::MPIMessage::NORMAL;
+        MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL;
 
         bool isAcknowledged() { return msg != nullptr; }
 
-        void acknowledge(std::shared_ptr<faabric::MPIMessage> msgIn)
+        void acknowledge(std::shared_ptr<MPIMessage> msgIn)
         {
             msg = msgIn;
         }
