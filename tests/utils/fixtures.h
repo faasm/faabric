@@ -106,8 +106,7 @@ class PlannerTestFixture
     {
         faabric::planner::HttpMessage msg;
         msg.set_type(faabric::planner::HttpMessage_Type_RESET);
-        std::string jsonStr;
-        faabric::util::messageToJsonPb(msg, &jsonStr);
+        std::string jsonStr = faabric::util::messageToJson(msg);
 
         faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
         std::pair<int, std::string> result =
@@ -119,8 +118,7 @@ class PlannerTestFixture
     {
         faabric::planner::HttpMessage msg;
         msg.set_type(faabric::planner::HttpMessage_Type_GET_CONFIG);
-        std::string jsonStr;
-        faabric::util::messageToJsonPb(msg, &jsonStr);
+        std::string jsonStr = faabric::util::messageToJson(msg);
 
         faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
         std::pair<int, std::string> result =
@@ -130,7 +128,7 @@ class PlannerTestFixture
         // Check that we can de-serialise the config. Note that if there's a
         // de-serialisation the method will throw an exception
         faabric::planner::PlannerConfig config;
-        faabric::util::jsonToMessagePb(result.second, &config);
+        faabric::util::jsonToMessage(result.second, &config);
         return config;
     }
 };

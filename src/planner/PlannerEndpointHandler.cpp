@@ -40,7 +40,7 @@ void PlannerEndpointHandler::onRequest(
 
     faabric::planner::HttpMessage msg;
     try {
-        faabric::util::jsonToMessagePb(requestStr, &msg);
+        faabric::util::jsonToMessage(requestStr, &msg);
     } catch (faabric::util::JsonSerialisationException e) {
         response.result(beast::http::status::bad_request);
         response.body() = std::string("Bad JSON in request body");
@@ -89,7 +89,7 @@ void PlannerEndpointHandler::onRequest(
             auto config = faabric::planner::getPlanner().getConfig();
             std::string responseStr;
             try {
-                faabric::util::messageToJsonPb(config, &responseStr);
+                responseStr = faabric::util::messageToJson(config);
                 response.result(beast::http::status::ok);
                 response.body() = responseStr;
             } catch (faabric::util::JsonSerialisationException& e) {

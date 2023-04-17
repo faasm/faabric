@@ -192,8 +192,8 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
     REQUIRE(statusResultAfter.first == 200);
     REQUIRE(statusResultAfter.second != "RUNNING");
 
-    faabric::Message resultMsg =
-      faabric::util::jsonToMessage(statusResultAfter.second);
+    faabric::Message resultMsg;
+    faabric::util::jsonToMessage(statusResultAfter.second, &resultMsg);
     REQUIRE(resultMsg.returnvalue() == 0);
     REQUIRE(resultMsg.outputdata() ==
             fmt::format("Finished async message {}", msg.id()));

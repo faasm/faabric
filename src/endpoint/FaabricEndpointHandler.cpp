@@ -44,7 +44,7 @@ void FaabricEndpointHandler::onRequest(
         auto req = faabric::util::batchExecFactory();
         req->set_type(req->FUNCTIONS);
         faabric::Message& msg = *req->add_messages();
-        msg = faabric::util::jsonToMessage(requestStr);
+        faabric::util::jsonToMessage(requestStr, &msg);
         faabric::scheduler::Scheduler& sched =
           faabric::scheduler::getScheduler();
 
