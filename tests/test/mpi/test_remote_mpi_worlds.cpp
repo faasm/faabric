@@ -22,7 +22,7 @@ using namespace faabric::scheduler;
 
 namespace tests {
 std::set<int> getReceiversFromMessages(
-  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+  std::vector<std::shared_ptr<MPIMessage>> msgs)
 {
     std::set<int> receivers;
     for (const auto& msg : msgs) {
@@ -108,14 +108,14 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                             BYTES(messageData.data()),
                             MPI_INT,
                             messageData.size(),
-                            faabric::MPIMessage::BROADCAST);
+                            MPIMessage::BROADCAST);
     } else {
         otherWorld.broadcast(sendRank,
                              recvRank,
                              BYTES(messageData.data()),
                              MPI_INT,
                              messageData.size(),
-                             faabric::MPIMessage::BROADCAST);
+                             MPIMessage::BROADCAST);
     }
     auto msgs = getMpiMockedMessages(recvRank);
     REQUIRE(msgs.size() == expectedNumMsg);
@@ -220,7 +220,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 }
 
 std::set<int> getMsgCountsFromMessages(
-  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+  std::vector<std::shared_ptr<MPIMessage>> msgs)
 {
     std::set<int> counts;
     for (const auto& msg : msgs) {

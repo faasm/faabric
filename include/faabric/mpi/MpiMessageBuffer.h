@@ -31,14 +31,11 @@ class MpiMessageBuffer
         uint8_t* buffer = nullptr;
         faabric_datatype_t* dataType = nullptr;
         int count = -1;
-        MPIMessage::MPIMessageType messageType = faabric::MPIMessage::NORMAL;
+        MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL;
 
         bool isAcknowledged() { return msg != nullptr; }
 
-        void acknowledge(std::shared_ptr<MPIMessage> msgIn)
-        {
-            msg = msgIn;
-        }
+        void acknowledge(std::shared_ptr<MPIMessage> msgIn) { msg = msgIn; }
     };
 
     /* Interface to query the buffer size */

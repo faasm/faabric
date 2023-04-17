@@ -170,7 +170,7 @@ TEST_CASE_METHOD(MpiTestFixture,
     {
         expectedKey = fmt::format("{}-{}-{}",
                                   MPI_MSGTYPE_COUNT_PREFIX,
-                                  faabric::MPIMessage::NORMAL,
+                                  MPIMessage::NORMAL,
                                   std::to_string(rankA2));
         msgCount = 1;
 
@@ -189,7 +189,7 @@ TEST_CASE_METHOD(MpiTestFixture,
 
         expectedKey = fmt::format("{}-{}-{}",
                                   MPI_MSGTYPE_COUNT_PREFIX,
-                                  faabric::MPIMessage::REDUCE,
+                                  MPIMessage::REDUCE,
                                   std::to_string(rankA2));
         msgCount = worldSize - 1;
 

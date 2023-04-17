@@ -48,7 +48,7 @@ if (NOT ("${CMAKE_PROJECT_NAME}" STREQUAL "faabricmpi"))
         OUTPUT "${MPI_PB_HEADER_COPIED}"
         DEPENDS "${MPI_PB_HEADER}"
         COMMAND ${CMAKE_COMMAND}
-        ARGS -E copy ${MPI_PB_HEADER} ${FAABRIC_INCLUDE_DIR}/faabric/planner/
+        ARGS -E copy ${MPI_PB_HEADER} ${FAABRIC_INCLUDE_DIR}/faabric/mpi/
     )
 
     add_custom_target(

@@ -21,7 +21,7 @@ MpiMessageBuffer::PendingAsyncMpiMessage genRandomArguments(
     pendingMsg.requestId = requestId;
 
     if (!nullMsg) {
-        pendingMsg.msg = std::make_shared<faabric::MPIMessage>();
+        pendingMsg.msg = std::make_shared<MPIMessage>();
     }
 
     return pendingMsg;
