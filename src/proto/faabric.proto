@@ -111,7 +111,7 @@ message Message {
     string user = 6;
     string function = 7;
 
-    bytes inputData = 8;
+    bytes inputData = 8 [json_name = "input_data"];
     bytes outputData = 9;
 
     int32 funcPtr = 10;
@@ -125,15 +125,15 @@ message Message {
     string statusKey = 17;
 
     string executedHost = 18;
-    int64 finishTimestamp = 19;
+    int64 finishTimestamp = 19 [json_name = "finish"];
 
-    bool isAsync = 20;
-    bool isPython = 21;
-    bool isStatusRequest = 22;
-    bool isExecGraphRequest = 23;
+    bool isAsync = 20 [json_name = "async"];
+    bool isPython = 21 [json_name = "python"];
+    bool isStatusRequest = 22 [json_name = "status"];
+    bool isExecGraphRequest = 23 [json_name = "exec_graph"];
 
-    string pythonUser = 24;
-    string pythonFunction = 25;
+    string pythonUser = 24 [json_name = "py_user"];
+    string pythonFunction = 25 [json_name = "py_func"];
     string pythonEntry = 26;
 
     // Function groups
@@ -142,23 +142,23 @@ message Message {
     int32 groupSize = 29;
 
     // MPI
-    bool isMpi = 30;
+    bool isMpi = 30 [json_name = "mpi"];
     int32 mpiWorldId = 31;
     int32 mpiRank = 32;
-    int32 mpiWorldSize = 33;
+    int32 mpiWorldSize = 33 [json_name = "mpi_world_size"];
 
     string cmdline = 34;
 
     // Exec-graph utils
-    bool recordExecGraph = 35;
+    bool recordExecGraph = 35 [json_name = "record_exec_graph"];
     map<string, int32> intExecGraphDetails = 36;
     map<string, string> execGraphDetails = 37;
 
     // Function migration
-    int32 migrationCheckPeriod = 38;
+    int32 migrationCheckPeriod = 38 [json_name = "migration_check_period"];
 
     // Scheduling
-    string topologyHint = 39;
+    string topologyHint = 39 [json_name = "topology_hint"];
 }
 
 // ---------------------------------------------
