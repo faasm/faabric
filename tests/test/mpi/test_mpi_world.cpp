@@ -1124,6 +1124,9 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
         std::vector<std::jthread> threads;
         for (int r = 0; r < worldSize; r++) {
             threads.emplace_back([&, r, isInPlace] {
+                // Re-define the data vector so that each thread has its own
+                // copy, avoiding data races
+                std::vector<int> actual(gatheredSize, 0);
                 if (isInPlace) {
                     // Put this rank's data in place in the recv buffer as
                     // expected
@@ -1132,7 +1135,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
                               actual.data() + (r * nPerRank));
 
                     world.allGather(r,
-                                    BYTES(actual.data()),
+                                    BYTES_CONST(actual.data()),
                                     MPI_INT,
                                     nPerRank,
                                     BYTES(actual.data()),
@@ -1148,7 +1151,6 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
                                     nPerRank);
                 }
 
-                // TODO remove
                 assert(actual == expected);
             });
         }
@@ -1158,8 +1160,6 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
                 t.join();
             }
         }
-
-        REQUIRE(actual == expected);
     }
 }
 
