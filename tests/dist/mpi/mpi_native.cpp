@@ -1,8 +1,9 @@
 #include "mpi_native.h"
 
+#include <faabric/mpi/mpi.pb.h>
+#include <faabric/mpi/mpi.h>
 #include <faabric/mpi/MpiContext.h>
 #include <faabric/mpi/MpiWorld.h>
-#include <faabric/mpi/mpi.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/compare.h>
@@ -111,7 +112,7 @@ int MPI_Send(const void* buf,
                              (uint8_t*)buf,
                              datatype,
                              count,
-                             faabric::MPIMessage::NORMAL);
+                             MPIMessage::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -144,7 +145,7 @@ int MPI_Recv(void* buf,
                              datatype,
                              count,
                              status,
-                             faabric::MPIMessage::NORMAL);
+                             MPIMessage::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -234,7 +235,7 @@ int MPI_Bcast(void* buffer,
                     (uint8_t*)buffer,
                     datatype,
                     count,
-                    faabric::MPIMessage::BROADCAST);
+                    MPIMessage::BROADCAST);
     return MPI_SUCCESS;
 }
 

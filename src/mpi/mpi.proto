@@ -28,4 +28,3 @@ message MPIMessage {
     int32 count = 7;
     bytes buffer = 8;
 }
-
