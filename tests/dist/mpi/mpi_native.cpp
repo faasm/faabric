@@ -1,9 +1,9 @@
 #include "mpi_native.h"
 
-#include <faabric/mpi/mpi.pb.h>
-#include <faabric/mpi/mpi.h>
 #include <faabric/mpi/MpiContext.h>
 #include <faabric/mpi/MpiWorld.h>
+#include <faabric/mpi/mpi.h>
+#include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/compare.h>
@@ -230,12 +230,8 @@ int MPI_Bcast(void* buffer,
     MpiWorld& world = getExecutingWorld();
 
     int rank = executingContext.getRank();
-    world.broadcast(root,
-                    rank,
-                    (uint8_t*)buffer,
-                    datatype,
-                    count,
-                    MPIMessage::BROADCAST);
+    world.broadcast(
+      root, rank, (uint8_t*)buffer, datatype, count, MPIMessage::BROADCAST);
     return MPI_SUCCESS;
 }
 
