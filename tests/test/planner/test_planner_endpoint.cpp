@@ -49,7 +49,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     HttpMessage msg;
     msg.set_type(HttpMessage_Type_RESET);
 
-    faabric::util::messageToJsonPb(msg, &msgJsonStr);
+    msgJsonStr = faabric::util::messageToJson(msg);
 
     std::pair<int, std::string> result = doPost(msgJsonStr);
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
@@ -91,7 +91,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     // Prepare the message
     HttpMessage msg;
     msg.set_type(HttpMessage_Type_FLUSH_HOSTS);
-    faabric::util::messageToJsonPb(msg, &msgJsonStr);
+    msgJsonStr = faabric::util::messageToJson(msg);
 
     // Send it
     std::pair<int, std::string> result = doPost(msgJsonStr);
@@ -132,7 +132,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
 
     HttpMessage msg;
     msg.set_type(HttpMessage_Type_GET_CONFIG);
-    faabric::util::messageToJsonPb(msg, &msgJsonStr);
+    msgJsonStr = faabric::util::messageToJson(msg);
 
     // Send it
     std::pair<int, std::string> result = doPost(msgJsonStr);
@@ -142,7 +142,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     // Check that we can de-serialise the config. Note that if there's a
     // de-serialisation the method will throw an exception
     PlannerConfig config;
-    REQUIRE_NOTHROW(faabric::util::jsonToMessagePb(result.second, &config));
+    REQUIRE_NOTHROW(faabric::util::jsonToMessage(result.second, &config));
     REQUIRE(!config.ip().empty());
     REQUIRE(config.hosttimeout() > 0);
     REQUIRE(config.numthreadshttpserver() > 0);
