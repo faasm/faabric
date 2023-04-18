@@ -2,6 +2,7 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/util/func.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 
@@ -85,6 +86,77 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = std::string("Failed getting config!");
             }
             return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_EXECUTE: {
+            auto req = faabric::util::batchExecFactory();
+            req->set_type(req->FUNCTIONS);
+            faabric::Message& msg = *req->add_messages();
+            try {
+                faabric::util::jsonToMessage(requestStr, &msg);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Wrong payload for execute function");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Sanity check input message
+            if (msg.user().empty()) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Empty user");
+                return ctx.sendFunction(std::move(response));
+            }
+            if (msg.function().empty()) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Empty function");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Set message id
+            faabric::util::setMessageId(msg);
+            auto tid = gettid();
+            const std::string funcStr = faabric::util::funcToString(msg, true);
+            SPDLOG_DEBUG("Worker HTTP thread {} scheduling {}", tid, funcStr);
+
+            // Make scheduling decision for message
+            auto& planner = getPlanner();
+            auto schedulingDecision = planner.makeSchedulingDecision(req);
+
+            // Dispatch to the corresponding workers
+            planner.dispatchSchedulingDecision(req, schedulingDecision);
+
+            // Wait for result, or return async id
+            if (msg.isasync()) {
+                response.result(beast::http::status::ok);
+                response.body() = faabric::util::buildAsyncResponse(msg);
+                return ctx.sendFunction(std::move(response));
+            }
+
+            SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
+            // TODO - this currently blocks the main thread
+            bool completed = planner.waitForAppResult(req);
+
+            if (!completed) {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = "Internal error executing function";
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Set the function result. Note that, for the moment, we only
+            // consider the result to be the first message even though we
+            // wait for the whole request
+            auto result = req->messages().at(0);
+            beast::http::status statusCode =
+              (result.returnvalue() == 0) ? beast::http::status::ok
+                                          : beast::http::status::internal_server_error;
+            response.result(statusCode);
+            SPDLOG_DEBUG("Worker thread {} result {}",
+                         gettid(),
+                         faabric::util::funcToString(result, true));
+
+            response.body() = result.outputdata();
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_EXECUTE_STATUS: {
         }
         default: {
             SPDLOG_ERROR("Unrecognised message type {}", msg.type());

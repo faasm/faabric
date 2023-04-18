@@ -116,6 +116,7 @@ void Scheduler::addHostToGlobalSet(const std::string& hostIp)
     req->mutable_host()->set_ip(hostIp);
     if (hostIp == thisHost) {
         req->mutable_host()->set_slots(thisHostResources.slots());
+        req->mutable_host()->set_usedslots(0);
     }
 
     int plannerTimeout = getPlannerClient()->registerHost(req);
@@ -1154,13 +1155,16 @@ void Scheduler::flushLocally()
 
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
     // Record which host did the execution
     msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
 
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
+
+    getPlannerClient()->setResult(msg);
+    // TODO: send message to planner
+    /*
+    redis::Redis& redis = redis::Redis::getQueue();
 
     // Remove the app from in-flight map if still there, and this host is the
     // master host for the message
@@ -1191,6 +1195,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Write the successful result to the result queue
     std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
     redis.publishSchedulerResult(key, msg.statuskey(), inputData);
+    */
 }
 
 void Scheduler::registerThread(uint32_t msgId)

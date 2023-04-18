@@ -37,9 +37,16 @@ message HttpMessage {
         RESET = 1;
         FLUSH_HOSTS = 2;
         GET_CONFIG = 3;
+        EXECUTE = 4;
+        EXECUTE_STATUS = 5;
     }
 
     Type type = 1;
+    // Payload parameter to populate with the message body if necessary. The
+    // body is only needed for:
+    // - EXECUTE, where it should be formatted as a Message
+    // - EXECUTE_STATUS, where it should be formatted as a Message
+    string payloadJson = 2;
 }
 
 // ---------------------------------------------
@@ -60,8 +67,9 @@ message PlannerConfig {
 message Host {
     string ip = 1;
     int32 slots = 2;
+    int32 usedSlots = 3;
     // Host register timestamp as epoch time in ms
-    Timestamp registerTs = 3;
+    Timestamp registerTs = 4;
 }
 
 message PingResponse {

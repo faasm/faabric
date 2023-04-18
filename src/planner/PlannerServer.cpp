@@ -47,6 +47,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::RemoveHost: {
             return recvRemoveHost(message.udata());
         }
+        case PlannerCalls::SetMessageResult: {
+            return recvSetMessageResult(message.udata());
+        }
         default: {
             // If we don't recognise the header, let the client fail, but don't
             // crash the planner
@@ -112,6 +115,16 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRemoveHost(
     // Removing a host is a best-effort operation, we just try to remove it if
     // we find it
     planner.removeHost(parsedMsg.host());
+
+    return std::make_unique<faabric::EmptyResponse>();
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvSetMessageResult(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(Message, buffer.data(), buffer.size());
+
+    planner.setMessageResult(std::make_shared<faabric::Message>(parsedMsg));
 
     return std::make_unique<faabric::EmptyResponse>();
 }

@@ -8,5 +8,6 @@ enum PlannerCalls
     GetAvailableHosts = 2,
     RegisterHost = 3,
     RemoveHost = 4,
+    SetMessageResult = 5,
 };
 }

@@ -95,20 +95,8 @@ void FaabricEndpointHandler::executeFunction(
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
     faabric::Message& msg = *ber->mutable_messages(messageIndex);
 
-    if (msg.user().empty()) {
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty user");
-        return ctx.sendFunction(std::move(response));
-    }
-
-    if (msg.function().empty()) {
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty function");
-        return ctx.sendFunction(std::move(response));
-    }
 
     // Set message ID and master host
-    faabric::util::setMessageId(msg);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
     msg.set_masterhost(thisHost);
     // This is set to false by the scheduler if the function ends up being sent

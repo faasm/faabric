@@ -2,6 +2,7 @@
 
 #include <faabric/planner/PlannerState.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/util/scheduling.h>
 
 #include <shared_mutex>
 
@@ -37,7 +38,7 @@ class Planner
     bool flush(faabric::planner::FlushType flushType);
 
     // ----------
-    // Host membership management
+    // Host membership public API
     // ----------
 
     std::vector<std::shared_ptr<Host>> getAvailableHosts();
@@ -47,6 +48,27 @@ class Planner
     // Best effort host removal. Don't fail if we can't
     void removeHost(const Host& hostIn);
 
+    // ----------
+    // Request scheduling public API
+    // ----------
+    // TODO: remove duplication with src/scheduler/Scheduler.cpp, and move
+    // away this methods elsewhere
+
+    // Given a batch execute request, make a scheduling decision informed by
+    // the topology hint. If the request is already in-flight, WHAT?
+    std::shared_ptr<faabric::util::SchedulingDecision> makeSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      faabric::util::SchedulingTopologyHint topologyHint =
+        faabric::util::SchedulingTopologyHint::NONE);
+
+    void dispatchSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      std::shared_ptr<faabric::util::SchedulingDecision> decision);
+
+    bool waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
+    void setMessageResult(std::shared_ptr<faabric::Message> msg);
+
   private:
     // There's a singleton instance of the planner running, but it must allow
     // concurrent requests
@@ -54,6 +76,12 @@ class Planner
 
     PlannerState state;
     PlannerConfig config;
+
+    // ----------
+    // Host membership private API
+    // ----------
+
+    std::vector<std::shared_ptr<Host>> doGetAvailableHosts();
 
     void flushHosts();
 
