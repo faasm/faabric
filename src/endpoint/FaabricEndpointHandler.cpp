@@ -50,8 +50,7 @@ void FaabricEndpointHandler::onRequest(
 
         if (msg.isstatusrequest()) {
             SPDLOG_DEBUG("Processing status request");
-            const faabric::Message result =
-              sched.getFunctionResult(msg.id(), 0);
+            const faabric::Message result = sched.getFunctionResult(msg, 0);
 
             if (result.type() == faabric::Message_MessageType_EMPTY) {
                 response.result(beast::http::status::ok);
@@ -76,9 +75,8 @@ void FaabricEndpointHandler::onRequest(
             response.result(beast::http::status::ok);
             response.body() = std::string("Flush sent");
         } else {
-            executeFunction(
-              std::move(ctx), std::move(response), std::move(req), 0);
-            return;
+            response.result(beast::http::status::internal_server_error);
+            response.body() = "Unrecognised request type";
         }
     }
 
@@ -86,6 +84,7 @@ void FaabricEndpointHandler::onRequest(
     ctx.sendFunction(std::move(response));
 }
 
+/*
 void FaabricEndpointHandler::executeFunction(
   HttpRequestContext&& ctx,
   faabric::util::BeastHttpResponse&& response,
@@ -148,5 +147,6 @@ void FaabricEndpointHandler::onFunctionResult(
     response.body() = result.outputdata();
     return ctx.sendFunction(std::move(response));
 }
+*/
 
 }

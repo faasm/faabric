@@ -19,6 +19,9 @@ class SchedulingDecision
 
     SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn);
 
+    // Helper method to visualise a scheduling decision
+    void debugPrint();
+
     uint32_t appId = 0;
 
     int32_t groupId = 0;

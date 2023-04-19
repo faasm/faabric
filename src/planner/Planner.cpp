@@ -1,5 +1,6 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -126,7 +127,7 @@ bool Planner::registerHost(const Host& hostIn)
 
         // If its the first time we see this IP, give it a UID and add it to
         // the map
-        SPDLOG_DEBUG("Registering host {}", hostIn.ip());
+        SPDLOG_DEBUG("Registering host {} with {} slots", hostIn.ip(), hostIn.slots());
         state.hostMap.emplace(
           std::make_pair<std::string, std::shared_ptr<Host>>(
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
@@ -172,7 +173,8 @@ bool Planner::isHostExpired(std::shared_ptr<Host> host, long epochTimeMs)
 // Request scheduling
 // ----------
 
-std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecision(
+std::shared_ptr<faabric::util::SchedulingDecision>
+Planner::makeSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingTopologyHint topologyHint)
 {
@@ -199,10 +201,33 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
     auto it = state.inFlightRequests.find(appId);
     if (it == state.inFlightRequests.end()) {
         decisionType = DecisionType::NEW;
-    } else if (it->second.first->messages_size() == req->messages_size()) {
-        decisionType = DecisionType::DIST_CHANGE;
+        SPDLOG_INFO("Planner making NEW scheduling decision for app {}", appId);
     } else {
-        decisionType = DecisionType::SCALE_CHANGE;
+        // Work out the total of message ids that are in the new request, that
+        // are not in the old scheduling decision. We can get rid of the
+        // messages in the request that we have already seen
+        auto oldDecisionMsgIds = it->second.second->messageIds;
+        int newMessages = 0;
+        for (const auto& msg : req->messages()) {
+            if (std::find(oldDecisionMsgIds.begin(), oldDecisionMsgIds.end(), msg.id()) == oldDecisionMsgIds.end()) {
+                ++newMessages;
+            }
+        }
+        if (newMessages == 0) {
+            decisionType = DecisionType::DIST_CHANGE;
+            SPDLOG_INFO("Planner deciding DIST_CHANGE for app {}", appId);
+        } else if (newMessages == req->messages_size()) {
+            decisionType = DecisionType::SCALE_CHANGE;
+            SPDLOG_INFO("Planner deciding SCALE_CHANGE for app {} ({} -> {})",
+                        appId,
+                        it->second.first->messages_size(),
+                        it->second.first->messages_size() + newMessages);
+        } else {
+            // This should never happen
+            // TODO: what to do here?
+            SPDLOG_ERROR("Request with known and unknown messages!");
+            return it->second.second;
+        }
     }
 
     // Helper methods used during scheduling
@@ -211,9 +236,10 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
     };
     auto claimSlots = [](std::shared_ptr<Host> host, int numClaimed) -> void {
         assert(host->usedslots() + numClaimed <= host->slots());
-        host->set_usedslots(host->slots() + numClaimed);
+        host->set_usedslots(host->usedslots() + numClaimed);
     };
-    auto isHostSmaller = [nAvailable](std::shared_ptr<Host> hostA, std::shared_ptr<Host> hostB) -> bool {
+    auto isHostSmaller = [nAvailable](std::shared_ptr<Host> hostA,
+                                      std::shared_ptr<Host> hostB) -> bool {
         // Sort hosts by number of free slots
         int availA = nAvailable(hostA);
         int availB = nAvailable(hostB);
@@ -225,31 +251,36 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
         return hostA->slots() > hostB->slots();
     };
 
-    auto availableHosts = doGetAvailableHosts();
     // TODO: should we check that none of the hosts in the existing decision
     // have become unavailble?
+    auto availableHosts = doGetAvailableHosts();
+    auto& broker = faabric::transport::getPointToPointBroker();
     switch (decisionType) {
         case DecisionType::NEW: {
-            auto decision = std::make_shared<faabric::util::SchedulingDecision>(appId, groupId);
+            auto decision = std::make_shared<faabric::util::SchedulingDecision>(
+              appId, groupId);
 
             // Get the sorted list of available hosts
-            std::sort(availableHosts.begin(),
-                      availableHosts.end(),
-                      isHostSmaller);
+            std::sort(
+              availableHosts.begin(), availableHosts.end(), isHostSmaller);
 
             // Schedule requests to available hosts
             int numMessages = req->messages_size();
             int numLeftToSchedule = numMessages;
             for (auto& host : availableHosts) {
                 // Work out how many messages go to this host
-                int numOnThisHost = std::min<int>(nAvailable(host), numLeftToSchedule);
+                int numOnThisHost =
+                  std::min<int>(nAvailable(host), numLeftToSchedule);
 
                 // Update our records
                 numLeftToSchedule -= numOnThisHost;
                 claimSlots(host, numOnThisHost);
                 for (int i = 0; i < numOnThisHost; i++) {
+                    SPDLOG_WARN("Pushing back host: {}/{}", host->usedslots(), host->slots());
                     decision->plannerHosts.push_back(host);
-                    decision->addMessage(host->ip(), req->messages().at(decision->plannerHosts.size() - 1));
+                    decision->addMessage(
+                      host->ip(),
+                      req->messages().at(decision->plannerHosts.size() - 1));
                 }
                 if (numLeftToSchedule == 0) {
                     break;
@@ -259,6 +290,7 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
             // Finally, add the request to in-flight and return the decision
             state.inFlightRequests[appId] = std::make_pair(req, decision);
 
+            broker.setAndSendMappingsFromSchedulingDecision(*decision);
             return decision;
         };
         case DecisionType::SCALE_CHANGE: {
@@ -266,18 +298,17 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
             auto newReq = req;
             auto decision = state.inFlightRequests.at(appId).second;
 
-            // If we are scaling down, make a new scheduling decision with the
-            // remaining messages
-            // TODO: think if we are ever gonna hit this
-            if (oldReq->messages_size() > newReq->messages_size()) {
-                SPDLOG_WARN("What do we do when we scale down?");
-                return decision;
+            // For MPI we only set the group id when doing a scale change, so
+            // make sure we update the decision's group id here
+            auto firstMsg = req->messages().at(0);
+            if (firstMsg.ismpi()) {
+                decision->groupId = firstMsg.groupid();
             }
 
             // If we are scaling up, we try to schedule messages first on hosts
             // that are already being used, second in new hosts. We assume that
-            // when scaling up, all the messages in the old request are also
-            // in the new request
+            // when scaling up, the messages in the old request are _not_ in
+            // the new request
             std::map<std::string, int> hostFreqCount;
             auto sortedHosts = decision->plannerHosts;
             for (const auto& host : sortedHosts) {
@@ -292,43 +323,60 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
             std::sort(sortedHosts.begin(),
                       sortedHosts.end(),
                       [&](auto hostA, auto hostB) {
-                            bool isHostAKnown = hostFreqCount.find(hostA->ip()) != hostFreqCount.end();
-                            bool isHostBKnown = hostFreqCount.find(hostB->ip()) != hostFreqCount.end();
+                          bool isHostAKnown = hostFreqCount.find(hostA->ip()) !=
+                                              hostFreqCount.end();
+                          bool isHostBKnown = hostFreqCount.find(hostB->ip()) !=
+                                              hostFreqCount.end();
 
-                            if (isHostAKnown && isHostBKnown) {
-                                if (hostFreqCount[hostA->ip()] != hostFreqCount[hostB->ip()]) {
-                                    return hostFreqCount[hostA->ip()] > hostFreqCount[hostB->ip()];
-                                }
-                            } else if (isHostAKnown) {
-                                // If host A is known but B is not, A is greater than B
-                                return true;
-                            } else if (isHostBKnown) {
-                                // If host B is known but A is not, B is greater than A
-                                return false;
-                            }
+                          if (isHostAKnown && isHostBKnown) {
+                              if (hostFreqCount[hostA->ip()] !=
+                                  hostFreqCount[hostB->ip()]) {
+                                  return hostFreqCount[hostA->ip()] >
+                                         hostFreqCount[hostB->ip()];
+                              }
+                          } else if (isHostAKnown) {
+                              // If host A is known but B is not, A is greater
+                              // than B
+                              return true;
+                          } else if (isHostBKnown) {
+                              // If host B is known but A is not, B is greater
+                              // than A
+                              return false;
+                          }
 
-                            return isHostSmaller(hostA, hostB);
+                          return isHostSmaller(hostA, hostB);
                       });
 
             // Lastly, schedule requests to available hosts
-            int numMessages = newReq->messages_size() - oldReq->messages_size();
+            int numMessages = req->messages_size();
             int numLeftToSchedule = numMessages;
+            // This index goes from 0 to req->messages_size() - 1
+            int nextMessageToScheduleIdx = 0;
             for (auto& host : sortedHosts) {
                 // Work out how many messages go to this host
-                int numOnThisHost = std::min<int>(nAvailable(host), numLeftToSchedule);
+                int numOnThisHost =
+                  std::min<int>(nAvailable(host), numLeftToSchedule);
 
                 // Update our records
                 numLeftToSchedule -= numOnThisHost;
                 claimSlots(host, numOnThisHost);
                 for (int i = 0; i < numOnThisHost; i++) {
+                    // Update the in-flight map
+                    // First update the scheduling decision
                     decision->plannerHosts.push_back(host);
-                    decision->addMessage(host->ip(), req->messages().at(decision->plannerHosts.size() - 1));
+                    decision->addMessage(
+                      host->ip(),
+                      req->messages().at(nextMessageToScheduleIdx));
+                    // Second update the BatchExecuteRequest
+                    *oldReq->add_messages() = *req->mutable_messages(nextMessageToScheduleIdx);
+                    ++nextMessageToScheduleIdx;
                 }
                 if (numLeftToSchedule == 0) {
                     break;
                 }
             }
 
+            broker.setAndSendMappingsFromSchedulingDecision(*decision);
             return decision;
         };
         case DecisionType::DIST_CHANGE: {
@@ -340,22 +388,25 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
             std::map<std::string, int> hostFreqCount;
             std::vector<std::pair<int, std::shared_ptr<Host>>> sortedHosts;
             for (int i = 0; i < decision->plannerHosts.size(); i++) {
-                sortedHosts.push_back(std::make_pair(i, decision->plannerHosts.at(i)));
+                sortedHosts.push_back(
+                  std::make_pair(i, decision->plannerHosts.at(i)));
                 hostFreqCount[decision->plannerHosts.at(i)->ip()] += 1;
             }
             std::sort(sortedHosts.begin(),
                       sortedHosts.end(),
                       [&](auto pairA, auto pairB) {
-                            auto hostA = pairA.second;
-                            auto hostB = pairB.second;
-                            // Sort first the host with the highest frequency
-                            // count. I.e. the host that is already executing
-                            // the largest number of messages for this request
-                            if (hostFreqCount[hostA->ip()] != hostFreqCount[hostB->ip()]) {
-                                return hostFreqCount[hostA->ip()] > hostFreqCount[hostB->ip()];
-                            }
+                          auto hostA = pairA.second;
+                          auto hostB = pairB.second;
+                          // Sort first the host with the highest frequency
+                          // count. I.e. the host that is already executing
+                          // the largest number of messages for this request
+                          if (hostFreqCount[hostA->ip()] !=
+                              hostFreqCount[hostB->ip()]) {
+                              return hostFreqCount[hostA->ip()] >
+                                     hostFreqCount[hostB->ip()];
+                          }
 
-                            return isHostSmaller(hostA, hostB);
+                          return isHostSmaller(hostA, hostB);
                       });
 
             // So far, the only way we allow to change the distribution is by
@@ -389,6 +440,7 @@ std::shared_ptr<faabric::util::SchedulingDecision> Planner::makeSchedulingDecisi
                 --right;
             }
 
+            broker.setAndSendMappingsFromSchedulingDecision(*decision);
             return decision;
         };
         case DecisionType::NO_DECISION_TYPE:
@@ -403,42 +455,83 @@ void Planner::dispatchSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   std::shared_ptr<faabric::util::SchedulingDecision> decision)
 {
-    std::map<std::string, std::shared_ptr<faabric::BatchExecuteRequest>> hostRequests;
+    std::map<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>
+      hostRequests;
 
-    {
-        // Acquire a full-lock to populate the result promise map
-        faabric::util::FullLock lock(plannerMx);
+    // TODO: this does _not_ work for migration!! (i.e. DIST_CHANGE)
 
-        for (int i = 0; i < req->messages_size(); i++) {
-            auto msg = req->messages().at(i);
-            // TODO: maybe assert differently?
-            assert(msg.appid() == decision->appId);
-            assert(msg.id() == decision->messageIds.at(i));
-            assert(decision->hosts.at(i) == decision->plannerHosts.at(i)->ip());
+    // Note that the just-scheduled messages in the request will correspond to
+    // the last req->messages_size() messages in the scheduling decision
+    int totalAppMessages = decision->hosts.size();
+    int newAppMessages = req->messages_size();
+    int j = totalAppMessages - newAppMessages;
+    for (int i = 0; i < newAppMessages; i++, j++) {
+        auto msg = req->messages().at(i);
+        // TODO: maybe assert differently?
+        // This assertions only work if we are dealing with a NEW
+        assert(msg.appid() == decision->appId);
+        assert(msg.id() == decision->messageIds.at(j));
+        assert(decision->hosts.at(j) == decision->plannerHosts.at(j)->ip());
 
-            std::string thisHost = decision->hosts.at(i);
-            if (hostRequests.find(thisHost) == hostRequests.end()) {
-                hostRequests[thisHost] = faabric::util::batchExecFactory();
-                hostRequests[thisHost]->set_snapshotkey(req->snapshotkey());
-                hostRequests[thisHost]->set_type(req->type());
-                hostRequests[thisHost]->set_subtype(req->subtype());
-                hostRequests[thisHost]->set_contextdata(req->contextdata());
-            }
-
-            *hostRequests[thisHost]->add_messages() = msg;
-
-            // Make sure the message result promise is registered
-            state.appResults[msg.appid()][msg.id()];
+        std::string thisHost = decision->hosts.at(j);
+        if (hostRequests.find(thisHost) == hostRequests.end()) {
+            hostRequests[thisHost] = faabric::util::batchExecFactory();
+            hostRequests[thisHost]->set_snapshotkey(req->snapshotkey());
+            hostRequests[thisHost]->set_type(req->type());
+            hostRequests[thisHost]->set_subtype(req->subtype());
+            hostRequests[thisHost]->set_contextdata(req->contextdata());
         }
+
+        *hostRequests[thisHost]->add_messages() = msg;
     }
 
     auto& sch = faabric::scheduler::getScheduler();
     for (const auto& [hostIp, hostReq] : hostRequests) {
+        SPDLOG_DEBUG("Dispatching {} messages to host {} for execution", hostReq->messages_size(), hostIp);
         sch.getFunctionCallClient(hostIp)->executeFunctions(hostReq);
     }
+
+    SPDLOG_INFO("Finished dispatching {} messages for execution", req->messages_size());
 }
 
-bool Planner::waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req)
+void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
+{
+    int appId = msg->appid();
+    int msgId = msg->id();
+
+    faabric::util::FullLock lock(plannerMx);
+
+    state.appResults[appId][msgId] = msg;
+}
+
+// This method should _not_ block on the planner side, and only block on the
+// calling worker thread. Thus, its implementation in the planner is always
+// non-blocking
+std::shared_ptr<faabric::Message> Planner::getMessageResult(
+  std::shared_ptr<faabric::Message> msg)
+{
+    int appId = msg->appid();
+    int msgId = msg->id();
+
+    faabric::util::SharedLock lock(plannerMx);
+
+    if (state.appResults.find(appId) == state.appResults.end()) {
+        SPDLOG_ERROR("App {} not registered in app results", appId);
+        return nullptr;
+    }
+
+    if (state.appResults[appId].find(msgId) == state.appResults[appId].end()) {
+        SPDLOG_ERROR(
+          "Msg {} not registered in app results (app id: {})", msgId, appId);
+        return nullptr;
+    }
+
+    return state.appResults[appId][msgId];
+}
+
+/*
+bool Planner::waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest>
+req)
 {
     if (req->messages_size() == 0) {
         SPDLOG_ERROR("What shall we do here?");
@@ -451,7 +544,8 @@ bool Planner::waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req
     // know
 
     // We acquire a lock just to get the sub-map corresponding to this app id
-    std::map<int, std::promise<std::shared_ptr<faabric::Message>>> thisAppResults;
+    std::map<int, std::promise<std::shared_ptr<faabric::Message>>>
+thisAppResults;
     {
         faabric::util::FullLock lock(plannerMx);
 
@@ -464,8 +558,8 @@ bool Planner::waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req
     }
 
     if (thisAppResults.size() != req->messages_size()) {
-        SPDLOG_ERROR("Size mismtach between recorded app results and request: {} != {}", thisAppResults.size(), req->messages_size());
-        return false;
+        SPDLOG_ERROR("Size mismtach between recorded app results and request: {}
+!= {}", thisAppResults.size(), req->messages_size()); return false;
     }
 
     std::vector<std::shared_ptr<faabric::Message>> resultMsgs;
@@ -483,26 +577,7 @@ bool Planner::waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req
 
     return true;
 }
-
-void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
-{
-    faabric::util::FullLock lock(plannerMx);
-
-    int appId = msg->appid();
-    int msgId = msg->id();
-
-    if (state.appResults.find(appId) == state.appResults.end()) {
-        SPDLOG_ERROR("App {} not registered in app results", appId);
-        return;
-    }
-
-    if (state.appResults[appId].find(msgId) == state.appResults[appId].end()) {
-        SPDLOG_ERROR("Msg {} not registered in app results (app id: {})", msgId, appId);
-        return;
-    }
-
-    state.appResults[appId][msgId].set_value(std::make_shared<faabric::Message>(msg));
-}
+*/
 
 Planner& getPlanner()
 {

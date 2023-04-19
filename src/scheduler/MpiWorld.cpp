@@ -113,6 +113,14 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     auto& sch = faabric::scheduler::getScheduler();
 
+    call.set_ismpi(true);
+    call.set_mpirank(0);
+    call.set_mpiworldid(id);
+    call.set_mpiworldsize(size);
+    call.set_groupid(call.mpiworldid());
+    call.set_groupidx(call.mpirank());
+    call.set_appidx(call.mpirank());
+
     // Dispatch all the chained calls. With the master being rank zero, we want
     // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
@@ -127,6 +135,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         // Set group ids for remote messaging
         msg.set_groupid(msg.mpiworldid());
         msg.set_groupidx(msg.mpirank());
+        msg.set_appidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
             msg.set_appid(thisRankMsg->appid());
@@ -153,7 +162,12 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     // group will have been created with id equal to the MPI world's id.
     if (size > 1) {
         faabric::util::SchedulingDecision decision = sch.callFunctions(req);
-        assert(decision.hosts.size() == size - 1);
+        // assert(decision.hosts.size() == size - 1);
+        assert(decision.hosts.size() == size);
+        // TODO: do we need to do this? I would not think so
+        SPDLOG_WARN("Begin waiting");
+        broker.waitForMappingsOnThisHost(id);
+        SPDLOG_WARN("Done waiting");
     } else {
         // If world has size one, create the communication group (of size one)
         // manually.
@@ -261,7 +275,7 @@ void MpiWorld::initLocalRemoteLeaders()
     // acquiring a lock.
     auto rankIds = broker.getIdxsRegisteredForGroup(id);
     if (rankIds.size() != size) {
-        SPDLOG_ERROR("rankIds != size ({} != {})", rankIds.size(), size);
+        SPDLOG_ERROR("Id: {}; rankIds != size ({} != {})", id, rankIds.size(), size);
     }
     assert(rankIds.size() == size);
     hostForRank.resize(size);

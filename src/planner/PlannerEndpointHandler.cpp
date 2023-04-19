@@ -95,7 +95,8 @@ void PlannerEndpointHandler::onRequest(
                 faabric::util::jsonToMessage(requestStr, &msg);
             } catch (faabric::util::JsonSerialisationException e) {
                 response.result(beast::http::status::bad_request);
-                response.body() = std::string("Wrong payload for execute function");
+                response.body() =
+                  std::string("Wrong payload for execute function");
                 return ctx.sendFunction(std::move(response));
             }
 
@@ -131,23 +132,24 @@ void PlannerEndpointHandler::onRequest(
                 return ctx.sendFunction(std::move(response));
             }
 
+            /* TODO: think how we want to wait for planner results
             SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
-            // TODO - this currently blocks the main thread
             bool completed = planner.waitForAppResult(req);
-
             if (!completed) {
                 response.result(beast::http::status::internal_server_error);
                 response.body() = "Internal error executing function";
                 return ctx.sendFunction(std::move(response));
             }
+            */
 
             // Set the function result. Note that, for the moment, we only
             // consider the result to be the first message even though we
             // wait for the whole request
             auto result = req->messages().at(0);
             beast::http::status statusCode =
-              (result.returnvalue() == 0) ? beast::http::status::ok
-                                          : beast::http::status::internal_server_error;
+              (result.returnvalue() == 0)
+                ? beast::http::status::ok
+                : beast::http::status::internal_server_error;
             response.result(statusCode);
             SPDLOG_DEBUG("Worker thread {} result {}",
                          gettid(),

@@ -1,6 +1,7 @@
 #include <faabric/planner/PlannerApi.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/proto/faabric.pb.h>
 #include <faabric/transport/common.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
@@ -79,9 +80,32 @@ void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
     syncSend(PlannerCalls::RemoveHost, req.get(), &response);
 }
 
+faabric::util::SchedulingDecision PlannerClient::callFunctions(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::PointToPointMappings response;
+    syncSend(PlannerCalls::CallFunctions, req.get(), &response);
+
+    return faabric::util::SchedulingDecision::fromPointToPointMappings(
+      response);
+}
+
 void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
     faabric::EmptyResponse response;
     syncSend(PlannerCalls::SetMessageResult, msg.get(), &response);
+}
+
+std::shared_ptr<faabric::Message> PlannerClient::getMessageResult(
+  std::shared_ptr<faabric::Message> msg)
+{
+    faabric::Message responseMsg;
+    syncSend(PlannerCalls::GetMessageResult, msg.get(), &responseMsg);
+
+    if (responseMsg.id() == 0 && responseMsg.appid() == 0) {
+        return nullptr;
+    }
+
+    return std::make_shared<faabric::Message>(responseMsg);
 }
 }

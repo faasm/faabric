@@ -374,9 +374,39 @@ void Scheduler::vacateSlot()
     thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
 }
 
+// Special entrypoint to `just` execute functions in this host. Right now it is
+// retro-fitted to the old scheduling behaviour. TODO: make it the default
+// entrypoint
+void Scheduler::executeBatchRequest(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+    SPDLOG_INFO("Host {} executing {} messages for app {}", thisHost, req->messages_size(), firstMsg.appid());
+    auto topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+
+    // TODO: we only create this fake decision because the current
+    // doCallFunctions API requires us to pass a SchedulingDecision (even if
+    // the topology hint is FORCE_LOCAL)
+    faabric::util::SchedulingDecision fakeDecision(firstMsg.appid(), firstMsg.groupid());
+    for (const auto& msg : req->messages()) {
+        fakeDecision.addMessage(thisHost, msg);
+    }
+
+    // Do we even need this lock?
+    faabric::util::FullLock lock(mx);
+
+    doCallFunctions(req, fakeDecision, lock, topologyHint);
+}
+
+// This function is the entry point to trigger the scheduling of a batch of
+// messages
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
+    auto decision = getPlannerClient()->callFunctions(req);
+    // broker.setAndSendMappingsFromSchedulingDecision(decision);
+    return decision;
+    /*
     // We assume all the messages are for the same function and have the
     // same master host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
@@ -409,6 +439,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
 
     // Pass decision as hint
     return doCallFunctions(req, decision, lock, topologyHint);
+    */
 }
 
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
@@ -695,6 +726,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     // master)
     bool isForceLocal =
       topologyHint == faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
+    /*
     if (!isForceLocal && !isMigration && (firstMsg.groupid() > 0)) {
         if (firstMsg.ismpi()) {
             // If we are scheduling an MPI message, we want rank 0 to be in the
@@ -711,6 +743,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
             broker.setAndSendMappingsFromSchedulingDecision(decision);
         }
     }
+    */
 
     // Record in-flight request if function desires to be migrated
     if (!isMigration && firstMsg.migrationcheckperiod() > 0) {
@@ -1161,7 +1194,8 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
 
-    getPlannerClient()->setResult(msg);
+    getPlannerClient()->setMessageResult(
+      std::make_shared<faabric::Message>(msg));
     // TODO: send message to planner
     /*
     redis::Redis& redis = redis::Redis::getQueue();
@@ -1322,12 +1356,38 @@ size_t Scheduler::getCachedMessageCount()
     return threadResultMessages.size();
 }
 
-faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
+faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
                                               int timeoutMs)
 {
+    // TODO: current implementation is very naive
+    auto msgPtr = std::make_shared<faabric::Message>(msg);
+
+    auto resultMsg = nullptr;
+    int sleepCount = 10;
+    int totalSleepCount = sleepCount;
+
+    while (resultMsg == nullptr && sleepCount > 0) {
+        std::this_thread::sleep_for(
+          std::chrono::milliseconds(timeoutMs / totalSleepCount));
+        auto resultMsg = getPlannerClient()->getMessageResult(msgPtr);
+
+        if (resultMsg != nullptr) {
+            return *resultMsg;
+        }
+
+        --sleepCount;
+    }
+
+    SPDLOG_ERROR("Timeout waiting for message {} (app: {})",
+                 msgPtr->id(),
+                 msgPtr->appid());
+    throw std::runtime_error("Timeout waiting for message");
+
+    /*
     bool isBlocking = timeoutMs > 0;
 
     if (messageId == 0) {
+        SPDLOG_ERROR("Zero message ID in get function result");
         throw std::runtime_error("Must provide non-zero message ID");
     }
 
@@ -1391,6 +1451,7 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
     }
 
     return msgResult;
+    */
 }
 
 void Scheduler::getFunctionResultAsync(

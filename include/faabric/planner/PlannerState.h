@@ -4,13 +4,16 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/util/scheduling.h>
 
-#include <future>
+// #include <future>
 #include <map>
 
 namespace faabric::planner {
-typedef std::pair<std::shared_ptr<faabric::BatchExecuteRequest>, std::shared_ptr<faabric::util::SchedulingDecision>> InFlightRequest;
+typedef std::pair<std::shared_ptr<faabric::BatchExecuteRequest>,
+                  std::shared_ptr<faabric::util::SchedulingDecision>>
+  InFlightRequest;
 
-enum DecisionType {
+enum DecisionType
+{
     NO_DECISION_TYPE = 0,
     NEW = 1,
     DIST_CHANGE = 2,
@@ -33,6 +36,8 @@ struct PlannerState
     // each app id, we keep a map of the message id, and a promise to the
     // result. Note that the message result is the same message that is in-
     // flight, with some updated fields
-    std::map<int, std::map<int, std::promise<std::shared_ptr<faabric::Message>>>> appResults;
+    // std::map<int, std::map<int,
+    // std::promise<std::shared_ptr<faabric::Message>>>> appResults;
+    std::map<int, std::map<int, std::shared_ptr<faabric::Message>>> appResults;
 };
 }

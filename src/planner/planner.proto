@@ -97,3 +97,19 @@ message RemoveHostResponse {
 message AvailableHostsResponse {
     repeated Host hosts = 1;
 }
+
+// ---------------------------------------------
+// Scheduling RPC Messages
+// ---------------------------------------------
+
+/*
+message SchedulingDecision {
+    int32 appId = 1;
+    int32 goupId = 2;
+    int32 nFunctions = 3;
+    repeated Host hosts = 4;
+    repeated int32 messageIds = 5;
+    repeated int32 appIdxs;
+    repeated int32 groupIdxs;
+}
+*/

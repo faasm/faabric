@@ -96,8 +96,8 @@ TEST_CASE_METHOD(ClientServerFixture,
     sch.clearRecordedMessages();
 
     // Wait for functions to finish
-    sch.getFunctionResult(msgA.id(), 2000);
-    sch.getFunctionResult(msgB.id(), 2000);
+    sch.getFunctionResult(msgA, 2000);
+    sch.getFunctionResult(msgB, 2000);
 
     // Check executors present
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 1);
@@ -164,7 +164,7 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     for (const auto& m : req->messages()) {
         // This timeout can be long as it shouldn't fail
-        sch.getFunctionResult(m.id(), 5 * SHORT_TEST_TIMEOUT_MS);
+        sch.getFunctionResult(m, 5 * SHORT_TEST_TIMEOUT_MS);
     }
 
     // Check no other hosts have been registered

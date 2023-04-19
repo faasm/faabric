@@ -65,9 +65,13 @@ class Planner
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       std::shared_ptr<faabric::util::SchedulingDecision> decision);
 
-    bool waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req);
-
+    // Legacy set/get message result methods called from local schedulers
     void setMessageResult(std::shared_ptr<faabric::Message> msg);
+
+    std::shared_ptr<faabric::Message> getMessageResult(
+      std::shared_ptr<faabric::Message> msg);
+
+    // bool waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
   private:
     // There's a singleton instance of the planner running, but it must allow

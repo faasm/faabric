@@ -214,6 +214,8 @@ class Scheduler
 
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
+    void executeBatchRequest(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
@@ -249,7 +251,8 @@ class Scheduler
 
     void setFunctionResult(faabric::Message& msg);
 
-    faabric::Message getFunctionResult(unsigned int messageId, int timeout);
+    faabric::Message getFunctionResult(const faabric::Message& msg,
+                                       int timeoutMs);
 
     void getFunctionResultAsync(unsigned int messageId,
                                 int timeoutMs,

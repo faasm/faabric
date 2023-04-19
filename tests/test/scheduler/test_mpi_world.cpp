@@ -15,6 +15,14 @@
 using namespace faabric::scheduler;
 
 namespace tests {
+TEST_CASE_METHOD(MpiBaseTestFixture, "Test simple world creation", "[mpi]")
+{
+    sch.callFunctions(req);
+
+    MpiWorld world;
+    world.create(msg, msg.appid(), worldSize);
+}
+
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
 {
     // Create the world

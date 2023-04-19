@@ -108,6 +108,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         expectedResponseBody = "Empty request";
     }
 
+    /* TODO: not valid anymore
     SECTION("Valid request")
     {
         faabric::Message msg = faabric::util::messageFactory("foo", "valid");
@@ -116,6 +117,7 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
         expectedResponseBody =
           fmt::format("Endpoint API test executed {}", msg.id());
     }
+    */
 
     SECTION("Error request")
     {

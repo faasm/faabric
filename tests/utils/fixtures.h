@@ -14,6 +14,7 @@
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -133,9 +134,34 @@ class PlannerTestFixture
     }
 };
 
+class FunctionCallServerTestFixture
+{
+  public:
+    FunctionCallServerTestFixture()
+    {
+        executorFactory = std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        setExecutorFactory(executorFactory);
+
+        functionCallServer.start();
+    }
+
+    ~FunctionCallServerTestFixture()
+    {
+        functionCallServer.stop();
+        executorFactory->reset();
+    }
+
+  protected:
+    faabric::scheduler::FunctionCallServer functionCallServer;
+    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+};
+
 class SchedulerTestFixture
   : public CachedDecisionTestFixture
   , public PlannerTestFixture
+    // TODO: right-now, scheduler's callFunctions depends on the function call
+    // server being online
+  , public FunctionCallServerTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -279,7 +305,7 @@ class PointToPointTestFixture
 
 class PointToPointClientServerFixture
   : public PointToPointTestFixture
-  , SchedulerTestFixture
+  , public SchedulerTestFixture
 {
   public:
     PointToPointClientServerFixture()
@@ -296,17 +322,17 @@ class PointToPointClientServerFixture
 };
 
 class MpiBaseTestFixture
-  : public SchedulerTestFixture
+  // : public SchedulerTestFixture
+  : public PointToPointClientServerFixture
   , public ConfTestFixture
-  , public PointToPointTestFixture
 {
   public:
     MpiBaseTestFixture()
       : user("mpi")
       , func("hellompi")
-      , worldId(123)
       , worldSize(5)
-      , msg(faabric::util::messageFactory(user, func))
+      , req(faabric::util::batchExecFactory(user, func, 1))
+      , msg(*req->mutable_messages(0))
     {
         std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
@@ -315,7 +341,8 @@ class MpiBaseTestFixture
         auto& mpiRegistry = faabric::scheduler::getMpiWorldRegistry();
         mpiRegistry.clear();
 
-        msg.set_mpiworldid(worldId);
+        msg.set_ismpi(true);
+        msg.set_mpiworldid(msg.appid());
         msg.set_mpiworldsize(worldSize);
     }
 
@@ -335,7 +362,8 @@ class MpiBaseTestFixture
     int worldId;
     int worldSize;
 
-    faabric::Message msg;
+    std::shared_ptr<faabric::BatchExecuteRequest> req;
+    faabric::Message& msg;
 };
 
 class MpiTestFixture : public MpiBaseTestFixture

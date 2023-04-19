@@ -47,8 +47,14 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::RemoveHost: {
             return recvRemoveHost(message.udata());
         }
+        case PlannerCalls::CallFunctions: {
+            return recvCallFunctions(message.udata());
+        }
         case PlannerCalls::SetMessageResult: {
             return recvSetMessageResult(message.udata());
+        }
+        case PlannerCalls::GetMessageResult: {
+            return recvGetMessageResult(message.udata());
         }
         default: {
             // If we don't recognise the header, let the client fail, but don't
@@ -119,6 +125,38 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRemoveHost(
     return std::make_unique<faabric::EmptyResponse>();
 }
 
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallFunctions(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
+
+    auto req = std::make_shared<faabric::BatchExecuteRequest>(parsedMsg);
+    // Note: we currently ignore the topology hint :/
+    faabric::Message& firstMsg = req->mutable_messages()->at(0);
+    faabric::util::SchedulingTopologyHint topologyHint =
+      firstMsg.topologyhint().empty()
+        ? faabric::util::SchedulingTopologyHint::NONE
+        : faabric::util::strToTopologyHint.at(firstMsg.topologyhint());
+
+    auto decision = planner.makeSchedulingDecision(req, topologyHint);
+    decision->debugPrint();
+    planner.dispatchSchedulingDecision(req, decision);
+
+    // Build PointToPointMappings from scheduling decision
+    faabric::PointToPointMappings mappings;
+    mappings.set_appid(firstMsg.appid());
+    mappings.set_groupid(firstMsg.groupid());
+    for (int i = 0; i < decision->hosts.size(); i++) {
+        auto* mapping = mappings.add_mappings();
+        mapping->set_host(decision->hosts.at(i));
+        mapping->set_messageid(decision->messageIds.at(i));
+        mapping->set_appidx(decision->appIdxs.at(i));
+        mapping->set_groupidx(decision->groupIdxs.at(i));
+    }
+
+    return std::make_unique<faabric::PointToPointMappings>(mappings);
+}
+
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvSetMessageResult(
   std::span<const uint8_t> buffer)
 {
@@ -127,5 +165,22 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvSetMessageResult(
     planner.setMessageResult(std::make_shared<faabric::Message>(parsedMsg));
 
     return std::make_unique<faabric::EmptyResponse>();
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(Message, buffer.data(), buffer.size());
+
+    auto resultMsg =
+      planner.getMessageResult(std::make_shared<faabric::Message>(parsedMsg));
+
+    if (resultMsg == nullptr) {
+        resultMsg = std::make_shared<faabric::Message>();
+        resultMsg->set_appid(0);
+        resultMsg->set_id(0);
+    }
+
+    return std::make_unique<faabric::Message>(*resultMsg);
 }
 }

@@ -84,6 +84,20 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
   , groupId(groupIdIn)
 {}
 
+void SchedulingDecision::debugPrint()
+{
+    SPDLOG_DEBUG("--------- Decision for App: {} -----------", appId);
+    SPDLOG_DEBUG("MsgId\tAppIdx\tHostIp\t\tHostCap");
+    for (int i = 0; i < hosts.size(); i++) {
+        SPDLOG_DEBUG("{}\t{}\t{}\t{}",
+                     messageIds.at(i),
+                     appIdxs.at(i),
+                     hosts.at(i),
+                     plannerHosts.at(i)->slots() - plannerHosts.at(i)->usedslots());
+    }
+    SPDLOG_DEBUG("-------- End Decision for App {} ----------", appId);
+}
+
 bool SchedulingDecision::isSingleHost()
 {
     // Always return false if single-host optimisations are switched off

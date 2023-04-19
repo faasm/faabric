@@ -93,7 +93,7 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
     REQUIRE(actualCall.inputdata() == actualInput);
 
     // Wait for the result
-    sch.getFunctionResult(actualCall.id(), 2000);
+    sch.getFunctionResult(actualCall, 2000);
 }
 
 TEST_CASE("Test empty invocation", "[endpoint]")
