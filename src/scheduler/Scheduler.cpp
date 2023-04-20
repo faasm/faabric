@@ -109,12 +109,15 @@ std::set<std::string> Scheduler::getAvailableHosts()
     return availableHostsIps;
 }
 
-void Scheduler::addHostToGlobalSet(const std::string& hostIp)
+void Scheduler::addHostToGlobalSet(const std::string& hostIp, std::shared_ptr<faabric::HostResources> overwriteResources)
 {
     // Build register host request
     auto req = std::make_shared<faabric::planner::RegisterHostRequest>();
     req->mutable_host()->set_ip(hostIp);
-    if (hostIp == thisHost) {
+    if (overwriteResources != nullptr) {
+        req->mutable_host()->set_slots(overwriteResources->slots());
+        req->mutable_host()->set_usedslots(overwriteResources->usedslots());
+    } else if (hostIp == thisHost) {
         req->mutable_host()->set_slots(thisHostResources.slots());
         req->mutable_host()->set_usedslots(0);
     }
@@ -381,7 +384,6 @@ void Scheduler::executeBatchRequest(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    SPDLOG_INFO("Host {} executing {} messages for app {}", thisHost, req->messages_size(), firstMsg.appid());
     auto topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
 
     // TODO: we only create this fake decision because the current
@@ -1378,7 +1380,7 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
         --sleepCount;
     }
 
-    SPDLOG_ERROR("Timeout waiting for message {} (app: {})",
+    SPDLOG_ERROR("Timed-out waiting for message {} (app: {})",
                  msgPtr->id(),
                  msgPtr->appid());
     throw std::runtime_error("Timeout waiting for message");

@@ -299,7 +299,8 @@ class Scheduler
 
     void addHostToGlobalSet();
 
-    void addHostToGlobalSet(const std::string& host);
+    void addHostToGlobalSet(const std::string& host,
+                            std::shared_ptr<faabric::HostResources> overwriteResources = nullptr);
 
     void removeHostFromGlobalSet(const std::string& host);
 

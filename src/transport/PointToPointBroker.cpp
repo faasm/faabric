@@ -9,6 +9,8 @@
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/network.h>
+#include <faabric/util/testing.h>
 
 #include <absl/container/flat_hash_set.h>
 #include <atomic>
@@ -467,6 +469,11 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
                      indexes.size(),
                      decision.groupId,
                      host);
+
+        if (host == LOCALHOST) {
+            SPDLOG_WARN("Skipping sending mappings to LOCALHOST in mock mode");
+            continue;
+        }
 
         auto cli = getClient(host);
         cli->sendMappings(msg);

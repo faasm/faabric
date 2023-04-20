@@ -11,12 +11,17 @@ class MultiWorldMpiTestFixture : public MpiBaseTestFixture
   public:
     MultiWorldMpiTestFixture()
     {
-        faabric::Message msgA = faabric::util::messageFactory(userA, funcA);
-        faabric::Message msgB = faabric::util::messageFactory(userB, funcB);
+        auto reqA = faabric::util::batchExecFactory(userB, funcB, 1);
+        auto reqB = faabric::util::batchExecFactory(userB, funcB, 1);
+        auto& msgA = reqA->mutable_messages()->at(0);
+        auto& msgB = reqB->mutable_messages()->at(0);
         msgA.set_mpiworldsize(worldSizeA);
         msgA.set_mpiworldid(worldIdA);
         msgB.set_mpiworldsize(worldSizeB);
         msgB.set_mpiworldid(worldIdB);
+
+        sch.callFunctions(reqA);
+        sch.callFunctions(reqB);
 
         worldA.create(msgA, worldIdA, worldSizeA);
         worldB.create(msgB, worldIdB, worldSizeB);
@@ -50,9 +55,12 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     std::string funcA = "funcA";
     int worldIdA = 123;
     int worldSizeA = 3;
-    auto msgA = faabric::util::messageFactory(userA, funcA);
+    auto reqA = faabric::util::batchExecFactory(userA, funcA, 1);
+    auto& msgA = reqA->mutable_messages()->at(0);
+    msgA.set_ismpi(true);
     msgA.set_mpiworldid(worldIdA);
     msgA.set_mpiworldsize(worldSizeA);
+    sch.callFunctions(reqA);
     worldA.create(msgA, worldIdA, worldSizeA);
 
     MpiWorld worldB;
@@ -60,9 +68,12 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     std::string funcB = "funcB";
     int worldIdB = 245;
     int worldSizeB = 6;
-    auto msgB = faabric::util::messageFactory(userB, funcB);
+    auto reqB = faabric::util::batchExecFactory(userB, funcB, 1);
+    auto& msgB = reqB->mutable_messages()->at(0);
+    msgB.set_ismpi(true);
     msgB.set_mpiworldid(worldIdB);
     msgB.set_mpiworldsize(worldSizeB);
+    sch.callFunctions(reqB);
     worldB.create(msgB, worldIdB, worldSizeB);
 
     // Check getters on worlds
@@ -77,24 +88,28 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
 
     // Check that chained function calls are made as expected
     std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
-    int expectedMsgCount = worldSizeA + worldSizeB - 2;
+    // Note that we add one to the count to account for a message that we send
+    // as part of the test fixture, but we don't use here
+    int expectedMsgCount = worldSizeA + worldSizeB + 1;
     REQUIRE(actual.size() == expectedMsgCount);
 
-    for (int i = 0; i < expectedMsgCount; i++) {
+    // We skip the unused message
+    for (int i = 1; i < expectedMsgCount; i++) {
         faabric::Message actualCall = actual.at(i);
-        if (i < worldSizeA - 1) {
+        SPDLOG_INFO("Message {}", i);
+        if ((i - 1) < worldSizeA) {
             REQUIRE(actualCall.user() == userA);
             REQUIRE(actualCall.function() == funcA);
             REQUIRE(actualCall.ismpi());
             REQUIRE(actualCall.mpiworldid() == worldIdA);
-            REQUIRE(actualCall.mpirank() == i + 1);
+            REQUIRE(actualCall.mpirank() == i - 1);
             REQUIRE(actualCall.mpiworldsize() == worldSizeA);
         } else {
             REQUIRE(actualCall.user() == userB);
             REQUIRE(actualCall.function() == funcB);
             REQUIRE(actualCall.ismpi());
             REQUIRE(actualCall.mpiworldid() == worldIdB);
-            REQUIRE(actualCall.mpirank() == i + 2 - worldSizeA);
+            REQUIRE(actualCall.mpirank() == i - worldSizeA - 1);
             REQUIRE(actualCall.mpiworldsize() == worldSizeB);
         }
     }

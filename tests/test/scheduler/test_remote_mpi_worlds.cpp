@@ -38,8 +38,11 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     setWorldSizes(4, 2, 2);
 
     // Init worlds
-    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, worldId);
+    SPDLOG_WARN("World id: {}", msg.mpiworldid());
+    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, msg.mpiworldid());
+    SPDLOG_WARN("A");
     otherWorld.initialiseFromMsg(msg);
+    SPDLOG_WARN("B");
 
     // Call broadcast and check sent messages
     std::set<int> expectedRecvRanks;

@@ -17,8 +17,6 @@ using namespace faabric::scheduler;
 namespace tests {
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test simple world creation", "[mpi]")
 {
-    sch.callFunctions(req);
-
     MpiWorld world;
     world.create(msg, msg.appid(), worldSize);
 }
@@ -27,24 +25,24 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
 {
     // Create the world
     MpiWorld world;
-    world.create(msg, worldId, worldSize);
+    world.create(msg, msg.appid(), worldSize);
 
     REQUIRE(world.getSize() == worldSize);
-    REQUIRE(world.getId() == worldId);
+    REQUIRE(world.getId() == msg.mpiworldid());
     REQUIRE(world.getUser() == user);
     REQUIRE(world.getFunction() == func);
 
     // Check that chained function calls are made as expected
     std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
-    REQUIRE(actual.size() == worldSize - 1);
+    REQUIRE(actual.size() == worldSize);
 
-    for (int i = 0; i < worldSize - 1; i++) {
+    for (int i = 0; i < worldSize; i++) {
         faabric::Message actualCall = actual.at(i);
         REQUIRE(actualCall.user() == user);
         REQUIRE(actualCall.function() == func);
         REQUIRE(actualCall.ismpi());
-        REQUIRE(actualCall.mpiworldid() == worldId);
-        REQUIRE(actualCall.mpirank() == i + 1);
+        REQUIRE(actualCall.mpiworldid() == msg.mpiworldid());
+        REQUIRE(actualCall.mpirank() == i);
         REQUIRE(actualCall.mpiworldsize() == worldSize);
     }
 
@@ -68,7 +66,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating world of size 1", "[mpi]")
     REQUIRE(world.getFunction() == func);
 
     // Check no messages are sent
-    REQUIRE(sch.getRecordedMessagesAll().empty());
+    REQUIRE(sch.getRecordedMessagesAll().size() == worldSize);
 
     world.destroy();
 }
@@ -443,6 +441,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test recv with partial data", "[mpi]")
 
 // 30/12/21 - MPI_Probe is broken after the switch to single-producer, single-
 // consumer fixed capacity queues.
+/*
 TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[.]")
 {
     // Send two messages of different sizes
@@ -484,6 +483,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test probe", "[.]")
     auto* bufferB = bufferBAllocation.get();
     world.recv(1, 2, BYTES(bufferB), MPI_INT, sizeB * sizeof(int), nullptr);
 }
+*/
 
 TEST_CASE_METHOD(MpiTestFixture, "Check sending to invalid rank", "[mpi]")
 {

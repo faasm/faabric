@@ -344,6 +344,9 @@ class MpiBaseTestFixture
         msg.set_ismpi(true);
         msg.set_mpiworldid(msg.appid());
         msg.set_mpiworldsize(worldSize);
+
+        // Register the first message that creates the world size
+        sch.callFunctions(req);
     }
 
     ~MpiBaseTestFixture()
@@ -413,15 +416,19 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         faabric::HostResources thisResources;
         thisResources.set_slots(ranksThisWorld);
         thisResources.set_usedslots(1);
-        sch.setThisHostResources(thisResources);
+        sch.addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(thisResources));
+        // sch.setThisHostResources(thisResources);
 
         // Set up the other world and add it to the global set of hosts
         faabric::HostResources otherResources;
         otherResources.set_slots(ranksOtherWorld);
-        sch.addHostToGlobalSet(otherHost);
+        thisResources.set_usedslots(0);
+        sch.addHostToGlobalSet(otherHost, std::make_shared<faabric::HostResources>(otherResources));
+
+        sch.callFunctions(req);
 
         // Queue the resource response for this other host
-        faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+        // faabric::scheduler::queueResourceResponse(otherHost, otherResources);
     }
 
   protected:

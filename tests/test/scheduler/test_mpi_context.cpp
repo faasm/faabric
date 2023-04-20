@@ -85,18 +85,17 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     const std::string expectedHost =
       faabric::util::getSystemConfig().endpointHost;
 
-    faabric::Message msgA = faabric::util::messageFactory("mpi", "hellompi");
     int worldSize = 6;
-    msgA.set_mpiworldsize(worldSize);
+    msg.set_mpiworldsize(worldSize);
 
     // Use one context to create the world
     MpiContext cA;
-    cA.createWorld(msgA);
+    cA.createWorld(msg);
     int worldId = cA.getWorldId();
 
-    // Get one message formed by world creation
-    Scheduler& sch = getScheduler();
-    faabric::Message msgB = sch.getRecordedMessagesAll().at(0);
+    // Get one message formed by world creation. Message 0 corresponds to the
+    // world-creating message, messages 1-`worldSize` correspond to the rest
+    faabric::Message msgB = sch.getRecordedMessagesAll().at(1);
 
     // Create another context and make sure it's not initialised
     MpiContext cB;

@@ -127,6 +127,9 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
       faabric::util::batchExecFactory(user, function, size - 1);
     for (int i = 0; i < req->messages_size(); i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
+        // Overwrite the app id to make sure it is the same than the original
+        // call
+        msg.set_appid(call.appid());
         msg.set_ismpi(true);
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
@@ -164,10 +167,6 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         faabric::util::SchedulingDecision decision = sch.callFunctions(req);
         // assert(decision.hosts.size() == size - 1);
         assert(decision.hosts.size() == size);
-        // TODO: do we need to do this? I would not think so
-        SPDLOG_WARN("Begin waiting");
-        broker.waitForMappingsOnThisHost(id);
-        SPDLOG_WARN("Done waiting");
     } else {
         // If world has size one, create the communication group (of size one)
         // manually.

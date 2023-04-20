@@ -8,6 +8,7 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
+#include <faabric/util/network.h>
 
 #include <string>
 
@@ -131,6 +132,14 @@ bool Planner::registerHost(const Host& hostIn)
         state.hostMap.emplace(
           std::make_pair<std::string, std::shared_ptr<Host>>(
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
+    } else if (it != state.hostMap.end() && (
+        (it->second->slots() != hostIn.slots()) || (it->second->slots() != hostIn.slots()))) {
+        // We allow overwritting the host state by sending another register
+        // request with same IP but different host resources. This is useful
+        // for testing and resetting purposes
+        SPDLOG_DEBUG("Overwritting host {} with {} slots (used {})", hostIn.ip(), hostIn.slots(), hostIn.usedslots());
+        it->second->set_slots(hostIn.slots());
+        it->second->set_usedslots(hostIn.usedslots());
     }
 
     // Irrespective, set the timestamp
@@ -276,7 +285,6 @@ Planner::makeSchedulingDecision(
                 numLeftToSchedule -= numOnThisHost;
                 claimSlots(host, numOnThisHost);
                 for (int i = 0; i < numOnThisHost; i++) {
-                    SPDLOG_WARN("Pushing back host: {}/{}", host->usedslots(), host->slots());
                     decision->plannerHosts.push_back(host);
                     decision->addMessage(
                       host->ip(),
@@ -487,6 +495,12 @@ void Planner::dispatchSchedulingDecision(
 
     auto& sch = faabric::scheduler::getScheduler();
     for (const auto& [hostIp, hostReq] : hostRequests) {
+        // Used in the tests
+        // TODO: make it less hacky
+        if (hostIp == LOCALHOST) {
+            SPDLOG_DEBUG("Skipping dispatching messages to LOCALHOST");
+            continue;
+        }
         SPDLOG_DEBUG("Dispatching {} messages to host {} for execution", hostReq->messages_size(), hostIp);
         sch.getFunctionCallClient(hostIp)->executeFunctions(hostReq);
     }
@@ -501,6 +515,31 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
 
     faabric::util::FullLock lock(plannerMx);
 
+    if (state.inFlightRequests.find(appId) == state.inFlightRequests.end()) {
+        SPDLOG_ERROR("Did not find app {} in in-flight requests", appId);
+        return;
+    }
+
+    // Free the resources corresponding to this message from the in-flight map
+    auto inFlightDec = state.inFlightRequests.at(appId).second;
+    try {
+        // Note that this call also releases the used slot
+        inFlightDec->removeMessage(*msg);
+    } catch (std::exception& e) {
+        SPDLOG_ERROR("Error removing message {} from scheduling decision (app id: {}): {}", msg->id(), msg->appid(), e.what());
+        return;
+    }
+    auto inFlightReq = state.inFlightRequests.at(appId).first;
+    auto it = std::find_if(inFlightReq->messages().begin(),
+                           inFlightReq->messages().end(),
+                           [&](auto innerMsg) { return innerMsg.id() == msg->id(); });
+    if (it == inFlightReq->messages().end()) {
+        SPDLOG_ERROR("Error removing message {} from in-flight batch request (app id: {})", msg->id(), msg->appid());
+        return;
+    }
+    inFlightReq->mutable_messages()->erase(it);
+
+    // Finally, set the result
     state.appResults[appId][msgId] = msg;
 }
 
@@ -525,6 +564,8 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
           "Msg {} not registered in app results (app id: {})", msgId, appId);
         return nullptr;
     }
+
+    // TODO: we are not cleaning the appResults map
 
     return state.appResults[appId][msgId];
 }

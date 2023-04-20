@@ -57,6 +57,9 @@ class SchedulingDecision
                     int32_t messageId,
                     int32_t appIdx,
                     int32_t groupIdx);
+
+    void removeMessage(const faabric::Message& msg);
+
 };
 
 // Scheduling topology hints help the scheduler decide which host to assign new

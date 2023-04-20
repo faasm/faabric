@@ -86,16 +86,18 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
 
 void SchedulingDecision::debugPrint()
 {
-    SPDLOG_DEBUG("--------- Decision for App: {} -----------", appId);
-    SPDLOG_DEBUG("MsgId\tAppIdx\tHostIp\t\tHostCap");
+    SPDLOG_DEBUG("-------------- Decision for App: {} ----------------", appId);
+    SPDLOG_DEBUG("MsgId\tAppId\t\tGroupId\t\tAppIdx\tHostIp\t\tHostCap");
     for (int i = 0; i < hosts.size(); i++) {
-        SPDLOG_DEBUG("{}\t{}\t{}\t{}",
+        SPDLOG_DEBUG("{}\t{}\t{}\t{}\t{}\t{}",
                      messageIds.at(i),
+                     appId,
+                     groupId,
                      appIdxs.at(i),
                      hosts.at(i),
                      plannerHosts.at(i)->slots() - plannerHosts.at(i)->usedslots());
     }
-    SPDLOG_DEBUG("-------- End Decision for App {} ----------", appId);
+    SPDLOG_DEBUG("------------- End Decision for App {} ---------------", appId);
 }
 
 bool SchedulingDecision::isSingleHost()
@@ -129,6 +131,28 @@ void SchedulingDecision::addMessage(const std::string& host,
     messageIds.emplace_back(messageId);
     appIdxs.emplace_back(appIdx);
     groupIdxs.emplace_back(groupIdx);
+}
+
+void SchedulingDecision::removeMessage(const faabric::Message& msg)
+{
+    nFunctions--;
+
+    // Work out the index for the to-be-deleted message
+    auto idxItr = std::find(messageIds.begin(), messageIds.end(), msg.id());
+    if (idxItr == messageIds.end()) {
+        SPDLOG_ERROR("Attempting to remove a message id ({}) that is not in the scheduling decision!", msg.id());
+        throw std::runtime_error("Removing non-existant message!");
+    }
+    int idx = std::distance(messageIds.begin(), idxItr);
+
+    hosts.erase(hosts.begin() + idx);
+    messageIds.erase(messageIds.begin() + idx);
+    appIdxs.erase(appIdxs.begin() + idx);
+    groupIdxs.erase(groupIdxs.begin() + idx);
+
+    // TODO: still done separately
+    plannerHosts.at(idx)->set_usedslots(plannerHosts.at(idx)->usedslots() - 1);
+    plannerHosts.erase(plannerHosts.begin() + idx);
 }
 
 SchedulingDecision SchedulingDecision::fromPointToPointMappings(
