@@ -342,14 +342,8 @@ class Scheduler
     // ----------------------------------
     // Function Migration
     // ----------------------------------
-    void checkForMigrationOpportunities();
-
-    std::shared_ptr<faabric::PendingMigrations> getPendingAppMigrations(
-      uint32_t appId);
-
-    void addPendingMigration(std::shared_ptr<faabric::PendingMigrations> msg);
-
-    void removePendingMigration(uint32_t appId);
+    std::shared_ptr<faabric::PendingMigrations>
+    checkForMigrationOpportunities(faabric::Message& msg);
 
     // ----------------------------------
     // Clients
@@ -435,24 +429,5 @@ class Scheduler
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;
-
-    // ---- Function migration ----
-    FunctionMigrationThread functionMigrationThread;
-    std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
-    std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
-      pendingMigrations;
-
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-    doCheckForMigrationOpportunities(
-      faabric::util::MigrationStrategy migrationStrategy =
-        faabric::util::MigrationStrategy::BIN_PACK);
-
-    void broadcastPendingMigrations(
-      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
-
-    void doStartFunctionMigrationThread(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& decision);
 };
-
 }

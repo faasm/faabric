@@ -14,6 +14,7 @@ namespace tests {
 class SchedulerReapingTestFixture
   // : public SchedulerTestFixture
   : public PointToPointClientServerFixture
+  , public FunctionCallServerTestFixture
   , public ConfTestFixture
 {
   public:

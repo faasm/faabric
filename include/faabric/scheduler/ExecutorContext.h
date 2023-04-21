@@ -43,6 +43,15 @@ class ExecutorContext
         return req->mutable_messages()->at(msgIdx);
     }
 
+    std::shared_ptr<faabric::BatchExecuteRequest> getBatchExecuteRequest()
+    {
+        if (req == nullptr) {
+            throw std::runtime_error(
+              "Getting message when no request set in context");
+        }
+        return req;
+    }
+
     int getMsgIdx() { return msgIdx; }
 
   private:

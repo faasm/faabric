@@ -149,8 +149,8 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallFunctions(
 
     // Build PointToPointMappings from scheduling decision
     faabric::PointToPointMappings mappings;
-    mappings.set_appid(firstMsg.appid());
-    mappings.set_groupid(firstMsg.groupid());
+    mappings.set_appid(decision->appId);
+    mappings.set_groupid(decision->groupId);
     for (int i = 0; i < decision->hosts.size(); i++) {
         auto* mapping = mappings.add_mappings();
         mapping->set_host(decision->hosts.at(i));

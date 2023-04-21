@@ -51,6 +51,7 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory()
 {
     auto req = std::make_shared<faabric::BatchExecuteRequest>();
     req->set_id(faabric::util::generateGid());
+    req->set_appid(req->id());
     return req;
 }
 
@@ -62,7 +63,7 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
     auto req = batchExecFactory();
 
     // Force the messages to have the same app ID
-    uint32_t appId = faabric::util::generateGid();
+    uint32_t appId = req->appid();
     for (int i = 0; i < count; i++) {
         *req->add_messages() = messageFactory(user, function);
         req->mutable_messages()->at(i).set_appid(appId);

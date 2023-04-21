@@ -202,14 +202,7 @@ Planner::makeSchedulingDecision(
 {
     faabric::util::FullLock lock(plannerMx);
 
-    if (req->messages_size() == 0) {
-        SPDLOG_ERROR("Request has no messages!");
-        // TODO: what to do here
-        return nullptr;
-    }
-
-    int appId = req->messages().at(0).appid();
-    int groupId = req->messages().at(0).groupid();
+    int appId = req->appid();
 
     // There are three types of scheduling of batch execute requests:
     // 1. New: first time we are scheduling the BER
@@ -281,6 +274,11 @@ Planner::makeSchedulingDecision(
         numFreeSlots += nAvailable(host);
     }
 
+    // A scheduling decision will generate a new PTP mapping, and therefore
+    // a new group ID
+    int groupId = faabric::util::generateGid();
+    req->set_groupid(groupId);
+
     auto& broker = faabric::transport::getPointToPointBroker();
     switch (decisionType) {
         case DecisionType::NEW: {
@@ -314,6 +312,7 @@ Planner::makeSchedulingDecision(
                     decision->addMessage(
                       host->ip(),
                       req->messages().at(decision->plannerHosts.size() - 1));
+                    req->mutable_messages(decision->plannerHosts.size() -1)->set_groupid(groupId);
                 }
                 if (numLeftToSchedule == 0) {
                     break;
@@ -331,12 +330,17 @@ Planner::makeSchedulingDecision(
             auto newReq = req;
             auto decision = state.inFlightRequests.at(appId).second;
 
+            /* TODO: remove me
             // For MPI we only set the group id when doing a scale change, so
             // make sure we update the decision's group id here
             auto firstMsg = req->messages().at(0);
             if (firstMsg.ismpi()) {
                 decision->groupId = firstMsg.groupid();
             }
+            */
+            // Set the new group ID after the scale change
+            oldReq->set_groupid(groupId);
+            decision->groupId = groupId;
 
             // If we are scaling up, we try to schedule messages first on hosts
             // that are already being used, second in new hosts. We assume that
@@ -395,12 +399,14 @@ Planner::makeSchedulingDecision(
                 claimSlots(host, numOnThisHost);
                 for (int i = 0; i < numOnThisHost; i++) {
                     // Update the in-flight map
-                    // First update the scheduling decision
+                    // First, update the group id on the message
+                    req->mutable_messages(nextMessageToScheduleIdx)->set_groupid(groupId);
+                    // Second, update the scheduling decision
                     decision->plannerHosts.push_back(host);
                     decision->addMessage(
                       host->ip(),
                       req->messages().at(nextMessageToScheduleIdx));
-                    // Second update the BatchExecuteRequest
+                    // Last, update the BatchExecuteRequest
                     *oldReq->add_messages() = *req->mutable_messages(nextMessageToScheduleIdx);
                     ++nextMessageToScheduleIdx;
                 }
@@ -503,6 +509,7 @@ void Planner::dispatchSchedulingDecision(
         // TODO: maybe assert differently?
         // This assertions only work if we are dealing with a NEW
         assert(msg.appid() == decision->appId);
+        assert(msg.groupid() == decision->groupId);
         assert(msg.id() == decision->messageIds.at(j));
         assert(decision->hosts.at(j) == decision->plannerHosts.at(j)->ip());
 

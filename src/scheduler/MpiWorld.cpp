@@ -117,7 +117,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     call.set_mpirank(0);
     call.set_mpiworldid(id);
     call.set_mpiworldsize(size);
-    call.set_groupid(call.mpiworldid());
+    // call.set_groupid(call.mpiworldid());
     call.set_groupidx(call.mpirank());
     call.set_appidx(call.mpirank());
 
@@ -125,6 +125,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, size - 1);
+    req->set_appid(call.appid());
     for (int i = 0; i < req->messages_size(); i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
         // Overwrite the app id to make sure it is the same than the original
@@ -136,7 +137,9 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldsize(size);
 
         // Set group ids for remote messaging
-        msg.set_groupid(msg.mpiworldid());
+        // TODO: update this and use the group id set by the planner
+        // The planner will set the group id field here
+        // msg.set_groupid(msg.mpiworldid());
         msg.set_groupidx(msg.mpirank());
         msg.set_appidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
@@ -165,12 +168,14 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     // group will have been created with id equal to the MPI world's id.
     if (size > 1) {
         faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+        call.set_groupid(decision.groupId);
         // assert(decision.hosts.size() == size - 1);
         assert(decision.hosts.size() == size);
     } else {
         // If world has size one, create the communication group (of size one)
         // manually.
         faabric::util::SchedulingDecision decision(id, id);
+        call.set_groupid(decision.groupId);
         call.set_groupidx(0);
         decision.addMessage(thisHost, call);
         broker.setAndSendMappingsFromSchedulingDecision(decision);
@@ -237,6 +242,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
+    thisRankMsg = &msg;
 
     // Record which ranks are local to this world, and query for all leaders
     initLocalRemoteLeaders();
@@ -272,14 +278,18 @@ void MpiWorld::initLocalRemoteLeaders()
     // keep a record of the opposite mapping, the host that each rank belongs
     // to, as it is queried frequently and asking the ptp broker involves
     // acquiring a lock.
-    auto rankIds = broker.getIdxsRegisteredForGroup(id);
+    if (thisRankMsg == nullptr) {
+        throw std::runtime_error("Rank message not set!");
+    }
+    int groupId = thisRankMsg->groupid();
+    auto rankIds = broker.getIdxsRegisteredForGroup(groupId);
     if (rankIds.size() != size) {
-        SPDLOG_ERROR("Id: {}; rankIds != size ({} != {})", id, rankIds.size(), size);
+        SPDLOG_ERROR("Group ID: {}; rankIds != size ({} != {})", groupId, rankIds.size(), size);
     }
     assert(rankIds.size() == size);
     hostForRank.resize(size);
     for (const auto& rankId : rankIds) {
-        std::string host = broker.getHostForReceiver(id, rankId);
+        std::string host = broker.getHostForReceiver(groupId, rankId);
         ranksForHost[host].push_back(rankId);
         hostForRank.at(rankId) = host;
     }
@@ -1399,18 +1409,6 @@ void MpiWorld::barrier(int thisRank)
         SPDLOG_TRACE("MPI - barrier join {}", thisRank);
         send(
           thisRank, 0, nullptr, MPI_INT, 0, faabric::MPIMessage::BARRIER_JOIN);
-    }
-
-    if (thisRank == localLeader && hasBeenMigrated) {
-        hasBeenMigrated = false;
-        if (thisRankMsg != nullptr) {
-            faabric::scheduler::getScheduler().removePendingMigration(
-              thisRankMsg->appid());
-        } else {
-            SPDLOG_ERROR("App has been migrated but rank ({}) message not set",
-                         thisRank);
-            throw std::runtime_error("App migrated but rank message not set");
-        }
     }
 
     // Rank 0 broadcasts that the barrier is done (the others block here)

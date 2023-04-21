@@ -25,10 +25,12 @@ void FunctionCallServer::doAsyncRecv(transport::Message& message)
             recvExecuteFunctions(message.udata());
             break;
         }
+        /* TODO: do we delete this one?
         case faabric::scheduler::FunctionCalls::Unregister: {
             recvUnregister(message.udata());
             break;
         }
+        */
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized async call header: {}", header));
@@ -46,9 +48,6 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         }
         case faabric::scheduler::FunctionCalls::GetResources: {
             return recvGetResources(message.udata());
-        }
-        case faabric::scheduler::FunctionCalls::PendingMigrations: {
-            return recvPendingMigrations(message.udata());
         }
         default: {
             throw std::runtime_error(
@@ -80,6 +79,7 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }
 
+/* TODO: we may want to delete this one?
 void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
 {
     PARSE_MSG(faabric::UnregisterRequest, buffer.data(), buffer.size())
@@ -93,6 +93,7 @@ void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
     scheduler.removeRegisteredHost(
       parsedMsg.host(), parsedMsg.user(), parsedMsg.function());
 }
+*/
 
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
   std::span<const uint8_t> buffer)
@@ -100,17 +101,5 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
     auto response = std::make_unique<faabric::HostResources>(
       scheduler.getThisHostResources());
     return response;
-}
-
-std::unique_ptr<google::protobuf::Message>
-FunctionCallServer::recvPendingMigrations(std::span<const uint8_t> buffer)
-{
-    PARSE_MSG(faabric::PendingMigrations, buffer.data(), buffer.size());
-
-    auto msgPtr = std::make_shared<faabric::PendingMigrations>(parsedMsg);
-
-    scheduler.addPendingMigration(msgPtr);
-
-    return std::make_unique<faabric::EmptyResponse>();
 }
 }

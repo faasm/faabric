@@ -26,11 +26,9 @@ class FunctionCallServer final
     std::unique_ptr<google::protobuf::Message> recvGetResources(
       std::span<const uint8_t> buffer);
 
-    std::unique_ptr<google::protobuf::Message> recvPendingMigrations(
-      std::span<const uint8_t> buffer);
-
     void recvExecuteFunctions(std::span<const uint8_t> buffer);
 
-    void recvUnregister(std::span<const uint8_t> buffer);
+    // TODO: do we delete this one?
+    // void recvUnregister(std::span<const uint8_t> buffer);
 };
 }

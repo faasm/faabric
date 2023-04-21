@@ -20,28 +20,35 @@ message EmptyRequest {
 
 message BatchExecuteRequest {
     int32 id = 1;
+    // App id is shared among all BatchExecuteRequests corresponding to the
+    // same application
+    int32 appId = 2;
+    // Group id is unique to a particular distribution and scale of an
+    // application. Changes in distribution or scale will change the group id
+    int32 groupId = 3;
 
     enum BatchExecuteType {
         FUNCTIONS = 0;
         THREADS = 1;
         PROCESSES = 2;
+        // TODO: remove this one
         MIGRATION = 3;
     }
 
-    BatchExecuteType type = 2;
+    BatchExecuteType type = 4;
 
     // Shared snapshot used for threads
-    string snapshotKey = 3;
+    string snapshotKey = 5;
 
-    repeated Message messages = 5;
+    repeated Message messages = 6;
 
     // Arbitrary context for this batch
-    int32 subType = 6;
-    bytes contextData = 7;
+    int32 subType = 7;
+    bytes contextData = 8;
 
     // Flag set by the scheduler when this batch is all executing on a single
     // host
-    bool singleHost = 8;
+    bool singleHost = 9;
 }
 
 message HostResources {

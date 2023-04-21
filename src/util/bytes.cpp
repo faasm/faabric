@@ -68,6 +68,11 @@ int safeCopyToBuffer(const uint8_t* dataIn,
     return copyLen;
 }
 
+int bytesToInt(const std::vector<uint8_t>& bytes)
+{
+    return std::stoi(bytesToString(bytes));
+}
+
 std::string bytesToString(const std::vector<uint8_t>& bytes)
 {
     unsigned long byteLen = bytes.size();

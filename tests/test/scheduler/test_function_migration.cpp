@@ -116,6 +116,7 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
 
             // Check we have sent a message to all other hosts with the pending
             // migration
+            /*
             auto pendingRequests = getPendingMigrationsRequests();
             REQUIRE(pendingRequests.size() == hosts.size() - 1);
             for (auto& pendingReq : getPendingMigrationsRequests()) {
@@ -126,22 +127,12 @@ class FunctionMigrationTestFixture : public SchedulerTestFixture
                 REQUIRE(it != hosts.end());
                 REQUIRE(migration == actualMigrations);
             }
+            */
         }
     }
 };
 
-TEST_CASE_METHOD(FunctionMigrationTestFixture,
-                 "Test starting and stopping the function migration thread",
-                 "[scheduler]")
-{
-    int wakeUpPeriodSeconds = 2;
-    migrationThread.start(wakeUpPeriodSeconds);
-
-    SLEEP_MS(SHORT_TEST_TIMEOUT_MS);
-
-    migrationThread.stop();
-}
-
+/*
 TEST_CASE_METHOD(
   FunctionMigrationTestFixture,
   "Test migration opportunities are only detected if set in the message",
@@ -196,7 +187,9 @@ TEST_CASE_METHOD(
     sch.checkForMigrationOpportunities();
     REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
+*/
 
+/*
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
                  "Test checking for migration opportunities",
                  "[scheduler]")
@@ -458,4 +451,5 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     // Clean up
     world.destroy();
 }
+*/
 }
