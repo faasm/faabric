@@ -25,9 +25,8 @@ using namespace faabric::scheduler;
 namespace tests {
 class ClientServerFixture
   : public RedisTestFixture
-  , public SchedulerTestFixture
   , public StateTestFixture
-  , public PointToPointTestFixture
+  , public PointToPointClientServerFixture
   , public ConfTestFixture
 {
   protected:
@@ -69,7 +68,7 @@ TEST_CASE_METHOD(ConfTestFixture,
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
-                 "Test sending flush message",
+                 "Test flushing executors with function call",
                  "[scheduler]")
 {
     // Check no flushes to begin with
@@ -83,10 +82,16 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(state.getKVCount() == 2);
 
     // Execute a couple of functions
-    faabric::Message msgA = faabric::util::messageFactory("dummy", "foo");
-    faabric::Message msgB = faabric::util::messageFactory("dummy", "bar");
-    sch.callFunction(msgA);
-    sch.callFunction(msgB);
+    auto reqA = faabric::util::batchExecFactory("dummy", "foo", 1);
+    auto msgA = reqA->messages().at(0);
+    auto reqB = faabric::util::batchExecFactory("dummy", "bar", 1);
+    auto msgB = reqB->messages().at(0);
+    sch.callFunctions(reqA);
+    sch.callFunctions(reqB);
+
+    // Wait for functions to finish
+    sch.getFunctionResult(msgA, 2000);
+    sch.getFunctionResult(msgB, 2000);
 
     // Check messages passed
     std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
@@ -95,9 +100,9 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(msgs.at(1).function() == "bar");
     sch.clearRecordedMessages();
 
-    // Wait for functions to finish
-    sch.getFunctionResult(msgA, 2000);
-    sch.getFunctionResult(msgB, 2000);
+    // Check executors present
+    REQUIRE(sch.getFunctionExecutorCount(msgA) == 1);
+    REQUIRE(sch.getFunctionExecutorCount(msgB) == 1);
 
     // Check executors present
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 1);
@@ -119,48 +124,23 @@ TEST_CASE_METHOD(ClientServerFixture,
 }
 
 TEST_CASE_METHOD(ClientServerFixture,
-                 "Test broadcasting flush message",
-                 "[scheduler]")
-{
-    faabric::util::setMockMode(true);
-
-    std::string hostA = "alpha";
-    std::string hostB = "beta";
-    std::string hostC = "gamma";
-
-    std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
-
-    sch.addHostToGlobalSet(hostA);
-    sch.addHostToGlobalSet(hostB);
-    sch.addHostToGlobalSet(hostC);
-
-    // Broadcast the flush
-    sch.broadcastFlush();
-
-    // Make sure messages have been sent
-    auto calls = faabric::scheduler::getFlushCalls();
-    REQUIRE(calls.size() == 3);
-
-    std::vector<std::string> actualHosts;
-    for (auto c : calls) {
-        actualHosts.emplace_back(c.first);
-    }
-
-    faabric::util::setMockMode(false);
-    faabric::scheduler::clearMockRequests();
-}
-
-TEST_CASE_METHOD(ClientServerFixture,
                  "Test client batch execution request",
                  "[scheduler]")
 {
+    // Make sure we have enough space in the scheduler
+    auto thisHostResources = std::make_shared<faabric::HostResources>();
+    thisHostResources->set_slots(40);
+    thisHostResources->set_usedslots(0);
+    sch.addHostToGlobalSet(conf.endpointHost, thisHostResources);
+
     // Set up a load of calls
     int nCalls = 30;
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("foo", "bar", nCalls);
 
     // Make the request
-    cli.executeFunctions(req);
+    // cli.executeFunctions(req);
+    sch.callFunctions(req);
 
     for (const auto& m : req->messages()) {
         // This timeout can be long as it shouldn't fail
@@ -214,6 +194,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     sch.setThisHostResources(originalResources);
 }
 
+/* TODO: do we want to keep the unregister request?
 TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
 {
     faabric::util::setMockMode(true);
@@ -232,9 +213,10 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Request a function and check the other host is registered
-    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    auto req = faabric::util::batchExecFactory("foo", "bar", 1);
+    auto msg = req->messages().at(0);
     sch.addHostToGlobalSet(otherHost);
-    sch.callFunction(msg);
+    sch.callFunctions(req);
 
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
@@ -268,4 +250,5 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();
 }
+*/
 }

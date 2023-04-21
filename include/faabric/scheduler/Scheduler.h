@@ -245,7 +245,8 @@ class Scheduler
       const std::string& function,
       bool acquireLock = true);
 
-    void broadcastFlush();
+    // TODO: remove me
+    // void broadcastFlush();
 
     void flushLocally();
 

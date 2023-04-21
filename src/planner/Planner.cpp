@@ -57,6 +57,10 @@ bool Planner::flush(faabric::planner::FlushType flushType)
             SPDLOG_INFO("Planner flushing available hosts state");
             flushHosts();
             return true;
+        case faabric::planner::FlushType::Executors:
+            SPDLOG_INFO("Planner flushing executors");
+            flushExecutors();
+            return true;
         default:
             SPDLOG_ERROR("Unrecognised flush type");
             return false;
@@ -70,10 +74,19 @@ void Planner::flushHosts()
     state.hostMap.clear();
 }
 
+void Planner::flushExecutors()
+{
+    auto availableHosts = getAvailableHosts();
+
+    auto& sch = faabric::scheduler::getScheduler();
+    for (const auto& host : availableHosts) {
+        SPDLOG_INFO("Planner sending EXECUTOR flush to {}", host->ip());
+        sch.getFunctionCallClient(host->ip())->sendFlush();
+    }
+}
+
 std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
 {
-    SPDLOG_DEBUG("Planner received request to get available hosts");
-
     // Acquire a full lock because we will also remove the hosts that have
     // timed out
     faabric::util::FullLock lock(plannerMx);
@@ -263,9 +276,23 @@ Planner::makeSchedulingDecision(
     // TODO: should we check that none of the hosts in the existing decision
     // have become unavailble?
     auto availableHosts = doGetAvailableHosts();
+    int numFreeSlots = 0;
+    for (const auto& host : availableHosts) {
+        numFreeSlots += nAvailable(host);
+    }
+
     auto& broker = faabric::transport::getPointToPointBroker();
     switch (decisionType) {
         case DecisionType::NEW: {
+            // Fail-fast if we don't have enough capacity
+            int numMessages = req->messages_size();
+            int numLeftToSchedule = numMessages;
+            if (numFreeSlots < numMessages) {
+                SPDLOG_ERROR("Not enough capacity to schedule request {}", appId);
+                SPDLOG_ERROR("Requested {} messages, but have only {} free slots", numMessages, numFreeSlots);
+                return nullptr;
+            }
+
             auto decision = std::make_shared<faabric::util::SchedulingDecision>(
               appId, groupId);
 
@@ -274,8 +301,6 @@ Planner::makeSchedulingDecision(
               availableHosts.begin(), availableHosts.end(), isHostSmaller);
 
             // Schedule requests to available hosts
-            int numMessages = req->messages_size();
-            int numLeftToSchedule = numMessages;
             for (auto& host : availableHosts) {
                 // Work out how many messages go to this host
                 int numOnThisHost =

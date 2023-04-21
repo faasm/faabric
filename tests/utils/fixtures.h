@@ -132,6 +132,18 @@ class PlannerTestFixture
         faabric::util::jsonToMessage(result.second, &config);
         return config;
     }
+
+    void flushExecutors()
+    {
+        faabric::planner::HttpMessage msg;
+        msg.set_type(faabric::planner::HttpMessage_Type_FLUSH_EXECUTORS);
+        std::string jsonStr = faabric::util::messageToJson(msg);
+
+        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+        std::pair<int, std::string> result =
+          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        REQUIRE(result.first == 200);
+    }
 };
 
 class FunctionCallServerTestFixture
@@ -161,7 +173,7 @@ class SchedulerTestFixture
   , public PlannerTestFixture
     // TODO: right-now, scheduler's callFunctions depends on the function call
     // server being online
-  , public FunctionCallServerTestFixture
+  // , public FunctionCallServerTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -174,7 +186,12 @@ class SchedulerTestFixture
         faabric::snapshot::clearMockSnapshotRequests();
 
         sch.shutdown();
-        sch.addHostToGlobalSet();
+        // Make sure we have enough space in the scheduler for the tests
+        auto thisHostResources = std::make_shared<faabric::HostResources>();
+        thisHostResources->set_slots(20);
+        thisHostResources->set_usedslots(0);
+        sch.addHostToGlobalSet(faabric::util::getSystemConfig().endpointHost,
+                               thisHostResources);
     };
 
     ~SchedulerTestFixture()
@@ -322,9 +339,9 @@ class PointToPointClientServerFixture
 };
 
 class MpiBaseTestFixture
-  // : public SchedulerTestFixture
   : public PointToPointClientServerFixture
   , public ConfTestFixture
+  , public FunctionCallServerTestFixture
 {
   public:
     MpiBaseTestFixture()

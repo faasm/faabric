@@ -139,6 +139,11 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallFunctions(
         : faabric::util::strToTopologyHint.at(firstMsg.topologyhint());
 
     auto decision = planner.makeSchedulingDecision(req, topologyHint);
+    // Catch failures when making a scheduling decision, and return an empty
+    // PTP mapping
+    if (decision == nullptr) {
+        return std::make_unique<faabric::PointToPointMappings>();
+    }
     decision->debugPrint();
     planner.dispatchSchedulingDecision(req, decision);
 

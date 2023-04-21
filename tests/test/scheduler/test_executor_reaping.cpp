@@ -12,7 +12,8 @@ using namespace faabric::scheduler;
 namespace tests {
 
 class SchedulerReapingTestFixture
-  : public SchedulerTestFixture
+  // : public SchedulerTestFixture
+  : public PointToPointClientServerFixture
   , public ConfTestFixture
 {
   public:
@@ -60,6 +61,9 @@ TEST_CASE_METHOD(SchedulerReapingTestFixture,
     auto req = faabric::util::batchExecFactory("foo", "bar", nMsgs);
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     sch.callFunctions(req);
+
+    // Sleep for a bit to give time to all the executors to fire up
+    SLEEP_MS(sleepTimeMs / 2);
 
     // Check executor count
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);

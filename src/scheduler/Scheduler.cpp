@@ -406,7 +406,6 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     auto decision = getPlannerClient()->callFunctions(req);
-    // broker.setAndSendMappingsFromSchedulingDecision(decision);
     return decision;
     /*
     // We assume all the messages are for the same function and have the
@@ -703,6 +702,10 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
   faabric::util::FullLock& lock,
   faabric::util::SchedulingTopologyHint topologyHint)
 {
+    if (req->messages_size() == 0) {
+        SPDLOG_ERROR("Got request to execute batch with 0 messages!");
+        throw std::runtime_error("Malformed batch execute request");
+    }
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
@@ -1158,6 +1161,7 @@ std::string Scheduler::getThisHost()
     return thisHost;
 }
 
+/* TODO: remove me
 void Scheduler::broadcastFlush()
 {
     faabric::util::FullLock lock(mx);
@@ -1175,6 +1179,7 @@ void Scheduler::broadcastFlush()
     lock.unlock();
     flushLocally();
 }
+*/
 
 void Scheduler::flushLocally()
 {
