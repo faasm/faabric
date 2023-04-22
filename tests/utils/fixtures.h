@@ -26,6 +26,7 @@
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/func.h>
+#include <faabric/util/gids.h>
 #include <faabric/util/json.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
@@ -423,26 +424,29 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
 
     void setWorldSizes(int worldSize, int ranksThisWorld, int ranksOtherWorld)
     {
-        // Update message
+        // The MpiBaseTestFixture calls the message in its constructor to make
+        // sure the world can be created. Here we want to start from scratch,
+        // so we create a "new" request (by updating the app id) and update
+        // the host resources
+        req->set_appid(faabric::util::generateGid());
+        msg.set_appid(req->appid());
         msg.set_mpiworldsize(worldSize);
 
-        // Set up the first world, holding the master rank (which already takes
-        // one slot).
-        // Note that any excess ranks will also be allocated to this world when
-        // the scheduler is overloaded.
+        // Set up this host resources
         faabric::HostResources thisResources;
         thisResources.set_slots(ranksThisWorld);
-        thisResources.set_usedslots(1);
+        thisResources.set_usedslots(0);
         sch.addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(thisResources));
-        // sch.setThisHostResources(thisResources);
+
+        // Call the request _before_ setting up the second host, to make sure
+        // the request gets scheduled to this host
+        sch.callFunctions(req);
 
         // Set up the other world and add it to the global set of hosts
         faabric::HostResources otherResources;
         otherResources.set_slots(ranksOtherWorld);
         thisResources.set_usedslots(0);
         sch.addHostToGlobalSet(otherHost, std::make_shared<faabric::HostResources>(otherResources));
-
-        sch.callFunctions(req);
 
         // Queue the resource response for this other host
         // faabric::scheduler::queueResourceResponse(otherHost, otherResources);

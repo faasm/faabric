@@ -86,6 +86,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     REQUIRE(worldB.getUser() == userB);
     REQUIRE(worldB.getFunction() == funcB);
 
+    // Wait for functions to finish before checking the recorded messages
+    sch.getFunctionResult(msgA, 500);
+    sch.getFunctionResult(msgB, 500);
+
     // Check that chained function calls are made as expected
     std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
     // Note that we add one to the count to account for a message that we send
@@ -96,7 +100,6 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     // We skip the unused message
     for (int i = 1; i < expectedMsgCount; i++) {
         faabric::Message actualCall = actual.at(i);
-        SPDLOG_INFO("Message {}", i);
         if ((i - 1) < worldSizeA) {
             REQUIRE(actualCall.user() == userA);
             REQUIRE(actualCall.function() == funcA);
