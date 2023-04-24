@@ -44,6 +44,9 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
     faabric::util::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
+    faabric::util::SchedulingDecision getSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
     void setMessageResult(std::shared_ptr<faabric::Message> msg);
 
     std::shared_ptr<faabric::Message> getMessageResult(

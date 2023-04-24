@@ -96,13 +96,14 @@ class PlannerTestFixture
     PlannerTestFixture()
     {
         // Ensure the server is reachable
-        cli.ping();
+        plannerCli.ping();
     }
 
     ~PlannerTestFixture() { resetPlanner(); }
 
   protected:
-    faabric::planner::PlannerClient cli;
+    // TODO: re-factor to plannerCli
+    faabric::planner::PlannerClient plannerCli;
 
     void resetPlanner() const
     {
@@ -152,7 +153,8 @@ class FunctionCallServerTestFixture
   public:
     FunctionCallServerTestFixture()
     {
-        executorFactory = std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        executorFactory =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
 
         functionCallServer.start();
@@ -172,9 +174,9 @@ class FunctionCallServerTestFixture
 class SchedulerTestFixture
   : public CachedDecisionTestFixture
   , public PlannerTestFixture
-    // TODO: right-now, scheduler's callFunctions depends on the function call
-    // server being online
-  // , public FunctionCallServerTestFixture
+// TODO: right-now, scheduler's callFunctions depends on the function call
+// server being online
+// , public FunctionCallServerTestFixture
 {
   public:
     SchedulerTestFixture()
@@ -436,7 +438,8 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         faabric::HostResources thisResources;
         thisResources.set_slots(ranksThisWorld);
         thisResources.set_usedslots(0);
-        sch.addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(thisResources));
+        sch.addHostToGlobalSet(
+          thisHost, std::make_shared<faabric::HostResources>(thisResources));
 
         // Call the request _before_ setting up the second host, to make sure
         // the request gets scheduled to this host
@@ -446,7 +449,8 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         faabric::HostResources otherResources;
         otherResources.set_slots(ranksOtherWorld);
         thisResources.set_usedslots(0);
-        sch.addHostToGlobalSet(otherHost, std::make_shared<faabric::HostResources>(otherResources));
+        sch.addHostToGlobalSet(
+          otherHost, std::make_shared<faabric::HostResources>(otherResources));
 
         // Queue the resource response for this other host
         // faabric::scheduler::queueResourceResponse(otherHost, otherResources);

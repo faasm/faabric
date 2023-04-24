@@ -300,8 +300,9 @@ class Scheduler
 
     void addHostToGlobalSet();
 
-    void addHostToGlobalSet(const std::string& host,
-                            std::shared_ptr<faabric::HostResources> overwriteResources = nullptr);
+    void addHostToGlobalSet(
+      const std::string& host,
+      std::shared_ptr<faabric::HostResources> overwriteResources = nullptr);
 
     void removeHostFromGlobalSet(const std::string& host);
 
@@ -342,8 +343,9 @@ class Scheduler
     // ----------------------------------
     // Function Migration
     // ----------------------------------
-    std::shared_ptr<faabric::PendingMigrations>
-    checkForMigrationOpportunities(faabric::Message& msg);
+    std::shared_ptr<faabric::PendingMigration> checkForMigrationOpportunities(
+      faabric::Message& msg,
+      int overwriteNewGroupId = 0);
 
     // ----------------------------------
     // Clients

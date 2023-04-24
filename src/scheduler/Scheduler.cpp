@@ -109,7 +109,9 @@ std::set<std::string> Scheduler::getAvailableHosts()
     return availableHostsIps;
 }
 
-void Scheduler::addHostToGlobalSet(const std::string& hostIp, std::shared_ptr<faabric::HostResources> overwriteResources)
+void Scheduler::addHostToGlobalSet(
+  const std::string& hostIp,
+  std::shared_ptr<faabric::HostResources> overwriteResources)
 {
     // Build register host request
     auto req = std::make_shared<faabric::planner::RegisterHostRequest>();
@@ -382,7 +384,8 @@ void Scheduler::executeBatchRequest(
     // TODO: we only create this fake decision because the current
     // doCallFunctions API requires us to pass a SchedulingDecision (even if
     // the topology hint is FORCE_LOCAL)
-    faabric::util::SchedulingDecision fakeDecision(firstMsg.appid(), firstMsg.groupid());
+    faabric::util::SchedulingDecision fakeDecision(firstMsg.appid(),
+                                                   firstMsg.groupid());
     for (const auto& msg : req->messages()) {
         fakeDecision.addMessage(thisHost, msg);
     }
@@ -1560,6 +1563,7 @@ faabric::HostResources Scheduler::getThisHostResources()
     return hostResources;
 }
 
+// TODO: delete this method
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
     faabric::util::FullLock lock(mx);
@@ -1667,38 +1671,61 @@ ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
 
 // To check for migration opportunities, we request a scheduling decision for
 // the same batch execute request
-std::shared_ptr<faabric::PendingMigrations>
-Scheduler::checkForMigrationOpportunities(faabric::Message& msg)
+std::shared_ptr<faabric::PendingMigration>
+Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
+                                          int overwriteNewGroupId)
 {
+    int appId = msg.appid();
     int groupId = msg.groupid();
     int groupIdx = msg.groupidx();
-    SPDLOG_DEBUG("{}:{} checking for migration opportunities", groupId, groupIdx);
+    SPDLOG_DEBUG("Message {}:{}:{} checking for migration opportunities",
+                 appId,
+                 groupId,
+                 groupIdx);
 
     // TODO: maybe we could move this into a broker-specific function
     int newGroupId = 0;
     if (groupIdx == 0) {
-        // Actually check for migration opportunities
-        // newGroupId = ...
+        auto req =
+          faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
+        req->set_appid(msg.appid());
+        req->set_groupid(msg.groupid());
+        req->set_type(faabric::BatchExecuteRequest::DIST_CHANGE);
+        auto decision = getPlannerClient()->callFunctions(req);
+        newGroupId = decision.groupId;
 
         // Send the new group id to all the members of the group
         auto groupIdxs = broker.getIdxsRegisteredForGroup(groupId);
         groupIdxs.erase(0);
         for (const auto& recvIdx : groupIdxs) {
-            broker.sendMessage(groupId,
-                               0,
-                               recvIdx,
-                               BYTES_CONST(&newGroupId),
-                               sizeof(int));
+            broker.sendMessage(
+              groupId, 0, recvIdx, BYTES_CONST(&newGroupId), sizeof(int));
         }
+    } else if (overwriteNewGroupId == 0) {
+        newGroupId =
+          faabric::util::bytesToInt(broker.recvMessage(groupId, 0, groupIdx));
     } else {
-        newGroupId = faabric::util::bytesToInt(broker.recvMessage(groupId, 0, groupIdx));
+        // In some settings, like tests, we already know the new group id, so
+        // we can set it here
+        newGroupId = overwriteNewGroupId;
+    }
+
+    bool appMustMigrate = newGroupId != groupId;
+    if (!appMustMigrate) {
+        return nullptr;
     }
 
     msg.set_groupid(newGroupId);
     broker.waitForMappingsOnThisHost(newGroupId);
+    std::string newHost = broker.getHostForReceiver(newGroupId, groupIdx);
 
-    // TODO: work-out if we personally have to migrate
+    auto migration = std::make_shared<faabric::PendingMigration>();
+    migration->set_appid(appId);
+    migration->set_groupid(newGroupId);
+    migration->set_groupidx(groupIdx);
+    migration->set_srchost(thisHost);
+    migration->set_dsthost(newHost);
 
-    return nullptr;
+    return migration;
 }
 }

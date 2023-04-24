@@ -66,6 +66,9 @@ class Planner
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       std::shared_ptr<faabric::util::SchedulingDecision> decision);
 
+    std::shared_ptr<faabric::util::SchedulingDecision> getSchedulingDecision(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
+
     // Legacy set/get message result methods called from local schedulers
     void setMessageResult(std::shared_ptr<faabric::Message> msg);
 

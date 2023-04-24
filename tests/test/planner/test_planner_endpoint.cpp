@@ -157,7 +157,8 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     msg.set_type(HttpMessage_Type_RESET);
     msgJsonStr = faabric::util::messageToJson(msg);
     std::pair<int, std::string> result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) == boost::beast::http::status::ok);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            boost::beast::http::status::ok);
 
     expectedReturnCode = boost::beast::http::status::ok;
     expectedResponseBody = "Flushed executors!";
@@ -167,7 +168,8 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     // and an executor factory
     faabric::scheduler::FunctionCallServer functionCallServer;
     faabric::transport::PointToPointServer pointToPointServer;
-    auto executorFactory = std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+    auto executorFactory =
+      std::make_shared<faabric::scheduler::DummyExecutorFactory>();
     auto& sch = faabric::scheduler::getScheduler();
     sch.reset();
     setExecutorFactory(executorFactory);
@@ -239,6 +241,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     msg.set_type(HttpMessage_Type_RESET);
     msgJsonStr = faabric::util::messageToJson(msg);
     result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) == boost::beast::http::status::ok);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            boost::beast::http::status::ok);
 }
 }

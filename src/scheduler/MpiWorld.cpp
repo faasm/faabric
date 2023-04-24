@@ -284,7 +284,10 @@ void MpiWorld::initLocalRemoteLeaders()
     int groupId = thisRankMsg->groupid();
     auto rankIds = broker.getIdxsRegisteredForGroup(groupId);
     if (rankIds.size() != size) {
-        SPDLOG_ERROR("Group ID: {}; rankIds != size ({} != {})", groupId, rankIds.size(), size);
+        SPDLOG_ERROR("Group ID: {}; rankIds != size ({} != {})",
+                     groupId,
+                     rankIds.size(),
+                     size);
     }
     assert(rankIds.size() == size);
     hostForRank.resize(size);
@@ -1571,9 +1574,7 @@ void MpiWorld::checkRanksRange(int sendRank, int recvRank)
     }
 }
 
-void MpiWorld::prepareMigration(
-  int thisRank,
-  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
+void MpiWorld::prepareMigration(int thisRank)
 {
     // Check that there are no pending asynchronous messages to send and receive
     for (auto umb : unackedMessageBuffers) {
@@ -1600,6 +1601,9 @@ void MpiWorld::prepareMigration(
 
     // Update local records
     if (thisRank == localLeader) {
+        // TODO: we may be able to just initLocalRemote here?
+        initLocalRemoteLeaders();
+        /*
         for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
             auto m = pendingMigrations->mutable_migrations()->at(i);
             assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
@@ -1637,6 +1641,7 @@ void MpiWorld::prepareMigration(
             // a full lock every time
             broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
         }
+        */
 
         // Set the migration flag
         hasBeenMigrated = true;

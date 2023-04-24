@@ -81,8 +81,7 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = std::string("Flushed executors!");
             } else {
                 response.result(beast::http::status::internal_server_error);
-                response.body() =
-                  std::string("Failed flushing executors!");
+                response.body() = std::string("Failed flushing executors!");
             }
             return ctx.sendFunction(std::move(response));
         }

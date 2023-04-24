@@ -30,6 +30,9 @@ class PlannerServer final : public faabric::transport::MessageEndpointServer
     std::unique_ptr<google::protobuf::Message> recvCallFunctions(
       std::span<const uint8_t> buffer);
 
+    std::unique_ptr<google::protobuf::Message> recvGetSchedulingDecision(
+      std::span<const uint8_t> buffer);
+
     std::unique_ptr<google::protobuf::Message> recvSetMessageResult(
       std::span<const uint8_t> buffer);
 

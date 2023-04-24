@@ -28,11 +28,13 @@ message BatchExecuteRequest {
     int32 groupId = 3;
 
     enum BatchExecuteType {
+        // TODO: update this list as necessary
         FUNCTIONS = 0;
         THREADS = 1;
         PROCESSES = 2;
-        // TODO: remove this one
+        // TODO: this one is probably not needed
         MIGRATION = 3;
+        DIST_CHANGE = 4;
     }
 
     BatchExecuteType type = 4;
@@ -249,15 +251,10 @@ message PointToPointMappings {
 // FUNCTION MIGRATIONS
 // ---------------------------------------------
 
-message PendingMigrations {
+message PendingMigration {
     int32 appId = 1;
     int32 groupId = 2;
-
-    message PendingMigration {
-        Message msg = 1;
-        string srcHost = 2;
-        string dstHost = 3;
-    }
-
-    repeated PendingMigration migrations = 3;
+    int32 groupIdx = 3;
+    string srcHost = 4;
+    string dstHost = 5;
 }

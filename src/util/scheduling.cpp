@@ -91,20 +91,22 @@ void SchedulingDecision::debugPrint()
     // group ID is 0, we want to only add one tab so that columns are formatted
     // correctly upon print
     if (groupId != 0) {
-        SPDLOG_DEBUG("MsgId\tAppId\t\tGroupId\t\tAppIdx\tHostIp\t\tHostCap");
+        SPDLOG_DEBUG("MsgId\tAppId\t\tGroupId\t\tGrIdx\tHostIp\t\tHostCap");
     } else {
-        SPDLOG_DEBUG("MsgId\tAppId\t\tGroupId\tAppIdx\tHostIp\t\tHostCap");
+        SPDLOG_DEBUG("MsgId\tAppId\tGroupId\tGrIdx\tHostIp\t\tHostCap");
     }
     for (int i = 0; i < hosts.size(); i++) {
         SPDLOG_DEBUG("{}\t{}\t{}\t{}\t{}\t{}",
                      messageIds.at(i),
                      appId,
                      groupId,
-                     appIdxs.at(i),
+                     groupIdxs.at(i),
                      hosts.at(i),
-                     plannerHosts.at(i)->slots() - plannerHosts.at(i)->usedslots());
+                     plannerHosts.at(i)->slots() -
+                       plannerHosts.at(i)->usedslots());
     }
-    SPDLOG_DEBUG("------------- End Decision for App {} ---------------", appId);
+    SPDLOG_DEBUG("------------- End Decision for App {} ---------------",
+                 appId);
 }
 
 bool SchedulingDecision::isSingleHost()
@@ -147,7 +149,9 @@ void SchedulingDecision::removeMessage(const faabric::Message& msg)
     // Work out the index for the to-be-deleted message
     auto idxItr = std::find(messageIds.begin(), messageIds.end(), msg.id());
     if (idxItr == messageIds.end()) {
-        SPDLOG_ERROR("Attempting to remove a message id ({}) that is not in the scheduling decision!", msg.id());
+        SPDLOG_ERROR("Attempting to remove a message id ({}) that is not in "
+                     "the scheduling decision!",
+                     msg.id());
         throw std::runtime_error("Removing non-existant message!");
     }
     int idx = std::distance(messageIds.begin(), idxItr);

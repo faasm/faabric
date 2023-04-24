@@ -9,7 +9,8 @@ enum PlannerCalls
     RegisterHost = 3,
     RemoveHost = 4,
     CallFunctions = 5,
-    SetMessageResult = 6,
-    GetMessageResult = 7,
+    GetSchedulingDecision = 6,
+    SetMessageResult = 7,
+    GetMessageResult = 8,
 };
 }

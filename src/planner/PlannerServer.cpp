@@ -50,6 +50,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::CallFunctions: {
             return recvCallFunctions(message.udata());
         }
+        case PlannerCalls::GetSchedulingDecision: {
+            return recvGetSchedulingDecision(message.udata());
+        }
         case PlannerCalls::SetMessageResult: {
             return recvSetMessageResult(message.udata());
         }
@@ -131,6 +134,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallFunctions(
     PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
 
     auto req = std::make_shared<faabric::BatchExecuteRequest>(parsedMsg);
+    bool isDistChange =
+      req->type() == faabric::BatchExecuteRequest::DIST_CHANGE;
+
     // Note: we currently ignore the topology hint :/
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     faabric::util::SchedulingTopologyHint topologyHint =
@@ -145,7 +151,39 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallFunctions(
         return std::make_unique<faabric::PointToPointMappings>();
     }
     decision->debugPrint();
-    planner.dispatchSchedulingDecision(req, decision);
+    // If the request is a DIST_CHANGE (i.e. migration) we don't need to
+    // dispatch new execution calls
+    if (!isDistChange) {
+        planner.dispatchSchedulingDecision(req, decision);
+    }
+
+    // Build PointToPointMappings from scheduling decision
+    faabric::PointToPointMappings mappings;
+    mappings.set_appid(decision->appId);
+    mappings.set_groupid(decision->groupId);
+    for (int i = 0; i < decision->hosts.size(); i++) {
+        auto* mapping = mappings.add_mappings();
+        mapping->set_host(decision->hosts.at(i));
+        mapping->set_messageid(decision->messageIds.at(i));
+        mapping->set_appidx(decision->appIdxs.at(i));
+        mapping->set_groupidx(decision->groupIdxs.at(i));
+    }
+
+    return std::make_unique<faabric::PointToPointMappings>(mappings);
+}
+
+std::unique_ptr<google::protobuf::Message>
+PlannerServer::recvGetSchedulingDecision(std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
+
+    auto req = std::make_shared<faabric::BatchExecuteRequest>(parsedMsg);
+
+    auto decision = planner.getSchedulingDecision(req);
+
+    if (decision == nullptr) {
+        return std::make_unique<faabric::PointToPointMappings>();
+    }
 
     // Build PointToPointMappings from scheduling decision
     faabric::PointToPointMappings mappings;

@@ -90,6 +90,16 @@ faabric::util::SchedulingDecision PlannerClient::callFunctions(
       response);
 }
 
+faabric::util::SchedulingDecision PlannerClient::getSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::PointToPointMappings response;
+    syncSend(PlannerCalls::GetSchedulingDecision, req.get(), &response);
+
+    return faabric::util::SchedulingDecision::fromPointToPointMappings(
+      response);
+}
+
 void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
     faabric::EmptyResponse response;

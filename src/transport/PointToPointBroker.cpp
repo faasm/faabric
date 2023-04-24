@@ -449,8 +449,14 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
     std::set<std::string> otherHosts =
       setUpLocalMappingsFromSchedulingDecision(decision);
 
-    // Send out to other hosts
-    for (const auto& host : otherHosts) {
+    sendMappingsFromSchedulingDecision(decision, otherHosts);
+}
+
+void PointToPointBroker::sendMappingsFromSchedulingDecision(
+  const faabric::util::SchedulingDecision& decision,
+  const std::set<std::string>& hostList)
+{
+    for (const auto& host : hostList) {
         faabric::PointToPointMappings msg;
         msg.set_appid(decision.appId);
         msg.set_groupid(decision.groupId);
@@ -470,6 +476,7 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
                      decision.groupId,
                      host);
 
+        // TODO: figure out a better way to mock things in the tests
         if (host == LOCALHOST) {
             SPDLOG_WARN("Skipping sending mappings to LOCALHOST in mock mode");
             continue;

@@ -38,7 +38,8 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
     setWorldSizes(4, 2, 2);
 
     // Init worlds
-    MpiWorld& thisWorld = getMpiWorldRegistry().createWorld(msg, msg.mpiworldid());
+    MpiWorld& thisWorld =
+      getMpiWorldRegistry().createWorld(msg, msg.mpiworldid());
     otherWorld.initialiseFromMsg(msg);
 
     // Call broadcast and check sent messages

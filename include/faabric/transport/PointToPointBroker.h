@@ -98,6 +98,10 @@ class PointToPointBroker
     void setAndSendMappingsFromSchedulingDecision(
       const faabric::util::SchedulingDecision& decision);
 
+    void sendMappingsFromSchedulingDecision(
+      const faabric::util::SchedulingDecision& decision,
+      const std::set<std::string>& hostList);
+
     void waitForMappingsOnThisHost(int groupId);
 
     std::set<int> getIdxsRegisteredForGroup(int groupId);

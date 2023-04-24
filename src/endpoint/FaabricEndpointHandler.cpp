@@ -68,13 +68,13 @@ void FaabricEndpointHandler::onRequest(
               sched.getFunctionExecGraph(msg.id());
             response.result(beast::http::status::ok);
             response.body() = faabric::scheduler::execGraphToJson(execGraph);
-        /* TODO: remove me
-        } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
-            SPDLOG_DEBUG("Broadcasting flush request");
-            sched.broadcastFlush();
-            response.result(beast::http::status::ok);
-            response.body() = std::string("Flush sent");
-        */
+            /* TODO: remove me
+            } else if (msg.type() == faabric::Message_MessageType_FLUSH) {
+                SPDLOG_DEBUG("Broadcasting flush request");
+                sched.broadcastFlush();
+                response.result(beast::http::status::ok);
+                response.body() = std::string("Flush sent");
+            */
         } else {
             response.result(beast::http::status::internal_server_error);
             response.body() = "Unrecognised request type";

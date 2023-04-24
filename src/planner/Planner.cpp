@@ -141,16 +141,21 @@ bool Planner::registerHost(const Host& hostIn)
 
         // If its the first time we see this IP, give it a UID and add it to
         // the map
-        SPDLOG_DEBUG("Registering host {} with {} slots", hostIn.ip(), hostIn.slots());
+        SPDLOG_DEBUG(
+          "Registering host {} with {} slots", hostIn.ip(), hostIn.slots());
         state.hostMap.emplace(
           std::make_pair<std::string, std::shared_ptr<Host>>(
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
-    } else if (it != state.hostMap.end() && (
-        (it->second->slots() != hostIn.slots()) || (it->second->slots() != hostIn.slots()))) {
+    } else if (it != state.hostMap.end() &&
+               ((it->second->slots() != hostIn.slots()) ||
+                (it->second->slots() != hostIn.slots()))) {
         // We allow overwritting the host state by sending another register
         // request with same IP but different host resources. This is useful
         // for testing and resetting purposes
-        SPDLOG_DEBUG("Overwritting host {} with {} slots (used {})", hostIn.ip(), hostIn.slots(), hostIn.usedslots());
+        SPDLOG_DEBUG("Overwritting host {} with {} slots (used {})",
+                     hostIn.ip(),
+                     hostIn.slots(),
+                     hostIn.usedslots());
         it->second->set_slots(hostIn.slots());
         it->second->set_usedslots(hostIn.usedslots());
     }
@@ -203,6 +208,7 @@ Planner::makeSchedulingDecision(
     faabric::util::FullLock lock(plannerMx);
 
     int appId = req->appid();
+    int oldGroupId = req->groupid();
 
     // There are three types of scheduling of batch execute requests:
     // 1. New: first time we are scheduling the BER
@@ -212,19 +218,33 @@ Planner::makeSchedulingDecision(
     // 3. ScaleSchange: we are requesting a change of scale of an existing
     //    BER. This is indicated by providing the same BER
     // TODO: what about shared memory w/ repeated loops?
+    // TODO: simplify this and use a field in the actual request
     auto decisionType = DecisionType::NO_DECISION_TYPE;
     auto it = state.inFlightRequests.find(appId);
     if (it == state.inFlightRequests.end()) {
         decisionType = DecisionType::NEW;
         SPDLOG_INFO("Planner making NEW scheduling decision for app {}", appId);
     } else {
+        if (req->type() == faabric::BatchExecuteRequest::DIST_CHANGE) {
+            decisionType = DecisionType::DIST_CHANGE;
+            SPDLOG_INFO("Planner deciding DIST_CHANGE for app {}", appId);
+        } else {
+            decisionType = DecisionType::SCALE_CHANGE;
+            SPDLOG_INFO("Planner deciding SCALE_CHANGE for app {} ({} -> {})",
+                        appId,
+                        it->second.first->messages_size(),
+                        it->second.first->messages_size() +
+                          req->messages_size());
+        }
+        /*
         // Work out the total of message ids that are in the new request, that
         // are not in the old scheduling decision. We can get rid of the
         // messages in the request that we have already seen
         auto oldDecisionMsgIds = it->second.second->messageIds;
         int newMessages = 0;
         for (const auto& msg : req->messages()) {
-            if (std::find(oldDecisionMsgIds.begin(), oldDecisionMsgIds.end(), msg.id()) == oldDecisionMsgIds.end()) {
+            if (std::find(oldDecisionMsgIds.begin(), oldDecisionMsgIds.end(),
+        msg.id()) == oldDecisionMsgIds.end()) {
                 ++newMessages;
             }
         }
@@ -243,6 +263,7 @@ Planner::makeSchedulingDecision(
             SPDLOG_ERROR("Request with known and unknown messages!");
             return it->second.second;
         }
+        */
     }
 
     // Helper methods used during scheduling
@@ -253,6 +274,8 @@ Planner::makeSchedulingDecision(
         assert(host->usedslots() + numClaimed <= host->slots());
         host->set_usedslots(host->usedslots() + numClaimed);
     };
+    // This function is used as a predicate to std::sort. Being smaller means
+    // going first in the sorted list
     auto isHostSmaller = [nAvailable](std::shared_ptr<Host> hostA,
                                       std::shared_ptr<Host> hostB) -> bool {
         // Sort hosts by number of free slots
@@ -263,7 +286,14 @@ Planner::makeSchedulingDecision(
         }
 
         // In case of tie, return the larger host first
-        return hostA->slots() > hostB->slots();
+        if (hostA->slots() != hostB->slots()) {
+            return hostA->slots() > hostB->slots();
+        }
+
+        // Lastly, in case of tie again, return the largest alphabetically
+        // TODO: this has the effect that, in the tests, LOCALHOST goes latest
+        // which is good for the mocking but a HACK
+        return hostA->ip() > hostB->ip();
     };
 
     // TODO: should we check that none of the hosts in the existing decision
@@ -286,8 +316,12 @@ Planner::makeSchedulingDecision(
             int numMessages = req->messages_size();
             int numLeftToSchedule = numMessages;
             if (numFreeSlots < numMessages) {
-                SPDLOG_ERROR("Not enough capacity to schedule request {}", appId);
-                SPDLOG_ERROR("Requested {} messages, but have only {} free slots", numMessages, numFreeSlots);
+                SPDLOG_ERROR("Not enough capacity to schedule request {}",
+                             appId);
+                SPDLOG_ERROR(
+                  "Requested {} messages, but have only {} free slots",
+                  numMessages,
+                  numFreeSlots);
                 return nullptr;
             }
 
@@ -312,7 +346,8 @@ Planner::makeSchedulingDecision(
                     decision->addMessage(
                       host->ip(),
                       req->messages().at(decision->plannerHosts.size() - 1));
-                    req->mutable_messages(decision->plannerHosts.size() -1)->set_groupid(groupId);
+                    req->mutable_messages(decision->plannerHosts.size() - 1)
+                      ->set_groupid(groupId);
                 }
                 if (numLeftToSchedule == 0) {
                     break;
@@ -330,14 +365,6 @@ Planner::makeSchedulingDecision(
             auto newReq = req;
             auto decision = state.inFlightRequests.at(appId).second;
 
-            /* TODO: remove me
-            // For MPI we only set the group id when doing a scale change, so
-            // make sure we update the decision's group id here
-            auto firstMsg = req->messages().at(0);
-            if (firstMsg.ismpi()) {
-                decision->groupId = firstMsg.groupid();
-            }
-            */
             // Set the new group ID after the scale change
             oldReq->set_groupid(groupId);
             decision->groupId = groupId;
@@ -400,14 +427,15 @@ Planner::makeSchedulingDecision(
                 for (int i = 0; i < numOnThisHost; i++) {
                     // Update the in-flight map
                     // First, update the group id on the message
-                    req->mutable_messages(nextMessageToScheduleIdx)->set_groupid(groupId);
+                    req->mutable_messages(nextMessageToScheduleIdx)
+                      ->set_groupid(groupId);
                     // Second, update the scheduling decision
                     decision->plannerHosts.push_back(host);
                     decision->addMessage(
-                      host->ip(),
-                      req->messages().at(nextMessageToScheduleIdx));
+                      host->ip(), req->messages().at(nextMessageToScheduleIdx));
                     // Last, update the BatchExecuteRequest
-                    *oldReq->add_messages() = *req->mutable_messages(nextMessageToScheduleIdx);
+                    *oldReq->add_messages() =
+                      *req->mutable_messages(nextMessageToScheduleIdx);
                     ++nextMessageToScheduleIdx;
                 }
                 if (numLeftToSchedule == 0) {
@@ -454,6 +482,9 @@ Planner::makeSchedulingDecision(
             // frequency hosts (at the begining in our sorted list)
             auto left = sortedHosts.begin();
             auto right = sortedHosts.end() - 1;
+            bool hasDistChanged = false;
+            std::set<std::string> oldHostIps(decision->hosts.begin(),
+                                             decision->hosts.end());
             while (left < right) {
                 // If both pointers point to the same host, check another
                 // possible candidate to be moved
@@ -471,6 +502,11 @@ Planner::makeSchedulingDecision(
 
                 // If both pointers point to different hosts, and the
                 // destination has enough slots, update our records
+                hasDistChanged = true;
+                SPDLOG_DEBUG("Migrating group idx {} from {} to {}",
+                             decision->groupIdxs.at(right->first),
+                             right->second->ip(),
+                             left->second->ip());
                 claimSlots(left->second, 1);
                 decision->plannerHosts.at(right->first) = left->second;
                 decision->hosts.at(right->first) = left->second->ip();
@@ -479,7 +515,28 @@ Planner::makeSchedulingDecision(
                 --right;
             }
 
+            if (hasDistChanged) {
+                req->set_groupid(groupId);
+                decision->groupId = groupId;
+            }
+
+            // Make sure hosts that are not part of the _new_ scheduling
+            // decision also get the mappings
+            std::set<std::string> newHostIps(decision->hosts.begin(),
+                                             decision->hosts.end());
+            std::set<std::string> evictedHosts;
+            std::set_difference(
+              oldHostIps.begin(),
+              oldHostIps.end(),
+              newHostIps.begin(),
+              newHostIps.end(),
+              std::inserter(evictedHosts, evictedHosts.begin()));
+
+            // Send the mappings to the hosts involved in the new decision
             broker.setAndSendMappingsFromSchedulingDecision(*decision);
+            // Also send the mappings to the hosts that will be emptied as
+            // a consequence of the migration
+            broker.sendMappingsFromSchedulingDecision(*decision, evictedHosts);
             return decision;
         };
         case DecisionType::NO_DECISION_TYPE:
@@ -533,11 +590,30 @@ void Planner::dispatchSchedulingDecision(
             SPDLOG_DEBUG("Skipping dispatching messages to LOCALHOST");
             continue;
         }
-        SPDLOG_DEBUG("Dispatching {} messages to host {} for execution", hostReq->messages_size(), hostIp);
+        SPDLOG_DEBUG("Dispatching {} messages to host {} for execution",
+                     hostReq->messages_size(),
+                     hostIp);
         sch.getFunctionCallClient(hostIp)->executeFunctions(hostReq);
     }
 
-    SPDLOG_INFO("Finished dispatching {} messages for execution", req->messages_size());
+    SPDLOG_INFO("Finished dispatching {} messages for execution",
+                req->messages_size());
+}
+
+std::shared_ptr<faabric::util::SchedulingDecision>
+Planner::getSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    int appId = req->appid();
+    SPDLOG_INFO("Planner getting scheduling decision for app: {}", appId);
+
+    faabric::util::SharedLock lock(plannerMx);
+
+    if (state.inFlightRequests.find(appId) == state.inFlightRequests.end()) {
+        return nullptr;
+    }
+
+    return state.inFlightRequests.at(appId).second;
 }
 
 void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
@@ -552,21 +628,35 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
         return;
     }
 
+    SPDLOG_INFO("Planner setting message result (id: {}) for {}:{}:{}",
+                msg->id(),
+                msg->appid(),
+                msg->groupid(),
+                msg->groupidx());
+
     // Free the resources corresponding to this message from the in-flight map
     auto inFlightDec = state.inFlightRequests.at(appId).second;
     try {
         // Note that this call also releases the used slot
         inFlightDec->removeMessage(*msg);
     } catch (std::exception& e) {
-        SPDLOG_ERROR("Error removing message {} from scheduling decision (app id: {}): {}", msg->id(), msg->appid(), e.what());
+        SPDLOG_ERROR(
+          "Error removing message {} from scheduling decision (app id: {}): {}",
+          msg->id(),
+          msg->appid(),
+          e.what());
         return;
     }
     auto inFlightReq = state.inFlightRequests.at(appId).first;
-    auto it = std::find_if(inFlightReq->messages().begin(),
-                           inFlightReq->messages().end(),
-                           [&](auto innerMsg) { return innerMsg.id() == msg->id(); });
+    auto it =
+      std::find_if(inFlightReq->messages().begin(),
+                   inFlightReq->messages().end(),
+                   [&](auto innerMsg) { return innerMsg.id() == msg->id(); });
     if (it == inFlightReq->messages().end()) {
-        SPDLOG_ERROR("Error removing message {} from in-flight batch request (app id: {})", msg->id(), msg->appid());
+        SPDLOG_ERROR(
+          "Error removing message {} from in-flight batch request (app id: {})",
+          msg->id(),
+          msg->appid());
         return;
     }
     inFlightReq->mutable_messages()->erase(it);
