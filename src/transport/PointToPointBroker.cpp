@@ -443,20 +443,34 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
 }
 
 void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
-  const faabric::util::SchedulingDecision& decision)
+  const faabric::util::SchedulingDecision& decision,
+  const std::set<std::string>& hostSkipList)
 {
     // Set up locally
     std::set<std::string> otherHosts =
       setUpLocalMappingsFromSchedulingDecision(decision);
 
-    sendMappingsFromSchedulingDecision(decision, otherHosts);
+    sendMappingsFromSchedulingDecision(decision, otherHosts, hostSkipList);
 }
 
 void PointToPointBroker::sendMappingsFromSchedulingDecision(
   const faabric::util::SchedulingDecision& decision,
-  const std::set<std::string>& hostList)
+  const std::set<std::string>& hostList,
+  const std::set<std::string>& hostSkipList)
 {
-    for (const auto& host : hostList) {
+    std::set<std::string> actualHostList;
+    if (hostSkipList.empty()) {
+        actualHostList = hostList;
+    } else {
+        std::set_difference(
+          hostList.begin(),
+          hostList.end(),
+          hostSkipList.begin(),
+          hostSkipList.end(),
+          std::inserter(actualHostList, actualHostList.begin()));
+    }
+
+    for (const auto& host : actualHostList) {
         faabric::PointToPointMappings msg;
         msg.set_appid(decision.appId);
         msg.set_groupid(decision.groupId);

@@ -43,6 +43,12 @@ void PlannerClient::ping()
     SPDLOG_DEBUG("Succesfully pinged the planner server at {}", expectedIp);
 }
 
+void PlannerClient::setTestsConfig(PlannerTestsConfig& testsConfig)
+{
+    EmptyResponse resp;
+    syncSend(PlannerCalls::SetTestsConfig, &testsConfig, &resp);
+}
+
 std::vector<faabric::planner::Host> PlannerClient::getAvailableHosts()
 {
     EmptyRequest req;

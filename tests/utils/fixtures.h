@@ -117,6 +117,15 @@ class PlannerTestFixture
         assert(result.first == 200);
     }
 
+    void setPlannerMockedHosts(const std::vector<std::string>& hosts)
+    {
+        faabric::planner::PlannerTestsConfig testsConfig;
+        for (const auto& host : hosts) {
+            testsConfig.add_mockedhosts(host);
+        }
+        plannerCli.setTestsConfig(testsConfig);
+    }
+
     faabric::planner::PlannerConfig getPlannerConfig()
     {
         faabric::planner::HttpMessage msg;
@@ -228,20 +237,11 @@ class SchedulerTestFixture
         faabric::scheduler::clearMockRequests();
 
         for (int i = 0; i < hosts.size(); i++) {
-            faabric::HostResources resources;
-            resources.set_slots(slotsPerHost.at(i));
-            resources.set_usedslots(usedPerHost.at(i));
+            auto resources = std::make_shared<faabric::HostResources>();
+            resources->set_slots(slotsPerHost.at(i));
+            resources->set_usedslots(usedPerHost.at(i));
 
-            sch.addHostToGlobalSet(hosts.at(i));
-
-            // If setting resources for the master host, update the scheduler.
-            // Otherwise, queue the resource response
-            if (i == 0) {
-                sch.setThisHostResources(resources);
-            } else {
-                faabric::scheduler::queueResourceResponse(hosts.at(i),
-                                                          resources);
-            }
+            sch.addHostToGlobalSet(hosts.at(i), resources);
         }
     }
 
@@ -323,9 +323,7 @@ class PointToPointTestFixture
     faabric::transport::PointToPointBroker& broker;
 };
 
-class PointToPointClientServerFixture
-  : public PointToPointTestFixture
-  , public SchedulerTestFixture
+class PointToPointClientServerFixture : public PointToPointTestFixture
 {
   public:
     PointToPointClientServerFixture()
@@ -342,7 +340,8 @@ class PointToPointClientServerFixture
 };
 
 class MpiBaseTestFixture
-  : public PointToPointClientServerFixture
+  : public SchedulerTestFixture
+  , public PointToPointClientServerFixture
   , public ConfTestFixture
   , public FunctionCallServerTestFixture
 {

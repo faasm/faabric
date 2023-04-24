@@ -51,7 +51,7 @@ message HttpMessage {
 }
 
 // ---------------------------------------------
-// State/Config Messages
+// Util/Config Messages
 // ---------------------------------------------
 
 message PlannerConfig {
@@ -59,6 +59,12 @@ message PlannerConfig {
     // Host keep-alive timeout in seconds
     int32 hostTimeout = 2;
     int32 numThreadsHttpServer = 3;
+}
+
+message PlannerTestsConfig {
+    // List of hosts that must be mocked. I.e. that don't have an online
+    // function call and ptp server
+    repeated string mockedHosts = 1;
 }
 
 // ---------------------------------------------

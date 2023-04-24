@@ -38,6 +38,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::Ping: {
             return recvPing();
         }
+        case PlannerCalls::SetTestsConfig: {
+            return recvSetTestsConfig(message.udata());
+        }
         case PlannerCalls::GetAvailableHosts: {
             return recvGetAvailableHosts();
         }
@@ -75,6 +78,16 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvPing()
     *response->mutable_config() = planner.getConfig();
 
     return std::move(response);
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvSetTestsConfig(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(PlannerTestsConfig, buffer.data(), buffer.size());
+
+    planner.setTestsConfig(parsedMsg);
+
+    return std::make_unique<faabric::EmptyResponse>();
 }
 
 std::unique_ptr<google::protobuf::Message>

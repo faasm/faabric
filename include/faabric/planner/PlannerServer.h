@@ -19,6 +19,9 @@ class PlannerServer final : public faabric::transport::MessageEndpointServer
 
     std::unique_ptr<google::protobuf::Message> recvPing();
 
+    std::unique_ptr<google::protobuf::Message> recvSetTestsConfig(
+      std::span<const uint8_t> buffer);
+
     std::unique_ptr<google::protobuf::Message> recvGetAvailableHosts();
 
     std::unique_ptr<google::protobuf::Message> recvRegisterHost(

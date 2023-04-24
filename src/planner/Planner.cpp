@@ -41,17 +41,32 @@ void Planner::printConfig() const
     SPDLOG_INFO("HTTP_SERVER_THREADS        {}", config.numthreadshttpserver());
 }
 
+void Planner::setTestsConfig(PlannerTestsConfig& testsConfigIn, bool reset)
+{
+    SPDLOG_INFO("Planner setting configuration for tests");
+
+    isTestMode.store(!reset, std::memory_order_release);
+
+    faabric::util::FullLock lock(plannerMx);
+
+    testsConfig = testsConfigIn;
+}
+
 bool Planner::reset()
 {
     SPDLOG_INFO("Resetting planner");
 
     flushHosts();
 
+    PlannerTestsConfig emptyConfig;
+    setTestsConfig(emptyConfig, true);
+
     return true;
 }
 
 bool Planner::flush(faabric::planner::FlushType flushType)
 {
+    // TODO: flush scheduling state
     switch (flushType) {
         case faabric::planner::FlushType::Hosts:
             SPDLOG_INFO("Planner flushing available hosts state");
@@ -290,11 +305,20 @@ Planner::makeSchedulingDecision(
             return hostA->slots() > hostB->slots();
         }
 
-        // Lastly, in case of tie again, return the largest alphabetically
-        // TODO: this has the effect that, in the tests, LOCALHOST goes latest
-        // which is good for the mocking but a HACK
+        // Lastly, in case of tie again, return the largest alphabetically.
+        // This is useful in the tests to make sure LOCALHOST is last in case
+        // of mocking
         return hostA->ip() > hostB->ip();
     };
+
+    // Set the list of hosts to skip when sending messages. This is used for
+    // mocking in the tests
+    std::set<std::string> hostSkipList;
+    if (isTestMode.load(std::memory_order_acquire)) {
+        for (const auto& host : testsConfig.mockedhosts()) {
+            hostSkipList.insert(host);
+        }
+    }
 
     // TODO: should we check that none of the hosts in the existing decision
     // have become unavailble?
@@ -354,10 +378,12 @@ Planner::makeSchedulingDecision(
                 }
             }
 
-            // Finally, add the request to in-flight and return the decision
+            // Add the request to in-flight
             state.inFlightRequests[appId] = std::make_pair(req, decision);
 
-            broker.setAndSendMappingsFromSchedulingDecision(*decision);
+            broker.setAndSendMappingsFromSchedulingDecision(*decision,
+                                                            hostSkipList);
+
             return decision;
         };
         case DecisionType::SCALE_CHANGE: {
@@ -443,7 +469,8 @@ Planner::makeSchedulingDecision(
                 }
             }
 
-            broker.setAndSendMappingsFromSchedulingDecision(*decision);
+            broker.setAndSendMappingsFromSchedulingDecision(*decision,
+                                                            hostSkipList);
             return decision;
         };
         case DecisionType::DIST_CHANGE: {
@@ -533,10 +560,12 @@ Planner::makeSchedulingDecision(
               std::inserter(evictedHosts, evictedHosts.begin()));
 
             // Send the mappings to the hosts involved in the new decision
-            broker.setAndSendMappingsFromSchedulingDecision(*decision);
+            broker.setAndSendMappingsFromSchedulingDecision(*decision,
+                                                            hostSkipList);
             // Also send the mappings to the hosts that will be emptied as
             // a consequence of the migration
-            broker.sendMappingsFromSchedulingDecision(*decision, evictedHosts);
+            broker.sendMappingsFromSchedulingDecision(
+              *decision, evictedHosts, hostSkipList);
             return decision;
         };
         case DecisionType::NO_DECISION_TYPE:
@@ -553,8 +582,6 @@ void Planner::dispatchSchedulingDecision(
 {
     std::map<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>
       hostRequests;
-
-    // TODO: this does _not_ work for migration!! (i.e. DIST_CHANGE)
 
     // Note that the just-scheduled messages in the request will correspond to
     // the last req->messages_size() messages in the scheduling decision
@@ -582,14 +609,21 @@ void Planner::dispatchSchedulingDecision(
         *hostRequests[thisHost]->add_messages() = msg;
     }
 
+    // In tests, remove the hosts that we are mocking
+    if (isTestMode.load(std::memory_order_acquire)) {
+        faabric::util::SharedLock lock(plannerMx);
+
+        for (const auto& hostIp : testsConfig.mockedhosts()) {
+            auto it = hostRequests.find(hostIp);
+            if (it != hostRequests.end()) {
+                hostRequests.erase(it);
+                SPDLOG_DEBUG("Skipping dispatching messages to {}", hostIp);
+            }
+        }
+    }
+
     auto& sch = faabric::scheduler::getScheduler();
     for (const auto& [hostIp, hostReq] : hostRequests) {
-        // Used in the tests
-        // TODO: make it less hacky
-        if (hostIp == LOCALHOST) {
-            SPDLOG_DEBUG("Skipping dispatching messages to LOCALHOST");
-            continue;
-        }
         SPDLOG_DEBUG("Dispatching {} messages to host {} for execution",
                      hostReq->messages_size(),
                      hostIp);

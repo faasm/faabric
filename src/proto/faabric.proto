@@ -39,18 +39,26 @@ message BatchExecuteRequest {
 
     BatchExecuteType type = 4;
 
-    // Shared snapshot used for threads
-    string snapshotKey = 5;
+    enum SchedulingHint {
+        NO_HINT = 0;
+        CACHED = 1;
+    }
 
-    repeated Message messages = 6;
+    SchedulingHint schedulingHint = 5;
+
+    // Shared snapshot used for threads
+    string snapshotKey = 6;
+
+    repeated Message messages = 7;
 
     // Arbitrary context for this batch
-    int32 subType = 7;
-    bytes contextData = 8;
+    int32 subType = 8;
+    bytes contextData = 9;
 
     // Flag set by the scheduler when this batch is all executing on a single
     // host
-    bool singleHost = 9;
+    // TODO: we don't need this one i think
+    bool singleHost = 10;
 }
 
 message HostResources {

@@ -439,6 +439,7 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
     */
 }
 
+/*
 faabric::util::SchedulingDecision Scheduler::makeSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingTopologyHint topologyHint)
@@ -682,6 +683,7 @@ faabric::util::SchedulingDecision Scheduler::doSchedulingDecision(
 
     return decision;
 }
+*/
 
 faabric::util::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -981,6 +983,7 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
     return decision;
 }
 
+/* TODO: remove me
 std::vector<std::string> Scheduler::getUnregisteredHosts(
   const std::string& user,
   const std::string& function,
@@ -1011,6 +1014,7 @@ std::vector<std::string> Scheduler::getUnregisteredHosts(
 
     return unregisteredHosts;
 }
+*/
 
 void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
                                         const std::string& snapshotKey)
@@ -1554,6 +1558,7 @@ void Scheduler::getFunctionResultAsync(
     handler(msgResult);
 }
 
+/* TODO: remove me
 faabric::HostResources Scheduler::getThisHostResources()
 {
     faabric::util::SharedLock lock(mx);
@@ -1562,20 +1567,21 @@ faabric::HostResources Scheduler::getThisHostResources()
       this->thisHostUsedSlots.load(std::memory_order_acquire));
     return hostResources;
 }
+*/
 
-// TODO: delete this method
+// We keep this method for backwards-compatibility
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
-    faabric::util::FullLock lock(mx);
-    thisHostResources = res;
-    this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
+    addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(res));
 }
 
+/* TODO: remove me
 faabric::HostResources Scheduler::getHostResources(const std::string& host)
 {
     SPDLOG_TRACE("Requesting resources from {}", host);
     return getFunctionCallClient(host)->getResources();
 }
+*/
 
 // --------------------------------------------
 // EXECUTION GRAPH

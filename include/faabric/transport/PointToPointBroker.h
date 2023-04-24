@@ -95,12 +95,19 @@ class PointToPointBroker
     std::set<std::string> setUpLocalMappingsFromSchedulingDecision(
       const faabric::util::SchedulingDecision& decision);
 
+    /*
     void setAndSendMappingsFromSchedulingDecision(
       const faabric::util::SchedulingDecision& decision);
+      */
+
+    void setAndSendMappingsFromSchedulingDecision(
+      const faabric::util::SchedulingDecision& decision,
+      const std::set<std::string>& hostSkipList = {});
 
     void sendMappingsFromSchedulingDecision(
       const faabric::util::SchedulingDecision& decision,
-      const std::set<std::string>& hostList);
+      const std::set<std::string>& hostList,
+      const std::set<std::string>& hostSkipList = {});
 
     void waitForMappingsOnThisHost(int groupId);
 

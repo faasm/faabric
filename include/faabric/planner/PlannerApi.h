@@ -4,13 +4,17 @@ namespace faabric::planner {
 enum PlannerCalls
 {
     NoPlanerCall = 0,
+    // Util
     Ping = 1,
-    GetAvailableHosts = 2,
-    RegisterHost = 3,
-    RemoveHost = 4,
-    CallFunctions = 5,
-    GetSchedulingDecision = 6,
-    SetMessageResult = 7,
-    GetMessageResult = 8,
+    SetTestsConfig = 2,
+    // Host-membership calls
+    GetAvailableHosts = 3,
+    RegisterHost = 4,
+    RemoveHost = 5,
+    // Scheduling calls
+    CallFunctions = 6,
+    GetSchedulingDecision = 7,
+    SetMessageResult = 8,
+    GetMessageResult = 9,
 };
 }

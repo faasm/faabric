@@ -127,8 +127,9 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Get the scheduling decision
-    faabric::util::SchedulingDecision decision = sch.makeSchedulingDecision(
-      req, faabric::util::SchedulingTopologyHint::CACHED);
+    // TODO: implement CACHED topology hint
+    req->set_schedulinghint(faabric::BatchExecuteRequest_SchedulingHint_CACHED);
+    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
     bool isSingleHost = decision.isSingleHost();
 
     // Do snapshotting if not on a single host

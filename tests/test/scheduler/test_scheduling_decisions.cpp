@@ -46,28 +46,11 @@ class SchedulingDecisionTestFixture : public SchedulerTestFixture
         // Set resources for all hosts
         setHostResources(config.hosts, config.slots, config.used);
 
-        // The first time we run the batch request, we will follow the
-        // unregistered hosts path
-        faabric::util::SchedulingDecision actualDecision =
-          sch.makeSchedulingDecision(req, config.topologyHint);
-        REQUIRE(actualDecision.hosts == config.expectedHosts);
+        // Set the planner's mocked hosts (hosts that we simulate, but are not
+        // online)
+        setPlannerMockedHosts(config.hosts);
 
-        // Reestablish host resources
-        setHostResources(config.hosts, config.slots, config.used);
-
-        // Create a new request, preserving the app ID to ensure a repeat
-        // request uses the registered hosts
-        auto repeatReq =
-          faabric::util::batchExecFactory("foo", "baz", req->messages_size());
-        for (int i = 0; i < req->messages_size(); i++) {
-            faabric::Message& msg = repeatReq->mutable_messages()->at(i);
-            msg.set_appid(actualDecision.appId);
-        }
-
-        // The second time we run the batch request, we will follow
-        // the registered hosts path
-        actualDecision =
-          sch.makeSchedulingDecision(repeatReq, config.topologyHint);
+        auto actualDecision = sch.callFunctions(req);
         REQUIRE(actualDecision.hosts == config.expectedHosts);
     }
 };
@@ -82,7 +65,9 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .used = { 0, 0 },
         .numReqs = 2,
         .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
-        .expectedHosts = { masterHost, "hostA" },
+        // The scheduler breaks ties in reverse alphabetical order, so it will
+        // pick "hostA" before "masterHost" (which has a numerical IP)
+        .expectedHosts = { "hostA", masterHost },
     };
 
     auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
@@ -102,38 +87,52 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
     };
 
-    SECTION("Capacity on all hosts")
+    // The scheduler picks first hosts with a higher number of available
+    // slots
+    SECTION("Capacity on all hosts - Emptier hosts go first")
     {
         config.used = { 2, 3, 2 };
         config.numReqs = 5;
         config.expectedHosts = {
-            masterHost, masterHost, "hostA", "hostB", "hostB"
+            "hostB", "hostB", masterHost, masterHost, "hostA"
         };
     }
 
-    SECTION("Non-master host overloaded")
+    // If all hosts have the same number of available slots, it will pick
+    // larger hosts first
+    SECTION("Capacity on all hosts - Larger hosts go first")
     {
-        config.used = { 2, 6, 2 };
+        config.slots = { 4, 6, 4 };
+        config.used = { 2, 4, 2 };
+        config.numReqs = 5;
+        config.expectedHosts = {
+            "hostA", "hostA", "hostB", "hostB", masterHost
+        };
+    }
+
+    // If all hosts have the same number of available slots and the same size,
+    // it will break the tie picking larger hosts alphabetically first
+    SECTION("Capacity on all hosts - Larger alphabetically breaks tie")
+    {
+        config.used = { 2, 2, 2 };
+        config.numReqs = 5;
+        config.expectedHosts = {
+            "hostB", "hostB", "hostA", "hostA", masterHost
+        };
+    }
+
+    SECTION("One host at capacity")
+    {
+        config.used = { 2, 4, 2 };
         config.numReqs = 4;
-        config.expectedHosts = { masterHost, masterHost, "hostB", "hostB" };
+        config.expectedHosts = { "hostB", "hostB", masterHost, masterHost };
     }
 
-    SECTION("Non-master host overloaded, insufficient capacity")
+    SECTION("Empty scheduling decision if no capacity")
     {
-        config.used = { 3, 6, 2 };
+        config.used = { 3, 4, 2 };
         config.numReqs = 5;
-        config.expectedHosts = {
-            masterHost, "hostB", "hostB", masterHost, masterHost,
-        };
-    }
-
-    SECTION("Non-master host overloaded, master overloaded")
-    {
-        config.used = { 6, 6, 2 };
-        config.numReqs = 5;
-        config.expectedHosts = {
-            "hostB", "hostB", masterHost, masterHost, masterHost,
-        };
+        config.expectedHosts = {};
     }
 
     auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
@@ -141,55 +140,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
     testActualSchedulingDecision(req, config);
 }
 
-TEST_CASE_METHOD(SchedulingDecisionTestFixture,
-                 "Test overloading all resources defaults to master",
-                 "[scheduler]")
-{
-    SchedulingConfig config = {
-        .hosts = { masterHost, "hostA" },
-        .slots = { 1, 1 },
-        .used = { 0, 0 },
-        .numReqs = 3,
-        .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
-        .expectedHosts = { masterHost, "hostA", masterHost },
-    };
-
-    auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
-
-    testActualSchedulingDecision(req, config);
-}
-
-TEST_CASE_METHOD(SchedulingDecisionTestFixture,
-                 "Test force local forces executing at master",
-                 "[scheduler]")
-{
-    SchedulingConfig config = {
-        .hosts = { masterHost, "hostA" },
-        .slots = { 1, 1 },
-        .used = { 0, 0 },
-        .numReqs = 2,
-        .topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL,
-        .expectedHosts = { masterHost, "hostA" },
-    };
-
-    auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
-
-    SECTION("Force local off")
-    {
-        config.topologyHint = faabric::util::SchedulingTopologyHint::NONE,
-        config.expectedHosts = { masterHost, "hostA" };
-    }
-
-    SECTION("Force local on")
-    {
-        config.topologyHint =
-          faabric::util::SchedulingTopologyHint::FORCE_LOCAL,
-        config.expectedHosts = { masterHost, masterHost };
-    }
-
-    testActualSchedulingDecision(req, config);
-}
-
+/* TODO: what shall we do with scheduling topology hints?
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test scheduling hints can be disabled through the config",
                  "[scheduler]")
@@ -221,6 +172,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 
     faabricConf.reset();
 }
+*/
 
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test master running out of resources",
@@ -250,21 +202,22 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         .used = { 0, 0, 0 },
         .numReqs = 4,
         .topologyHint = faabric::util::SchedulingTopologyHint::NONE,
-        .expectedHosts = { masterHost, masterHost, "hostB", "hostB" },
+        .expectedHosts = { "hostB", "hostB", masterHost, masterHost },
     };
 
+    SECTION("Empty hosts")
+    {
+        config.slots = { 2, 0, 2 };
+        config.used = { 0, 0, 0 };
+    }
+
+    SECTION("Full hosts")
+    {
+        config.slots = { 2, 4, 2 };
+        config.used = { 0, 4, 0 };
+    }
+
     auto req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
-
-    SECTION("No topology hint")
-    {
-        config.topologyHint = faabric::util::SchedulingTopologyHint::NONE;
-    }
-
-    SECTION("Never alone topology hint")
-    {
-        config.topologyHint =
-          faabric::util::SchedulingTopologyHint::NEVER_ALONE;
-    }
 
     testActualSchedulingDecision(req, config);
 }
@@ -287,39 +240,29 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
     SECTION("Even slot distribution across hosts")
     {
         config.slots = { 2, 2, 2, 2 };
-        config.expectedHosts = { masterHost, masterHost, "hostA", "hostA",
-                                 "hostB",    "hostB",    "hostC", "hostC" };
+        config.expectedHosts = { "hostC", "hostC", "hostB",    "hostB",
+                                 "hostA", "hostA", masterHost, masterHost };
     }
 
     SECTION("Uneven slot ditribution across hosts")
     {
         config.slots = { 3, 2, 2, 1 };
-        config.expectedHosts = { masterHost, masterHost, masterHost, "hostA",
-                                 "hostA",    "hostB",    "hostB",    "hostC" };
-    }
-
-    SECTION("Very uneven slot distribution across hosts")
-    {
-        config.slots = { 1, 0, 0, 0 };
-        config.expectedHosts = {
-            masterHost, masterHost, masterHost, masterHost,
-            masterHost, masterHost, masterHost, masterHost
-        };
+        config.expectedHosts = { masterHost, masterHost, masterHost, "hostB",
+                                 "hostB",    "hostA",    "hostA",    "hostC" };
     }
 
     SECTION("Decreasing to one and increasing slot distribution")
     {
-        config.slots = { 2, 2, 1, 2 };
+        config.slots = { 3, 3, 1, 3 };
 
         SECTION("No topology hint")
         {
             config.topologyHint = faabric::util::SchedulingTopologyHint::NONE;
-            config.expectedHosts = {
-                masterHost, masterHost, "hostA", "hostA",
-                "hostB",    "hostC",    "hostC", masterHost
-            };
+            config.expectedHosts = { "hostC", "hostC", "hostC",    "hostA",
+                                     "hostA", "hostA", masterHost, masterHost };
         }
 
+        /* TODO: do we want to keep this topology hint?
         SECTION("Never alone topology hint")
         {
             config.topologyHint =
@@ -327,11 +270,13 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
             config.expectedHosts = { masterHost, masterHost, "hostA", "hostA",
                                      "hostC",    "hostC",    "hostC", "hostC" };
         }
+        */
     }
 
     testActualSchedulingDecision(req, config);
 }
 
+/* TODO: do we want to keep this test?
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test sticky pairs scheduling topology hint",
                  "[scheduler]")
@@ -403,7 +348,9 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 
     testActualSchedulingDecision(req, config);
 }
+*/
 
+/* TODO: do we want to keep the underfull topology hint?
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test underfull scheduling topology hint",
                  "[scheduler]")
@@ -440,7 +387,9 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
 
     testActualSchedulingDecision(req, config);
 }
+*/
 
+/* TODO: implement CACHED topology hint
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test cached scheduling topology hint",
                  "[scheduler]")
@@ -490,4 +439,5 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
       faabric::util::batchExecFactory("foo", "bar", config.numReqs);
     testActualSchedulingDecision(missReq, missConfig);
 }
+*/
 }

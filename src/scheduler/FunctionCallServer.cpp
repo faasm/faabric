@@ -46,9 +46,11 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::Flush: {
             return recvFlush(message.udata());
         }
+        /* TODO: can we delete this one
         case faabric::scheduler::FunctionCalls::GetResources: {
             return recvGetResources(message.udata());
         }
+        */
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized sync call header: {}", header));
@@ -95,6 +97,7 @@ void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
 }
 */
 
+/* TODO: can we delete this one?
 std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
   std::span<const uint8_t> buffer)
 {
@@ -102,4 +105,5 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
       scheduler.getThisHostResources());
     return response;
 }
+*/
 }

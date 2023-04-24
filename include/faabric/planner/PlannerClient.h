@@ -26,6 +26,8 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     void ping();
 
+    void setTestsConfig(PlannerTestsConfig& testsConfig);
+
     // ------
     // Host membership calls
     // ------

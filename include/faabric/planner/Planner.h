@@ -30,6 +30,8 @@ class Planner
 
     void printConfig() const;
 
+    void setTestsConfig(PlannerTestsConfig& testsConfigIn, bool reset = false);
+
     // ----------
     // Util
     // ----------
@@ -84,6 +86,8 @@ class Planner
 
     PlannerState state;
     PlannerConfig config;
+    PlannerTestsConfig testsConfig;
+    std::atomic<bool> isTestMode = false;
 
     // ----------
     // Host membership private API

@@ -207,10 +207,12 @@ class Scheduler
 
     ~Scheduler();
 
+    /* TODO: remove me
     faabric::util::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingTopologyHint topologyHint =
         faabric::util::SchedulingTopologyHint::NONE);
+    */
 
     void callFunction(faabric::Message& msg, bool forceLocal = false);
 
@@ -244,9 +246,6 @@ class Scheduler
       const std::string& user,
       const std::string& function,
       bool acquireLock = true);
-
-    // TODO: remove me
-    // void broadcastFlush();
 
     void flushLocally();
 
@@ -356,7 +355,7 @@ class Scheduler
     std::shared_ptr<faabric::snapshot::SnapshotClient> getSnapshotClient(
       const std::string& otherHost);
 
-    static std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
+    std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
 
   private:
     std::string thisHost;
@@ -389,8 +388,6 @@ class Scheduler
     faabric::HostResources thisHostResources;
     std::atomic<int32_t> thisHostUsedSlots = 0;
 
-    void updateHostResources();
-
     faabric::HostResources getHostResources(const std::string& host);
 
     // ---- Planner----
@@ -403,9 +400,11 @@ class Scheduler
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
+    /* TODO: remove me
     faabric::util::SchedulingDecision doSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingTopologyHint topologyHint);
+    */
 
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -417,9 +416,11 @@ class Scheduler
       faabric::Message& msg,
       faabric::util::FullLock& schedulerLock);
 
+    /*
     std::vector<std::string> getUnregisteredHosts(const std::string& user,
                                                   const std::string& function,
                                                   bool noCache = false);
+    */
 
     // ---- Accounting and debugging ----
     std::vector<faabric::Message> recordedMessagesAll;
