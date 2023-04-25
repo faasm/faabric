@@ -227,9 +227,9 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
-    bool isMaster = firstMsg.masterhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     bool isSingleHost = req->singlehost();
+    // TODO: can we set snapshot key in the request?
     std::string snapshotKey = firstMsg.snapshotkey();
 
     // Threads on a single host don't need to do anything with snapshots, as
@@ -284,7 +284,13 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
         const faabric::Message& msg = req->messages().at(msgIdx);
 
         int threadPoolIdx = -1;
+        // WARNING: we should not be overloading anymore, so we should be
+        // able to  error out if this happens (?)
         if (availablePoolThreads.empty()) {
+            SPDLOG_ERROR("Available thread pool is empty for app: {}",
+                         req->appid());
+            throw std::runtime_error("Empty available thread pool!");
+            /* TODO: remove me
             // Here all threads are still executing, so we have to overload.
             // If any tasks are blocking we risk a deadlock, and can no
             // longer guarantee the application will finish. In general if
@@ -292,7 +298,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
             // avoid the zeroth and first pool threads as they are likely to
             // be the main thread and the zeroth in the communication group,
             // so will be blocking.
-            if (isThreads && isMaster) {
+            if (isThreads && isMain) {
                 if (threadPoolSize <= 2) {
                     SPDLOG_ERROR("Insufficient pool threads ({}) to "
                                  "overload {} idx {}",
@@ -311,15 +317,15 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
             SPDLOG_DEBUG("Overloaded app index {} to thread {}",
                          msg.appidx(),
                          threadPoolIdx);
-        } else {
-            // Take next from those that are available
-            threadPoolIdx = *availablePoolThreads.begin();
-            availablePoolThreads.erase(threadPoolIdx);
-
-            SPDLOG_TRACE("Assigned app index {} to thread {}",
-                         msg.appidx(),
-                         threadPoolIdx);
+            */
         }
+
+        // Take next from those that are available
+        threadPoolIdx = *availablePoolThreads.begin();
+        availablePoolThreads.erase(threadPoolIdx);
+
+        SPDLOG_TRACE(
+          "Assigned app index {} to thread {}", msg.appidx(), threadPoolIdx);
 
         // Enqueue the task
         threadTaskQueues[threadPoolIdx].enqueue(ExecutorTask(msgIdx, req));

@@ -35,6 +35,7 @@ message BatchExecuteRequest {
         // TODO: this one is probably not needed
         MIGRATION = 3;
         DIST_CHANGE = 4;
+        // SCALE_CHANGE = 5;
     }
 
     BatchExecuteType type = 4;
@@ -137,8 +138,10 @@ message Message {
     string snapshotKey = 12;
 
     int64 timestamp = 14;
+    // TODO: can we get rid of the redis-specific keys?
     string resultKey = 15;
     bool executesLocally = 16;
+    // TODO: can we get rid of the redis-specific keys?
     string statusKey = 17;
 
     string executedHost = 18;

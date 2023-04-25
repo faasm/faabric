@@ -7,6 +7,16 @@ namespace faabric::util {
 void PeriodicBackgroundThread::start(int intervalSecondsIn)
 {
     intervalSeconds = intervalSecondsIn;
+    if (intervalSecondsIn <= 0) {
+        SPDLOG_DEBUG("Skipping starting periodic background thread");
+        return;
+    }
+
+    if (workThread != nullptr) {
+        SPDLOG_DEBUG("Skipping starting already-initialised background thread");
+        return;
+    }
+
     SPDLOG_DEBUG("Starting periodic background thread with interval {}s",
                  intervalSeconds);
 

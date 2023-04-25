@@ -207,14 +207,9 @@ class Scheduler
 
     ~Scheduler();
 
-    /* TODO: remove me
-    faabric::util::SchedulingDecision makeSchedulingDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingTopologyHint topologyHint =
-        faabric::util::SchedulingTopologyHint::NONE);
-    */
-
-    void callFunction(faabric::Message& msg, bool forceLocal = false);
+    // TODO: do we want to keep this legacy function?
+    // TODO: no! remove me
+    // void callFunction(faabric::Message& msg, bool forceLocal = false);
 
     void executeBatchRequest(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
@@ -242,10 +237,8 @@ class Scheduler
 
     int getFunctionRegisteredHostCount(const faabric::Message& msg);
 
-    const std::set<std::string>& getFunctionRegisteredHosts(
-      const std::string& user,
-      const std::string& function,
-      bool acquireLock = true);
+    const std::set<std::string> getFunctionRegisteredHosts(
+      const faabric::Message& msg);
 
     void flushLocally();
 
@@ -304,14 +297,6 @@ class Scheduler
       std::shared_ptr<faabric::HostResources> overwriteResources = nullptr);
 
     void removeHostFromGlobalSet(const std::string& host);
-
-    void removeRegisteredHost(const std::string& host,
-                              const std::string& user,
-                              const std::string& function);
-
-    void addRegisteredHost(const std::string& host,
-                           const std::string& user,
-                           const std::string& function);
 
     faabric::HostResources getThisHostResources();
 
@@ -395,16 +380,6 @@ class Scheduler
 
     // ---- Actual scheduling ----
     SchedulerReaperThread reaperThread;
-
-    std::set<std::string> availableHostsCache;
-
-    std::unordered_map<std::string, std::set<std::string>> registeredHosts;
-
-    /* TODO: remove me
-    faabric::util::SchedulingDecision doSchedulingDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingTopologyHint topologyHint);
-    */
 
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,

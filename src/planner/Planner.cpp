@@ -123,6 +123,7 @@ std::vector<std::shared_ptr<Host>> Planner::doGetAvailableHosts()
     }
 
     for (const auto& host : hostsToRemove) {
+        SPDLOG_INFO("Removing host {} after not receiving keep-alive", host);
         state.hostMap.erase(host);
     }
 
@@ -251,34 +252,6 @@ Planner::makeSchedulingDecision(
                         it->second.first->messages_size() +
                           req->messages_size());
         }
-        /*
-        // Work out the total of message ids that are in the new request, that
-        // are not in the old scheduling decision. We can get rid of the
-        // messages in the request that we have already seen
-        auto oldDecisionMsgIds = it->second.second->messageIds;
-        int newMessages = 0;
-        for (const auto& msg : req->messages()) {
-            if (std::find(oldDecisionMsgIds.begin(), oldDecisionMsgIds.end(),
-        msg.id()) == oldDecisionMsgIds.end()) {
-                ++newMessages;
-            }
-        }
-        if (newMessages == 0) {
-            decisionType = DecisionType::DIST_CHANGE;
-            SPDLOG_INFO("Planner deciding DIST_CHANGE for app {}", appId);
-        } else if (newMessages == req->messages_size()) {
-            decisionType = DecisionType::SCALE_CHANGE;
-            SPDLOG_INFO("Planner deciding SCALE_CHANGE for app {} ({} -> {})",
-                        appId,
-                        it->second.first->messages_size(),
-                        it->second.first->messages_size() + newMessages);
-        } else {
-            // This should never happen
-            // TODO: what to do here?
-            SPDLOG_ERROR("Request with known and unknown messages!");
-            return it->second.second;
-        }
-        */
     }
 
     // Helper methods used during scheduling
@@ -387,6 +360,8 @@ Planner::makeSchedulingDecision(
             return decision;
         };
         case DecisionType::SCALE_CHANGE: {
+            // TODO: shall we set the groupidx here instead of relying on the
+            // calling function?
             auto oldReq = state.inFlightRequests.at(appId).first;
             auto newReq = req;
             auto decision = state.inFlightRequests.at(appId).second;
@@ -590,16 +565,19 @@ void Planner::dispatchSchedulingDecision(
     int j = totalAppMessages - newAppMessages;
     for (int i = 0; i < newAppMessages; i++, j++) {
         auto msg = req->messages().at(i);
-        // TODO: maybe assert differently?
-        // This assertions only work if we are dealing with a NEW
+        // TODO: maybe assert differently to prevent the planner from dying
+        // if something goes wrong. Maybe we want it to die?
         assert(msg.appid() == decision->appId);
         assert(msg.groupid() == decision->groupId);
         assert(msg.id() == decision->messageIds.at(j));
+        assert(msg.groupidx() == decision->groupIdxs.at(j));
         assert(decision->hosts.at(j) == decision->plannerHosts.at(j)->ip());
 
         std::string thisHost = decision->hosts.at(j);
         if (hostRequests.find(thisHost) == hostRequests.end()) {
             hostRequests[thisHost] = faabric::util::batchExecFactory();
+            hostRequests[thisHost]->set_appid(decision->appId);
+            hostRequests[thisHost]->set_groupid(decision->groupId);
             hostRequests[thisHost]->set_snapshotkey(req->snapshotkey());
             hostRequests[thisHost]->set_type(req->type());
             hostRequests[thisHost]->set_subtype(req->subtype());

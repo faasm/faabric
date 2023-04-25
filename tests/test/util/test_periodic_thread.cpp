@@ -58,4 +58,15 @@ TEST_CASE("Test periodic background operation", "[util]")
     // Check the count again
     REQUIRE(t.getWorkCount() == 2);
 }
+
+/* TODO
+TEST_CASE("Periodic background thread does not start with non-positive period",
+"[util]")
+{
+    auto b = Barrier::create(2);
+
+    DummyPeriodicThread t(b);
+    REQUIRE(t.getWorkCount() == 0);
+}
+*/
 }

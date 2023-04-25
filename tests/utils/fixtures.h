@@ -451,6 +451,9 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         sch.addHostToGlobalSet(
           otherHost, std::make_shared<faabric::HostResources>(otherResources));
 
+        // Add the other world to the list of mocked hosts
+        setPlannerMockedHosts({ otherHost });
+
         // Queue the resource response for this other host
         // faabric::scheduler::queueResourceResponse(otherHost, otherResources);
     }

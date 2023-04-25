@@ -532,6 +532,20 @@ std::set<int> PointToPointBroker::getIdxsRegisteredForGroup(int groupId)
     return groupIdIdxsMap[groupId];
 }
 
+std::set<std::string> PointToPointBroker::getHostsRegisteredForGroup(
+  int groupId)
+{
+    // This method acquires and releases a SharedLock many times. If it becomes
+    // a bottleneck we can work around it by adding a bit of code duplication
+    auto groupIdxs = getIdxsRegisteredForGroup(groupId);
+    std::set<std::string> hostsForGroup;
+    for (const auto idx : groupIdxs) {
+        hostsForGroup.insert(getHostForReceiver(groupId, idx));
+    }
+
+    return hostsForGroup;
+}
+
 void PointToPointBroker::initSequenceCounters(int groupId)
 {
     if (currentGroupId != NO_CURRENT_GROUP_ID) {

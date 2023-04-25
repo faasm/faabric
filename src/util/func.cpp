@@ -67,6 +67,7 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
     for (int i = 0; i < count; i++) {
         *req->add_messages() = messageFactory(user, function);
         req->mutable_messages()->at(i).set_appid(appId);
+        req->mutable_messages()->at(i).set_groupidx(i);
     }
 
     return req;

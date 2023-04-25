@@ -929,8 +929,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Check the other host is registered
     std::set<std::string> expectedRegistered = { otherHost };
-    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
-            expectedRegistered);
+    REQUIRE(sch.getFunctionRegisteredHosts(msg) == expectedRegistered);
 
     // Check snapshot has been pushed
     auto pushes = faabric::snapshot::getSnapshotPushes();

@@ -162,6 +162,7 @@ void SchedulingDecision::removeMessage(const faabric::Message& msg)
     groupIdxs.erase(groupIdxs.begin() + idx);
 
     // TODO: still done separately
+    auto plannerHost = plannerHosts.at(idx);
     plannerHosts.at(idx)->set_usedslots(plannerHosts.at(idx)->usedslots() - 1);
     plannerHosts.erase(plannerHosts.begin() + idx);
 }

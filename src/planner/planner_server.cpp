@@ -13,6 +13,9 @@ int main()
     // Initialise crash handler
     faabric::util::setUpCrashHandler();
 
+    // Disable the reaper thread in the scheduler
+    faabric::util::getSystemConfig().reaperIntervalSeconds = 0;
+
     // Start both the planner server and the planner http endpoint
     SPDLOG_INFO("Starting planner server");
     faabric::planner::PlannerServer plannerServer;
