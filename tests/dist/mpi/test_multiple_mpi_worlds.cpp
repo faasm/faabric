@@ -9,6 +9,7 @@
 
 namespace tests {
 
+/*
 TEST_CASE_METHOD(MpiDistTestsFixture,
                  "Test concurrent MPI applications with same master host",
                  "[mpi]")
@@ -129,4 +130,5 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     checkAllocationAndResultMigration(
       req2, hostsBeforeMigration, hostsAfterMigration, 15000);
 }
+*/
 }

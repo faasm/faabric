@@ -74,8 +74,12 @@ class Planner
     // Legacy set/get message result methods called from local schedulers
     void setMessageResult(std::shared_ptr<faabric::Message> msg);
 
+    // TODO: consider only using ids for getting message/batch results
     std::shared_ptr<faabric::Message> getMessageResult(
       std::shared_ptr<faabric::Message> msg);
+
+    std::shared_ptr<faabric::BatchExecuteRequest> getBatchResult(
+      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     // bool waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
@@ -101,6 +105,13 @@ class Planner
 
     // Check if a host's registration timestamp has expired
     bool isHostExpired(std::shared_ptr<Host> host, long epochTimeMs = 0);
+
+    // ----------
+    // Batch/message scheduling private API
+    // ----------
+
+    std::shared_ptr<faabric::Message> doGetMessageResult(
+      std::shared_ptr<faabric::Message> msg);
 };
 
 Planner& getPlanner();

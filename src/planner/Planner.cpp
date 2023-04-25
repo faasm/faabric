@@ -134,7 +134,7 @@ std::vector<std::shared_ptr<Host>> Planner::doGetAvailableHosts()
 // ownership of the host
 bool Planner::registerHost(const Host& hostIn)
 {
-    SPDLOG_DEBUG("Planner received request to register host {}", hostIn.ip());
+    SPDLOG_TRACE("Planner received request to register host {}", hostIn.ip());
 
     // Sanity check the input argument
     if (hostIn.slots() < 0) {
@@ -177,7 +177,7 @@ bool Planner::registerHost(const Host& hostIn)
     }
 
     // Irrespective, set the timestamp
-    SPDLOG_DEBUG("Setting timestamp for host {}", hostIn.ip());
+    SPDLOG_TRACE("Setting timestamp for host {}", hostIn.ip());
     state.hostMap.at(hostIn.ip())
       ->mutable_registerts()
       ->set_epochms(faabric::util::getGlobalClock().epochMillis());
@@ -351,6 +351,12 @@ Planner::makeSchedulingDecision(
                 }
             }
 
+            if (numLeftToSchedule != 0) {
+                SPDLOG_ERROR("Ran out of available hosts with {} messages left to schedule!",
+                             numLeftToSchedule);
+                return nullptr;
+            }
+
             // Add the request to in-flight
             state.inFlightRequests[appId] = std::make_pair(req, decision);
 
@@ -365,6 +371,17 @@ Planner::makeSchedulingDecision(
             auto oldReq = state.inFlightRequests.at(appId).first;
             auto newReq = req;
             auto decision = state.inFlightRequests.at(appId).second;
+
+            int numMessages = req->messages_size();
+            if (numFreeSlots < numMessages) {
+                SPDLOG_ERROR("Not enough capacity to schedule app {}:",
+                             appId);
+                SPDLOG_ERROR(
+                  "requested {} messages, but have only {} free slots",
+                  numMessages,
+                  numFreeSlots);
+                return nullptr;
+            }
 
             // Set the new group ID after the scale change
             oldReq->set_groupid(groupId);
@@ -413,7 +430,6 @@ Planner::makeSchedulingDecision(
                       });
 
             // Lastly, schedule requests to available hosts
-            int numMessages = req->messages_size();
             int numLeftToSchedule = numMessages;
             // This index goes from 0 to req->messages_size() - 1
             int nextMessageToScheduleIdx = 0;
@@ -683,10 +699,63 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
 std::shared_ptr<faabric::Message> Planner::getMessageResult(
   std::shared_ptr<faabric::Message> msg)
 {
-    int appId = msg->appid();
-    int msgId = msg->id();
+    faabric::util::SharedLock lock(plannerMx);
+
+    return doGetMessageResult(msg);
+}
+
+std::shared_ptr<faabric::BatchExecuteRequest> Planner::getBatchResult(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    int appId = req->appid();
+    auto responseReq = req;
+    responseReq->clear_messages();
+
+    SPDLOG_INFO("Planner getting batch result for app: {}", appId);
 
     faabric::util::SharedLock lock(plannerMx);
+
+    if (state.inFlightRequests.find(appId) == state.inFlightRequests.end()) {
+        SPDLOG_ERROR("App {} not registered in app results", appId);
+        return nullptr;
+    }
+
+    auto inFlightReq = state.inFlightRequests.at(appId).first;
+    if (inFlightReq->messages_size() != 0) {
+        SPDLOG_ERROR("App {} still has {} messages in-flight!",
+                     appId,
+                     inFlightReq->messages_size());
+        return nullptr;
+    }
+
+    if (state.appResults.find(appId) == state.appResults.end()) {
+        SPDLOG_ERROR("App {} not registered in result map!", appId);
+        return nullptr;
+    }
+    auto resultMsgs = state.appResults.at(appId);
+    for (auto& msg : resultMsgs) {
+        *responseReq->add_messages() = *(msg.second);
+    }
+
+    // If we get here, we release the shared lock, and acquire a full lock
+    // to remove the batch from in-flight
+    lock.unlock();
+
+    faabric::util::FullLock fullLock(plannerMx);
+    auto it = state.inFlightRequests.find(appId);
+    state.inFlightRequests.erase(it);
+
+    SPDLOG_INFO("Planner removing app {} from in-flight", appId);
+
+    return responseReq;
+}
+
+// TODO: we actually don't need this lock-free version anymore
+std::shared_ptr<faabric::Message> Planner::doGetMessageResult(
+  std::shared_ptr<faabric::Message> msg)
+{
+    int appId = msg->appid();
+    int msgId = msg->id();
 
     if (state.appResults.find(appId) == state.appResults.end()) {
         SPDLOG_ERROR("App {} not registered in app results", appId);

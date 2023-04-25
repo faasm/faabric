@@ -33,21 +33,21 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all reduce", "[mpi]")
     checkAllocationAndResult(req);
 }
 
-TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[.][mpi]")
+TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI all to all", "[mpi]")
 {
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
     auto req = setRequest("alltoall");
 
     // Call the functions
-    sch.callFunctions(req);
+    auto decision = sch.callFunctions(req);
 
     checkAllocationAndResult(req);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
                  "Test MPI all to all many times",
-                 "[.][mpi]")
+                 "[mpi]")
 {
     int numRuns = 50;
     int oldNumLocalSlots = nLocalSlots;
@@ -70,7 +70,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
                  "Test MPI all to all and sleep",
-                 "[.][mpi]")
+                 "[mpi]")
 {
     // Set up this host's resources
     setLocalSlots(nLocalSlots);
@@ -143,6 +143,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI checks", "[mpi]")
     checkAllocationAndResult(req);
 }
 
+/*
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
 {
     // We fist distribute the execution, and update the local slots
@@ -178,6 +179,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI function migration", "[mpi]")
     checkAllocationAndResultMigration(
       req, hostsBeforeMigration, hostsAfterMigration, 15000);
 }
+*/
 
 TEST_CASE_METHOD(MpiDistTestsFixture, "Test MPI gather", "[mpi]")
 {

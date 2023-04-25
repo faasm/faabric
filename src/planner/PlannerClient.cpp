@@ -11,7 +11,17 @@ namespace faabric::planner {
 void KeepAliveThread::doWork()
 {
     PlannerClient cli;
+
+    faabric::util::SharedLock lock(keepAliveThreadMx);
+
     cli.registerHost(thisHostReq);
+}
+
+void KeepAliveThread::setRequest(std::shared_ptr<RegisterHostRequest> thisHostReqIn)
+{
+    faabric::util::FullLock lock(keepAliveThreadMx);
+
+    thisHostReq = thisHostReqIn;
 }
 
 PlannerClient::PlannerClient()
@@ -123,5 +133,18 @@ std::shared_ptr<faabric::Message> PlannerClient::getMessageResult(
     }
 
     return std::make_shared<faabric::Message>(responseMsg);
+}
+
+std::shared_ptr<faabric::BatchExecuteRequest> PlannerClient::getBatchResult(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::BatchExecuteRequest responseReq;
+    syncSend(PlannerCalls::GetBatchResult, req.get(), &responseReq);
+
+    if (responseReq.id() == 0 || responseReq.appid() == 0) {
+        return nullptr;
+    }
+
+    return std::make_shared<faabric::BatchExecuteRequest>(responseReq);
 }
 }

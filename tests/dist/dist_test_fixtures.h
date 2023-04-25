@@ -23,8 +23,13 @@ class DistTestsFixture
     {
         // Make sure the host list is up to date
         sch.addHostToGlobalSet(getMasterIP());
-        sch.addHostToGlobalSet(getWorkerIP());
-        sch.removeHostFromGlobalSet(LOCALHOST);
+        // Even though the worker will send keep-alive messages, we reset the
+        // planner as part of the dist-test fixture. Thus, the period of time
+        // between the reset, and the keep-alive, the planner is not aware
+        // of the worker host. Thus, we add it here
+        auto workerResources = std::make_shared<faabric::HostResources>();
+        workerResources->set_slots(4);
+        sch.addHostToGlobalSet(getWorkerIP(), workerResources);
 
         // Set up executor
         std::shared_ptr<tests::DistTestExecutorFactory> fac =
@@ -56,15 +61,15 @@ class MpiDistTestsFixture : public DistTestsFixture
     MpiDistTestsFixture()
     {
         // Flush before each execution to ensure a clean start
-        sch.broadcastFlush();
+        // sch.broadcastFlush();
         SLEEP_MS(INTER_MPI_TEST_SLEEP);
     }
 
     ~MpiDistTestsFixture() = default;
 
   protected:
-    int nLocalSlots = 2;
-    int worldSize = 4;
+    int nLocalSlots = 4;
+    int worldSize = 8;
     bool origIsMsgOrderingOn;
 
     // The server has four slots, therefore by setting the number of local slots
@@ -72,7 +77,8 @@ class MpiDistTestsFixture : public DistTestsFixture
     void setLocalSlots(int numSlots, int worldSizeIn = 0)
     {
         faabric::HostResources res;
-        res.set_slots(numSlots);
+        res.set_slots(2 * numSlots);
+        res.set_usedslots(numSlots);
         sch.setThisHostResources(res);
 
         if (worldSizeIn > 0) {
@@ -87,13 +93,12 @@ class MpiDistTestsFixture : public DistTestsFixture
         faabric::Message& msg = req->mutable_messages()->at(0);
         msg.set_ismpi(true);
         msg.set_mpiworldsize(worldSize);
-        msg.set_recordexecgraph(true);
 
         return req;
     }
 
-    void checkSchedulingFromExecGraph(
-      const faabric::scheduler::ExecGraph& execGraph)
+    void checkSchedulingFromDecision(
+      const faabric::util::SchedulingDecision& decision)
     {
         // Build the expectation
         std::vector<std::string> expecedHosts;
@@ -119,10 +124,10 @@ class MpiDistTestsFixture : public DistTestsFixture
         }
 
         // Check against the actual scheduling decision
-        REQUIRE(expecedHosts ==
-                faabric::scheduler::getMpiRankHostsFromExecGraph(execGraph));
+        REQUIRE(expecedHosts == decision.hosts);
     }
 
+    // TODO: remove me plspls
     // Specialisation for migration tests
     void checkSchedulingFromExecGraph(
       const faabric::scheduler::ExecGraph& execGraph,
@@ -139,15 +144,21 @@ class MpiDistTestsFixture : public DistTestsFixture
     void checkAllocationAndResult(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       int timeoutMs = 10000,
-      bool skipExecGraphCheck = false)
+      bool skipDecisionCheck = false)
     {
-        faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
-        REQUIRE(result.returnvalue() == 0);
-        SLEEP_MS(1000);
-        if (!skipExecGraphCheck) {
-            auto execGraph = sch.getFunctionExecGraph(msg.id());
-            checkSchedulingFromExecGraph(execGraph);
+        for (const auto& msg : req->messages()) {
+            auto result = sch.getFunctionResult(msg, timeoutMs);
+            REQUIRE(result.returnvalue() == 0);
+        }
+
+        auto responseReq = sch.getPlannerClient()->getBatchResult(req);
+        faabric::util::SchedulingDecision decision(req->appid(), req->groupid());
+        for (const auto& msg : responseReq->messages()) {
+            decision.addMessage(msg.executedhost(), msg);
+        }
+
+        if (!skipDecisionCheck) {
+            checkSchedulingFromDecision(decision);
         }
     }
 
@@ -158,7 +169,7 @@ class MpiDistTestsFixture : public DistTestsFixture
       int timeoutMs = 1000)
     {
         faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
+        faabric::Message result = sch.getFunctionResult(msg, timeoutMs);
         REQUIRE(result.returnvalue() == 0);
         SLEEP_MS(1000);
         auto execGraph = sch.getFunctionExecGraph(msg.id());

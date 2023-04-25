@@ -59,7 +59,12 @@ int MPI_Init(int* argc, char*** argv)
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
     SPDLOG_DEBUG(
-      "Initialised world (id: {}) for rank: {}", call->mpiworldid(), thisRank);
+      "Function {}:{}:{} initialised world (id: {}) for rank: {}",
+      call->appid(),
+      call->groupid(),
+      call->groupidx(),
+      call->mpiworldid(),
+      thisRank);
 
     return MPI_SUCCESS;
 }
@@ -766,21 +771,14 @@ void mpiMigrationPoint(int entrypointFuncArg)
     auto& sch = faabric::scheduler::getScheduler();
 
     // Detect if there is a pending migration for the current app
-    auto pendingMigrations = sch.getPendingAppMigrations(call->appid());
-    bool appMustMigrate = pendingMigrations != nullptr;
+    auto migration = sch.checkForMigrationOpportunities(*call);
+    bool appMustMigrate = migration != nullptr;
 
     // Detect if this particular function needs to be migrated or not
     bool funcMustMigrate = false;
     std::string hostToMigrateTo = "otherHost";
     if (appMustMigrate) {
-        for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
-            auto m = pendingMigrations->mutable_migrations()->at(i);
-            if (m.msg().id() == call->id()) {
-                funcMustMigrate = true;
-                hostToMigrateTo = m.dsthost();
-                break;
-            }
-        }
+        funcMustMigrate = migration->srchost() != migration->dsthost();
     }
 
     // Regardless if we have to individually migrate or not, we need to prepare
@@ -788,7 +786,8 @@ void mpiMigrationPoint(int entrypointFuncArg)
     if (appMustMigrate && call->ismpi()) {
         auto& mpiWorld = faabric::scheduler::getMpiWorldRegistry().getWorld(
           call->mpiworldid());
-        mpiWorld.prepareMigration(call->mpirank(), pendingMigrations);
+        // TODO: resume from here
+        mpiWorld.prepareMigration(call->mpirank());
     }
 
     // Do actual migration

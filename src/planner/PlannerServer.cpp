@@ -62,6 +62,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::GetMessageResult: {
             return recvGetMessageResult(message.udata());
         }
+        case PlannerCalls::GetBatchResult: {
+            return recvGetBatchResult(message.udata());
+        }
         default: {
             // If we don't recognise the header, let the client fail, but don't
             // crash the planner
@@ -238,5 +241,16 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
     }
 
     return std::make_unique<faabric::Message>(*resultMsg);
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetBatchResult(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
+
+    auto resultReq =
+      planner.getBatchResult(std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
+
+    return std::make_unique<faabric::BatchExecuteRequest>(*resultReq);
 }
 }

@@ -490,12 +490,6 @@ void PointToPointBroker::sendMappingsFromSchedulingDecision(
                      decision.groupId,
                      host);
 
-        // TODO: figure out a better way to mock things in the tests
-        if (host == LOCALHOST) {
-            SPDLOG_WARN("Skipping sending mappings to LOCALHOST in mock mode");
-            continue;
-        }
-
         auto cli = getClient(host);
         cli->sendMappings(msg);
     }

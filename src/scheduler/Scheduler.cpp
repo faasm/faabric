@@ -120,7 +120,7 @@ void Scheduler::addHostToGlobalSet(
         req->mutable_host()->set_slots(overwriteResources->slots());
         req->mutable_host()->set_usedslots(overwriteResources->usedslots());
     } else if (hostIp == thisHost) {
-        req->mutable_host()->set_slots(thisHostResources.slots());
+        req->mutable_host()->set_slots(faabric::util::getUsableCores());
         req->mutable_host()->set_usedslots(0);
     }
 
@@ -129,15 +129,11 @@ void Scheduler::addHostToGlobalSet(
     // Once the host is registered, set-up a periodic thread to send a heart-
     // beat to the planner. Note that this method may be called multiple times
     // during the tests, so we only set the scheduler's variable if we are
-    // actually registering this host
-    if (hostIp == thisHost) {
-        keepAliveThread.thisHostReq = std::move(req);
-
-        // Only start the background keep-alive thread if not in test mode. We
-        // do so that in the tests we can overwrite the local resources
-        if (!faabric::util::isTestMode()) {
-            keepAliveThread.start(plannerTimeout / 2);
-        }
+    // actually registering this host. Also, only start the keep-alive thread
+    // if not in test mode
+    if (hostIp == thisHost && !faabric::util::isTestMode()) {
+        keepAliveThread.setRequest(req);
+        keepAliveThread.start(plannerTimeout / 2);
     }
 }
 
@@ -299,6 +295,7 @@ int Scheduler::reapStaleExecutors()
         if (execs.empty()) {
             SPDLOG_TRACE("No remaining executors for {}", key);
 
+            /* TODO: remove me
             bool isMaster = thisHost == masterHost;
             if (!isMaster) {
                 faabric::UnregisterRequest req;
@@ -308,6 +305,7 @@ int Scheduler::reapStaleExecutors()
 
                 getFunctionCallClient(masterHost)->unregister(req);
             }
+            */
 
             keysToRemove.emplace_back(key);
         }
@@ -1100,7 +1098,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     getPlannerClient()->setMessageResult(
       std::make_shared<faabric::Message>(msg));
-    // TODO: also set message result for faster awaiting
+    // TODO: also set local message result for faster awaiting
     /*
     redis::Redis& redis = redis::Redis::getQueue();
 

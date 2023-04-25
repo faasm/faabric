@@ -18,8 +18,8 @@ TEST_CASE_METHOD(DistTestsFixture,
                  "[funcs]")
 {
     // Set up this host's resources
-    int nLocalSlots = 2;
-    int nFuncs = 4;
+    int nLocalSlots = 6;
+    int nFuncs = 8;
     faabric::HostResources res;
     res.set_slots(nLocalSlots);
     sch.setThisHostResources(res);
@@ -35,10 +35,10 @@ TEST_CASE_METHOD(DistTestsFixture,
     const faabric::Message firstMsg = req->messages().at(0);
     faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
                                                        firstMsg.groupid());
-    expectedDecision.addMessage(thisHost, req->messages().at(0));
-    expectedDecision.addMessage(thisHost, req->messages().at(1));
-    expectedDecision.addMessage(otherHost, req->messages().at(2));
-    expectedDecision.addMessage(otherHost, req->messages().at(3));
+    for (int i = 0; i < req->messages_size(); i++) {
+        std::string host = i < nLocalSlots ? thisHost : otherHost;
+        expectedDecision.addMessage(host, req->messages().at(i));
+    }
 
     // Call the functions
     faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
@@ -47,25 +47,14 @@ TEST_CASE_METHOD(DistTestsFixture,
     checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
     // Check functions executed on this host
-    for (int i = 0; i < nLocalSlots; i++) {
-        faabric::Message& m = req->mutable_messages()->at(i);
-
-        sch.getFunctionResult(m.id(), 1000);
+    for (int i = 0; i < req->messages_size(); i++) {
+        std::string host = i < nLocalSlots ? thisHost : otherHost;
+        auto m = req->messages(i);
+        auto res = sch.getFunctionResult(m, 1000);
         std::string expected =
-          fmt::format("Function {} executed on host {}", m.id(), getMasterIP());
+          fmt::format("Function {} executed on host {}", m.id(), host);
 
-        REQUIRE(m.outputdata() == expected);
-    }
-
-    // Check functions executed on the other host
-    for (int i = nLocalSlots; i < nFuncs; i++) {
-        faabric::Message& m = req->mutable_messages()->at(i);
-        faabric::Message result = sch.getFunctionResult(m.id(), 1000);
-
-        std::string expected =
-          fmt::format("Function {} executed on host {}", m.id(), getWorkerIP());
-
-        REQUIRE(result.outputdata() == expected);
+        REQUIRE(res.outputdata() == expected);
     }
 }
 }
