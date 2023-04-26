@@ -3,8 +3,8 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/macros.h>
@@ -12,6 +12,7 @@
 
 #include <thread>
 
+using namespace faabric::mpi;
 using namespace faabric::scheduler;
 
 namespace tests {
@@ -196,7 +197,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test local barrier", "[mpi]")
     world.destroy();
 }
 
-void checkMessage(faabric::MPIMessage& actualMessage,
+void checkMessage(MPIMessage& actualMessage,
                   int worldId,
                   int senderRank,
                   int destRank,
@@ -237,7 +238,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send and recv on same host", "[mpi]")
         // Check message content
         const std::shared_ptr<InMemoryMpiQueue>& queueA2 =
           world.getLocalQueue(rankA1, rankA2);
-        faabric::MPIMessage actualMessage = *(queueA2->dequeue());
+        MPIMessage actualMessage = *(queueA2->dequeue());
         checkMessage(actualMessage, worldId, rankA1, rankA2, messageData);
     }
 
@@ -395,7 +396,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test send/recv message with no data", "[mpi]")
     SECTION("Check on queue")
     {
         // Check message content
-        faabric::MPIMessage actualMessage =
+        MPIMessage actualMessage =
           *(world.getLocalQueue(rankA1, rankA2)->dequeue());
         REQUIRE(actualMessage.count() == 0);
         REQUIRE(actualMessage.type() == FAABRIC_INT);
@@ -499,7 +500,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
                         BYTES(messageData.data()),
                         MPI_INT,
                         messageData.size(),
-                        faabric::MPIMessage::BROADCAST);
+                        MPIMessage::BROADCAST);
 
         // Recv on all non-root ranks
         for (int rank = 0; rank < worldSize; rank++) {
@@ -512,7 +513,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
                             BYTES(actual.data()),
                             MPI_INT,
                             3,
-                            faabric::MPIMessage::BROADCAST);
+                            MPIMessage::BROADCAST);
             REQUIRE(actual == messageData);
         }
     }
@@ -616,7 +617,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test collective messaging locally", "[mpi]")
 }
 
 template<typename T>
-void doReduceTest(scheduler::MpiWorld& world,
+void doReduceTest(MpiWorld& world,
                   int root,
                   MPI_Op op,
                   MPI_Datatype datatype,
@@ -701,14 +702,14 @@ void doReduceTest(scheduler::MpiWorld& world,
     }
 }
 
-template void doReduceTest<int>(scheduler::MpiWorld& world,
+template void doReduceTest<int>(MpiWorld& world,
                                 int root,
                                 MPI_Op op,
                                 MPI_Datatype datatype,
                                 std::vector<std::vector<int>> rankData,
                                 std::vector<int>& expected);
 
-template void doReduceTest<double>(scheduler::MpiWorld& world,
+template void doReduceTest<double>(MpiWorld& world,
                                    int root,
                                    MPI_Op op,
                                    MPI_Datatype datatype,
@@ -1123,6 +1124,9 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
         std::vector<std::jthread> threads;
         for (int r = 0; r < worldSize; r++) {
             threads.emplace_back([&, r, isInPlace] {
+                // Re-define the data vector so that each thread has its own
+                // copy, avoiding data races
+                std::vector<int> actual(gatheredSize, 0);
                 if (isInPlace) {
                     // Put this rank's data in place in the recv buffer as
                     // expected
@@ -1131,7 +1135,7 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
                               actual.data() + (r * nPerRank));
 
                     world.allGather(r,
-                                    BYTES(actual.data()),
+                                    BYTES_CONST(actual.data()),
                                     MPI_INT,
                                     nPerRank,
                                     BYTES(actual.data()),
@@ -1147,7 +1151,6 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
                                     nPerRank);
                 }
 
-                // TODO remove
                 assert(actual == expected);
             });
         }
@@ -1157,8 +1160,6 @@ TEST_CASE_METHOD(MpiTestFixture, "Test gather and allgather", "[mpi]")
                 t.join();
             }
         }
-
-        REQUIRE(actual == expected);
     }
 }
 

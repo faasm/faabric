@@ -6,12 +6,12 @@
 #include <DummyExecutor.h>
 #include <DummyExecutorFactory.h>
 
+#include <faabric/mpi/MpiWorld.h>
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/FunctionCallServer.h>
-#include <faabric/scheduler/MpiWorld.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
