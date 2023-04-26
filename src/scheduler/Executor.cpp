@@ -1,6 +1,6 @@
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecutorContext.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/State.h>
@@ -467,9 +467,8 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 
             // MPI migration
             if (msg.ismpi()) {
-                auto& mpiWorld =
-                  faabric::scheduler::getMpiWorldRegistry().getWorld(
-                    msg.mpiworldid());
+                auto& mpiWorld = faabric::mpi::getMpiWorldRegistry().getWorld(
+                  msg.mpiworldid());
                 mpiWorld.destroy();
             }
         } catch (const std::exception& ex) {

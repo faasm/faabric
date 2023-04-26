@@ -3,10 +3,11 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <faabric/scheduler/MpiContext.h>
+#include <faabric/mpi/MpiContext.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/random.h>
 
+using namespace faabric::mpi;
 using namespace faabric::scheduler;
 
 namespace tests {

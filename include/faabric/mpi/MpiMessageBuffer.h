@@ -1,10 +1,10 @@
 #include <faabric/mpi/mpi.h>
-#include <faabric/proto/faabric.pb.h>
+#include <faabric/mpi/mpi.pb.h>
 
 #include <iterator>
 #include <list>
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 /* The MPI message buffer (MMB) keeps track of the asyncrhonous
  * messages that we must have received (i.e. through an irecv call) but we
  * still have not waited on (acknowledged). Messages are acknowledged either
@@ -25,21 +25,17 @@ class MpiMessageBuffer
     {
       public:
         int requestId = -1;
-        std::shared_ptr<faabric::MPIMessage> msg = nullptr;
+        std::shared_ptr<MPIMessage> msg = nullptr;
         int sendRank = -1;
         int recvRank = -1;
         uint8_t* buffer = nullptr;
         faabric_datatype_t* dataType = nullptr;
         int count = -1;
-        faabric::MPIMessage::MPIMessageType messageType =
-          faabric::MPIMessage::NORMAL;
+        MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL;
 
         bool isAcknowledged() { return msg != nullptr; }
 
-        void acknowledge(std::shared_ptr<faabric::MPIMessage> msgIn)
-        {
-            msg = msgIn;
-        }
+        void acknowledge(std::shared_ptr<MPIMessage> msgIn) { msg = msgIn; }
     };
 
     /* Interface to query the buffer size */

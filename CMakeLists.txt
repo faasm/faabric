@@ -116,6 +116,7 @@ add_library(faabric
     faabric.cpp
     $<TARGET_OBJECTS:endpoint_obj>
     $<TARGET_OBJECTS:flat_obj>
+    $<TARGET_OBJECTS:mpi_obj>
     $<TARGET_OBJECTS:planner_obj>
     $<TARGET_OBJECTS:proto_obj>
     $<TARGET_OBJECTS:redis_obj>

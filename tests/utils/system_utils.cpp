@@ -1,11 +1,11 @@
 #include "DummyExecutorFactory.h"
 #include <catch2/catch.hpp>
 
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
@@ -58,7 +58,8 @@ void cleanFaabric()
     faabric::scheduler::setExecutorFactory(fac);
 
     // Clear out MPI worlds
-    scheduler::MpiWorldRegistry& mpiRegistry = scheduler::getMpiWorldRegistry();
+    faabric::mpi::MpiWorldRegistry& mpiRegistry =
+      faabric::mpi::getMpiWorldRegistry();
     mpiRegistry.clear();
 }
 }

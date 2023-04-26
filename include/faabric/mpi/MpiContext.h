@@ -1,9 +1,9 @@
 #pragma once
 
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 class MpiContext
 {
   public:
@@ -13,11 +13,11 @@ class MpiContext
 
     void joinWorld(faabric::Message& msg);
 
-    bool getIsMpi();
+    bool getIsMpi() const;
 
-    int getWorldId();
+    int getRank() const;
 
-    int getRank();
+    int getWorldId() const;
 
   private:
     bool isMpi = false;

@@ -1,18 +1,18 @@
-#include <faabric/scheduler/MpiWorldRegistry.h>
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 MpiWorldRegistry& getMpiWorldRegistry()
 {
     static MpiWorldRegistry r;
     return r;
 }
 
-scheduler::MpiWorld& MpiWorldRegistry::createWorld(faabric::Message& msg,
-                                                   int worldId,
-                                                   std::string hostOverride)
+MpiWorld& MpiWorldRegistry::createWorld(faabric::Message& msg,
+                                        int worldId,
+                                        std::string hostOverride)
 {
     if (worldMap.count(worldId) > 0) {
         SPDLOG_ERROR("World {} already exists", worldId);

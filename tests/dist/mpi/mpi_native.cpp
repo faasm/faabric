@@ -1,15 +1,18 @@
 #include "mpi_native.h"
 
+#include <faabric/mpi/MpiContext.h>
+#include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.h>
+#include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/ExecutorContext.h>
-#include <faabric/scheduler/MpiContext.h>
-#include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/compare.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 
-static thread_local faabric::scheduler::MpiContext executingContext;
+using namespace faabric::mpi;
+
+static thread_local MpiContext executingContext;
 
 faabric::Message* getExecutingCall()
 {
@@ -20,10 +23,9 @@ faabric::Message* getExecutingCall()
     return tests::mpi::executingCall;
 }
 
-faabric::scheduler::MpiWorld& getExecutingWorld()
+MpiWorld& getExecutingWorld()
 {
-    faabric::scheduler::MpiWorldRegistry& reg =
-      faabric::scheduler::getMpiWorldRegistry();
+    MpiWorldRegistry& reg = getMpiWorldRegistry();
     return reg.getWorld(executingContext.getWorldId());
 }
 
@@ -110,7 +112,7 @@ int MPI_Send(const void* buf,
                              (uint8_t*)buf,
                              datatype,
                              count,
-                             faabric::MPIMessage::NORMAL);
+                             MPIMessage::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -143,7 +145,7 @@ int MPI_Recv(void* buf,
                              datatype,
                              count,
                              status,
-                             faabric::MPIMessage::NORMAL);
+                             MPIMessage::NORMAL);
 
     return MPI_SUCCESS;
 }
@@ -225,15 +227,11 @@ int MPI_Bcast(void* buffer,
               int root,
               MPI_Comm comm)
 {
-    faabric::scheduler::MpiWorld& world = getExecutingWorld();
+    MpiWorld& world = getExecutingWorld();
 
     int rank = executingContext.getRank();
-    world.broadcast(root,
-                    rank,
-                    (uint8_t*)buffer,
-                    datatype,
-                    count,
-                    faabric::MPIMessage::BROADCAST);
+    world.broadcast(
+      root, rank, (uint8_t*)buffer, datatype, count, MPIMessage::BROADCAST);
     return MPI_SUCCESS;
 }
 
@@ -629,7 +627,7 @@ int MPI_Isend(const void* buf,
 {
     SPDLOG_TRACE("MPI - MPI_Isend {} -> {}", executingContext.getRank(), dest);
 
-    faabric::scheduler::MpiWorld& world = getExecutingWorld();
+    MpiWorld& world = getExecutingWorld();
     (*request) = (faabric_request_t*)malloc(sizeof(faabric_request_t));
     int requestId = world.isend(
       executingContext.getRank(), dest, (uint8_t*)buf, datatype, count);
@@ -649,7 +647,7 @@ int MPI_Irecv(void* buf,
     SPDLOG_TRACE(
       "MPI - MPI_Irecv {} <- {}", executingContext.getRank(), source);
 
-    faabric::scheduler::MpiWorld& world = getExecutingWorld();
+    MpiWorld& world = getExecutingWorld();
     (*request) = (faabric_request_t*)malloc(sizeof(faabric_request_t));
     int requestId = world.irecv(
       source, executingContext.getRank(), (uint8_t*)buf, datatype, count);
@@ -786,8 +784,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
     // Regardless if we have to individually migrate or not, we need to prepare
     // for the app migration
     if (appMustMigrate && call->ismpi()) {
-        auto& mpiWorld = faabric::scheduler::getMpiWorldRegistry().getWorld(
-          call->mpiworldid());
+        auto& mpiWorld = getMpiWorldRegistry().getWorld(call->mpiworldid());
         mpiWorld.prepareMigration(call->mpirank(), pendingMigrations);
     }
 
