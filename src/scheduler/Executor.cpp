@@ -448,6 +448,16 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
               faabric::transport::PointToPointGroup::getGroup(msg.groupid());
         }
 
+        // If the to-be-executed message is a migrated message, we need to
+        // execute the post-migration hook to sync with non-migrated messages
+        // in the same group
+        bool isMigration =
+          task.req->type() == faabric::BatchExecuteRequest::MIGRATION;
+        if (isMigration) {
+            faabric::transport::getPointToPointBroker().postMigrationHook(
+              msg.groupid(), msg.groupidx());
+        }
+
         SPDLOG_TRACE("Thread {}:{} executing task {} ({}, thread={}, group={})",
                      id,
                      threadPoolIdx,
