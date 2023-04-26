@@ -21,14 +21,16 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 
     // The first request will schedule two functions on each host
     setLocalSlots(4, worldSize);
+    setRemoteSlots(4);
     sch.callFunctions(req1);
 
     // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
-    SLEEP_MS(1000);
+    SLEEP_MS(200);
 
     // Override the local slots so that the same scheduling decision as before
     // is taken
     setLocalSlots(4, worldSize);
+    setRemoteSlots(4);
     sch.callFunctions(req2);
 
     checkAllocationAndResult(req1, 15000);

@@ -137,12 +137,16 @@ void PlannerEndpointHandler::onRequest(
             // Dispatch to the corresponding workers
             planner.dispatchSchedulingDecision(req, schedulingDecision);
 
-            // Wait for result, or return async id
-            if (msg.isasync()) {
-                response.result(beast::http::status::ok);
-                response.body() = faabric::util::buildAsyncResponse(msg);
-                return ctx.sendFunction(std::move(response));
+            if (!msg.isasync()) {
+                SPDLOG_ERROR("Can't handle non-async messages just yet");
             }
+
+            // Wait for result, or return async id
+            // if (msg.isasync() {
+            response.result(beast::http::status::ok);
+            response.body() = faabric::util::buildAsyncResponse(msg);
+            return ctx.sendFunction(std::move(response));
+            // }
 
             /* TODO: think how we want to wait for planner results
             SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
@@ -152,7 +156,6 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = "Internal error executing function";
                 return ctx.sendFunction(std::move(response));
             }
-            */
 
             // Set the function result. Note that, for the moment, we only
             // consider the result to be the first message even though we
@@ -169,8 +172,35 @@ void PlannerEndpointHandler::onRequest(
 
             response.body() = result.outputdata();
             return ctx.sendFunction(std::move(response));
+            */
         }
         case faabric::planner::HttpMessage_Type_EXECUTE_STATUS: {
+            // Get message from request string
+            faabric::Message msg;
+            try {
+                faabric::util::jsonToMessage(requestStr, &msg);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string(
+                  "Wrong payload for get function execution status");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Get actual message result, and populate HTTP response
+            auto resultMsg = getPlanner().getMessageResult(
+              std::make_shared<faabric::Message>(msg));
+            if (!resultMsg) {
+                response.result(beast::http::status::ok);
+                response.body() = std::string("RUNNING");
+            } else if (resultMsg->returnvalue() == 0) {
+                response.result(beast::http::status::ok);
+                response.body() = faabric::util::messageToJson(*resultMsg);
+            } else {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = "FAILED: " + resultMsg->outputdata();
+            }
+
+            return ctx.sendFunction(std::move(response));
         }
         default: {
             SPDLOG_ERROR("Unrecognised message type {}", msg.type());
