@@ -872,6 +872,44 @@ void PointToPointBroker::resetThreadLocalCache()
     threadEndpoints.clear();
 }
 
+/*
+int PointToPointBroker::preMigrationHook(int groupId, int groupIdx)
+{
+}
+*/
+
+void PointToPointBroker::postMigrationHook(int groupId, int groupIdx)
+{
+    int postMigrationOkCode = 1337;
+    int recvCode = 0;
+    // TODO: implement this as a broadcast in the PTP broker
+    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
+        auto groupIdxs = getIdxsRegisteredForGroup(groupId);
+        groupIdxs.erase(POINT_TO_POINT_MASTER_IDX);
+        for (const auto& recvIdx : groupIdxs) {
+            sendMessage(groupId,
+                        0,
+                        recvIdx,
+                        BYTES_CONST(&postMigrationOkCode),
+                        sizeof(int));
+        }
+        recvCode = postMigrationOkCode;
+    } else {
+        std::vector<uint8_t> bytes = recvMessage(groupId, 0, groupIdx);
+        recvCode = faabric::util::bytesToInt(bytes);
+    }
+
+    if (recvCode != postMigrationOkCode) {
+        SPDLOG_ERROR("Error in post-migration hook. {}:{} received code {}",
+                     groupId,
+                     groupIdx,
+                     recvCode);
+        throw std::runtime_error("Error in post-migration hook");
+    }
+
+    SPDLOG_DEBUG("{}:{} exiting post-migration hook", groupId, groupIdx);
+}
+
 PointToPointBroker& getPointToPointBroker()
 {
     static PointToPointBroker broker;

@@ -17,7 +17,8 @@ void KeepAliveThread::doWork()
     cli.registerHost(thisHostReq);
 }
 
-void KeepAliveThread::setRequest(std::shared_ptr<RegisterHostRequest> thisHostReqIn)
+void KeepAliveThread::setRequest(
+  std::shared_ptr<RegisterHostRequest> thisHostReqIn)
 {
     faabric::util::FullLock lock(keepAliveThreadMx);
 

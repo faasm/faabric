@@ -164,7 +164,7 @@ bool Planner::registerHost(const Host& hostIn)
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
     } else if (it != state.hostMap.end() &&
                ((it->second->slots() != hostIn.slots()) ||
-                (it->second->slots() != hostIn.slots()))) {
+                (it->second->usedslots() != hostIn.usedslots()))) {
         // We allow overwritting the host state by sending another register
         // request with same IP but different host resources. This is useful
         // for testing and resetting purposes
@@ -352,7 +352,8 @@ Planner::makeSchedulingDecision(
             }
 
             if (numLeftToSchedule != 0) {
-                SPDLOG_ERROR("Ran out of available hosts with {} messages left to schedule!",
+                SPDLOG_ERROR("Ran out of available hosts with {} messages left "
+                             "to schedule!",
                              numLeftToSchedule);
                 return nullptr;
             }
@@ -374,8 +375,7 @@ Planner::makeSchedulingDecision(
 
             int numMessages = req->messages_size();
             if (numFreeSlots < numMessages) {
-                SPDLOG_ERROR("Not enough capacity to schedule app {}:",
-                             appId);
+                SPDLOG_ERROR("Not enough capacity to schedule app {}:", appId);
                 SPDLOG_ERROR(
                   "requested {} messages, but have only {} free slots",
                   numMessages,

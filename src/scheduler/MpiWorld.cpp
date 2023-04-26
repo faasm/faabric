@@ -75,10 +75,8 @@ std::shared_ptr<faabric::MPIMessage> MpiWorld::recvRemoteMpiMessage(
   int sendRank,
   int recvRank)
 {
-    auto msg = broker.recvMessage(thisRankMsg->groupid(),
-                                  sendRank,
-                                  recvRank,
-                                  true);
+    auto msg =
+      broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
     PARSE_MSG(faabric::MPIMessage, msg.data(), msg.size());
     return std::make_shared<faabric::MPIMessage>(parsedMsg);
 }
@@ -291,6 +289,7 @@ void MpiWorld::initLocalRemoteLeaders()
                      groupId,
                      rankIds.size(),
                      size);
+        throw std::runtime_error("MPI Group-World size mismatch!");
     }
     assert(rankIds.size() == size);
     hostForRank.resize(size);
@@ -302,6 +301,7 @@ void MpiWorld::initLocalRemoteLeaders()
 
     // Second, put the local leader for each host (currently lowest rank) at the
     // front.
+    // TODO: rankIds is a set already, so it should be sorted!
     for (auto it : ranksForHost) {
         // Persist the local leader in this host for further use
         if (it.first == thisHost) {
@@ -1606,45 +1606,6 @@ void MpiWorld::prepareMigration(int thisRank)
     if (thisRank == localLeader) {
         // TODO: we may be able to just initLocalRemote here?
         initLocalRemoteLeaders();
-        /*
-        for (int i = 0; i < pendingMigrations->migrations_size(); i++) {
-            auto m = pendingMigrations->mutable_migrations()->at(i);
-            assert(hostForRank.at(m.msg().mpirank()) == m.srchost());
-
-            // Update the host for this rank. We only update the positions of
-            // the to-be migrated ranks, avoiding race conditions with not-
-            // migrated ranks
-            hostForRank.at(m.msg().mpirank()) = m.dsthost();
-
-            // Update the ranks for host. This structure is used when doing
-            // collective communications by all ranks. At this point, all non-
-            // leader ranks will be hitting a barrier, for which they don't
-            // need the ranks for host map, therefore it is safe to modify it
-            if (m.dsthost() == thisHost && m.msg().mpirank() < localLeader) {
-                SPDLOG_WARN("Changing local leader {} -> {}",
-                            localLeader,
-                            m.msg().mpirank());
-                localLeader = m.msg().mpirank();
-                ranksForHost[m.dsthost()].insert(
-                  ranksForHost[m.dsthost()].begin(), m.msg().mpirank());
-            }
-
-            ranksForHost[m.dsthost()].push_back(m.msg().mpirank());
-            ranksForHost[m.srchost()].erase(
-              std::remove(ranksForHost[m.srchost()].begin(),
-                          ranksForHost[m.srchost()].end(),
-                          m.msg().mpirank()),
-              ranksForHost[m.srchost()].end());
-
-            if (ranksForHost[m.srchost()].empty()) {
-                ranksForHost.erase(m.srchost());
-            }
-
-            // This could be made more efficient as the broker method acquires
-            // a full lock every time
-            broker.updateHostForIdx(id, m.msg().mpirank(), m.dsthost());
-        }
-        */
 
         // Set the migration flag
         hasBeenMigrated = true;

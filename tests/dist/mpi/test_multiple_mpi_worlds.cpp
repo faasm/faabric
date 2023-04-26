@@ -9,7 +9,6 @@
 
 namespace tests {
 
-/*
 TEST_CASE_METHOD(MpiDistTestsFixture,
                  "Test concurrent MPI applications with same master host",
                  "[mpi]")
@@ -18,18 +17,18 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     auto req1 = setRequest("alltoall-sleep");
     auto req2 = setRequest("alltoall-sleep");
 
-    int worldSize = 4;
+    int worldSize = 8;
 
     // The first request will schedule two functions on each host
-    setLocalSlots(2, worldSize);
+    setLocalSlots(4, worldSize);
     sch.callFunctions(req1);
 
     // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
-    SLEEP_MS(200);
+    SLEEP_MS(1000);
 
     // Override the local slots so that the same scheduling decision as before
     // is taken
-    setLocalSlots(2, worldSize);
+    setLocalSlots(4, worldSize);
     sch.callFunctions(req2);
 
     checkAllocationAndResult(req1, 15000);
@@ -40,58 +39,41 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
                  "Test concurrent MPI applications with different master host",
                  "[mpi]")
 {
-    // Prepare the first request (local): 2 ranks locally, 2 remotely
-    int worldSize = 4;
-    setLocalSlots(2, worldSize);
+    // Prepare the first request (local): 4 ranks locally, 4 remotely
+    int worldSize = 8;
+    setLocalSlots(4, worldSize);
     auto req1 = setRequest("alltoall-sleep");
     sch.callFunctions(req1);
 
     // Sleep for a bit to allow for the scheduler to schedule all MPI ranks
-    SLEEP_MS(200);
+    SLEEP_MS(1000);
 
     // Prepare the second request (remote): 4 ranks remotely, 2 locally
     int newWorldSize = 6;
     setLocalSlots(2, newWorldSize);
+    setRemoteSlots(4);
     auto req2 = setRequest("alltoall-sleep");
-    // Request remote execution
-    faabric::scheduler::FunctionCallClient cli(getWorkerIP());
-    cli.executeFunctions(req2);
+    sch.callFunctions(req2);
 
-    // Skip the automated exec graph check, and check manually
-    bool skipExecGraphCheck = true;
-    checkAllocationAndResult(req1, 15000, skipExecGraphCheck);
-    std::vector<std::string> hostsBeforeMigration = {
-        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
-    };
-    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
-    checkAllocationAndResult(req2, 15000, skipExecGraphCheck);
-
-    // Check exec graph for first request
-    auto execGraph1 =
-      sch.getFunctionExecGraph(req1->mutable_messages()->at(0).id());
-    std::vector<std::string> expectedHosts1 = {
-        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
-    };
-    REQUIRE(expectedHosts1 ==
-            faabric::scheduler::getMpiRankHostsFromExecGraph(execGraph1));
-
-    // Check exec graph for second request
-    auto execGraph2 =
-      sch.getFunctionExecGraph(req2->mutable_messages()->at(0).id());
-    std::vector<std::string> expectedHosts2 = { getWorkerIP(), getWorkerIP(),
+    std::vector<std::string> expectedHosts1 = { getMasterIP(), getMasterIP(),
                                                 getMasterIP(), getMasterIP(),
+                                                getWorkerIP(), getWorkerIP(),
                                                 getWorkerIP(), getWorkerIP() };
-    REQUIRE(expectedHosts2 ==
-            faabric::scheduler::getMpiRankHostsFromExecGraph(execGraph2));
+    checkAllocationAndResult(req1, 15000, expectedHosts1);
+    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
+    std::vector<std::string> expectedHosts2 = { getWorkerIP(), getWorkerIP(),
+                                                getWorkerIP(), getWorkerIP(),
+                                                getMasterIP(), getMasterIP() };
+    checkAllocationAndResult(req2, 15000, expectedHosts2);
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
                  "Test MPI migration with two MPI worlds",
                  "[mpi]")
 {
-    // Set the slots for the first request: 2 locally and 2 remote
-    int worldSize = 4;
-    setLocalSlots(2, worldSize);
+    // Set the slots for the first request: 4 locally and 4 remote
+    int worldSize = 8;
+    setLocalSlots(4, worldSize);
 
     // Prepare both requests:
     // - The first will do work, sleep for five seconds, and do work again
@@ -99,36 +81,68 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     auto req1 = setRequest("alltoall-sleep");
     auto req2 = setRequest("migration");
     auto& msg = req2->mutable_messages()->at(0);
-    msg.set_migrationcheckperiod(1);
     msg.set_inputdata(std::to_string(NUM_MIGRATION_LOOPS));
 
-    // The first request will schedule two functions on each host
+    // The first request will schedule four functions on each host
     sch.callFunctions(req1);
 
-    // Sleep for a while so that:
-    // - When we schedule the second application the first one is already
-    //   running
-    // - When the first application finishes, the function migration thread
-    //   picks up a migration opportunity
-    // - The previous point happens before the second application has checked
-    //   for migration opportunities internally
+    // Sleep for a while
     SLEEP_MS(5000);
 
-    // The previous three points are likely to be out-of-sync in a GHA test so:
-    // - We sleep for a very long time (almost the duration of the first app)
-    // - Even though we don't need it, we overwrite the local slots in case in
-    //   a GHA run we have slept so long that the first application has already
-    //   finished
-    setLocalSlots(2, worldSize);
+    // Update the local and remote slots so that the second request is also
+    // split among two worlds
+    setLocalSlots(4, worldSize);
+    setRemoteSlots(4);
     sch.callFunctions(req2);
 
-    checkAllocationAndResult(req1, 15000);
-    std::vector<std::string> hostsBeforeMigration = {
-        getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
+    SLEEP_MS(200);
+    auto decisionBefore = sch.getPlannerClient()->getSchedulingDecision(req2);
+
+    // Update the slots again so that a migration opportunity appears. We
+    // update either the local or remote worlds to force the migration of one
+    // half of the ranks or the other one
+    bool migratingMainRank;
+
+    SECTION("Migrate main rank")
+    {
+        // Make more space remotely, so we migrate the first half of ranks
+        // (including the main rank)
+        migratingMainRank = true;
+        setRemoteSlots(worldSize);
+    }
+
+    SECTION("Don't migrate main rank")
+    {
+        // Make more space locally, so we migrate the second half of ranks
+        migratingMainRank = false;
+        setLocalSlots(worldSize, worldSize);
+    }
+
+    std::vector<std::string> expectedHosts1 = { getMasterIP(), getMasterIP(),
+                                                getMasterIP(), getMasterIP(),
+                                                getWorkerIP(), getWorkerIP(),
+                                                getWorkerIP(), getWorkerIP() };
+    checkAllocationAndResult(req1, 15000, expectedHosts1);
+
+    // Check hosts before migration
+    std::vector<std::string> expectedHostsBeforeMigration = {
+        getMasterIP(), getMasterIP(), getMasterIP(), getMasterIP(),
+        getWorkerIP(), getWorkerIP(), getWorkerIP(), getWorkerIP()
     };
-    std::vector<std::string> hostsAfterMigration(worldSize, getMasterIP());
-    checkAllocationAndResultMigration(
-      req2, hostsBeforeMigration, hostsAfterMigration, 15000);
+    REQUIRE(decisionBefore.hosts == expectedHostsBeforeMigration);
+
+    std::vector<std::string> expectedHostsAfterMigration;
+    if (migratingMainRank) {
+        expectedHostsAfterMigration = { getWorkerIP(), getWorkerIP(),
+                                        getWorkerIP(), getWorkerIP(),
+                                        getWorkerIP(), getWorkerIP(),
+                                        getWorkerIP(), getWorkerIP() };
+    } else {
+        expectedHostsAfterMigration = { getMasterIP(), getMasterIP(),
+                                        getMasterIP(), getMasterIP(),
+                                        getMasterIP(), getMasterIP(),
+                                        getMasterIP(), getMasterIP() };
+    }
+    checkAllocationAndResult(req2, 15000, expectedHostsAfterMigration);
 }
-*/
 }

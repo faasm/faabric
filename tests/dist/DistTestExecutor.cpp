@@ -51,6 +51,12 @@ int32_t DistTestExecutor::executeTask(
 {
     const faabric::Message& msg = req->mutable_messages()->at(msgIdx);
 
+    bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
+    if (isMigration) {
+        faabric::transport::getPointToPointBroker().postMigrationHook(
+          msg.groupid(), msg.groupidx());
+    }
+
     // Look up function and invoke
     ExecutorFunction callback = getDistTestExecutorCallback(msg);
     return callback(this, threadPoolIdx, msgIdx, req);

@@ -87,19 +87,14 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
 void SchedulingDecision::debugPrint()
 {
     SPDLOG_DEBUG("-------------- Decision for App: {} ----------------", appId);
-    // The app ID will always be set, whereas the group id may not. If the
-    // group ID is 0, we want to only add one tab so that columns are formatted
-    // correctly upon print
-    if (groupId != 0) {
-        SPDLOG_DEBUG("MsgId\tAppId\t\tGroupId\t\tGrIdx\tHostIp\t\tHostCap");
-    } else {
-        SPDLOG_DEBUG("MsgId\tAppId\tGroupId\tGrIdx\tHostIp\t\tHostCap");
-    }
+    SPDLOG_DEBUG("MsgId\tAppId\tGroupId\tGrIdx\tHostIp\tHostCap");
+    // Modulo a big number so that we can get the UUIDs to fit within one tab
+    int formatBase = 1e6;
     for (int i = 0; i < hosts.size(); i++) {
         SPDLOG_DEBUG("{}\t{}\t{}\t{}\t{}\t{}",
-                     messageIds.at(i),
-                     appId,
-                     groupId,
+                     messageIds.at(i) % formatBase,
+                     appId % formatBase,
+                     groupId % formatBase,
                      groupIdxs.at(i),
                      hosts.at(i),
                      plannerHosts.at(i)->slots() -

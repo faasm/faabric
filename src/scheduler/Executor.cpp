@@ -637,8 +637,10 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
                 sch.setThreadResult(msg, returnValue, "", {});
             }
         } else {
-            // Set normal function result
-            sch.setFunctionResult(msg);
+            // Set normal function result unless we have migrated
+            if (msg.returnvalue() != MIGRATED_FUNCTION_RETURN_VALUE) {
+                sch.setFunctionResult(msg);
+            }
         }
     }
 }

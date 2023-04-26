@@ -86,6 +86,15 @@ class MpiDistTestsFixture : public DistTestsFixture
         }
     }
 
+    void setRemoteSlots(int numSlots, int numUsedSlots = 0)
+    {
+        auto res = std::make_shared<faabric::HostResources>();
+        res->set_slots(numSlots);
+        res->set_usedslots(numUsedSlots);
+
+        sch.addHostToGlobalSet(getWorkerIP(), res);
+    }
+
     std::shared_ptr<faabric::BatchExecuteRequest> setRequest(
       const std::string& function)
     {
@@ -127,24 +136,10 @@ class MpiDistTestsFixture : public DistTestsFixture
         REQUIRE(expecedHosts == decision.hosts);
     }
 
-    // TODO: remove me plspls
-    // Specialisation for migration tests
-    void checkSchedulingFromExecGraph(
-      const faabric::scheduler::ExecGraph& execGraph,
-      const std::vector<std::string> expectedHostsBefore,
-      const std::vector<std::string> expectedHostsAfter)
-    {
-        auto actualHostsBeforeAndAfter =
-          faabric::scheduler::getMigratedMpiRankHostsFromExecGraph(execGraph);
-
-        REQUIRE(actualHostsBeforeAndAfter.first == expectedHostsBefore);
-        REQUIRE(actualHostsBeforeAndAfter.second == expectedHostsAfter);
-    }
-
     void checkAllocationAndResult(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       int timeoutMs = 10000,
-      bool skipDecisionCheck = false)
+      const std::vector<std::string>& expectedHosts = {})
     {
         for (const auto& msg : req->messages()) {
             auto result = sch.getFunctionResult(msg, timeoutMs);
@@ -152,29 +147,17 @@ class MpiDistTestsFixture : public DistTestsFixture
         }
 
         auto responseReq = sch.getPlannerClient()->getBatchResult(req);
-        faabric::util::SchedulingDecision decision(req->appid(), req->groupid());
+        faabric::util::SchedulingDecision decision(req->appid(),
+                                                   req->groupid());
         for (const auto& msg : responseReq->messages()) {
             decision.addMessage(msg.executedhost(), msg);
         }
 
-        if (!skipDecisionCheck) {
+        if (expectedHosts.empty()) {
             checkSchedulingFromDecision(decision);
+        } else {
+            REQUIRE(decision.hosts == expectedHosts);
         }
-    }
-
-    void checkAllocationAndResultMigration(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      const std::vector<std::string>& expectedHostsBefore,
-      const std::vector<std::string>& expectedHostsAfter,
-      int timeoutMs = 1000)
-    {
-        faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = sch.getFunctionResult(msg, timeoutMs);
-        REQUIRE(result.returnvalue() == 0);
-        SLEEP_MS(1000);
-        auto execGraph = sch.getFunctionExecGraph(msg.id());
-        checkSchedulingFromExecGraph(
-          execGraph, expectedHostsBefore, expectedHostsAfter);
     }
 };
 }

@@ -4,6 +4,7 @@
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/MpiContext.h>
 #include <faabric/scheduler/MpiWorld.h>
+#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/compare.h>
 #include <faabric/util/config.h>
@@ -46,11 +47,21 @@ int MPI_Init(int* argc, char*** argv)
 {
     faabric::Message* call = getExecutingCall();
 
+    // For non-zero ranks, we always join an existing world. For the zero-th
+    // rank we either create it, or join it in case we have been migrated
     if (call->mpirank() <= 0) {
-        SPDLOG_TRACE("MPI - MPI_Init (create)");
+        // If we are rank 0 and the world already exists, it means we are being
+        // migrated
+        if (faabric::scheduler::getMpiWorldRegistry().worldExists(
+              call->mpiworldid())) {
+            SPDLOG_TRACE("MPI - MPI_Init (join)");
+            executingContext.joinWorld(*call);
+        } else {
+            SPDLOG_TRACE("MPI - MPI_Init (create)");
 
-        int worldId = executingContext.createWorld(*call);
-        call->set_mpiworldid(worldId);
+            int worldId = executingContext.createWorld(*call);
+            call->set_mpiworldid(worldId);
+        }
     } else {
         SPDLOG_TRACE("MPI - MPI_Init (join)");
         executingContext.joinWorld(*call);
@@ -58,13 +69,12 @@ int MPI_Init(int* argc, char*** argv)
 
     // Initialise MPI-specific logging
     int thisRank = executingContext.getRank();
-    SPDLOG_DEBUG(
-      "Function {}:{}:{} initialised world (id: {}) for rank: {}",
-      call->appid(),
-      call->groupid(),
-      call->groupidx(),
-      call->mpiworldid(),
-      thisRank);
+    SPDLOG_DEBUG("Function {}:{}:{} initialised world (id: {}) for rank: {}",
+                 call->appid(),
+                 call->groupid(),
+                 call->groupidx(),
+                 call->mpiworldid(),
+                 thisRank);
 
     return MPI_SUCCESS;
 }
@@ -779,6 +789,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
     std::string hostToMigrateTo = "otherHost";
     if (appMustMigrate) {
         funcMustMigrate = migration->srchost() != migration->dsthost();
+        hostToMigrateTo = migration->dsthost();
     }
 
     // Regardless if we have to individually migrate or not, we need to prepare
@@ -786,7 +797,6 @@ void mpiMigrationPoint(int entrypointFuncArg)
     if (appMustMigrate && call->ismpi()) {
         auto& mpiWorld = faabric::scheduler::getMpiWorldRegistry().getWorld(
           call->mpiworldid());
-        // TODO: resume from here
         mpiWorld.prepareMigration(call->mpirank());
     }
 
@@ -799,6 +809,8 @@ void mpiMigrationPoint(int entrypointFuncArg)
 
         std::shared_ptr<faabric::BatchExecuteRequest> req =
           faabric::util::batchExecFactory(call->user(), call->function(), 1);
+        req->set_appid(call->appid());
+        req->set_groupid(call->groupid());
         req->set_type(faabric::BatchExecuteRequest::MIGRATION);
 
         faabric::Message& msg = req->mutable_messages()->at(0);
@@ -818,7 +830,10 @@ void mpiMigrationPoint(int entrypointFuncArg)
         sch.getSnapshotClient(hostToMigrateTo)->pushSnapshot(snapKey, snap);
         msg.set_snapshotkey(snapKey);
 
-        // Propagate the id's and indices
+        // Propagate the id's and indices. The id is necessary to set the
+        // right message result, the app and group ids are necessary for
+        // communication purposes
+        msg.set_id(call->id());
         msg.set_appid(call->appid());
         msg.set_groupid(call->groupid());
         msg.set_groupidx(call->groupidx());
@@ -840,17 +855,23 @@ void mpiMigrationPoint(int entrypointFuncArg)
                      faabric::util::getSystemConfig().endpointHost,
                      hostToMigrateTo);
 
-        // Build decision and send
-        faabric::util::SchedulingDecision decision(msg.appid(), msg.groupid());
-        decision.addMessage(hostToMigrateTo, msg);
-        sch.callFunctions(req, decision);
+        // Send request to execute functions to the migrated-to host
+        sch.getFunctionCallClient(hostToMigrateTo)->executeFunctions(req);
 
+        /* TODO: fix chained function
         if (call->recordexecgraph()) {
             sch.logChainedFunction(call->id(), msg.id());
         }
+        */
 
         // Throw an exception to be caught by the executor and terminate
         throw faabric::util::FunctionMigratedException("Migrating MPI rank");
+    }
+
+    // Hit the post-migration hook if not migrated (but someone has)
+    if (appMustMigrate) {
+        faabric::transport::getPointToPointBroker().postMigrationHook(
+          call->groupid(), call->groupidx());
     }
 }
 

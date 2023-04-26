@@ -248,8 +248,8 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetBatchResult(
 {
     PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
 
-    auto resultReq =
-      planner.getBatchResult(std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
+    auto resultReq = planner.getBatchResult(
+      std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 
     return std::make_unique<faabric::BatchExecuteRequest>(*resultReq);
 }

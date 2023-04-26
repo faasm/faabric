@@ -1498,6 +1498,7 @@ std::string getChainedKey(unsigned int msgId)
     return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
 }
 
+// TODO: fix chain functions with the planner
 void Scheduler::logChainedFunction(unsigned int parentMessageId,
                                    unsigned int chainedMessageId)
 {
@@ -1508,6 +1509,7 @@ void Scheduler::logChainedFunction(unsigned int parentMessageId,
     redis.expire(key, STATUS_KEY_EXPIRY);
 }
 
+// TODO: fix chain functions with the planner
 std::set<unsigned int> Scheduler::getChainedFunctions(unsigned int msgId)
 {
     redis::Redis& redis = redis::Redis::getQueue();
@@ -1594,7 +1596,7 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
                  groupId,
                  groupIdx);
 
-    // TODO: maybe we could move this into a broker-specific function
+    // TODO: maybe we could move this into a broker-specific function?
     int newGroupId = 0;
     if (groupIdx == 0) {
         auto req =
@@ -1613,8 +1615,8 @@ Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
               groupId, 0, recvIdx, BYTES_CONST(&newGroupId), sizeof(int));
         }
     } else if (overwriteNewGroupId == 0) {
-        newGroupId =
-          faabric::util::bytesToInt(broker.recvMessage(groupId, 0, groupIdx));
+        std::vector<uint8_t> bytes = broker.recvMessage(groupId, 0, groupIdx);
+        newGroupId = faabric::util::bytesToInt(bytes);
     } else {
         // In some settings, like tests, we already know the new group id, so
         // we can set it here
