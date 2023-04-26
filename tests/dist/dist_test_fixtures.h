@@ -106,8 +106,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         return req;
     }
 
-    void checkSchedulingFromDecision(
-      const faabric::util::SchedulingDecision& decision)
+    std::vector<std::string> buildExpectedHosts()
     {
         // Build the expectation
         std::vector<std::string> expecedHosts;
@@ -132,14 +131,13 @@ class MpiDistTestsFixture : public DistTestsFixture
             expecedHosts.push_back(localIp);
         }
 
-        // Check against the actual scheduling decision
-        REQUIRE(expecedHosts == decision.hosts);
+        return expecedHosts;
     }
 
     void checkAllocationAndResult(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       int timeoutMs = 10000,
-      const std::vector<std::string>& expectedHosts = {})
+      std::vector<std::string> expectedHosts = {})
     {
         for (const auto& msg : req->messages()) {
             auto result = sch.getFunctionResult(msg, timeoutMs);
@@ -147,17 +145,19 @@ class MpiDistTestsFixture : public DistTestsFixture
         }
 
         auto responseReq = sch.getPlannerClient()->getBatchResult(req);
+        std::vector<std::string> actualHosts(responseReq->messages_size());
         faabric::util::SchedulingDecision decision(req->appid(),
                                                    req->groupid());
         for (const auto& msg : responseReq->messages()) {
             decision.addMessage(msg.executedhost(), msg);
+            actualHosts.at(msg.groupidx()) = msg.executedhost();
         }
 
         if (expectedHosts.empty()) {
-            checkSchedulingFromDecision(decision);
-        } else {
-            REQUIRE(decision.hosts == expectedHosts);
+            expectedHosts = buildExpectedHosts();
         }
+
+        REQUIRE(actualHosts == expectedHosts);
     }
 };
 }
