@@ -15,7 +15,6 @@ faabric.ini
 *.swp
 
 # Protobuf
-*.pb.cc
 *.pb.h
 
 # C

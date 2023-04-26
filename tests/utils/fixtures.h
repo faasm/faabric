@@ -5,9 +5,8 @@
 #include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
 
-#include "DummyExecutorFactory.h"
-#include "faabric_utils.h"
-
+#include <faabric/mpi/MpiWorld.h>
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
@@ -15,8 +14,6 @@
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
-#include <faabric/scheduler/MpiWorld.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
@@ -357,7 +354,7 @@ class MpiBaseTestFixture
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
         faabric::scheduler::setExecutorFactory(fac);
 
-        auto& mpiRegistry = faabric::scheduler::getMpiWorldRegistry();
+        auto& mpiRegistry = faabric::mpi::getMpiWorldRegistry();
         mpiRegistry.clear();
 
         msg.set_ismpi(true);
@@ -374,7 +371,7 @@ class MpiBaseTestFixture
         // all the executor threads have been set up, and when trying to query
         // for the comm. group we throw a runtime error.
         SLEEP_MS(200);
-        auto& mpiRegistry = faabric::scheduler::getMpiWorldRegistry();
+        auto& mpiRegistry = faabric::mpi::getMpiWorldRegistry();
         mpiRegistry.clear();
     }
 
@@ -396,7 +393,7 @@ class MpiTestFixture : public MpiBaseTestFixture
     ~MpiTestFixture() { world.destroy(); }
 
   protected:
-    faabric::scheduler::MpiWorld world;
+    faabric::mpi::MpiWorld world;
 };
 
 // Note that this test has two worlds, which each "think" that the other is
@@ -420,7 +417,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     {
         faabric::util::setMockMode(false);
 
-        faabric::scheduler::getMpiWorldRegistry().clear();
+        faabric::mpi::getMpiWorldRegistry().clear();
     }
 
     void setWorldSizes(int worldSize, int ranksThisWorld, int ranksOtherWorld)
@@ -464,7 +461,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
 
     std::shared_ptr<faabric::util::Latch> testLatch;
 
-    faabric::scheduler::MpiWorld otherWorld;
+    faabric::mpi::MpiWorld otherWorld;
 };
 
 class ExecutorContextTestFixture

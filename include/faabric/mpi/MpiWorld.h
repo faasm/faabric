@@ -1,10 +1,10 @@
 #pragma once
 
+#include <faabric/mpi/MpiMessageBuffer.h>
 #include <faabric/mpi/mpi.h>
-
+#include <faabric/mpi/mpi.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
-#include <faabric/scheduler/MpiMessageBuffer.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/timing.h>
@@ -19,17 +19,16 @@
 #define MPI_MSG_COUNT_PREFIX "mpi-msgcount-torank"
 #define MPI_MSGTYPE_COUNT_PREFIX "mpi-msgtype-torank"
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 
 // -----------------------------------
 // Mocking
 // -----------------------------------
 // MPITOPTP - mocking at the MPI level won't be needed when using the PTP broker
 // as the broker already has mocking capabilities
-std::vector<std::shared_ptr<faabric::MPIMessage>> getMpiMockedMessages(
-  int sendRank);
+std::vector<std::shared_ptr<MPIMessage>> getMpiMockedMessages(int sendRank);
 
-typedef faabric::util::FixedCapacityQueue<std::shared_ptr<faabric::MPIMessage>>
+typedef faabric::util::FixedCapacityQueue<std::shared_ptr<MPIMessage>>
   InMemoryMpiQueue;
 
 class MpiWorld
@@ -49,9 +48,9 @@ class MpiWorld
 
     std::string getFunction();
 
-    int getId();
+    int getId() const;
 
-    int getSize();
+    int getSize() const;
 
     void destroy();
 
@@ -74,24 +73,21 @@ class MpiWorld
               const uint8_t* buffer,
               faabric_datatype_t* dataType,
               int count,
-              faabric::MPIMessage::MPIMessageType messageType =
-                faabric::MPIMessage::NORMAL);
+              MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
 
     int isend(int sendRank,
               int recvRank,
               const uint8_t* buffer,
               faabric_datatype_t* dataType,
               int count,
-              faabric::MPIMessage::MPIMessageType messageType =
-                faabric::MPIMessage::NORMAL);
+              MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
 
     void broadcast(int rootRank,
                    int thisRank,
                    uint8_t* buffer,
                    faabric_datatype_t* dataType,
                    int count,
-                   faabric::MPIMessage::MPIMessageType messageType =
-                     faabric::MPIMessage::NORMAL);
+                   MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
 
     void recv(int sendRank,
               int recvRank,
@@ -99,16 +95,14 @@ class MpiWorld
               faabric_datatype_t* dataType,
               int count,
               MPI_Status* status,
-              faabric::MPIMessage::MPIMessageType messageType =
-                faabric::MPIMessage::NORMAL);
+              MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
 
     int irecv(int sendRank,
               int recvRank,
               uint8_t* buffer,
               faabric_datatype_t* dataType,
               int count,
-              faabric::MPIMessage::MPIMessageType messageType =
-                faabric::MPIMessage::NORMAL);
+              MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
 
     void awaitAsyncRequest(int requestId);
 
@@ -247,31 +241,30 @@ class MpiWorld
     void sendRemoteMpiMessage(std::string dstHost,
                               int sendRank,
                               int recvRank,
-                              const std::shared_ptr<faabric::MPIMessage>& msg);
+                              const std::shared_ptr<MPIMessage>& msg);
 
-    std::shared_ptr<faabric::MPIMessage> recvRemoteMpiMessage(int sendRank,
-                                                              int recvRank);
+    std::shared_ptr<MPIMessage> recvRemoteMpiMessage(int sendRank,
+                                                     int recvRank);
 
     // Support for asyncrhonous communications
     std::shared_ptr<MpiMessageBuffer> getUnackedMessageBuffer(int sendRank,
                                                               int recvRank);
 
-    std::shared_ptr<faabric::MPIMessage> recvBatchReturnLast(int sendRank,
-                                                             int recvRank,
-                                                             int batchSize = 0);
+    std::shared_ptr<MPIMessage> recvBatchReturnLast(int sendRank,
+                                                    int recvRank,
+                                                    int batchSize = 0);
 
     /* Helper methods */
 
     void checkRanksRange(int sendRank, int recvRank);
 
     // Abstraction of the bulk of the recv work, shared among various functions
-    void doRecv(std::shared_ptr<faabric::MPIMessage>& m,
+    void doRecv(std::shared_ptr<MPIMessage>& m,
                 uint8_t* buffer,
                 faabric_datatype_t* dataType,
                 int count,
                 MPI_Status* status,
-                faabric::MPIMessage::MPIMessageType messageType =
-                  faabric::MPIMessage::NORMAL);
+                MPIMessage::MPIMessageType messageType = MPIMessage::NORMAL);
 
     /* Function migration */
     bool hasBeenMigrated = false;

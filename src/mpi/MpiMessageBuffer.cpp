@@ -1,7 +1,7 @@
-#include <faabric/scheduler/MpiMessageBuffer.h>
+#include <faabric/mpi/MpiMessageBuffer.h>
 #include <faabric/util/logging.h>
 
-namespace faabric::scheduler {
+namespace faabric::mpi {
 typedef std::list<MpiMessageBuffer::PendingAsyncMpiMessage>::iterator
   MpiMessageIterator;
 bool MpiMessageBuffer::isEmpty()

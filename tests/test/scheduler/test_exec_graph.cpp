@@ -3,8 +3,8 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/mpi/MpiWorld.h>
 #include <faabric/redis/Redis.h>
-#include <faabric/scheduler/MpiWorld.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -105,11 +105,9 @@ TEST_CASE("Test get unique hosts from exec graph", "[scheduler][exec-graph]")
     REQUIRE(hosts == expected);
 }
 
-TEST_CASE_METHOD(MpiBaseTestFixture,
-                 "Test MPI execution graph",
-                 "[mpi][scheduler][exec-graph]")
+TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
 {
-    faabric::scheduler::MpiWorld world;
+    faabric::mpi::MpiWorld world;
     msg.set_ismpi(true);
     msg.set_recordexecgraph(true);
 

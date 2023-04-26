@@ -3,8 +3,8 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/mpi/mpi.h>
-#include <faabric/scheduler/MpiWorldRegistry.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/logging.h>
@@ -17,11 +17,12 @@
 // _always_ in mocking mode. For truly multi-host MPI tests you must write
 // an actual distributed test.
 
+using namespace faabric::mpi;
 using namespace faabric::scheduler;
 
 namespace tests {
 std::set<int> getReceiversFromMessages(
-  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+  std::vector<std::shared_ptr<MPIMessage>> msgs)
 {
     std::set<int> receivers;
     for (const auto& msg : msgs) {
@@ -108,14 +109,14 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
                             BYTES(messageData.data()),
                             MPI_INT,
                             messageData.size(),
-                            faabric::MPIMessage::BROADCAST);
+                            MPIMessage::BROADCAST);
     } else {
         otherWorld.broadcast(sendRank,
                              recvRank,
                              BYTES(messageData.data()),
                              MPI_INT,
                              messageData.size(),
-                             faabric::MPIMessage::BROADCAST);
+                             MPIMessage::BROADCAST);
     }
     auto msgs = getMpiMockedMessages(recvRank);
     REQUIRE(msgs.size() == expectedNumMsg);
@@ -220,7 +221,7 @@ TEST_CASE_METHOD(RemoteMpiTestFixture,
 }
 
 std::set<int> getMsgCountsFromMessages(
-  std::vector<std::shared_ptr<faabric::MPIMessage>> msgs)
+  std::vector<std::shared_ptr<MPIMessage>> msgs)
 {
     std::set<int> counts;
     for (const auto& msg : msgs) {
