@@ -61,7 +61,7 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
     std::shared_ptr<faabric::Message> getMessageResult(
       std::shared_ptr<faabric::Message> msg);
 
-    std::shared_ptr<faabric::BatchExecuteRequest> getBatchResult(
+    std::shared_ptr<faabric::BatchExecuteRequest> getBatchMessages(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 };
 }

@@ -16,6 +16,6 @@ enum PlannerCalls
     GetSchedulingDecision = 7,
     SetMessageResult = 8,
     GetMessageResult = 9,
-    GetBatchResult = 10,
+    GetBatchMessages = 10,
 };
 }

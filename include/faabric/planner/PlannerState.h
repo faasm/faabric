@@ -32,16 +32,12 @@ struct PlannerState
     std::map<int, InFlightRequest> inFlightRequests;
 
     // Double-map holding the message results. The first key is the app id. For
-    // each app id, we keep a map of the message id, and a promise to the
-    // result. Note that the message result is the same message that is in-
-    // flight, with some updated fields
-    // std::map<int, std::map<int,
-    // std::promise<std::shared_ptr<faabric::Message>>>> appResults;
+    // each app id, we keep a map of the message id, and the actual message
+    // result
     std::map<int, std::map<int, std::shared_ptr<faabric::Message>>> appResults;
 
-    // Double-map holding the message results. The first key is the app id. For
-    // each app id, we keep a map of the message id, and a promise to the
-    // result that can be asynchronously waited-on
-    // std::map<int, std::map<int, MessageResultPromisePtr>> msgResults;
+    // Map holding the hosts that have registered interest in getting an app
+    // result
+    std::map<int, std::vector<std::string>> appResultWaiters;
 };
 }

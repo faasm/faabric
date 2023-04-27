@@ -144,6 +144,7 @@ message Message {
     map<string, string> execGraphDetails = 37;
 
     // Function migration
+    // TODO: remove me
     int32 migrationCheckPeriod = 38 [json_name = "migration_check_period"];
 
     // Scheduling

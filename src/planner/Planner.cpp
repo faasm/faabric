@@ -59,6 +59,8 @@ bool Planner::reset()
 
     flushHosts();
 
+    flushSchedulingState();
+
     PlannerTestsConfig emptyConfig;
     setTestsConfig(emptyConfig, true);
 
@@ -68,6 +70,7 @@ bool Planner::reset()
 bool Planner::flush(faabric::planner::FlushType flushType)
 {
     // TODO: flush scheduling state
+    // TODO: flush results
     switch (flushType) {
         case faabric::planner::FlushType::Hosts:
             SPDLOG_INFO("Planner flushing available hosts state");
@@ -99,6 +102,15 @@ void Planner::flushExecutors()
         SPDLOG_INFO("Planner sending EXECUTOR flush to {}", host->ip());
         sch.getFunctionCallClient(host->ip())->sendFlush();
     }
+}
+
+void Planner::flushSchedulingState()
+{
+    faabric::util::FullLock lock(plannerMx);
+
+    state.inFlightRequests.clear();
+    state.appResults.clear();
+    state.appResultWaiters.clear();
 }
 
 std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
@@ -225,7 +237,6 @@ Planner::makeSchedulingDecision(
     faabric::util::FullLock lock(plannerMx);
 
     int appId = req->appid();
-    int oldGroupId = req->groupid();
 
     // There are three types of scheduling of batch execute requests:
     // 1. New: first time we are scheduling the BER
@@ -287,6 +298,7 @@ Planner::makeSchedulingDecision(
 
     // Set the list of hosts to skip when sending messages. This is used for
     // mocking in the tests
+    // TODO: do a different mocking in the tests
     std::set<std::string> hostSkipList;
     if (isTestMode.load(std::memory_order_acquire)) {
         for (const auto& host : testsConfig.mockedhosts()) {
@@ -692,32 +704,53 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     }
     inFlightReq->mutable_messages()->erase(it);
 
+    if (inFlightReq->messages_size() == 0) {
+        SPDLOG_INFO("Planner removing app {} from in-flight", appId);
+        state.inFlightRequests.erase(appId);
+    }
+
     // Set the result
     state.appResults[appId][msgId] = msg;
 
     // Dispatch an async message to all hosts that are waiting
+    auto& sch = faabric::scheduler::getScheduler();
+    if (state.appResultWaiters.find(msgId) != state.appResultWaiters.end()) {
+        for (const auto& host : state.appResultWaiters[msgId]) {
+            sch.getFunctionCallClient(host)->setMessageResult(msg);
+        }
+    }
 }
 
 std::shared_ptr<faabric::Message> Planner::getMessageResult(
   std::shared_ptr<faabric::Message> msg)
 {
-    faabric::util::SharedLock lock(plannerMx);
-
     int appId = msg->appid();
     int msgId = msg->id();
 
-    if (state.appResults.find(appId) == state.appResults.end()) {
-        SPDLOG_ERROR("App {} not registered in app results", appId);
-        return nullptr;
+    {
+        faabric::util::SharedLock lock(plannerMx);
+
+        if (state.appResults.find(appId) == state.appResults.end()) {
+            SPDLOG_ERROR("App {} not registered in app results", appId);
+        } else if (state.appResults[appId].find(msgId) == state.appResults[appId].end()) {
+            SPDLOG_ERROR(
+              "Msg {} not registered in app results (app id: {})", msgId, appId);
+        } else {
+            return state.appResults[appId][msgId];
+        }
     }
 
-    if (state.appResults[appId].find(msgId) == state.appResults[appId].end()) {
-        SPDLOG_ERROR(
-          "Msg {} not registered in app results (app id: {})", msgId, appId);
-        return nullptr;
+    // If we are here, it means that we have not found the message result, so
+    // we register the calling-host's interest
+    {
+        faabric::util::FullLock lock(plannerMx);
+        SPDLOG_DEBUG("Adding host {} on the waiting list for message {}",
+                     msg->masterhost(),
+                     msgId);
+        state.appResultWaiters[msgId].push_back(msg->masterhost());
     }
 
-    return state.appResults[appId][msgId];
+    return nullptr;
 }
 
 /* TODO: finish me!
@@ -744,8 +777,9 @@ std::make_shared<faabric::util::MessageResultPromiseAwaiter>( msg, this, mrp,
 }
 */
 
-// TODO: make this always asynchrnously-blocking
-std::shared_ptr<faabric::BatchExecuteRequest> Planner::getBatchResult(
+// This method returns all the registered messages for the calling requests'
+// app id. We combine the in-flight messages and the result ones
+std::shared_ptr<faabric::BatchExecuteRequest> Planner::getBatchMessages(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     int appId = req->appid();
@@ -756,37 +790,20 @@ std::shared_ptr<faabric::BatchExecuteRequest> Planner::getBatchResult(
 
     faabric::util::SharedLock lock(plannerMx);
 
-    if (state.inFlightRequests.find(appId) == state.inFlightRequests.end()) {
-        SPDLOG_ERROR("App {} not registered in app results", appId);
-        return nullptr;
+    auto inFlightIt = state.inFlightRequests.find(appId);
+    if (inFlightIt != state.inFlightRequests.end()) {
+        auto inFlightReq = inFlightIt->second.first;
+        for (auto& msg : *inFlightReq->mutable_messages()) {
+            *responseReq->add_messages() = msg;
+        }
     }
 
-    auto inFlightReq = state.inFlightRequests.at(appId).first;
-    if (inFlightReq->messages_size() != 0) {
-        SPDLOG_ERROR("App {} still has {} messages in-flight!",
-                     appId,
-                     inFlightReq->messages_size());
-        return nullptr;
+    auto resultsIt = state.appResults.find(appId);
+    if (resultsIt != state.appResults.end()) {
+        for (auto& msg : resultsIt->second) {
+            *responseReq->add_messages() = *(msg.second);
+        }
     }
-
-    if (state.appResults.find(appId) == state.appResults.end()) {
-        SPDLOG_ERROR("App {} not registered in result map!", appId);
-        return nullptr;
-    }
-    auto resultMsgs = state.appResults.at(appId);
-    for (auto& msg : resultMsgs) {
-        *responseReq->add_messages() = *(msg.second);
-    }
-
-    // If we get here, we release the shared lock, and acquire a full lock
-    // to remove the batch from in-flight
-    lock.unlock();
-
-    faabric::util::FullLock fullLock(plannerMx);
-    auto it = state.inFlightRequests.find(appId);
-    state.inFlightRequests.erase(it);
-
-    SPDLOG_INFO("Planner removing app {} from in-flight", appId);
 
     return responseReq;
 }

@@ -60,8 +60,7 @@ class MpiDistTestsFixture : public DistTestsFixture
   public:
     MpiDistTestsFixture()
     {
-        // Flush before each execution to ensure a clean start
-        // sch.broadcastFlush();
+        // TODO: do we need this?
         SLEEP_MS(INTER_MPI_TEST_SLEEP);
     }
 
@@ -139,17 +138,24 @@ class MpiDistTestsFixture : public DistTestsFixture
       int timeoutMs = 10000,
       std::vector<std::string> expectedHosts = {})
     {
+        /*
         for (const auto& msg : req->messages()) {
             auto result = sch.getFunctionResult(msg, timeoutMs);
             REQUIRE(result.returnvalue() == 0);
         }
+        int numRetries = 3;
+        for (int i = 0; i < numRetries; i++) {
+        */
 
-        auto responseReq = sch.getPlannerClient()->getBatchResult(req);
+        // Sleep for a bit to make sure the scheduler has had time to schedule
+        // all MPI calls before we wait on the batch
+        SLEEP_MS(200);
+
+        int batchSizeHint = expectedHosts.empty() ? worldSize : expectedHosts.size();
+        auto responseReq = sch.getBatchResult(req, timeoutMs, batchSizeHint);
         std::vector<std::string> actualHosts(responseReq->messages_size());
-        faabric::util::SchedulingDecision decision(req->appid(),
-                                                   req->groupid());
         for (const auto& msg : responseReq->messages()) {
-            decision.addMessage(msg.executedhost(), msg);
+            REQUIRE(msg.returnvalue() == 0);
             actualHosts.at(msg.groupidx()) = msg.executedhost();
         }
 

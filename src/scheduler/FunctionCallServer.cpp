@@ -25,12 +25,10 @@ void FunctionCallServer::doAsyncRecv(transport::Message& message)
             recvExecuteFunctions(message.udata());
             break;
         }
-        /* TODO: do we delete this one?
-        case faabric::scheduler::FunctionCalls::Unregister: {
-            recvUnregister(message.udata());
+        case faabric::scheduler::FunctionCalls::SetMessageResult: {
+            recvSetMessageResult(message.udata());
             break;
         }
-        */
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized async call header: {}", header));
@@ -46,12 +44,7 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::Flush: {
             return recvFlush(message.udata());
         }
-        /* TODO: can we delete this one
-        case faabric::scheduler::FunctionCalls::GetResources: {
-            return recvGetResources(message.udata());
-        }
-        */
-        default: {
+       default: {
             throw std::runtime_error(
               fmt::format("Unrecognized sync call header: {}", header));
         }
@@ -81,34 +74,10 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }
 
-void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
+void FunctionCallServer::recvSetMessageResult(std::span<const uint8_t> buffer)
 {
     PARSE_MSG(faabric::Message, buffer.data(), buffer.size())
+
+    scheduler.setMessageResult(std::make_shared<faabric::Message>(parsedMsg));
 }
-
-/* TODO: we may want to delete this one?
-void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
-{
-    PARSE_MSG(faabric::UnregisterRequest, buffer.data(), buffer.size())
-
-    SPDLOG_DEBUG("Unregistering host {} for {}/{}",
-                 parsedMsg.host(),
-                 parsedMsg.user(),
-                 parsedMsg.function());
-
-    // Remove the host from the warm set
-    scheduler.removeRegisteredHost(
-      parsedMsg.host(), parsedMsg.user(), parsedMsg.function());
-}
-*/
-
-/* TODO: can we delete this one?
-std::unique_ptr<google::protobuf::Message> FunctionCallServer::recvGetResources(
-  std::span<const uint8_t> buffer)
-{
-    auto response = std::make_unique<faabric::HostResources>(
-      scheduler.getThisHostResources());
-    return response;
-}
-*/
 }

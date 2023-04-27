@@ -362,7 +362,8 @@ class MpiBaseTestFixture
         msg.set_mpiworldsize(worldSize);
 
         // Register the first message that creates the world size
-        sch.callFunctions(req);
+        // TODO: this is giving problems in Faasm
+        // sch.callFunctions(req);
     }
 
     ~MpiBaseTestFixture()
@@ -426,20 +427,19 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         // sure the world can be created. Here we want to start from scratch,
         // so we create a "new" request (by updating the app id) and update
         // the host resources
+        req->set_id(faabric::util::generateGid());
         req->set_appid(faabric::util::generateGid());
+        msg.set_id(faabric::util::generateGid());
         msg.set_appid(req->appid());
         msg.set_mpiworldsize(worldSize);
 
-        // Set up this host resources
+        // Set up this host resources. Bump up the total number of slots so
+        // that, in case of tie, we prefer this host over the other host
         faabric::HostResources thisResources;
-        thisResources.set_slots(ranksThisWorld);
-        thisResources.set_usedslots(0);
+        thisResources.set_slots(3 * ranksThisWorld);
+        thisResources.set_usedslots(2 * ranksThisWorld);
         sch.addHostToGlobalSet(
           thisHost, std::make_shared<faabric::HostResources>(thisResources));
-
-        // Call the request _before_ setting up the second host, to make sure
-        // the request gets scheduled to this host
-        sch.callFunctions(req);
 
         // Set up the other world and add it to the global set of hosts
         faabric::HostResources otherResources;
@@ -450,6 +450,9 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
 
         // Add the other world to the list of mocked hosts
         setPlannerMockedHosts({ otherHost });
+
+        sch.callFunctions(req);
+
 
         // Queue the resource response for this other host
         // faabric::scheduler::queueResourceResponse(otherHost, otherResources);

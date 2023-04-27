@@ -1087,7 +1087,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
         auto msgPtr = std::make_shared<faabric::Message>(msg);
         if (plannerResults.find(msg.id()) != plannerResults.end()) {
-            plannerResults.at(msg.id())->setValue(msgPtr);
+            plannerResults.at(msg.id())->set_value(msgPtr);
         }
     }
 
@@ -1110,7 +1110,7 @@ void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
         return;
     }
 
-    plannerResults.at(msg->id())->setValue(msg);
+    plannerResults.at(msg->id())->set_value(msg);
 }
 
 void Scheduler::registerThread(uint32_t msgId)
@@ -1247,15 +1247,15 @@ size_t Scheduler::getCachedMessageCount()
 // for the result. If its not there, the planner will register this host's
 // interest, and send a function call setting the message result. In the
 // meantime, we wait on a promise
-// TODO: this method could be optimised, as there's a chance that we are
-// setting the message result from this same host, so we would not need to
-// go through the planner
 faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
                                               int timeoutMs)
 {
+    // Deliberately make a copy here so that we can set the masterhost when
+    // registering interest in the results
     auto msgPtr = std::make_shared<faabric::Message>(msg);
-    auto resMsgPtr = getPlannerClient()->getMessageResult(msgPtr);
+    msgPtr->set_masterhost(thisHost);
     int msgId = msgPtr->id();
+    auto resMsgPtr = getPlannerClient()->getMessageResult(msgPtr);
 
     // If when we first check the message it is there, return. Otherwise, we
     // will have told the planner we want the result
@@ -1275,11 +1275,10 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
         // getFunctionResult?
         if (plannerResults.find(msgId) == plannerResults.end()) {
             plannerResults.insert(
-              { msgId,
-                std::make_shared<faabric::util::MessageResultPromise>() });
+              { msgId, std::make_shared<MessageResultPromise>() });
         }
 
-        fut = plannerResults.at(msgId)->promise.get_future();
+        fut = plannerResults.at(msgId)->get_future();
     }
 
     bool isBlocking = timeoutMs > 0;
@@ -1296,8 +1295,43 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
             fut.wait();
         }
 
-        return *fut.get();
+        auto resultPtr = fut.get();
+        {
+            // Remove the result promise
+            faabric::util::UniqueLock lock(plannerResultsMutex);
+            plannerResults.erase(msgId);
+        }
+
+        return *resultPtr;
     }
+}
+
+std::shared_ptr<faabric::BatchExecuteRequest>
+Scheduler::getBatchResult(std::shared_ptr<faabric::BatchExecuteRequest> req,
+                          int timeoutMs,
+                          int batchSizeHint)
+{
+    auto batchMsgs = getPlannerClient()->getBatchMessages(req);
+    auto responseReq = std::make_shared<faabric::BatchExecuteRequest>();
+    responseReq->set_appid(req->appid());
+
+    if (batchSizeHint != 0 && batchSizeHint != batchMsgs->messages_size()) {
+        SPDLOG_ERROR("Batch size hint does not match planner's records for "
+                     "app {}:{} ({} != {})",
+                     req->appid(),
+                     req->groupid(),
+                     batchSizeHint,
+                     batchMsgs->messages_size());
+        // TODO: should we throw an exception here?
+        return nullptr;
+    }
+
+    SPDLOG_DEBUG("Getting result for app {} ({} messages)", req->appid(), batchMsgs->messages_size());
+    for (const auto& msg : batchMsgs->messages()) {
+        *responseReq->add_messages() = getFunctionResult(msg, timeoutMs);
+    }
+
+    return responseReq;
 }
 
 /*

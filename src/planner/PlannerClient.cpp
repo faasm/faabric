@@ -136,11 +136,11 @@ std::shared_ptr<faabric::Message> PlannerClient::getMessageResult(
     return std::make_shared<faabric::Message>(responseMsg);
 }
 
-std::shared_ptr<faabric::BatchExecuteRequest> PlannerClient::getBatchResult(
+std::shared_ptr<faabric::BatchExecuteRequest> PlannerClient::getBatchMessages(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     faabric::BatchExecuteRequest responseReq;
-    syncSend(PlannerCalls::GetBatchResult, req.get(), &responseReq);
+    syncSend(PlannerCalls::GetBatchMessages, req.get(), &responseReq);
 
     if (responseReq.id() == 0 || responseReq.appid() == 0) {
         return nullptr;

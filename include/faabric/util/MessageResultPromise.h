@@ -8,7 +8,7 @@
 
 // TODO: move to include/faabric/message/MessageResultPromise.h and move there
 // the remainders of faabric.pb.h
-
+// TODO: consider if we actually want to keep this class
 namespace faabric::util {
 /**
  * A promise for a future message result with an associated eventfd for use with
@@ -38,7 +38,7 @@ class MessageResultPromise final
 
     ~MessageResultPromise();
 
-    void setValue(std::shared_ptr<faabric::Message>& msg);
+    void setValue(std::shared_ptr<faabric::Message> msg);
 
     std::promise<std::shared_ptr<faabric::Message>> promise;
     int eventFd = -1;

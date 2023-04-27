@@ -67,13 +67,16 @@ class Planner
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       std::shared_ptr<faabric::util::SchedulingDecision> decision);
 
+    // Getters for planner's scheduling state
+
     std::shared_ptr<faabric::util::SchedulingDecision> getSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    std::shared_ptr<faabric::BatchExecuteRequest> getBatchResult(
+    std::shared_ptr<faabric::BatchExecuteRequest> getBatchMessages(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    // Legacy set/get message result methods called from local schedulers
+    // Setters/getters for individual message results
+
     void setMessageResult(std::shared_ptr<faabric::Message> msg);
 
     std::shared_ptr<faabric::Message> getMessageResult(
@@ -110,6 +113,12 @@ class Planner
 
     // Check if a host's registration timestamp has expired
     bool isHostExpired(std::shared_ptr<Host> host, long epochTimeMs = 0);
+
+    // ----------
+    // Scheduling private API
+    // ----------
+
+    void flushSchedulingState();
 };
 
 Planner& getPlanner();

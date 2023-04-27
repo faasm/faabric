@@ -56,14 +56,14 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::GetSchedulingDecision: {
             return recvGetSchedulingDecision(message.udata());
         }
+        case PlannerCalls::GetBatchMessages: {
+            return recvGetBatchMessages(message.udata());
+        }
         case PlannerCalls::SetMessageResult: {
             return recvSetMessageResult(message.udata());
         }
         case PlannerCalls::GetMessageResult: {
             return recvGetMessageResult(message.udata());
-        }
-        case PlannerCalls::GetBatchResult: {
-            return recvGetBatchResult(message.udata());
         }
         default: {
             // If we don't recognise the header, let the client fail, but don't
@@ -229,11 +229,9 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvSetMessageResult(
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
   std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(MessageResultRequest, buffer.data(), buffer.size());
+    PARSE_MSG(Message, buffer.data(), buffer.size());
 
-    auto resultMsg = planner.getMessageResult(
-      std::make_shared<faabric::Message>(parsedMsg.msg()),
-      parsedMsg.timeoutms());
+    auto resultMsg = planner.getMessageResult(std::make_shared<faabric::Message>(parsedMsg));
 
     if (resultMsg == nullptr) {
         resultMsg = std::make_shared<faabric::Message>();
@@ -244,12 +242,12 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
     return std::make_unique<faabric::Message>(*resultMsg);
 }
 
-std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetBatchResult(
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetBatchMessages(
   std::span<const uint8_t> buffer)
 {
     PARSE_MSG(BatchExecuteRequest, buffer.data(), buffer.size());
 
-    auto resultReq = planner.getBatchResult(
+    auto resultReq = planner.getBatchMessages(
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 
     if (!resultReq) {

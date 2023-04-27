@@ -14,7 +14,7 @@ MessageResultPromise::~MessageResultPromise()
     }
 }
 
-void MessageResultPromise::setValue(std::shared_ptr<faabric::Message>& msg)
+void MessageResultPromise::setValue(std::shared_ptr<faabric::Message> msg)
 {
     this->promise.set_value(msg);
     eventfd_write(this->eventFd, (eventfd_t)1);

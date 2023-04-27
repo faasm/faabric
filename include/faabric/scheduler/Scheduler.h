@@ -10,7 +10,7 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/MessageResultPromise.h>
 #include <faabric/util/PeriodicBackgroundThread.h>
-#include <faabric/util/asio.h>
+// #include <faabric/util/asio.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
@@ -29,8 +29,8 @@
 
 namespace faabric::scheduler {
 
-typedef std::shared_ptr<faabric::util::MessageResultPromise>
-  MessageResultPromisePtr;
+typedef std::promise<std::shared_ptr<faabric::Message>> MessageResultPromise;
+typedef std::shared_ptr<MessageResultPromise> MessageResultPromisePtr;
 
 class Scheduler;
 
@@ -216,11 +216,18 @@ class Scheduler
     faabric::Message getFunctionResult(const faabric::Message& msg,
                                        int timeoutMs);
 
+    std::shared_ptr<faabric::BatchExecuteRequest>
+    getBatchResult(std::shared_ptr<faabric::BatchExecuteRequest> req,
+                   int timeoutMs,
+                   int batchSizeHint = 0);
+
+    /* TODO: remove from here
     void getFunctionResultAsync(unsigned int messageId,
                                 int timeoutMs,
                                 asio::io_context& ioc,
                                 asio::any_io_executor& executor,
                                 std::function<void(faabric::Message&)> handler);
+    */
 
     void setThreadResult(const faabric::Message& msg,
                          int32_t returnValue,
@@ -331,19 +338,18 @@ class Scheduler
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
 
-    std::unordered_map<uint32_t,
-                       std::shared_ptr<faabric::util::MessageResultPromise>>
-      localResults;
-
-    // TODO(planner): eventually plannerResults should overtake localResults
-    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
-    std::mutex plannerResultsMutex;
+    std::unordered_map<uint32_t, MessageResultPromisePtr> localResults;
 
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
     std::mutex localResultsMutex;
 
+    // TODO(planner): eventually plannerResults should overtake localResults
+    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
+    std::mutex plannerResultsMutex;
+
     // ---- Host resources and hosts ----
+    // TODO: remove from here eventually
     faabric::HostResources thisHostResources;
     std::atomic<int32_t> thisHostUsedSlots = 0;
 
