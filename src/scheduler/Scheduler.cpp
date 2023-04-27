@@ -1315,14 +1315,15 @@ Scheduler::getBatchResult(std::shared_ptr<faabric::BatchExecuteRequest> req,
     auto responseReq = std::make_shared<faabric::BatchExecuteRequest>();
     responseReq->set_appid(req->appid());
 
+    // The hint failing is not necessarily an error, as we use it to know when
+    // the results are ready to be waited-upon
     if (batchSizeHint != 0 && batchSizeHint != batchMsgs->messages_size()) {
-        SPDLOG_ERROR("Batch size hint does not match planner's records for "
+        SPDLOG_DEBUG("Batch size hint does not match planner's records for "
                      "app {}:{} ({} != {})",
                      req->appid(),
                      req->groupid(),
                      batchSizeHint,
                      batchMsgs->messages_size());
-        // TODO: should we throw an exception here?
         return nullptr;
     }
 
