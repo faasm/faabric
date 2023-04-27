@@ -23,6 +23,9 @@ void KeepAliveThread::setRequest(
     faabric::util::FullLock lock(keepAliveThreadMx);
 
     thisHostReq = thisHostReqIn;
+
+    // Keep-alive requests should never overwrite the state of the planner
+    thisHostReq->set_overwrite(false);
 }
 
 PlannerClient::PlannerClient()

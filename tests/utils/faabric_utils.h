@@ -93,4 +93,14 @@ void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
 std::pair<int, std::string> postToUrl(const std::string& host,
                                       int port,
                                       const std::string& body);
+
+// ------
+// Planner utils
+// ------
+
+void resetPlanner();
+
+faabric::planner::PlannerConfig getPlannerConfig();
+
+void flushExecutors();
 }

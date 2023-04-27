@@ -99,20 +99,7 @@ class PlannerTestFixture
     ~PlannerTestFixture() { resetPlanner(); }
 
   protected:
-    // TODO: re-factor to plannerCli
     faabric::planner::PlannerClient plannerCli;
-
-    void resetPlanner() const
-    {
-        faabric::planner::HttpMessage msg;
-        msg.set_type(faabric::planner::HttpMessage_Type_RESET);
-        std::string jsonStr = faabric::util::messageToJson(msg);
-
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        assert(result.first == 200);
-    }
 
     void setPlannerMockedHosts(const std::vector<std::string>& hosts)
     {
@@ -121,36 +108,6 @@ class PlannerTestFixture
             testsConfig.add_mockedhosts(host);
         }
         plannerCli.setTestsConfig(testsConfig);
-    }
-
-    faabric::planner::PlannerConfig getPlannerConfig()
-    {
-        faabric::planner::HttpMessage msg;
-        msg.set_type(faabric::planner::HttpMessage_Type_GET_CONFIG);
-        std::string jsonStr = faabric::util::messageToJson(msg);
-
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        REQUIRE(result.first == 200);
-
-        // Check that we can de-serialise the config. Note that if there's a
-        // de-serialisation the method will throw an exception
-        faabric::planner::PlannerConfig config;
-        faabric::util::jsonToMessage(result.second, &config);
-        return config;
-    }
-
-    void flushExecutors()
-    {
-        faabric::planner::HttpMessage msg;
-        msg.set_type(faabric::planner::HttpMessage_Type_FLUSH_EXECUTORS);
-        std::string jsonStr = faabric::util::messageToJson(msg);
-
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        REQUIRE(result.first == 200);
     }
 };
 
@@ -362,8 +319,7 @@ class MpiBaseTestFixture
         msg.set_mpiworldsize(worldSize);
 
         // Register the first message that creates the world size
-        // TODO: this is giving problems in Faasm
-        // sch.callFunctions(req);
+        sch.callFunctions(req);
     }
 
     ~MpiBaseTestFixture()
@@ -452,7 +408,6 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         setPlannerMockedHosts({ otherHost });
 
         sch.callFunctions(req);
-
 
         // Queue the resource response for this other host
         // faabric::scheduler::queueResourceResponse(otherHost, otherResources);

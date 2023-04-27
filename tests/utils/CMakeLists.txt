@@ -5,6 +5,7 @@ add_library(faabric_test_utils
     exec_graph_utils.cpp
     http_utils.cpp
     message_utils.cpp
+    planner_utils.cpp
     scheduling_utils.cpp
     system_utils.cpp
 )

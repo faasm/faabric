@@ -34,9 +34,9 @@ void MessageResultPromiseAwaiter::await(const boost::system::error_code& ec)
 
 void MessageResultPromiseAwaiter::doAwait()
 {
-    dsc.async_wait(asio::posix::stream_descriptor::wait_read,
-                   beast::bind_front_handler(
-                     &MessageResultPromiseAwaiter::await,
-                     this->shared_from_this()));
+    dsc.async_wait(
+      asio::posix::stream_descriptor::wait_read,
+      beast::bind_front_handler(&MessageResultPromiseAwaiter::await,
+                                this->shared_from_this()));
 }
 }

@@ -145,7 +145,7 @@ std::vector<std::shared_ptr<Host>> Planner::doGetAvailableHosts()
 
 // Deliberately take a const reference as an argument to force a copy and take
 // ownership of the host
-bool Planner::registerHost(const Host& hostIn)
+bool Planner::registerHost(const Host& hostIn, bool overwrite)
 {
     SPDLOG_TRACE("Planner received request to register host {}", hostIn.ip());
 
@@ -175,9 +175,7 @@ bool Planner::registerHost(const Host& hostIn)
         state.hostMap.emplace(
           std::make_pair<std::string, std::shared_ptr<Host>>(
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
-    } else if (it != state.hostMap.end() &&
-               ((it->second->slots() != hostIn.slots()) ||
-                (it->second->usedslots() != hostIn.usedslots()))) {
+    } else if (it != state.hostMap.end() && overwrite) {
         // We allow overwritting the host state by sending another register
         // request with same IP but different host resources. This is useful
         // for testing and resetting purposes
@@ -187,6 +185,11 @@ bool Planner::registerHost(const Host& hostIn)
                      hostIn.usedslots());
         it->second->set_slots(hostIn.slots());
         it->second->set_usedslots(hostIn.usedslots());
+    } else if (it != state.hostMap.end()) {
+        SPDLOG_DEBUG("NOT overwritting host {} with {} slots (used {})",
+                     hostIn.ip(),
+                     hostIn.slots(),
+                     hostIn.usedslots());
     }
 
     // Irrespective, set the timestamp
@@ -732,9 +735,11 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
 
         if (state.appResults.find(appId) == state.appResults.end()) {
             SPDLOG_ERROR("App {} not registered in app results", appId);
-        } else if (state.appResults[appId].find(msgId) == state.appResults[appId].end()) {
-            SPDLOG_ERROR(
-              "Msg {} not registered in app results (app id: {})", msgId, appId);
+        } else if (state.appResults[appId].find(msgId) ==
+                   state.appResults[appId].end()) {
+            SPDLOG_ERROR("Msg {} not registered in app results (app id: {})",
+                         msgId,
+                         appId);
         } else {
             return state.appResults[appId][msgId];
         }

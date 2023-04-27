@@ -85,6 +85,7 @@ message PingResponse {
 
 message RegisterHostRequest {
     Host host = 1;
+    bool overwrite = 2;
 }
 
 message RegisterHostResponse {

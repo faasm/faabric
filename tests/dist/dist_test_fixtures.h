@@ -151,7 +151,8 @@ class MpiDistTestsFixture : public DistTestsFixture
         // all MPI calls before we wait on the batch
         SLEEP_MS(200);
 
-        int batchSizeHint = expectedHosts.empty() ? worldSize : expectedHosts.size();
+        int batchSizeHint =
+          expectedHosts.empty() ? worldSize : expectedHosts.size();
         auto responseReq = sch.getBatchResult(req, timeoutMs, batchSizeHint);
         std::vector<std::string> actualHosts(responseReq->messages_size());
         for (const auto& msg : responseReq->messages()) {

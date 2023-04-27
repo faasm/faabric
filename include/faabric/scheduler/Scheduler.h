@@ -216,10 +216,10 @@ class Scheduler
     faabric::Message getFunctionResult(const faabric::Message& msg,
                                        int timeoutMs);
 
-    std::shared_ptr<faabric::BatchExecuteRequest>
-    getBatchResult(std::shared_ptr<faabric::BatchExecuteRequest> req,
-                   int timeoutMs,
-                   int batchSizeHint = 0);
+    std::shared_ptr<faabric::BatchExecuteRequest> getBatchResult(
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      int timeoutMs,
+      int batchSizeHint = 0);
 
     /* TODO: remove from here
     void getFunctionResultAsync(unsigned int messageId,

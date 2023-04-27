@@ -95,12 +95,18 @@ void Scheduler::addHostToGlobalSet(
   const std::string& hostIp,
   std::shared_ptr<faabric::HostResources> overwriteResources)
 {
-    // Build register host request
+    // Build register host request. Setting the overwrite flag means that we
+    // will overwrite whatever records the planner has on this host. We only
+    // set it when calling this method for a different host (e.g. in the tests)
+    // or when passing an overwrited host-resources (e.g. when calling
+    // setThisHostResources)
     auto req = std::make_shared<faabric::planner::RegisterHostRequest>();
     req->mutable_host()->set_ip(hostIp);
+    req->set_overwrite(false);
     if (overwriteResources != nullptr) {
         req->mutable_host()->set_slots(overwriteResources->slots());
         req->mutable_host()->set_usedslots(overwriteResources->usedslots());
+        req->set_overwrite(true);
     } else if (hostIp == thisHost) {
         req->mutable_host()->set_slots(faabric::util::getUsableCores());
         req->mutable_host()->set_usedslots(0);
@@ -1306,10 +1312,10 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
     }
 }
 
-std::shared_ptr<faabric::BatchExecuteRequest>
-Scheduler::getBatchResult(std::shared_ptr<faabric::BatchExecuteRequest> req,
-                          int timeoutMs,
-                          int batchSizeHint)
+std::shared_ptr<faabric::BatchExecuteRequest> Scheduler::getBatchResult(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  int timeoutMs,
+  int batchSizeHint)
 {
     auto batchMsgs = getPlannerClient()->getBatchMessages(req);
     auto responseReq = std::make_shared<faabric::BatchExecuteRequest>();
@@ -1327,7 +1333,9 @@ Scheduler::getBatchResult(std::shared_ptr<faabric::BatchExecuteRequest> req,
         return nullptr;
     }
 
-    SPDLOG_DEBUG("Getting result for app {} ({} messages)", req->appid(), batchMsgs->messages_size());
+    SPDLOG_DEBUG("Getting result for app {} ({} messages)",
+                 req->appid(),
+                 batchMsgs->messages_size());
     for (const auto& msg : batchMsgs->messages()) {
         *responseReq->add_messages() = getFunctionResult(msg, timeoutMs);
     }

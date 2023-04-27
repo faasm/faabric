@@ -112,7 +112,8 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
 {
     PARSE_MSG(RegisterHostRequest, buffer.data(), buffer.size());
 
-    bool success = planner.registerHost(parsedMsg.host());
+    bool success =
+      planner.registerHost(parsedMsg.host(), parsedMsg.overwrite());
     if (!success) {
         SPDLOG_ERROR("Error registering host in Planner!");
     }
@@ -231,7 +232,8 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
 {
     PARSE_MSG(Message, buffer.data(), buffer.size());
 
-    auto resultMsg = planner.getMessageResult(std::make_shared<faabric::Message>(parsedMsg));
+    auto resultMsg =
+      planner.getMessageResult(std::make_shared<faabric::Message>(parsedMsg));
 
     if (resultMsg == nullptr) {
         resultMsg = std::make_shared<faabric::Message>();

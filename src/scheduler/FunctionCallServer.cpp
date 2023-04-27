@@ -44,7 +44,7 @@ std::unique_ptr<google::protobuf::Message> FunctionCallServer::doSyncRecv(
         case faabric::scheduler::FunctionCalls::Flush: {
             return recvFlush(message.udata());
         }
-       default: {
+        default: {
             throw std::runtime_error(
               fmt::format("Unrecognized sync call header: {}", header));
         }
