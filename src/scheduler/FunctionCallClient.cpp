@@ -149,4 +149,9 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
         asyncSend(faabric::scheduler::FunctionCalls::Unregister, &req);
     }
 }
+
+void FunctionCallClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
+{
+    asyncSend(faabric::scheduler::FunctionCalls::SetMessageResult, msg.get());
+}
 }

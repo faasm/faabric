@@ -1,6 +1,7 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/util/MessageResultPromise.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -453,6 +454,8 @@ Planner::makeSchedulingDecision(
                     // Last, update the BatchExecuteRequest
                     *oldReq->add_messages() =
                       *req->mutable_messages(nextMessageToScheduleIdx);
+
+                    // Update the index of the next message to schedule
                     ++nextMessageToScheduleIdx;
                 }
                 if (numLeftToSchedule == 0) {
@@ -689,21 +692,59 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     }
     inFlightReq->mutable_messages()->erase(it);
 
-    // Finally, set the result
+    // Set the result
     state.appResults[appId][msgId] = msg;
+
+    // Dispatch an async message to all hosts that are waiting
 }
 
-// This method should _not_ block on the planner side, and only block on the
-// calling worker thread. Thus, its implementation in the planner is always
-// non-blocking
 std::shared_ptr<faabric::Message> Planner::getMessageResult(
   std::shared_ptr<faabric::Message> msg)
 {
     faabric::util::SharedLock lock(plannerMx);
 
-    return doGetMessageResult(msg);
+    int appId = msg->appid();
+    int msgId = msg->id();
+
+    if (state.appResults.find(appId) == state.appResults.end()) {
+        SPDLOG_ERROR("App {} not registered in app results", appId);
+        return nullptr;
+    }
+
+    if (state.appResults[appId].find(msgId) == state.appResults[appId].end()) {
+        SPDLOG_ERROR(
+          "Msg {} not registered in app results (app id: {})", msgId, appId);
+        return nullptr;
+    }
+
+    return state.appResults[appId][msgId];
 }
 
+/* TODO: finish me!
+void Planner::getMessageResultAsync(
+  std::shared_ptr<faabric::Message> msg,
+  int timeoutMs,
+  asio::io_context& ioc,
+  asio::any_io_executor& executor,
+  std::function<void(std::shared_ptr<faabric::Message>)> handler)
+{
+    int appId = msg->appid();
+    int msgId = msg->id();
+
+    while (true) {
+        auto mrp = getMessageResult(msg);
+
+        auto awaiter =
+std::make_shared<faabric::util::MessageResultPromiseAwaiter>( msg, this, mrp,
+          asio::posix::stream_descriptor(ioc, mrp->eventFd),
+          std::move(handler));
+        awaiter->doAwait();
+        return;
+    }
+}
+*/
+
+// TODO: make this always asynchrnously-blocking
 std::shared_ptr<faabric::BatchExecuteRequest> Planner::getBatchResult(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -748,29 +789,6 @@ std::shared_ptr<faabric::BatchExecuteRequest> Planner::getBatchResult(
     SPDLOG_INFO("Planner removing app {} from in-flight", appId);
 
     return responseReq;
-}
-
-// TODO: we actually don't need this lock-free version anymore
-std::shared_ptr<faabric::Message> Planner::doGetMessageResult(
-  std::shared_ptr<faabric::Message> msg)
-{
-    int appId = msg->appid();
-    int msgId = msg->id();
-
-    if (state.appResults.find(appId) == state.appResults.end()) {
-        SPDLOG_ERROR("App {} not registered in app results", appId);
-        return nullptr;
-    }
-
-    if (state.appResults[appId].find(msgId) == state.appResults[appId].end()) {
-        SPDLOG_ERROR(
-          "Msg {} not registered in app results (app id: {})", msgId, appId);
-        return nullptr;
-    }
-
-    // TODO: we are not cleaning the appResults map
-
-    return state.appResults[appId][msgId];
 }
 
 /*

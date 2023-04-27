@@ -4,7 +4,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/util/scheduling.h>
 
-// #include <future>
 #include <map>
 
 namespace faabric::planner {
@@ -39,5 +38,10 @@ struct PlannerState
     // std::map<int, std::map<int,
     // std::promise<std::shared_ptr<faabric::Message>>>> appResults;
     std::map<int, std::map<int, std::shared_ptr<faabric::Message>>> appResults;
+
+    // Double-map holding the message results. The first key is the app id. For
+    // each app id, we keep a map of the message id, and a promise to the
+    // result that can be asynchronously waited-on
+    // std::map<int, std::map<int, MessageResultPromisePtr>> msgResults;
 };
 }

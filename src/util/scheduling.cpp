@@ -84,24 +84,23 @@ SchedulingDecision::SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn)
   , groupId(groupIdIn)
 {}
 
-void SchedulingDecision::debugPrint()
+void SchedulingDecision::print()
 {
-    SPDLOG_DEBUG("-------------- Decision for App: {} ----------------", appId);
-    SPDLOG_DEBUG("MsgId\tAppId\tGroupId\tGrIdx\tHostIp\tHostCap");
+    SPDLOG_INFO("-------------- Decision for App: {} ----------------", appId);
+    SPDLOG_INFO("MsgId\tAppId\tGroupId\tGrIdx\tHostIp\t\tHostCap");
     // Modulo a big number so that we can get the UUIDs to fit within one tab
     int formatBase = 1e6;
     for (int i = 0; i < hosts.size(); i++) {
-        SPDLOG_DEBUG("{}\t{}\t{}\t{}\t{}\t{}",
-                     messageIds.at(i) % formatBase,
-                     appId % formatBase,
-                     groupId % formatBase,
-                     groupIdxs.at(i),
-                     hosts.at(i),
-                     plannerHosts.at(i)->slots() -
-                       plannerHosts.at(i)->usedslots());
+        SPDLOG_INFO("{}\t{}\t{}\t{}\t{}\t{}",
+                    messageIds.at(i) % formatBase,
+                    appId % formatBase,
+                    groupId % formatBase,
+                    groupIdxs.at(i),
+                    hosts.at(i),
+                    plannerHosts.at(i)->slots() -
+                      plannerHosts.at(i)->usedslots());
     }
-    SPDLOG_DEBUG("------------- End Decision for App {} ---------------",
-                 appId);
+    SPDLOG_INFO("------------- End Decision for App {} ---------------", appId);
 }
 
 bool SchedulingDecision::isSingleHost()

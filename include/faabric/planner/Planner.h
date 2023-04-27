@@ -2,6 +2,7 @@
 
 #include <faabric/planner/PlannerState.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/util/asio.h>
 #include <faabric/util/scheduling.h>
 
 #include <shared_mutex>
@@ -54,8 +55,6 @@ class Planner
     // ----------
     // Request scheduling public API
     // ----------
-    // TODO: remove duplication with src/scheduler/Scheduler.cpp, and move
-    // away this methods elsewhere
 
     // Given a batch execute request, make a scheduling decision informed by
     // the topology hint. If the request is already in-flight, WHAT?
@@ -71,17 +70,23 @@ class Planner
     std::shared_ptr<faabric::util::SchedulingDecision> getSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    // Legacy set/get message result methods called from local schedulers
-    void setMessageResult(std::shared_ptr<faabric::Message> msg);
-
-    // TODO: consider only using ids for getting message/batch results
-    std::shared_ptr<faabric::Message> getMessageResult(
-      std::shared_ptr<faabric::Message> msg);
-
     std::shared_ptr<faabric::BatchExecuteRequest> getBatchResult(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    // bool waitForAppResult(std::shared_ptr<faabric::BatchExecuteRequest> req);
+    // Legacy set/get message result methods called from local schedulers
+    void setMessageResult(std::shared_ptr<faabric::Message> msg);
+
+    std::shared_ptr<faabric::Message> getMessageResult(
+      std::shared_ptr<faabric::Message> msg);
+
+    /* TODO: finish me!
+    void getMessageResultAsync(
+      std::shared_ptr<faabric::Message> msg,
+      int timeoutMs,
+      asio::io_context& ioc,
+      asio::any_io_executor& executor,
+      std::function<void(faabric::Message&)> handler);
+    */
 
   private:
     // There's a singleton instance of the planner running, but it must allow
@@ -105,13 +110,6 @@ class Planner
 
     // Check if a host's registration timestamp has expired
     bool isHostExpired(std::shared_ptr<Host> host, long epochTimeMs = 0);
-
-    // ----------
-    // Batch/message scheduling private API
-    // ----------
-
-    std::shared_ptr<faabric::Message> doGetMessageResult(
-      std::shared_ptr<faabric::Message> msg);
 };
 
 Planner& getPlanner();

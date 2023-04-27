@@ -20,7 +20,7 @@ class SchedulingDecision
     SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn);
 
     // Helper method to visualise a scheduling decision
-    void debugPrint();
+    void print();
 
     uint32_t appId = 0;
 
@@ -29,7 +29,7 @@ class SchedulingDecision
     int32_t nFunctions = 0;
 
     std::vector<std::string> hosts;
-    // TODO: think about this
+
     std::vector<std::shared_ptr<faabric::planner::Host>> plannerHosts;
 
     std::vector<int32_t> messageIds;

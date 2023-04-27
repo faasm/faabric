@@ -28,6 +28,8 @@ class FunctionCallServer final
 
     void recvExecuteFunctions(std::span<const uint8_t> buffer);
 
+    void recvSetMessageResult(std::span<const uint8_t> buffer);
+
     // TODO: do we delete this one?
     // void recvUnregister(std::span<const uint8_t> buffer);
 };

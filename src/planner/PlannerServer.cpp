@@ -166,7 +166,7 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvCallFunctions(
     if (decision == nullptr) {
         return std::make_unique<faabric::PointToPointMappings>();
     }
-    decision->debugPrint();
+    decision->print();
     // If the request is a DIST_CHANGE (i.e. migration) we don't need to
     // dispatch new execution calls
     if (!isDistChange) {
@@ -229,10 +229,11 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvSetMessageResult(
 std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
   std::span<const uint8_t> buffer)
 {
-    PARSE_MSG(Message, buffer.data(), buffer.size());
+    PARSE_MSG(MessageResultRequest, buffer.data(), buffer.size());
 
-    auto resultMsg =
-      planner.getMessageResult(std::make_shared<faabric::Message>(parsedMsg));
+    auto resultMsg = planner.getMessageResult(
+      std::make_shared<faabric::Message>(parsedMsg.msg()),
+      parsedMsg.timeoutms());
 
     if (resultMsg == nullptr) {
         resultMsg = std::make_shared<faabric::Message>();
@@ -250,6 +251,10 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetBatchResult(
 
     auto resultReq = planner.getBatchResult(
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
+
+    if (!resultReq) {
+        return std::make_unique<faabric::BatchExecuteRequest>();
+    }
 
     return std::make_unique<faabric::BatchExecuteRequest>(*resultReq);
 }

@@ -81,6 +81,11 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }
 
+void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(faabric::Message, buffer.data(), buffer.size())
+}
+
 /* TODO: we may want to delete this one?
 void FunctionCallServer::recvUnregister(std::span<const uint8_t> buffer)
 {

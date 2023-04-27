@@ -8,6 +8,7 @@
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/util/MessageResultPromise.h>
 #include <faabric/util/PeriodicBackgroundThread.h>
 #include <faabric/util/asio.h>
 #include <faabric/util/clock.h>
@@ -28,9 +29,8 @@
 
 namespace faabric::scheduler {
 
-typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
-                  std::shared_ptr<faabric::util::SchedulingDecision>>
-  InFlightPair;
+typedef std::shared_ptr<faabric::util::MessageResultPromise>
+  MessageResultPromisePtr;
 
 class Scheduler;
 
@@ -156,40 +156,6 @@ class FunctionMigrationThread : public faabric::util::PeriodicBackgroundThread
 };
 
 /**
- * A promise for a future message result with an associated eventfd for use with
- * asio.
- */
-class MessageLocalResult final
-{
-  public:
-    std::promise<std::unique_ptr<faabric::Message>> promise;
-    int eventFd = -1;
-
-    MessageLocalResult();
-
-    MessageLocalResult(const MessageLocalResult&) = delete;
-
-    inline MessageLocalResult(MessageLocalResult&& other)
-    {
-        this->operator=(std::move(other));
-    }
-
-    MessageLocalResult& operator=(const MessageLocalResult&) = delete;
-
-    inline MessageLocalResult& operator=(MessageLocalResult&& other)
-    {
-        this->promise = std::move(other.promise);
-        this->eventFd = other.eventFd;
-        other.eventFd = -1;
-        return *this;
-    }
-
-    ~MessageLocalResult();
-
-    void setValue(std::unique_ptr<faabric::Message>&& msg);
-};
-
-/**
  * Background thread that periodically checks to see if any executors have
  * become stale (i.e. not handled any requests in a given timeout). If any are
  * found, they are removed.
@@ -242,7 +208,10 @@ class Scheduler
 
     void flushLocally();
 
+    // TODO: remove naming duplicity
     void setFunctionResult(faabric::Message& msg);
+
+    void setMessageResult(std::shared_ptr<faabric::Message> msg);
 
     faabric::Message getFunctionResult(const faabric::Message& msg,
                                        int timeoutMs);
@@ -362,8 +331,13 @@ class Scheduler
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
 
-    std::unordered_map<uint32_t, std::shared_ptr<MessageLocalResult>>
+    std::unordered_map<uint32_t,
+                       std::shared_ptr<faabric::util::MessageResultPromise>>
       localResults;
+
+    // TODO(planner): eventually plannerResults should overtake localResults
+    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
+    std::mutex plannerResultsMutex;
 
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
