@@ -741,13 +741,17 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
                          msgId,
                          appId);
         } else {
+            auto returnMsg = state.appResults[appId][msgId];
+            SPDLOG_INFO("Returning message result! Yay! (msg = nullptr {})", returnMsg == nullptr);
             return state.appResults[appId][msgId];
         }
     }
 
     // If we are here, it means that we have not found the message result, so
-    // we register the calling-host's interest
-    {
+    // we register the calling-host's interest if the calling-host has
+    // provided a masterhost. The masterhost is set when dispatching a message
+    // within faabric, but not when sending an HTTP request
+    if (!msg->masterhost().empty()) {
         faabric::util::FullLock lock(plannerMx);
         SPDLOG_DEBUG("Adding host {} on the waiting list for message {}",
                      msg->masterhost(),

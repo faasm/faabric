@@ -47,8 +47,6 @@ void PlannerEndpointHandler::onRequest(
         response.body() = std::string("Bad JSON in request body");
         return ctx.sendFunction(std::move(response));
     }
-    SPDLOG_WARN("This is the message we have: {}", faabric::util::messageToJson(msg));
-    SPDLOG_WARN("This is the payload: {}", msg.payloadjson());
 
     switch (msg.type()) {
         case faabric::planner::HttpMessage_Type_RESET: {
@@ -146,45 +144,17 @@ void PlannerEndpointHandler::onRequest(
             // Dispatch to the corresponding workers
             planner.dispatchSchedulingDecision(req, schedulingDecision);
 
-            // Wait for result, or return async id
-            // if (msg.isasync() {
-            // TODO: probably remove non-async messages altogether
+            // TODO: Remove async altogether
             response.result(beast::http::status::ok);
-            response.body() = faabric::util::buildAsyncResponse(funcMsg);
+            // response.body() = faabric::util::buildAsyncResponse(funcMsg);
+            response.body() = faabric::util::messageToJson(funcMsg);
             return ctx.sendFunction(std::move(response));
-            // }
-
-            /* TODO: think how we want to wait for planner results
-            SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
-            bool completed = planner.waitForAppResult(req);
-            if (!completed) {
-                response.result(beast::http::status::internal_server_error);
-                response.body() = "Internal error executing function";
-                return ctx.sendFunction(std::move(response));
-            }
-
-            // Set the function result. Note that, for the moment, we only
-            // consider the result to be the first message even though we
-            // wait for the whole request
-            auto result = req->messages().at(0);
-            beast::http::status statusCode =
-              (result.returnvalue() == 0)
-                ? beast::http::status::ok
-                : beast::http::status::internal_server_error;
-            response.result(statusCode);
-            SPDLOG_DEBUG("Worker thread {} result {}",
-                         gettid(),
-                         faabric::util::funcToString(result, true));
-
-            response.body() = result.outputdata();
-            return ctx.sendFunction(std::move(response));
-            */
         }
         case faabric::planner::HttpMessage_Type_EXECUTE_STATUS: {
             // Get message from request string
-            faabric::Message msg;
+            faabric::Message funcMsg;
             try {
-                faabric::util::jsonToMessage(requestStr, &msg);
+                faabric::util::jsonToMessage(msg.payloadjson(), &funcMsg);
             } catch (faabric::util::JsonSerialisationException e) {
                 response.result(beast::http::status::bad_request);
                 response.body() = std::string(
@@ -192,10 +162,19 @@ void PlannerEndpointHandler::onRequest(
                 return ctx.sendFunction(std::move(response));
             }
 
+            // As a sanity-check, make sure the message's master host is unset,
+            // this will prevent the planner from trying to notify us when
+            // the message is ready
+            funcMsg.clear_masterhost();
+
             // Get actual message result, and populate HTTP response
             auto resultMsg = getPlanner().getMessageResult(
-              std::make_shared<faabric::Message>(msg));
-            if (!resultMsg) {
+              std::make_shared<faabric::Message>(funcMsg));
+            SPDLOG_INFO("Result msg == nullptr? {}", resultMsg == nullptr);
+            if (resultMsg != nullptr) {
+                SPDLOG_INFO("Return value: {}", resultMsg->returnvalue());
+            }
+            if (resultMsg == nullptr) {
                 response.result(beast::http::status::ok);
                 response.body() = std::string("RUNNING");
             } else if (resultMsg->returnvalue() == 0) {
