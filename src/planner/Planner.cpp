@@ -170,7 +170,7 @@ bool Planner::registerHost(const Host& hostIn, bool overwrite)
 
         // If its the first time we see this IP, give it a UID and add it to
         // the map
-        SPDLOG_DEBUG(
+        SPDLOG_INFO(
           "Registering host {} with {} slots", hostIn.ip(), hostIn.slots());
         state.hostMap.emplace(
           std::make_pair<std::string, std::shared_ptr<Host>>(
@@ -179,7 +179,7 @@ bool Planner::registerHost(const Host& hostIn, bool overwrite)
         // We allow overwritting the host state by sending another register
         // request with same IP but different host resources. This is useful
         // for testing and resetting purposes
-        SPDLOG_DEBUG("Overwritting host {} with {} slots (used {})",
+        SPDLOG_INFO("Overwritting host {} with {} slots (used {})",
                      hostIn.ip(),
                      hostIn.slots(),
                      hostIn.usedslots());

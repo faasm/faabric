@@ -138,15 +138,6 @@ class MpiDistTestsFixture : public DistTestsFixture
       int timeoutMs = 10000,
       std::vector<std::string> expectedHosts = {})
     {
-        /*
-        for (const auto& msg : req->messages()) {
-            auto result = sch.getFunctionResult(msg, timeoutMs);
-            REQUIRE(result.returnvalue() == 0);
-        }
-        int numRetries = 3;
-        for (int i = 0; i < numRetries; i++) {
-        */
-
         // Sleep for a bit to make sure the scheduler has had time to schedule
         // all MPI calls before we wait on the batch
         SLEEP_MS(200);
