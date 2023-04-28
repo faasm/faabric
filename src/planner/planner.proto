@@ -42,12 +42,12 @@ message HttpMessage {
         EXECUTE_STATUS = 6;
     }
 
-    Type type = 1;
+    Type type = 1 [json_name = "http_type"];
     // Payload parameter to populate with the message body if necessary. The
     // body is only needed for:
     // - EXECUTE, where it should be formatted as a Message
     // - EXECUTE_STATUS, where it should be formatted as a Message
-    string payloadJson = 2;
+    string payloadJson = 2 [json_name = "payload"];
 }
 
 // ---------------------------------------------

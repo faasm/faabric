@@ -47,6 +47,8 @@ void PlannerEndpointHandler::onRequest(
         response.body() = std::string("Bad JSON in request body");
         return ctx.sendFunction(std::move(response));
     }
+    SPDLOG_WARN("This is the message we have: {}", faabric::util::messageToJson(msg));
+    SPDLOG_WARN("This is the payload: {}", msg.payloadjson());
 
     switch (msg.type()) {
         case faabric::planner::HttpMessage_Type_RESET: {
@@ -100,11 +102,9 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_EXECUTE: {
-            auto req = faabric::util::batchExecFactory();
-            req->set_type(req->FUNCTIONS);
-            faabric::Message& msg = *req->add_messages();
+            faabric::Message funcMsg;
             try {
-                faabric::util::jsonToMessage(requestStr, &msg);
+                faabric::util::jsonToMessage(msg.payloadjson(), &funcMsg);
             } catch (faabric::util::JsonSerialisationException e) {
                 response.result(beast::http::status::bad_request);
                 response.body() =
@@ -113,38 +113,44 @@ void PlannerEndpointHandler::onRequest(
             }
 
             // Sanity check input message
-            if (msg.user().empty()) {
+            if (funcMsg.user().empty()) {
                 response.result(beast::http::status::bad_request);
                 response.body() = std::string("Empty user");
                 return ctx.sendFunction(std::move(response));
             }
-            if (msg.function().empty()) {
+            if (funcMsg.function().empty()) {
                 response.result(beast::http::status::bad_request);
                 response.body() = std::string("Empty function");
                 return ctx.sendFunction(std::move(response));
             }
 
-            // Set message id
-            faabric::util::setMessageId(msg);
-            auto tid = gettid();
-            const std::string funcStr = faabric::util::funcToString(msg, true);
-            SPDLOG_DEBUG("Worker HTTP thread {} scheduling {}", tid, funcStr);
+            // Set request
+            auto req = faabric::util::batchExecFactory(funcMsg.user(),
+                                                       funcMsg.function(),
+                                                       0);
+            req->set_type(req->FUNCTIONS);
+            funcMsg.set_appid(req->appid());
+            faabric::util::setMessageId(funcMsg);
+            *req->add_messages() = funcMsg;
+
+            const std::string funcStr = faabric::util::funcToString(funcMsg, true);
+            SPDLOG_DEBUG("Worker HTTP thread scheduling {}", funcStr);
 
             // Make scheduling decision for message
             auto& planner = getPlanner();
             auto schedulingDecision = planner.makeSchedulingDecision(req);
 
+            // Print the scheduling decision
+            schedulingDecision->print();
+
             // Dispatch to the corresponding workers
             planner.dispatchSchedulingDecision(req, schedulingDecision);
 
-            if (!msg.isasync()) {
-                SPDLOG_ERROR("Can't handle non-async messages just yet");
-            }
-
             // Wait for result, or return async id
             // if (msg.isasync() {
+            // TODO: probably remove non-async messages altogether
             response.result(beast::http::status::ok);
-            response.body() = faabric::util::buildAsyncResponse(msg);
+            response.body() = faabric::util::buildAsyncResponse(funcMsg);
             return ctx.sendFunction(std::move(response));
             // }
 

@@ -48,4 +48,11 @@ void checkMessageEquality(const faabric::Message& msgA,
 
     REQUIRE(msgA.migrationcheckperiod() == msgB.migrationcheckperiod());
 }
+
+void checkPlannerHttpMessageEquality(const faabric::planner::HttpMessage& msgA,
+                                     const faabric::planner::HttpMessage& msgB)
+{
+    REQUIRE(msgA.type() == msgB.type());
+    REQUIRE(msgA.payloadjson() == msgB.payloadjson());
+}
 }

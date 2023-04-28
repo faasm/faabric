@@ -80,6 +80,9 @@ void checkMessageMapEquality(T mapA, T mapB)
 void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);
 
+void checkPlannerHttpMessageEquality(const faabric::planner::HttpMessage& msgA,
+                                     const faabric::planner::HttpMessage& msgB);
+
 void checkSchedulingDecisionEquality(
   const faabric::util::SchedulingDecision& decisionA,
   const faabric::util::SchedulingDecision& decisionB);

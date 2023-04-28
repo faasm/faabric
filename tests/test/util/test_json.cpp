@@ -94,6 +94,7 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
                                               "migration_check_period",
                                               "topology_hint" };
     std::string jsonString = faabric::util::messageToJson(msg);
+    SPDLOG_WARN("jsonString: {}", jsonString);
 
     for (const auto& key : requiredKeys) {
         // To make sure we are indeed dealing with keywords, we make sure to
@@ -106,5 +107,48 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
     // particular a 3, as we set the message type to FLUSH in the constructor
     std::string flushStr = "\"type\":3,";
     REQUIRE(jsonString.find(flushStr) != std::string::npos);
+}
+
+TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising from JSON string", "[util]")
+{
+    faabric::planner::HttpMessage httpMessage;
+    httpMessage.set_type(faabric::planner::HttpMessage_Type_EXECUTE);
+    // std::string jsonString = "{\"type\": 5}";
+
+    faabric::Message nestedMsg;
+    nestedMsg.set_user("demo");
+    nestedMsg.set_function("hello");
+
+    httpMessage.set_payloadjson(faabric::util::messageToJson(nestedMsg));
+
+    SPDLOG_WARN("Payload: {}", httpMessage.payloadjson());
+    SPDLOG_WARN("What we have: {}", faabric::util::messageToJson(httpMessage));
+
+    /*
+    faabric::planner::HttpMessage actualHttpMessage;
+    faabric::util::jsonToMessage(jsonString, &actualHttpMessage);
+
+    checkPlannerHttpMessageEquality(actualHttpMessage, httpMessage);
+
+    // With payload
+    std::string payloadJsonStr = faabric::util::messageToJson(msg);
+    httpMessage.set_payloadjson(payloadJsonStr);
+
+    SPDLOG_WARN("what we got: {}", faabric::util::messageToJson(httpMessage));
+    */
+
+    // Allow missing fields
+    std::string jsonString =
+      "{\"http_type\": 5, \"payload\": '{\"user\":\"demo\",\"function\":\"hello\"}'}";
+    faabric::planner::HttpMessage actualHttpMessage;
+    faabric::util::jsonToMessage(jsonString, &actualHttpMessage);
+    std::string nestedMsgStr = actualHttpMessage.payloadjson();
+    SPDLOG_WARN("nested message string: {}", nestedMsgStr);
+
+    faabric::Message actualNestedMsg;
+    // TODO: this used to fail before
+    REQUIRE_NOTHROW(faabric::util::jsonToMessage(nestedMsgStr, &actualNestedMsg));
+    checkMessageEquality(nestedMsg, actualNestedMsg);
+    // TODO: check message equality
 }
 }
