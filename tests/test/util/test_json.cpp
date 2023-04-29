@@ -109,7 +109,9 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
     REQUIRE(jsonString.find(flushStr) != std::string::npos);
 }
 
-TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising of nested JSON strings", "[util]")
+TEST_CASE_METHOD(JsonTestFixture,
+                 "Test (de)-serialising of nested JSON strings",
+                 "[util]")
 {
     faabric::planner::HttpMessage httpMessage;
     httpMessage.set_type(faabric::planner::HttpMessage_Type_EXECUTE);
@@ -140,7 +142,8 @@ TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising of nested JSON strings"
 
     // Allow missing fields
     std::string jsonString =
-      "{\"http_type\": 5, \"payload\": '{\"user\":\"demo\",\"function\":\"hello\", \"mpi\": \"true\"}'}";
+      "{\"http_type\": 5, \"payload\": "
+      "'{\"user\":\"demo\",\"function\":\"hello\", \"mpi\": \"true\"}'}";
     faabric::planner::HttpMessage actualHttpMessage;
     faabric::util::jsonToMessage(jsonString, &actualHttpMessage);
     std::string nestedMsgStr = actualHttpMessage.payloadjson();
@@ -148,7 +151,8 @@ TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising of nested JSON strings"
 
     faabric::Message actualNestedMsg;
     // TODO: this used to fail before
-    REQUIRE_NOTHROW(faabric::util::jsonToMessage(nestedMsgStr, &actualNestedMsg));
+    REQUIRE_NOTHROW(
+      faabric::util::jsonToMessage(nestedMsgStr, &actualNestedMsg));
     checkMessageEquality(nestedMsg, actualNestedMsg);
     // TODO: check message equality
 }

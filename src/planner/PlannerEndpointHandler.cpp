@@ -123,15 +123,15 @@ void PlannerEndpointHandler::onRequest(
             }
 
             // Set request
-            auto req = faabric::util::batchExecFactory(funcMsg.user(),
-                                                       funcMsg.function(),
-                                                       0);
+            auto req = faabric::util::batchExecFactory(
+              funcMsg.user(), funcMsg.function(), 0);
             req->set_type(req->FUNCTIONS);
             funcMsg.set_appid(req->appid());
             faabric::util::setMessageId(funcMsg);
             *req->add_messages() = funcMsg;
 
-            const std::string funcStr = faabric::util::funcToString(funcMsg, true);
+            const std::string funcStr =
+              faabric::util::funcToString(funcMsg, true);
             SPDLOG_DEBUG("Worker HTTP thread scheduling {}", funcStr);
 
             // Make scheduling decision for message

@@ -180,9 +180,9 @@ bool Planner::registerHost(const Host& hostIn, bool overwrite)
         // request with same IP but different host resources. This is useful
         // for testing and resetting purposes
         SPDLOG_INFO("Overwritting host {} with {} slots (used {})",
-                     hostIn.ip(),
-                     hostIn.slots(),
-                     hostIn.usedslots());
+                    hostIn.ip(),
+                    hostIn.slots(),
+                    hostIn.usedslots());
         it->second->set_slots(hostIn.slots());
         it->second->set_usedslots(hostIn.usedslots());
     } else if (it != state.hostMap.end()) {
