@@ -170,10 +170,6 @@ void PlannerEndpointHandler::onRequest(
             // Get actual message result, and populate HTTP response
             auto resultMsg = getPlanner().getMessageResult(
               std::make_shared<faabric::Message>(funcMsg));
-            SPDLOG_INFO("Result msg == nullptr? {}", resultMsg == nullptr);
-            if (resultMsg != nullptr) {
-                SPDLOG_INFO("Return value: {}", resultMsg->returnvalue());
-            }
             if (resultMsg == nullptr) {
                 response.result(beast::http::status::ok);
                 response.body() = std::string("RUNNING");

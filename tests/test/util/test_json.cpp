@@ -109,7 +109,7 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
     REQUIRE(jsonString.find(flushStr) != std::string::npos);
 }
 
-TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising from JSON string", "[util]")
+TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising of nested JSON strings", "[util]")
 {
     faabric::planner::HttpMessage httpMessage;
     httpMessage.set_type(faabric::planner::HttpMessage_Type_EXECUTE);
@@ -118,6 +118,7 @@ TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising from JSON string", "[ut
     faabric::Message nestedMsg;
     nestedMsg.set_user("demo");
     nestedMsg.set_function("hello");
+    nestedMsg.set_ismpi(true);
 
     httpMessage.set_payloadjson(faabric::util::messageToJson(nestedMsg));
 
@@ -139,7 +140,7 @@ TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising from JSON string", "[ut
 
     // Allow missing fields
     std::string jsonString =
-      "{\"http_type\": 5, \"payload\": '{\"user\":\"demo\",\"function\":\"hello\"}'}";
+      "{\"http_type\": 5, \"payload\": '{\"user\":\"demo\",\"function\":\"hello\", \"mpi\": \"true\"}'}";
     faabric::planner::HttpMessage actualHttpMessage;
     faabric::util::jsonToMessage(jsonString, &actualHttpMessage);
     std::string nestedMsgStr = actualHttpMessage.payloadjson();
@@ -151,4 +152,9 @@ TEST_CASE_METHOD(JsonTestFixture, "Test (de)-serialising from JSON string", "[ut
     checkMessageEquality(nestedMsg, actualNestedMsg);
     // TODO: check message equality
 }
+
+// TODO: test outputdata encoding
+
+// TODO: add test to check that boolean values are lowercase (`true`, `false`)
+// as currently uppercase are not supported (`True`, `False`)
 }

@@ -741,8 +741,6 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
                          msgId,
                          appId);
         } else {
-            auto returnMsg = state.appResults[appId][msgId];
-            SPDLOG_INFO("Returning message result! Yay! (msg = nullptr {})", returnMsg == nullptr);
             return state.appResults[appId][msgId];
         }
     }
