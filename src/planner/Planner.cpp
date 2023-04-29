@@ -733,11 +733,13 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
     {
         faabric::util::SharedLock lock(plannerMx);
 
+        // We debug and not error these messages as they happen frequently
+        // when polling for results
         if (state.appResults.find(appId) == state.appResults.end()) {
-            SPDLOG_ERROR("App {} not registered in app results", appId);
+            SPDLOG_DEBUG("App {} not registered in app results", appId);
         } else if (state.appResults[appId].find(msgId) ==
                    state.appResults[appId].end()) {
-            SPDLOG_ERROR("Msg {} not registered in app results (app id: {})",
+            SPDLOG_DEBUG("Msg {} not registered in app results (app id: {})",
                          msgId,
                          appId);
         } else {

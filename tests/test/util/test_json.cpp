@@ -72,6 +72,8 @@ TEST_CASE_METHOD(JsonTestFixture, "Test message to JSON round trip", "[util]")
     faabric::Message actual;
     faabric::util::jsonToMessage(jsonString, &actual);
 
+    SPDLOG_INFO("actual: {}", jsonString);
+
     checkMessageEquality(msg, actual);
 }
 

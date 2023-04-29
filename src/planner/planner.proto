@@ -28,18 +28,19 @@ message Timestamp {
 }
 
 // ---------------------------------------------
-// Endpoint Messages
+// HTTP Endpoint Messages
 // ---------------------------------------------
 
 message HttpMessage {
     enum Type {
         NO_TYPE = 0;
         RESET = 1;
-        GET_CONFIG = 2;
-        FLUSH_AVAILABLE_HOSTS = 3;
-        FLUSH_EXECUTORS = 4;
-        EXECUTE = 5;
-        EXECUTE_STATUS = 6;
+        GET_AVAILABLE_HOSTS = 2;
+        GET_CONFIG = 3;
+        FLUSH_AVAILABLE_HOSTS = 4;
+        FLUSH_EXECUTORS = 5;
+        EXECUTE = 6;
+        EXECUTE_STATUS = 7;
     }
 
     Type type = 1 [json_name = "http_type"];
@@ -48,6 +49,10 @@ message HttpMessage {
     // - EXECUTE, where it should be formatted as a Message
     // - EXECUTE_STATUS, where it should be formatted as a Message
     string payloadJson = 2 [json_name = "payload"];
+}
+
+message GetAvailableHostsResponse {
+    repeated Host hosts = 1;
 }
 
 // ---------------------------------------------
@@ -67,6 +72,10 @@ message PlannerTestsConfig {
     repeated string mockedHosts = 1;
 }
 
+message PingResponse {
+    PlannerConfig config = 1;
+}
+
 // ---------------------------------------------
 // Host Membership RPC Messages
 // ---------------------------------------------
@@ -77,10 +86,6 @@ message Host {
     int32 usedSlots = 3;
     // Host register timestamp as epoch time in ms
     Timestamp registerTs = 4;
-}
-
-message PingResponse {
-    PlannerConfig config = 1;
 }
 
 message RegisterHostRequest {

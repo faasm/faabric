@@ -60,6 +60,18 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_GET_AVAILABLE_HOSTS: {
+            auto availableHosts = faabric::planner::getPlanner().getAvailableHosts();
+
+            faabric::planner::GetAvailableHostsResponse hostsResponse;
+            for (auto& host : availableHosts) {
+                *hostsResponse.add_hosts() = *host;
+            }
+
+            response.result(beast::http::status::ok);
+            response.body() = faabric::util::messageToJson(hostsResponse);
+            return ctx.sendFunction(std::move(response));
+        }
         case faabric::planner::HttpMessage_Type_FLUSH_AVAILABLE_HOSTS: {
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Hosts);
@@ -137,6 +149,11 @@ void PlannerEndpointHandler::onRequest(
             // Make scheduling decision for message
             auto& planner = getPlanner();
             auto schedulingDecision = planner.makeSchedulingDecision(req);
+            if (!schedulingDecision) {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = "Error making scheduling decision for app";
+                return ctx.sendFunction(std::move(response));
+            }
 
             // Print the scheduling decision
             schedulingDecision->print();
@@ -170,7 +187,7 @@ void PlannerEndpointHandler::onRequest(
             // Get actual message result, and populate HTTP response
             auto resultMsg = getPlanner().getMessageResult(
               std::make_shared<faabric::Message>(funcMsg));
-            if (resultMsg == nullptr) {
+            if (!resultMsg) {
                 response.result(beast::http::status::ok);
                 response.body() = std::string("RUNNING");
             } else if (resultMsg->returnvalue() == 0) {
