@@ -69,7 +69,6 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
 
     // This host has now been told to execute these functions no matter what
     // TODO - avoid this copy
-    parsedMsg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
     scheduler.executeBatchRequest(
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }

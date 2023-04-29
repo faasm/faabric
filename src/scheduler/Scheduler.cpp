@@ -339,7 +339,6 @@ void Scheduler::executeBatchRequest(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    auto topologyHint = faabric::util::SchedulingTopologyHint::FORCE_LOCAL;
 
     // TODO: we only create this fake decision because the current
     // doCallFunctions API requires us to pass a SchedulingDecision (even if
@@ -353,7 +352,7 @@ void Scheduler::executeBatchRequest(
     // Do we even need this lock?
     faabric::util::FullLock lock(mx);
 
-    doCallFunctions(req, fakeDecision, lock, topologyHint);
+    doCallFunctions(req, fakeDecision, lock);
 }
 
 // This function is the entry point to trigger the scheduling of a batch of
@@ -657,15 +656,13 @@ faabric::util::SchedulingDecision Scheduler::callFunctions(
   faabric::util::SchedulingDecision& hint)
 {
     faabric::util::FullLock lock(mx);
-    return doCallFunctions(
-      req, hint, lock, faabric::util::SchedulingTopologyHint::NONE);
+    return doCallFunctions(req, hint, lock);
 }
 
 faabric::util::SchedulingDecision Scheduler::doCallFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::util::SchedulingDecision& decision,
-  faabric::util::FullLock& lock,
-  faabric::util::SchedulingTopologyHint topologyHint)
+  faabric::util::FullLock& lock)
 {
     if (req->messages_size() == 0) {
         SPDLOG_ERROR("Got request to execute batch with 0 messages!");

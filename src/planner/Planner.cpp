@@ -309,6 +309,26 @@ Planner::makeSchedulingDecision(
         }
     }
 
+    // If the topology hint is underfull, and we are performing a scale change,
+    // and this is an MPI call, halve the slots of the current main host. Note
+    // that this is mostly a workaround to create migration opportunities to
+    // run microbenchmarks. Eventually we should probably remove it
+    bool mustHalveSlots =
+      topologyHint == faabric::util::SchedulingTopologyHint::UNDERFULL
+        && req->messages(0).ismpi()
+        && decisionType ==  DecisionType::SCALE_CHANGE;
+    if (mustHalveSlots) {
+        std::string hostToHalveIp = state.inFlightRequests.at(appId).second->hosts.at(0);
+        auto hostToHalve = state.hostMap.at(hostToHalveIp);
+        SPDLOG_INFO("Planner halving the available slots of host"
+                    " {} ({}->{}) for UNDERFULL topology",
+                    hostToHalveIp,
+                    hostToHalve->slots(),
+                    hostToHalve->slots() / 2);
+        hostToHalve->set_slots(hostToHalve->slots() / 2);
+    }
+
+
     // TODO: should we check that none of the hosts in the existing decision
     // have become unavailble?
     auto availableHosts = doGetAvailableHosts();

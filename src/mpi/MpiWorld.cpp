@@ -123,29 +123,23 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, size - 1);
+    // Overwrite the app id to make sure it is the same than the original call
     req->set_appid(call.appid());
     for (int i = 0; i < req->messages_size(); i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
-        // Overwrite the app id to make sure it is the same than the original
-        // call
         msg.set_appid(call.appid());
         msg.set_ismpi(true);
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);
         msg.set_mpiworldsize(size);
 
-        // Set group ids for remote messaging
-        // TODO: update this and use the group id set by the planner
-        // The planner will set the group id field here
-        // msg.set_groupid(msg.mpiworldid());
+        // Set group idxs for remote messaging
         msg.set_groupidx(msg.mpirank());
         msg.set_appidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
-            msg.set_appid(thisRankMsg->appid());
             msg.set_cmdline(thisRankMsg->cmdline());
             msg.set_inputdata(thisRankMsg->inputdata());
-            msg.set_migrationcheckperiod(thisRankMsg->migrationcheckperiod());
 
             // To run migration experiments easily, we may want to propagate
             // the UNDERFULL topology hint. In general however, we don't

@@ -10,7 +10,6 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/MessageResultPromise.h>
 #include <faabric/util/PeriodicBackgroundThread.h>
-// #include <faabric/util/asio.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
@@ -364,18 +363,11 @@ class Scheduler
     faabric::util::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingDecision& decision,
-      faabric::util::FullLock& lock,
-      faabric::util::SchedulingTopologyHint topologyHint);
+      faabric::util::FullLock& lock);
 
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,
       faabric::util::FullLock& schedulerLock);
-
-    /*
-    std::vector<std::string> getUnregisteredHosts(const std::string& user,
-                                                  const std::string& function,
-                                                  bool noCache = false);
-    */
 
     // ---- Accounting and debugging ----
     std::vector<faabric::Message> recordedMessagesAll;
