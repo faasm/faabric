@@ -655,7 +655,7 @@ void MpiWorld::broadcast(int sendRank,
 {
     SPDLOG_TRACE("MPI - bcast {} -> {}", sendRank, recvRank);
     // TODO: debug (remove me)
-    bool isAllReduce = messageType == MPIMessage_MPIMessageType_ALLREDUCE;
+    bool isAllReduce = messageType == MPIMessage_MPIMessageType_ALLREDUCE && false;
     if (isAllReduce) {
         SPDLOG_INFO("MPI - bcast {} -> {}", sendRank, recvRank);
     }
