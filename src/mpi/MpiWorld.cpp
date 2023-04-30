@@ -654,6 +654,11 @@ void MpiWorld::broadcast(int sendRank,
                          MPIMessage::MPIMessageType messageType)
 {
     SPDLOG_TRACE("MPI - bcast {} -> {}", sendRank, recvRank);
+    // TODO: debug (remove me)
+    bool isAllReduce = messageType == MPIMessage_MPIMessageType_ALLREDUCE;
+    if (isAllReduce) {
+        SPDLOG_INFO("MPI - bcast {} -> {}", sendRank, recvRank);
+    }
 
     if (recvRank == sendRank) {
         for (auto it : ranksForHost) {
@@ -664,6 +669,10 @@ void MpiWorld::broadcast(int sendRank,
                         continue;
                     }
 
+                    // SPDLOG_INFO("MPI_
+                    if (isAllReduce) {
+                        SPDLOG_INFO("MPI - bcast (local send) {} -> {}", recvRank, localRecvRank);
+                    }
                     send(recvRank,
                          localRecvRank,
                          buffer,
@@ -672,6 +681,9 @@ void MpiWorld::broadcast(int sendRank,
                          messageType);
                 }
             } else {
+                if (isAllReduce) {
+                    SPDLOG_INFO("MPI - bcast (remote send) {} -> {}", recvRank, it.second.front());
+                }
                 // Send message to the local leader of each remote host. Note
                 // that the local leader will then broadcast the message to its
                 // local ranks.
@@ -684,6 +696,9 @@ void MpiWorld::broadcast(int sendRank,
             }
         }
     } else if (recvRank == localLeader) {
+        if (isAllReduce) {
+            SPDLOG_INFO("MPI - bcast (remote recv) {} -> {}", sendRank, recvRank);
+        }
         // If we are the local leader, first we receive the message sent by
         // the sending rank
         recv(sendRank, recvRank, buffer, dataType, count, nullptr, messageType);
@@ -696,6 +711,9 @@ void MpiWorld::broadcast(int sendRank,
                     continue;
                 }
 
+                if (isAllReduce) {
+                    SPDLOG_INFO("MPI - bcast (local send) {} -> {}", recvRank, localRecvRank);
+                }
                 send(recvRank,
                      localRecvRank,
                      buffer,
@@ -711,6 +729,9 @@ void MpiWorld::broadcast(int sendRank,
         int sendingRank =
           getHostForRank(sendRank) == thisHost ? sendRank : localLeader;
 
+        if (isAllReduce) {
+            SPDLOG_INFO("MPI - bcast (local recv) {} -> {}", sendingRank, recvRank);
+        }
         recv(
           sendingRank, recvRank, buffer, dataType, count, nullptr, messageType);
     }
