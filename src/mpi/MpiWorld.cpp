@@ -1449,7 +1449,20 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
             SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-            auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+            // TODO: debug
+            std::shared_ptr<MPIMessage> pendingMsg;
+            try {
+                pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+            } catch (faabric::util::QueueTimeoutException& e) {
+                SPDLOG_ERROR("Timed-out dequeueing MPI - pending recv {} -> {} ({}:{}:{})",
+                             sendRank,
+                             recvRank,
+                             thisRankMsg->appid(),
+                             thisRankMsg->groupid(),
+                             thisRankMsg->groupidx());
+
+                throw e;
+            }
 
             // Put the unacked message in the UMB
             assert(!msgIt->isAcknowledged());
@@ -1459,7 +1472,19 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
 
         // Finally receive the message corresponding to us
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        // TODO: debug
+        try {
+            ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        } catch (faabric::util::QueueTimeoutException& e) {
+            SPDLOG_ERROR("Timed-out dequeueing MPI - recv {} -> {} ({}:{}:{})",
+                         sendRank,
+                         recvRank,
+                         thisRankMsg->appid(),
+                         thisRankMsg->groupid(),
+                         thisRankMsg->groupidx());
+
+            throw e;
+        }
     } else {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
