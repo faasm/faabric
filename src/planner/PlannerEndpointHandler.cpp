@@ -88,6 +88,22 @@ void PlannerEndpointHandler::onRequest(
             response.body() = faabric::util::messageToJson(hostsResponse);
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_GET_IN_FLIGHT_APPS: {
+            auto inFlightApps = faabric::planner::getPlanner().getInFlightBatches();
+
+            faabric::planner::GetInFlightAppsResponse inFlightAppsResponse;
+            for (const auto& app : inFlightApps) {
+                auto* inFlightApp = inFlightAppsResponse.add_apps();
+                inFlightApp->set_appid(app->appid());
+                for (const auto& msg : app->messages()) {
+                    inFlightApp->add_hostips(msg.executedhost());
+                }
+            }
+
+            response.result(beast::http::status::ok);
+            response.body() = faabric::util::messageToJson(inFlightAppsResponse);
+            return ctx.sendFunction(std::move(response));
+        }
         case faabric::planner::HttpMessage_Type_FLUSH_AVAILABLE_HOSTS: {
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Hosts);

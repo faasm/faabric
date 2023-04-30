@@ -666,6 +666,35 @@ void Planner::dispatchSchedulingDecision(
                 req->messages_size());
 }
 
+// We call this method from the HTTP endpoint to monitor the state of the
+// planner. So far, we are only interested in the app-to-host allocation. In
+// addition, we don't want to interfere with the functioning of the planner,
+// so we are careful to always take copies, and acquire the read lock for the
+// least amount of time possible
+std::vector<std::shared_ptr<faabric::BatchExecuteRequest>>
+Planner::getInFlightBatches()
+{
+    faabric::util::SharedLock lock(plannerMx);
+
+    std::vector<std::shared_ptr<faabric::BatchExecuteRequest>> inFlightBatches;
+    // Deliberately make copies to not interefere with the scheduling
+    // functionality
+    for (const auto& [appId, inFlightReq] : state.inFlightRequests) {
+        auto batch = inFlightReq.first;
+        auto decision = inFlightReq.second;
+        auto batchCopy = std::make_shared<faabric::BatchExecuteRequest>();
+        batchCopy->set_appid(batch->appid());
+        for (const auto& host : decision->hosts) {
+            auto* msg = batchCopy->add_messages();
+            msg->set_executedhost(host);
+        }
+
+        inFlightBatches.push_back(batchCopy);
+    }
+
+    return inFlightBatches;
+}
+
 std::shared_ptr<faabric::util::SchedulingDecision>
 Planner::getSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req)

@@ -57,7 +57,7 @@ class Planner
     // ----------
 
     // Given a batch execute request, make a scheduling decision informed by
-    // the topology hint. If the request is already in-flight, WHAT?
+    // the topology hint
     std::shared_ptr<faabric::util::SchedulingDecision> makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::util::SchedulingTopologyHint topologyHint =
@@ -68,6 +68,8 @@ class Planner
       std::shared_ptr<faabric::util::SchedulingDecision> decision);
 
     // Getters for planner's scheduling state
+
+    std::vector<std::shared_ptr<faabric::BatchExecuteRequest>> getInFlightBatches();
 
     std::shared_ptr<faabric::util::SchedulingDecision> getSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -81,15 +83,6 @@ class Planner
 
     std::shared_ptr<faabric::Message> getMessageResult(
       std::shared_ptr<faabric::Message> msg);
-
-    /* TODO: finish me!
-    void getMessageResultAsync(
-      std::shared_ptr<faabric::Message> msg,
-      int timeoutMs,
-      asio::io_context& ioc,
-      asio::any_io_executor& executor,
-      std::function<void(faabric::Message&)> handler);
-    */
 
   private:
     // There's a singleton instance of the planner running, but it must allow
