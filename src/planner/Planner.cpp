@@ -815,7 +815,7 @@ std::shared_ptr<faabric::BatchExecuteRequest> Planner::getBatchMessages(
     auto responseReq = req;
     responseReq->clear_messages();
 
-    SPDLOG_INFO("Planner getting batch result for app: {}", appId);
+    SPDLOG_DEBUG("Planner getting batch result for app: {}", appId);
 
     faabric::util::SharedLock lock(plannerMx);
 

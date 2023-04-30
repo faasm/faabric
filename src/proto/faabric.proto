@@ -81,6 +81,7 @@ message FunctionStatusResponse {
     FunctionStatus status = 1;
 }
 
+// TODO: this could actually go to include/faabric/transport ?
 message Message {
     int32 id = 1;
     int32 appId = 2;

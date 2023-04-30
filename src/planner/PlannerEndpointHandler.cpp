@@ -60,6 +60,22 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_GET_APP_MESSAGES: {
+            faabric::BatchExecuteRequest req;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &req);
+            } catch (faabric::util::JsonSerialisationException& e) {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("Error deserialising GET_APP_MESSAGES request");
+            }
+
+            auto resultReq = faabric::planner::getPlanner().getBatchMessages(
+              std::make_shared<faabric::BatchExecuteRequest>(req));
+
+            response.result(beast::http::status::ok);
+            response.body() = faabric::util::messageToJson(*resultReq);
+            return ctx.sendFunction(std::move(response));
+        }
         case faabric::planner::HttpMessage_Type_GET_AVAILABLE_HOSTS: {
             auto availableHosts = faabric::planner::getPlanner().getAvailableHosts();
 
