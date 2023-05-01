@@ -182,6 +182,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     initLocalQueues();
 }
 
+// TODO: we are actually never removing the world from the map
 void MpiWorld::destroy()
 {
     SPDLOG_TRACE("Destroying MPI world {}", id);
@@ -193,11 +194,9 @@ void MpiWorld::destroy()
         for (auto& umb : unackedMessageBuffers) {
             if (umb != nullptr) {
                 if (!umb->isEmpty()) {
-                    SPDLOG_ERROR("Destroying the MPI world with outstanding {}"
+                    SPDLOG_WARN("Destroying the MPI world with outstanding {}"
                                  " messages in the message buffer",
                                  umb->size());
-                    throw std::runtime_error(
-                      "Destroying world with a non-empty MPI message buffer");
                 }
             }
         }
@@ -206,18 +205,18 @@ void MpiWorld::destroy()
 
     // Request to rank map should be empty
     if (!reqIdToRanks.empty()) {
-        SPDLOG_ERROR(
+        SPDLOG_WARN(
           "Destroying the MPI world with {} outstanding irecv requests",
           reqIdToRanks.size());
-        throw std::runtime_error("Destroying world with outstanding requests");
+        reqIdToRanks.clear();
     }
 
     // iSend set should be empty
     if (!iSendRequests.empty()) {
-        SPDLOG_ERROR(
+        SPDLOG_WARN(
           "Destroying the MPI world with {} outstanding isend requests",
           iSendRequests.size());
-        throw std::runtime_error("Destroying world with outstanding requests");
+        iSendRequests.clear();
     }
 
     // Lastly, clear-out the rank message
@@ -260,8 +259,7 @@ std::string MpiWorld::getHostForRank(int rank)
 }
 
 // The local leader for an MPI world is defined as the lowest rank assigned to
-// this host. For simplicity, we set the local leader to be the first element
-// in the ranks to hosts map.
+// this host
 void MpiWorld::initLocalRemoteLeaders()
 {
     // Clear the existing map in case we are calling this method during a
