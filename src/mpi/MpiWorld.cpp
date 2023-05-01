@@ -1435,6 +1435,11 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 // Note - the queues themselves perform concurrency control
 void MpiWorld::initLocalQueues()
 {
+    // TODO: iirc we used _not_ to clean stuff here, as it caused races
+    // during migration (the not-migrated ranks would wait here) but this is
+    // not the case anymore (with the ptp's post-migration hook) so we may be
+    // able to clear it?
+    localQueues.clear();
     localQueues.resize(size * size);
     for (const int sendRank : ranksForHost[thisHost]) {
         for (const int recvRank : ranksForHost[thisHost]) {
@@ -1474,7 +1479,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
             SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-            // TODO: debug
+            // TODO: this try/catch has been added for debugging purposes
             std::shared_ptr<MPIMessage> pendingMsg;
             try {
                 pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
@@ -1497,7 +1502,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
 
         // Finally receive the message corresponding to us
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        // TODO: debug
+        // TODO: this try/catch has been added for debugging purposes
         try {
             ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
         } catch (faabric::util::QueueTimeoutException& e) {
