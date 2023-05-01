@@ -305,6 +305,23 @@ void MpiWorld::initLocalRemoteLeaders()
         std::iter_swap(it.second.begin(),
                        std::min_element(it.second.begin(), it.second.end()));
     }
+
+    SPDLOG_INFO("{}:{}:{} setting local-remote leaders (local leader: {})",
+                thisRankMsg->appid(),
+                thisRankMsg->groupid(),
+                thisRankMsg->groupidx(),
+                localLeader);
+    for (auto it : ranksForHost) {
+        std::string line = fmt::format("{}:", it.first);
+        for (auto h : it.second) {
+            line = fmt::format("{} {}", line, h);
+        }
+        SPDLOG_INFO("{}:{}:{} local-remote-leaders: {}",
+                thisRankMsg->appid(),
+                thisRankMsg->groupid(),
+                thisRankMsg->groupidx(),
+                line);
+    }
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -672,7 +689,6 @@ void MpiWorld::broadcast(int sendRank,
                         continue;
                     }
 
-                    // SPDLOG_INFO("MPI_
                     if (isAllReduce) {
                         SPDLOG_INFO("MPI - bcast (local send) {} -> {}", recvRank, localRecvRank);
                     }
