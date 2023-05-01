@@ -136,7 +136,7 @@ std::vector<std::shared_ptr<Host>> Planner::doGetAvailableHosts()
     }
 
     for (const auto& host : hostsToRemove) {
-        SPDLOG_INFO("Removing host {} after not receiving keep-alive", host);
+        SPDLOG_WARN("Removing host {} after not receiving keep-alive", host);
         state.hostMap.erase(host);
     }
 
