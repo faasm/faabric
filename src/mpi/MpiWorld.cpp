@@ -221,7 +221,11 @@ void MpiWorld::destroy()
         throw std::runtime_error("Destroying world with outstanding requests");
     }
 
+    // Lastly, clear-out the rank message
+    thisRankMsg = nullptr;
+
     // Clear structures used for mocking
+    // TODO: after moving to PTP, can we get rid of this?
     {
         faabric::util::UniqueLock lock(mockMutex);
         mpiMockedMessages.clear();
