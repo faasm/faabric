@@ -161,7 +161,6 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     if (size > 1) {
         faabric::util::SchedulingDecision decision = sch.callFunctions(req);
         call.set_groupid(decision.groupId);
-        // assert(decision.hosts.size() == size - 1);
         assert(decision.hosts.size() == size);
     } else {
         // If world has size one, create the communication group (of size one)
@@ -659,7 +658,7 @@ void MpiWorld::broadcast(int sendRank,
 {
     SPDLOG_TRACE("MPI - bcast {} -> {}", sendRank, recvRank);
     // TODO: debug (remove me)
-    bool isAllReduce = messageType == MPIMessage_MPIMessageType_ALLREDUCE && false;
+    bool isAllReduce = messageType == MPIMessage_MPIMessageType_ALLREDUCE;
     if (isAllReduce) {
         SPDLOG_INFO("MPI - bcast {} -> {}", sendRank, recvRank);
     }
