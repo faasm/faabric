@@ -491,6 +491,13 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         } catch (const std::exception& ex) {
             returnValue = 1;
 
+            // Do MPI specific clean-up in case an exception is thrown
+            if (msg.ismpi()) {
+                auto& mpiWorld = faabric::mpi::getMpiWorldRegistry().getWorld(
+                  msg.mpiworldid());
+                mpiWorld.destroy();
+            }
+
             std::string errorMessage = fmt::format(
               "Task {} threw exception. What: {}", msg.id(), ex.what());
             SPDLOG_ERROR(errorMessage);
@@ -631,6 +638,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
         // releasing the claim on this executor, otherwise the scheduler may
         // try to schedule another function and be unable to reuse this
         // executor.
+        // TODO: probably we can remove this (think about OMP though)
         sch.vacateSlot();
 
         // Finally set the result of the task, this will allow anything
