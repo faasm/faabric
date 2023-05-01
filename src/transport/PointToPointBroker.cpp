@@ -553,6 +553,7 @@ void PointToPointBroker::initSequenceCounters(int groupId)
     // thread when we have changed group id
     sentMsgCount = std::vector<int>(groupSize, 0);
     recvMsgCount = std::vector<int>(groupSize, 0);
+    outOfOrderMsgs.clear();
     outOfOrderMsgs.resize(groupSize);
 }
 
