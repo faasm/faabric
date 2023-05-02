@@ -50,8 +50,7 @@ void FaabricEndpointHandler::onRequest(
 
         if (msg.isstatusrequest()) {
             SPDLOG_DEBUG("Processing status request");
-            const faabric::Message result =
-              sched.getFunctionResult(msg.id(), 0);
+            const faabric::Message result = sched.getFunctionResult(msg, 0);
 
             if (result.type() == faabric::Message_MessageType_EMPTY) {
                 response.result(beast::http::status::ok);
@@ -134,7 +133,7 @@ void FaabricEndpointHandler::executeFunction(
 
     SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
     sch.getFunctionResultAsync(
-      msg.id(),
+      msg,
       conf.globalMessageTimeout,
       ctx.ioc,
       ctx.executor,

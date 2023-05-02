@@ -1260,10 +1260,11 @@ size_t Scheduler::getCachedMessageCount()
     return threadResultMessages.size();
 }
 
-faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
+faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
                                               int timeoutMs)
 {
     bool isBlocking = timeoutMs > 0;
+    int messageId = msg.id();
 
     if (messageId == 0) {
         throw std::runtime_error("Must provide non-zero message ID");
@@ -1332,12 +1333,14 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
 }
 
 void Scheduler::getFunctionResultAsync(
-  unsigned int messageId,
+  const faabric::Message& msg,
   int timeoutMs,
   asio::io_context& ioc,
   asio::any_io_executor& executor,
   std::function<void(faabric::Message&)> handler)
 {
+    int messageId = msg.id();
+
     if (messageId == 0) {
         throw std::runtime_error("Must provide non-zero message ID");
     }

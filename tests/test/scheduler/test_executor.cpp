@@ -150,13 +150,13 @@ int32_t TestExecutor::executeTask(
 
             for (const auto& m : reqThis->messages()) {
                 faabric::Message res =
-                  sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+                  sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
                 assert(res.outputdata() == "chain-check-a successful");
             }
 
             for (const auto& m : reqOther->messages()) {
                 faabric::Message res =
-                  sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+                  sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
                 assert(res.outputdata() == "chain-check-b successful");
             }
 
@@ -348,7 +348,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 {
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "simple", 1);
-    uint32_t msgId = req->messages().at(0).id();
+    const auto msg = req->messages().at(0);
 
     REQUIRE(req->messages_size() == 1);
 
@@ -356,9 +356,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<std::string> expectedHosts = { conf.endpointHost };
     REQUIRE(actualHosts == expectedHosts);
 
-    faabric::Message result =
-      sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
-    std::string expected = fmt::format("Simple function {} executed", msgId);
+    faabric::Message result = sch.getFunctionResult(msg, SHORT_TEST_TIMEOUT_MS);
+    std::string expected = fmt::format("Simple function {} executed", msg.id());
     REQUIRE(result.outputdata() == expected);
 
     // Check that restore has not been called
@@ -377,13 +376,13 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < numRepeats; i++) {
         std::shared_ptr<BatchExecuteRequest> req =
           faabric::util::batchExecFactory("dummy", "simple", 1);
-        uint32_t msgId = req->messages().at(0).id();
+        const auto msg = req->messages().at(0);
 
         executeWithTestExecutor(req, false);
         faabric::Message result =
-          sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
+          sch.getFunctionResult(msg, SHORT_TEST_TIMEOUT_MS);
         std::string expected =
-          fmt::format("Simple function {} executed", msgId);
+          fmt::format("Simple function {} executed", msg.id());
         REQUIRE(result.outputdata() == expected);
 
         // Flush
@@ -397,14 +396,13 @@ TEST_CASE_METHOD(TestExecutorFixture,
 {
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "chain-check-a", 1);
-    uint32_t msgId = req->messages().at(0).id();
+    const auto msg = req->messages().at(0);
 
     std::vector<std::string> actualHosts = executeWithTestExecutor(req, false);
     std::vector<std::string> expectedHosts = { conf.endpointHost };
     REQUIRE(actualHosts == expectedHosts);
 
-    faabric::Message result =
-      sch.getFunctionResult(msgId, SHORT_TEST_TIMEOUT_MS);
+    faabric::Message result = sch.getFunctionResult(msg, SHORT_TEST_TIMEOUT_MS);
     REQUIRE(result.outputdata() == "All chain checks successful");
 
     // Check that restore has not been called
@@ -547,7 +545,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(actualHosts == expectedHosts);
 
     auto& sch = faabric::scheduler::getScheduler();
-    faabric::Message res = sch.getFunctionResult(msg.id(), 5000);
+    faabric::Message res = sch.getFunctionResult(msg, 5000);
     REQUIRE(res.returnvalue() == 0);
 }
 
@@ -578,8 +576,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         std::vector<std::string> expectedHosts = { conf.endpointHost };
         REQUIRE(actualHosts == expectedHosts);
 
-        faabric::Message res =
-          sch.getFunctionResult(msg.id(), LONG_TEST_TIMEOUT_MS);
+        faabric::Message res = sch.getFunctionResult(msg, LONG_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
 
         sch.reset();
@@ -638,7 +635,7 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test non-zero return code", "[executor]")
 
     executeWithTestExecutor(req, false);
 
-    faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
+    faabric::Message res = sch.getFunctionResult(msg, 2000);
     REQUIRE(res.returnvalue() == 1);
 }
 
@@ -650,7 +647,7 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test erroring function", "[executor]")
 
     executeWithTestExecutor(req, false);
 
-    faabric::Message res = sch.getFunctionResult(msg.id(), 2000);
+    faabric::Message res = sch.getFunctionResult(msg, 2000);
     REQUIRE(res.returnvalue() == 1);
 
     std::string expectedErrorMsg = fmt::format(
@@ -699,17 +696,17 @@ TEST_CASE_METHOD(TestExecutorFixture,
     sch.callFunctions(reqC);
 
     faabric::Message resA1 =
-      sch.getFunctionResult(reqA->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
+      sch.getFunctionResult(reqA->messages().at(0), SHORT_TEST_TIMEOUT_MS);
     faabric::Message resA2 =
-      sch.getFunctionResult(reqA->messages().at(1).id(), SHORT_TEST_TIMEOUT_MS);
+      sch.getFunctionResult(reqA->messages().at(1), SHORT_TEST_TIMEOUT_MS);
 
     faabric::Message resB =
-      sch.getFunctionResult(reqB->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
+      sch.getFunctionResult(reqB->messages().at(0), SHORT_TEST_TIMEOUT_MS);
 
     faabric::Message resC1 =
-      sch.getFunctionResult(reqC->messages().at(0).id(), SHORT_TEST_TIMEOUT_MS);
+      sch.getFunctionResult(reqC->messages().at(0), SHORT_TEST_TIMEOUT_MS);
     faabric::Message resC2 =
-      sch.getFunctionResult(reqC->messages().at(1).id(), SHORT_TEST_TIMEOUT_MS);
+      sch.getFunctionResult(reqC->messages().at(1), SHORT_TEST_TIMEOUT_MS);
 
     REQUIRE(resA1.outputdata() == "Message A1");
     REQUIRE(resA2.outputdata() == "Message A2");
@@ -786,7 +783,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(millisC < millisB);
 
     // Wait for execution to finish
-    sch.getFunctionResult(req->messages().at(0).id(), 2000);
+    sch.getFunctionResult(req->messages().at(0), 2000);
 
     exec->shutdown();
 }
@@ -1060,7 +1057,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         if (requestType == faabric::BatchExecuteRequest::THREADS) {
             sch.awaitThreadResult(m.id());
         } else {
-            sch.getFunctionResult(m.id(), 2000);
+            sch.getFunctionResult(m, 2000);
         }
     }
 
@@ -1111,7 +1108,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < nMessages; i++) {
         if (singleHosts[i] == thisHost) {
             faabric::Message res =
-              sch.getFunctionResult(req->messages().at(i).id(), 2000);
+              sch.getFunctionResult(req->messages().at(i), 2000);
 
             // Check result as expected
             REQUIRE(res.returnvalue() == expectedResult);
@@ -1134,7 +1131,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     for (int i = 0; i < nMessages; i++) {
         faabric::Message res =
-          sch.getFunctionResult(req->messages().at(i).id(), 2000);
+          sch.getFunctionResult(req->messages().at(i), 2000);
 
         REQUIRE(res.returnvalue() == expectedResult);
     }

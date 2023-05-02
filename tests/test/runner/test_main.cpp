@@ -48,7 +48,7 @@ TEST_CASE_METHOD(MainRunnerTestFixture, "Test main runner", "[runner]")
             std::string expected =
               fmt::format("DummyExecutor executed {}", m.id());
             faabric::Message res =
-              sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+              sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
             REQUIRE(res.outputdata() == expected);
         }
     }

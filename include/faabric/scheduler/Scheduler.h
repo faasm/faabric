@@ -248,9 +248,10 @@ class Scheduler
 
     void setFunctionResult(faabric::Message& msg);
 
-    faabric::Message getFunctionResult(unsigned int messageId, int timeout);
+    faabric::Message getFunctionResult(const faabric::Message& msg,
+                                       int timeoutMs);
 
-    void getFunctionResultAsync(unsigned int messageId,
+    void getFunctionResultAsync(const faabric::Message& msg,
                                 int timeoutMs,
                                 asio::io_context& ioc,
                                 asio::any_io_executor& executor,

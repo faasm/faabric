@@ -149,8 +149,8 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
 
         // Await results
         bool success = true;
-        for (int msgId : decision.messageIds) {
-            faabric::Message res = sch.getFunctionResult(msgId, 30000);
+        for (const auto& msg : nestedReq->messages()) {
+            faabric::Message res = sch.getFunctionResult(msg, 30000);
             if (res.returnvalue() != 0) {
                 success = false;
             }
