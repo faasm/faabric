@@ -5,6 +5,14 @@
 
 namespace faabric::scheduler {
 
+class ExecutorContextException : public faabric::util::FaabricException
+{
+  public:
+    explicit ExecutorContextException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
+
 /**
  * Globally-accessible wrapper that allows executing applications to query
  * their execution context. The context is thread-local, so applications can

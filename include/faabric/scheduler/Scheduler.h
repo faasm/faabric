@@ -56,6 +56,14 @@ class ExecutorTask
     int messageIndex = 0;
 };
 
+class ChainedCallException : public faabric::util::FaabricException
+{
+  public:
+    explicit ChainedCallException(std::string message)
+      : FaabricException(std::move(message))
+    {}
+};
+
 class Executor
 {
   public:
@@ -104,6 +112,12 @@ class Executor
 
     bool isShutdown() { return _isShutdown; }
 
+    void addChainedMessage(const faabric::Message& msg);
+
+    const faabric::Message& getChainedMessage(int messageId);
+
+    std::set<unsigned int> getChainedMessageIds();
+
   protected:
     virtual void setMemorySize(size_t newSize);
 
@@ -118,6 +132,8 @@ class Executor
     std::shared_ptr<faabric::util::DirtyTracker> tracker;
 
     uint32_t threadPoolSize = 0;
+
+    std::map<int, std::shared_ptr<faabric::Message>> chainedMessages;
 
   private:
     // ---- Accounting ----
@@ -327,8 +343,8 @@ class Scheduler
     // ----------------------------------
     // Exec graph
     // ----------------------------------
-    void logChainedFunction(unsigned int parentMessageId,
-                            unsigned int chainedMessageId);
+    void logChainedFunction(const faabric::Message& parentMessage,
+                            const faabric::Message& chainedMessage);
 
     std::set<unsigned int> getChainedFunctions(unsigned int msgId);
 

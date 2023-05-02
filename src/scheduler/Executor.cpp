@@ -658,7 +658,12 @@ int32_t Executor::executeTask(int threadPoolIdx,
     return 0;
 }
 
-void Executor::reset(faabric::Message& msg) {}
+void Executor::reset(faabric::Message& msg)
+{
+    faabric::util::UniqueLock lock(threadsMutex);
+
+    chainedMessages.clear();
+}
 
 std::span<uint8_t> Executor::getMemoryView()
 {
@@ -704,5 +709,45 @@ void Executor::restore(const std::string& snapshotKey)
 
     // Map the memory onto the snapshot
     snap->mapToMemory({ memView.data(), snap->getSize() });
+}
+
+void Executor::addChainedMessage(const faabric::Message& msg)
+{
+    faabric::util::UniqueLock lock(threadsMutex);
+
+    auto it = chainedMessages.find(msg.id());
+    if (it != chainedMessages.end()) {
+        SPDLOG_ERROR("Message {} already in chained messages!", msg.id());
+        throw ChainedCallException("Message already registered!");
+    }
+
+    chainedMessages[msg.id()] = std::make_shared<faabric::Message>(msg);
+}
+
+const faabric::Message& Executor::getChainedMessage(int messageId)
+{
+    faabric::util::UniqueLock lock(threadsMutex);
+
+    auto it = chainedMessages.find(messageId);
+    if (it == chainedMessages.end()) {
+        SPDLOG_ERROR("Message {} does not correspond to a chained function!",
+                     messageId);
+        throw ChainedCallException(
+          "Unrecognised message ID for chained function");
+    }
+
+    return *(it->second);
+}
+
+std::set<unsigned int> Executor::getChainedMessageIds()
+{
+    faabric::util::UniqueLock lock(threadsMutex);
+
+    std::set<unsigned int> returnSet;
+    for (auto it : chainedMessages) {
+        returnSet.insert(it.first);
+    }
+
+    return returnSet;
 }
 }

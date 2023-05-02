@@ -1,5 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -1468,10 +1469,13 @@ std::string getChainedKey(unsigned int msgId)
     return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
 }
 
-void Scheduler::logChainedFunction(unsigned int parentMessageId,
-                                   unsigned int chainedMessageId)
+void Scheduler::logChainedFunction(const faabric::Message& parentMessage,
+                                   const faabric::Message& chainedMessage)
 {
     redis::Redis& redis = redis::Redis::getQueue();
+
+    int parentMessageId = parentMessage.id();
+    int chainedMessageId = chainedMessage.id();
 
     const std::string& key = getChainedKey(parentMessageId);
     redis.sadd(key, std::to_string(chainedMessageId));
@@ -1484,8 +1488,8 @@ std::set<unsigned int> Scheduler::getChainedFunctions(unsigned int msgId)
 
     const std::string& key = getChainedKey(msgId);
     const std::set<std::string> chainedCalls = redis.smembers(key);
-
     std::set<unsigned int> chainedIds;
+
     for (auto i : chainedCalls) {
         chainedIds.insert(std::stoi(i));
     }

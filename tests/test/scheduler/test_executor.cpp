@@ -39,6 +39,8 @@ TestExecutor::TestExecutor(faabric::Message& msg)
 
 void TestExecutor::reset(faabric::Message& msg)
 {
+    Executor::reset(msg);
+
     SPDLOG_DEBUG("Resetting TestExecutor");
     resetCount += 1;
 }
@@ -1251,4 +1253,33 @@ TEST_CASE_METHOD(TestExecutorFixture,
     testExec->shutdown();
 }
 
+TEST_CASE_METHOD(TestExecutorFixture,
+                 "Test executor keeps track of chained messages",
+                 "[executor]")
+{
+    auto req = faabric::util::batchExecFactory("hello", "world", 1);
+    auto& firstMsg = *req->mutable_messages(0);
+
+    // Create an executor
+    auto fac = faabric::scheduler::getExecutorFactory();
+    auto exec = fac->createExecutor(firstMsg);
+
+    // At the begining there are no chained messages
+    REQUIRE(exec->getChainedMessageIds().empty());
+
+    // Add a chained call
+    faabric::Message chainedMsg =
+      faabric::util::messageFactory("hello", "chained");
+    exec->addChainedMessage(chainedMsg);
+    std::set<unsigned int> expectedChainedMessageIds = {
+        (uint32_t)chainedMsg.id()
+    };
+    REQUIRE(exec->getChainedMessageIds() == expectedChainedMessageIds);
+    auto actualChainedMessage = exec->getChainedMessage(chainedMsg.id());
+    checkMessageEquality(actualChainedMessage, chainedMsg);
+
+    // Resetting the executor removes the chained messages
+    exec->reset(firstMsg);
+    REQUIRE(exec->getChainedMessageIds().empty());
+}
 }

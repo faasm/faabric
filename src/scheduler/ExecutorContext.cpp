@@ -34,7 +34,7 @@ std::shared_ptr<ExecutorContext> ExecutorContext::get()
 {
     if (context == nullptr) {
         SPDLOG_ERROR("No executor context set");
-        throw std::runtime_error("No executor context set");
+        throw ExecutorContextException("No executor context set");
     }
     return context;
 }
