@@ -27,8 +27,8 @@ TEST_CASE_METHOD(DistTestsFixture,
 
         // Add a fictional chaining dependency between functions
         for (int i = 1; i < nFuncs; i++) {
-            sch.logChainedFunction(req->mutable_messages()->at(0).id(),
-                                   req->mutable_messages()->at(i).id());
+            sch.logChainedFunction(req->mutable_messages()->at(0),
+                                   req->mutable_messages()->at(i));
         }
 
         // Call the functions

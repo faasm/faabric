@@ -272,7 +272,7 @@ class DistributedCoordinationTestRunner
 
         bool success = true;
         for (const auto& m : chainReq->messages()) {
-            faabric::Message result = sch.getFunctionResult(m.id(), 10000);
+            faabric::Message result = sch.getFunctionResult(m, 10000);
             if (result.returnvalue() != 0) {
                 SPDLOG_ERROR("Distributed coordination check call failed: {}",
                              m.id());
