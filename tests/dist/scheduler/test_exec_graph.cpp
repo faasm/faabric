@@ -27,8 +27,8 @@ TEST_CASE_METHOD(DistTestsFixture,
 
         // Add a fictional chaining dependency between functions
         for (int i = 1; i < nFuncs; i++) {
-            sch.logChainedFunction(req->mutable_messages()->at(0).id(),
-                                   req->mutable_messages()->at(i).id());
+            sch.logChainedFunction(req->mutable_messages()->at(0),
+                                   req->mutable_messages()->at(i));
         }
 
         // Call the functions
@@ -38,7 +38,7 @@ TEST_CASE_METHOD(DistTestsFixture,
 
         // Wait for the result, and immediately after query for the execution
         // graph
-        faabric::Message result = sch.getFunctionResult(m.id(), 1000);
+        faabric::Message result = sch.getFunctionResult(m, 1000);
         auto execGraph = sch.getFunctionExecGraph(m.id());
         REQUIRE(countExecGraphNodes(execGraph) == nFuncs);
 

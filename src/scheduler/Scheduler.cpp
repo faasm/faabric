@@ -1,5 +1,6 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
+#include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -1260,10 +1261,11 @@ size_t Scheduler::getCachedMessageCount()
     return threadResultMessages.size();
 }
 
-faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
+faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
                                               int timeoutMs)
 {
     bool isBlocking = timeoutMs > 0;
+    int messageId = msg.id();
 
     if (messageId == 0) {
         throw std::runtime_error("Must provide non-zero message ID");
@@ -1332,12 +1334,14 @@ faabric::Message Scheduler::getFunctionResult(unsigned int messageId,
 }
 
 void Scheduler::getFunctionResultAsync(
-  unsigned int messageId,
+  const faabric::Message& msg,
   int timeoutMs,
   asio::io_context& ioc,
   asio::any_io_executor& executor,
   std::function<void(faabric::Message&)> handler)
 {
+    int messageId = msg.id();
+
     if (messageId == 0) {
         throw std::runtime_error("Must provide non-zero message ID");
     }
@@ -1465,10 +1469,13 @@ std::string getChainedKey(unsigned int msgId)
     return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
 }
 
-void Scheduler::logChainedFunction(unsigned int parentMessageId,
-                                   unsigned int chainedMessageId)
+void Scheduler::logChainedFunction(const faabric::Message& parentMessage,
+                                   const faabric::Message& chainedMessage)
 {
     redis::Redis& redis = redis::Redis::getQueue();
+
+    int parentMessageId = parentMessage.id();
+    int chainedMessageId = chainedMessage.id();
 
     const std::string& key = getChainedKey(parentMessageId);
     redis.sadd(key, std::to_string(chainedMessageId));
@@ -1481,8 +1488,8 @@ std::set<unsigned int> Scheduler::getChainedFunctions(unsigned int msgId)
 
     const std::string& key = getChainedKey(msgId);
     const std::set<std::string> chainedCalls = redis.smembers(key);
-
     std::set<unsigned int> chainedIds;
+
     for (auto i : chainedCalls) {
         chainedIds.insert(std::stoi(i));
     }

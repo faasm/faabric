@@ -142,7 +142,7 @@ class MpiDistTestsFixture : public DistTestsFixture
       bool skipExecGraphCheck = false)
     {
         faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
+        faabric::Message result = sch.getFunctionResult(msg, timeoutMs);
         REQUIRE(result.returnvalue() == 0);
         SLEEP_MS(1000);
         if (!skipExecGraphCheck) {
@@ -158,7 +158,7 @@ class MpiDistTestsFixture : public DistTestsFixture
       int timeoutMs = 1000)
     {
         faabric::Message& msg = req->mutable_messages()->at(0);
-        faabric::Message result = sch.getFunctionResult(msg.id(), timeoutMs);
+        faabric::Message result = sch.getFunctionResult(msg, timeoutMs);
         REQUIRE(result.returnvalue() == 0);
         SLEEP_MS(1000);
         auto execGraph = sch.getFunctionExecGraph(msg.id());

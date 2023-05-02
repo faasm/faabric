@@ -28,7 +28,7 @@ TEST_CASE_METHOD(DistTestsFixture, "Test distributed lock", "[ptp][transport]")
     sch.callFunctions(req);
 
     faabric::Message& m = req->mutable_messages()->at(0);
-    faabric::Message result = sch.getFunctionResult(m.id(), 30000);
+    faabric::Message result = sch.getFunctionResult(m, 30000);
     REQUIRE(result.returnvalue() == 0);
 }
 }
