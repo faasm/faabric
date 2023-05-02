@@ -93,4 +93,6 @@ void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
 std::pair<int, std::string> postToUrl(const std::string& host,
                                       int port,
                                       const std::string& body);
+
+void resetPlanner();
 }

@@ -102,18 +102,6 @@ class PlannerTestFixture
   protected:
     faabric::planner::PlannerClient cli;
 
-    void resetPlanner() const
-    {
-        faabric::planner::HttpMessage msg;
-        msg.set_type(faabric::planner::HttpMessage_Type_RESET);
-        std::string jsonStr = faabric::util::messageToJson(msg);
-
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        assert(result.first == 200);
-    }
-
     faabric::planner::PlannerConfig getPlannerConfig()
     {
         faabric::planner::HttpMessage msg;
