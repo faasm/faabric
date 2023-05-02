@@ -3,6 +3,7 @@
 #include <faabric/planner/planner.pb.h>
 #include <faabric/transport/common.h>
 #include <faabric/util/config.h>
+#include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/network.h>
 
@@ -10,7 +11,21 @@ namespace faabric::planner {
 void KeepAliveThread::doWork()
 {
     PlannerClient cli;
+
+    faabric::util::SharedLock lock(keepAliveThreadMx);
+
     cli.registerHost(thisHostReq);
+}
+
+void KeepAliveThread::setRequest(
+  std::shared_ptr<RegisterHostRequest> thisHostReqIn)
+{
+    faabric::util::FullLock lock(keepAliveThreadMx);
+
+    thisHostReq = thisHostReqIn;
+
+    // Keep-alive requests should never overwrite the state of the planner
+    thisHostReq->set_overwrite(false);
 }
 
 PlannerClient::PlannerClient()

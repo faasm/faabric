@@ -60,8 +60,9 @@ message PlannerConfig {
 message Host {
     string ip = 1;
     int32 slots = 2;
+    int32 usedSlots = 3;
     // Host register timestamp as epoch time in ms
-    Timestamp registerTs = 3;
+    Timestamp registerTs = 4;
 }
 
 message PingResponse {
@@ -70,6 +71,7 @@ message PingResponse {
 
 message RegisterHostRequest {
     Host host = 1;
+    bool overwrite = 2;
 }
 
 message RegisterHostResponse {

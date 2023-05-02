@@ -84,7 +84,8 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRegisterHost(
 {
     PARSE_MSG(RegisterHostRequest, buffer.data(), buffer.size());
 
-    bool success = planner.registerHost(parsedMsg.host());
+    bool success =
+      planner.registerHost(parsedMsg.host(), parsedMsg.overwrite());
     if (!success) {
         SPDLOG_ERROR("Error registering host in Planner!");
     }

@@ -94,9 +94,9 @@ std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
 
 // Deliberately take a const reference as an argument to force a copy and take
 // ownership of the host
-bool Planner::registerHost(const Host& hostIn)
+bool Planner::registerHost(const Host& hostIn, bool overwrite)
 {
-    SPDLOG_DEBUG("Planner received request to register host {}", hostIn.ip());
+    SPDLOG_TRACE("Planner received request to register host {}", hostIn.ip());
 
     // Sanity check the input argument
     if (hostIn.slots() < 0) {
@@ -119,14 +119,30 @@ bool Planner::registerHost(const Host& hostIn)
 
         // If its the first time we see this IP, give it a UID and add it to
         // the map
-        SPDLOG_DEBUG("Registering host {}", hostIn.ip());
+        SPDLOG_INFO(
+          "Registering host {} with {} slots", hostIn.ip(), hostIn.slots());
         state.hostMap.emplace(
           std::make_pair<std::string, std::shared_ptr<Host>>(
             (std::string)hostIn.ip(), std::make_shared<Host>(hostIn)));
+    } else if (it != state.hostMap.end() && overwrite) {
+        // We allow overwritting the host state by sending another register
+        // request with same IP but different host resources. This is useful
+        // for testing and resetting purposes
+        SPDLOG_INFO("Overwritting host {} with {} slots (used {})",
+                    hostIn.ip(),
+                    hostIn.slots(),
+                    hostIn.usedslots());
+        it->second->set_slots(hostIn.slots());
+        it->second->set_usedslots(hostIn.usedslots());
+    } else if (it != state.hostMap.end()) {
+        SPDLOG_DEBUG("NOT overwritting host {} with {} slots (used {})",
+                     hostIn.ip(),
+                     hostIn.slots(),
+                     hostIn.usedslots());
     }
 
     // Irrespective, set the timestamp
-    SPDLOG_DEBUG("Setting timestamp for host {}", hostIn.ip());
+    SPDLOG_TRACE("Setting timestamp for host {}", hostIn.ip());
     state.hostMap.at(hostIn.ip())
       ->mutable_registerts()
       ->set_epochms(faabric::util::getGlobalClock().epochMillis());

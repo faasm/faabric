@@ -109,13 +109,25 @@ std::set<std::string> Scheduler::getAvailableHosts()
     return availableHostsIps;
 }
 
-void Scheduler::addHostToGlobalSet(const std::string& hostIp)
+void Scheduler::addHostToGlobalSet(
+  const std::string& hostIp,
+  std::shared_ptr<faabric::HostResources> overwriteResources)
 {
-    // Build register host request
+    // Build register host request. Setting the overwrite flag means that we
+    // will overwrite whatever records the planner has on this host. We only
+    // set it when calling this method for a different host (e.g. in the tests)
+    // or when passing an overwrited host-resources (e.g. when calling
+    // setThisHostResources)
     auto req = std::make_shared<faabric::planner::RegisterHostRequest>();
     req->mutable_host()->set_ip(hostIp);
-    if (hostIp == thisHost) {
-        req->mutable_host()->set_slots(thisHostResources.slots());
+    req->set_overwrite(false);
+    if (overwriteResources != nullptr) {
+        req->mutable_host()->set_slots(overwriteResources->slots());
+        req->mutable_host()->set_usedslots(overwriteResources->usedslots());
+        req->set_overwrite(true);
+    } else if (hostIp == thisHost) {
+        req->mutable_host()->set_slots(faabric::util::getUsableCores());
+        req->mutable_host()->set_usedslots(0);
     }
 
     int plannerTimeout = getPlannerClient()->registerHost(req);
@@ -123,14 +135,11 @@ void Scheduler::addHostToGlobalSet(const std::string& hostIp)
     // Once the host is registered, set-up a periodic thread to send a heart-
     // beat to the planner. Note that this method may be called multiple times
     // during the tests, so we only set the scheduler's variable if we are
-    // actually registering this host
-    if (hostIp == thisHost) {
-        keepAliveThread.thisHostReq = std::move(req);
-
-        // Only start the background keep-alive thread if not in test mode
-        if (!faabric::util::isTestMode()) {
-            keepAliveThread.start(plannerTimeout / 2);
-        }
+    // actually registering this host. Also, only start the keep-alive thread
+    // if not in test mode
+    if (hostIp == thisHost && !faabric::util::isTestMode()) {
+        keepAliveThread.setRequest(req);
+        keepAliveThread.start(plannerTimeout / 2);
     }
 }
 
@@ -1501,6 +1510,9 @@ faabric::HostResources Scheduler::getThisHostResources()
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
+    // Update the planner (no lock required)
+    addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(res));
+
     faabric::util::FullLock lock(mx);
     thisHostResources = res;
     this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
