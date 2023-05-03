@@ -83,10 +83,12 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(state.getKVCount() == 2);
 
     // Execute a couple of functions
-    faabric::Message msgA = faabric::util::messageFactory("dummy", "foo");
-    faabric::Message msgB = faabric::util::messageFactory("dummy", "bar");
-    sch.callFunction(msgA);
-    sch.callFunction(msgB);
+    auto reqA = faabric::util::batchExecFactory("dummy", "foo", 1);
+    auto& msgA = *reqA->mutable_messages(0);
+    auto reqB = faabric::util::batchExecFactory("dummy", "bar", 1);
+    auto& msgB = *reqA->mutable_messages(0);
+    sch.callFunctions(reqA);
+    sch.callFunctions(reqB);
 
     // Check messages passed
     std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
@@ -232,9 +234,10 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Request a function and check the other host is registered
-    faabric::Message msg = faabric::util::messageFactory("foo", "bar");
+    auto funcReq = faabric::util::batchExecFactory("foo", "bar", 1);
+    auto& msg = *funcReq->mutable_messages(0);
     sch.addHostToGlobalSet(otherHost);
-    sch.callFunction(msg);
+    sch.callFunctions(funcReq);
 
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 

@@ -122,7 +122,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
 {
     faabric::util::setMockMode(true);
 
-    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
+    auto req = faabric::util::batchExecFactory("blah", "foo", 1);
+    auto& msg = *req->mutable_messages(0);
 
     std::string thisHost = conf.endpointHost;
     std::string otherHost = "other";
@@ -151,7 +152,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     // Make calls with one extra that should be sent to the other host
     int nCalls = nCores + 1;
     for (int i = 0; i < nCalls; i++) {
-        sch.callFunction(msg);
+        sch.callFunctions(req);
         REQUIRE(sch.getThisHostResources().slots() == nCores);
     }
 
@@ -582,15 +583,18 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test unregistering host", "[scheduler]")
 
 TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
 {
-    faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgB = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgC = faabric::util::messageFactory("demo", "echo");
+    auto reqA = faabric::util::batchExecFactory("demo", "echo", 1);
+    auto& msgA = *reqA->mutable_messages(0);
+    auto reqB = faabric::util::batchExecFactory("demo", "echo", 1);
+    auto& msgB = *reqA->mutable_messages(0);
+    auto reqC = faabric::util::batchExecFactory("demo", "echo", 1);
+    auto& msgC = *reqA->mutable_messages(0);
 
     SECTION("No test mode")
     {
         faabric::util::setTestMode(false);
 
-        sch.callFunction(msgA);
+        sch.callFunctions(reqA);
         REQUIRE(sch.getRecordedMessagesAll().empty());
     }
 
@@ -598,9 +602,9 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
     {
         faabric::util::setTestMode(true);
 
-        sch.callFunction(msgA);
-        sch.callFunction(msgB);
-        sch.callFunction(msgC);
+        sch.callFunctions(reqA);
+        sch.callFunctions(reqB);
+        sch.callFunctions(reqC);
 
         std::vector<int> expectedIds = { msgA.id(), msgB.id(), msgC.id() };
         std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
