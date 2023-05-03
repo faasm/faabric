@@ -191,7 +191,7 @@ TEST_CASE_METHOD(
       expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
+      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -243,7 +243,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
       expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
+      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -298,7 +298,7 @@ TEST_CASE_METHOD(
       expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
+      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -355,7 +355,7 @@ TEST_CASE_METHOD(
       expectedMigrations, actualMigrations, hosts);
 
     faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0).id(), 2 * timeToSleep);
+      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     SLEEP_MS(100);
@@ -454,7 +454,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
       expectedMigrations, actualMigrations, hosts, true);
 
     faabric::Message res =
-      sch.getFunctionResult(firstMsg->id(), 2 * timeToSleep);
+      sch.getFunctionResult(req->messages(0), 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Clean up

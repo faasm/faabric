@@ -104,7 +104,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
-    faabric::Message actualResult = sch.getFunctionResult(msg.id(), 10000);
+    faabric::Message actualResult = sch.getFunctionResult(msg, 10000);
     REQUIRE(actualResult.returnvalue() == 333);
 }
 
@@ -129,7 +129,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
-    faabric::Message actualResult = sch.getFunctionResult(msg.id(), 10000);
+    faabric::Message actualResult = sch.getFunctionResult(msg, 10000);
     REQUIRE(actualResult.returnvalue() == 0);
 }
 }

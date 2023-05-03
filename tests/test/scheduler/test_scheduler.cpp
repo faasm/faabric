@@ -316,7 +316,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         if (isThreads) {
             sch.awaitThreadResult(m.id());
         } else {
-            sch.getFunctionResult(m.id(), 10000);
+            sch.getFunctionResult(m, 10000);
         }
     }
 
@@ -412,7 +412,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         if (isThreads) {
             sch.awaitThreadResult(m.id());
         } else {
-            sch.getFunctionResult(m.id(), 10000);
+            sch.getFunctionResult(m, 10000);
         }
     }
 
@@ -499,7 +499,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     const faabric::Message firstMsg = req->messages().at(0);
     faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
                                                        firstMsg.groupid());
-    std::vector<uint32_t> mids;
+    std::vector<faabric::Message> msgToWait;
     for (int i = 0; i < nCalls; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
 
@@ -510,7 +510,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
         if (i == 1 || i == 2) {
             expectedDecision.addMessage(otherHost, msg);
         } else {
-            mids.emplace_back(msg.id());
+            msgToWait.emplace_back(msg);
             expectedDecision.addMessage(thisHost, msg);
         }
     }
@@ -531,11 +531,11 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == expectedExecutors);
 
     // Await results
-    for (const auto& mid : mids) {
+    for (const auto& msg : msgToWait) {
         if (execMode == faabric::BatchExecuteRequest::THREADS) {
-            sch.awaitThreadResult(mid);
+            sch.awaitThreadResult(msg.id());
         } else {
-            sch.getFunctionResult(mid, 10000);
+            sch.getFunctionResult(msg, 10000);
         }
     }
 }
@@ -633,7 +633,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(ttl > 10);
 
     // Check retrieval method gets the same call out again
-    faabric::Message actualCall2 = sch.getFunctionResult(call.id(), 1);
+    faabric::Message actualCall2 = sch.getFunctionResult(call, 1);
 
     checkMessageEquality(call, actualCall2);
 }
@@ -661,7 +661,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
             sch.callFunctions(req);
 
             for (const auto& m : req->messages()) {
-                sch.getFunctionResult(m.id(), 5000);
+                sch.getFunctionResult(m, 5000);
             }
         });
     }
@@ -719,7 +719,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     }
 
     // Check status when nothing has been written
-    const faabric::Message result = sch.getFunctionResult(msg.id(), 0);
+    const faabric::Message result = sch.getFunctionResult(msg, 0);
 
     REQUIRE(result.returnvalue() == expectedReturnValue);
     REQUIRE(result.type() == expectedType);
@@ -756,22 +756,28 @@ TEST_CASE_METHOD(SlowExecutorFixture,
                  "[scheduler]")
 {
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-    unsigned int chainedMsgIdA = 1234;
-    unsigned int chainedMsgIdB = 5678;
-    unsigned int chainedMsgIdC = 9876;
+    faabric::Message chainedMsgA =
+      faabric::util::messageFactory("demo", "echo");
+    faabric::Message chainedMsgB =
+      faabric::util::messageFactory("demo", "echo");
+    faabric::Message chainedMsgC =
+      faabric::util::messageFactory("demo", "echo");
+    unsigned int chainedMsgIdA = faabric::util::setMessageId(chainedMsgA);
+    unsigned int chainedMsgIdB = faabric::util::setMessageId(chainedMsgB);
+    unsigned int chainedMsgIdC = faabric::util::setMessageId(chainedMsgC);
 
     // Check empty initially
     REQUIRE(sch.getChainedFunctions(msg.id()).empty());
 
     // Log and check this shows up in the result
-    sch.logChainedFunction(msg.id(), chainedMsgIdA);
+    sch.logChainedFunction(msg, chainedMsgA);
     std::set<unsigned int> expected = { chainedMsgIdA };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 
     // Log some more and check
-    sch.logChainedFunction(msg.id(), chainedMsgIdA);
-    sch.logChainedFunction(msg.id(), chainedMsgIdB);
-    sch.logChainedFunction(msg.id(), chainedMsgIdC);
+    sch.logChainedFunction(msg, chainedMsgA);
+    sch.logChainedFunction(msg, chainedMsgB);
+    sch.logChainedFunction(msg, chainedMsgC);
     expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 }
@@ -908,8 +914,7 @@ TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
     // Execute a couple of functions
     sch.callFunctions(reqA);
     for (const auto& m : reqA->messages()) {
-        faabric::Message res =
-          sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+        faabric::Message res = sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -919,8 +924,7 @@ TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
     // Execute a couple more functions
     sch.callFunctions(reqB);
     for (const auto& m : reqB->messages()) {
-        faabric::Message res =
-          sch.getFunctionResult(m.id(), SHORT_TEST_TIMEOUT_MS);
+        faabric::Message res = sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -1056,8 +1060,7 @@ TEST_CASE_METHOD(DummyExecutorFixture,
             continue;
         }
 
-        uint32_t messageId = req->mutable_messages()->at(i).id();
-        sch.getFunctionResult(messageId, 10000);
+        sch.getFunctionResult(req->messages(i), 10000);
     }
 }
 
