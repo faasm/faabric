@@ -1,6 +1,7 @@
 #include <catch2/catch.hpp>
 
 #include <faabric/util/bytes.h>
+#include <faabric/util/gids.h>
 
 using namespace faabric::util;
 
