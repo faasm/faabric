@@ -217,4 +217,18 @@ TEST_CASE("Test format int to hex string", "[util]")
         REQUIRE(expectedString == intToHexString(number));
     }
 }
+
+TEST_CASE("Test converting a byte array to an int")
+{
+    int value;
+
+    SECTION("Test case 1") { value = 38; }
+
+    SECTION("Test case 2") { value = faabric::util::generateGid(); }
+
+    uint8_t* bytePtr = BYTES(&value);
+    std::vector<uint8_t> valueInBytes(bytePtr, bytePtr + sizeof(int));
+    int decodedValue = faabric::util::bytesToInt(valueInBytes);
+    REQUIRE(decodedValue == value);
+}
 }

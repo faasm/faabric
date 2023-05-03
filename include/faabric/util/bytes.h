@@ -14,6 +14,8 @@
 namespace faabric::util {
 std::vector<uint8_t> stringToBytes(const std::string& str);
 
+int bytesToInt(const std::vector<uint8_t>& bytes);
+
 std::string bytesToString(const std::vector<uint8_t>& bytes);
 
 std::string formatByteArrayToIntString(const std::vector<uint8_t>& bytes);
