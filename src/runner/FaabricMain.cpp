@@ -1,3 +1,4 @@
+#include <faabric/planner/PlannerClient.h>
 #include <faabric/runner/FaabricMain.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallServer.h>
@@ -43,6 +44,10 @@ void FaabricMain::startRunner()
     // Ensure we can ping both redis instances
     faabric::redis::Redis::getQueue().ping();
     faabric::redis::Redis::getState().ping();
+
+    // Ensure we can ping the planner
+    faabric::planner::PlannerClient cli;
+    cli.ping();
 
     auto& sch = faabric::scheduler::getScheduler();
     sch.addHostToGlobalSet();

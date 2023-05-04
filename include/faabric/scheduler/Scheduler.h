@@ -1,5 +1,6 @@
 #pragma once
 
+#include <faabric/planner/PlannerClient.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
@@ -312,7 +313,9 @@ class Scheduler
 
     void addHostToGlobalSet();
 
-    void addHostToGlobalSet(const std::string& host);
+    void addHostToGlobalSet(
+      const std::string& host,
+      std::shared_ptr<faabric::HostResources> overwriteResources = nullptr);
 
     void removeHostFromGlobalSet(const std::string& host);
 
@@ -371,6 +374,8 @@ class Scheduler
     std::shared_ptr<faabric::snapshot::SnapshotClient> getSnapshotClient(
       const std::string& otherHost);
 
+    static std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
+
   private:
     std::string thisHost;
 
@@ -405,6 +410,9 @@ class Scheduler
     void updateHostResources();
 
     faabric::HostResources getHostResources(const std::string& host);
+
+    // ---- Planner----
+    faabric::planner::KeepAliveThread keepAliveThread;
 
     // ---- Actual scheduling ----
     SchedulerReaperThread reaperThread;

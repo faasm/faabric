@@ -76,6 +76,10 @@ void SystemConfig::initialise()
     // Dirty tracking
     dirtyTrackingMode = getEnvVar("DIRTY_TRACKING_MODE", "segfault");
     diffingMode = getEnvVar("DIFFING_MODE", "xor");
+
+    // Planner
+    plannerHost = getEnvVar("PLANNER_HOST", "planner");
+    plannerPort = this->getSystemConfIntParam("PLANNER_PORT", "8080");
 }
 
 int SystemConfig::getSystemConfIntParam(const char* name,

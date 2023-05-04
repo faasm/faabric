@@ -56,6 +56,10 @@ class SystemConfig
     std::string dirtyTrackingMode;
     std::string diffingMode;
 
+    // Planner
+    std::string plannerHost;
+    int plannerPort;
+
     SystemConfig();
 
     void print();

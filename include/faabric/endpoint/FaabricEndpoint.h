@@ -38,10 +38,9 @@ class FaabricEndpoint
   public:
     FaabricEndpoint();
 
-    FaabricEndpoint(
-      int port,
-      int threadCount,
-      std::shared_ptr<HttpRequestHandler> requestHandlerIn = nullptr);
+    FaabricEndpoint(int port,
+                    int threadCount,
+                    std::shared_ptr<HttpRequestHandler> requestHandlerIn);
 
     FaabricEndpoint(const FaabricEndpoint&) = delete;
 

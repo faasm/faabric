@@ -5,8 +5,13 @@
 #include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
 
+#include "DummyExecutorFactory.h"
+#include "faabric_utils.h"
+
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
+#include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
@@ -83,7 +88,42 @@ class CachedDecisionTestFixture
     faabric::util::DecisionCache& decisionCache;
 };
 
-class SchedulerTestFixture : public CachedDecisionTestFixture
+class PlannerTestFixture
+{
+  public:
+    PlannerTestFixture()
+    {
+        // Ensure the server is reachable
+        cli.ping();
+    }
+
+    ~PlannerTestFixture() { resetPlanner(); }
+
+  protected:
+    faabric::planner::PlannerClient cli;
+
+    faabric::planner::PlannerConfig getPlannerConfig()
+    {
+        faabric::planner::HttpMessage msg;
+        msg.set_type(faabric::planner::HttpMessage_Type_GET_CONFIG);
+        std::string jsonStr = faabric::util::messageToJson(msg);
+
+        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+        std::pair<int, std::string> result =
+          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
+        REQUIRE(result.first == 200);
+
+        // Check that we can de-serialise the config. Note that if there's a
+        // de-serialisation the method will throw an exception
+        faabric::planner::PlannerConfig config;
+        faabric::util::jsonToMessage(result.second, &config);
+        return config;
+    }
+};
+
+class SchedulerTestFixture
+  : public CachedDecisionTestFixture
+  , public PlannerTestFixture
 {
   public:
     SchedulerTestFixture()

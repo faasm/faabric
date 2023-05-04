@@ -1,3 +1,5 @@
+#include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
@@ -44,6 +46,13 @@ static faabric::util::ConcurrentMap<
 static faabric::util::
   ConcurrentMap<std::string, std::shared_ptr<faabric::snapshot::SnapshotClient>>
     snapshotClients;
+
+// Even though there's just one planner server, and thus there will only be
+// one client per scheduler instance, using a ConcurrentMap gives us the
+// thread-safe wrapper for free
+static faabric::util::
+  ConcurrentMap<std::string, std::shared_ptr<faabric::planner::PlannerClient>>
+    plannerClient;
 
 MessageLocalResult::MessageLocalResult()
 {
@@ -92,26 +101,71 @@ Scheduler::~Scheduler()
 
 std::set<std::string> Scheduler::getAvailableHosts()
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-    return redis.smembers(AVAILABLE_HOST_SET);
+    auto availableHosts = getPlannerClient()->getAvailableHosts();
+    std::set<std::string> availableHostsIps;
+    for (const auto& host : availableHosts) {
+        availableHostsIps.insert(host.ip());
+    }
+
+    return availableHostsIps;
 }
 
-void Scheduler::addHostToGlobalSet(const std::string& host)
+void Scheduler::addHostToGlobalSet(
+  const std::string& hostIp,
+  std::shared_ptr<faabric::HostResources> overwriteResources)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.sadd(AVAILABLE_HOST_SET, host);
-}
+    // Build register host request. Setting the overwrite flag means that we
+    // will overwrite whatever records the planner has on this host. We only
+    // set it when calling this method for a different host (e.g. in the tests)
+    // or when passing an overwrited host-resources (e.g. when calling
+    // setThisHostResources)
+    auto req = std::make_shared<faabric::planner::RegisterHostRequest>();
+    req->mutable_host()->set_ip(hostIp);
+    req->set_overwrite(false);
+    if (overwriteResources != nullptr) {
+        req->mutable_host()->set_slots(overwriteResources->slots());
+        req->mutable_host()->set_usedslots(overwriteResources->usedslots());
+        req->set_overwrite(true);
+    } else if (hostIp == thisHost) {
+        req->mutable_host()->set_slots(faabric::util::getUsableCores());
+        req->mutable_host()->set_usedslots(0);
+    }
 
-void Scheduler::removeHostFromGlobalSet(const std::string& host)
-{
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.srem(AVAILABLE_HOST_SET, host);
+    int plannerTimeout = getPlannerClient()->registerHost(req);
+
+    // Once the host is registered, set-up a periodic thread to send a heart-
+    // beat to the planner. Note that this method may be called multiple times
+    // during the tests, so we only set the scheduler's variable if we are
+    // actually registering this host. Also, only start the keep-alive thread
+    // if not in test mode
+    if (hostIp == thisHost && !faabric::util::isTestMode()) {
+        keepAliveThread.setRequest(req);
+        keepAliveThread.start(plannerTimeout / 2);
+    }
 }
 
 void Scheduler::addHostToGlobalSet()
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-    redis.sadd(AVAILABLE_HOST_SET, thisHost);
+    addHostToGlobalSet(thisHost);
+}
+
+void Scheduler::removeHostFromGlobalSet(const std::string& hostIp)
+{
+    auto req = std::make_shared<faabric::planner::RemoveHostRequest>();
+    bool isThisHost =
+      hostIp == thisHost && keepAliveThread.thisHostReq != nullptr;
+    if (isThisHost) {
+        *req->mutable_host() = *keepAliveThread.thisHostReq->mutable_host();
+    } else {
+        req->mutable_host()->set_ip(hostIp);
+    }
+
+    getPlannerClient()->removeHost(req);
+
+    // Clear the keep alive thread
+    if (isThisHost) {
+        keepAliveThread.stop();
+    }
 }
 
 void Scheduler::resetThreadLocalCache()
@@ -1009,6 +1063,18 @@ std::shared_ptr<SnapshotClient> Scheduler::getSnapshotClient(
     return client;
 }
 
+std::shared_ptr<faabric::planner::PlannerClient> Scheduler::getPlannerClient()
+{
+    auto plannerHost = faabric::util::getIPFromHostname(
+      faabric::util::getSystemConfig().plannerHost);
+    auto client = plannerClient.get(plannerHost).value_or(nullptr);
+    if (client == nullptr) {
+        SPDLOG_DEBUG("Adding new planner client for {}", plannerHost);
+        client = plannerClient.tryEmplaceShared(plannerHost).second;
+    }
+    return client;
+}
+
 std::vector<std::pair<std::string, faabric::Message>>
 Scheduler::getRecordedMessagesShared()
 {
@@ -1076,7 +1142,7 @@ void Scheduler::broadcastFlush()
     allHosts.erase(thisHost);
 
     // Dispatch flush message to all other hosts
-    for (auto& otherHost : allHosts) {
+    for (const auto& otherHost : allHosts) {
         getFunctionCallClient(otherHost)->sendFlush();
     }
 
@@ -1448,6 +1514,9 @@ faabric::HostResources Scheduler::getThisHostResources()
 
 void Scheduler::setThisHostResources(faabric::HostResources& res)
 {
+    // Update the planner (no lock required)
+    addHostToGlobalSet(thisHost, std::make_shared<faabric::HostResources>(res));
+
     faabric::util::FullLock lock(mx);
     thisHostResources = res;
     this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);

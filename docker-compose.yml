@@ -4,6 +4,18 @@ services:
   redis:
     image: redis
 
+  planner:
+    image: faasm.azurecr.io/planner:${FAABRIC_VERSION}
+    # The planner entrypoint supports changing the location of the
+    # planner_server binary. If the binary is not found, it will wait until
+    # it is built
+    command: ${PLANNER_ENTRYPOINT_BINARY:-/build/faabric/static/bin}
+    volumes:
+      - ./:/code/faabric
+      - ./build:/build/faabric
+    environment:
+      - LOG_LEVEL=debug
+
   cli:
     image: ${FAABRIC_CLI_IMAGE}
     volumes:
@@ -17,14 +29,17 @@ services:
     tty: true
     privileged: true
     environment:
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - PLANNER_HOST=planner
+      - PLANNER_PORT=8080
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
       - OVERRIDE_CPU_COUNT=${OVERRIDE_CPU_COUNT:-0}
       - ASAN_OPTIONS=verbosity=1:halt_on_error=1
-      - TSAN_OPTIONS="verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
-      - UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1
+      - TSAN_OPTIONS=verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4
+      - UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
     depends_on:
+      - planner
       - redis
 
   dist-test-server:
@@ -36,9 +51,12 @@ services:
     working_dir: /build/faabric/static
     environment:
       - LOG_LEVEL=debug
+      - PLANNER_HOST=planner
+      - PLANNER_PORT=8080
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
       - OVERRIDE_CPU_COUNT=${OVERRIDE_CPU_COUNT:-0}
     command: ./bin/faabric_dist_test_server
     depends_on:
+      - planner
       - redis

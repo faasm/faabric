@@ -6,8 +6,11 @@ on:
       - 'v*.*.*'
 
 jobs:
-  build-faabric:
+  build-images:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [faabric, planner]
     steps:
       - name: "Get the code"
         uses: actions/checkout@v3
@@ -29,7 +32,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           push: true
-          file: docker/faabric.dockerfile
+          file: docker/${{ matrix.image }}.dockerfile
           context: .
-          tags: faasm.azurecr.io/faabric:${{ env.TAG_VERSION }}
+          tags: faasm.azurecr.io/${{ matrix.image }}:${{ env.TAG_VERSION }}
           build-args: FAABRIC_VERSION=${{ env.TAG_VERSION }}
