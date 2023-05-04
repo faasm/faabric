@@ -94,7 +94,7 @@ def get_release_body():
     """
     git_cmd = (
         "git log --pretty=format:'%d,%s,%as' {}...v{}".format(
-            _get_release().tag_name, get_version()
+            get_release().tag_name, get_version()
         ),
     )
     commits = (
