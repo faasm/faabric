@@ -68,6 +68,17 @@ int safeCopyToBuffer(const uint8_t* dataIn,
     return copyLen;
 }
 
+// This function assumes that the byte array has been generated from an int
+// of the same size, with the same endianess (effectively, using something like
+// BYTES(int*)). See the test in util/test_bytes.cpp for an example
+int bytesToInt(const std::vector<uint8_t>& bytes)
+{
+    int returnValue;
+    assert(bytes.size() == sizeof(int));
+    std::memcpy(&returnValue, bytes.data(), bytes.size());
+    return returnValue;
+}
+
 std::string bytesToString(const std::vector<uint8_t>& bytes)
 {
     unsigned long byteLen = bytes.size();
