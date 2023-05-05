@@ -46,12 +46,16 @@ void PlannerClient::ping()
     auto expectedIp = faabric::util::getIPFromHostname(
       faabric::util::getSystemConfig().plannerHost);
     auto gotIp = resp.config().ip();
+    // In a k8s deployment, where the planner pod is deployed behind a service,
+    // expectedIp will correspond to the service IP, and gotIp to the pod's
+    // one (i.e. as reported by the planner locally getting its endpoint host)
+    // I don't consider it an error that they differ, and the worker should
+    // use the service one
     if (expectedIp != gotIp) {
-        SPDLOG_ERROR(
-          "Error pinging the planner server (expected ip: {} - got {})",
+        SPDLOG_DEBUG(
+          "Got two IPs pinging the planner server (our ip: {} - their {})",
           expectedIp,
           gotIp);
-        throw std::runtime_error("Error pinging the planner server");
     }
 
     SPDLOG_DEBUG("Succesfully pinged the planner server at {}", expectedIp);
