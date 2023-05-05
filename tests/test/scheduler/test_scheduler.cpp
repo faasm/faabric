@@ -586,9 +586,9 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
     auto reqA = faabric::util::batchExecFactory("demo", "echo", 1);
     auto& msgA = *reqA->mutable_messages(0);
     auto reqB = faabric::util::batchExecFactory("demo", "echo", 1);
-    auto& msgB = *reqA->mutable_messages(0);
+    auto& msgB = *reqB->mutable_messages(0);
     auto reqC = faabric::util::batchExecFactory("demo", "echo", 1);
-    auto& msgC = *reqA->mutable_messages(0);
+    auto& msgC = *reqC->mutable_messages(0);
 
     SECTION("No test mode")
     {
