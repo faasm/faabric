@@ -122,9 +122,6 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
 {
     faabric::util::setMockMode(true);
 
-    auto req = faabric::util::batchExecFactory("blah", "foo", 1);
-    auto& msg = *req->mutable_messages(0);
-
     std::string thisHost = conf.endpointHost;
     std::string otherHost = "other";
     std::set<std::string> expectedHosts = { otherHost };
@@ -140,6 +137,11 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     // Set resources for other host too
     faabric::scheduler::queueResourceResponse(otherHost, res);
 
+    // Set request
+    int nCalls = nCores + 1;
+    auto req = faabric::util::batchExecFactory("blah", "foo", nCalls);
+    auto msg = req->messages(0);
+
     // Initial checks
     REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
@@ -148,13 +150,10 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     faabric::HostResources resCheck = sch.getThisHostResources();
     REQUIRE(resCheck.slots() == nCores);
     REQUIRE(resCheck.usedslots() == 0);
+    REQUIRE(sch.getThisHostResources().slots() == nCores);
 
     // Make calls with one extra that should be sent to the other host
-    int nCalls = nCores + 1;
-    for (int i = 0; i < nCalls; i++) {
-        sch.callFunctions(req);
-        REQUIRE(sch.getThisHostResources().slots() == nCores);
-    }
+    sch.callFunctions(req);
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == nCores);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
