@@ -86,7 +86,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     auto reqA = faabric::util::batchExecFactory("dummy", "foo", 1);
     auto& msgA = *reqA->mutable_messages(0);
     auto reqB = faabric::util::batchExecFactory("dummy", "bar", 1);
-    auto& msgB = *reqA->mutable_messages(0);
+    auto& msgB = *reqB->mutable_messages(0);
     sch.callFunctions(reqA);
     sch.callFunctions(reqB);
 
