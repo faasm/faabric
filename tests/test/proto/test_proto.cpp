@@ -33,7 +33,6 @@ TEST_CASE("Test protobuf classes", "[proto]")
     std::vector<uint8_t> inputData = createInput(0, 100);
     std::string outputData = "output data";
 
-
     std::string cmdline = "some cmdline args";
 
     funcCall.set_user(user);
