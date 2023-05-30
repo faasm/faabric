@@ -80,7 +80,7 @@ message Message {
     string user = 6;
     string function = 7;
 
-    bytes inputData = 8 [json_name = "input_data"];
+    string inputData = 8 [json_name = "input_data"];
     string outputData = 9 [json_name = "output_data"];
 
     int32 funcPtr = 10;
