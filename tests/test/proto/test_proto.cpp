@@ -5,6 +5,18 @@
 #include <faabric_utils.h>
 
 namespace tests {
+std::vector<uint8_t> createInput(int start, int length)
+{
+    std::vector<uint8_t> result;
+    result.reserve((unsigned long)length);
+
+    for (int i = start; i < start + length; i++) {
+        result.emplace_back((uint8_t)i);
+    }
+
+    return result;
+}
+
 TEST_CASE("Test protobuf classes", "[proto]")
 {
     faabric::Message funcCall;
@@ -18,7 +30,7 @@ TEST_CASE("Test protobuf classes", "[proto]")
     std::string pyFunc = "python func";
     std::string pyEntry = "python entry";
 
-    std::string inputData = "input data";
+    std::vector<uint8_t> inputData = createInput(0, 100);
     std::string outputData = "output data";
 
     std::string cmdline = "some cmdline args";
@@ -74,7 +86,10 @@ TEST_CASE("Test protobuf classes", "[proto]")
     const std::string actualStrInput = newFuncCall.inputdata();
     const std::string actualStrOutput = newFuncCall.outputdata();
 
-    REQUIRE(inputData == actualStrInput);
+    const std::vector<uint8_t> actualBytesInput =
+      faabric::util::stringToBytes(actualStrInput);
+
+    REQUIRE(inputData == actualBytesInput);
     REQUIRE(outputData == actualStrOutput);
 }
 
@@ -82,10 +97,12 @@ TEST_CASE("Test protobuf byte handling", "[proto]")
 {
     // One message with null terminators, one without
     faabric::Message msgA;
-    msgA.set_inputdata("input data A");
+    std::vector<uint8_t> bytesA = { 0, 0, 1, 1, 0, 0, 2, 2 };
+    msgA.set_inputdata(bytesA.data(), bytesA.size());
 
     faabric::Message msgB;
-    msgA.set_inputdata("input data B");
+    std::vector<uint8_t> bytesB = { 1, 1, 1, 1, 1, 1, 2, 2 };
+    msgB.set_inputdata(bytesB.data(), bytesB.size());
 
     std::string serialisedA = msgA.SerializeAsString();
     std::string serialisedB = msgB.SerializeAsString();
