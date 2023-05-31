@@ -45,7 +45,7 @@ TEST_CASE("Test protobuf classes", "[proto]")
     funcCall.set_pythonentry(pyEntry);
 
     funcCall.set_inputdata(inputData.data(), 100);
-    funcCall.set_outputdata(outputData.data(), 50);
+    funcCall.set_outputdata(outputData);
 
     funcCall.set_isasync(true);
     funcCall.set_ispython(true);
