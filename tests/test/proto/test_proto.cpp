@@ -31,7 +31,7 @@ TEST_CASE("Test protobuf classes", "[proto]")
     std::string pyEntry = "python entry";
 
     std::vector<uint8_t> inputData = createInput(0, 100);
-    std::vector<uint8_t> outputData = createInput(120, 50);
+    std::string outputData = "output data";
 
     std::string cmdline = "some cmdline args";
 
@@ -45,7 +45,7 @@ TEST_CASE("Test protobuf classes", "[proto]")
     funcCall.set_pythonentry(pyEntry);
 
     funcCall.set_inputdata(inputData.data(), 100);
-    funcCall.set_outputdata(outputData.data(), 50);
+    funcCall.set_outputdata(outputData);
 
     funcCall.set_isasync(true);
     funcCall.set_ispython(true);
@@ -88,11 +88,9 @@ TEST_CASE("Test protobuf classes", "[proto]")
 
     const std::vector<uint8_t> actualBytesInput =
       faabric::util::stringToBytes(actualStrInput);
-    const std::vector<uint8_t> actualBytesOutput =
-      faabric::util::stringToBytes(actualStrOutput);
 
     REQUIRE(inputData == actualBytesInput);
-    REQUIRE(outputData == actualBytesOutput);
+    REQUIRE(outputData == actualStrOutput);
 }
 
 TEST_CASE("Test protobuf byte handling", "[proto]")
