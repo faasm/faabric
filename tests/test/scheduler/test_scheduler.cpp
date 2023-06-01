@@ -122,8 +122,6 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
 {
     faabric::util::setMockMode(true);
 
-    faabric::Message msg = faabric::util::messageFactory("blah", "foo");
-
     std::string thisHost = conf.endpointHost;
     std::string otherHost = "other";
     std::set<std::string> expectedHosts = { otherHost };
@@ -139,6 +137,11 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     // Set resources for other host too
     faabric::scheduler::queueResourceResponse(otherHost, res);
 
+    // Set request
+    int nCalls = nCores + 1;
+    auto req = faabric::util::batchExecFactory("blah", "foo", nCalls);
+    auto msg = req->messages(0);
+
     // Initial checks
     REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
@@ -147,13 +150,10 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     faabric::HostResources resCheck = sch.getThisHostResources();
     REQUIRE(resCheck.slots() == nCores);
     REQUIRE(resCheck.usedslots() == 0);
+    REQUIRE(sch.getThisHostResources().slots() == nCores);
 
     // Make calls with one extra that should be sent to the other host
-    int nCalls = nCores + 1;
-    for (int i = 0; i < nCalls; i++) {
-        sch.callFunction(msg);
-        REQUIRE(sch.getThisHostResources().slots() == nCores);
-    }
+    sch.callFunctions(req);
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == nCores);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
@@ -582,15 +582,18 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test unregistering host", "[scheduler]")
 
 TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
 {
-    faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgB = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgC = faabric::util::messageFactory("demo", "echo");
+    auto reqA = faabric::util::batchExecFactory("demo", "echo", 1);
+    auto& msgA = *reqA->mutable_messages(0);
+    auto reqB = faabric::util::batchExecFactory("demo", "echo", 1);
+    auto& msgB = *reqB->mutable_messages(0);
+    auto reqC = faabric::util::batchExecFactory("demo", "echo", 1);
+    auto& msgC = *reqC->mutable_messages(0);
 
     SECTION("No test mode")
     {
         faabric::util::setTestMode(false);
 
-        sch.callFunction(msgA);
+        sch.callFunctions(reqA);
         REQUIRE(sch.getRecordedMessagesAll().empty());
     }
 
@@ -598,9 +601,9 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
     {
         faabric::util::setTestMode(true);
 
-        sch.callFunction(msgA);
-        sch.callFunction(msgB);
-        sch.callFunction(msgC);
+        sch.callFunctions(reqA);
+        sch.callFunctions(reqB);
+        sch.callFunctions(reqC);
 
         std::vector<int> expectedIds = { msgA.id(), msgB.id(), msgC.id() };
         std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();

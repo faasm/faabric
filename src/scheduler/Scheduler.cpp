@@ -1003,23 +1003,6 @@ void Scheduler::broadcastSnapshotDelete(const faabric::Message& msg,
     }
 }
 
-void Scheduler::callFunction(faabric::Message& msg, bool forceLocal)
-{
-    // TODO - avoid this copy
-    auto req = faabric::util::batchExecFactory();
-    *req->add_messages() = msg;
-
-    // Specify that this is a normal function, not a thread
-    req->set_type(req->FUNCTIONS);
-
-    if (forceLocal) {
-        req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
-    }
-
-    // Make the call
-    callFunctions(req);
-}
-
 void Scheduler::clearRecordedMessages()
 {
     faabric::util::FullLock lock(mx);
