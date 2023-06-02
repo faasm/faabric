@@ -64,7 +64,9 @@ TEST_CASE("Test periodic background operation", "[util]")
     REQUIRE(t.getWorkCount() == 2);
 }
 
-TEST_CASE("Test periodic background thread does not start with non-positive interval", "[util]")
+TEST_CASE(
+  "Test periodic background thread does not start with non-positive interval",
+  "[util]")
 {
     int intervalSeconds = 0;
 
