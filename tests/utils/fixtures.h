@@ -11,6 +11,7 @@
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/PlannerServer.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
@@ -88,42 +89,32 @@ class CachedDecisionTestFixture
     faabric::util::DecisionCache& decisionCache;
 };
 
-class PlannerTestFixture
+class PlannerClientServerTestFixture
 {
   public:
-    PlannerTestFixture()
+    PlannerClientServerTestFixture()
+      : plannerCli(LOCALHOST)
     {
-        // Ensure the server is reachable
-        cli.ping();
+        faabric::util::getSystemConfig().plannerHost = LOCALHOST;
+        plannerServer.start();
+        plannerCli.ping();
     }
 
-    ~PlannerTestFixture() { resetPlanner(); }
+    ~PlannerClientServerTestFixture()
+    {
+        plannerServer.stop();
+        faabric::planner::getPlanner().reset();
+        faabric::util::getSystemConfig().reset();
+    }
 
   protected:
-    faabric::planner::PlannerClient cli;
-
-    faabric::planner::PlannerConfig getPlannerConfig()
-    {
-        faabric::planner::HttpMessage msg;
-        msg.set_type(faabric::planner::HttpMessage_Type_GET_CONFIG);
-        std::string jsonStr = faabric::util::messageToJson(msg);
-
-        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::pair<int, std::string> result =
-          postToUrl(conf.plannerHost, conf.plannerPort, jsonStr);
-        REQUIRE(result.first == 200);
-
-        // Check that we can de-serialise the config. Note that if there's a
-        // de-serialisation the method will throw an exception
-        faabric::planner::PlannerConfig config;
-        faabric::util::jsonToMessage(result.second, &config);
-        return config;
-    }
+    faabric::planner::PlannerClient plannerCli;
+    faabric::planner::PlannerServer plannerServer;
 };
 
 class SchedulerTestFixture
   : public CachedDecisionTestFixture
-  , public PlannerTestFixture
+  , public PlannerClientServerTestFixture
 {
   public:
     SchedulerTestFixture()
