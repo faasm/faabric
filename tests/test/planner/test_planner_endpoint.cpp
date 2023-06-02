@@ -44,6 +44,7 @@ class FaabricPlannerEndpointTestFixture
 
     std::pair<int, std::string> doPost(const std::string& body)
     {
+        SPDLOG_INFO("Posting to {}:{}", host, port);
         return postToUrl(host, port, body);
     }
 };
