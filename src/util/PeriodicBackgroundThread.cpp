@@ -12,11 +12,6 @@ void PeriodicBackgroundThread::start(int intervalSecondsIn)
         return;
     }
 
-    if (workThread != nullptr) {
-        SPDLOG_DEBUG("Skipping starting already-initialised background thread");
-        return;
-    }
-
     SPDLOG_DEBUG("Starting periodic background thread with interval {}s",
                  intervalSeconds);
 

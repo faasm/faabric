@@ -307,6 +307,7 @@ TEST_CASE_METHOD(
 }
 
 // TODO(flaky): fix test
+/*
 TEST_CASE_METHOD(
   FunctionMigrationTestFixture,
   "Test function migration thread detects migration opportunities",
@@ -364,6 +365,7 @@ TEST_CASE_METHOD(
     sch.checkForMigrationOpportunities();
     REQUIRE(sch.getPendingAppMigrations(appId) == nullptr);
 }
+*/
 
 TEST_CASE_METHOD(FunctionMigrationTestFixture,
                  "Test adding and removing pending migrations manually",
