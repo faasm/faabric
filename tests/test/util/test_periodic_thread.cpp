@@ -21,13 +21,16 @@ class DummyPeriodicThread : public PeriodicBackgroundThread
 
     void doWork() override
     {
+        isRunning.store(true);
         workCount++;
         barrier->wait();
     }
 
-    void tidyUp() override {}
+    void tidyUp() override { isRunning.store(false); }
 
     int getWorkCount() { return workCount.load(); }
+
+    std::atomic<bool> isRunning = false;
 
   private:
     std::shared_ptr<Barrier> barrier;
@@ -48,14 +51,31 @@ TEST_CASE("Test periodic background operation", "[util]")
     t.start(intervalSeconds);
     b->wait();
     REQUIRE(t.getWorkCount() == 1);
+    REQUIRE(t.isRunning.load());
 
     b->wait();
     REQUIRE(t.getWorkCount() == 2);
 
     // Stop the thread
     t.stop();
+    REQUIRE(!t.isRunning.load());
 
     // Check the count again
     REQUIRE(t.getWorkCount() == 2);
+}
+
+TEST_CASE("Test periodic background thread does not start with non-positive interval", "[util]")
+{
+    int intervalSeconds = 0;
+
+    auto b = Barrier::create(2);
+
+    DummyPeriodicThread t(b);
+    REQUIRE(t.getWorkCount() == 0);
+
+    // Start and wait for the interval
+    t.start(intervalSeconds);
+    SLEEP_MS(intervalSeconds * 1000);
+    REQUIRE(!t.isRunning.load());
 }
 }
