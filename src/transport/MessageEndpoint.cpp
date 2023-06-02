@@ -317,7 +317,7 @@ Message MessageEndpoint::recvMessage(bool async, std::optional<nng_ctx> context)
         return Message(MessageResponseCode::TIMEOUT);
     }
     if (ec == NNG_ECLOSED) {
-        SPDLOG_DEBUG("Endpoint {} received ECLOSED on recv", address);
+        SPDLOG_TRACE("Endpoint {} received ECLOSED on recv", address);
         return Message(MessageResponseCode::TERM);
     }
     checkNngError(ec, "recvBuffer", address);
