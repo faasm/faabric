@@ -20,6 +20,7 @@ def cmake(
     shared=False,
     build="Debug",
     sanitiser="None",
+    coverage=False,
     prof=False,
     cpu=None,
 ):
@@ -50,6 +51,7 @@ def cmake(
         "-DCMAKE_C_COMPILER=/usr/bin/clang-13",
         "-DFAABRIC_USE_SANITISER={}".format(sanitiser),
         "-DFAABRIC_SELF_TRACING=ON" if prof else "",
+        "-DFAABRIC_CODE_COVERAGE=ON" if coverage else "",
         "-DFAABRIC_TARGET_CPU={}".format(cpu) if cpu else "",
         PROJ_ROOT,
     ]

@@ -4,7 +4,7 @@ project(faabric)
 option(FAABRIC_WASM_BUILD "Build Faabric wasm library" OFF)
 option(FAABRIC_BUILD_TESTS "Build Faabric tests" ON)
 option(FAABRIC_SELF_TRACING "Turn on system tracing using the logger" OFF)
-
+option(FAABRIC_CODE_COVERAGE "Build Faabric with code coverage profiling" OFF)
 option(FAABRIC_TARGET_CPU "CPU to optimise for, e.g. skylake, icelake or native" OFF)
 
 # Enable colorized compiler output
@@ -49,6 +49,10 @@ elseif (FAABRIC_USE_SANITISER STREQUAL "Memory")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=memory")
 elseif (NOT ((FAABRIC_USE_SANITISER STREQUAL "None") OR (NOT FAABRIC_USE_SANITISER)))
     message(FATAL_ERROR "Invalid FAABRIC_USE_SANITISER setting: ${FAABRIC_USE_SANITISER}")
+endif()
+
+if (FAABRIC_CODE_COVERAGE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fcoverage-mapping")
 endif()
 
 # Global include dir
