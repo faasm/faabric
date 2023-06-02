@@ -25,6 +25,7 @@
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointServer.h>
 #include <faabric/util/dirty.h>
+#include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/json.h>
 #include <faabric/util/latch.h>
@@ -95,7 +96,8 @@ class PlannerClientServerTestFixture
     PlannerClientServerTestFixture()
       : plannerCli(LOCALHOST)
     {
-        faabric::util::getSystemConfig().plannerHost = LOCALHOST;
+        faabric::util::getSystemConfig().plannerHost = "localhost";
+        auto oldVar = faabric::util::setEnvVar("PLANNER_HOST", "localhost");
         plannerServer.start();
         plannerCli.ping();
     }
