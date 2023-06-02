@@ -856,7 +856,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
 
         /* TODO: fix chained function
         if (call->recordexecgraph()) {
-            sch.logChainedFunction(call->id(), msg.id());
+            sch.logChainedFunction(*call, msg);
         }
         */
 

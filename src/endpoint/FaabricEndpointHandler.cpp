@@ -122,7 +122,7 @@ void FaabricEndpointHandler::executeFunction(
 
     SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
     sch.getFunctionResultAsync(
-      msg.id(),
+      msg,
       conf.globalMessageTimeout,
       ctx.ioc,
       ctx.executor,

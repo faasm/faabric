@@ -36,12 +36,12 @@ TEST_CASE("Test execution graph", "[scheduler][exec-graph]")
     sch.setFunctionResult(msgD);
 
     // Set up chaining relationships
-    sch.logChainedFunction(msgA.id(), msgB1.id());
-    sch.logChainedFunction(msgA.id(), msgB2.id());
-    sch.logChainedFunction(msgB1.id(), msgC1.id());
-    sch.logChainedFunction(msgB2.id(), msgC2.id());
-    sch.logChainedFunction(msgB2.id(), msgC3.id());
-    sch.logChainedFunction(msgC2.id(), msgD.id());
+    sch.logChainedFunction(msgA, msgB1);
+    sch.logChainedFunction(msgA, msgB2);
+    sch.logChainedFunction(msgB1, msgC1);
+    sch.logChainedFunction(msgB2, msgC2);
+    sch.logChainedFunction(msgB2, msgC3);
+    sch.logChainedFunction(msgC2, msgD);
 
     ExecGraph actual = sch.getFunctionExecGraph(msgA.id());
 

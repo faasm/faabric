@@ -142,6 +142,11 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
 
     std::set<std::string> expectedHosts = { thisHost, otherHost };
 
+    // Set request
+    int nCalls = nCores + 1;
+    auto req = faabric::util::batchExecFactory("blah", "foo", nCalls);
+    auto msg = req->messages(0);
+
     // Initial checks
     REQUIRE(sch.getFunctionExecutorCount(msg) == 0);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
@@ -488,7 +493,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     const faabric::Message firstMsg = req->messages().at(0);
     faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
                                                        firstMsg.groupid());
-    std::vector<uint32_t> mids;
+    std::vector<faabric::Message> msgToWait;
     for (int i = 0; i < nCalls; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
 
@@ -499,7 +504,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
         if (i == 1 || i == 2) {
             expectedDecision.addMessage(otherHost, msg);
         } else {
-            mids.emplace_back(msg.id());
+            msgToWait.emplace_back(msg);
             expectedDecision.addMessage(thisHost, msg);
         }
     }
@@ -817,22 +822,28 @@ TEST_CASE_METHOD(SlowExecutorFixture,
                  "[scheduler]")
 {
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-    unsigned int chainedMsgIdA = 1234;
-    unsigned int chainedMsgIdB = 5678;
-    unsigned int chainedMsgIdC = 9876;
+    faabric::Message chainedMsgA =
+      faabric::util::messageFactory("demo", "echo");
+    faabric::Message chainedMsgB =
+      faabric::util::messageFactory("demo", "echo");
+    faabric::Message chainedMsgC =
+      faabric::util::messageFactory("demo", "echo");
+    unsigned int chainedMsgIdA = faabric::util::setMessageId(chainedMsgA);
+    unsigned int chainedMsgIdB = faabric::util::setMessageId(chainedMsgB);
+    unsigned int chainedMsgIdC = faabric::util::setMessageId(chainedMsgC);
 
     // Check empty initially
     REQUIRE(sch.getChainedFunctions(msg.id()).empty());
 
     // Log and check this shows up in the result
-    sch.logChainedFunction(msg.id(), chainedMsgIdA);
+    sch.logChainedFunction(msg, chainedMsgA);
     std::set<unsigned int> expected = { chainedMsgIdA };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 
     // Log some more and check
-    sch.logChainedFunction(msg.id(), chainedMsgIdA);
-    sch.logChainedFunction(msg.id(), chainedMsgIdB);
-    sch.logChainedFunction(msg.id(), chainedMsgIdC);
+    sch.logChainedFunction(msg, chainedMsgA);
+    sch.logChainedFunction(msg, chainedMsgB);
+    sch.logChainedFunction(msg, chainedMsgC);
     expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
     REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
 }

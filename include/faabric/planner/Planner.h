@@ -84,13 +84,6 @@ class Planner
     std::shared_ptr<faabric::Message> getMessageResult(
       std::shared_ptr<faabric::Message> msg);
 
-  private:
-    // There's a singleton instance of the planner running, but it must allow
-    // concurrent requests
-    std::shared_mutex plannerMx;
-
-    PlannerState state;
-    PlannerConfig config;
     PlannerTestsConfig testsConfig;
     std::atomic<bool> isTestMode = false;
 

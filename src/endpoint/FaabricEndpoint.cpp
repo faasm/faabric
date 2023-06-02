@@ -202,9 +202,10 @@ class EndpointListener : public std::enable_shared_from_this<EndpointListener>
 }
 
 FaabricEndpoint::FaabricEndpoint()
-  : FaabricEndpoint(faabric::util::getSystemConfig().endpointPort,
-                    faabric::util::getSystemConfig().endpointNumThreads,
-                    nullptr)
+  : FaabricEndpoint(
+      faabric::util::getSystemConfig().endpointPort,
+      faabric::util::getSystemConfig().endpointNumThreads,
+      std::make_shared<faabric::endpoint::FaabricEndpointHandler>())
 {}
 
 FaabricEndpoint::FaabricEndpoint(

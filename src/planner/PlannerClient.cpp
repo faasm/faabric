@@ -52,12 +52,10 @@ void PlannerClient::ping()
     // I don't consider it an error that they differ, and the worker should
     // use the service one
     if (expectedIp != gotIp) {
-        SPDLOG_ERROR(
-          "Error pinging the planner server (expected ip: {} - got {})",
+        SPDLOG_DEBUG(
+          "Got two IPs pinging the planner server (our ip: {} - their {})",
           expectedIp,
           gotIp);
-        // TODO: think what to do with this
-        // throw std::runtime_error("Error pinging the planner server");
     }
 
     SPDLOG_DEBUG("Succesfully pinged the planner server at {}", expectedIp);

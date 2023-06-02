@@ -5,6 +5,9 @@
 #include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
 
+#include "DummyExecutorFactory.h"
+#include "faabric_utils.h"
+
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/planner/PlannerClient.h>
