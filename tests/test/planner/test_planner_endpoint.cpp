@@ -11,11 +11,10 @@
 
 using namespace faabric::planner;
 
-/* This tests use that the planner is already running as a standalone service
- * and only test the external HTTP API
- */
 namespace tests {
-class FaabricPlannerEndpointTestFixture : public ConfTestFixture
+class FaabricPlannerEndpointTestFixture
+  : public ConfTestFixture
+  , public PlannerClientServerTestFixture
 {
   public:
     FaabricPlannerEndpointTestFixture()
@@ -57,17 +56,16 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     REQUIRE(result.second == expectedResponseBody);
 
     // Check that the set of available hosts is empty after reset
-    PlannerClient cli;
     std::vector<faabric::planner::Host> availableHosts =
-      cli.getAvailableHosts();
+      plannerCli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
 
     // Add a host, reset, and check again
     auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
     regReq->mutable_host()->set_ip("foo");
     regReq->mutable_host()->set_slots(12);
-    cli.registerHost(regReq);
-    availableHosts = cli.getAvailableHosts();
+    plannerCli.registerHost(regReq);
+    availableHosts = plannerCli.getAvailableHosts();
     REQUIRE(availableHosts.size() == 1);
 
     // Reset again
@@ -77,7 +75,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     REQUIRE(result.second == expectedResponseBody);
 
     // Check count is now zero again
-    availableHosts = cli.getAvailableHosts();
+    availableHosts = plannerCli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
 }
 

@@ -96,8 +96,8 @@ class PlannerClientServerTestFixture
     PlannerClientServerTestFixture()
       : plannerCli(LOCALHOST)
     {
-        faabric::util::getSystemConfig().plannerHost = "localhost";
-        auto oldVar = faabric::util::setEnvVar("PLANNER_HOST", "localhost");
+        // faabric::util::getSystemConfig().plannerHost = "localhost";
+        // auto oldVar = faabric::util::setEnvVar("PLANNER_HOST", "localhost");
         plannerServer.start();
         plannerCli.ping();
     }
@@ -106,7 +106,7 @@ class PlannerClientServerTestFixture
     {
         plannerServer.stop();
         faabric::planner::getPlanner().reset();
-        faabric::util::getSystemConfig().reset();
+        // faabric::util::getSystemConfig().reset();
     }
 
   protected:
