@@ -71,44 +71,32 @@ jobs:
       matrix:
         sanitiser: [None, Address, Thread, Undefined]
     env:
-      CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
       HOST_TYPE: ci
       LOG_LEVEL: info
-      # Overwritting the entrypoint makes sure that we use the latest version
-      # of the planner
-      PLANNER_ENTRYPOINT_BINARY: /code/faabric/build/static/bin
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
       ASAN_OPTIONS: verbosity=1:halt_on_error=1
       TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    container:
+      image: faasm.azurecr.io/faabric:0.4.4
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
+      options: --privileged
+    services:
+      redis:
+        image: redis
     steps:
-      - name: "Install Conan"
-        run: pip install conan
       - uses: faasm/conan-cache-action@v1
-      - name: "Start compose"
-        run: docker compose up -d cli
-      - name: "Wait for python venv to be initialised"
-        run: ./bin/wait_for_venv.sh
-        env:
-          FAABRIC_DOCKER: "on"
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
       - name: "Run cmake for tests"
-        run: |
-          docker compose exec cli bash -c \
-            './bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}'
-      - name: "Build planner binary"
-        run: |
-          docker compose exec cli bash -c \
-            './bin/inv_wrapper.sh dev.cc planner_server'
+        run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --sanitiser ${{ matrix.sanitiser }}
       - name: "Build tests"
-        run: |
-          docker compose exec cli bash -c \
-            './bin/inv_wrapper.sh dev.cc faabric_tests'
+        run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
-        run: |
-          docker compose exec cli bash -c \
-            '/build/faabric/static/bin/faabric_tests'
-      - name: "Print planner logs"
-        if: always()
-        run: docker compose logs planner
+        run: /build/faabric/static/bin/faabric_tests
 
   dist-tests:
     if: github.event.pull_request.draft == false
