@@ -30,6 +30,8 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
   public:
     PlannerClient();
 
+    PlannerClient(const std::string& plannerIp);
+
     void ping();
 
     std::vector<Host> getAvailableHosts();
