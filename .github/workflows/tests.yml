@@ -74,11 +74,6 @@ jobs:
         sanitiser: [None, Address, Thread, Undefined]
     env:
       HOST_TYPE: ci
-<<<<<<< HEAD
-=======
-      LOG_LEVEL: info
-        # PLANNER_HOST: localhost
->>>>>>> fcf530b (gha: attempt to fix tests)
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
