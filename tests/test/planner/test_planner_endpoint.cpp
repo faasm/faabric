@@ -3,7 +3,9 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/endpoint/FaabricEndpoint.h>
 #include <faabric/planner/PlannerClient.h>
+#include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/util/json.h>
 
@@ -20,12 +22,20 @@ class FaabricPlannerEndpointTestFixture
     FaabricPlannerEndpointTestFixture()
       : host(conf.plannerHost)
       , port(conf.plannerPort)
-    {}
+      , endpoint(
+          port,
+          faabric::planner::getPlanner().getConfig().numthreadshttpserver(),
+          std::make_shared<faabric::planner::PlannerEndpointHandler>())
+    {
+        endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
+    }
+
+    ~FaabricPlannerEndpointTestFixture() { endpoint.stop(); }
 
   protected:
-    // Planner endpoint state
     std::string host;
     int port;
+    faabric::endpoint::FaabricEndpoint endpoint;
 
     // Test case state
     boost::beast::http::status expectedReturnCode;
@@ -34,6 +44,7 @@ class FaabricPlannerEndpointTestFixture
 
     std::pair<int, std::string> doPost(const std::string& body)
     {
+        SPDLOG_INFO("Posting to {}:{}", host, port);
         return postToUrl(host, port, body);
     }
 };
