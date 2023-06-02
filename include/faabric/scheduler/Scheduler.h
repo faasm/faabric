@@ -31,6 +31,8 @@ namespace faabric::scheduler {
 typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
                   std::shared_ptr<faabric::util::SchedulingDecision>>
   InFlightPair;
+typedef std::promise<std::shared_ptr<faabric::Message>> MessageResultPromise;
+typedef std::shared_ptr<MessageResultPromise> MessageResultPromisePtr;
 
 class Scheduler;
 
@@ -263,6 +265,8 @@ class Scheduler
 
     void setFunctionResult(faabric::Message& msg);
 
+    void setMessageResult(std::shared_ptr<faabric::Message> msg);
+
     faabric::Message getFunctionResult(const faabric::Message& msg,
                                        int timeoutMs);
 
@@ -400,6 +404,10 @@ class Scheduler
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
     std::mutex localResultsMutex;
+
+    // TODO: can we remove localResultsMutex ?
+    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
+    std::mutex plannerResultsMutex;
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;

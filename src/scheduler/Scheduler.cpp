@@ -1147,8 +1147,6 @@ void Scheduler::flushLocally()
 
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
     // Record which host did the execution
     msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
 
@@ -1161,29 +1159,34 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
         removePendingMigration(msg.appid());
     }
 
-    if (msg.executeslocally()) {
-        faabric::util::UniqueLock resultsLock(localResultsMutex);
+    // If someone is already waiting for this result locally, set it so that
+    // we avoid going back and forth to the planner
+    {
+        faabric::util::UniqueLock lock(plannerResultsMutex);
 
-        auto it = localResults.find(msg.id());
-        if (it != localResults.end()) {
-            it->second->setValue(std::make_unique<faabric::Message>(msg));
-        }
-
-        // Sync messages can't have their results read twice, so skip
-        // redis
-        if (!msg.isasync()) {
-            return;
+        auto msgPtr = std::make_shared<faabric::Message>(msg);
+        if (plannerResults.find(msg.id()) != plannerResults.end()) {
+            plannerResults.at(msg.id())->set_value(msgPtr);
         }
     }
 
-    std::string key = msg.resultkey();
-    if (key.empty()) {
-        throw std::runtime_error("Result key empty. Cannot publish result");
+    getPlannerClient()->setMessageResult(
+      std::make_shared<faabric::Message>(msg));
+}
+
+void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
+{
+    faabric::util::UniqueLock lock(plannerResultsMutex);
+
+    if (plannerResults.find(msg->id()) == plannerResults.end()) {
+        SPDLOG_DEBUG(
+          "Ignoring setting message that is already set (id: {}, app: {})",
+          msg->id(),
+          msg->appid());
+        return;
     }
 
-    // Write the successful result to the result queue
-    std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
-    redis.publishSchedulerResult(key, msg.statuskey(), inputData);
+    plannerResults.at(msg->id())->set_value(msg);
 }
 
 void Scheduler::registerThread(uint32_t msgId)
@@ -1310,26 +1313,50 @@ size_t Scheduler::getCachedMessageCount()
     return threadResultMessages.size();
 }
 
+// This method gets the function result from the planner in a blocking fashion.
+// Even though the results are stored in the planner, we want to block in the
+// client (i.e. here) not in the planner, to avoid consuming planner threads
+// or adding complexity there. This method will first query the planner once
+// for the result. If its not there, the planner will register this host's
+// interest, and send a function call setting the message result. In the
+// meantime, we wait on a promise
 faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
                                               int timeoutMs)
 {
-    bool isBlocking = timeoutMs > 0;
-    int messageId = msg.id();
+    // Deliberately make a copy here so that we can set the masterhost when
+    // registering interest in the results
+    auto msgPtr = std::make_shared<faabric::Message>(msg);
+    msgPtr->set_masterhost(thisHost);
+    int msgId = msgPtr->id();
+    auto resMsgPtr = getPlannerClient()->getMessageResult(msgPtr);
 
-    if (messageId == 0) {
-        throw std::runtime_error("Must provide non-zero message ID");
+    // If when we first check the message it is there, return. Otherwise, we
+    // will have told the planner we want the result
+    if (resMsgPtr) {
+        return *resMsgPtr;
     }
 
-    do {
-        std::future<std::unique_ptr<faabric::Message>> fut;
-        {
-            faabric::util::UniqueLock resultsLock(localResultsMutex);
-            auto it = localResults.find(messageId);
-            if (it == localResults.end()) {
-                break; // fallback to redis
-            }
-            fut = it->second->promise.get_future();
+    // If we are here, we need to wait for the planner to let us know that
+    // the message is ready. To do so, we need to set a promise at the message
+    // id. We do so immediately after returning, so that we don't race with
+    // the planner sending the result back
+    std::future<std::shared_ptr<faabric::Message>> fut;
+    {
+        faabric::util::UniqueLock lock(plannerResultsMutex);
+
+        // TODO: what happens if someone else has already called
+        // getFunctionResult?
+        if (plannerResults.find(msgId) == plannerResults.end()) {
+            plannerResults.insert(
+              { msgId, std::make_shared<MessageResultPromise>() });
         }
+
+        fut = plannerResults.at(msgId)->get_future();
+    }
+
+    bool isBlocking = timeoutMs > 0;
+
+    while (true) {
         if (!isBlocking) {
             auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
             if (status == std::future_status::timeout) {
@@ -1341,47 +1368,18 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
             fut.wait();
         }
 
+        auto resultPtr = fut.get();
         {
-            faabric::util::UniqueLock resultsLock(localResultsMutex);
-            localResults.erase(messageId);
+            // Remove the result promise
+            faabric::util::UniqueLock lock(plannerResultsMutex);
+            plannerResults.erase(msgId);
         }
 
-        return *fut.get();
-    } while (0);
-
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    std::string resultKey = faabric::util::resultKeyFromMessageId(messageId);
-
-    faabric::Message msgResult;
-
-    if (isBlocking) {
-        // Blocking version will throw an exception when timing out
-        // which is handled by the caller.
-        std::vector<uint8_t> result = redis.dequeueBytes(resultKey, timeoutMs);
-        msgResult.ParseFromArray(result.data(), (int)result.size());
-    } else {
-        // Non-blocking version will tolerate empty responses, therefore
-        // we handle the exception here
-        std::vector<uint8_t> result;
-        try {
-            result = redis.dequeueBytes(resultKey, timeoutMs);
-        } catch (redis::RedisNoResponseException& ex) {
-            // Ok for no response when not blocking
-        }
-
-        if (result.empty()) {
-            // Empty result has special type
-            msgResult.set_type(faabric::Message_MessageType_EMPTY);
-        } else {
-            // Normal response if we get something from redis
-            msgResult.ParseFromArray(result.data(), (int)result.size());
-        }
+        return *resultPtr;
     }
-
-    return msgResult;
 }
 
+// TODO: remove this bad boy
 void Scheduler::getFunctionResultAsync(
   const faabric::Message& msg,
   int timeoutMs,

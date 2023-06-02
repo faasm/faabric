@@ -34,11 +34,24 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     void ping();
 
+    // ------
+    // Host membership calls
+    // ------
+
     std::vector<Host> getAvailableHosts();
 
     // Registering a host returns the keep-alive timeout for heartbeats
     int registerHost(std::shared_ptr<RegisterHostRequest> req);
 
     void removeHost(std::shared_ptr<RemoveHostRequest> req);
+
+    // ------
+    // Scheduling calls
+    // ------
+
+    void setMessageResult(std::shared_ptr<faabric::Message> msg);
+
+    std::shared_ptr<faabric::Message> getMessageResult(
+      std::shared_ptr<faabric::Message> msg);
 };
 }

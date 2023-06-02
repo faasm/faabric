@@ -1,4 +1,5 @@
 #include <faabric/planner/Planner.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -175,6 +176,69 @@ bool Planner::isHostExpired(std::shared_ptr<Host> host, long epochTimeMs)
 
     long hostTimeoutMs = getConfig().hosttimeout() * 1000;
     return (epochTimeMs - host->registerts().epochms()) > hostTimeoutMs;
+}
+
+void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
+{
+    int appId = msg->appid();
+    int msgId = msg->id();
+
+    faabric::util::FullLock lock(plannerMx);
+
+    SPDLOG_INFO("Planner setting message result (id: {}) for {}:{}:{}",
+                msg->id(),
+                msg->appid(),
+                msg->groupid(),
+                msg->groupidx());
+
+    // Set the result
+    state.appResults[appId][msgId] = msg;
+
+    // Dispatch an async message to all hosts that are waiting
+    auto& sch = faabric::scheduler::getScheduler();
+    if (state.appResultWaiters.find(msgId) != state.appResultWaiters.end()) {
+        for (const auto& host : state.appResultWaiters[msgId]) {
+            sch.getFunctionCallClient(host)->setMessageResult(msg);
+        }
+    }
+}
+
+std::shared_ptr<faabric::Message> Planner::getMessageResult(
+  std::shared_ptr<faabric::Message> msg)
+{
+    int appId = msg->appid();
+    int msgId = msg->id();
+
+    {
+        faabric::util::SharedLock lock(plannerMx);
+
+        // We debug and not error these messages as they happen frequently
+        // when polling for results
+        if (state.appResults.find(appId) == state.appResults.end()) {
+            SPDLOG_DEBUG("App {} not registered in app results", appId);
+        } else if (state.appResults[appId].find(msgId) ==
+                   state.appResults[appId].end()) {
+            SPDLOG_DEBUG("Msg {} not registered in app results (app id: {})",
+                         msgId,
+                         appId);
+        } else {
+            return state.appResults[appId][msgId];
+        }
+    }
+
+    // If we are here, it means that we have not found the message result, so
+    // we register the calling-host's interest if the calling-host has
+    // provided a masterhost. The masterhost is set when dispatching a message
+    // within faabric, but not when sending an HTTP request
+    if (!msg->masterhost().empty()) {
+        faabric::util::FullLock lock(plannerMx);
+        SPDLOG_DEBUG("Adding host {} on the waiting list for message {}",
+                     msg->masterhost(),
+                     msgId);
+        state.appResultWaiters[msgId].push_back(msg->masterhost());
+    }
+
+    return nullptr;
 }
 
 Planner& getPlanner()

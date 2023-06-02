@@ -27,6 +27,12 @@ class PlannerServer final : public faabric::transport::MessageEndpointServer
     std::unique_ptr<google::protobuf::Message> recvRemoveHost(
       std::span<const uint8_t> buffer);
 
+    std::unique_ptr<google::protobuf::Message> recvSetMessageResult(
+      std::span<const uint8_t> buffer);
+
+    std::unique_ptr<google::protobuf::Message> recvGetMessageResult(
+      std::span<const uint8_t> buffer);
+
   private:
     faabric::planner::Planner& planner;
 };
