@@ -46,10 +46,9 @@ PlannerClient::PlannerClient()
 {}
 
 PlannerClient::PlannerClient(const std::string& plannerIp)
-  : faabric::transport::MessageEndpointClient(
-      plannerIp,
-      PLANNER_ASYNC_PORT,
-      PLANNER_SYNC_PORT)
+  : faabric::transport::MessageEndpointClient(plannerIp,
+                                              PLANNER_ASYNC_PORT,
+                                              PLANNER_SYNC_PORT)
 {}
 
 void PlannerClient::ping()
