@@ -21,21 +21,6 @@ using namespace state;
 
 namespace tests {
 static int staticCount = 0;
-static std::string originalStateMode;
-
-static void setUpStateMode(const std::string& newMode)
-{
-    cleanFaabric();
-
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    originalStateMode = conf.stateMode;
-    conf.stateMode = newMode;
-}
-
-static void resetStateMode()
-{
-    faabric::util::getSystemConfig().stateMode = originalStateMode;
-}
 
 static std::shared_ptr<StateKeyValue> setupKV(size_t size)
 {
@@ -53,7 +38,7 @@ static std::shared_ptr<StateKeyValue> setupKV(size_t size)
     return kv;
 }
 
-TEST_CASE("Test Redis state sizes", "[state]")
+TEST_CASE_METHOD(StateTestFixture, "Test Redis state sizes", "[state]")
 {
     setUpStateMode("redis");
 
@@ -73,11 +58,9 @@ TEST_CASE("Test Redis state sizes", "[state]")
 
     // Get size
     REQUIRE(s.getStateSize(user, key) == bytes.size());
-
-    resetStateMode();
 }
 
-TEST_CASE("Test simple redis state get/set", "[state]")
+TEST_CASE_METHOD(StateTestFixture, "Test simple redis state get/set", "[state]")
 {
     setUpStateMode("redis");
 
@@ -108,11 +91,9 @@ TEST_CASE("Test simple redis state get/set", "[state]")
 
     // Check that when pushed, the update is pushed to redis
     REQUIRE(redisState.get(actualKey) == values);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis get/ set segment", "[state]")
+TEST_CASE_METHOD(StateTestFixture, "Test redis get/ set segment", "[state]")
 {
     setUpStateMode("redis");
 
@@ -151,11 +132,11 @@ TEST_CASE("Test redis get/ set segment", "[state]")
     // Run push and check redis updated
     kv->pushPartial();
     REQUIRE(redisState.get(actualKey) == expected);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis pulls segment even when already allocated", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test redis pulls segment even when already allocated",
+                 "[state]")
 {
     setUpStateMode("redis");
 
@@ -185,11 +166,11 @@ TEST_CASE("Test redis pulls segment even when already allocated", "[state]")
     kvAfter->getChunk(4, actualChunk.data(), actualChunk.size());
 
     REQUIRE(actualChunk == expectedChunk);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis marking segments dirty", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test redis marking segments dirty",
+                 "[state]")
 {
     setUpStateMode("redis");
 
@@ -220,11 +201,11 @@ TEST_CASE("Test redis marking segments dirty", "[state]")
     // Check expectation
     std::vector<uint8_t> actualMemory(ptr, ptr + values.size());
     REQUIRE(actualMemory == values);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis overlaps with multiple segments dirty", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test redis overlaps with multiple segments dirty",
+                 "[state]")
 {
     setUpStateMode("redis");
 
@@ -275,11 +256,11 @@ TEST_CASE("Test redis overlaps with multiple segments dirty", "[state]")
     // Push and check that with no pull we're up to date
     kv->pushPartial();
     REQUIRE(redisState.get(key) == expected);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis partial update of doubles in state", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test redis partial update of doubles in state",
+                 "[state]")
 {
     setUpStateMode("redis");
 
@@ -302,8 +283,8 @@ TEST_CASE("Test redis partial update of doubles in state", "[state]")
     kv->pushFull();
 
     // Update some elements in both and flag dirty
-    auto actualPtr = reinterpret_cast<double*>(kv->get());
-    auto expectedPtr = expected.data();
+    auto* actualPtr = reinterpret_cast<double*>(kv->get());
+    auto* expectedPtr = expected.data();
     actualPtr[0] = 123.456;
     expectedPtr[0] = 123.456;
     kv->flagChunkDirty(0, sizeof(double));
@@ -322,7 +303,7 @@ TEST_CASE("Test redis partial update of doubles in state", "[state]")
 
     // Push and check that with no pull we're up to date
     kv->pushPartial();
-    auto postPushDoublePtr = reinterpret_cast<double*>(kv->get());
+    auto* postPushDoublePtr = reinterpret_cast<double*>(kv->get());
     std::vector<double> actualPostPush(postPushDoublePtr,
                                        postPushDoublePtr + nDoubles);
     REQUIRE(expected == actualPostPush);
@@ -330,11 +311,11 @@ TEST_CASE("Test redis partial update of doubles in state", "[state]")
     std::vector<double> actualFromRedis(nDoubles);
     redisState.get(key, BYTES(actualFromRedis.data()), nBytes);
     REQUIRE(expected == actualFromRedis);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis partially setting just first/ last element", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test redis partially setting just first/ last element",
+                 "[state]")
 {
     setUpStateMode("redis");
 
@@ -370,11 +351,11 @@ TEST_CASE("Test redis partially setting just first/ last element", "[state]")
     kv->pushPartial();
     expected = { 6, 1, 2, 3, 6 };
     REQUIRE(redisState.get(actualKey) == expected);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis push partial with mask", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test redis push partial with mask",
+                 "[state]")
 {
     setUpStateMode("redis");
 
@@ -387,7 +368,7 @@ TEST_CASE("Test redis push partial with mask", "[state]")
 
     // Set up value in memory
     uint8_t* dataBytePtr = kvData->get();
-    auto dataDoublePtr = reinterpret_cast<double*>(dataBytePtr);
+    auto* dataDoublePtr = reinterpret_cast<double*>(dataBytePtr);
     std::vector<double> initial = { 1.2345, 12.345, 987.6543, 10987654.3 };
 
     std::copy(initial.begin(), initial.end(), dataDoublePtr);
@@ -400,7 +381,7 @@ TEST_CASE("Test redis push partial with mask", "[state]")
     std::string actualKey =
       faabric::util::keyForUser(kvData->user, kvData->key);
     std::vector<uint8_t> actualBytes = redisState.get(actualKey);
-    auto actualDoublePtr = reinterpret_cast<double*>(actualBytes.data());
+    auto* actualDoublePtr = reinterpret_cast<double*>(actualBytes.data());
     std::vector<double> actualDoubles(actualDoublePtr, actualDoublePtr + 4);
 
     REQUIRE(actualDoubles == initial);
@@ -412,7 +393,7 @@ TEST_CASE("Test redis push partial with mask", "[state]")
 
     // Mask two as having changed and push with mask
     uint8_t* maskBytePtr = kvMask->get();
-    auto maskIntPtr = reinterpret_cast<unsigned int*>(maskBytePtr);
+    auto* maskIntPtr = reinterpret_cast<unsigned int*>(maskBytePtr);
     faabric::util::maskDouble(maskIntPtr, 1);
     faabric::util::maskDouble(maskIntPtr, 3);
 
@@ -429,14 +410,12 @@ TEST_CASE("Test redis push partial with mask", "[state]")
 
     // Check in redis
     std::vector<uint8_t> actualValue2 = redisState.get(actualKey);
-    auto actualDoublesPtr = reinterpret_cast<double*>(actualValue2.data());
+    auto* actualDoublesPtr = reinterpret_cast<double*>(actualValue2.data());
     std::vector<double> actualDoubles2(actualDoublesPtr, actualDoublesPtr + 4);
     REQUIRE(actualDoubles2 == expected);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis async pulling", "[state]")
+TEST_CASE_METHOD(StateTestFixture, "Test redis async pulling", "[state]")
 {
     setUpStateMode("redis");
 
@@ -460,11 +439,11 @@ TEST_CASE("Test redis async pulling", "[state]")
     std::vector<uint8_t> actual(4);
     kv->get(actual.data());
     REQUIRE(actual == values);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis pushing only happens when dirty", "[state]")
+TEST_CASE_METHOD(StateTestFixture,
+                 "Test redis pushing only happens when dirty",
+                 "[state]")
 {
     setUpStateMode("redis");
 
@@ -490,12 +469,12 @@ TEST_CASE("Test redis pushing only happens when dirty", "[state]")
     kv->set(newValues2.data());
     kv->pushFull();
     REQUIRE(redisState.get(actualKey) == newValues2);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis mapping shared memory does not pull if not initialised",
-          "[state]")
+TEST_CASE_METHOD(
+  StateTestFixture,
+  "Test redis mapping shared memory does not pull if not initialised",
+  "[state]")
 {
     setUpStateMode("redis");
 
@@ -522,14 +501,12 @@ TEST_CASE("Test redis mapping shared memory does not pull if not initialised",
     kv->get();
 
     // Check
-    auto byteRegion = static_cast<uint8_t*>(mappedRegion);
+    auto* byteRegion = static_cast<uint8_t*>(mappedRegion);
     std::vector<uint8_t> actualValue(byteRegion, byteRegion + length);
     REQUIRE(actualValue == value);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis state pulling")
+TEST_CASE_METHOD(StateTestFixture, "Test redis state pulling", "[state]")
 {
     setUpStateMode("redis");
 
@@ -552,11 +529,9 @@ TEST_CASE("Test redis state pulling")
     uint8_t* actualBytes = kv->get();
     std::vector<uint8_t> actual(actualBytes, actualBytes + 6);
     REQUIRE(actual == expected);
-
-    resetStateMode();
 }
 
-TEST_CASE("Test redis state deletion", "[state]")
+TEST_CASE_METHOD(StateTestFixture, "Test redis state deletion", "[state]")
 {
     setUpStateMode("redis");
 
@@ -571,8 +546,6 @@ TEST_CASE("Test redis state deletion", "[state]")
     REQUIRE(redisState.get(actualKey) == values);
 
     state::getGlobalState().deleteKV(kv->user, kv->key);
-    REQUIRE(redisState.get(actualKey).size() == 0);
-
-    resetStateMode();
+    REQUIRE(redisState.get(actualKey).empty());
 }
 }

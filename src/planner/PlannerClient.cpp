@@ -8,6 +8,11 @@
 #include <faabric/util/network.h>
 
 namespace faabric::planner {
+
+// -----------------------------------
+// Keep-Alive Thread
+// -----------------------------------
+
 void KeepAliveThread::doWork()
 {
     PlannerClient cli;
@@ -28,12 +33,22 @@ void KeepAliveThread::setRequest(
     thisHostReq->set_overwrite(false);
 }
 
+// -----------------------------------
+// Planner Client
+// -----------------------------------
+
 PlannerClient::PlannerClient()
   : faabric::transport::MessageEndpointClient(
       faabric::util::getIPFromHostname(
         faabric::util::getSystemConfig().plannerHost),
       PLANNER_ASYNC_PORT,
       PLANNER_SYNC_PORT)
+{}
+
+PlannerClient::PlannerClient(const std::string& plannerIp)
+  : faabric::transport::MessageEndpointClient(plannerIp,
+                                              PLANNER_ASYNC_PORT,
+                                              PLANNER_SYNC_PORT)
 {}
 
 void PlannerClient::ping()

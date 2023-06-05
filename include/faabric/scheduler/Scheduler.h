@@ -372,7 +372,7 @@ class Scheduler
     std::shared_ptr<faabric::snapshot::SnapshotClient> getSnapshotClient(
       const std::string& otherHost);
 
-    static std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
+    std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
 
   private:
     std::string thisHost;
