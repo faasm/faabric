@@ -33,7 +33,6 @@ TEST_CASE("Test default system config initialisation", "[util]")
 
     REQUIRE(conf.dirtyTrackingMode == "segfault");
 
-    REQUIRE(conf.plannerHost == "planner");
     REQUIRE(conf.plannerPort == 8080);
 }
 

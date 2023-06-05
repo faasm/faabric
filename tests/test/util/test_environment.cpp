@@ -42,8 +42,6 @@ TEST_CASE("Test setting environment variables", "[util]")
 
 TEST_CASE("Test overriding CPU count", "[util]")
 {
-    cleanFaabric();
-
     // Check default cores is same as available concurrency
     auto& conf = getSystemConfig();
     unsigned int defaultCores = getUsableCores();

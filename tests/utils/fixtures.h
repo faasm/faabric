@@ -56,7 +56,6 @@ class StateTestFixture
   public:
     StateTestFixture()
       : state(faabric::state::getGlobalState())
-    // , conf(faabric::util::getSystemConfig())
     {
         doCleanUp();
     }
@@ -65,7 +64,6 @@ class StateTestFixture
 
   protected:
     faabric::state::State& state;
-    // faabric::util::SystemConfig& conf;
     std::string oldStateMode;
 
     void setUpStateMode(const std::string& stateMode)
@@ -108,8 +106,6 @@ class PlannerClientServerTestFixture
     PlannerClientServerTestFixture()
       : plannerCli(LOCALHOST)
     {
-        // faabric::util::getSystemConfig().plannerHost = "localhost";
-        // auto oldVar = faabric::util::setEnvVar("PLANNER_HOST", "localhost");
         plannerServer.start();
         plannerCli.ping();
     }
@@ -118,7 +114,6 @@ class PlannerClientServerTestFixture
     {
         plannerServer.stop();
         faabric::planner::getPlanner().reset();
-        // faabric::util::getSystemConfig().reset();
     }
 
   protected:
