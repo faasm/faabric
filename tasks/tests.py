@@ -10,9 +10,9 @@ TEST_ENV = {
     "REDIS_QUEUE_HOST": "redis",
     "REDIS_STATE_HOST": "redis",
     "TERM": "xterm-256color",
-    "ASAN_OPTIONS": "verbosity=1:halt_on_error=1"
-    "TSAN_OPTIONS": "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
-    "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
+    "ASAN_OPTIONS": "verbosity=1:halt_on_error=1",
+    "TSAN_OPTIONS": "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4",
+    "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1",
 }
 
 
