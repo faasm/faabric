@@ -70,8 +70,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HOST_TYPE: ci
-      LOG_LEVEL: info
-      PLANNER_HOST: localhost
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
     container:
@@ -92,7 +90,7 @@ jobs:
       - name: "Build tests"
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests with profiling"
-        run: /build/faabric/static/bin/faabric_tests \[mpi\]
+        run: ./bin/inv_wrapper.sh tests
         env:
           LLVM_PROFILE_FILE: faabric.profraw
       - name: "Generate code coverage report"
