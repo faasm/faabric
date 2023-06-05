@@ -1,5 +1,5 @@
 from invoke import task
-from os import environ, listdir
+from os import listdir
 from os.path import join
 from subprocess import run
 from tasks.util.env import FAABRIC_STATIC_BUILD_DIR, PROJ_ROOT
@@ -11,7 +11,15 @@ TEST_ENV = {
     "REDIS_STATE_HOST": "redis",
     "TERM": "xterm-256color",
     "ASAN_OPTIONS": "verbosity=1:halt_on_error=1",
-    "TSAN_OPTIONS": "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4",
+    "TSAN_OPTIONS": " ".join(
+        [
+            "verbosity=1 halt_on_error=1",
+            "suppressions={}/thread-sanitizer-ignorelist.txt".format(
+                PROJ_ROOT
+            ),
+            "history_size=4",
+        ]
+    ),
     "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1",
 }
 
