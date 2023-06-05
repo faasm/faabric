@@ -5,10 +5,14 @@ from subprocess import run
 from tasks.util.env import FAABRIC_STATIC_BUILD_DIR, PROJ_ROOT
 
 TEST_ENV = {
+    "LOG_LEVEL": "info",
     "PLANNER_HOST": "localhost",
     "REDIS_QUEUE_HOST": "redis",
     "REDIS_STATE_HOST": "redis",
     "TERM": "xterm-256color",
+    "ASAN_OPTIONS": "verbosity=1:halt_on_error=1"
+    "TSAN_OPTIONS": "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
+    "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
 }
 
 
