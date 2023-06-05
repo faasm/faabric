@@ -92,7 +92,7 @@ jobs:
       - name: "Build tests"
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
-        run: /build/faabric/static/bin/faabric_tests
+        run: ./bin/inv_wrapper.sh tests
 
   dist-tests:
     if: github.event.pull_request.draft == false
