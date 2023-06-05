@@ -21,7 +21,7 @@ inv dev.cmake
 inv dev.cc faabric_tests
 
 # Run the tests
-faabric_tests
+inv tests
 ```
 
 To stop the `faabric`-related containers run:
@@ -77,6 +77,24 @@ Note that Faabric provides its own `.gdbinit` file which will ensure segfaults
 
 We have some standard tests using [Catch2](https://github.com/catchorg/Catch2)
 under the `faabric_tests` target.
+
+We add a wrapper script around the tests target to set the right environment
+variables, and capture idiomatic ways to call the tests. You can use the
+wrapper scripts in the following ways:
+
+```bash
+# Run the whole test suite
+inv tests
+
+# Run just one test case
+inv tests --test-case "Test JSON contains required keys"
+
+# Run all test cases defined in one file
+inv tests --filename test_json
+
+# Run all test cases defined in one directory
+inv tests --directory util
+```
 
 ## Distributed tests
 

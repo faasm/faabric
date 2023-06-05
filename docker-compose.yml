@@ -35,9 +35,6 @@ services:
       - REDIS_STATE_HOST=redis
       - REDIS_QUEUE_HOST=redis
       - OVERRIDE_CPU_COUNT=${OVERRIDE_CPU_COUNT:-0}
-      - ASAN_OPTIONS=verbosity=1:halt_on_error=1
-      - TSAN_OPTIONS=verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4
-      - UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
     depends_on:
       - planner
       - redis

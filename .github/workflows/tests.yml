@@ -72,13 +72,8 @@ jobs:
         sanitiser: [None, Address, Thread, Undefined]
     env:
       HOST_TYPE: ci
-      LOG_LEVEL: info
-      PLANNER_HOST: localhost
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
-      ASAN_OPTIONS: verbosity=1:halt_on_error=1
-      TSAN_OPTIONS: "verbosity=1 halt_on_error=1 suppressions=./thread-sanitizer-ignorelist.txt history_size=4"
-      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
     container:
       image: faasm.azurecr.io/faabric:0.4.4
       credentials:
@@ -97,7 +92,7 @@ jobs:
       - name: "Build tests"
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
       - name: "Run tests"
-        run: /build/faabric/static/bin/faabric_tests
+        run: ./bin/inv_wrapper.sh tests
 
   dist-tests:
     if: github.event.pull_request.draft == false

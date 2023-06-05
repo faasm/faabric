@@ -7,6 +7,7 @@ from . import docs
 from . import examples
 from . import git
 from . import format_code
+from . import tests
 
 ns = Collection(
     call,
@@ -16,4 +17,5 @@ ns = Collection(
     examples,
     git,
     format_code,
+    tests,
 )
