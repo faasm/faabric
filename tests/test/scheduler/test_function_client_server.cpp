@@ -237,4 +237,34 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();
 }
+
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test setting a message result with the function call client",
+                 "[scheduler]")
+{
+    auto msg = faabric::util::messageFactory("foo", "bar");
+    auto msgPtr = std::make_shared<faabric::Message>(msg);
+
+    // Setting a message result with the function call client is used when the
+    // planner is notifying that a message result is ready
+
+    // If we set the message result before we have tried (and failed) to get
+    // the result through the planner first, nothing happens
+    cli.setMessageResult(msgPtr);
+
+    int expectedReturnCode = 1337;
+    int actualReturnCode;
+    // This thread will block waiting for another thread to set the message
+    // result
+    std::jthread waiterThread{[&]{
+        sch.getFunctionResult(msg, 1000);
+        actualReturnCode = msg.returnvalue();
+    }};
+
+    msgPtr->set_returnvalue(expectedReturnCode);
+    cli.setMessageResult(msgPtr);
+    waiterThread.join();
+
+    REQUIRE(expectedReturnCode == actualReturnCode);
+}
 }

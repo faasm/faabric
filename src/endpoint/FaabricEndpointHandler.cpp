@@ -127,7 +127,7 @@ void FaabricEndpointHandler::executeFunction(
     // Await result on global bus (may have been executed on a different worker)
     if (msg.isasync()) {
         response.result(beast::http::status::ok);
-        response.body() = faabric::util::buildAsyncResponse(msg);
+        response.body() = faabric::util::messageToJson(msg);
         return ctx.sendFunction(std::move(response));
     }
 

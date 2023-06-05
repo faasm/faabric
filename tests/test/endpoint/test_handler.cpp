@@ -11,44 +11,32 @@
 
 namespace tests {
 
-class EndpointHandlerTestFixture : public SchedulerTestFixture
+class EndpointHandlerTestFixture : public ClientServerFixture
 {
-  public:
-    EndpointHandlerTestFixture()
-    {
-        executorFactory =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        setExecutorFactory(executorFactory);
-    }
-
-    ~EndpointHandlerTestFixture() { executorFactory->reset(); }
-
   protected:
-    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+    // Taking in a shared_ptr by reference to ensure the handler was constructed
+    // with std::make_shared
+    static std::pair<int, std::string> synchronouslyHandleFunction(
+      std::shared_ptr<endpoint::FaabricEndpointHandler>& handler,
+      std::string requestStr)
+    {
+        asio::io_context ioc(1);
+        asio::strand strand = asio::make_strand(ioc);
+        faabric::util::BeastHttpResponse response;
+        faabric::util::BeastHttpRequest req(beast::http::verb::get, "/", 10);
+        req.body() = requestStr;
+        faabric::endpoint::HttpRequestContext ctx{
+            ioc,
+            strand,
+            [&](faabric::util::BeastHttpResponse&& resp) {
+                response = std::move(resp);
+            }
+        };
+        handler->onRequest(std::move(ctx), std::move(req));
+        ioc.run();
+        return std::make_pair(response.result_int(), response.body());
+    }
 };
-
-// Taking in a shared_ptr by reference to ensure the handler was constructed
-// with std::make_shared
-std::pair<int, std::string> synchronouslyHandleFunction(
-  std::shared_ptr<endpoint::FaabricEndpointHandler>& handler,
-  std::string requestStr)
-{
-    asio::io_context ioc(1);
-    asio::strand strand = asio::make_strand(ioc);
-    faabric::util::BeastHttpResponse response;
-    faabric::util::BeastHttpRequest req(beast::http::verb::get, "/", 10);
-    req.body() = requestStr;
-    faabric::endpoint::HttpRequestContext ctx{
-        ioc,
-        strand,
-        [&](faabric::util::BeastHttpResponse&& resp) {
-            response = std::move(resp);
-        }
-    };
-    handler->onRequest(std::move(ctx), std::move(req));
-    ioc.run();
-    return std::make_pair(response.result_int(), response.body());
-}
 
 TEST_CASE_METHOD(EndpointHandlerTestFixture,
                  "Test valid calls to endpoint",
@@ -66,6 +54,7 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
         actualInput = "foobar";
         call.set_inputdata(actualInput);
     }
+
     SECTION("No input") {}
 
     call.set_user(user);
@@ -80,7 +69,8 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
       synchronouslyHandleFunction(handler, requestStr);
 
     REQUIRE(response.first == 200);
-    std::string responseStr = response.second;
+    faabric::Message responseMsg;
+    faabric::util::jsonToMessage(response.second, &responseMsg);
 
     // Check actual call has right details including the ID returned to the
     // caller
@@ -89,14 +79,15 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
     faabric::Message actualCall = msgs.at(0);
     REQUIRE(actualCall.user() == call.user());
     REQUIRE(actualCall.function() == call.function());
-    REQUIRE(actualCall.id() == std::stoi(responseStr));
+    REQUIRE(actualCall.id() == responseMsg.id());
     REQUIRE(actualCall.inputdata() == actualInput);
 
     // Wait for the result
+    actualCall.set_appid(responseMsg.appid());
     sch.getFunctionResult(actualCall, 2000);
 }
 
-TEST_CASE("Test empty invocation", "[endpoint]")
+TEST_CASE_METHOD(EndpointHandlerTestFixture, "Test empty invocation", "[endpoint]")
 {
     std::shared_ptr handler =
       std::make_shared<endpoint::FaabricEndpointHandler>();
@@ -107,7 +98,7 @@ TEST_CASE("Test empty invocation", "[endpoint]")
     REQUIRE(actual.second == "Empty request");
 }
 
-TEST_CASE("Test empty JSON invocation", "[endpoint]")
+TEST_CASE_METHOD(EndpointHandlerTestFixture, "Test empty JSON invocation", "[endpoint]")
 {
     faabric::Message call;
     call.set_isasync(true);

@@ -1161,6 +1161,10 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // If someone is already waiting for this result locally, set it so that
     // any sleeping threads wake up earlier
+    // TODO: this optimisation is creating race conditions in the tests,
+    // wereby execution finishes (and the function call server shuts down)
+    // before the planner has delivered the last message, dead-locking
+    /*
     {
         faabric::util::UniqueLock lock(plannerResultsMutex);
 
@@ -1169,6 +1173,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
             plannerResults.at(msg.id())->set_value(msgPtr);
         }
     }
+    */
 
     getPlannerClient()->setMessageResult(
       std::make_shared<faabric::Message>(msg));
@@ -1194,6 +1199,7 @@ void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
     // are waiting for this result locally, thus it sets the result before
     // notifying the planner
     try {
+        SPDLOG_DEBUG("msg return value: {}", msg->returnvalue());
         plannerResults.at(msg->id())->set_value(msg);
     } catch (const std::future_error& e) {
         SPDLOG_DEBUG("Result already set (id: {}, app: {})", msg->id(), msg->appid());
@@ -1341,9 +1347,12 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
     int msgId = msgPtr->id();
     auto resMsgPtr = getPlannerClient()->getMessageResult(msgPtr);
 
+    SPDLOG_WARN("Getting result for message: {}", msgId);
+
     // If when we first check the message it is there, return. Otherwise, we
     // will have told the planner we want the result
     if (resMsgPtr) {
+        SPDLOG_WARN("Got result for message ({})!", msgId);
         return *resMsgPtr;
     }
 
@@ -1387,6 +1396,7 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
             faabric::util::UniqueLock lock(plannerResultsMutex);
             plannerResults.erase(msgId);
         }
+        SPDLOG_WARN("Got result for message ({})!", msgId);
 
         return *resultPtr;
     }
