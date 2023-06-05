@@ -1,5 +1,5 @@
 from invoke import task
-from os import listdir
+from os import environ, listdir
 from os.path import join
 from subprocess import run
 from tasks.util.env import FAABRIC_STATIC_BUILD_DIR, PROJ_ROOT
@@ -47,6 +47,10 @@ def tests(
         "--use-colour yes",
         "--abort" if abort else "",
     ]
+
+    # Allow specific environment variables
+    if "LLVM_PROFILE_FILE" in environ:
+        TEST_ENV["LLVM_PROFILE_FILE"] = environ["LLVM_PROFILE_FILE"]
 
     if debug:
         TEST_ENV["LOG_LEVEL"] = "debug"
