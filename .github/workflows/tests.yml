@@ -99,6 +99,8 @@ jobs:
           llvm-cov-13 show /build/faabric/static/bin/faabric_tests -instr-profile=faabric.profdata > coverage.txt
       - name: "Upload coverage report to CodeCov"
         uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   tests:
     if: github.event.pull_request.draft == false
