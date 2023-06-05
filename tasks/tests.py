@@ -6,6 +6,10 @@ from tasks.util.env import FAABRIC_STATIC_BUILD_DIR, PROJ_ROOT
 
 TEST_ENV = {
     "LOG_LEVEL": "info",
+    "PLANNER_HOST": "localhost",
+    "REDIS_QUEUE_HOST": "redis",
+    "REDIS_STATE_HOST": "redis",
+    "TERM": "xterm-256color",
     "ASAN_OPTIONS": "verbosity=1:halt_on_error=1",
     "TSAN_OPTIONS": " ".join(
         [
