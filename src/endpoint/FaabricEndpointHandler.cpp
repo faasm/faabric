@@ -131,23 +131,12 @@ void FaabricEndpointHandler::executeFunction(
         return ctx.sendFunction(std::move(response));
     }
 
+    // TODO: temporarily make this HTTP call block one server thread.
+    // Eventually. we will route all HTTP requests through the planner instead
+    // of the worker, so we will be able to remove this blocking call
     SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
-    sch.getFunctionResultAsync(
-      msg,
-      conf.globalMessageTimeout,
-      ctx.ioc,
-      ctx.executor,
-      beast::bind_front_handler(&FaabricEndpointHandler::onFunctionResult,
-                                this->shared_from_this(),
-                                std::move(ctx),
-                                std::move(response)));
-}
+    auto result = sch.getFunctionResult(msg, conf.globalMessageTimeout);
 
-void FaabricEndpointHandler::onFunctionResult(
-  HttpRequestContext&& ctx,
-  faabric::util::BeastHttpResponse&& response,
-  faabric::Message& result)
-{
     beast::http::status statusCode =
       (result.returnvalue() == 0) ? beast::http::status::ok
                                   : beast::http::status::internal_server_error;
@@ -159,5 +148,4 @@ void FaabricEndpointHandler::onFunctionResult(
     response.body() = result.outputdata();
     return ctx.sendFunction(std::move(response));
 }
-
 }

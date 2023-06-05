@@ -198,6 +198,7 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     auto& sch = faabric::scheduler::getScheduler();
     if (state.appResultWaiters.find(msgId) != state.appResultWaiters.end()) {
         for (const auto& host : state.appResultWaiters[msgId]) {
+            SPDLOG_INFO("Sending result to waiting host: {}", host);
             sch.getFunctionCallClient(host)->setMessageResult(msg);
         }
     }

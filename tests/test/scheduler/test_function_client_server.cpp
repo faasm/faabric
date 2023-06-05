@@ -23,40 +23,6 @@
 using namespace faabric::scheduler;
 
 namespace tests {
-class ClientServerFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public StateTestFixture
-  , public PointToPointTestFixture
-  , public ConfTestFixture
-{
-  protected:
-    FunctionCallServer server;
-    FunctionCallClient cli;
-
-    std::shared_ptr<DummyExecutorFactory> executorFactory;
-
-    int groupId = 123;
-    int groupSize = 2;
-
-  public:
-    ClientServerFixture()
-      : cli(LOCALHOST)
-    {
-        // Set up executor
-        executorFactory = std::make_shared<DummyExecutorFactory>();
-        setExecutorFactory(executorFactory);
-
-        server.start();
-    }
-
-    ~ClientServerFixture()
-    {
-        server.stop();
-        executorFactory->reset();
-    }
-};
-
 TEST_CASE_METHOD(ConfTestFixture,
                  "Test setting function call server threads",
                  "[scheduler]")

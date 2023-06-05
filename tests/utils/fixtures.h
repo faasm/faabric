@@ -5,9 +5,6 @@
 #include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
 
-#include "DummyExecutorFactory.h"
-#include "faabric_utils.h"
-
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/planner/PlannerClient.h>
@@ -17,6 +14,7 @@
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
+#include <faabric/scheduler/FunctionCallServer.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/state/InMemoryStateKeyValue.h>
@@ -483,4 +481,39 @@ class DirtyTrackingTestFixture : public ConfTestFixture
         faabric::util::resetDirtyTracker();
     }
 };
+
+class ClientServerFixture
+  : public RedisTestFixture
+  , public SchedulerTestFixture
+  , public StateTestFixture
+  , public PointToPointTestFixture
+  , public ConfTestFixture
+{
+  protected:
+    faabric::scheduler::FunctionCallServer server;
+    faabric::scheduler::FunctionCallClient cli;
+
+    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+
+    int groupId = 123;
+    int groupSize = 2;
+
+  public:
+    ClientServerFixture()
+      : cli(LOCALHOST)
+    {
+        // Set up executor
+        executorFactory = std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        setExecutorFactory(executorFactory);
+
+        server.start();
+    }
+
+    ~ClientServerFixture()
+    {
+        server.stop();
+        executorFactory->reset();
+    }
+};
+
 }

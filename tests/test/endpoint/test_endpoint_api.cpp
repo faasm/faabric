@@ -69,7 +69,7 @@ class EndpointApiTestExecutorFactory : public ExecutorFactory
     }
 };
 
-class EndpointApiTestFixture : public SchedulerTestFixture
+class EndpointApiTestFixture : public ClientServerFixture
 {
   public:
     EndpointApiTestFixture()

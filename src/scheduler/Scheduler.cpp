@@ -1160,7 +1160,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     }
 
     // If someone is already waiting for this result locally, set it so that
-    // we avoid going back and forth to the planner
+    // any sleeping threads wake up earlier
     {
         faabric::util::UniqueLock lock(plannerResultsMutex);
 
@@ -1174,6 +1174,9 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
       std::make_shared<faabric::Message>(msg));
 }
 
+// This function is called from the planner through the function call server
+// to set a message result. The planner notifies this worker because, before,
+// the worker has attempted to get a message result that was not ready yet
 void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
     faabric::util::UniqueLock lock(plannerResultsMutex);
@@ -1186,7 +1189,15 @@ void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
         return;
     }
 
-    plannerResults.at(msg->id())->set_value(msg);
+    // It could happen that the result has already been set. This happens
+    // when the thread setting the function result detects that other localthreads
+    // are waiting for this result locally, thus it sets the result before
+    // notifying the planner
+    try {
+        plannerResults.at(msg->id())->set_value(msg);
+    } catch (const std::future_error& e) {
+        SPDLOG_DEBUG("Result already set (id: {}, app: {})", msg->id(), msg->appid());
+    }
 }
 
 void Scheduler::registerThread(uint32_t msgId)
@@ -1315,8 +1326,8 @@ size_t Scheduler::getCachedMessageCount()
 
 // This method gets the function result from the planner in a blocking fashion.
 // Even though the results are stored in the planner, we want to block in the
-// client (i.e. here) not in the planner, to avoid consuming planner threads
-// or adding complexity there. This method will first query the planner once
+// client (i.e. here) and not in the planner. This is to avoid consuming
+// planner threads. This method will first query the planner once
 // for the result. If its not there, the planner will register this host's
 // interest, and send a function call setting the message result. In the
 // meantime, we wait on a promise
@@ -1336,6 +1347,14 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
         return *resMsgPtr;
     }
 
+    bool isBlocking = timeoutMs > 0;
+    // If the result is not in the planner, and we are not blocking, return
+    if (!isBlocking) {
+        faabric::Message msgResult;
+        msgResult.set_type(faabric::Message_MessageType_EMPTY);
+        return msgResult;
+    }
+
     // If we are here, we need to wait for the planner to let us know that
     // the message is ready. To do so, we need to set a promise at the message
     // id. We do so immediately after returning, so that we don't race with
@@ -1344,28 +1363,22 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
     {
         faabric::util::UniqueLock lock(plannerResultsMutex);
 
-        // TODO: what happens if someone else has already called
-        // getFunctionResult?
         if (plannerResults.find(msgId) == plannerResults.end()) {
             plannerResults.insert(
               { msgId, std::make_shared<MessageResultPromise>() });
         }
 
+        // Note that it is deliberately an error for two threads to retrieve
+        // the future at the same time
         fut = plannerResults.at(msgId)->get_future();
     }
 
-    bool isBlocking = timeoutMs > 0;
-
     while (true) {
-        if (!isBlocking) {
-            auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
-            if (status == std::future_status::timeout) {
-                faabric::Message msgResult;
-                msgResult.set_type(faabric::Message_MessageType_EMPTY);
-                return msgResult;
-            }
-        } else {
-            fut.wait();
+        auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+        if (status == std::future_status::timeout) {
+            faabric::Message msgResult;
+            msgResult.set_type(faabric::Message_MessageType_EMPTY);
+            return msgResult;
         }
 
         auto resultPtr = fut.get();
