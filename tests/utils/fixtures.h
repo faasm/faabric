@@ -56,6 +56,7 @@ class StateTestFixture
   public:
     StateTestFixture()
       : state(faabric::state::getGlobalState())
+    // , conf(faabric::util::getSystemConfig())
     {
         doCleanUp();
     }
@@ -64,11 +65,22 @@ class StateTestFixture
 
   protected:
     faabric::state::State& state;
+    // faabric::util::SystemConfig& conf;
+    std::string oldStateMode;
+
+    void setUpStateMode(const std::string& stateMode)
+    {
+        faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
+        oldStateMode = conf.stateMode;
+        conf.stateMode = stateMode;
+    }
+
     void doCleanUp()
     {
         // Clear out any cached state, do so for both modes
         faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-        std::string& originalStateMode = conf.stateMode;
+        std::string& originalStateMode =
+          oldStateMode.empty() ? conf.stateMode : oldStateMode;
         conf.stateMode = "inmemory";
         state.forceClearAll(true);
         conf.stateMode = "redis";
