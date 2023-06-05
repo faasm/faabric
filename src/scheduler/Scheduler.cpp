@@ -1199,7 +1199,6 @@ void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
     // are waiting for this result locally, thus it sets the result before
     // notifying the planner
     try {
-        SPDLOG_DEBUG("msg return value: {}", msg->returnvalue());
         plannerResults.at(msg->id())->set_value(msg);
     } catch (const std::future_error& e) {
         SPDLOG_DEBUG("Result already set (id: {}, app: {})", msg->id(), msg->appid());
@@ -1383,6 +1382,7 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
     }
 
     while (true) {
+        SPDLOG_WARN("here");
         auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
         if (status == std::future_status::timeout) {
             faabric::Message msgResult;
@@ -1390,6 +1390,7 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
             return msgResult;
         }
 
+        SPDLOG_WARN("here too");
         auto resultPtr = fut.get();
         {
             // Remove the result promise

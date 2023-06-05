@@ -35,6 +35,8 @@ static std::vector<
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
+static std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>> messageResults;
+
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
     faabric::util::UniqueLock lock(mockMutex);
@@ -75,6 +77,12 @@ getUnregisterRequests()
     return unregisterRequests;
 }
 
+std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>> getMessageResults()
+{
+    faabric::util::UniqueLock lock(mockMutex);
+    return messageResults;
+}
+
 void queueResourceResponse(const std::string& host, faabric::HostResources& res)
 {
     faabric::util::UniqueLock lock(mockMutex);
@@ -94,6 +102,7 @@ void clearMockRequests()
         p.second.reset();
     }
     queuedResourceResponses.clear();
+    messageResults.clear();
 }
 
 // -----------------------------------
@@ -183,6 +192,11 @@ void FunctionCallClient::unregister(faabric::UnregisterRequest& req)
 
 void FunctionCallClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
-    asyncSend(faabric::scheduler::FunctionCalls::SetMessageResult, msg.get());
+    if (faabric::util::isMockMode()) {
+        faabric::util::UniqueLock lock(mockMutex);
+        messageResults.emplace_back(host, msg);
+    } else {
+        asyncSend(faabric::scheduler::FunctionCalls::SetMessageResult, msg.get());
+    }
 }
 }

@@ -14,7 +14,7 @@
 using namespace scheduler;
 
 namespace tests {
-TEST_CASE("Test execution graph", "[scheduler][exec-graph]")
+TEST_CASE_METHOD(ClientServerFixture, "Test execution graph", "[scheduler]")
 {
     faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
     faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
