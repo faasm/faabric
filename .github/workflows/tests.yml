@@ -94,9 +94,7 @@ jobs:
         env:
           LLVM_PROFILE_FILE: faabric.profraw
       - name: "Generate code coverage report"
-        run: |
-          llvm-profdata-13 merge -sparse faabric.profraw -o faabric.profdata
-          llvm-cov-13 show /build/faabric/static/bin/faabric_tests -instr-profile=faabric.profdata > coverage.txt
+        run: ./bin/inv_wrapper.sh dev.coverage-report --file-in faabric.profraw --file-out coverage.txt
       - name: "Upload coverage report to CodeCov"
         uses: codecov/codecov-action@v3
         with:

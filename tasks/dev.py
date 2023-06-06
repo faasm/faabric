@@ -1,6 +1,6 @@
 from os import makedirs
 from shutil import rmtree
-from os.path import exists
+from os.path import exists, join
 from subprocess import run
 
 from tasks.util.env import (
@@ -108,3 +108,31 @@ def sanitise(ctx, mode, target="faabric_tests", noclean=False, shared=False):
     )
 
     cc(ctx, target, shared=shared)
+
+
+@task
+def coverage_report(ctx, file_in, file_out):
+    """
+    Generate code coverage report
+    """
+    tmp_file = "tmp_gha.profdata"
+
+    # First, merge in the raw profiling data
+    llvm_cmd = [
+        "llvm-profdata-13",
+        "merge -sparse {}".format(file_in),
+        "-o {}".format(tmp_file),
+    ]
+    llvm_cmd = " ".join(llvm_cmd)
+    run(llvm_cmd, shell=True, check=True, cwd=PROJ_ROOT)
+
+    # Second, generate the coverage report
+    llvm_cmd = [
+        "llvm-cov-13 show",
+        "--ignore-filename-regex=/code/faabric/tests/*",
+        join(FAABRIC_STATIC_BUILD_DIR, "bin", "faabric_tests"),
+        "-instr-profile={}".format(tmp_file),
+        "> {}".format(file_out),
+    ]
+    llvm_cmd = " ".join(llvm_cmd)
+    run(llvm_cmd, shell=True, check=True, cwd=PROJ_ROOT)
