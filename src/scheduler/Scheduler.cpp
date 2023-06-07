@@ -90,6 +90,8 @@ Scheduler::Scheduler()
 
     // Start the reaper thread
     reaperThread.start(conf.reaperIntervalSeconds);
+
+    SPDLOG_WARN("Scheduler initialised!!");
 }
 
 Scheduler::~Scheduler()
@@ -1195,13 +1197,14 @@ void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
     }
 
     // It could happen that the result has already been set. This happens
-    // when the thread setting the function result detects that other localthreads
-    // are waiting for this result locally, thus it sets the result before
-    // notifying the planner
+    // when the thread setting the function result detects that other
+    // localthreads are waiting for this result locally, thus it sets the result
+    // before notifying the planner
     try {
         plannerResults.at(msg->id())->set_value(msg);
     } catch (const std::future_error& e) {
-        SPDLOG_DEBUG("Result already set (id: {}, app: {})", msg->id(), msg->appid());
+        SPDLOG_DEBUG(
+          "Result already set (id: {}, app: {})", msg->id(), msg->appid());
     }
 }
 
@@ -1343,15 +1346,30 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
     // registering interest in the results
     auto msgPtr = std::make_shared<faabric::Message>(msg);
     msgPtr->set_masterhost(thisHost);
+    return doGetFunctionResult(msgPtr, timeoutMs);
+}
+
+faabric::Message Scheduler::getFunctionResult(int appId,
+                                              int msgId,
+                                              int timeoutMs)
+{
+    auto msgPtr = std::make_shared<faabric::Message>();
+    msgPtr->set_appid(appId);
+    msgPtr->set_id(msgId);
+    msgPtr->set_masterhost(thisHost);
+    return doGetFunctionResult(msgPtr, timeoutMs);
+}
+
+faabric::Message Scheduler::doGetFunctionResult(
+  std::shared_ptr<faabric::Message> msgPtr,
+  int timeoutMs)
+{
     int msgId = msgPtr->id();
     auto resMsgPtr = getPlannerClient()->getMessageResult(msgPtr);
-
-    SPDLOG_WARN("Getting result for message: {}", msgId);
 
     // If when we first check the message it is there, return. Otherwise, we
     // will have told the planner we want the result
     if (resMsgPtr) {
-        SPDLOG_WARN("Got result for message ({})!", msgId);
         return *resMsgPtr;
     }
 
@@ -1374,32 +1392,34 @@ faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
         if (plannerResults.find(msgId) == plannerResults.end()) {
             plannerResults.insert(
               { msgId, std::make_shared<MessageResultPromise>() });
+        } else {
+            SPDLOG_WARN("Two threads waiting for the same promise?");
         }
 
         // Note that it is deliberately an error for two threads to retrieve
         // the future at the same time
+        // TODO: should two threads be waiting for the same message? Why? Why
+        // not?
         fut = plannerResults.at(msgId)->get_future();
     }
 
     while (true) {
-        SPDLOG_WARN("here");
+        faabric::Message msgResult;
         auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
         if (status == std::future_status::timeout) {
-            faabric::Message msgResult;
             msgResult.set_type(faabric::Message_MessageType_EMPTY);
-            return msgResult;
+        } else {
+            msgResult = *fut.get();
         }
 
-        SPDLOG_WARN("here too");
-        auto resultPtr = fut.get();
+        // auto resultPtr = fut.get();
         {
             // Remove the result promise
             faabric::util::UniqueLock lock(plannerResultsMutex);
             plannerResults.erase(msgId);
         }
-        SPDLOG_WARN("Got result for message ({})!", msgId);
 
-        return *resultPtr;
+        return msgResult;
     }
 }
 
@@ -1543,83 +1563,55 @@ std::string getChainedKey(unsigned int msgId)
     return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
 }
 
-void Scheduler::logChainedFunction(const faabric::Message& parentMessage,
+void Scheduler::logChainedFunction(faabric::Message& parentMessage,
                                    const faabric::Message& chainedMessage)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    int parentMessageId = parentMessage.id();
-    int chainedMessageId = chainedMessage.id();
-
-    const std::string& key = getChainedKey(parentMessageId);
-    redis.sadd(key, std::to_string(chainedMessageId));
-    redis.expire(key, STATUS_KEY_EXPIRY);
+    parentMessage.add_chainedmsgids(chainedMessage.id());
 }
 
-std::set<unsigned int> Scheduler::getChainedFunctions(unsigned int msgId)
+std::set<unsigned int> Scheduler::getChainedFunctions(
+  const faabric::Message& msg)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    const std::string& key = getChainedKey(msgId);
-    const std::set<std::string> chainedCalls = redis.smembers(key);
-    std::set<unsigned int> chainedIds;
-
-    for (auto i : chainedCalls) {
-        chainedIds.insert(std::stoi(i));
-    }
+    // Note that we can't get the chained functions until the result for the
+    // parent message has been set
+    // TODO: what timeout?
+    auto resultMsg = getFunctionResult(msg, 1000);
+    std::set<unsigned int> chainedIds(
+      resultMsg.mutable_chainedmsgids()->begin(),
+      resultMsg.mutable_chainedmsgids()->end());
 
     return chainedIds;
 }
 
-ExecGraph Scheduler::getFunctionExecGraph(unsigned int messageId)
+ExecGraph Scheduler::getFunctionExecGraph(const faabric::Message& msg)
 {
-    ExecGraphNode rootNode = getFunctionExecGraphNode(messageId);
+    ExecGraphNode rootNode = getFunctionExecGraphNode(msg.appid(), msg.id());
     ExecGraph graph{ .rootNode = rootNode };
 
     return graph;
 }
 
-ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
+ExecGraphNode Scheduler::getFunctionExecGraphNode(int appId, int msgId)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    // Get the result for this message
-    std::string statusKey = faabric::util::statusKeyFromMessageId(messageId);
-
-    // We want to make sure the message bytes have been populated by the time
-    // we get them from Redis. For the time being, we retry a number of times
-    // and fail if we don't succeed.
-    std::vector<uint8_t> messageBytes = redis.get(statusKey);
-    int numRetries = 0;
-    while (messageBytes.empty() && numRetries < MAX_GET_EXEC_GRAPH_RETRIES) {
-        SPDLOG_WARN(
-          "Retry GET message for ExecGraph node with id {} (Retry {}/{})",
-          messageId,
-          numRetries + 1,
-          MAX_GET_EXEC_GRAPH_RETRIES);
-        SLEEP_MS(GET_EXEC_GRAPH_SLEEP_MS);
-        messageBytes = redis.get(statusKey);
-        ++numRetries;
+    // TODO: what timeout?
+    faabric::Message resultMsg = getFunctionResult(appId, msgId, 1000);
+    if (resultMsg.type() == faabric::Message_MessageType_EMPTY) {
+        SPDLOG_ERROR(
+          "Timed-out getting exec graph node for msg id: {} (app: {})",
+          msgId,
+          appId);
+        throw std::runtime_error("Timed-out waiting for function result");
     }
-    if (messageBytes.empty()) {
-        SPDLOG_ERROR("Can't GET message from redis (id: {}, key: {})",
-                     messageId,
-                     statusKey);
-        throw std::runtime_error("Message for exec graph not in Redis");
-    }
-
-    faabric::Message result;
-    result.ParseFromArray(messageBytes.data(), (int)messageBytes.size());
 
     // Recurse through chained calls
-    std::set<unsigned int> chainedMsgIds = getChainedFunctions(messageId);
+    std::set<unsigned int> chainedMsgIds = getChainedFunctions(resultMsg);
     std::vector<ExecGraphNode> children;
-    for (auto c : chainedMsgIds) {
-        children.emplace_back(getFunctionExecGraphNode(c));
+    for (auto chainedMsgId : chainedMsgIds) {
+        children.emplace_back(getFunctionExecGraphNode(appId, chainedMsgId));
     }
 
     // Build the node
-    ExecGraphNode node{ .msg = result, .children = children };
+    ExecGraphNode node{ .msg = resultMsg, .children = children };
 
     return node;
 }

@@ -770,19 +770,19 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     unsigned int chainedMsgIdC = faabric::util::setMessageId(chainedMsgC);
 
     // Check empty initially
-    REQUIRE(sch.getChainedFunctions(msg.id()).empty());
+    REQUIRE(sch.getChainedFunctions(msg).empty());
 
     // Log and check this shows up in the result
     sch.logChainedFunction(msg, chainedMsgA);
     std::set<unsigned int> expected = { chainedMsgIdA };
-    REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+    REQUIRE(sch.getChainedFunctions(msg) == expected);
 
     // Log some more and check
     sch.logChainedFunction(msg, chainedMsgA);
     sch.logChainedFunction(msg, chainedMsgB);
     sch.logChainedFunction(msg, chainedMsgC);
     expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
-    REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+    REQUIRE(sch.getChainedFunctions(msg) == expected);
 }
 
 TEST_CASE_METHOD(SlowExecutorFixture,

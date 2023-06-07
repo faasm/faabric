@@ -116,6 +116,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
       faabric::util::batchExecFactory(user, function, size - 1);
     for (int i = 0; i < req->messages_size(); i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
+        msg.set_appid(call.appid());
         msg.set_ismpi(true);
         msg.set_mpiworldid(id);
         msg.set_mpirank(i + 1);

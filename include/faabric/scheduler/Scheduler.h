@@ -263,6 +263,9 @@ class Scheduler
 
     void flushLocally();
 
+    // ----------------------------------
+    // Message results
+    // ----------------------------------
     void setFunctionResult(faabric::Message& msg);
 
     void setMessageResult(std::shared_ptr<faabric::Message> msg);
@@ -270,6 +273,9 @@ class Scheduler
     faabric::Message getFunctionResult(const faabric::Message& msg,
                                        int timeoutMs);
 
+    faabric::Message getFunctionResult(int appId, int msgId, int timeoutMs);
+
+    // TODO: delete this method
     void getFunctionResultAsync(const faabric::Message& msg,
                                 int timeoutMs,
                                 asio::io_context& ioc,
@@ -348,12 +354,12 @@ class Scheduler
     // ----------------------------------
     // Exec graph
     // ----------------------------------
-    void logChainedFunction(const faabric::Message& parentMessage,
+    void logChainedFunction(faabric::Message& parentMessage,
                             const faabric::Message& chainedMessage);
 
-    std::set<unsigned int> getChainedFunctions(unsigned int msgId);
+    std::set<unsigned int> getChainedFunctions(const faabric::Message& msg);
 
-    ExecGraph getFunctionExecGraph(unsigned int msgId);
+    ExecGraph getFunctionExecGraph(const faabric::Message& msg);
 
     // ----------------------------------
     // Function Migration
@@ -406,8 +412,12 @@ class Scheduler
     std::mutex localResultsMutex;
 
     // TODO: can we remove localResultsMutex ?
+    // ---- Message results ----
     std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
     std::mutex plannerResultsMutex;
+    faabric::Message doGetFunctionResult(
+      std::shared_ptr<faabric::Message> msgPtr,
+      int timeoutMs);
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;
@@ -451,7 +461,7 @@ class Scheduler
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 
-    ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
+    ExecGraphNode getFunctionExecGraphNode(int appId, int msgId);
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;

@@ -257,11 +257,11 @@ TEST_CASE_METHOD(ClientServerFixture,
     auto latch = faabric::util::Latch::create(2);
     // This thread will block waiting for another thread to set the message
     // result
-    std::jthread waiterThread{[&]{
+    std::jthread waiterThread{ [&] {
         auto resultMsg = sch.getFunctionResult(msg, 2000);
         SPDLOG_INFO("Actual return value: {}", resultMsg.returnvalue());
         actualReturnCode = resultMsg.returnvalue();
-    }};
+    } };
 
     SLEEP_MS(500);
     msgPtr->set_returnvalue(expectedReturnCode);

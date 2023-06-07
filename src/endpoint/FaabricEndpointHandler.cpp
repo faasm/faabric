@@ -65,7 +65,7 @@ void FaabricEndpointHandler::onRequest(
         } else if (msg.isexecgraphrequest()) {
             SPDLOG_DEBUG("Processing execution graph request");
             faabric::scheduler::ExecGraph execGraph =
-              sched.getFunctionExecGraph(msg.id());
+              sched.getFunctionExecGraph(msg);
             response.result(beast::http::status::ok);
             response.body() = faabric::scheduler::execGraphToJson(execGraph);
 

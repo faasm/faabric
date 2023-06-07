@@ -87,7 +87,9 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
     sch.getFunctionResult(actualCall, 2000);
 }
 
-TEST_CASE_METHOD(EndpointHandlerTestFixture, "Test empty invocation", "[endpoint]")
+TEST_CASE_METHOD(EndpointHandlerTestFixture,
+                 "Test empty invocation",
+                 "[endpoint]")
 {
     std::shared_ptr handler =
       std::make_shared<endpoint::FaabricEndpointHandler>();
@@ -98,7 +100,9 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture, "Test empty invocation", "[endpoint
     REQUIRE(actual.second == "Empty request");
 }
 
-TEST_CASE_METHOD(EndpointHandlerTestFixture, "Test empty JSON invocation", "[endpoint]")
+TEST_CASE_METHOD(EndpointHandlerTestFixture,
+                 "Test empty JSON invocation",
+                 "[endpoint]")
 {
     faabric::Message call;
     call.set_isasync(true);

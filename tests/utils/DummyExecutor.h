@@ -14,6 +14,8 @@ class DummyExecutor final : public Executor
       int threadPoolIdx,
       int msgIdx,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override;
+
+    std::span<uint8_t> getMemoryView() override;
 };
 
 }

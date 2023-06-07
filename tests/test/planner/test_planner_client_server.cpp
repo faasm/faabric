@@ -96,7 +96,8 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
                  "[planner]")
 {
     faabric::util::setMockMode(true);
-    auto msgPtr = std::make_shared<faabric::Message>(faabric::util::messageFactory("foo", "bar"));
+    auto msgPtr = std::make_shared<faabric::Message>(
+      faabric::util::messageFactory("foo", "bar"));
 
     // If we try to get the message result before setting it first, nothing
     // happens
@@ -116,7 +117,8 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     // request to the host that tried to get the result before
     auto msgResults = faabric::scheduler::getMessageResults();
     REQUIRE(msgResults.size() == 1);
-    REQUIRE(msgResults.at(0).first == faabric::util::getSystemConfig().endpointHost);
+    REQUIRE(msgResults.at(0).first ==
+            faabric::util::getSystemConfig().endpointHost);
 
     faabric::scheduler::clearMockRequests();
     faabric::util::setMockMode(false);

@@ -16,13 +16,22 @@ using namespace scheduler;
 namespace tests {
 TEST_CASE_METHOD(ClientServerFixture, "Test execution graph", "[scheduler]")
 {
-    faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgB2 = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgC1 = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgC2 = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgC3 = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgD = faabric::util::messageFactory("demo", "echo");
+    auto ber = faabric::util::batchExecFactory("demo", "echo", 7);
+    faabric::Message msgA = *ber->mutable_messages(0);
+    faabric::Message msgB1 = *ber->mutable_messages(1);
+    faabric::Message msgB2 = *ber->mutable_messages(2);
+    faabric::Message msgC1 = *ber->mutable_messages(3);
+    faabric::Message msgC2 = *ber->mutable_messages(4);
+    faabric::Message msgC3 = *ber->mutable_messages(5);
+    faabric::Message msgD = *ber->mutable_messages(6);
+
+    // Set up chaining relationships
+    sch.logChainedFunction(msgA, msgB1);
+    sch.logChainedFunction(msgA, msgB2);
+    sch.logChainedFunction(msgB1, msgC1);
+    sch.logChainedFunction(msgB2, msgC2);
+    sch.logChainedFunction(msgB2, msgC3);
+    sch.logChainedFunction(msgC2, msgD);
 
     // Set all execution results
     scheduler::Scheduler& sch = scheduler::getScheduler();
@@ -34,15 +43,7 @@ TEST_CASE_METHOD(ClientServerFixture, "Test execution graph", "[scheduler]")
     sch.setFunctionResult(msgC3);
     sch.setFunctionResult(msgD);
 
-    // Set up chaining relationships
-    sch.logChainedFunction(msgA, msgB1);
-    sch.logChainedFunction(msgA, msgB2);
-    sch.logChainedFunction(msgB1, msgC1);
-    sch.logChainedFunction(msgB2, msgC2);
-    sch.logChainedFunction(msgB2, msgC3);
-    sch.logChainedFunction(msgC2, msgD);
-
-    ExecGraph actual = sch.getFunctionExecGraph(msgA.id());
+    ExecGraph actual = sch.getFunctionExecGraph(msgA);
 
     ExecGraphNode nodeD = {
         .msg = msgD,
@@ -73,20 +74,24 @@ TEST_CASE_METHOD(ClientServerFixture, "Test execution graph", "[scheduler]")
     checkExecGraphEquality(expected, actual);
 }
 
-TEST_CASE("Test can't get exec graph if results are not published",
-          "[scheduler][exec-graph]")
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test can't get exec graph if results are not published",
+                 "[scheduler][exec-graph]")
 {
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
     REQUIRE_THROWS(
-      faabric::scheduler::getScheduler().getFunctionExecGraph(msg.id()));
+      faabric::scheduler::getScheduler().getFunctionExecGraph(msg));
 }
 
-TEST_CASE("Test get unique hosts from exec graph", "[scheduler][exec-graph]")
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test get unique hosts from exec graph",
+                 "[scheduler][exec-graph]")
 {
-    faabric::Message msgA = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgB1 = faabric::util::messageFactory("demo", "echo");
-    faabric::Message msgB2 = faabric::util::messageFactory("demo", "echo");
+    auto ber = faabric::util::batchExecFactory("demo", "echo", 3);
+    faabric::Message msgA = *ber->mutable_messages(0);
+    faabric::Message msgB1 = *ber->mutable_messages(1);
+    faabric::Message msgB2 = *ber->mutable_messages(2);
 
     msgA.set_executedhost("foo");
     msgB1.set_executedhost("bar");
@@ -107,11 +112,9 @@ TEST_CASE("Test get unique hosts from exec graph", "[scheduler][exec-graph]")
 TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
 {
     faabric::mpi::MpiWorld world;
+    msg.set_appid(1337);
     msg.set_ismpi(true);
     msg.set_recordexecgraph(true);
-
-    // Update the result for the master message
-    sch.setFunctionResult(msg);
 
     // Build the message vector to reconstruct the graph
     std::vector<faabric::Message> messages(worldSize);
@@ -133,7 +136,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
 
     world.create(msg, worldId, worldSize);
 
-    world.destroy();
+    // Update the result for the master message
+    sch.setFunctionResult(msg);
 
     // Build expected graph
     ExecGraphNode nodeB1 = { .msg = messages.at(1) };
@@ -146,14 +150,19 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
 
     ExecGraph expected{ .rootNode = nodeA };
 
-    // Wait for the MPI messages to finish
     /* TODO: fix
-    sch.getFunctionResult(msg, 500);
     for (const auto& id : sch.getChainedFunctions(msg.id())) {
         sch.getFunctionResult(id, 500);
     }
     */
-    ExecGraph actual = sch.getFunctionExecGraph(msg.id());
+    // Wait for the MPI messages to finish
+    sch.getFunctionResult(msg, 2000);
+    for (const auto& id : sch.getChainedFunctions(msg)) {
+        sch.getFunctionResult(msg.appid(), id, 2000);
+    }
+    ExecGraph actual = sch.getFunctionExecGraph(msg);
+
+    world.destroy();
 
     // Unset the fields that we can't recreate
     actual.rootNode.msg.set_id(0);
@@ -178,7 +187,9 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     checkExecGraphEquality(expected, actual);
 }
 
-TEST_CASE("Test exec graph details", "[util][exec-graph]")
+TEST_CASE_METHOD(ClientServerFixture,
+                 "Test exec graph details",
+                 "[util][exec-graph]")
 {
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     std::string expectedKey = "foo";

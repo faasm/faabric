@@ -35,7 +35,8 @@ static std::vector<
 static std::vector<std::pair<std::string, faabric::UnregisterRequest>>
   unregisterRequests;
 
-static std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>> messageResults;
+static std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>>
+  messageResults;
 
 std::vector<std::pair<std::string, faabric::Message>> getFunctionCalls()
 {
@@ -77,7 +78,8 @@ getUnregisterRequests()
     return unregisterRequests;
 }
 
-std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>> getMessageResults()
+std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>>
+getMessageResults()
 {
     faabric::util::UniqueLock lock(mockMutex);
     return messageResults;
@@ -196,7 +198,8 @@ void FunctionCallClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
         faabric::util::UniqueLock lock(mockMutex);
         messageResults.emplace_back(host, msg);
     } else {
-        asyncSend(faabric::scheduler::FunctionCalls::SetMessageResult, msg.get());
+        asyncSend(faabric::scheduler::FunctionCalls::SetMessageResult,
+                  msg.get());
     }
 }
 }

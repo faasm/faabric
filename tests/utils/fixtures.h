@@ -281,10 +281,137 @@ class PointToPointClientServerFixture
     faabric::transport::PointToPointServer server;
 };
 
-class MpiBaseTestFixture
-  : public SchedulerTestFixture
-  , public ConfTestFixture
+class ExecutorContextTestFixture
+{
+  public:
+    ExecutorContextTestFixture() {}
+
+    ~ExecutorContextTestFixture()
+    {
+        faabric::scheduler::ExecutorContext::unset();
+        // There is a circular dependency between the executor and the
+        // scheduler, so even if we don't explicitly use the scheduler in the
+        // executor context tests we need to shut it down
+        faabric::scheduler::getScheduler().shutdown();
+    }
+
+    /**
+     * Creates a batch request and sets up the associated context
+     */
+    std::shared_ptr<faabric::BatchExecuteRequest> setUpContext(
+      const std::string& user,
+      const std::string& func,
+      int nMsgs = 1)
+    {
+        auto req = faabric::util::batchExecFactory(user, func, nMsgs);
+
+        setUpContext(req);
+
+        return req;
+    }
+
+    /**
+     * Sets up context for the given batch request
+     */
+    void setUpContext(std::shared_ptr<faabric::BatchExecuteRequest> req)
+    {
+        faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
+    }
+};
+
+#define TEST_EXECUTOR_DEFAULT_MEMORY_SIZE (10 * faabric::util::HOST_PAGE_SIZE)
+
+class TestExecutor final : public faabric::scheduler::Executor
+{
+  public:
+    TestExecutor(faabric::Message& msg);
+
+    faabric::util::MemoryRegion dummyMemory = nullptr;
+    size_t dummyMemorySize = TEST_EXECUTOR_DEFAULT_MEMORY_SIZE;
+    size_t maxMemorySize = 0;
+
+    void reset(faabric::Message& msg) override;
+
+    void restore(const std::string& snapshotKey) override;
+
+    std::span<uint8_t> getMemoryView() override;
+
+    void setUpDummyMemory(size_t memSize);
+
+    size_t getMaxMemorySize() override;
+
+    int32_t executeTask(
+      int threadPoolIdx,
+      int msgIdx,
+      std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override;
+};
+
+class TestExecutorFactory : public faabric::scheduler::ExecutorFactory
+{
+  protected:
+    std::shared_ptr<faabric::scheduler::Executor> createExecutor(
+      faabric::Message& msg) override;
+};
+
+class DirtyTrackingTestFixture : public ConfTestFixture
+{
+  public:
+    DirtyTrackingTestFixture()
+    {
+        conf.reset();
+        faabric::util::resetDirtyTracker();
+    };
+
+    ~DirtyTrackingTestFixture()
+    {
+        faabric::util::getDirtyTracker()->clearAll();
+        conf.reset();
+        faabric::util::resetDirtyTracker();
+    }
+
+    void setTrackingMode(const std::string& mode)
+    {
+        conf.dirtyTrackingMode = mode;
+        faabric::util::resetDirtyTracker();
+    }
+};
+
+class ClientServerFixture
+  : public RedisTestFixture
+  , public SchedulerTestFixture
+  , public StateTestFixture
   , public PointToPointTestFixture
+  , public ConfTestFixture
+{
+  protected:
+    faabric::scheduler::FunctionCallServer server;
+    faabric::scheduler::FunctionCallClient cli;
+
+    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+
+    int groupId = 123;
+    int groupSize = 2;
+
+  public:
+    ClientServerFixture()
+      : cli(LOCALHOST)
+    {
+        // Set up executor
+        executorFactory =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        setExecutorFactory(executorFactory);
+
+        server.start();
+    }
+
+    ~ClientServerFixture()
+    {
+        server.stop();
+        executorFactory->reset();
+    }
+};
+
+class MpiBaseTestFixture : public ClientServerFixture
 {
   public:
     MpiBaseTestFixture()
@@ -390,130 +517,4 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
 
     faabric::mpi::MpiWorld otherWorld;
 };
-
-class ExecutorContextTestFixture
-{
-  public:
-    ExecutorContextTestFixture() {}
-
-    ~ExecutorContextTestFixture()
-    {
-        faabric::scheduler::ExecutorContext::unset();
-    }
-
-    /**
-     * Creates a batch request and sets up the associated context
-     */
-    std::shared_ptr<faabric::BatchExecuteRequest> setUpContext(
-      const std::string& user,
-      const std::string& func,
-      int nMsgs = 1)
-    {
-        auto req = faabric::util::batchExecFactory(user, func, nMsgs);
-
-        setUpContext(req);
-
-        return req;
-    }
-
-    /**
-     * Sets up context for the given batch request
-     */
-    void setUpContext(std::shared_ptr<faabric::BatchExecuteRequest> req)
-    {
-        faabric::scheduler::ExecutorContext::set(nullptr, req, 0);
-    }
-};
-
-#define TEST_EXECUTOR_DEFAULT_MEMORY_SIZE (10 * faabric::util::HOST_PAGE_SIZE)
-
-class TestExecutor final : public faabric::scheduler::Executor
-{
-  public:
-    TestExecutor(faabric::Message& msg);
-
-    faabric::util::MemoryRegion dummyMemory = nullptr;
-    size_t dummyMemorySize = TEST_EXECUTOR_DEFAULT_MEMORY_SIZE;
-    size_t maxMemorySize = 0;
-
-    void reset(faabric::Message& msg) override;
-
-    void restore(const std::string& snapshotKey) override;
-
-    std::span<uint8_t> getMemoryView() override;
-
-    void setUpDummyMemory(size_t memSize);
-
-    size_t getMaxMemorySize() override;
-
-    int32_t executeTask(
-      int threadPoolIdx,
-      int msgIdx,
-      std::shared_ptr<faabric::BatchExecuteRequest> reqOrig) override;
-};
-
-class TestExecutorFactory : public faabric::scheduler::ExecutorFactory
-{
-  protected:
-    std::shared_ptr<faabric::scheduler::Executor> createExecutor(
-      faabric::Message& msg) override;
-};
-
-class DirtyTrackingTestFixture : public ConfTestFixture
-{
-  public:
-    DirtyTrackingTestFixture()
-    {
-        conf.reset();
-        faabric::util::resetDirtyTracker();
-    };
-
-    ~DirtyTrackingTestFixture()
-    {
-        faabric::util::getDirtyTracker()->clearAll();
-        conf.reset();
-        faabric::util::resetDirtyTracker();
-    }
-
-    void setTrackingMode(const std::string& mode)
-    {
-        conf.dirtyTrackingMode = mode;
-        faabric::util::resetDirtyTracker();
-    }
-};
-
-class ClientServerFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public StateTestFixture
-  , public PointToPointTestFixture
-  , public ConfTestFixture
-{
-  protected:
-    faabric::scheduler::FunctionCallServer server;
-    faabric::scheduler::FunctionCallClient cli;
-
-    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
-
-    int groupId = 123;
-    int groupSize = 2;
-
-  public:
-    ClientServerFixture()
-      : cli(LOCALHOST)
-    {
-        // Set up executor
-        executorFactory = std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        setExecutorFactory(executorFactory);
-
-        server.start();
-    }
-
-    ~ClientServerFixture()
-    {
-        server.stop();
-        executorFactory->reset();
-    }
-};
-
 }
