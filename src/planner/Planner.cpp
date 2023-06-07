@@ -233,6 +233,16 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
     // within faabric, but not when sending an HTTP request
     if (!msg->masterhost().empty()) {
         faabric::util::FullLock lock(plannerMx);
+
+        // Check again if the result is not set, as it could have been set
+        // between releasing the shared lock and acquiring the full lock
+        if (state.appResults.contains(appId) &&
+            state.appResults[appId].contains(msgId)) {
+            return state.appResults[appId][msgId];
+        }
+
+        // Definately the message result is not set, so we add the host to the
+        // waiters list
         SPDLOG_DEBUG("Adding host {} on the waiting list for message {}",
                      msg->masterhost(),
                      msgId);
