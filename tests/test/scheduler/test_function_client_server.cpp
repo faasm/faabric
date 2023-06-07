@@ -248,18 +248,12 @@ TEST_CASE_METHOD(ClientServerFixture,
     // Setting a message result with the function call client is used when the
     // planner is notifying that a message result is ready
 
-    // If we set the message result before we have tried (and failed) to get
-    // the result through the planner first, nothing happens
-    cli.setMessageResult(msgPtr);
-
     int expectedReturnCode = 1337;
     int actualReturnCode;
-    auto latch = faabric::util::Latch::create(2);
     // This thread will block waiting for another thread to set the message
     // result
     std::jthread waiterThread{ [&] {
         auto resultMsg = sch.getFunctionResult(msg, 2000);
-        SPDLOG_INFO("Actual return value: {}", resultMsg.returnvalue());
         actualReturnCode = resultMsg.returnvalue();
     } };
 

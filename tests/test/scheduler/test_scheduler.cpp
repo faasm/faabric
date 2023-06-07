@@ -616,7 +616,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
 }
 
 TEST_CASE_METHOD(SlowExecutorFixture,
-                 "Global message queue tests",
+                 "Test getting a function result",
                  "[scheduler]")
 {
     // Request function
@@ -627,13 +627,6 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     call.set_inputdata(inputData);
 
     sch.setFunctionResult(call);
-
-    // Check result has been written to the right key
-    REQUIRE(redis.listLength(call.resultkey()) == 1);
-
-    // Check that some expiry has been set
-    long ttl = redis.getTtl(call.resultkey());
-    REQUIRE(ttl > 10);
 
     // Check retrieval method gets the same call out again
     faabric::Message actualCall2 = sch.getFunctionResult(call, 1);
@@ -731,57 +724,39 @@ TEST_CASE_METHOD(SlowExecutorFixture,
 }
 
 TEST_CASE_METHOD(SlowExecutorFixture,
-                 "Check setting long-lived function status",
-                 "[scheduler]")
-{
-    // Create a message
-    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-    faabric::Message expected = msg;
-    expected.set_executedhost(util::getSystemConfig().endpointHost);
-
-    sch.setFunctionResult(msg);
-
-    std::vector<uint8_t> actual = redis.get(msg.statuskey());
-    REQUIRE(!actual.empty());
-
-    faabric::Message actualMsg;
-    actualMsg.ParseFromArray(actual.data(), (int)actual.size());
-
-    // We can't predict the finish timestamp, so have to manually copy here
-    REQUIRE(actualMsg.finishtimestamp() > 0);
-    expected.set_finishtimestamp(actualMsg.finishtimestamp());
-
-    checkMessageEquality(actualMsg, expected);
-}
-
-TEST_CASE_METHOD(SlowExecutorFixture,
                  "Check logging chained functions",
                  "[scheduler]")
 {
-    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-    faabric::Message chainedMsgA =
-      faabric::util::messageFactory("demo", "echo");
-    faabric::Message chainedMsgB =
-      faabric::util::messageFactory("demo", "echo");
-    faabric::Message chainedMsgC =
-      faabric::util::messageFactory("demo", "echo");
-    unsigned int chainedMsgIdA = faabric::util::setMessageId(chainedMsgA);
-    unsigned int chainedMsgIdB = faabric::util::setMessageId(chainedMsgB);
-    unsigned int chainedMsgIdC = faabric::util::setMessageId(chainedMsgC);
+    // faabric::Message msg = faabric::util::messageFactory("demo", "echo");
+    auto ber = faabric::util::batchExecFactory("demo", "echo", 4);
+    faabric::Message& msg = *ber->mutable_messages(0);
+    faabric::Message& chainedMsgA = *ber->mutable_messages(1);
+    faabric::Message& chainedMsgB = *ber->mutable_messages(2);
+    faabric::Message& chainedMsgC = *ber->mutable_messages(3);
+
+    // We need to set the function result in order to get the chained
+    // functions. We can do so multiple times
+    sch.setFunctionResult(msg);
 
     // Check empty initially
     REQUIRE(sch.getChainedFunctions(msg).empty());
 
     // Log and check this shows up in the result
     sch.logChainedFunction(msg, chainedMsgA);
-    std::set<unsigned int> expected = { chainedMsgIdA };
+    std::set<unsigned int> expected = { (unsigned int)chainedMsgA.id() };
+
+    sch.setFunctionResult(msg);
     REQUIRE(sch.getChainedFunctions(msg) == expected);
 
     // Log some more and check
     sch.logChainedFunction(msg, chainedMsgA);
     sch.logChainedFunction(msg, chainedMsgB);
     sch.logChainedFunction(msg, chainedMsgC);
-    expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
+    expected = { (unsigned int)chainedMsgA.id(),
+                 (unsigned int)chainedMsgB.id(),
+                 (unsigned int)chainedMsgC.id() };
+
+    sch.setFunctionResult(msg);
     REQUIRE(sch.getChainedFunctions(msg) == expected);
 }
 

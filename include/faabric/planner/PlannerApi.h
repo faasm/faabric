@@ -13,7 +13,5 @@ enum PlannerCalls
     // Scheduling calls
     SetMessageResult = 8,
     GetMessageResult = 9,
-    // TODO: probably not here
-    // GetBatchMessages = 10,
 };
 }

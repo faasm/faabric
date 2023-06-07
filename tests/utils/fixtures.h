@@ -281,8 +281,7 @@ class PointToPointClientServerFixture
     faabric::transport::PointToPointServer server;
 };
 
-class ExecutorContextTestFixture
-  : public SchedulerTestFixture
+class ExecutorContextTestFixture : public SchedulerTestFixture
 {
   public:
     ExecutorContextTestFixture() {}

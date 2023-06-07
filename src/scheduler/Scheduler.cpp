@@ -30,8 +30,7 @@
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
-#define GET_EXEC_GRAPH_SLEEP_MS 500
-#define MAX_GET_EXEC_GRAPH_RETRIES 3
+#define EXEC_GRAPH_TIMEOUT_MS 1000
 
 using namespace faabric::util;
 using namespace faabric::snapshot;
@@ -90,8 +89,6 @@ Scheduler::Scheduler()
 
     // Start the reaper thread
     reaperThread.start(conf.reaperIntervalSeconds);
-
-    SPDLOG_WARN("Scheduler initialised!!");
 }
 
 Scheduler::~Scheduler()
@@ -1551,8 +1548,7 @@ std::set<unsigned int> Scheduler::getChainedFunctions(
 {
     // Note that we can't get the chained functions until the result for the
     // parent message has been set
-    // TODO: what timeout?
-    auto resultMsg = getFunctionResult(msg, 1000);
+    auto resultMsg = getFunctionResult(msg, EXEC_GRAPH_TIMEOUT_MS);
     std::set<unsigned int> chainedIds(
       resultMsg.mutable_chainedmsgids()->begin(),
       resultMsg.mutable_chainedmsgids()->end());
@@ -1570,8 +1566,7 @@ ExecGraph Scheduler::getFunctionExecGraph(const faabric::Message& msg)
 
 ExecGraphNode Scheduler::getFunctionExecGraphNode(int appId, int msgId)
 {
-    // TODO: what timeout?
-    faabric::Message resultMsg = getFunctionResult(appId, msgId, 1000);
+    auto resultMsg = getFunctionResult(appId, msgId, EXEC_GRAPH_TIMEOUT_MS);
     if (resultMsg.type() == faabric::Message_MessageType_EMPTY) {
         SPDLOG_ERROR(
           "Timed-out getting exec graph node for msg id: {} (app: {})",
