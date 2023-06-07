@@ -71,6 +71,7 @@ jobs:
       matrix:
         sanitiser: [None, Address, Thread, Undefined]
     env:
+      CONAN_CACHE_MOUNT_SOURCE: ~/.conan/
       HOST_TYPE: ci
       REDIS_QUEUE_HOST: redis
       REDIS_STATE_HOST: redis
