@@ -84,16 +84,16 @@ wrapper scripts in the following ways:
 
 ```bash
 # Run the whole test suite
-inv tests
+inv tests [--debug]
 
 # Run just one test case
-inv tests --test-case "Test JSON contains required keys"
+inv tests --test-case "Test JSON contains required keys" [--repeats <num>]
 
 # Run all test cases defined in one file
-inv tests --filename test_json
+inv tests --test-file test_json
 
 # Run all test cases defined in one directory
-inv tests --directory util
+inv tests --test-dir util
 ```
 
 ## Distributed tests
