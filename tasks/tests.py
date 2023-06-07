@@ -28,10 +28,11 @@ TEST_ENV = {
 def tests(
     ctx,
     test_case=None,
-    filename=None,
-    directory=None,
+    test_file=None,
+    test_dir=None,
     abort=False,
     debug=False,
+    repeats=1,
 ):
     """
     Run the C++ unit tests
@@ -52,13 +53,14 @@ def tests(
 
     if test_case:
         tests_cmd.append("'{}'".format(test_case))
-    elif filename:
-        tests_cmd.append("--filenames-as-tags [#{}]".format(filename))
-    elif directory:
+    elif test_file:
+        tests_cmd.append("--filenames-as-tags [#{}]".format(test_file))
+    elif test_dir:
         tag_str = "--filenames-as-tags "
-        for file_name in listdir(join(PROJ_ROOT, "tests", "test", directory)):
+        for file_name in listdir(join(PROJ_ROOT, "tests", "test", test_dir)):
             tag_str += "[#{}],".format(file_name.split(".")[0])
         tests_cmd.append(tag_str[:-1])
 
     tests_cmd = " ".join(tests_cmd)
-    run(tests_cmd, shell=True, check=True, cwd=PROJ_ROOT, env=TEST_ENV)
+    for i in range(repeats):
+        run(tests_cmd, shell=True, check=True, cwd=PROJ_ROOT, env=TEST_ENV)
