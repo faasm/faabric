@@ -75,9 +75,7 @@ class SlowExecutorFactory : public ExecutorFactory
 };
 
 class SlowExecutorFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public ConfTestFixture
+  : public ClientServerFixture
   , public SnapshotTestFixture
 {
   public:
@@ -97,10 +95,7 @@ class SlowExecutorFixture
 };
 
 class DummyExecutorFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public ConfTestFixture
-  , public PointToPointTestFixture
+  : public ClientServerFixture
 {
   public:
     DummyExecutorFixture()
@@ -640,6 +635,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
 {
     int nWaiters = 10;
     int nWaiterMessages = 4;
+    conf.overrideCpuCount = nWaiters * nWaiterMessages;
 
     std::vector<std::jthread> waiterThreads;
 
@@ -647,9 +643,6 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     for (int i = 0; i < nWaiters; i++) {
         waiterThreads.emplace_back([nWaiterMessages] {
             Scheduler& sch = scheduler::getScheduler();
-
-            faabric::Message msg =
-              faabric::util::messageFactory("demo", "echo");
 
             // Invoke and await
             std::shared_ptr<faabric::BatchExecuteRequest> req =
