@@ -39,7 +39,7 @@ TEST_CASE_METHOD(DistTestsFixture,
         // Wait for the result, and immediately after query for the execution
         // graph
         faabric::Message result = sch.getFunctionResult(m, 1000);
-        auto execGraph = sch.getFunctionExecGraph(m.id());
+        auto execGraph = sch.getFunctionExecGraph(m);
         REQUIRE(countExecGraphNodes(execGraph) == nFuncs);
 
         REQUIRE(execGraph.rootNode.msg.id() == m.id());
