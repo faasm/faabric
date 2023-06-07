@@ -268,7 +268,7 @@ class Scheduler
     // ----------------------------------
     void setFunctionResult(faabric::Message& msg);
 
-    void setMessageResult(std::shared_ptr<faabric::Message> msg);
+    void setMessageResultLocally(std::shared_ptr<faabric::Message> msg);
 
     faabric::Message getFunctionResult(const faabric::Message& msg,
                                        int timeoutMs);

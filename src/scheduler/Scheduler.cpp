@@ -1161,51 +1161,29 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
         removePendingMigration(msg.appid());
     }
 
-    // If someone is already waiting for this result locally, set it so that
-    // any sleeping threads wake up earlier
-    // TODO: this optimisation is creating race conditions in the tests,
-    // wereby execution finishes (and the function call server shuts down)
-    // before the planner has delivered the last message, dead-locking
-    /*
-    {
-        faabric::util::UniqueLock lock(plannerResultsMutex);
-
-        auto msgPtr = std::make_shared<faabric::Message>(msg);
-        if (plannerResults.find(msg.id()) != plannerResults.end()) {
-            plannerResults.at(msg.id())->set_value(msgPtr);
-        }
-    }
-    */
-
+    // Let the planner know this function has finished execution. This will
+    // wake any thread waiting on this result
     getPlannerClient()->setMessageResult(
       std::make_shared<faabric::Message>(msg));
 }
 
-// This function is called from the planner through the function call server
-// to set a message result. The planner notifies this worker because, before,
-// the worker has attempted to get a message result that was not ready yet
-void Scheduler::setMessageResult(std::shared_ptr<faabric::Message> msg)
+// This function sets a message result locally. It is invoked as a callback
+// from the planner to notify all hosts waiting for a message result that the
+// result is ready
+void Scheduler::setMessageResultLocally(std::shared_ptr<faabric::Message> msg)
 {
     faabric::util::UniqueLock lock(plannerResultsMutex);
 
     if (plannerResults.find(msg->id()) == plannerResults.end()) {
-        SPDLOG_DEBUG(
+        SPDLOG_ERROR(
           "Ignoring setting message that is already set (id: {}, app: {})",
           msg->id(),
           msg->appid());
-        return;
+        // TODO: should this be unreachable?
+        throw std::runtime_error("Unerachable?");
     }
 
-    // It could happen that the result has already been set. This happens
-    // when the thread setting the function result detects that other
-    // localthreads are waiting for this result locally, thus it sets the result
-    // before notifying the planner
-    try {
-        plannerResults.at(msg->id())->set_value(msg);
-    } catch (const std::future_error& e) {
-        SPDLOG_DEBUG(
-          "Result already set (id: {}, app: {})", msg->id(), msg->appid());
-    }
+    plannerResults.at(msg->id())->set_value(msg);
 }
 
 void Scheduler::registerThread(uint32_t msgId)
@@ -1332,13 +1310,6 @@ size_t Scheduler::getCachedMessageCount()
     return threadResultMessages.size();
 }
 
-// This method gets the function result from the planner in a blocking fashion.
-// Even though the results are stored in the planner, we want to block in the
-// client (i.e. here) and not in the planner. This is to avoid consuming
-// planner threads. This method will first query the planner once
-// for the result. If its not there, the planner will register this host's
-// interest, and send a function call setting the message result. In the
-// meantime, we wait on a promise
 faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
                                               int timeoutMs)
 {
@@ -1360,6 +1331,13 @@ faabric::Message Scheduler::getFunctionResult(int appId,
     return doGetFunctionResult(msgPtr, timeoutMs);
 }
 
+// This method gets the function result from the planner in a blocking fashion.
+// Even though the results are stored in the planner, we want to block in the
+// client (i.e. here) and not in the planner. This is to avoid consuming
+// planner threads. This method will first query the planner once
+// for the result. If its not there, the planner will register this host's
+// interest, and send a function call setting the message result. In the
+// meantime, we wait on a promise
 faabric::Message Scheduler::doGetFunctionResult(
   std::shared_ptr<faabric::Message> msgPtr,
   int timeoutMs)
