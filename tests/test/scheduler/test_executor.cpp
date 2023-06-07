@@ -280,9 +280,7 @@ std::shared_ptr<Executor> TestExecutorFactory::createExecutor(
 }
 
 class TestExecutorFixture
-  : public SchedulerTestFixture
-  , public RedisTestFixture
-  , public ConfTestFixture
+  : public ClientServerFixture
   , public SnapshotTestFixture
 {
   public:

@@ -1174,13 +1174,16 @@ void Scheduler::setMessageResultLocally(std::shared_ptr<faabric::Message> msg)
 {
     faabric::util::UniqueLock lock(plannerResultsMutex);
 
+    // It may happen that the planner returns the message result before we
+    // have had time to prepare the promise. This should happen rarely as it
+    // is an unexpected race condition, thus why we emit a warning
     if (plannerResults.find(msg->id()) == plannerResults.end()) {
-        SPDLOG_ERROR(
-          "Ignoring setting message that is already set (id: {}, app: {})",
+        SPDLOG_WARN(
+          "Setting message result before promise is set for (id: {}, app: {})",
           msg->id(),
           msg->appid());
-        // TODO: should this be unreachable?
-        throw std::runtime_error("Unerachable?");
+        plannerResults.insert(
+          { msg->id(), std::make_shared<MessageResultPromise>() });
     }
 
     plannerResults.at(msg->id())->set_value(msg);
@@ -1370,14 +1373,10 @@ faabric::Message Scheduler::doGetFunctionResult(
         if (plannerResults.find(msgId) == plannerResults.end()) {
             plannerResults.insert(
               { msgId, std::make_shared<MessageResultPromise>() });
-        } else {
-            SPDLOG_WARN("Two threads waiting for the same promise?");
         }
 
         // Note that it is deliberately an error for two threads to retrieve
         // the future at the same time
-        // TODO: should two threads be waiting for the same message? Why? Why
-        // not?
         fut = plannerResults.at(msgId)->get_future();
     }
 
@@ -1390,9 +1389,9 @@ faabric::Message Scheduler::doGetFunctionResult(
             msgResult = *fut.get();
         }
 
-        // auto resultPtr = fut.get();
         {
-            // Remove the result promise
+            // Remove the result promise irrespective of whether we timed out
+            // or not, as promises are single-use
             faabric::util::UniqueLock lock(plannerResultsMutex);
             plannerResults.erase(msgId);
         }
