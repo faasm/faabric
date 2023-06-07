@@ -1103,6 +1103,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Mock mode to avoid requests sent across hosts
     setMockMode(true);
     executeWithTestExecutorHint(req, hint);
+    setMockMode(false);
 
     // Await results on this host
     for (int i = 0; i < nMessages; i++) {
@@ -1114,8 +1115,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
             REQUIRE(res.returnvalue() == expectedResult);
         }
     }
-
-    setMockMode(false);
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,

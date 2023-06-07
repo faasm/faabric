@@ -282,6 +282,7 @@ class PointToPointClientServerFixture
 };
 
 class ExecutorContextTestFixture
+  : public SchedulerTestFixture
 {
   public:
     ExecutorContextTestFixture() {}
@@ -289,10 +290,6 @@ class ExecutorContextTestFixture
     ~ExecutorContextTestFixture()
     {
         faabric::scheduler::ExecutorContext::unset();
-        // There is a circular dependency between the executor and the
-        // scheduler, so even if we don't explicitly use the scheduler in the
-        // executor context tests we need to shut it down
-        faabric::scheduler::getScheduler().shutdown();
     }
 
     /**
