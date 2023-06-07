@@ -94,8 +94,7 @@ class SlowExecutorFixture
     };
 };
 
-class DummyExecutorFixture
-  : public ClientServerFixture
+class DummyExecutorFixture : public ClientServerFixture
 {
   public:
     DummyExecutorFixture()
