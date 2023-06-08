@@ -92,7 +92,9 @@ void FaabricEndpointHandler::executeFunction(
   size_t messageIndex)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    faabric::Message& msg = *ber->mutable_messages(messageIndex);
+    // Deliberately make a copy here to avoid data races. The BER message will
+    // be used for execution, the message copy to wait on the function result
+    faabric::Message msg = ber->messages(messageIndex);
 
     if (msg.user().empty()) {
         response.result(beast::http::status::bad_request);
