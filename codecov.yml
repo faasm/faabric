@@ -1,0 +1,8 @@
+ignore:
+    # Ideally we would not keep protobuf generated files in the source tree.
+    # Until we don't fix that, we need to ignore them here
+    - "**/*.pb.h"
+    # Same with flatbuffers
+    - "include/faabric/flat"
+    # We exclude the tests from the coverage results
+    - "tests"

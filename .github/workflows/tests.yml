@@ -64,6 +64,42 @@ jobs:
       - name: "Code formatting checks"
         run: ./bin/inv_wrapper.sh format-code --check
 
+  code-coverage:
+    if: github.event.pull_request.draft == false
+    needs: [conan-cache]
+    runs-on: ubuntu-latest
+    env:
+      HOST_TYPE: ci
+      REDIS_QUEUE_HOST: redis
+      REDIS_STATE_HOST: redis
+    container:
+      image: faasm.azurecr.io/faabric:0.4.4
+      credentials:
+        username: ${{ secrets.ACR_SERVICE_PRINCIPAL_ID }}
+        password: ${{ secrets.ACR_SERVICE_PRINCIPAL_PASSWORD }}
+      options: --privileged
+    services:
+      redis:
+        image: redis
+    steps:
+      - uses: faasm/conan-cache-action@v1
+      - name: "Ping redis"
+        run: redis-cli -h redis ping
+      - name: "Run cmake for tests"
+        run: ./bin/inv_wrapper.sh dev.cmake --clean --build=Debug --coverage
+      - name: "Build tests"
+        run: ./bin/inv_wrapper.sh dev.cc faabric_tests
+      - name: "Run tests with profiling"
+        run: ./bin/inv_wrapper.sh tests
+        env:
+          LLVM_PROFILE_FILE: faabric.profraw
+      - name: "Generate code coverage report"
+        run: ./bin/inv_wrapper.sh dev.coverage-report --file-in faabric.profraw --file-out coverage.txt
+      - name: "Upload coverage report to CodeCov"
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
   tests:
     if: github.event.pull_request.draft == false
     needs: [conan-cache]
