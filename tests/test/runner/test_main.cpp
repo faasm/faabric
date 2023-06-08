@@ -40,15 +40,25 @@ TEST_CASE_METHOD(MainRunnerTestFixture, "Test main runner", "[runner]")
     {
         std::shared_ptr<faabric::BatchExecuteRequest> req =
           faabric::util::batchExecFactory("foo", "bar", 4);
+        // In the tests, the executing and the waiting threads are in the
+        // same address space. We thus need to be careful when calling
+        // functions with a ber, and then waiting for the messages in that
+        // request. In order to avoid data races, its safe to just use the
+        // app id and the message id
+        int appId = req->messages(0).appid();
+        std::vector<int> msgIds;
+        std::for_each(req->mutable_messages()->begin(),
+                      req->mutable_messages()->end(),
+                      [&msgIds](auto msg) { msgIds.push_back(msg.id()); });
 
         auto& sch = faabric::scheduler::getScheduler();
         sch.callFunctions(req);
 
-        for (const auto& m : req->messages()) {
+        for (auto msgId : msgIds) {
             std::string expected =
-              fmt::format("DummyExecutor executed {}", m.id());
+              fmt::format("DummyExecutor executed {}", msgId);
             faabric::Message res =
-              sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
+              sch.getFunctionResult(appId, msgId, SHORT_TEST_TIMEOUT_MS);
             REQUIRE(res.outputdata() == expected);
         }
     }

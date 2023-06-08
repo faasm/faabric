@@ -537,7 +537,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "thread-check", 1);
-    faabric::Message& msg = req->mutable_messages()->at(0);
+    faabric::Message msg = req->messages(0);
     msg.set_inputdata(std::to_string(nThreads));
 
     std::vector<std::string> actualHosts = executeWithTestExecutor(req, false);
@@ -568,7 +568,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < nRepeats; i++) {
         std::shared_ptr<BatchExecuteRequest> req =
           faabric::util::batchExecFactory("dummy", "thread-check", 1);
-        faabric::Message& msg = req->mutable_messages()->at(0);
+        faabric::Message msg = req->messages(0);
         msg.set_inputdata(std::to_string(nThreads));
 
         std::vector<std::string> actualHosts =
@@ -631,7 +631,7 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test non-zero return code", "[executor]")
 {
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "ret-one", 1);
-    faabric::Message& msg = req->mutable_messages()->at(0);
+    faabric::Message msg = req->messages(0);
 
     executeWithTestExecutor(req, false);
 
@@ -643,7 +643,7 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test erroring function", "[executor]")
 {
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "error", 1);
-    faabric::Message& msg = req->mutable_messages()->at(0);
+    faabric::Message msg = req->messages(0);
 
     executeWithTestExecutor(req, false);
 
@@ -659,7 +659,7 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test erroring thread", "[executor]")
 {
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "error", 1);
-    faabric::Message& msg = req->mutable_messages()->at(0);
+    faabric::Message msg = req->messages(0);
     req->set_type(faabric::BatchExecuteRequest::THREADS);
 
     executeWithTestExecutor(req, false);
@@ -758,7 +758,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
                  "[executor]")
 {
     auto req = faabric::util::batchExecFactory("foo", "bar");
-    faabric::Message& msg = *req->mutable_messages(0);
+    faabric::Message msg = req->messages(0);
 
     std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
       faabric::scheduler::getExecutorFactory();
@@ -783,7 +783,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(millisC < millisB);
 
     // Wait for execution to finish
-    sch.getFunctionResult(req->messages().at(0), 2000);
+    sch.getFunctionResult(msg, 2000);
 
     exec->shutdown();
 }
@@ -1033,7 +1033,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
       faabric::util::batchExecFactory(user, function, nMessages);
     req->set_type(requestType);
 
-    faabric::Message& msg = req->mutable_messages()->at(0);
+    faabric::Message msg = req->messages().at(0);
 
     if (requestType == faabric::BatchExecuteRequest::THREADS) {
         // Set up main thread snapshot
@@ -1044,8 +1044,11 @@ TEST_CASE_METHOD(TestExecutorFixture,
         reg.registerSnapshot(snapKey, snap);
     }
 
+    int appId = msg.appid();
+    std::vector<int> msgIds;
     for (auto& m : *req->mutable_messages()) {
         m.set_masterhost(hostOverride);
+        msgIds.push_back(m.id());
     }
 
     // Call functions and force to execute locally
@@ -1053,11 +1056,11 @@ TEST_CASE_METHOD(TestExecutorFixture,
     sch.callFunctions(req);
 
     // Await execution
-    for (auto& m : *req->mutable_messages()) {
+    for (auto msgId : msgIds) {
         if (requestType == faabric::BatchExecuteRequest::THREADS) {
-            sch.awaitThreadResult(m.id());
+            sch.awaitThreadResult(msgId);
         } else {
-            sch.getFunctionResult(m, 2000);
+            sch.getFunctionResult(appId, msgId, 2000);
         }
     }
 
@@ -1078,6 +1081,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     int nMessages = singleHosts.size();
     std::shared_ptr<BatchExecuteRequest> req =
       faabric::util::batchExecFactory("dummy", "single-host", nMessages);
+    int appId = req->messages(0).appid();
+    std::vector<int> msgIds;
 
     int expectedResult = 0;
     SECTION("Single host") { expectedResult = 10; }
@@ -1098,6 +1103,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     SchedulingDecision hint(123, 123);
     for (int i = 0; i < nMessages; i++) {
         hint.addMessage(singleHosts[i], req->messages().at(i));
+        msgIds.push_back(req->messages(i).id());
     }
 
     // Mock mode to avoid requests sent across hosts
@@ -1109,7 +1115,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < nMessages; i++) {
         if (singleHosts[i] == thisHost) {
             faabric::Message res =
-              sch.getFunctionResult(req->messages().at(i), 2000);
+              sch.getFunctionResult(appId, msgIds.at(i), 2000);
 
             // Check result as expected
             REQUIRE(res.returnvalue() == expectedResult);
