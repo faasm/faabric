@@ -88,13 +88,13 @@ message Message {
 
     string snapshotKey = 12;
 
-    int64 timestamp = 14;
+    int64 timestamp = 14 [json_name = "start_ts"];
     string resultKey = 15;
     bool executesLocally = 16;
     string statusKey = 17;
 
     string executedHost = 18;
-    int64 finishTimestamp = 19 [json_name = "finish"];
+    int64 finishTimestamp = 19 [json_name = "finish_ts"];
 
     bool isAsync = 20 [json_name = "async"];
     bool isPython = 21 [json_name = "python"];
