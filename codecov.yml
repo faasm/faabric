@@ -6,3 +6,11 @@ ignore:
     - "include/faabric/flat"
     # We exclude the tests from the coverage results
     - "tests"
+
+# Don't report actions as failed unless there's more than a 1% decrease in
+# coverage
+coverage:
+  status:
+    project:
+      default:
+        threshold: 1%
