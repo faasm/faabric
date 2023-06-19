@@ -728,7 +728,6 @@ TEST_CASE_METHOD(SlowExecutorFixture,
                  "Check logging chained functions",
                  "[scheduler]")
 {
-    // faabric::Message msg = faabric::util::messageFactory("demo", "echo");
     auto ber = faabric::util::batchExecFactory("demo", "echo", 4);
     faabric::Message& msg = *ber->mutable_messages(0);
     faabric::Message& chainedMsgA = *ber->mutable_messages(1);
