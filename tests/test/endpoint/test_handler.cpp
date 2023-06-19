@@ -176,4 +176,33 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
     REQUIRE(actual.first == expectedReturnCode);
     REQUIRE(actual.second == expectedOutput);
 }
+
+TEST_CASE_METHOD(EndpointHandlerTestFixture,
+                 "Check getting execution graph from endpoint",
+                 "[endpoint]")
+{
+    // Must be async to avoid needing a result
+    faabric::Message call = faabric::util::messageFactory("foo", "bar");
+    call.set_appid(1337);
+    call.set_isasync(true);
+
+    // Handle the function
+    std::string requestStr = faabric::util::messageToJson(call);
+    std::shared_ptr handler =
+      std::make_shared<endpoint::FaabricEndpointHandler>();
+    std::pair<int, std::string> response =
+      synchronouslyHandleFunction(handler, requestStr);
+
+    // Wait for the function to finish
+    REQUIRE(response.first == 200);
+    faabric::Message responseMsg;
+    faabric::util::jsonToMessage(response.second, &responseMsg);
+    sch.getFunctionResult(responseMsg, 2000);
+
+    // Request the execution graph
+    responseMsg.set_isexecgraphrequest(true);
+    requestStr = faabric::util::messageToJson(responseMsg);
+    response = synchronouslyHandleFunction(handler, requestStr);
+    REQUIRE(response.first == 200);
+}
 }
