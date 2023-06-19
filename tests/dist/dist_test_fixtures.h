@@ -13,10 +13,10 @@
 
 namespace tests {
 class DistTestsFixture
-  : public SchedulerTestFixture
-  , public ConfTestFixture
-  , public SnapshotTestFixture
-  , public PointToPointTestFixture
+  : public SchedulerFixture
+  , public ConfFixture
+  , public SnapshotRegistryFixture
+  , public PointToPointBrokerFixture
 {
   public:
     DistTestsFixture()
