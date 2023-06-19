@@ -34,31 +34,43 @@
 
 #include <sys/mman.h>
 
+// This file contains the common test fixtures used throughout the tests. A
+// test fixture is the mocking of a component for the purpose of testing it.
+// To that extent, fixtures that are meant to be shared (i.e. included in this
+// file) should aim to be as concise as possible, and include the minimum
+// amount of dependencies (in therms of parent classes) to mimick the
+// corresponding component. Complex and attribute-rich features should only
+// be defined in test files. To differentiate the two, we name
+// <ComponentName>Fixture those simple, concise, fixtures that mimick one
+// component, and <Component>TestFixture for the attribute rich ones.
+// Note that most of the features included in this file are also used in
+// Faasm.
+
 namespace tests {
-class RedisTestFixture
+class RedisFixture
 {
   public:
-    RedisTestFixture()
+    RedisFixture()
       : redis(faabric::redis::Redis::getQueue())
     {
         redis.flushAll();
     }
-    ~RedisTestFixture() { redis.flushAll(); }
+    ~RedisFixture() { redis.flushAll(); }
 
   protected:
     faabric::redis::Redis& redis;
 };
 
-class StateTestFixture
+class StateFixture
 {
   public:
-    StateTestFixture()
+    StateFixture()
       : state(faabric::state::getGlobalState())
     {
         doCleanUp();
     }
 
-    ~StateTestFixture() { doCleanUp(); }
+    ~StateFixture() { doCleanUp(); }
 
   protected:
     faabric::state::State& state;
@@ -98,17 +110,17 @@ class CachedDecisionTestFixture
     faabric::util::DecisionCache& decisionCache;
 };
 
-class PlannerClientServerTestFixture
+class PlannerClientServerFixture
 {
   public:
-    PlannerClientServerTestFixture()
+    PlannerClientServerFixture()
       : plannerCli(LOCALHOST)
     {
         plannerServer.start();
         plannerCli.ping();
     }
 
-    ~PlannerClientServerTestFixture()
+    ~PlannerClientServerFixture()
     {
         plannerServer.stop();
         faabric::planner::getPlanner().reset();
@@ -119,12 +131,14 @@ class PlannerClientServerTestFixture
     faabric::planner::PlannerServer plannerServer;
 };
 
-class SchedulerTestFixture
-  : public CachedDecisionTestFixture
-  , public PlannerClientServerTestFixture
+class SchedulerFixture
+  // We need to mock the planner server every time we mock the scheduler
+  // because the planner server handles host membership calls, and in turn
+  // the scheduler's add/remove host from global set
+  : public PlannerClientServerFixture
 {
   public:
-    SchedulerTestFixture()
+    SchedulerFixture()
       : sch(faabric::scheduler::getScheduler())
     {
         faabric::util::setMockMode(false);
@@ -137,7 +151,7 @@ class SchedulerTestFixture
         sch.addHostToGlobalSet();
     };
 
-    ~SchedulerTestFixture()
+    ~SchedulerFixture()
     {
         faabric::util::setMockMode(false);
         faabric::util::setTestMode(true);
@@ -189,16 +203,16 @@ class SchedulerTestFixture
     faabric::scheduler::Scheduler& sch;
 };
 
-class SnapshotTestFixture
+class SnapshotRegistryFixture
 {
   public:
-    SnapshotTestFixture()
+    SnapshotRegistryFixture()
       : reg(faabric::snapshot::getSnapshotRegistry())
     {
         reg.clear();
     }
 
-    ~SnapshotTestFixture()
+    ~SnapshotRegistryFixture()
     {
         reg.clear();
         faabric::util::getDirtyTracker()->clearAll();
@@ -225,29 +239,29 @@ class SnapshotTestFixture
     faabric::snapshot::SnapshotRegistry& reg;
 };
 
-class ConfTestFixture
+class ConfFixture
 {
   public:
-    ConfTestFixture()
+    ConfFixture()
       : conf(faabric::util::getSystemConfig()){};
 
-    ~ConfTestFixture() { conf.reset(); };
+    ~ConfFixture() { conf.reset(); };
 
   protected:
     faabric::util::SystemConfig& conf;
 };
 
-class PointToPointTestFixture
+class PointToPointBrokerFixture
 {
   public:
-    PointToPointTestFixture()
+    PointToPointBrokerFixture()
       : broker(faabric::transport::getPointToPointBroker())
     {
         faabric::util::setMockMode(false);
         broker.clear();
     }
 
-    ~PointToPointTestFixture()
+    ~PointToPointBrokerFixture()
     {
         // Here we reset the thread-local cache for the test thread. If other
         // threads are used in the tests, they too must do this.
@@ -264,32 +278,29 @@ class PointToPointTestFixture
 };
 
 class PointToPointClientServerFixture
-  : public PointToPointTestFixture
-  , SchedulerTestFixture
+  // To mock the P2P client/server we need to mock the PTP broker first
+  : public PointToPointBrokerFixture
 {
   public:
     PointToPointClientServerFixture()
-      : cli(LOCALHOST)
+      : ptpClient(LOCALHOST)
     {
-        server.start();
+        ptpServer.start();
     }
 
-    ~PointToPointClientServerFixture() { server.stop(); }
+    ~PointToPointClientServerFixture() { ptpServer.stop(); }
 
   protected:
-    faabric::transport::PointToPointClient cli;
-    faabric::transport::PointToPointServer server;
+    faabric::transport::PointToPointClient ptpClient;
+    faabric::transport::PointToPointServer ptpServer;
 };
 
-class ExecutorContextTestFixture
+class ExecutorContextFixture
 {
   public:
-    ExecutorContextTestFixture() {}
+    ExecutorContextFixture() {}
 
-    ~ExecutorContextTestFixture()
-    {
-        faabric::scheduler::ExecutorContext::unset();
-    }
+    ~ExecutorContextFixture() { faabric::scheduler::ExecutorContext::unset(); }
 
     /**
      * Creates a batch request and sets up the associated context
@@ -349,16 +360,16 @@ class TestExecutorFactory : public faabric::scheduler::ExecutorFactory
       faabric::Message& msg) override;
 };
 
-class DirtyTrackingTestFixture : public ConfTestFixture
+class DirtyTrackingFixture : public ConfFixture
 {
   public:
-    DirtyTrackingTestFixture()
+    DirtyTrackingFixture()
     {
         conf.reset();
         faabric::util::resetDirtyTracker();
     };
 
-    ~DirtyTrackingTestFixture()
+    ~DirtyTrackingFixture()
     {
         faabric::util::getDirtyTracker()->clearAll();
         conf.reset();
@@ -372,42 +383,65 @@ class DirtyTrackingTestFixture : public ConfTestFixture
     }
 };
 
-class ClientServerFixture
+class FunctionCallClientServerFixture
+/*
   : public RedisTestFixture
   , public SchedulerTestFixture
   , public StateTestFixture
   , public PointToPointTestFixture
   , public ConfTestFixture
+*/
 {
   protected:
-    faabric::scheduler::FunctionCallServer server;
-    faabric::scheduler::FunctionCallClient cli;
+    faabric::scheduler::FunctionCallServer functionCallServer;
+    faabric::scheduler::FunctionCallClient functionCallClient;
 
-    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+    // std::shared_ptr<faabric::scheduler::DummyExecutorFactory>
+    // executorFactory;
 
-    int groupId = 123;
-    int groupSize = 2;
+    // int groupId = 123;
+    // int groupSize = 2;
 
   public:
-    ClientServerFixture()
-      : cli(LOCALHOST)
+    FunctionCallClientServerFixture()
+      : functionCallClient(LOCALHOST)
     {
         // Set up executor
+        /* NOT HERE
         executorFactory =
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
+        */
 
-        server.start();
+        functionCallServer.start();
     }
 
-    ~ClientServerFixture()
+    ~FunctionCallClientServerFixture()
     {
-        server.stop();
-        executorFactory->reset();
+        functionCallServer.stop();
+        // executorFactory->reset();
     }
 };
 
-class MpiBaseTestFixture : public ClientServerFixture
+class MpiWorldRegistryFixture
+{
+  public:
+    MpiWorldRegistryFixture()
+      : mpiRegistry(faabric::mpi::getMpiWorldRegistry())
+    {
+        mpiRegistry.clear();
+    }
+
+    ~MpiWorldRegistryFixture() { mpiRegistry.clear(); }
+
+  protected:
+    faabric::mpi::MpiWorldRegistry& mpiRegistry;
+};
+
+class MpiBaseTestFixture
+  : public FunctionCallClientServerFixture
+  , public MpiWorldRegistryFixture
+  , public SchedulerFixture
 {
   public:
     MpiBaseTestFixture()
@@ -421,9 +455,6 @@ class MpiBaseTestFixture : public ClientServerFixture
           std::make_shared<faabric::scheduler::DummyExecutorFactory>();
         faabric::scheduler::setExecutorFactory(fac);
 
-        auto& mpiRegistry = faabric::mpi::getMpiWorldRegistry();
-        mpiRegistry.clear();
-
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(worldSize);
     }
@@ -434,8 +465,6 @@ class MpiBaseTestFixture : public ClientServerFixture
         // all the executor threads have been set up, and when trying to query
         // for the comm. group we throw a runtime error.
         SLEEP_MS(200);
-        auto& mpiRegistry = faabric::mpi::getMpiWorldRegistry();
-        mpiRegistry.clear();
     }
 
   protected:

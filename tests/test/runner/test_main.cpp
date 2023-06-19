@@ -15,7 +15,7 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-class MainRunnerTestFixture : public SchedulerTestFixture
+class MainRunnerTestFixture : public SchedulerFixture
 {
   public:
     MainRunnerTestFixture()

@@ -19,9 +19,7 @@ namespace tests {
 // These tests are unstable under ThreadSanitizer
 #if !(defined(__has_feature) && __has_feature(thread_sanitizer))
 
-TEST_CASE_METHOD(SchedulerTestFixture,
-                 "Test send/recv one message",
-                 "[transport]")
+TEST_CASE_METHOD(SchedulerFixture, "Test send/recv one message", "[transport]")
 {
     AsyncSendMessageEndpoint src(LOCALHOST, TEST_PORT);
     AsyncRecvMessageEndpoint dst(TEST_PORT);
@@ -40,7 +38,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     REQUIRE(actualMsg == expectedMsg);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SchedulerFixture,
                  "Test send before recv is ready",
                  "[transport]")
 {
@@ -76,7 +74,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     }
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
+TEST_CASE_METHOD(SchedulerFixture, "Test await response", "[transport]")
 {
     // Prepare common message/response
     std::string expectedMsg = "Hello ";
@@ -118,7 +116,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test await response", "[transport]")
     }
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SchedulerFixture,
                  "Test send/recv many messages",
                  "[transport]")
 {
@@ -157,7 +155,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     }
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SchedulerFixture,
                  "Test send/recv many messages from many clients",
                  "[transport]")
 {
@@ -201,7 +199,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     }
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SchedulerFixture,
                  "Test can't set invalid send/recv timeouts",
                  "[transport]")
 {
@@ -240,7 +238,7 @@ TEST_CASE_METHOD(SchedulerTestFixture,
     }
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture, "Test direct messaging", "[transport]")
+TEST_CASE_METHOD(SchedulerFixture, "Test direct messaging", "[transport]")
 {
     std::string expected = "Direct hello";
     const uint8_t* msg = BYTES_CONST(expected.c_str());
@@ -264,7 +262,7 @@ TEST_CASE_METHOD(SchedulerTestFixture, "Test direct messaging", "[transport]")
     REQUIRE(actual == expected);
 }
 
-TEST_CASE_METHOD(SchedulerTestFixture,
+TEST_CASE_METHOD(SchedulerFixture,
                  "Stress test direct messaging",
                  "[transport]")
 {

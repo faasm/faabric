@@ -14,7 +14,12 @@
 using namespace scheduler;
 
 namespace tests {
-TEST_CASE_METHOD(ClientServerFixture, "Test execution graph", "[scheduler]")
+class ExecGraphTestFixture
+  : public FunctionCallClientServerFixture
+  , public SchedulerFixture
+{};
+
+TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[scheduler]")
 {
     auto ber = faabric::util::batchExecFactory("demo", "echo", 7);
     faabric::Message msgA = *ber->mutable_messages(0);
@@ -74,7 +79,7 @@ TEST_CASE_METHOD(ClientServerFixture, "Test execution graph", "[scheduler]")
     checkExecGraphEquality(expected, actual);
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(ExecGraphTestFixture,
                  "Test can't get exec graph if results are not published",
                  "[scheduler][exec-graph]")
 {
@@ -84,7 +89,7 @@ TEST_CASE_METHOD(ClientServerFixture,
       faabric::scheduler::getScheduler().getFunctionExecGraph(msg));
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(ExecGraphTestFixture,
                  "Test get unique hosts from exec graph",
                  "[scheduler][exec-graph]")
 {
@@ -187,7 +192,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     checkExecGraphEquality(expected, actual);
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(ExecGraphTestFixture,
                  "Test exec graph details",
                  "[util][exec-graph]")
 {

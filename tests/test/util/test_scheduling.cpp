@@ -11,9 +11,7 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE_METHOD(ConfTestFixture,
-                 "Test building scheduling decisions",
-                 "[util]")
+TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
 {
     int appId = 123;
     int groupId = 345;

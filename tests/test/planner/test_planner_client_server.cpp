@@ -11,7 +11,7 @@
 using namespace faabric::planner;
 
 namespace tests {
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test sending ping to planner",
                  "[planner]")
 {
@@ -19,7 +19,7 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     REQUIRE_NOTHROW(cli.ping());
 }
 
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test registering host",
                  "[planner]")
 {
@@ -39,7 +39,7 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     REQUIRE(newTimeout == plannerTimeout);
 }
 
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test getting the available hosts",
                  "[planner]")
 {
@@ -69,7 +69,7 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     REQUIRE(availableHosts.empty());
 }
 
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test removing a host",
                  "[planner]")
 {
@@ -91,7 +91,7 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     REQUIRE(availableHosts.empty());
 }
 
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test setting/getting message results",
                  "[planner]")
 {

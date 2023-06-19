@@ -23,7 +23,25 @@
 using namespace faabric::scheduler;
 
 namespace tests {
-TEST_CASE_METHOD(ConfTestFixture,
+class FunctionClientServerTestFixture
+  : public FunctionCallClientServerFixture
+  , public SchedulerFixture
+{
+  public:
+    FunctionClientServerTestFixture()
+    {
+        executorFactory =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        setExecutorFactory(executorFactory);
+    }
+
+    ~FunctionClientServerTestFixture() { executorFactory->reset(); }
+
+  protected:
+    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
+};
+
+TEST_CASE_METHOD(ConfFixture,
                  "Test setting function call server threads",
                  "[scheduler]")
 {
@@ -34,7 +52,7 @@ TEST_CASE_METHOD(ConfTestFixture,
     REQUIRE(server.getNThreads() == 6);
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test sending flush message",
                  "[scheduler]")
 {
@@ -72,7 +90,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(sch.getFunctionExecutorCount(msgB) == 1);
 
     // Send flush message (which is synchronous)
-    cli.sendFlush();
+    functionCallClient.sendFlush();
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 0);
@@ -86,7 +104,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(flushCount == 1);
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test broadcasting flush message",
                  "[scheduler]")
 {
@@ -118,7 +136,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     faabric::scheduler::clearMockRequests();
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test client batch execution request",
                  "[scheduler]")
 {
@@ -128,7 +146,7 @@ TEST_CASE_METHOD(ClientServerFixture,
       faabric::util::batchExecFactory("foo", "bar", nCalls);
 
     // Make the request
-    cli.executeFunctions(req);
+    functionCallClient.executeFunctions(req);
 
     for (const auto& m : req->messages()) {
         // This timeout can be long as it shouldn't fail
@@ -144,7 +162,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(sch.getRecordedMessagesShared().empty());
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test get resources request",
                  "[scheduler]")
 {
@@ -173,7 +191,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     }
 
     // Make the request
-    faabric::HostResources resResponse = cli.getResources();
+    faabric::HostResources resResponse = functionCallClient.getResources();
 
     REQUIRE(resResponse.slots() == expectedSlots);
     REQUIRE(resResponse.usedslots() == expectedUsedSlots);
@@ -182,7 +200,9 @@ TEST_CASE_METHOD(ClientServerFixture,
     sch.setThisHostResources(originalResources);
 }
 
-TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
+                 "Test unregister request",
+                 "[scheduler]")
 {
     faabric::util::setMockMode(true);
     std::string otherHost = "other";
@@ -217,9 +237,9 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqA.set_function(msg.function());
 
     // Check that nothing's happened
-    server.setRequestLatch();
-    cli.unregister(reqA);
-    server.awaitRequestLatch();
+    functionCallServer.setRequestLatch();
+    functionCallClient.unregister(reqA);
+    functionCallServer.awaitRequestLatch();
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Make the request to unregister the actual host
@@ -228,9 +248,9 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqB.set_user(msg.user());
     reqB.set_function(msg.function());
 
-    server.setRequestLatch();
-    cli.unregister(reqB);
-    server.awaitRequestLatch();
+    functionCallServer.setRequestLatch();
+    functionCallClient.unregister(reqB);
+    functionCallServer.awaitRequestLatch();
 
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
@@ -238,7 +258,7 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     faabric::scheduler::clearMockRequests();
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test setting a message result with the function call client",
                  "[scheduler]")
 {
@@ -259,7 +279,7 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     SLEEP_MS(500);
     msgPtr->set_returnvalue(expectedReturnCode);
-    cli.setMessageResult(msgPtr);
+    functionCallClient.setMessageResult(msgPtr);
     waiterThread.join();
 
     REQUIRE(expectedReturnCode == actualReturnCode);

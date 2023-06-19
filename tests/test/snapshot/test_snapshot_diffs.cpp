@@ -27,7 +27,7 @@ void checkSnapshotDiff(int offset,
     REQUIRE(data == actualData);
 }
 
-TEST_CASE_METHOD(SnapshotTestFixture,
+TEST_CASE_METHOD(SnapshotRegistryFixture,
                  "Test single extension diff if no merge regions and grown",
                  "[snapshot]")
 {
@@ -88,7 +88,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(actual.getData().size() == expectedData.size());
 }
 
-TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
+TEST_CASE_METHOD(SnapshotRegistryFixture, "Test snapshot diffs", "[snapshot]")
 {
     std::string snapKey = "foobar123";
     int snapPages = 5;
@@ -203,7 +203,7 @@ TEST_CASE_METHOD(SnapshotTestFixture, "Test snapshot diffs", "[snapshot]")
     checkSnapshotDiff(regionOffsetD, expectedDataD, changeDiffs.at(5));
 }
 
-TEST_CASE_METHOD(SnapshotTestFixture,
+TEST_CASE_METHOD(SnapshotRegistryFixture,
                  "Test snapshot diff and unerlying data",
                  "[snapshot]")
 {

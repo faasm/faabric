@@ -10,9 +10,7 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-TEST_CASE_METHOD(ExecutorContextTestFixture,
-                 "Test executor context",
-                 "[scheduler]")
+TEST_CASE_METHOD(ExecutorContextFixture, "Test executor context", "[scheduler]")
 {
     REQUIRE(!ExecutorContext::isSet());
 

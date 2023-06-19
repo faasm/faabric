@@ -11,7 +11,9 @@
 
 namespace tests {
 
-class EndpointHandlerTestFixture : public ClientServerFixture
+class EndpointHandlerTestFixture
+  : public FunctionCallClientServerFixture
+  , public SchedulerFixture
 {
   protected:
     // Taking in a shared_ptr by reference to ensure the handler was constructed

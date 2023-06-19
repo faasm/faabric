@@ -22,8 +22,8 @@ namespace tests {
 static int staticCount = 0;
 
 class StateServerTestFixture
-  : public StateTestFixture
-  , ConfTestFixture
+  : public StateFixture
+  , public ConfFixture
 {
   public:
     // Set up a local server with a *different* state instance to the main
@@ -162,7 +162,7 @@ static std::shared_ptr<StateKeyValue> setupKV(size_t size)
     return kv;
 }
 
-TEST_CASE_METHOD(StateTestFixture, "Test in-memory state sizes", "[state]")
+TEST_CASE_METHOD(StateFixture, "Test in-memory state sizes", "[state]")
 {
     std::string user = "alpha";
     std::string key = "beta";
@@ -181,9 +181,7 @@ TEST_CASE_METHOD(StateTestFixture, "Test in-memory state sizes", "[state]")
     REQUIRE(state.getStateSize(user, key) == bytes.size());
 }
 
-TEST_CASE_METHOD(StateTestFixture,
-                 "Test simple in memory state get/set",
-                 "[state]")
+TEST_CASE_METHOD(StateFixture, "Test simple in memory state get/set", "[state]")
 {
     auto kv = setupKV(5);
 

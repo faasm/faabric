@@ -68,8 +68,8 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     mappingB1->set_groupidx(groupIdxB1);
     mappingB1->set_host(hostA);
 
-    cli.sendMappings(mappingsA);
-    cli.sendMappings(mappingsB);
+    ptpClient.sendMappings(mappingsA);
+    ptpClient.sendMappings(mappingsB);
 
     REQUIRE(broker.getIdxsRegisteredForGroup(groupIdA).size() == 2);
     REQUIRE(broker.getIdxsRegisteredForGroup(groupIdB).size() == 1);
@@ -486,17 +486,17 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     REQUIRE(group->getLockOwner(recursive) == -1);
 
     for (int i = 0; i < nCalls; i++) {
-        server.setRequestLatch();
-        cli.groupLock(appId, groupId, groupIdx, recursive);
-        server.awaitRequestLatch();
+        ptpServer.setRequestLatch();
+        ptpClient.groupLock(appId, groupId, groupIdx, recursive);
+        ptpServer.awaitRequestLatch();
     }
 
     REQUIRE(group->getLockOwner(recursive) == groupIdx);
 
     for (int i = 0; i < nCalls; i++) {
-        server.setRequestLatch();
-        cli.groupUnlock(appId, groupId, groupIdx, recursive);
-        server.awaitRequestLatch();
+        ptpServer.setRequestLatch();
+        ptpClient.groupUnlock(appId, groupId, groupIdx, recursive);
+        ptpServer.awaitRequestLatch();
     }
 
     REQUIRE(group->getLockOwner(recursive) == -1);

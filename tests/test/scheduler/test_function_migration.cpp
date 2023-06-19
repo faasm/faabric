@@ -12,7 +12,7 @@
 using namespace faabric::scheduler;
 
 namespace tests {
-class FunctionMigrationTestFixture : public SchedulerTestFixture
+class FunctionMigrationTestFixture : public SchedulerFixture
 {
   public:
     FunctionMigrationTestFixture()

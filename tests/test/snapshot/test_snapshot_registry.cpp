@@ -13,7 +13,7 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE_METHOD(SnapshotTestFixture,
+TEST_CASE_METHOD(SnapshotRegistryFixture,
                  "Test set and get snapshots",
                  "[snapshot]")
 {
@@ -106,7 +106,7 @@ TEST_CASE_METHOD(SnapshotTestFixture,
     REQUIRE(reg.getSnapshotCount() == 0);
 }
 
-TEST_CASE_METHOD(SnapshotTestFixture,
+TEST_CASE_METHOD(SnapshotRegistryFixture,
                  "Test can't get snapshot with empty key",
                  "[snapshot]")
 {

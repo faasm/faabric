@@ -13,7 +13,7 @@ using namespace faabric::util;
 
 namespace tests {
 
-TEST_CASE_METHOD(DirtyTrackingTestFixture,
+TEST_CASE_METHOD(DirtyTrackingFixture,
                  "Test configuring tracker",
                  "[util][dirty]")
 {
@@ -39,7 +39,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     REQUIRE(t->getType() == mode);
 }
 
-TEST_CASE_METHOD(DirtyTrackingTestFixture,
+TEST_CASE_METHOD(DirtyTrackingFixture,
                  "Test basic dirty tracking",
                  "[util][dirty]")
 {
@@ -282,7 +282,7 @@ TEST_CASE_METHOD(DirtyTrackingTestFixture,
     }
 }
 
-TEST_CASE_METHOD(DirtyTrackingTestFixture,
+TEST_CASE_METHOD(DirtyTrackingFixture,
                  "Test thread-local dirty tracking",
                  "[util][dirty]")
 {
