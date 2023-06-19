@@ -17,7 +17,7 @@ static std::mutex hostnameMx;
 
 std::string getIPFromHostname(const std::string& hostname)
 {
-    // Concurrent calls to gethostbyname-style syscalls is not thread-safe, so
+    // Concurrent calls to gethostbyname-style syscalls are not thread-safe, so
     // we protect it with a mutex. We are overly cautious with the locking, as
     // this is not performance critical. This function is usually called once
     // during initialisation (it may affect throughput measurements, though)
