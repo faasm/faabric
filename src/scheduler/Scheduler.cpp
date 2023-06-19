@@ -899,14 +899,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 for (auto i : thisHostIdxs) {
                     faabric::Message& localMsg = req->mutable_messages()->at(i);
 
-                    if (localMsg.executeslocally()) {
-                        faabric::util::UniqueLock resultsLock(
-                          localResultsMutex);
-                        localResults.insert(
-                          { localMsg.id(),
-                            std::make_shared<MessageLocalResult>() });
-                    }
-
                     std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
                     e->executeTasks({ i }, req);
                 }
@@ -1395,111 +1387,6 @@ faabric::Message Scheduler::doGetFunctionResult(
 
         return msgResult;
     }
-}
-
-// TODO: remove this bad boy
-void Scheduler::getFunctionResultAsync(
-  const faabric::Message& msg,
-  int timeoutMs,
-  asio::io_context& ioc,
-  asio::any_io_executor& executor,
-  std::function<void(faabric::Message&)> handler)
-{
-    int messageId = msg.id();
-
-    if (messageId == 0) {
-        throw std::runtime_error("Must provide non-zero message ID");
-    }
-
-    do {
-        std::shared_ptr<MessageLocalResult> mlr;
-        // Try to find matching local promise
-        {
-            faabric::util::UniqueLock resultsLock(localResultsMutex);
-            auto it = localResults.find(messageId);
-            if (it == localResults.end()) {
-                break; // Fallback to redis
-            }
-            mlr = it->second;
-        }
-        // Asio wrapper for the MLR eventfd
-        class MlrAwaiter : public std::enable_shared_from_this<MlrAwaiter>
-        {
-          public:
-            unsigned int messageId;
-            Scheduler* sched;
-            std::shared_ptr<MessageLocalResult> mlr;
-            asio::posix::stream_descriptor dsc;
-            std::function<void(faabric::Message&)> handler;
-
-            MlrAwaiter(unsigned int messageId,
-                       Scheduler* sched,
-                       std::shared_ptr<MessageLocalResult> mlr,
-                       asio::posix::stream_descriptor dsc,
-                       std::function<void(faabric::Message&)> handler)
-              : messageId(messageId)
-              , sched(sched)
-              , mlr(std::move(mlr))
-              , dsc(std::move(dsc))
-              , handler(handler)
-            {}
-
-            ~MlrAwaiter()
-            {
-                // Ensure that Asio doesn't close the eventfd, to prevent a
-                // double-close in the MLR destructor
-                dsc.release();
-            }
-
-            void await(const boost::system::error_code& ec)
-            {
-                if (!ec) {
-                    auto msg = mlr->promise.get_future().get();
-                    handler(*msg);
-                    {
-                        faabric::util::UniqueLock resultsLock(
-                          sched->localResultsMutex);
-                        sched->localResults.erase(messageId);
-                    }
-                } else {
-                    // The waiting task can spuriously wake up, requeue if this
-                    // happens
-                    doAwait();
-                }
-            }
-
-            // Schedule this task waiting on the eventfd in the Asio queue
-            void doAwait()
-            {
-                dsc.async_wait(asio::posix::stream_descriptor::wait_read,
-                               beast::bind_front_handler(
-                                 &MlrAwaiter::await, this->shared_from_this()));
-            }
-        };
-        auto awaiter = std::make_shared<MlrAwaiter>(
-          messageId,
-          this,
-          mlr,
-          asio::posix::stream_descriptor(ioc, mlr->eventFd),
-          std::move(handler));
-        awaiter->doAwait();
-        return;
-    } while (0);
-
-    // TODO: Use a non-blocking redis API here to avoid stalling the async
-    // worker thread
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    std::string resultKey = faabric::util::resultKeyFromMessageId(messageId);
-
-    faabric::Message msgResult;
-
-    // Blocking version will throw an exception when timing out
-    // which is handled by the caller.
-    std::vector<uint8_t> result = redis.dequeueBytes(resultKey, timeoutMs);
-    msgResult.ParseFromArray(result.data(), (int)result.size());
-
-    handler(msgResult);
 }
 
 faabric::HostResources Scheduler::getThisHostResources()

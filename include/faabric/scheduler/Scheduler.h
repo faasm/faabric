@@ -275,13 +275,6 @@ class Scheduler
 
     faabric::Message getFunctionResult(int appId, int msgId, int timeoutMs);
 
-    // TODO: delete this method
-    void getFunctionResultAsync(const faabric::Message& msg,
-                                int timeoutMs,
-                                asio::io_context& ioc,
-                                asio::any_io_executor& executor,
-                                std::function<void(faabric::Message&)> handler);
-
     void setThreadResult(const faabric::Message& msg,
                          int32_t returnValue,
                          const std::string& key,
@@ -404,14 +397,8 @@ class Scheduler
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
 
-    std::unordered_map<uint32_t, std::shared_ptr<MessageLocalResult>>
-      localResults;
-
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
-    std::mutex localResultsMutex;
-
-    // TODO: can we remove localResultsMutex ?
     // ---- Message results ----
     std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
     std::mutex plannerResultsMutex;
