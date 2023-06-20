@@ -202,6 +202,7 @@ void Scheduler::reset()
     // Reset resources
     thisHostResources = faabric::HostResources();
     thisHostResources.set_slots(faabric::util::getUsableCores());
+    thisHostResources.set_usedslots(0);
 
     // Reset scheduler state
     availableHostsCache.clear();
