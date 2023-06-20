@@ -131,7 +131,7 @@ jobs:
         run: ./bin/inv_wrapper.sh dev.cc faabric_tests
         # Try to make the NNG panics consistent in GHA
       - name: "Run one conflicting test in repeat"
-        run: ./bin/inv_wrapper.sh tests --test-case "Test starting and stopping the function migration thread" --repeats 20
+        run: ./bin/inv_wrapper.sh tests --test-case "Test\ starting\ and\ stopping\ the\ function\ migration\ thread" --repeats 20
       - name: "Run tests"
         run: ./bin/inv_wrapper.sh tests
 
