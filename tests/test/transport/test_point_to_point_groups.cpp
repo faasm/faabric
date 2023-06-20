@@ -26,6 +26,7 @@ namespace tests {
 class PointToPointGroupFixture
   : public ConfFixture
   , public PointToPointClientServerFixture
+  , public SchedulerFixture
 {
   public:
     PointToPointGroupFixture()
