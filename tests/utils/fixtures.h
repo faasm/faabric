@@ -396,30 +396,16 @@ class FunctionCallClientServerFixture
     faabric::scheduler::FunctionCallServer functionCallServer;
     faabric::scheduler::FunctionCallClient functionCallClient;
 
-    // std::shared_ptr<faabric::scheduler::DummyExecutorFactory>
-    // executorFactory;
-
-    // int groupId = 123;
-    // int groupSize = 2;
-
   public:
     FunctionCallClientServerFixture()
       : functionCallClient(LOCALHOST)
     {
-        // Set up executor
-        /* NOT HERE
-        executorFactory =
-          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-        setExecutorFactory(executorFactory);
-        */
-
         functionCallServer.start();
     }
 
     ~FunctionCallClientServerFixture()
     {
         functionCallServer.stop();
-        // executorFactory->reset();
     }
 };
 
