@@ -384,13 +384,6 @@ class DirtyTrackingFixture : public ConfFixture
 };
 
 class FunctionCallClientServerFixture
-/*
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public StateTestFixture
-  , public PointToPointTestFixture
-  , public ConfTestFixture
-*/
 {
   protected:
     faabric::scheduler::FunctionCallServer functionCallServer;
