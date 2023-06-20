@@ -403,10 +403,7 @@ class FunctionCallClientServerFixture
         functionCallServer.start();
     }
 
-    ~FunctionCallClientServerFixture()
-    {
-        functionCallServer.stop();
-    }
+    ~FunctionCallClientServerFixture() { functionCallServer.stop(); }
 };
 
 class MpiWorldRegistryFixture
