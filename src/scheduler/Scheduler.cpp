@@ -1376,6 +1376,9 @@ faabric::Message Scheduler::doGetFunctionResult(
         if (status == std::future_status::timeout) {
             msgResult.set_type(faabric::Message_MessageType_EMPTY);
         } else {
+            // Acquire a lock to read the value of the promise to avoid data
+            // races
+            faabric::util::UniqueLock lock(plannerResultsMutex);
             msgResult = *fut.get();
         }
 
