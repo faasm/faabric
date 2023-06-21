@@ -279,11 +279,13 @@ void MessageEndpoint::sendMessage(uint8_t header,
 
     nng_aio_set_msg(aio, msg);
 
+    /*
     if (context.has_value()) {
         nng_ctx_send(*context, aio);
     } else {
+    */
         nng_send_aio(socket, aio);
-    }
+    // }
 
     nng_aio_wait(aio);
     int ec = nng_aio_result(aio);
