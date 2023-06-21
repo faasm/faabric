@@ -23,24 +23,28 @@ using namespace faabric::util;
 namespace tests {
 
 class SnapshotClientServerFixture
-  : public SchedulerTestFixture
-  , public RedisTestFixture
-  , public SnapshotTestFixture
-  , public PointToPointTestFixture
 {
-  protected:
-    faabric::snapshot::SnapshotServer server;
-    faabric::snapshot::SnapshotClient cli;
-
   public:
     SnapshotClientServerFixture()
-      : cli(LOCALHOST)
+      : snapshotClient(LOCALHOST)
     {
-        server.start();
+        snapshotServer.start();
     }
 
-    ~SnapshotClientServerFixture() { server.stop(); }
+    ~SnapshotClientServerFixture() { snapshotServer.stop(); }
 
+  protected:
+    faabric::snapshot::SnapshotServer snapshotServer;
+    faabric::snapshot::SnapshotClient snapshotClient;
+};
+
+class SnapshotClientServerTestFixture
+  : public SnapshotClientServerFixture
+  , public SchedulerFixture
+  , public RedisFixture
+  , public SnapshotRegistryFixture
+  , public PointToPointClientServerFixture
+{
     void setUpFunctionGroup(int appId, int groupId)
     {
         SchedulingDecision decision(appId, groupId);
@@ -53,7 +57,7 @@ class SnapshotClientServerFixture
     }
 };
 
-TEST_CASE_METHOD(ConfTestFixture,
+TEST_CASE_METHOD(ConfFixture,
                  "Test setting snapshot server threads",
                  "[snapshot]")
 {
@@ -64,7 +68,7 @@ TEST_CASE_METHOD(ConfTestFixture,
     REQUIRE(server.getNThreads() == 5);
 }
 
-TEST_CASE_METHOD(SnapshotClientServerFixture,
+TEST_CASE_METHOD(SnapshotClientServerTestFixture,
                  "Test pushing and deleting snapshots",
                  "[snapshot]")
 {
@@ -97,8 +101,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(reg.getSnapshotCount() == 0);
 
     // Send the messages
-    cli.pushSnapshot(snapKeyA, snapA);
-    cli.pushSnapshot(snapKeyB, snapB);
+    snapshotClient.pushSnapshot(snapKeyA, snapA);
+    snapshotClient.pushSnapshot(snapKeyB, snapB);
 
     // Check snapshots created in registry
     REQUIRE(reg.getSnapshotCount() == 2);
@@ -143,7 +147,7 @@ void checkDiffsApplied(const uint8_t* snapBase, std::vector<SnapshotDiff> diffs)
     }
 }
 
-TEST_CASE_METHOD(SnapshotClientServerFixture,
+TEST_CASE_METHOD(SnapshotClientServerTestFixture,
                  "Test push snapshot updates",
                  "[snapshot]")
 {
@@ -194,7 +198,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
 
     // Push initial update
     std::vector<SnapshotDiff> diffsA = { diffA1, diffA2 };
-    cli.pushSnapshotUpdate(snapKey, snap, diffsA);
+    snapshotClient.pushSnapshotUpdate(snapKey, snap, diffsA);
 
     // Submit some more diffs, some larger than the original snapshot (to check
     // it gets extended)
@@ -224,7 +228,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     std::vector<SnapshotDiff> diffsB = { diffB1, diffB2, diffB3 };
 
     // Make the request
-    cli.pushSnapshotUpdate(snapKey, otherSnap, diffsB);
+    snapshotClient.pushSnapshotUpdate(snapKey, otherSnap, diffsB);
 
     // Check nothing queued
     REQUIRE(snap->getQueuedDiffsCount() == 0);
@@ -247,7 +251,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     checkDiffsApplied(snap->getDataPtr(), diffsB);
 }
 
-TEST_CASE_METHOD(SnapshotClientServerFixture,
+TEST_CASE_METHOD(SnapshotClientServerTestFixture,
                  "Test detailed snapshot diffs with merge ops",
                  "[snapshot]")
 {
@@ -285,7 +289,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int msgId = 345;
     sch.registerThread(msgId);
     diffs = { diffA1, diffA2 };
-    cli.pushThreadResult(msgId, 0, snapKey, diffs);
+    snapshotClient.pushThreadResult(msgId, 0, snapKey, diffs);
 
     // Write and check diffs have been applied according to the merge operations
     snap->writeQueuedDiffs();
@@ -296,7 +300,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     REQUIRE(actualA2 == baseA2 + diffIntA2);
 }
 
-TEST_CASE_METHOD(SnapshotClientServerFixture,
+TEST_CASE_METHOD(SnapshotClientServerTestFixture,
                  "Test applying snapshot diffs with merge ops",
                  "[snapshot]")
 {
@@ -400,7 +404,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     int msgId = 123;
     sch.registerThread(msgId);
     std::vector<SnapshotDiff> diffs = { diff };
-    cli.pushThreadResult(msgId, 0, snapKey, diffs);
+    snapshotClient.pushThreadResult(msgId, 0, snapKey, diffs);
 
     // Ensure the right number of diffs is applied
     REQUIRE(snap->getQueuedDiffsCount() == 1);
@@ -416,7 +420,7 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     sch.deregisterThread(msgId);
 }
 
-TEST_CASE_METHOD(SnapshotClientServerFixture,
+TEST_CASE_METHOD(SnapshotClientServerTestFixture,
                  "Test set thread result",
                  "[snapshot]")
 {
@@ -428,8 +432,8 @@ TEST_CASE_METHOD(SnapshotClientServerFixture,
     sch.registerThread(threadIdA);
     sch.registerThread(threadIdB);
 
-    cli.pushThreadResult(threadIdA, returnValueA, "", {});
-    cli.pushThreadResult(threadIdB, returnValueB, "", {});
+    snapshotClient.pushThreadResult(threadIdA, returnValueA, "", {});
+    snapshotClient.pushThreadResult(threadIdB, returnValueB, "", {});
 
     int rA = 0;
     int rB = 0;

@@ -31,4 +31,9 @@ int32_t DummyExecutor::executeTask(
 
     return 0;
 }
+
+std::span<uint8_t> DummyExecutor::getMemoryView()
+{
+    return {};
+}
 }

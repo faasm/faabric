@@ -13,10 +13,10 @@
 
 namespace tests {
 class DistTestsFixture
-  : public SchedulerTestFixture
-  , public ConfTestFixture
-  , public SnapshotTestFixture
-  , public PointToPointTestFixture
+  : public SchedulerFixture
+  , public ConfFixture
+  , public SnapshotRegistryFixture
+  , public PointToPointBrokerFixture
 {
   public:
     DistTestsFixture()
@@ -146,7 +146,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         REQUIRE(result.returnvalue() == 0);
         SLEEP_MS(1000);
         if (!skipExecGraphCheck) {
-            auto execGraph = sch.getFunctionExecGraph(msg.id());
+            auto execGraph = sch.getFunctionExecGraph(msg);
             checkSchedulingFromExecGraph(execGraph);
         }
     }
@@ -161,7 +161,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         faabric::Message result = sch.getFunctionResult(msg, timeoutMs);
         REQUIRE(result.returnvalue() == 0);
         SLEEP_MS(1000);
-        auto execGraph = sch.getFunctionExecGraph(msg.id());
+        auto execGraph = sch.getFunctionExecGraph(msg);
         checkSchedulingFromExecGraph(
           execGraph, expectedHostsBefore, expectedHostsAfter);
     }

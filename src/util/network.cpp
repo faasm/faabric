@@ -2,18 +2,27 @@
 
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+#include <mutex>
 #include <net/if.h>
 #include <netdb.h>
 #include <stdexcept>
 #include <unordered_map>
 
+#include <faabric/util/locks.h>
 #include <faabric/util/string_tools.h>
 
 namespace faabric::util {
 static std::unordered_map<std::string, std::string> ipMap;
+static std::mutex hostnameMx;
 
 std::string getIPFromHostname(const std::string& hostname)
 {
+    // Concurrent calls to gethostbyname-style syscalls are not thread-safe, so
+    // we protect it with a mutex. We are overly cautious with the locking, as
+    // this is not performance critical. This function is usually called once
+    // during initialisation (it may affect throughput measurements, though)
+    faabric::util::UniqueLock lock(hostnameMx);
+
     hostent* record = gethostbyname(hostname.c_str());
 
     if (record == nullptr) {
@@ -21,7 +30,7 @@ std::string getIPFromHostname(const std::string& hostname)
         throw std::runtime_error(errorMsg);
     }
 
-    auto address = (in_addr*)record->h_addr;
+    auto* address = (in_addr*)record->h_addr;
     std::string ipAddress = inet_ntoa(*address);
 
     return ipAddress;

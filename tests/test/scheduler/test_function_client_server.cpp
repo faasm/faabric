@@ -23,41 +23,25 @@
 using namespace faabric::scheduler;
 
 namespace tests {
-class ClientServerFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public StateTestFixture
-  , public PointToPointTestFixture
-  , public ConfTestFixture
+class FunctionClientServerTestFixture
+  : public FunctionCallClientServerFixture
+  , public SchedulerFixture
 {
-  protected:
-    FunctionCallServer server;
-    FunctionCallClient cli;
-
-    std::shared_ptr<DummyExecutorFactory> executorFactory;
-
-    int groupId = 123;
-    int groupSize = 2;
-
   public:
-    ClientServerFixture()
-      : cli(LOCALHOST)
+    FunctionClientServerTestFixture()
     {
-        // Set up executor
-        executorFactory = std::make_shared<DummyExecutorFactory>();
+        executorFactory =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
         setExecutorFactory(executorFactory);
-
-        server.start();
     }
 
-    ~ClientServerFixture()
-    {
-        server.stop();
-        executorFactory->reset();
-    }
+    ~FunctionClientServerTestFixture() { executorFactory->reset(); }
+
+  protected:
+    std::shared_ptr<faabric::scheduler::DummyExecutorFactory> executorFactory;
 };
 
-TEST_CASE_METHOD(ConfTestFixture,
+TEST_CASE_METHOD(ConfFixture,
                  "Test setting function call server threads",
                  "[scheduler]")
 {
@@ -68,7 +52,7 @@ TEST_CASE_METHOD(ConfTestFixture,
     REQUIRE(server.getNThreads() == 6);
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test sending flush message",
                  "[scheduler]")
 {
@@ -84,9 +68,9 @@ TEST_CASE_METHOD(ClientServerFixture,
 
     // Execute a couple of functions
     auto reqA = faabric::util::batchExecFactory("dummy", "foo", 1);
-    auto& msgA = *reqA->mutable_messages(0);
+    auto msgA = reqA->messages(0);
     auto reqB = faabric::util::batchExecFactory("dummy", "bar", 1);
-    auto& msgB = *reqB->mutable_messages(0);
+    auto msgB = reqB->messages(0);
     sch.callFunctions(reqA);
     sch.callFunctions(reqB);
 
@@ -106,7 +90,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(sch.getFunctionExecutorCount(msgB) == 1);
 
     // Send flush message (which is synchronous)
-    cli.sendFlush();
+    functionCallClient.sendFlush();
 
     // Check the scheduler has been flushed
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 0);
@@ -120,7 +104,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(flushCount == 1);
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test broadcasting flush message",
                  "[scheduler]")
 {
@@ -152,7 +136,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     faabric::scheduler::clearMockRequests();
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test client batch execution request",
                  "[scheduler]")
 {
@@ -162,7 +146,7 @@ TEST_CASE_METHOD(ClientServerFixture,
       faabric::util::batchExecFactory("foo", "bar", nCalls);
 
     // Make the request
-    cli.executeFunctions(req);
+    functionCallClient.executeFunctions(req);
 
     for (const auto& m : req->messages()) {
         // This timeout can be long as it shouldn't fail
@@ -178,7 +162,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     REQUIRE(sch.getRecordedMessagesShared().empty());
 }
 
-TEST_CASE_METHOD(ClientServerFixture,
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test get resources request",
                  "[scheduler]")
 {
@@ -207,7 +191,7 @@ TEST_CASE_METHOD(ClientServerFixture,
     }
 
     // Make the request
-    faabric::HostResources resResponse = cli.getResources();
+    faabric::HostResources resResponse = functionCallClient.getResources();
 
     REQUIRE(resResponse.slots() == expectedSlots);
     REQUIRE(resResponse.usedslots() == expectedUsedSlots);
@@ -216,7 +200,9 @@ TEST_CASE_METHOD(ClientServerFixture,
     sch.setThisHostResources(originalResources);
 }
 
-TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
+                 "Test unregister request",
+                 "[scheduler]")
 {
     faabric::util::setMockMode(true);
     std::string otherHost = "other";
@@ -251,9 +237,9 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqA.set_function(msg.function());
 
     // Check that nothing's happened
-    server.setRequestLatch();
-    cli.unregister(reqA);
-    server.awaitRequestLatch();
+    functionCallServer.setRequestLatch();
+    functionCallClient.unregister(reqA);
+    functionCallServer.awaitRequestLatch();
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
     // Make the request to unregister the actual host
@@ -262,13 +248,40 @@ TEST_CASE_METHOD(ClientServerFixture, "Test unregister request", "[scheduler]")
     reqB.set_user(msg.user());
     reqB.set_function(msg.function());
 
-    server.setRequestLatch();
-    cli.unregister(reqB);
-    server.awaitRequestLatch();
+    functionCallServer.setRequestLatch();
+    functionCallClient.unregister(reqB);
+    functionCallServer.awaitRequestLatch();
 
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 
     sch.setThisHostResources(originalResources);
     faabric::scheduler::clearMockRequests();
+}
+
+TEST_CASE_METHOD(FunctionClientServerTestFixture,
+                 "Test setting a message result with the function call client",
+                 "[scheduler]")
+{
+    auto msg = faabric::util::messageFactory("foo", "bar");
+    auto msgPtr = std::make_shared<faabric::Message>(msg);
+
+    // Setting a message result with the function call client is used when the
+    // planner is notifying that a message result is ready
+
+    int expectedReturnCode = 1337;
+    int actualReturnCode;
+    // This thread will block waiting for another thread to set the message
+    // result
+    std::jthread waiterThread{ [&] {
+        auto resultMsg = sch.getFunctionResult(msg, 2000);
+        actualReturnCode = resultMsg.returnvalue();
+    } };
+
+    SLEEP_MS(500);
+    msgPtr->set_returnvalue(expectedReturnCode);
+    functionCallClient.setMessageResult(msgPtr);
+    waiterThread.join();
+
+    REQUIRE(expectedReturnCode == actualReturnCode);
 }
 }

@@ -16,8 +16,8 @@ using namespace faabric::util;
 namespace tests {
 
 class SnapshotMergeTestFixture
-  : public SnapshotTestFixture
-  , public DirtyTrackingTestFixture
+  : public SnapshotRegistryFixture
+  , public DirtyTrackingFixture
 {
   public:
     SnapshotMergeTestFixture() = default;
@@ -1569,7 +1569,7 @@ TEST_CASE("Test snapshot data constructors", "[snapshot][util]")
     REQUIRE(actualConst == data);
 }
 
-TEST_CASE_METHOD(DirtyTrackingTestFixture,
+TEST_CASE_METHOD(DirtyTrackingFixture,
                  "Test snapshot mapped memory diffs",
                  "[snapshot][util]")
 {
@@ -2003,7 +2003,7 @@ TEST_CASE_METHOD(SnapshotMergeTestFixture,
     }
 }
 
-TEST_CASE_METHOD(DirtyTrackingTestFixture, "Test XOR diffs", "[util][snapshot]")
+TEST_CASE_METHOD(DirtyTrackingFixture, "Test XOR diffs", "[util][snapshot]")
 {
     int nSnapPages = 5;
     size_t snapSize = nSnapPages * HOST_PAGE_SIZE;

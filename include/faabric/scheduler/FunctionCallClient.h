@@ -28,6 +28,9 @@ getPendingMigrationsRequests();
 std::vector<std::pair<std::string, faabric::UnregisterRequest>>
 getUnregisterRequests();
 
+std::vector<std::pair<std::string, std::shared_ptr<faabric::Message>>>
+getMessageResults();
+
 void queueResourceResponse(const std::string& host,
                            faabric::HostResources& res);
 
@@ -50,5 +53,7 @@ class FunctionCallClient : public faabric::transport::MessageEndpointClient
     void executeFunctions(std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     void unregister(faabric::UnregisterRequest& req);
+
+    void setMessageResult(std::shared_ptr<faabric::Message> msg);
 };
 }

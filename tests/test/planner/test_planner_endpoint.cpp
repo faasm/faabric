@@ -15,8 +15,8 @@ using namespace faabric::planner;
 
 namespace tests {
 class FaabricPlannerEndpointTestFixture
-  : public ConfTestFixture
-  , public PlannerClientServerTestFixture
+  : public ConfFixture
+  , public PlannerClientServerFixture
 {
   public:
     FaabricPlannerEndpointTestFixture()

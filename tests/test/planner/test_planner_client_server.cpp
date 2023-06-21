@@ -11,7 +11,7 @@
 using namespace faabric::planner;
 
 namespace tests {
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test sending ping to planner",
                  "[planner]")
 {
@@ -19,7 +19,7 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     REQUIRE_NOTHROW(cli.ping());
 }
 
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test registering host",
                  "[planner]")
 {
@@ -39,7 +39,7 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     REQUIRE(newTimeout == plannerTimeout);
 }
 
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test getting the available hosts",
                  "[planner]")
 {
@@ -69,7 +69,7 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     REQUIRE(availableHosts.empty());
 }
 
-TEST_CASE_METHOD(PlannerClientServerTestFixture,
+TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test removing a host",
                  "[planner]")
 {
@@ -89,5 +89,42 @@ TEST_CASE_METHOD(PlannerClientServerTestFixture,
     plannerCli.removeHost(remReq);
     availableHosts = plannerCli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
+}
+
+TEST_CASE_METHOD(PlannerClientServerFixture,
+                 "Test setting/getting message results",
+                 "[planner]")
+{
+    faabric::util::setMockMode(true);
+    auto msgPtr = std::make_shared<faabric::Message>(
+      faabric::util::messageFactory("foo", "bar"));
+
+    // If we try to get the message result before setting it first, nothing
+    // happens
+    auto resultMsgPtr = plannerCli.getMessageResult(msgPtr);
+    REQUIRE(resultMsgPtr == nullptr);
+
+    // If we set the message result, then we can get it
+    int expectedReturnValue = 1337;
+    msgPtr->set_returnvalue(expectedReturnValue);
+    plannerCli.setMessageResult(msgPtr);
+    resultMsgPtr = plannerCli.getMessageResult(msgPtr);
+    REQUIRE(resultMsgPtr->id() == msgPtr->id());
+    REQUIRE(resultMsgPtr->appid() == msgPtr->appid());
+    REQUIRE(resultMsgPtr->returnvalue() == expectedReturnValue);
+
+    // Also, setting the message result triggers the planner to send a
+    // request to the host that tried to get the result before
+    auto msgResults = faabric::scheduler::getMessageResults();
+    REQUIRE(msgResults.size() == 1);
+    REQUIRE(msgResults.at(0).first ==
+            faabric::util::getSystemConfig().endpointHost);
+
+    faabric::scheduler::clearMockRequests();
+    faabric::util::setMockMode(false);
+
+    // Shutdown the scheduler as we are using the function client/server (even
+    // if mocked)
+    faabric::scheduler::getScheduler().shutdown();
 }
 }

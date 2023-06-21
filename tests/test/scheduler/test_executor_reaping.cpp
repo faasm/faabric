@@ -12,8 +12,8 @@ using namespace faabric::scheduler;
 namespace tests {
 
 class SchedulerReapingTestFixture
-  : public SchedulerTestFixture
-  , public ConfTestFixture
+  : public SchedulerFixture
+  , public ConfFixture
 {
   public:
     SchedulerReapingTestFixture()

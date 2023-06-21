@@ -12,7 +12,7 @@
 using namespace faabric::scheduler;
 
 namespace tests {
-class FunctionMigrationTestFixture : public SchedulerTestFixture
+class FunctionMigrationTestFixture : public SchedulerFixture
 {
   public:
     FunctionMigrationTestFixture()
@@ -162,6 +162,7 @@ TEST_CASE_METHOD(
     int timeToSleep = SHORT_TEST_TIMEOUT_MS;
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
     uint32_t appId = req->messages().at(0).appid();
+    uint32_t msgId = req->messages().at(0).id();
 
     // Build expected pending migrations
     std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
@@ -190,8 +191,7 @@ TEST_CASE_METHOD(
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
-    faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
+    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -212,6 +212,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     int timeToSleep = SHORT_TEST_TIMEOUT_MS;
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
     uint32_t appId = req->messages().at(0).appid();
+    uint32_t msgId = req->messages().at(0).id();
 
     // By setting the check period to a non-zero value, we are effectively
     // opting in to be considered for migration
@@ -242,8 +243,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
-    faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
+    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -267,6 +267,7 @@ TEST_CASE_METHOD(
     int timeToSleep = SHORT_TEST_TIMEOUT_MS;
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
     uint32_t appId = req->messages().at(0).appid();
+    uint32_t msgId = req->messages().at(0).id();
 
     // Opt in to be considered for migration
     req->mutable_messages()->at(0).set_migrationcheckperiod(2);
@@ -297,8 +298,7 @@ TEST_CASE_METHOD(
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
-    faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
+    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -323,6 +323,7 @@ TEST_CASE_METHOD(
     int timeToSleep = 4 * checkPeriodSecs * 1000;
     req->mutable_messages()->at(0).set_inputdata(std::to_string(timeToSleep));
     uint32_t appId = req->messages().at(0).appid();
+    uint32_t msgId = req->messages().at(0).id();
 
     // Opt in to be migrated
     req->mutable_messages()->at(0).set_migrationcheckperiod(checkPeriodSecs);
@@ -355,8 +356,7 @@ TEST_CASE_METHOD(
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
-    faabric::Message res =
-      sch.getFunctionResult(req->messages().at(0), 2 * timeToSleep);
+    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     SLEEP_MS(100);
@@ -415,6 +415,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     firstMsg->set_mpiworldid(worldId);
     firstMsg->set_migrationcheckperiod(checkPeriodSecs);
     uint32_t appId = req->messages().at(0).appid();
+    uint32_t msgId = req->messages().at(0).id();
 
     // Call function that wil just sleep
     auto decision = sch.callFunctions(req);
@@ -455,8 +456,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts, true);
 
-    faabric::Message res =
-      sch.getFunctionResult(req->messages(0), 2 * timeToSleep);
+    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Clean up

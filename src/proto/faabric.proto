@@ -120,14 +120,15 @@ message Message {
 
     // Exec-graph utils
     bool recordExecGraph = 35 [json_name = "record_exec_graph"];
-    map<string, int32> intExecGraphDetails = 36;
-    map<string, string> execGraphDetails = 37;
+    repeated int32 chainedMsgIds = 36;
+    map<string, int32> intExecGraphDetails = 37;
+    map<string, string> execGraphDetails = 38;
 
     // Function migration
-    int32 migrationCheckPeriod = 38 [json_name = "migration_check_period"];
+    int32 migrationCheckPeriod = 39 [json_name = "migration_check_period"];
 
     // Scheduling
-    string topologyHint = 39 [json_name = "topology_hint"];
+    string topologyHint = 40 [json_name = "topology_hint"];
 }
 
 // ---------------------------------------------

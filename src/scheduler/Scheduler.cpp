@@ -30,8 +30,7 @@
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
-#define GET_EXEC_GRAPH_SLEEP_MS 500
-#define MAX_GET_EXEC_GRAPH_RETRIES 3
+#define EXEC_GRAPH_TIMEOUT_MS 1000
 
 using namespace faabric::util;
 using namespace faabric::snapshot;
@@ -203,6 +202,7 @@ void Scheduler::reset()
     // Reset resources
     thisHostResources = faabric::HostResources();
     thisHostResources.set_slots(faabric::util::getUsableCores());
+    thisHostResources.set_usedslots(0);
 
     // Reset scheduler state
     availableHostsCache.clear();
@@ -900,14 +900,6 @@ faabric::util::SchedulingDecision Scheduler::doCallFunctions(
                 for (auto i : thisHostIdxs) {
                     faabric::Message& localMsg = req->mutable_messages()->at(i);
 
-                    if (localMsg.executeslocally()) {
-                        faabric::util::UniqueLock resultsLock(
-                          localResultsMutex);
-                        localResults.insert(
-                          { localMsg.id(),
-                            std::make_shared<MessageLocalResult>() });
-                    }
-
                     std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
                     e->executeTasks({ i }, req);
                 }
@@ -1147,8 +1139,6 @@ void Scheduler::flushLocally()
 
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
     // Record which host did the execution
     msg.set_executedhost(faabric::util::getSystemConfig().endpointHost);
 
@@ -1161,29 +1151,32 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
         removePendingMigration(msg.appid());
     }
 
-    if (msg.executeslocally()) {
-        faabric::util::UniqueLock resultsLock(localResultsMutex);
+    // Let the planner know this function has finished execution. This will
+    // wake any thread waiting on this result
+    getPlannerClient()->setMessageResult(
+      std::make_shared<faabric::Message>(msg));
+}
 
-        auto it = localResults.find(msg.id());
-        if (it != localResults.end()) {
-            it->second->setValue(std::make_unique<faabric::Message>(msg));
-        }
+// This function sets a message result locally. It is invoked as a callback
+// from the planner to notify all hosts waiting for a message result that the
+// result is ready
+void Scheduler::setMessageResultLocally(std::shared_ptr<faabric::Message> msg)
+{
+    faabric::util::UniqueLock lock(plannerResultsMutex);
 
-        // Sync messages can't have their results read twice, so skip
-        // redis
-        if (!msg.isasync()) {
-            return;
-        }
+    // It may happen that the planner returns the message result before we
+    // have had time to prepare the promise. This should happen rarely as it
+    // is an unexpected race condition, thus why we emit a warning
+    if (plannerResults.find(msg->id()) == plannerResults.end()) {
+        SPDLOG_WARN(
+          "Setting message result before promise is set for (id: {}, app: {})",
+          msg->id(),
+          msg->appid());
+        plannerResults.insert(
+          { msg->id(), std::make_shared<MessageResultPromise>() });
     }
 
-    std::string key = msg.resultkey();
-    if (key.empty()) {
-        throw std::runtime_error("Result key empty. Cannot publish result");
-    }
-
-    // Write the successful result to the result queue
-    std::vector<uint8_t> inputData = faabric::util::messageToBytes(msg);
-    redis.publishSchedulerResult(key, msg.statuskey(), inputData);
+    plannerResults.at(msg->id())->set_value(msg);
 }
 
 void Scheduler::registerThread(uint32_t msgId)
@@ -1313,177 +1306,91 @@ size_t Scheduler::getCachedMessageCount()
 faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
                                               int timeoutMs)
 {
-    bool isBlocking = timeoutMs > 0;
-    int messageId = msg.id();
-
-    if (messageId == 0) {
-        throw std::runtime_error("Must provide non-zero message ID");
-    }
-
-    do {
-        std::future<std::unique_ptr<faabric::Message>> fut;
-        {
-            faabric::util::UniqueLock resultsLock(localResultsMutex);
-            auto it = localResults.find(messageId);
-            if (it == localResults.end()) {
-                break; // fallback to redis
-            }
-            fut = it->second->promise.get_future();
-        }
-        if (!isBlocking) {
-            auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
-            if (status == std::future_status::timeout) {
-                faabric::Message msgResult;
-                msgResult.set_type(faabric::Message_MessageType_EMPTY);
-                return msgResult;
-            }
-        } else {
-            fut.wait();
-        }
-
-        {
-            faabric::util::UniqueLock resultsLock(localResultsMutex);
-            localResults.erase(messageId);
-        }
-
-        return *fut.get();
-    } while (0);
-
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    std::string resultKey = faabric::util::resultKeyFromMessageId(messageId);
-
-    faabric::Message msgResult;
-
-    if (isBlocking) {
-        // Blocking version will throw an exception when timing out
-        // which is handled by the caller.
-        std::vector<uint8_t> result = redis.dequeueBytes(resultKey, timeoutMs);
-        msgResult.ParseFromArray(result.data(), (int)result.size());
-    } else {
-        // Non-blocking version will tolerate empty responses, therefore
-        // we handle the exception here
-        std::vector<uint8_t> result;
-        try {
-            result = redis.dequeueBytes(resultKey, timeoutMs);
-        } catch (redis::RedisNoResponseException& ex) {
-            // Ok for no response when not blocking
-        }
-
-        if (result.empty()) {
-            // Empty result has special type
-            msgResult.set_type(faabric::Message_MessageType_EMPTY);
-        } else {
-            // Normal response if we get something from redis
-            msgResult.ParseFromArray(result.data(), (int)result.size());
-        }
-    }
-
-    return msgResult;
+    // Deliberately make a copy here so that we can set the masterhost when
+    // registering interest in the results
+    auto msgPtr = std::make_shared<faabric::Message>(msg);
+    msgPtr->set_masterhost(thisHost);
+    return doGetFunctionResult(msgPtr, timeoutMs);
 }
 
-void Scheduler::getFunctionResultAsync(
-  const faabric::Message& msg,
-  int timeoutMs,
-  asio::io_context& ioc,
-  asio::any_io_executor& executor,
-  std::function<void(faabric::Message&)> handler)
+faabric::Message Scheduler::getFunctionResult(int appId,
+                                              int msgId,
+                                              int timeoutMs)
 {
-    int messageId = msg.id();
+    auto msgPtr = std::make_shared<faabric::Message>();
+    msgPtr->set_appid(appId);
+    msgPtr->set_id(msgId);
+    msgPtr->set_masterhost(thisHost);
+    return doGetFunctionResult(msgPtr, timeoutMs);
+}
 
-    if (messageId == 0) {
-        throw std::runtime_error("Must provide non-zero message ID");
+// This method gets the function result from the planner in a blocking fashion.
+// Even though the results are stored in the planner, we want to block in the
+// client (i.e. here) and not in the planner. This is to avoid consuming
+// planner threads. This method will first query the planner once
+// for the result. If its not there, the planner will register this host's
+// interest, and send a function call setting the message result. In the
+// meantime, we wait on a promise
+faabric::Message Scheduler::doGetFunctionResult(
+  std::shared_ptr<faabric::Message> msgPtr,
+  int timeoutMs)
+{
+    int msgId = msgPtr->id();
+    auto resMsgPtr = getPlannerClient()->getMessageResult(msgPtr);
+
+    // If when we first check the message it is there, return. Otherwise, we
+    // will have told the planner we want the result
+    if (resMsgPtr) {
+        return *resMsgPtr;
     }
 
-    do {
-        std::shared_ptr<MessageLocalResult> mlr;
-        // Try to find matching local promise
-        {
-            faabric::util::UniqueLock resultsLock(localResultsMutex);
-            auto it = localResults.find(messageId);
-            if (it == localResults.end()) {
-                break; // Fallback to redis
-            }
-            mlr = it->second;
+    bool isBlocking = timeoutMs > 0;
+    // If the result is not in the planner, and we are not blocking, return
+    if (!isBlocking) {
+        faabric::Message msgResult;
+        msgResult.set_type(faabric::Message_MessageType_EMPTY);
+        return msgResult;
+    }
+
+    // If we are here, we need to wait for the planner to let us know that
+    // the message is ready. To do so, we need to set a promise at the message
+    // id. We do so immediately after returning, so that we don't race with
+    // the planner sending the result back
+    std::future<std::shared_ptr<faabric::Message>> fut;
+    {
+        faabric::util::UniqueLock lock(plannerResultsMutex);
+
+        if (plannerResults.find(msgId) == plannerResults.end()) {
+            plannerResults.insert(
+              { msgId, std::make_shared<MessageResultPromise>() });
         }
-        // Asio wrapper for the MLR eventfd
-        class MlrAwaiter : public std::enable_shared_from_this<MlrAwaiter>
+
+        // Note that it is deliberately an error for two threads to retrieve
+        // the future at the same time
+        fut = plannerResults.at(msgId)->get_future();
+    }
+
+    while (true) {
+        faabric::Message msgResult;
+        auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
+        if (status == std::future_status::timeout) {
+            msgResult.set_type(faabric::Message_MessageType_EMPTY);
+        } else {
+            // Acquire a lock to read the value of the promise to avoid data
+            // races
+            faabric::util::UniqueLock lock(plannerResultsMutex);
+            msgResult = *fut.get();
+        }
+
         {
-          public:
-            unsigned int messageId;
-            Scheduler* sched;
-            std::shared_ptr<MessageLocalResult> mlr;
-            asio::posix::stream_descriptor dsc;
-            std::function<void(faabric::Message&)> handler;
+            // Remove the result promise irrespective of whether we timed out
+            // or not, as promises are single-use
+            faabric::util::UniqueLock lock(plannerResultsMutex);
+            plannerResults.erase(msgId);
+        }
 
-            MlrAwaiter(unsigned int messageId,
-                       Scheduler* sched,
-                       std::shared_ptr<MessageLocalResult> mlr,
-                       asio::posix::stream_descriptor dsc,
-                       std::function<void(faabric::Message&)> handler)
-              : messageId(messageId)
-              , sched(sched)
-              , mlr(std::move(mlr))
-              , dsc(std::move(dsc))
-              , handler(handler)
-            {}
-
-            ~MlrAwaiter()
-            {
-                // Ensure that Asio doesn't close the eventfd, to prevent a
-                // double-close in the MLR destructor
-                dsc.release();
-            }
-
-            void await(const boost::system::error_code& ec)
-            {
-                if (!ec) {
-                    auto msg = mlr->promise.get_future().get();
-                    handler(*msg);
-                    {
-                        faabric::util::UniqueLock resultsLock(
-                          sched->localResultsMutex);
-                        sched->localResults.erase(messageId);
-                    }
-                } else {
-                    // The waiting task can spuriously wake up, requeue if this
-                    // happens
-                    doAwait();
-                }
-            }
-
-            // Schedule this task waiting on the eventfd in the Asio queue
-            void doAwait()
-            {
-                dsc.async_wait(asio::posix::stream_descriptor::wait_read,
-                               beast::bind_front_handler(
-                                 &MlrAwaiter::await, this->shared_from_this()));
-            }
-        };
-        auto awaiter = std::make_shared<MlrAwaiter>(
-          messageId,
-          this,
-          mlr,
-          asio::posix::stream_descriptor(ioc, mlr->eventFd),
-          std::move(handler));
-        awaiter->doAwait();
-        return;
-    } while (0);
-
-    // TODO: Use a non-blocking redis API here to avoid stalling the async
-    // worker thread
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    std::string resultKey = faabric::util::resultKeyFromMessageId(messageId);
-
-    faabric::Message msgResult;
-
-    // Blocking version will throw an exception when timing out
-    // which is handled by the caller.
-    std::vector<uint8_t> result = redis.dequeueBytes(resultKey, timeoutMs);
-    msgResult.ParseFromArray(result.data(), (int)result.size());
-
-    handler(msgResult);
+        return msgResult;
+    }
 }
 
 faabric::HostResources Scheduler::getThisHostResources()
@@ -1521,83 +1428,53 @@ std::string getChainedKey(unsigned int msgId)
     return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
 }
 
-void Scheduler::logChainedFunction(const faabric::Message& parentMessage,
+void Scheduler::logChainedFunction(faabric::Message& parentMessage,
                                    const faabric::Message& chainedMessage)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    int parentMessageId = parentMessage.id();
-    int chainedMessageId = chainedMessage.id();
-
-    const std::string& key = getChainedKey(parentMessageId);
-    redis.sadd(key, std::to_string(chainedMessageId));
-    redis.expire(key, STATUS_KEY_EXPIRY);
+    parentMessage.add_chainedmsgids(chainedMessage.id());
 }
 
-std::set<unsigned int> Scheduler::getChainedFunctions(unsigned int msgId)
+std::set<unsigned int> Scheduler::getChainedFunctions(
+  const faabric::Message& msg)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    const std::string& key = getChainedKey(msgId);
-    const std::set<std::string> chainedCalls = redis.smembers(key);
-    std::set<unsigned int> chainedIds;
-
-    for (auto i : chainedCalls) {
-        chainedIds.insert(std::stoi(i));
-    }
+    // Note that we can't get the chained functions until the result for the
+    // parent message has been set
+    auto resultMsg = getFunctionResult(msg, EXEC_GRAPH_TIMEOUT_MS);
+    std::set<unsigned int> chainedIds(
+      resultMsg.mutable_chainedmsgids()->begin(),
+      resultMsg.mutable_chainedmsgids()->end());
 
     return chainedIds;
 }
 
-ExecGraph Scheduler::getFunctionExecGraph(unsigned int messageId)
+ExecGraph Scheduler::getFunctionExecGraph(const faabric::Message& msg)
 {
-    ExecGraphNode rootNode = getFunctionExecGraphNode(messageId);
+    ExecGraphNode rootNode = getFunctionExecGraphNode(msg.appid(), msg.id());
     ExecGraph graph{ .rootNode = rootNode };
 
     return graph;
 }
 
-ExecGraphNode Scheduler::getFunctionExecGraphNode(unsigned int messageId)
+ExecGraphNode Scheduler::getFunctionExecGraphNode(int appId, int msgId)
 {
-    redis::Redis& redis = redis::Redis::getQueue();
-
-    // Get the result for this message
-    std::string statusKey = faabric::util::statusKeyFromMessageId(messageId);
-
-    // We want to make sure the message bytes have been populated by the time
-    // we get them from Redis. For the time being, we retry a number of times
-    // and fail if we don't succeed.
-    std::vector<uint8_t> messageBytes = redis.get(statusKey);
-    int numRetries = 0;
-    while (messageBytes.empty() && numRetries < MAX_GET_EXEC_GRAPH_RETRIES) {
-        SPDLOG_WARN(
-          "Retry GET message for ExecGraph node with id {} (Retry {}/{})",
-          messageId,
-          numRetries + 1,
-          MAX_GET_EXEC_GRAPH_RETRIES);
-        SLEEP_MS(GET_EXEC_GRAPH_SLEEP_MS);
-        messageBytes = redis.get(statusKey);
-        ++numRetries;
+    auto resultMsg = getFunctionResult(appId, msgId, EXEC_GRAPH_TIMEOUT_MS);
+    if (resultMsg.type() == faabric::Message_MessageType_EMPTY) {
+        SPDLOG_ERROR(
+          "Timed-out getting exec graph node for msg id: {} (app: {})",
+          msgId,
+          appId);
+        throw std::runtime_error("Timed-out waiting for function result");
     }
-    if (messageBytes.empty()) {
-        SPDLOG_ERROR("Can't GET message from redis (id: {}, key: {})",
-                     messageId,
-                     statusKey);
-        throw std::runtime_error("Message for exec graph not in Redis");
-    }
-
-    faabric::Message result;
-    result.ParseFromArray(messageBytes.data(), (int)messageBytes.size());
 
     // Recurse through chained calls
-    std::set<unsigned int> chainedMsgIds = getChainedFunctions(messageId);
+    std::set<unsigned int> chainedMsgIds = getChainedFunctions(resultMsg);
     std::vector<ExecGraphNode> children;
-    for (auto c : chainedMsgIds) {
-        children.emplace_back(getFunctionExecGraphNode(c));
+    for (auto chainedMsgId : chainedMsgIds) {
+        children.emplace_back(getFunctionExecGraphNode(appId, chainedMsgId));
     }
 
     // Build the node
-    ExecGraphNode node{ .msg = result, .children = children };
+    ExecGraphNode node{ .msg = resultMsg, .children = children };
 
     return node;
 }

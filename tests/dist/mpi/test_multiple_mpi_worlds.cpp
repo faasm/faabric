@@ -66,8 +66,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
     checkAllocationAndResult(req2, 15000, skipExecGraphCheck);
 
     // Check exec graph for first request
-    auto execGraph1 =
-      sch.getFunctionExecGraph(req1->mutable_messages()->at(0).id());
+    auto execGraph1 = sch.getFunctionExecGraph(req1->mutable_messages()->at(0));
     std::vector<std::string> expectedHosts1 = {
         getMasterIP(), getMasterIP(), getWorkerIP(), getWorkerIP()
     };
@@ -75,8 +74,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
             faabric::scheduler::getMpiRankHostsFromExecGraph(execGraph1));
 
     // Check exec graph for second request
-    auto execGraph2 =
-      sch.getFunctionExecGraph(req2->mutable_messages()->at(0).id());
+    auto execGraph2 = sch.getFunctionExecGraph(req2->mutable_messages()->at(0));
     std::vector<std::string> expectedHosts2 = { getWorkerIP(), getWorkerIP(),
                                                 getMasterIP(), getMasterIP(),
                                                 getWorkerIP(), getWorkerIP() };

@@ -65,7 +65,7 @@ void FaabricEndpointHandler::onRequest(
         } else if (msg.isexecgraphrequest()) {
             SPDLOG_DEBUG("Processing execution graph request");
             faabric::scheduler::ExecGraph execGraph =
-              sched.getFunctionExecGraph(msg.id());
+              sched.getFunctionExecGraph(msg);
             response.result(beast::http::status::ok);
             response.body() = faabric::scheduler::execGraphToJson(execGraph);
 
@@ -92,7 +92,9 @@ void FaabricEndpointHandler::executeFunction(
   size_t messageIndex)
 {
     faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    faabric::Message& msg = *ber->mutable_messages(messageIndex);
+    // Deliberately make a copy here to avoid data races. The BER message will
+    // be used for execution, the message copy to wait on the function result
+    faabric::Message msg = ber->messages(messageIndex);
 
     if (msg.user().empty()) {
         response.result(beast::http::status::bad_request);
@@ -127,27 +129,16 @@ void FaabricEndpointHandler::executeFunction(
     // Await result on global bus (may have been executed on a different worker)
     if (msg.isasync()) {
         response.result(beast::http::status::ok);
-        response.body() = faabric::util::buildAsyncResponse(msg);
+        response.body() = faabric::util::messageToJson(msg);
         return ctx.sendFunction(std::move(response));
     }
 
+    // TODO: temporarily make this HTTP call block one server thread.
+    // Eventually. we will route all HTTP requests through the planner instead
+    // of the worker, so we will be able to remove this blocking call
     SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
-    sch.getFunctionResultAsync(
-      msg,
-      conf.globalMessageTimeout,
-      ctx.ioc,
-      ctx.executor,
-      beast::bind_front_handler(&FaabricEndpointHandler::onFunctionResult,
-                                this->shared_from_this(),
-                                std::move(ctx),
-                                std::move(response)));
-}
+    auto result = sch.getFunctionResult(msg, conf.globalMessageTimeout);
 
-void FaabricEndpointHandler::onFunctionResult(
-  HttpRequestContext&& ctx,
-  faabric::util::BeastHttpResponse&& response,
-  faabric::Message& result)
-{
     beast::http::status statusCode =
       (result.returnvalue() == 0) ? beast::http::status::ok
                                   : beast::http::status::internal_server_error;
@@ -159,5 +150,4 @@ void FaabricEndpointHandler::onFunctionResult(
     response.body() = result.outputdata();
     return ctx.sendFunction(std::move(response));
 }
-
 }

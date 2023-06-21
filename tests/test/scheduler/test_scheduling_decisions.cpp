@@ -9,7 +9,7 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-class SchedulingDecisionTestFixture : public SchedulerTestFixture
+class SchedulingDecisionTestFixture : public SchedulerFixture
 {
   public:
     SchedulingDecisionTestFixture()

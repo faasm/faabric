@@ -18,8 +18,8 @@ using namespace faabric::state;
 namespace tests {
 
 class SimpleStateServerTestFixture
-  : public StateTestFixture
-  , public ConfTestFixture
+  : public StateFixture
+  , public ConfFixture
 {
   public:
     SimpleStateServerTestFixture()
@@ -58,9 +58,7 @@ class SimpleStateServerTestFixture
     std::vector<uint8_t> dataB;
 };
 
-TEST_CASE_METHOD(ConfTestFixture,
-                 "Test setting state server threads",
-                 "[state]")
+TEST_CASE_METHOD(ConfFixture, "Test setting state server threads", "[state]")
 {
     conf.stateServerThreads = 7;
 

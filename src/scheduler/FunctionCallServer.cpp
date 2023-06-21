@@ -29,6 +29,10 @@ void FunctionCallServer::doAsyncRecv(transport::Message& message)
             recvUnregister(message.udata());
             break;
         }
+        case faabric::scheduler::FunctionCalls::SetMessageResult: {
+            recvSetMessageResult(message.udata());
+            break;
+        }
         default: {
             throw std::runtime_error(
               fmt::format("Unrecognized async call header: {}", header));
@@ -112,5 +116,12 @@ FunctionCallServer::recvPendingMigrations(std::span<const uint8_t> buffer)
     scheduler.addPendingMigration(msgPtr);
 
     return std::make_unique<faabric::EmptyResponse>();
+}
+
+void FunctionCallServer::recvSetMessageResult(std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(faabric::Message, buffer.data(), buffer.size())
+    scheduler.setMessageResultLocally(
+      std::make_shared<faabric::Message>(parsedMsg));
 }
 }

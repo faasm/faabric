@@ -24,8 +24,9 @@ using namespace faabric::transport;
 namespace tests {
 
 class PointToPointGroupFixture
-  : public ConfTestFixture
+  : public ConfFixture
   , public PointToPointClientServerFixture
+  , public SchedulerFixture
 {
   public:
     PointToPointGroupFixture()

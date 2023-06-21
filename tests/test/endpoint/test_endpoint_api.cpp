@@ -69,7 +69,9 @@ class EndpointApiTestExecutorFactory : public ExecutorFactory
     }
 };
 
-class EndpointApiTestFixture : public SchedulerTestFixture
+class EndpointApiTestFixture
+  : public FunctionCallClientServerFixture
+  , public SchedulerFixture
 {
   public:
     EndpointApiTestFixture()
@@ -161,15 +163,18 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
     std::string body = faabric::util::messageToJson(msg);
 
     std::pair<int, std::string> result = postToUrl(LOCALHOST, port, body);
+    faabric::Message response;
+    faabric::util::jsonToMessage(result.second, &response);
 
     REQUIRE(result.first == 200);
-    REQUIRE(result.second == std::to_string(msg.id()));
+    REQUIRE(response.id() == msg.id());
 
     // Make a status request, should still be running
     faabric::Message statusMsg;
     statusMsg.set_user("foo");
     statusMsg.set_function("blah");
     statusMsg.set_id(msg.id());
+    statusMsg.set_appid(msg.appid());
     statusMsg.set_isstatusrequest(true);
 
     std::string statusBody = faabric::util::messageToJson(statusMsg);

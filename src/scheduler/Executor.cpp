@@ -391,7 +391,7 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
 {
     SPDLOG_DEBUG("Thread pool thread {}:{} starting up", id, threadPoolIdx);
 
-    const auto& conf = faabric::util::getSystemConfig();
+    const auto conf = faabric::util::getSystemConfig();
 
     // We terminate these threads by sending a shutdown message, but having this
     // check means they won't hang infinitely if destructed.

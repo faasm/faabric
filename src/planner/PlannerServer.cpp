@@ -47,6 +47,12 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::doSyncRecv(
         case PlannerCalls::RemoveHost: {
             return recvRemoveHost(message.udata());
         }
+        case PlannerCalls::SetMessageResult: {
+            return recvSetMessageResult(message.udata());
+        }
+        case PlannerCalls::GetMessageResult: {
+            return recvGetMessageResult(message.udata());
+        }
         default: {
             // If we don't recognise the header, let the client fail, but don't
             // crash the planner
@@ -115,5 +121,32 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRemoveHost(
     planner.removeHost(parsedMsg.host());
 
     return std::make_unique<faabric::EmptyResponse>();
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvSetMessageResult(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(Message, buffer.data(), buffer.size());
+
+    planner.setMessageResult(std::make_shared<faabric::Message>(parsedMsg));
+
+    return std::make_unique<faabric::EmptyResponse>();
+}
+
+std::unique_ptr<google::protobuf::Message> PlannerServer::recvGetMessageResult(
+  std::span<const uint8_t> buffer)
+{
+    PARSE_MSG(Message, buffer.data(), buffer.size());
+
+    auto resultMsg =
+      planner.getMessageResult(std::make_shared<faabric::Message>(parsedMsg));
+
+    if (resultMsg == nullptr) {
+        resultMsg = std::make_shared<faabric::Message>();
+        resultMsg->set_appid(0);
+        resultMsg->set_id(0);
+    }
+
+    return std::make_unique<faabric::Message>(*resultMsg);
 }
 }

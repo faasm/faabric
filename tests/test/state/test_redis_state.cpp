@@ -38,7 +38,7 @@ static std::shared_ptr<StateKeyValue> setupKV(size_t size)
     return kv;
 }
 
-TEST_CASE_METHOD(StateTestFixture, "Test Redis state sizes", "[state]")
+TEST_CASE_METHOD(StateFixture, "Test Redis state sizes", "[state]")
 {
     setUpStateMode("redis");
 
@@ -60,7 +60,7 @@ TEST_CASE_METHOD(StateTestFixture, "Test Redis state sizes", "[state]")
     REQUIRE(s.getStateSize(user, key) == bytes.size());
 }
 
-TEST_CASE_METHOD(StateTestFixture, "Test simple redis state get/set", "[state]")
+TEST_CASE_METHOD(StateFixture, "Test simple redis state get/set", "[state]")
 {
     setUpStateMode("redis");
 
@@ -93,7 +93,7 @@ TEST_CASE_METHOD(StateTestFixture, "Test simple redis state get/set", "[state]")
     REQUIRE(redisState.get(actualKey) == values);
 }
 
-TEST_CASE_METHOD(StateTestFixture, "Test redis get/ set segment", "[state]")
+TEST_CASE_METHOD(StateFixture, "Test redis get/ set segment", "[state]")
 {
     setUpStateMode("redis");
 
@@ -134,7 +134,7 @@ TEST_CASE_METHOD(StateTestFixture, "Test redis get/ set segment", "[state]")
     REQUIRE(redisState.get(actualKey) == expected);
 }
 
-TEST_CASE_METHOD(StateTestFixture,
+TEST_CASE_METHOD(StateFixture,
                  "Test redis pulls segment even when already allocated",
                  "[state]")
 {
@@ -168,9 +168,7 @@ TEST_CASE_METHOD(StateTestFixture,
     REQUIRE(actualChunk == expectedChunk);
 }
 
-TEST_CASE_METHOD(StateTestFixture,
-                 "Test redis marking segments dirty",
-                 "[state]")
+TEST_CASE_METHOD(StateFixture, "Test redis marking segments dirty", "[state]")
 {
     setUpStateMode("redis");
 
@@ -203,7 +201,7 @@ TEST_CASE_METHOD(StateTestFixture,
     REQUIRE(actualMemory == values);
 }
 
-TEST_CASE_METHOD(StateTestFixture,
+TEST_CASE_METHOD(StateFixture,
                  "Test redis overlaps with multiple segments dirty",
                  "[state]")
 {
@@ -258,7 +256,7 @@ TEST_CASE_METHOD(StateTestFixture,
     REQUIRE(redisState.get(key) == expected);
 }
 
-TEST_CASE_METHOD(StateTestFixture,
+TEST_CASE_METHOD(StateFixture,
                  "Test redis partial update of doubles in state",
                  "[state]")
 {
@@ -313,7 +311,7 @@ TEST_CASE_METHOD(StateTestFixture,
     REQUIRE(expected == actualFromRedis);
 }
 
-TEST_CASE_METHOD(StateTestFixture,
+TEST_CASE_METHOD(StateFixture,
                  "Test redis partially setting just first/ last element",
                  "[state]")
 {
@@ -353,9 +351,7 @@ TEST_CASE_METHOD(StateTestFixture,
     REQUIRE(redisState.get(actualKey) == expected);
 }
 
-TEST_CASE_METHOD(StateTestFixture,
-                 "Test redis push partial with mask",
-                 "[state]")
+TEST_CASE_METHOD(StateFixture, "Test redis push partial with mask", "[state]")
 {
     setUpStateMode("redis");
 
@@ -415,7 +411,7 @@ TEST_CASE_METHOD(StateTestFixture,
     REQUIRE(actualDoubles2 == expected);
 }
 
-TEST_CASE_METHOD(StateTestFixture, "Test redis async pulling", "[state]")
+TEST_CASE_METHOD(StateFixture, "Test redis async pulling", "[state]")
 {
     setUpStateMode("redis");
 
@@ -441,7 +437,7 @@ TEST_CASE_METHOD(StateTestFixture, "Test redis async pulling", "[state]")
     REQUIRE(actual == values);
 }
 
-TEST_CASE_METHOD(StateTestFixture,
+TEST_CASE_METHOD(StateFixture,
                  "Test redis pushing only happens when dirty",
                  "[state]")
 {
@@ -472,7 +468,7 @@ TEST_CASE_METHOD(StateTestFixture,
 }
 
 TEST_CASE_METHOD(
-  StateTestFixture,
+  StateFixture,
   "Test redis mapping shared memory does not pull if not initialised",
   "[state]")
 {
@@ -506,7 +502,7 @@ TEST_CASE_METHOD(
     REQUIRE(actualValue == value);
 }
 
-TEST_CASE_METHOD(StateTestFixture, "Test redis state pulling", "[state]")
+TEST_CASE_METHOD(StateFixture, "Test redis state pulling", "[state]")
 {
     setUpStateMode("redis");
 
@@ -531,7 +527,7 @@ TEST_CASE_METHOD(StateTestFixture, "Test redis state pulling", "[state]")
     REQUIRE(actual == expected);
 }
 
-TEST_CASE_METHOD(StateTestFixture, "Test redis state deletion", "[state]")
+TEST_CASE_METHOD(StateFixture, "Test redis state deletion", "[state]")
 {
     setUpStateMode("redis");
 

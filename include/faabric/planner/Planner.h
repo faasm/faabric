@@ -37,7 +37,7 @@ class Planner
     bool flush(faabric::planner::FlushType flushType);
 
     // ----------
-    // Host membership management
+    // Host membership public API
     // ----------
 
     std::vector<std::shared_ptr<Host>> getAvailableHosts();
@@ -46,6 +46,17 @@ class Planner
 
     // Best effort host removal. Don't fail if we can't
     void removeHost(const Host& hostIn);
+
+    // ----------
+    // Request scheduling public API
+    // ----------
+
+    // Setters/getters for individual message results
+
+    void setMessageResult(std::shared_ptr<faabric::Message> msg);
+
+    std::shared_ptr<faabric::Message> getMessageResult(
+      std::shared_ptr<faabric::Message> msg);
 
   private:
     // There's a singleton instance of the planner running, but it must allow

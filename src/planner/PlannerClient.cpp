@@ -112,4 +112,23 @@ void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
     faabric::EmptyResponse response;
     syncSend(PlannerCalls::RemoveHost, req.get(), &response);
 }
+
+void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
+{
+    faabric::EmptyResponse response;
+    syncSend(PlannerCalls::SetMessageResult, msg.get(), &response);
+}
+
+std::shared_ptr<faabric::Message> PlannerClient::getMessageResult(
+  std::shared_ptr<faabric::Message> msg)
+{
+    faabric::Message responseMsg;
+    syncSend(PlannerCalls::GetMessageResult, msg.get(), &responseMsg);
+
+    if (responseMsg.id() == 0 && responseMsg.appid() == 0) {
+        return nullptr;
+    }
+
+    return std::make_shared<faabric::Message>(responseMsg);
+}
 }

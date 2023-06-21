@@ -31,6 +31,8 @@ namespace faabric::scheduler {
 typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
                   std::shared_ptr<faabric::util::SchedulingDecision>>
   InFlightPair;
+typedef std::promise<std::shared_ptr<faabric::Message>> MessageResultPromise;
+typedef std::shared_ptr<MessageResultPromise> MessageResultPromisePtr;
 
 class Scheduler;
 
@@ -261,16 +263,17 @@ class Scheduler
 
     void flushLocally();
 
+    // ----------------------------------
+    // Message results
+    // ----------------------------------
     void setFunctionResult(faabric::Message& msg);
+
+    void setMessageResultLocally(std::shared_ptr<faabric::Message> msg);
 
     faabric::Message getFunctionResult(const faabric::Message& msg,
                                        int timeoutMs);
 
-    void getFunctionResultAsync(const faabric::Message& msg,
-                                int timeoutMs,
-                                asio::io_context& ioc,
-                                asio::any_io_executor& executor,
-                                std::function<void(faabric::Message&)> handler);
+    faabric::Message getFunctionResult(int appId, int msgId, int timeoutMs);
 
     void setThreadResult(const faabric::Message& msg,
                          int32_t returnValue,
@@ -344,12 +347,12 @@ class Scheduler
     // ----------------------------------
     // Exec graph
     // ----------------------------------
-    void logChainedFunction(const faabric::Message& parentMessage,
+    void logChainedFunction(faabric::Message& parentMessage,
                             const faabric::Message& chainedMessage);
 
-    std::set<unsigned int> getChainedFunctions(unsigned int msgId);
+    std::set<unsigned int> getChainedFunctions(const faabric::Message& msg);
 
-    ExecGraph getFunctionExecGraph(unsigned int msgId);
+    ExecGraph getFunctionExecGraph(const faabric::Message& msg);
 
     // ----------------------------------
     // Function Migration
@@ -394,12 +397,14 @@ class Scheduler
     std::unordered_map<uint32_t, faabric::transport::Message>
       threadResultMessages;
 
-    std::unordered_map<uint32_t, std::shared_ptr<MessageLocalResult>>
-      localResults;
-
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
 
-    std::mutex localResultsMutex;
+    // ---- Message results ----
+    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
+    std::mutex plannerResultsMutex;
+    faabric::Message doGetFunctionResult(
+      std::shared_ptr<faabric::Message> msgPtr,
+      int timeoutMs);
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;
@@ -443,7 +448,7 @@ class Scheduler
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
 
-    ExecGraphNode getFunctionExecGraphNode(unsigned int msgId);
+    ExecGraphNode getFunctionExecGraphNode(int appId, int msgId);
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;

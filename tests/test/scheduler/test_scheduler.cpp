@@ -74,21 +74,21 @@ class SlowExecutorFactory : public ExecutorFactory
     }
 };
 
-class SlowExecutorFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public ConfTestFixture
-  , public SnapshotTestFixture
+class SlowExecutorTestFixture
+  : public FunctionCallClientServerFixture
+  , public SchedulerFixture
+  , public SnapshotRegistryFixture
+  , public ConfFixture
 {
   public:
-    SlowExecutorFixture()
+    SlowExecutorTestFixture()
     {
         std::shared_ptr<ExecutorFactory> fac =
           std::make_shared<SlowExecutorFactory>();
         setExecutorFactory(fac);
     };
 
-    ~SlowExecutorFixture()
+    ~SlowExecutorTestFixture()
     {
         std::shared_ptr<DummyExecutorFactory> fac =
           std::make_shared<DummyExecutorFactory>();
@@ -96,21 +96,21 @@ class SlowExecutorFixture
     };
 };
 
-class DummyExecutorFixture
-  : public RedisTestFixture
-  , public SchedulerTestFixture
-  , public ConfTestFixture
-  , public PointToPointTestFixture
+class DummyExecutorTestFixture
+  : public FunctionCallClientServerFixture
+  , public PointToPointBrokerFixture
+  , public SchedulerFixture
+  , public ConfFixture
 {
   public:
-    DummyExecutorFixture()
+    DummyExecutorTestFixture()
     {
         std::shared_ptr<ExecutorFactory> fac =
           std::make_shared<DummyExecutorFactory>();
         setExecutorFactory(fac);
     };
 
-    ~DummyExecutorFixture()
+    ~DummyExecutorTestFixture()
     {
         std::shared_ptr<DummyExecutorFactory> fac =
           std::make_shared<DummyExecutorFactory>();
@@ -118,7 +118,9 @@ class DummyExecutorFixture
     };
 };
 
-TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorTestFixture,
+                 "Test scheduler clear-up",
+                 "[scheduler]")
 {
     faabric::util::setMockMode(true);
 
@@ -177,7 +179,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test scheduler clear-up", "[scheduler]")
     REQUIRE(resCheck.usedslots() == 0);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Test scheduler available hosts",
                  "[scheduler]")
 {
@@ -205,7 +207,9 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(actualHosts == expectedHosts);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorTestFixture,
+                 "Test batch scheduling",
+                 "[scheduler]")
 {
     std::string expectedSnapshot;
     faabric::BatchExecuteRequest::BatchExecuteType execMode;
@@ -281,6 +285,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     faabric::scheduler::queueResourceResponse(otherHost, otherResources);
 
     // Set up the messages
+    std::vector<int> reqOneMsgIds;
     faabric::util::SchedulingDecision expectedDecisionOne(firstMsg.appid(),
                                                           firstMsg.groupid());
     for (int i = 0; i < nCallsOne; i++) {
@@ -297,6 +302,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
         // Expect this host to handle up to its number of cores
         std::string host = i < thisCores ? thisHost : otherHost;
         expectedDecisionOne.addMessage(host, msg);
+
+        reqOneMsgIds.push_back(msg.id());
     }
 
     // Schedule the functions
@@ -312,11 +319,10 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
     // Await the results
     for (int i = 0; i < thisCores; i++) {
-        faabric::Message& m = reqOne->mutable_messages()->at(i);
         if (isThreads) {
-            sch.awaitThreadResult(m.id());
+            sch.awaitThreadResult(reqOneMsgIds.at(i));
         } else {
-            sch.getFunctionResult(m, 10000);
+            sch.getFunctionResult(appId, reqOneMsgIds.at(i), 10000);
         }
     }
 
@@ -379,6 +385,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     std::shared_ptr<faabric::BatchExecuteRequest> reqTwo =
       faabric::util::batchExecFactory("foo", "bar", nCallsTwo);
 
+    std::vector<int> reqTwoMsgIds;
     const faabric::Message& firstMsg2 = reqTwo->messages().at(0);
     faabric::util::SchedulingDecision expectedDecisionTwo(appId,
                                                           firstMsg2.groupid());
@@ -394,6 +401,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
         std::string host = i < thisCores ? thisHost : otherHost;
         expectedDecisionTwo.addMessage(host, msg);
+
+        reqTwoMsgIds.push_back(msg.id());
     }
 
     // Create the batch request
@@ -408,11 +417,10 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
 
     // Await the results
     for (int i = 0; i < thisCores; i++) {
-        faabric::Message& m = reqTwo->mutable_messages()->at(i);
         if (isThreads) {
-            sch.awaitThreadResult(m.id());
+            sch.awaitThreadResult(reqTwoMsgIds.at(i));
         } else {
-            sch.getFunctionResult(m, 10000);
+            sch.getFunctionResult(appId, reqTwoMsgIds.at(i), 10000);
         }
     }
 
@@ -442,7 +450,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test batch scheduling", "[scheduler]")
     REQUIRE(pTwo.second->messages_size() == nCallsTwo - thisCores);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Test overloaded scheduler",
                  "[scheduler]")
 {
@@ -540,7 +548,9 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     }
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture, "Test unregistering host", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorTestFixture,
+                 "Test unregistering host",
+                 "[scheduler]")
 {
     faabric::util::setMockMode(true);
 
@@ -580,7 +590,7 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Test unregistering host", "[scheduler]")
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
+TEST_CASE_METHOD(SlowExecutorTestFixture, "Check test mode", "[scheduler]")
 {
     auto reqA = faabric::util::batchExecFactory("demo", "echo", 1);
     auto& msgA = *reqA->mutable_messages(0);
@@ -615,8 +625,8 @@ TEST_CASE_METHOD(SlowExecutorFixture, "Check test mode", "[scheduler]")
     }
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
-                 "Global message queue tests",
+TEST_CASE_METHOD(SlowExecutorTestFixture,
+                 "Test getting a function result",
                  "[scheduler]")
 {
     // Request function
@@ -628,25 +638,19 @@ TEST_CASE_METHOD(SlowExecutorFixture,
 
     sch.setFunctionResult(call);
 
-    // Check result has been written to the right key
-    REQUIRE(redis.listLength(call.resultkey()) == 1);
-
-    // Check that some expiry has been set
-    long ttl = redis.getTtl(call.resultkey());
-    REQUIRE(ttl > 10);
-
     // Check retrieval method gets the same call out again
     faabric::Message actualCall2 = sch.getFunctionResult(call, 1);
 
     checkMessageEquality(call, actualCall2);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Check multithreaded function results",
                  "[scheduler]")
 {
     int nWaiters = 10;
     int nWaiterMessages = 4;
+    conf.overrideCpuCount = nWaiters * nWaiterMessages;
 
     std::vector<std::jthread> waiterThreads;
 
@@ -655,16 +659,18 @@ TEST_CASE_METHOD(SlowExecutorFixture,
         waiterThreads.emplace_back([nWaiterMessages] {
             Scheduler& sch = scheduler::getScheduler();
 
-            faabric::Message msg =
-              faabric::util::messageFactory("demo", "echo");
-
-            // Invoke and await
             std::shared_ptr<faabric::BatchExecuteRequest> req =
               faabric::util::batchExecFactory("demo", "echo", nWaiterMessages);
-            sch.callFunctions(req);
+            int appId = req->messages(0).appid();
+            std::vector<int> msgIds;
+            std::for_each(req->mutable_messages()->begin(),
+                          req->mutable_messages()->end(),
+                          [&msgIds](auto msg) { msgIds.push_back(msg.id()); });
 
-            for (const auto& m : req->messages()) {
-                sch.getFunctionResult(m, 5000);
+            // Invoke and await
+            sch.callFunctions(req);
+            for (auto msgId : msgIds) {
+                sch.getFunctionResult(appId, msgId, 5000);
             }
         });
     }
@@ -677,7 +683,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     }
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Check getting function status",
                  "[scheduler]")
 {
@@ -730,62 +736,43 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(result.executedhost() == expectedHost);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
-                 "Check setting long-lived function status",
-                 "[scheduler]")
-{
-    // Create a message
-    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-    faabric::Message expected = msg;
-    expected.set_executedhost(util::getSystemConfig().endpointHost);
-
-    sch.setFunctionResult(msg);
-
-    std::vector<uint8_t> actual = redis.get(msg.statuskey());
-    REQUIRE(!actual.empty());
-
-    faabric::Message actualMsg;
-    actualMsg.ParseFromArray(actual.data(), (int)actual.size());
-
-    // We can't predict the finish timestamp, so have to manually copy here
-    REQUIRE(actualMsg.finishtimestamp() > 0);
-    expected.set_finishtimestamp(actualMsg.finishtimestamp());
-
-    checkMessageEquality(actualMsg, expected);
-}
-
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Check logging chained functions",
                  "[scheduler]")
 {
-    faabric::Message msg = faabric::util::messageFactory("demo", "echo");
-    faabric::Message chainedMsgA =
-      faabric::util::messageFactory("demo", "echo");
-    faabric::Message chainedMsgB =
-      faabric::util::messageFactory("demo", "echo");
-    faabric::Message chainedMsgC =
-      faabric::util::messageFactory("demo", "echo");
-    unsigned int chainedMsgIdA = faabric::util::setMessageId(chainedMsgA);
-    unsigned int chainedMsgIdB = faabric::util::setMessageId(chainedMsgB);
-    unsigned int chainedMsgIdC = faabric::util::setMessageId(chainedMsgC);
+    auto ber = faabric::util::batchExecFactory("demo", "echo", 4);
+    faabric::Message& msg = *ber->mutable_messages(0);
+    faabric::Message& chainedMsgA = *ber->mutable_messages(1);
+    faabric::Message& chainedMsgB = *ber->mutable_messages(2);
+    faabric::Message& chainedMsgC = *ber->mutable_messages(3);
+
+    // We need to set the function result in order to get the chained
+    // functions. We can do so multiple times
+    sch.setFunctionResult(msg);
 
     // Check empty initially
-    REQUIRE(sch.getChainedFunctions(msg.id()).empty());
+    REQUIRE(sch.getChainedFunctions(msg).empty());
 
     // Log and check this shows up in the result
     sch.logChainedFunction(msg, chainedMsgA);
-    std::set<unsigned int> expected = { chainedMsgIdA };
-    REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+    std::set<unsigned int> expected = { (unsigned int)chainedMsgA.id() };
+
+    sch.setFunctionResult(msg);
+    REQUIRE(sch.getChainedFunctions(msg) == expected);
 
     // Log some more and check
     sch.logChainedFunction(msg, chainedMsgA);
     sch.logChainedFunction(msg, chainedMsgB);
     sch.logChainedFunction(msg, chainedMsgC);
-    expected = { chainedMsgIdA, chainedMsgIdB, chainedMsgIdC };
-    REQUIRE(sch.getChainedFunctions(msg.id()) == expected);
+    expected = { (unsigned int)chainedMsgA.id(),
+                 (unsigned int)chainedMsgB.id(),
+                 (unsigned int)chainedMsgC.id() };
+
+    sch.setFunctionResult(msg);
+    REQUIRE(sch.getChainedFunctions(msg) == expected);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Test non-master batch request returned to master",
                  "[scheduler]")
 {
@@ -808,7 +795,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(actualReqs.at(0).second->id() == req->id());
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Test broadcast snapshot deletion",
                  "[scheduler]")
 {
@@ -862,7 +849,7 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(actualDeleteRequests == expectedDeleteRequests);
 }
 
-TEST_CASE_METHOD(SlowExecutorFixture,
+TEST_CASE_METHOD(SlowExecutorTestFixture,
                  "Test set thread results on remote host",
                  "[scheduler]")
 {
@@ -904,20 +891,23 @@ TEST_CASE_METHOD(SlowExecutorFixture,
     REQUIRE(actualRes.diffs.size() == diffs.size());
 }
 
-TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
+TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
 {
     std::shared_ptr<faabric::BatchExecuteRequest> reqA =
       faabric::util::batchExecFactory("foo", "bar", 2);
+    auto reqAMsgIds = { reqA->messages(0).id(), reqA->messages(1).id() };
     std::shared_ptr<faabric::BatchExecuteRequest> reqB =
       faabric::util::batchExecFactory("foo", "bar", 2);
+    auto reqBMsgIds = { reqB->messages(0).id(), reqB->messages(1).id() };
 
-    faabric::Message& msgA = reqA->mutable_messages()->at(0);
-    faabric::Message& msgB = reqB->mutable_messages()->at(0);
+    faabric::Message msgA = reqA->mutable_messages()->at(0);
+    faabric::Message msgB = reqB->mutable_messages()->at(0);
 
     // Execute a couple of functions
     sch.callFunctions(reqA);
-    for (const auto& m : reqA->messages()) {
-        faabric::Message res = sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
+    for (auto msgId : reqAMsgIds) {
+        faabric::Message res =
+          sch.getFunctionResult(msgA.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -926,8 +916,9 @@ TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
 
     // Execute a couple more functions
     sch.callFunctions(reqB);
-    for (const auto& m : reqB->messages()) {
-        faabric::Message res = sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
+    for (auto msgId : reqBMsgIds) {
+        faabric::Message res =
+          sch.getFunctionResult(msgB.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -936,7 +927,7 @@ TEST_CASE_METHOD(DummyExecutorFixture, "Test executor reuse", "[scheduler]")
     REQUIRE(sch.getFunctionExecutorCount(msgB) == 2);
 }
 
-TEST_CASE_METHOD(DummyExecutorFixture,
+TEST_CASE_METHOD(DummyExecutorTestFixture,
                  "Test point-to-point mappings sent from scheduler",
                  "[scheduler]")
 {
@@ -1022,12 +1013,15 @@ TEST_CASE_METHOD(DummyExecutorFixture,
 
     faabric::util::SchedulingDecision expectedDecision(appId, groupId);
 
+    std::vector<int> msgIds;
     for (int i = 0; i < req->messages().size(); i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
         m.set_groupid(groupId);
         m.set_groupidx(i);
 
         expectedDecision.addMessage(expectedHosts.at(i), req->messages().at(i));
+
+        msgIds.push_back(m.id());
     }
 
     if (forceLocal) {
@@ -1063,11 +1057,11 @@ TEST_CASE_METHOD(DummyExecutorFixture,
             continue;
         }
 
-        sch.getFunctionResult(req->messages(i), 10000);
+        sch.getFunctionResult(appId, msgIds.at(i), 10000);
     }
 }
 
-TEST_CASE_METHOD(DummyExecutorFixture,
+TEST_CASE_METHOD(DummyExecutorTestFixture,
                  "Test scheduler register and deregister threads",
                  "[scheduler]")
 {
@@ -1090,7 +1084,7 @@ TEST_CASE_METHOD(DummyExecutorFixture,
     REQUIRE(sch.getRegisteredThreads() == expected);
 }
 
-TEST_CASE_METHOD(DummyExecutorFixture,
+TEST_CASE_METHOD(DummyExecutorTestFixture,
                  "Test caching message data when setting thread result",
                  "[scheduler]")
 {
