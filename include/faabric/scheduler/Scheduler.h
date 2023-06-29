@@ -259,8 +259,6 @@ class Scheduler
       const std::string& function,
       bool acquireLock = true);
 
-    void broadcastFlush();
-
     void flushLocally();
 
     // ----------------------------------

@@ -20,13 +20,14 @@ class FaabricPlannerEndpointTestFixture
 {
   public:
     FaabricPlannerEndpointTestFixture()
-      : host(conf.plannerHost)
+      : host(LOCALHOST)
       , port(conf.plannerPort)
       , endpoint(
           port,
           faabric::planner::getPlanner().getConfig().numthreadshttpserver(),
           std::make_shared<faabric::planner::PlannerEndpointHandler>())
     {
+        conf.plannerHost = LOCALHOST;
         endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
     }
 
@@ -130,6 +131,61 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     // Check count is now zero again
     availableHosts = cli.getAvailableHosts();
     REQUIRE(availableHosts.empty());
+}
+
+TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+                 "Test flushing executors",
+                 "[planner]")
+{
+    faabric::util::setMockMode(true);
+
+    // faabric::scheduler::FunctionCallServer functionCallServer;
+    // faabric::scheduler::FunctionCallClient functionCallClient(LOCALHOST);
+
+    // TODO: start function client/server
+    // functionCallServer.start();
+
+    std::string hostA = "alpha";
+    std::string hostB = "beta";
+    std::string hostC = "gamma";
+    auto hostReqA = std::make_shared<faabric::planner::RegisterHostRequest>();
+    hostReqA->mutable_host()->set_ip(hostA);
+    auto hostReqB = std::make_shared<faabric::planner::RegisterHostRequest>();
+    hostReqB->mutable_host()->set_ip(hostB);
+    auto hostReqC = std::make_shared<faabric::planner::RegisterHostRequest>();
+    hostReqC->mutable_host()->set_ip(hostC);
+
+    std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
+
+    plannerCli.registerHost(hostReqA);
+    plannerCli.registerHost(hostReqB);
+    plannerCli.registerHost(hostReqC);
+
+    // Send flush request
+    HttpMessage msg;
+    expectedReturnCode = boost::beast::http::status::ok;
+    expectedResponseBody = "Flushed executors!";
+    msg.set_type(HttpMessage_Type_FLUSH_EXECUTORS);
+    msgJsonStr = faabric::util::messageToJson(msg);
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
+
+    // Make sure messages have been sent
+    auto calls = faabric::scheduler::getFlushCalls();
+    REQUIRE(calls.size() == 3);
+
+    std::vector<std::string> actualHosts;
+    for (auto c : calls) {
+        actualHosts.emplace_back(c.first);
+    }
+
+    REQUIRE(expectedHosts == actualHosts);
+
+    faabric::util::setMockMode(false);
+    faabric::scheduler::clearMockRequests();
+    faabric::scheduler::getScheduler().shutdown();
 }
 
 TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,

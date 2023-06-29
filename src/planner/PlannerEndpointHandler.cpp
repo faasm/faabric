@@ -72,6 +72,19 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_FLUSH_EXECUTORS: {
+            bool success = faabric::planner::getPlanner().flush(
+              faabric::planner::FlushType::Executors);
+            if (success) {
+                response.result(beast::http::status::ok);
+                response.body() = std::string("Flushed executors!");
+            } else {
+                // TODO: can we actually ever be here?
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("Failed flushing executors!");
+            }
+            return ctx.sendFunction(std::move(response));
+        }
         case faabric::planner::HttpMessage_Type_GET_CONFIG: {
             auto config = faabric::planner::getPlanner().getConfig();
             std::string responseStr;

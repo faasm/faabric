@@ -105,38 +105,6 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
 }
 
 TEST_CASE_METHOD(FunctionClientServerTestFixture,
-                 "Test broadcasting flush message",
-                 "[scheduler]")
-{
-    faabric::util::setMockMode(true);
-
-    std::string hostA = "alpha";
-    std::string hostB = "beta";
-    std::string hostC = "gamma";
-
-    std::vector<std::string> expectedHosts = { hostA, hostB, hostC };
-
-    sch.addHostToGlobalSet(hostA);
-    sch.addHostToGlobalSet(hostB);
-    sch.addHostToGlobalSet(hostC);
-
-    // Broadcast the flush
-    sch.broadcastFlush();
-
-    // Make sure messages have been sent
-    auto calls = faabric::scheduler::getFlushCalls();
-    REQUIRE(calls.size() == 3);
-
-    std::vector<std::string> actualHosts;
-    for (auto c : calls) {
-        actualHosts.emplace_back(c.first);
-    }
-
-    faabric::util::setMockMode(false);
-    faabric::scheduler::clearMockRequests();
-}
-
-TEST_CASE_METHOD(FunctionClientServerTestFixture,
                  "Test client batch execution request",
                  "[scheduler]")
 {

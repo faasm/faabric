@@ -1107,24 +1107,6 @@ std::string Scheduler::getThisHost()
     return thisHost;
 }
 
-void Scheduler::broadcastFlush()
-{
-    faabric::util::FullLock lock(mx);
-    // Get all hosts
-    std::set<std::string> allHosts = getAvailableHosts();
-
-    // Remove this host from the set
-    allHosts.erase(thisHost);
-
-    // Dispatch flush message to all other hosts
-    for (const auto& otherHost : allHosts) {
-        getFunctionCallClient(otherHost)->sendFlush();
-    }
-
-    lock.unlock();
-    flushLocally();
-}
-
 void Scheduler::flushLocally()
 {
     SPDLOG_INFO("Flushing host {}",
