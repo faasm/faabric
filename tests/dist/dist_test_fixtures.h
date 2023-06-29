@@ -53,10 +53,7 @@ class DistTestsFixture
 class MpiDistTestsFixture : public DistTestsFixture
 {
   public:
-    MpiDistTestsFixture()
-    {
-        SLEEP_MS(INTER_MPI_TEST_SLEEP);
-    }
+    MpiDistTestsFixture() { SLEEP_MS(INTER_MPI_TEST_SLEEP); }
 
     ~MpiDistTestsFixture() = default;
 
