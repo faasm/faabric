@@ -91,35 +91,38 @@ void FaabricEndpointHandler::executeFunction(
   std::shared_ptr<faabric::BatchExecuteRequest> ber,
   size_t messageIndex)
 {
-    faabric::util::SystemConfig& conf = faabric::util::getSystemConfig();
-    // Deliberately make a copy here to avoid data races. The BER message will
-    // be used for execution, the message copy to wait on the function result
-    faabric::Message msg = ber->messages(messageIndex);
+    auto& conf = faabric::util::getSystemConfig();
 
-    if (msg.user().empty()) {
+    // Set app ID, message ID and master host on the first message of the BER
+    // TODO: eventually do it on the BER itself
+    faabric::util::setMessageId(*ber->mutable_messages(0));
+    ber->mutable_messages(0)->set_masterhost(conf.endpointHost);
+    int appId = ber->messages(0).appid();
+    int msgId = ber->messages(0).id();
+    assert(appId != 0);
+    assert(msgId != 0);
+
+    if (ber->messages(0).user().empty()) {
         response.result(beast::http::status::bad_request);
         response.body() = std::string("Empty user");
         return ctx.sendFunction(std::move(response));
     }
 
-    if (msg.function().empty()) {
+    if (ber->messages(0).function().empty()) {
         response.result(beast::http::status::bad_request);
         response.body() = std::string("Empty function");
         return ctx.sendFunction(std::move(response));
     }
 
-    // Set message ID and master host
-    faabric::util::setMessageId(msg);
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    msg.set_masterhost(thisHost);
     // This is set to false by the scheduler if the function ends up being sent
     // elsewhere
-    if (!msg.isasync()) {
-        msg.set_executeslocally(true);
+    if (!ber->messages(0).isasync()) {
+        ber->mutable_messages(0)->set_executeslocally(true);
     }
 
     auto tid = gettid();
-    const std::string funcStr = faabric::util::funcToString(msg, true);
+    const std::string funcStr =
+      faabric::util::funcToString(ber->messages(0), true);
     SPDLOG_DEBUG("Worker HTTP thread {} scheduling {}", tid, funcStr);
 
     // Schedule it
@@ -127,9 +130,9 @@ void FaabricEndpointHandler::executeFunction(
     sch.callFunctions(ber);
 
     // Await result on global bus (may have been executed on a different worker)
-    if (msg.isasync()) {
+    if (ber->messages(0).isasync()) {
         response.result(beast::http::status::ok);
-        response.body() = faabric::util::messageToJson(msg);
+        response.body() = faabric::util::messageToJson(ber->messages(0));
         return ctx.sendFunction(std::move(response));
     }
 
@@ -137,7 +140,8 @@ void FaabricEndpointHandler::executeFunction(
     // Eventually. we will route all HTTP requests through the planner instead
     // of the worker, so we will be able to remove this blocking call
     SPDLOG_DEBUG("Worker thread {} awaiting {}", tid, funcStr);
-    auto result = sch.getFunctionResult(msg, conf.globalMessageTimeout);
+    auto result =
+      sch.getFunctionResult(appId, msgId, conf.globalMessageTimeout);
 
     beast::http::status statusCode =
       (result.returnvalue() == 0) ? beast::http::status::ok
