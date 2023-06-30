@@ -21,7 +21,6 @@ int main()
 
     // The faabric endpoint starts in the foreground
     SPDLOG_INFO("Starting planner endpoint");
-    SPDLOG_WARN("Hellooo");
     // We get the port from the global config, but the number of threads from
     // the planner config
     faabric::endpoint::FaabricEndpoint endpoint(

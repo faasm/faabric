@@ -139,12 +139,6 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
 {
     faabric::util::setMockMode(true);
 
-    // faabric::scheduler::FunctionCallServer functionCallServer;
-    // faabric::scheduler::FunctionCallClient functionCallClient(LOCALHOST);
-
-    // TODO: start function client/server
-    // functionCallServer.start();
-
     std::string hostA = "alpha";
     std::string hostB = "beta";
     std::string hostC = "gamma";

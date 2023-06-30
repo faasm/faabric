@@ -79,7 +79,6 @@ void PlannerEndpointHandler::onRequest(
                 response.result(beast::http::status::ok);
                 response.body() = std::string("Flushed executors!");
             } else {
-                // TODO: can we actually ever be here?
                 response.result(beast::http::status::internal_server_error);
                 response.body() = std::string("Failed flushing executors!");
             }
