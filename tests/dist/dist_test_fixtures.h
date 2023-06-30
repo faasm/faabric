@@ -53,12 +53,7 @@ class DistTestsFixture
 class MpiDistTestsFixture : public DistTestsFixture
 {
   public:
-    MpiDistTestsFixture()
-    {
-        // Flush before each execution to ensure a clean start
-        sch.broadcastFlush();
-        SLEEP_MS(INTER_MPI_TEST_SLEEP);
-    }
+    MpiDistTestsFixture() { SLEEP_MS(INTER_MPI_TEST_SLEEP); }
 
     ~MpiDistTestsFixture() = default;
 

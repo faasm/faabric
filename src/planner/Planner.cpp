@@ -54,6 +54,10 @@ bool Planner::flush(faabric::planner::FlushType flushType)
             SPDLOG_INFO("Planner flushing available hosts state");
             flushHosts();
             return true;
+        case faabric::planner::FlushType::Executors:
+            SPDLOG_INFO("Planner flushing executors");
+            flushExecutors();
+            return true;
         default:
             SPDLOG_ERROR("Unrecognised flush type");
             return false;
@@ -65,6 +69,17 @@ void Planner::flushHosts()
     faabric::util::FullLock lock(plannerMx);
 
     state.hostMap.clear();
+}
+
+void Planner::flushExecutors()
+{
+    auto availableHosts = getAvailableHosts();
+
+    auto& sch = faabric::scheduler::getScheduler();
+    for (const auto& host : availableHosts) {
+        SPDLOG_INFO("Planner sending EXECUTOR flush to {}", host->ip());
+        sch.getFunctionCallClient(host->ip())->sendFlush();
+    }
 }
 
 std::vector<std::shared_ptr<Host>> Planner::getAvailableHosts()
