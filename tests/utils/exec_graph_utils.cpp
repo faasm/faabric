@@ -4,9 +4,11 @@
 
 #include <faabric/util/logging.h>
 
+using namespace faabric::util;
+
 namespace tests {
-void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
-                                const scheduler::ExecGraphNode& nodeB)
+void checkExecGraphNodeEquality(const ExecGraphNode& nodeA,
+                                const ExecGraphNode& nodeB)
 {
     // Check the message itself
     checkMessageEquality(nodeA.msg, nodeB.msg);
@@ -23,8 +25,7 @@ void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
     }
 }
 
-void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
-                            const scheduler::ExecGraph& graphB)
+void checkExecGraphEquality(const ExecGraph& graphA, const ExecGraph& graphB)
 {
     checkExecGraphNodeEquality(graphA.rootNode, graphB.rootNode);
 }

@@ -4,20 +4,27 @@
 #include "fixtures.h"
 
 #include <faabric/mpi/MpiWorld.h>
-#include <faabric/redis/Redis.h>
+#include <faabric/planner/Planner.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
-#include <faabric/util/exec_graph.h>
 #include <faabric/util/macros.h>
 
-using namespace scheduler;
+using namespace faabric::util;
 
 namespace tests {
 class ExecGraphTestFixture
   : public FunctionCallClientServerFixture
   , public SchedulerFixture
-{};
+{
+  public:
+    ExecGraphTestFixture()
+      : planner(faabric::planner::getPlanner()){};
+
+  protected:
+    faabric::planner::Planner& planner;
+};
 
 TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[scheduler]")
 {
@@ -31,12 +38,12 @@ TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[scheduler]")
     faabric::Message msgD = *ber->mutable_messages(6);
 
     // Set up chaining relationships
-    sch.logChainedFunction(msgA, msgB1);
-    sch.logChainedFunction(msgA, msgB2);
-    sch.logChainedFunction(msgB1, msgC1);
-    sch.logChainedFunction(msgB2, msgC2);
-    sch.logChainedFunction(msgB2, msgC3);
-    sch.logChainedFunction(msgC2, msgD);
+    faabric::util::logChainedFunction(msgA, msgB1);
+    faabric::util::logChainedFunction(msgA, msgB2);
+    faabric::util::logChainedFunction(msgB1, msgC1);
+    faabric::util::logChainedFunction(msgB2, msgC2);
+    faabric::util::logChainedFunction(msgB2, msgC3);
+    faabric::util::logChainedFunction(msgC2, msgD);
 
     // Set all execution results
     scheduler::Scheduler& sch = scheduler::getScheduler();
@@ -48,7 +55,7 @@ TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[scheduler]")
     sch.setFunctionResult(msgC3);
     sch.setFunctionResult(msgD);
 
-    ExecGraph actual = sch.getFunctionExecGraph(msgA);
+    ExecGraph actual = *planner.getMessageExecGraph(msgA);
 
     ExecGraphNode nodeD = {
         .msg = msgD,
@@ -85,8 +92,7 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
 {
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
-    REQUIRE_THROWS(
-      faabric::scheduler::getScheduler().getFunctionExecGraph(msg));
+    REQUIRE(planner.getMessageExecGraph(msg) == nullptr);
 }
 
 TEST_CASE_METHOD(ExecGraphTestFixture,
@@ -110,7 +116,7 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
 
     ExecGraph graph{ .rootNode = nodeA };
     std::set<std::string> expected = { "bar", "baz", "foo" };
-    auto hosts = faabric::scheduler::getExecGraphHosts(graph);
+    auto hosts = faabric::util::getExecGraphHosts(graph);
     REQUIRE(hosts == expected);
 }
 
@@ -162,10 +168,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     */
     // Wait for the MPI messages to finish
     sch.getFunctionResult(msg, 2000);
-    for (const auto& id : sch.getChainedFunctions(msg)) {
+    for (const auto& id : faabric::util::getChainedFunctions(msg)) {
         sch.getFunctionResult(msg.appid(), id, 2000);
     }
-    ExecGraph actual = sch.getFunctionExecGraph(msg);
+    ExecGraph actual = *faabric::planner::getPlanner().getMessageExecGraph(msg);
 
     world.destroy();
 
@@ -205,9 +211,8 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
     REQUIRE(msg.recordexecgraph() == false);
 
     // If we add a recording while disabled, nothing changes
-    faabric::util::exec_graph::incrementCounter(
-      msg, expectedKey, expectedIntValue);
-    faabric::util::exec_graph::addDetail(msg, expectedKey, expectedStringValue);
+    faabric::util::incrementCounter(msg, expectedKey, expectedIntValue);
+    faabric::util::addDetail(msg, expectedKey, expectedStringValue);
     REQUIRE(msg.intexecgraphdetails_size() == 0);
     REQUIRE(msg.execgraphdetails_size() == 0);
 
@@ -215,9 +220,8 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
     msg.set_recordexecgraph(true);
 
     // We can add records either to a string or to an int map
-    faabric::util::exec_graph::incrementCounter(
-      msg, expectedKey, expectedIntValue);
-    faabric::util::exec_graph::addDetail(msg, expectedKey, expectedStringValue);
+    faabric::util::incrementCounter(msg, expectedKey, expectedIntValue);
+    faabric::util::addDetail(msg, expectedKey, expectedStringValue);
 
     // Both change the behaviour of the underlying message
     REQUIRE(msg.intexecgraphdetails_size() == 1);

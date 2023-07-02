@@ -98,6 +98,27 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
+        case faabric::planner::HttpMessage_Type_GET_EXEC_GRAPH: {
+            faabric::Message payloadMsg;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &payloadMsg);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in request body");
+                return ctx.sendFunction(std::move(response));
+            }
+            auto execGraph =
+              faabric::planner::getPlanner().getMessageExecGraph(payloadMsg);
+            if (execGraph == nullptr) {
+                SPDLOG_ERROR("Error processing GET_EXEC_GRAPH request");
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("Failed getting exec. graph!");
+            } else {
+                response.result(beast::http::status::ok);
+                response.body() = faabric::util::execGraphToJson(*execGraph);
+            }
+            return ctx.sendFunction(std::move(response));
+        }
         default: {
             SPDLOG_ERROR("Unrecognised message type {}", msg.type());
             response.result(beast::http::status::bad_request);

@@ -62,12 +62,6 @@ void FaabricEndpointHandler::onRequest(
                 response.result(beast::http::status::internal_server_error);
                 response.body() = "FAILED: " + result.outputdata();
             }
-        } else if (msg.isexecgraphrequest()) {
-            SPDLOG_DEBUG("Processing execution graph request");
-            faabric::scheduler::ExecGraph execGraph =
-              sched.getFunctionExecGraph(msg);
-            response.result(beast::http::status::ok);
-            response.body() = faabric::scheduler::execGraphToJson(execGraph);
         } else {
             executeFunction(
               std::move(ctx), std::move(response), std::move(req), 0);

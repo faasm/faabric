@@ -205,4 +205,31 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     REQUIRE(config.hosttimeout() > 0);
     REQUIRE(config.numthreadshttpserver() > 0);
 }
+
+TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+                 "Check getting execution graph from endpoint",
+                 "[planner]")
+{
+    // Prepare HTTP Message
+    HttpMessage msg;
+    msg.set_type(HttpMessage_Type_GET_EXEC_GRAPH);
+    auto ber = faabric::util::batchExecFactory("foo", "bar", 1);
+    int appId = ber->messages(0).appid();
+    int msgId = ber->messages(0).id();
+    msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
+    msgJsonStr = faabric::util::messageToJson(msg);
+
+    // Call a function first, and wait for the result
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.callFunctions(ber);
+    sch.getFunctionResult(appId, msgId, 1000);
+
+    // Send an HTTP request to get the execution graph
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+
+    // Parse the ExecGraph from the response
+    // TODO
+}
 }

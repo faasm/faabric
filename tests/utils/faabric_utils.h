@@ -2,9 +2,9 @@
 
 #include <catch2/catch.hpp>
 
-#include <faabric/scheduler/ExecGraph.h>
 #include <faabric/state/State.h>
 #include <faabric/state/StateServer.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/func.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
@@ -84,11 +84,11 @@ void checkSchedulingDecisionEquality(
   const faabric::util::SchedulingDecision& decisionA,
   const faabric::util::SchedulingDecision& decisionB);
 
-void checkExecGraphNodeEquality(const scheduler::ExecGraphNode& nodeA,
-                                const scheduler::ExecGraphNode& nodeB);
+void checkExecGraphNodeEquality(const faabric::util::ExecGraphNode& nodeA,
+                                const faabric::util::ExecGraphNode& nodeB);
 
-void checkExecGraphEquality(const scheduler::ExecGraph& graphA,
-                            const scheduler::ExecGraph& graphB);
+void checkExecGraphEquality(const faabric::util::ExecGraph& graphA,
+                            const faabric::util::ExecGraph& graphB);
 
 std::pair<int, std::string> postToUrl(const std::string& host,
                                       int port,

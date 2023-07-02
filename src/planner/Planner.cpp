@@ -1,5 +1,6 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -265,6 +266,56 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
     }
 
     return nullptr;
+}
+
+std::shared_ptr<faabric::util::ExecGraph> Planner::getMessageExecGraph(
+  const faabric::Message& msg)
+{
+    faabric::util::ExecGraphNode rootNode;
+    try {
+        rootNode = getFunctionExecGraphNode(msg.appid(), msg.id());
+    } catch (faabric::util::ExecGraphNodeNotFoundException& e) {
+        return nullptr;
+    }
+
+    faabric::util::ExecGraph graph{ .rootNode = rootNode };
+
+    return std::make_shared<faabric::util::ExecGraph>(graph);
+}
+
+faabric::util::ExecGraphNode Planner::getFunctionExecGraphNode(int appId,
+                                                               int msgId)
+{
+    // We build a new message from scratch everytime here. We could avoid it if
+    // it becomes a bottleneck
+    auto msgPtr = std::make_shared<faabric::Message>();
+    msgPtr->set_id(msgId);
+    msgPtr->set_appid(appId);
+    auto resultMsg = getMessageResult(msgPtr);
+
+    if (resultMsg == nullptr) {
+        SPDLOG_ERROR(
+          "Message result in exec. graph not ready (msg: {} - app: {})",
+          msgId,
+          appId);
+        throw faabric::util::ExecGraphNodeNotFoundException(
+          "Exec. Graph node not ready!");
+    }
+
+    // Recurse through chained calls
+    std::set<unsigned int> chainedMsgIds(
+      resultMsg->mutable_chainedmsgids()->begin(),
+      resultMsg->mutable_chainedmsgids()->end());
+    std::vector<faabric::util::ExecGraphNode> children;
+    for (auto chainedMsgId : chainedMsgIds) {
+        children.emplace_back(getFunctionExecGraphNode(appId, chainedMsgId));
+    }
+
+    // Build the node
+    faabric::util::ExecGraphNode node{ .msg = *resultMsg,
+                                       .children = children };
+
+    return node;
 }
 
 Planner& getPlanner()
