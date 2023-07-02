@@ -219,17 +219,31 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
     msgJsonStr = faabric::util::messageToJson(msg);
 
+    // Prepare the system to execute functions
+    faabric::scheduler::FunctionCallServer functionCallServer;
+    functionCallServer.start();
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+    faabric::scheduler::setExecutorFactory(fac);
+
     // Call a function first, and wait for the result
     auto& sch = faabric::scheduler::getScheduler();
     sch.callFunctions(ber);
-    sch.getFunctionResult(appId, msgId, 1000);
+    auto resultMsg = sch.getFunctionResult(appId, msgId, 1000);
+
+    // Set expectation
+    expectedReturnCode = boost::beast::http::status::ok;
+    faabric::util::ExecGraphNode rootNode = { .msg = resultMsg };
+    faabric::util::ExecGraph expectedGraph{ .rootNode = rootNode };
 
     // Send an HTTP request to get the execution graph
     std::pair<int, std::string> result = doPost(msgJsonStr);
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             expectedReturnCode);
+    REQUIRE(result.second == faabric::util::execGraphToJson(expectedGraph));
 
-    // Parse the ExecGraph from the response
-    // TODO
+    // Shutdown
+    functionCallServer.stop();
+    sch.shutdown();
 }
 }

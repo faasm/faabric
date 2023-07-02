@@ -49,6 +49,7 @@ void PlannerEndpointHandler::onRequest(
 
     switch (msg.type()) {
         case faabric::planner::HttpMessage_Type_RESET: {
+            SPDLOG_DEBUG("Planner received RESET request");
             bool success = faabric::planner::getPlanner().reset();
             if (success) {
                 response.result(beast::http::status::ok);
@@ -60,6 +61,7 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_FLUSH_HOSTS: {
+            SPDLOG_DEBUG("Planner received FLUSH_HOSTS request");
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Hosts);
             if (success) {
@@ -73,6 +75,7 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_FLUSH_EXECUTORS: {
+            SPDLOG_DEBUG("Planner received FLUSH_EXECUTORS request");
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Executors);
             if (success) {
@@ -85,6 +88,7 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_GET_CONFIG: {
+            SPDLOG_DEBUG("Planner received GET_CONFIG request");
             auto config = faabric::planner::getPlanner().getConfig();
             std::string responseStr;
             try {
@@ -99,6 +103,7 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_GET_EXEC_GRAPH: {
+            SPDLOG_DEBUG("Planner received GET_EXEC_GRAPH request");
             faabric::Message payloadMsg;
             try {
                 faabric::util::jsonToMessage(msg.payloadjson(), &payloadMsg);
