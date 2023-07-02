@@ -83,7 +83,6 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
                                               "async",
                                               "python",
                                               "status",
-                                              "exec_graph",
                                               "py_user",
                                               "py_func",
                                               "mpi",

@@ -217,7 +217,6 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     int appId = ber->messages(0).appid();
     int msgId = ber->messages(0).id();
     msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
-    msgJsonStr = faabric::util::messageToJson(msg);
 
     // Prepare the system to execute functions
     faabric::scheduler::FunctionCallServer functionCallServer;
@@ -232,15 +231,27 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     auto resultMsg = sch.getFunctionResult(appId, msgId, 1000);
 
     // Set expectation
-    expectedReturnCode = boost::beast::http::status::ok;
+    SECTION("Success")
+    {
+        expectedReturnCode = boost::beast::http::status::ok;
+    }
+    SECTION("Failure")
+    {
+        expectedReturnCode = beast::http::status::internal_server_error;
+        ber->mutable_messages(0)->set_appid(1337);
+        msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
+    }
     faabric::util::ExecGraphNode rootNode = { .msg = resultMsg };
     faabric::util::ExecGraph expectedGraph{ .rootNode = rootNode };
 
     // Send an HTTP request to get the execution graph
+    msgJsonStr = faabric::util::messageToJson(msg);
     std::pair<int, std::string> result = doPost(msgJsonStr);
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             expectedReturnCode);
-    REQUIRE(result.second == faabric::util::execGraphToJson(expectedGraph));
+    if (expectedReturnCode == boost::beast::http::status::ok) {
+        REQUIRE(result.second == faabric::util::execGraphToJson(expectedGraph));
+    }
 
     // Shutdown
     functionCallServer.stop();
