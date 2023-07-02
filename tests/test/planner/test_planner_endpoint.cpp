@@ -231,10 +231,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     auto resultMsg = sch.getFunctionResult(appId, msgId, 1000);
 
     // Set expectation
-    SECTION("Success")
-    {
-        expectedReturnCode = boost::beast::http::status::ok;
-    }
+    SECTION("Success") { expectedReturnCode = boost::beast::http::status::ok; }
     SECTION("Failure")
     {
         expectedReturnCode = beast::http::status::internal_server_error;
