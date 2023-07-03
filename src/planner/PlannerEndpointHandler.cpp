@@ -113,7 +113,8 @@ void PlannerEndpointHandler::onRequest(
                 return ctx.sendFunction(std::move(response));
             }
             auto execGraph = faabric::util::getFunctionExecGraph(payloadMsg);
-            if (faabric::util::countExecGraphNodes(execGraph) == 0) {
+            // An empty exec graph has one node with all fields null-ed
+            if (execGraph.rootNode.msg.id() == 0) {
                 SPDLOG_ERROR("Error processing GET_EXEC_GRAPH request");
                 response.result(beast::http::status::internal_server_error);
                 response.body() = std::string("Failed getting exec. graph!");
