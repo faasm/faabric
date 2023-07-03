@@ -2,6 +2,7 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 

@@ -1,6 +1,5 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/scheduler/Scheduler.h>
-#include <faabric/util/ExecGraph.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>

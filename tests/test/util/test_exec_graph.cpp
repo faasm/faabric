@@ -17,14 +17,7 @@ namespace tests {
 class ExecGraphTestFixture
   : public FunctionCallClientServerFixture
   , public SchedulerFixture
-{
-  public:
-    ExecGraphTestFixture()
-      : planner(faabric::planner::getPlanner()){};
-
-  protected:
-    faabric::planner::Planner& planner;
-};
+{};
 
 TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[util]")
 {
@@ -38,12 +31,12 @@ TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[util]")
     faabric::Message msgD = *ber->mutable_messages(6);
 
     // Set up chaining relationships
-    faabric::util::logChainedFunction(msgA, msgB1);
-    faabric::util::logChainedFunction(msgA, msgB2);
-    faabric::util::logChainedFunction(msgB1, msgC1);
-    faabric::util::logChainedFunction(msgB2, msgC2);
-    faabric::util::logChainedFunction(msgB2, msgC3);
-    faabric::util::logChainedFunction(msgC2, msgD);
+    logChainedFunction(msgA, msgB1);
+    logChainedFunction(msgA, msgB2);
+    logChainedFunction(msgB1, msgC1);
+    logChainedFunction(msgB2, msgC2);
+    logChainedFunction(msgB2, msgC3);
+    logChainedFunction(msgC2, msgD);
 
     // Set all execution results
     scheduler::Scheduler& sch = scheduler::getScheduler();
@@ -116,7 +109,7 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
 
     ExecGraph graph{ .rootNode = nodeA };
     std::set<std::string> expected = { "bar", "baz", "foo" };
-    auto hosts = faabric::util::getExecGraphHosts(graph);
+    auto hosts = getExecGraphHosts(graph);
     REQUIRE(hosts == expected);
 }
 
@@ -211,8 +204,8 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
     REQUIRE(msg.recordexecgraph() == false);
 
     // If we add a recording while disabled, nothing changes
-    faabric::util::incrementCounter(msg, expectedKey, expectedIntValue);
-    faabric::util::addDetail(msg, expectedKey, expectedStringValue);
+    incrementCounter(msg, expectedKey, expectedIntValue);
+    addDetail(msg, expectedKey, expectedStringValue);
     REQUIRE(msg.intexecgraphdetails_size() == 0);
     REQUIRE(msg.execgraphdetails_size() == 0);
 
@@ -220,8 +213,8 @@ TEST_CASE_METHOD(ExecGraphTestFixture,
     msg.set_recordexecgraph(true);
 
     // We can add records either to a string or to an int map
-    faabric::util::incrementCounter(msg, expectedKey, expectedIntValue);
-    faabric::util::addDetail(msg, expectedKey, expectedStringValue);
+    incrementCounter(msg, expectedKey, expectedIntValue);
+    addDetail(msg, expectedKey, expectedStringValue);
 
     // Both change the behaviour of the underlying message
     REQUIRE(msg.intexecgraphdetails_size() == 1);

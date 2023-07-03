@@ -2,7 +2,6 @@
 
 #include <faabric/planner/PlannerState.h>
 #include <faabric/planner/planner.pb.h>
-#include <faabric/util/ExecGraph.h>
 
 #include <shared_mutex>
 
