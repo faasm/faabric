@@ -99,7 +99,6 @@ message Message {
     bool isAsync = 20 [json_name = "async"];
     bool isPython = 21 [json_name = "python"];
     bool isStatusRequest = 22 [json_name = "status"];
-    bool isExecGraphRequest = 23 [json_name = "exec_graph"];
 
     string pythonUser = 24 [json_name = "py_user"];
     string pythonFunction = 25 [json_name = "py_func"];

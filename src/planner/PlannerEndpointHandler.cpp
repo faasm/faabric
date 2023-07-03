@@ -2,6 +2,7 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 
@@ -49,6 +50,7 @@ void PlannerEndpointHandler::onRequest(
 
     switch (msg.type()) {
         case faabric::planner::HttpMessage_Type_RESET: {
+            SPDLOG_DEBUG("Planner received RESET request");
             bool success = faabric::planner::getPlanner().reset();
             if (success) {
                 response.result(beast::http::status::ok);
@@ -60,6 +62,7 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_FLUSH_HOSTS: {
+            SPDLOG_DEBUG("Planner received FLUSH_HOSTS request");
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Hosts);
             if (success) {
@@ -73,6 +76,7 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_FLUSH_EXECUTORS: {
+            SPDLOG_DEBUG("Planner received FLUSH_EXECUTORS request");
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Executors);
             if (success) {
@@ -85,6 +89,7 @@ void PlannerEndpointHandler::onRequest(
             return ctx.sendFunction(std::move(response));
         }
         case faabric::planner::HttpMessage_Type_GET_CONFIG: {
+            SPDLOG_DEBUG("Planner received GET_CONFIG request");
             auto config = faabric::planner::getPlanner().getConfig();
             std::string responseStr;
             try {
@@ -95,6 +100,28 @@ void PlannerEndpointHandler::onRequest(
                 SPDLOG_ERROR("Error processing GET_CONFIG request");
                 response.result(beast::http::status::internal_server_error);
                 response.body() = std::string("Failed getting config!");
+            }
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_GET_EXEC_GRAPH: {
+            SPDLOG_DEBUG("Planner received GET_EXEC_GRAPH request");
+            faabric::Message payloadMsg;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &payloadMsg);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in request body");
+                return ctx.sendFunction(std::move(response));
+            }
+            auto execGraph = faabric::util::getFunctionExecGraph(payloadMsg);
+            // An empty exec graph has one node with all fields null-ed
+            if (execGraph.rootNode.msg.id() == 0) {
+                SPDLOG_ERROR("Error processing GET_EXEC_GRAPH request");
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("Failed getting exec. graph!");
+            } else {
+                response.result(beast::http::status::ok);
+                response.body() = faabric::util::execGraphToJson(execGraph);
             }
             return ctx.sendFunction(std::move(response));
         }

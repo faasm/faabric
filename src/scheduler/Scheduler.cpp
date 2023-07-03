@@ -30,7 +30,6 @@
 #include <unordered_set>
 
 #define FLUSH_TIMEOUT_MS 10000
-#define EXEC_GRAPH_TIMEOUT_MS 1000
 
 using namespace faabric::util;
 using namespace faabric::snapshot;
@@ -1408,57 +1407,6 @@ faabric::HostResources Scheduler::getHostResources(const std::string& host)
 std::string getChainedKey(unsigned int msgId)
 {
     return std::string(CHAINED_SET_PREFIX) + std::to_string(msgId);
-}
-
-void Scheduler::logChainedFunction(faabric::Message& parentMessage,
-                                   const faabric::Message& chainedMessage)
-{
-    parentMessage.add_chainedmsgids(chainedMessage.id());
-}
-
-std::set<unsigned int> Scheduler::getChainedFunctions(
-  const faabric::Message& msg)
-{
-    // Note that we can't get the chained functions until the result for the
-    // parent message has been set
-    auto resultMsg = getFunctionResult(msg, EXEC_GRAPH_TIMEOUT_MS);
-    std::set<unsigned int> chainedIds(
-      resultMsg.mutable_chainedmsgids()->begin(),
-      resultMsg.mutable_chainedmsgids()->end());
-
-    return chainedIds;
-}
-
-ExecGraph Scheduler::getFunctionExecGraph(const faabric::Message& msg)
-{
-    ExecGraphNode rootNode = getFunctionExecGraphNode(msg.appid(), msg.id());
-    ExecGraph graph{ .rootNode = rootNode };
-
-    return graph;
-}
-
-ExecGraphNode Scheduler::getFunctionExecGraphNode(int appId, int msgId)
-{
-    auto resultMsg = getFunctionResult(appId, msgId, EXEC_GRAPH_TIMEOUT_MS);
-    if (resultMsg.type() == faabric::Message_MessageType_EMPTY) {
-        SPDLOG_ERROR(
-          "Timed-out getting exec graph node for msg id: {} (app: {})",
-          msgId,
-          appId);
-        throw std::runtime_error("Timed-out waiting for function result");
-    }
-
-    // Recurse through chained calls
-    std::set<unsigned int> chainedMsgIds = getChainedFunctions(resultMsg);
-    std::vector<ExecGraphNode> children;
-    for (auto chainedMsgId : chainedMsgIds) {
-        children.emplace_back(getFunctionExecGraphNode(appId, chainedMsgId));
-    }
-
-    // Build the node
-    ExecGraphNode node{ .msg = resultMsg, .children = children };
-
-    return node;
 }
 
 // ----------------------------------------

@@ -26,9 +26,12 @@ TEST_CASE_METHOD(DistTestsFixture,
           faabric::util::batchExecFactory("funcs", "simple", nFuncs);
 
         // Add a fictional chaining dependency between functions
+        int appId = req->messages(0).appid();
+        std::vector<int> msgIds = { req->messages(0).id() };
         for (int i = 1; i < nFuncs; i++) {
-            sch.logChainedFunction(req->mutable_messages()->at(0),
-                                   req->mutable_messages()->at(i));
+            faabric::util::logChainedFunction(req->mutable_messages()->at(0),
+                                              req->mutable_messages()->at(i));
+            msgIds.push_back(req->messages(i).id());
         }
 
         // Call the functions
@@ -38,8 +41,10 @@ TEST_CASE_METHOD(DistTestsFixture,
 
         // Wait for the result, and immediately after query for the execution
         // graph
-        faabric::Message result = sch.getFunctionResult(m, 1000);
-        auto execGraph = sch.getFunctionExecGraph(m);
+        for (const auto msgId : msgIds) {
+            sch.getFunctionResult(appId, msgId, 1000);
+        }
+        auto execGraph = faabric::util::getFunctionExecGraph(m);
         REQUIRE(countExecGraphNodes(execGraph) == nFuncs);
 
         REQUIRE(execGraph.rootNode.msg.id() == m.id());

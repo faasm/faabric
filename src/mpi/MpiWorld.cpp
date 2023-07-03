@@ -2,8 +2,8 @@
 #include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/environment.h>
-#include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
@@ -141,7 +141,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
             // Log chained functions to generate execution graphs
             if (thisRankMsg->recordexecgraph()) {
-                sch.logChainedFunction(call, msg);
+                faabric::util::logChainedFunction(call, msg);
                 msg.set_recordexecgraph(true);
             }
         }

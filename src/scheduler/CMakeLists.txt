@@ -1,5 +1,4 @@
 faabric_lib(scheduler
-    ExecGraph.cpp
     ExecutorContext.cpp
     ExecutorFactory.cpp
     Executor.cpp

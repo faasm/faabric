@@ -13,6 +13,7 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
@@ -751,25 +752,25 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     sch.setFunctionResult(msg);
 
     // Check empty initially
-    REQUIRE(sch.getChainedFunctions(msg).empty());
+    REQUIRE(faabric::util::getChainedFunctions(msg).empty());
 
     // Log and check this shows up in the result
-    sch.logChainedFunction(msg, chainedMsgA);
+    faabric::util::logChainedFunction(msg, chainedMsgA);
     std::set<unsigned int> expected = { (unsigned int)chainedMsgA.id() };
 
     sch.setFunctionResult(msg);
-    REQUIRE(sch.getChainedFunctions(msg) == expected);
+    REQUIRE(faabric::util::getChainedFunctions(msg) == expected);
 
     // Log some more and check
-    sch.logChainedFunction(msg, chainedMsgA);
-    sch.logChainedFunction(msg, chainedMsgB);
-    sch.logChainedFunction(msg, chainedMsgC);
+    faabric::util::logChainedFunction(msg, chainedMsgA);
+    faabric::util::logChainedFunction(msg, chainedMsgB);
+    faabric::util::logChainedFunction(msg, chainedMsgC);
     expected = { (unsigned int)chainedMsgA.id(),
                  (unsigned int)chainedMsgB.id(),
                  (unsigned int)chainedMsgC.id() };
 
     sch.setFunctionResult(msg);
-    REQUIRE(sch.getChainedFunctions(msg) == expected);
+    REQUIRE(faabric::util::getChainedFunctions(msg) == expected);
 }
 
 TEST_CASE_METHOD(SlowExecutorTestFixture,

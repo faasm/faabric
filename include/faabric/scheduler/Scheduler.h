@@ -2,7 +2,6 @@
 
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/scheduler/InMemoryMessageQueue.h>
 #include <faabric/snapshot/SnapshotClient.h>
@@ -343,16 +342,6 @@ class Scheduler
     void clearRecordedMessages();
 
     // ----------------------------------
-    // Exec graph
-    // ----------------------------------
-    void logChainedFunction(faabric::Message& parentMessage,
-                            const faabric::Message& chainedMessage);
-
-    std::set<unsigned int> getChainedFunctions(const faabric::Message& msg);
-
-    ExecGraph getFunctionExecGraph(const faabric::Message& msg);
-
-    // ----------------------------------
     // Function Migration
     // ----------------------------------
     void checkForMigrationOpportunities();
@@ -445,8 +434,6 @@ class Scheduler
     std::vector<faabric::Message> recordedMessagesLocal;
     std::vector<std::pair<std::string, faabric::Message>>
       recordedMessagesShared;
-
-    ExecGraphNode getFunctionExecGraphNode(int appId, int msgId);
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;

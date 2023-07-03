@@ -1,5 +1,7 @@
 
 faabric_lib(util
+    ExecGraph.cpp
+    PeriodicBackgroundThread.cpp
     barrier.cpp
     bytes.cpp
     config.cpp
@@ -8,7 +10,6 @@ faabric_lib(util
     delta.cpp
     dirty.cpp
     environment.cpp
-    exec_graph.cpp
     files.cpp
     func.cpp
     gids.cpp
@@ -18,7 +19,6 @@ faabric_lib(util
     logging.cpp
     memory.cpp
     network.cpp
-    PeriodicBackgroundThread.cpp
     queue.cpp
     random.cpp
     scheduling.cpp

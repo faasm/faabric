@@ -4,7 +4,7 @@
 #include "fixtures.h"
 
 #include <faabric/mpi/MpiWorld.h>
-#include <faabric/util/exec_graph.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/json.h>
 #include <faabric/util/macros.h>
 

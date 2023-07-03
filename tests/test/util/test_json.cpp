@@ -26,7 +26,6 @@ class JsonTestFixture
         msg.set_isasync(true);
         msg.set_ispython(true);
         msg.set_isstatusrequest(true);
-        msg.set_isexecgraphrequest(true);
 
         msg.set_ismpi(true);
         msg.set_mpiworldid(1234);
@@ -84,7 +83,6 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
                                               "async",
                                               "python",
                                               "status",
-                                              "exec_graph",
                                               "py_user",
                                               "py_func",
                                               "mpi",

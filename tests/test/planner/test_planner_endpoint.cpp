@@ -205,4 +205,53 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     REQUIRE(config.hosttimeout() > 0);
     REQUIRE(config.numthreadshttpserver() > 0);
 }
+
+TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+                 "Check getting execution graph from endpoint",
+                 "[planner]")
+{
+    // Prepare HTTP Message
+    HttpMessage msg;
+    msg.set_type(HttpMessage_Type_GET_EXEC_GRAPH);
+    auto ber = faabric::util::batchExecFactory("foo", "bar", 1);
+    int appId = ber->messages(0).appid();
+    int msgId = ber->messages(0).id();
+    msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
+
+    // Prepare the system to execute functions
+    faabric::scheduler::FunctionCallServer functionCallServer;
+    functionCallServer.start();
+    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+      std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+    faabric::scheduler::setExecutorFactory(fac);
+
+    // Call a function first, and wait for the result
+    auto& sch = faabric::scheduler::getScheduler();
+    sch.callFunctions(ber);
+    auto resultMsg = sch.getFunctionResult(appId, msgId, 1000);
+
+    // Set expectation
+    SECTION("Success") { expectedReturnCode = boost::beast::http::status::ok; }
+    SECTION("Failure")
+    {
+        expectedReturnCode = beast::http::status::internal_server_error;
+        ber->mutable_messages(0)->set_appid(1337);
+        msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
+    }
+    faabric::util::ExecGraphNode rootNode = { .msg = resultMsg };
+    faabric::util::ExecGraph expectedGraph{ .rootNode = rootNode };
+
+    // Send an HTTP request to get the execution graph
+    msgJsonStr = faabric::util::messageToJson(msg);
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    if (expectedReturnCode == boost::beast::http::status::ok) {
+        REQUIRE(result.second == faabric::util::execGraphToJson(expectedGraph));
+    }
+
+    // Shutdown
+    functionCallServer.stop();
+    sch.shutdown();
+}
 }

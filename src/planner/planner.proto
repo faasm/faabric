@@ -38,9 +38,14 @@ message HttpMessage {
         FLUSH_HOSTS = 2;
         FLUSH_EXECUTORS = 3;
         GET_CONFIG = 4;
+        GET_EXEC_GRAPH = 5;
     }
 
     Type type = 1 [json_name = "http_type"];
+    // Payload parameter to populate with the message body if necessary. The
+    // body is only needed for:
+    // - GET_EXEC_GRAPH: where the body is a faabric::Message
+    string payloadJson = 2 [json_name = "payload"];
 }
 
 // ---------------------------------------------

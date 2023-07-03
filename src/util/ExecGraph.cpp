@@ -1,10 +1,83 @@
-#include <faabric/scheduler/ExecGraph.h>
 #include <faabric/scheduler/Scheduler.h>
-
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/json.h>
+#include <faabric/util/logging.h>
+
+#include <queue>
 #include <sstream>
 
-namespace faabric::scheduler {
+#define EXEC_GRAPH_TIMEOUT_MS 1000
+// TODO: avoid this duplication
+#define MIGRATED_FUNCTION_RETURN_VALUE -99
+
+namespace faabric::util {
+
+ExecGraph getFunctionExecGraph(const faabric::Message& msg)
+{
+    ExecGraphNode rootNode;
+    try {
+        rootNode = getFunctionExecGraphNode(msg.appid(), msg.id());
+    } catch (ExecGraphNodeNotFoundException& e) {
+        return ExecGraph{};
+    }
+
+    faabric::util::ExecGraph graph{ .rootNode = rootNode };
+
+    return graph;
+}
+
+ExecGraphNode getFunctionExecGraphNode(int appId, int msgId)
+{
+    // We build a new message from scratch everytime here. We could avoid it if
+    // it becomes a bottleneck
+    faabric::Message msg;
+    msg.set_id(msgId);
+    msg.set_appid(appId);
+    // Get result without blocking, as we expect the results to have been
+    // published already
+    faabric::Message resultMsg =
+      faabric::scheduler::getScheduler().getFunctionResult(msg, 0);
+    if (resultMsg.type() == faabric::Message_MessageType_EMPTY) {
+        SPDLOG_ERROR(
+          "Message result in exec. graph not ready (msg: {} - app: {})",
+          msgId,
+          appId);
+        throw ExecGraphNodeNotFoundException("Exec. Graph node not ready!");
+    }
+
+    // Recurse through chained calls
+    std::set<unsigned int> chainedMsgIds(
+      resultMsg.mutable_chainedmsgids()->begin(),
+      resultMsg.mutable_chainedmsgids()->end());
+    std::vector<ExecGraphNode> children;
+    for (auto chainedMsgId : chainedMsgIds) {
+        children.emplace_back(getFunctionExecGraphNode(appId, chainedMsgId));
+    }
+
+    // Build the node
+    ExecGraphNode node{ .msg = resultMsg, .children = children };
+
+    return node;
+}
+
+void logChainedFunction(faabric::Message& parentMessage,
+                        const faabric::Message& chainedMessage)
+{
+    parentMessage.add_chainedmsgids(chainedMessage.id());
+}
+
+std::set<unsigned int> getChainedFunctions(const faabric::Message& msg)
+{
+    // Note that we can't get the chained functions until the result for the
+    // parent message has been set
+    auto resultMsg = faabric::scheduler::getScheduler().getFunctionResult(
+      msg, EXEC_GRAPH_TIMEOUT_MS);
+    std::set<unsigned int> chainedIds(
+      resultMsg.mutable_chainedmsgids()->begin(),
+      resultMsg.mutable_chainedmsgids()->end());
+
+    return chainedIds;
+}
 
 int countExecGraphNode(const ExecGraphNode& node)
 {
@@ -78,7 +151,7 @@ getMigratedMpiRankHostsFromExecGraph(const ExecGraph& graph)
     std::vector<std::string> hostsBefore(graph.rootNode.msg.mpiworldsize());
     std::vector<std::string> hostsAfter(graph.rootNode.msg.mpiworldsize());
 
-    std::queue<faabric::scheduler::ExecGraphNode> nodeList;
+    std::queue<ExecGraphNode> nodeList;
     nodeList.push(graph.rootNode);
 
     // Instead of iterating the execution graph recursively, we do it
@@ -162,5 +235,31 @@ std::string execGraphToJson(const ExecGraph& graph)
         << " }";
 
     return res.str();
+}
+
+void addDetail(faabric::Message& msg,
+               const std::string& key,
+               const std::string& value)
+{
+    if (!msg.recordexecgraph()) {
+        return;
+    }
+
+    auto& stringMap = *msg.mutable_execgraphdetails();
+
+    stringMap[key] = value;
+}
+
+void incrementCounter(faabric::Message& msg,
+                      const std::string& key,
+                      const int valueToIncrement)
+{
+    if (!msg.recordexecgraph()) {
+        return;
+    }
+
+    auto& stringMap = *msg.mutable_intexecgraphdetails();
+
+    stringMap[key] += valueToIncrement;
 }
 }

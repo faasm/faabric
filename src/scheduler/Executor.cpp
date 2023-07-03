@@ -9,7 +9,6 @@
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
-#include <faabric/util/exec_graph.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/locks.h>
