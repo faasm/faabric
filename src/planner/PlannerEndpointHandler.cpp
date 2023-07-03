@@ -112,15 +112,14 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = std::string("Bad JSON in request body");
                 return ctx.sendFunction(std::move(response));
             }
-            auto execGraph =
-              faabric::planner::getPlanner().getMessageExecGraph(payloadMsg);
-            if (execGraph == nullptr) {
+            auto execGraph = faabric::util::getFunctionExecGraph(payloadMsg);
+            if (faabric::util::countExecGraphNodes(execGraph) == 0) {
                 SPDLOG_ERROR("Error processing GET_EXEC_GRAPH request");
                 response.result(beast::http::status::internal_server_error);
                 response.body() = std::string("Failed getting exec. graph!");
             } else {
                 response.result(beast::http::status::ok);
-                response.body() = faabric::util::execGraphToJson(*execGraph);
+                response.body() = faabric::util::execGraphToJson(execGraph);
             }
             return ctx.sendFunction(std::move(response));
         }

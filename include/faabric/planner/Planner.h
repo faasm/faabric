@@ -60,11 +60,6 @@ class Planner
     std::shared_ptr<faabric::Message> getMessageResult(
       std::shared_ptr<faabric::Message> msg);
 
-    // Given a message, return the message and its chained dependencies
-    // structured as a graph
-    std::shared_ptr<faabric::util::ExecGraph> getMessageExecGraph(
-      const faabric::Message& msg);
-
   private:
     // There's a singleton instance of the planner running, but it must allow
     // concurrent requests
@@ -79,12 +74,6 @@ class Planner
 
     // Check if a host's registration timestamp has expired
     bool isHostExpired(std::shared_ptr<Host> host, long epochTimeMs = 0);
-
-    // ----------
-    // Request scheduling private API
-    // ----------
-
-    faabric::util::ExecGraphNode getFunctionExecGraphNode(int appId, int msgId);
 };
 
 Planner& getPlanner();

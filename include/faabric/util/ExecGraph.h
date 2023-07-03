@@ -27,6 +27,10 @@ struct ExecGraph
     ExecGraphNode rootNode;
 };
 
+faabric::util::ExecGraphNode getFunctionExecGraphNode(int appId, int msgId);
+
+faabric::util::ExecGraph getFunctionExecGraph(const faabric::Message& msg);
+
 void logChainedFunction(faabric::Message& parentMessage,
                         const faabric::Message& chainedMessage);
 

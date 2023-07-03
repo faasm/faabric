@@ -6,6 +6,7 @@
 #include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/ExecGraph.h>
 #include <faabric/util/compare.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
@@ -844,7 +845,7 @@ void mpiMigrationPoint(int entrypointFuncArg)
         sch.callFunctions(req, decision);
 
         if (call->recordexecgraph()) {
-            sch.logChainedFunction(*call, msg);
+            faabric::util::logChainedFunction(*call, msg);
         }
 
         // Throw an exception to be caught by the executor and terminate

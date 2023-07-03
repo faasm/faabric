@@ -12,6 +12,54 @@
 
 namespace faabric::util {
 
+ExecGraph getFunctionExecGraph(const faabric::Message& msg)
+{
+    ExecGraphNode rootNode;
+    try {
+        rootNode = getFunctionExecGraphNode(msg.appid(), msg.id());
+    } catch (ExecGraphNodeNotFoundException& e) {
+        return ExecGraph{};
+    }
+
+    faabric::util::ExecGraph graph{ .rootNode = rootNode };
+
+    return graph;
+}
+
+ExecGraphNode getFunctionExecGraphNode(int appId, int msgId)
+{
+    // We build a new message from scratch everytime here. We could avoid it if
+    // it becomes a bottleneck
+    faabric::Message msg;
+    msg.set_id(msgId);
+    msg.set_appid(appId);
+    // Get result without blocking, as we expect the results to have been
+    // published already
+    faabric::Message resultMsg =
+      faabric::scheduler::getScheduler().getFunctionResult(msg, 0);
+    if (resultMsg.type() == faabric::Message_MessageType_EMPTY) {
+        SPDLOG_ERROR(
+          "Message result in exec. graph not ready (msg: {} - app: {})",
+          msgId,
+          appId);
+        throw ExecGraphNodeNotFoundException("Exec. Graph node not ready!");
+    }
+
+    // Recurse through chained calls
+    std::set<unsigned int> chainedMsgIds(
+      resultMsg.mutable_chainedmsgids()->begin(),
+      resultMsg.mutable_chainedmsgids()->end());
+    std::vector<ExecGraphNode> children;
+    for (auto chainedMsgId : chainedMsgIds) {
+        children.emplace_back(getFunctionExecGraphNode(appId, chainedMsgId));
+    }
+
+    // Build the node
+    ExecGraphNode node{ .msg = resultMsg, .children = children };
+
+    return node;
+}
+
 void logChainedFunction(faabric::Message& parentMessage,
                         const faabric::Message& chainedMessage)
 {

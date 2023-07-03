@@ -87,8 +87,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         return req;
     }
 
-    void checkSchedulingFromExecGraph(
-      const faabric::scheduler::ExecGraph& execGraph)
+    void checkSchedulingFromExecGraph(const faabric::util::ExecGraph& execGraph)
     {
         // Build the expectation
         std::vector<std::string> expecedHosts;
@@ -115,17 +114,17 @@ class MpiDistTestsFixture : public DistTestsFixture
 
         // Check against the actual scheduling decision
         REQUIRE(expecedHosts ==
-                faabric::scheduler::getMpiRankHostsFromExecGraph(execGraph));
+                faabric::util::getMpiRankHostsFromExecGraph(execGraph));
     }
 
     // Specialisation for migration tests
     void checkSchedulingFromExecGraph(
-      const faabric::scheduler::ExecGraph& execGraph,
+      const faabric::util::ExecGraph& execGraph,
       const std::vector<std::string> expectedHostsBefore,
       const std::vector<std::string> expectedHostsAfter)
     {
         auto actualHostsBeforeAndAfter =
-          faabric::scheduler::getMigratedMpiRankHostsFromExecGraph(execGraph);
+          faabric::util::getMigratedMpiRankHostsFromExecGraph(execGraph);
 
         REQUIRE(actualHostsBeforeAndAfter.first == expectedHostsBefore);
         REQUIRE(actualHostsBeforeAndAfter.second == expectedHostsAfter);
@@ -141,7 +140,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         REQUIRE(result.returnvalue() == 0);
         SLEEP_MS(1000);
         if (!skipExecGraphCheck) {
-            auto execGraph = sch.getFunctionExecGraph(msg);
+            auto execGraph = faabric::util::getFunctionExecGraph(msg);
             checkSchedulingFromExecGraph(execGraph);
         }
     }
@@ -156,7 +155,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         faabric::Message result = sch.getFunctionResult(msg, timeoutMs);
         REQUIRE(result.returnvalue() == 0);
         SLEEP_MS(1000);
-        auto execGraph = sch.getFunctionExecGraph(msg);
+        auto execGraph = faabric::util::getFunctionExecGraph(msg);
         checkSchedulingFromExecGraph(
           execGraph, expectedHostsBefore, expectedHostsAfter);
     }

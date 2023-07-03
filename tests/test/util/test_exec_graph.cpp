@@ -26,7 +26,7 @@ class ExecGraphTestFixture
     faabric::planner::Planner& planner;
 };
 
-TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[scheduler]")
+TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[util]")
 {
     auto ber = faabric::util::batchExecFactory("demo", "echo", 7);
     faabric::Message msgA = *ber->mutable_messages(0);
@@ -55,7 +55,7 @@ TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[scheduler]")
     sch.setFunctionResult(msgC3);
     sch.setFunctionResult(msgD);
 
-    ExecGraph actual = *planner.getMessageExecGraph(msgA);
+    ExecGraph actual = getFunctionExecGraph(msgA);
 
     ExecGraphNode nodeD = {
         .msg = msgD,
@@ -88,11 +88,11 @@ TEST_CASE_METHOD(ExecGraphTestFixture, "Test execution graph", "[scheduler]")
 
 TEST_CASE_METHOD(ExecGraphTestFixture,
                  "Test can't get exec graph if results are not published",
-                 "[scheduler][exec-graph]")
+                 "[util]")
 {
     faabric::Message msg = faabric::util::messageFactory("demo", "echo");
 
-    REQUIRE(planner.getMessageExecGraph(msg) == nullptr);
+    REQUIRE(getFunctionExecGraph(msg).rootNode.msg.id() == 0);
 }
 
 TEST_CASE_METHOD(ExecGraphTestFixture,
@@ -171,7 +171,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     for (const auto& id : faabric::util::getChainedFunctions(msg)) {
         sch.getFunctionResult(msg.appid(), id, 2000);
     }
-    ExecGraph actual = *faabric::planner::getPlanner().getMessageExecGraph(msg);
+    ExecGraph actual = getFunctionExecGraph(msg);
 
     world.destroy();
 
