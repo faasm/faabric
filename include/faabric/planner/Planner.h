@@ -2,6 +2,7 @@
 
 #include <faabric/planner/PlannerState.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/proto/faabric.pb.h>
 
 #include <shared_mutex>
 
@@ -58,6 +59,9 @@ class Planner
 
     std::shared_ptr<faabric::Message> getMessageResult(
       std::shared_ptr<faabric::Message> msg);
+
+    // Get all the results recorded for one batch
+    faabric::BatchExecuteRequestStatus getBatchResults(int32_t appId);
 
   private:
     // There's a singleton instance of the planner running, but it must allow

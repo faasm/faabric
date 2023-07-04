@@ -14,12 +14,12 @@
 using namespace faabric::planner;
 
 namespace tests {
-class FaabricPlannerEndpointTestFixture
+class PlannerEndpointTestFixture
   : public ConfFixture
   , public PlannerClientServerFixture
 {
   public:
-    FaabricPlannerEndpointTestFixture()
+    PlannerEndpointTestFixture()
       : host(LOCALHOST)
       , port(conf.plannerPort)
       , endpoint(
@@ -31,7 +31,7 @@ class FaabricPlannerEndpointTestFixture
         endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
     }
 
-    ~FaabricPlannerEndpointTestFixture() { endpoint.stop(); }
+    ~PlannerEndpointTestFixture() { endpoint.stop(); }
 
   protected:
     std::string host;
@@ -49,7 +49,7 @@ class FaabricPlannerEndpointTestFixture
     }
 };
 
-TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+TEST_CASE_METHOD(PlannerEndpointTestFixture,
                  "Test planner reset",
                  "[planner]")
 {
@@ -90,7 +90,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     REQUIRE(availableHosts.empty());
 }
 
-TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+TEST_CASE_METHOD(PlannerEndpointTestFixture,
                  "Test flushing available hosts",
                  "[planner]")
 {
@@ -133,7 +133,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     REQUIRE(availableHosts.empty());
 }
 
-TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+TEST_CASE_METHOD(PlannerEndpointTestFixture,
                  "Test flushing executors",
                  "[planner]")
 {
@@ -182,7 +182,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     faabric::scheduler::getScheduler().shutdown();
 }
 
-TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+TEST_CASE_METHOD(PlannerEndpointTestFixture,
                  "Test getting the planner config",
                  "[planner]")
 {
@@ -206,7 +206,30 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     REQUIRE(config.numthreadshttpserver() > 0);
 }
 
-TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
+class PlannerEndpointExecTestFixture
+  : public PlannerEndpointTestFixture
+  , public FunctionCallClientServerFixture
+{
+  public:
+    PlannerEndpointExecTestFixture() : sch(faabric::scheduler::getScheduler())
+    {
+      sch.reset();
+
+      std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+        std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+      faabric::scheduler::setExecutorFactory(fac);
+    }
+
+    ~PlannerEndpointExecTestFixture()
+    {
+        sch.shutdown();
+    }
+
+  protected:
+    faabric::scheduler::Scheduler& sch;
+};
+
+TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
                  "Check getting execution graph from endpoint",
                  "[planner]")
 {
@@ -218,15 +241,7 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     int msgId = ber->messages(0).id();
     msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
 
-    // Prepare the system to execute functions
-    faabric::scheduler::FunctionCallServer functionCallServer;
-    functionCallServer.start();
-    std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-      std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-    faabric::scheduler::setExecutorFactory(fac);
-
     // Call a function first, and wait for the result
-    auto& sch = faabric::scheduler::getScheduler();
     sch.callFunctions(ber);
     auto resultMsg = sch.getFunctionResult(appId, msgId, 1000);
 
@@ -249,9 +264,39 @@ TEST_CASE_METHOD(FaabricPlannerEndpointTestFixture,
     if (expectedReturnCode == boost::beast::http::status::ok) {
         REQUIRE(result.second == faabric::util::execGraphToJson(expectedGraph));
     }
+}
 
-    // Shutdown
-    functionCallServer.stop();
-    sch.shutdown();
+TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
+                 "Check executing a function through the endpoint",
+                 "[planner]")
+{
+    // Prepare HTTP request
+    HttpMessage msg;
+    msg.set_type(HttpMessage_Type_EXECUTE_BATCH);
+    auto ber = faabric::util::batchExecFactory("foo", "bar", 1);
+    int appId = ber->appid();
+    int msgId = ber->messages(0).id();
+    msg.set_payloadjson(faabric::util::messageToJson(*ber));
+    msgJsonStr = faabric::util::messageToJson(msg);
+
+    SECTION("Success")
+    {
+        expectedReturnCode = beast::http::status::ok;
+    }
+
+    /*
+    SECTION("Bad request body")
+    {
+        expectedReturnCode = beast::http::status::internal_server_error;
+    }
+    */
+
+    // Post the message that will trigger a function execution
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+
+    auto msgResult = sch.getFunctionResult(appId, msgId, 1000);
+    REQUIRE(msgResult.returnvalue() == 0);
 }
 }

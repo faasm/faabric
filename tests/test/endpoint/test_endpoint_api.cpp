@@ -45,13 +45,6 @@ class EndpointApiTestExecutor final : public Executor
             returnVal = 1;
             msg.set_outputdata(fmt::format(
               "Endpoint API returning {} for {}", returnVal, msg.id()));
-        } else if (msg.isasync()) {
-            returnVal = 0;
-
-            SLEEP_MS(ASYNC_EXEC_SLEEP_TIME);
-
-            msg.set_outputdata(
-              fmt::format("Finished async message {}", msg.id()));
         } else {
             throw std::runtime_error("Endpoint API error");
         }
@@ -86,6 +79,7 @@ class EndpointApiTestFixture
     std::shared_ptr<EndpointApiTestExecutorFactory> executorFactory;
 };
 
+/* TODO: move to planner
 TEST_CASE_METHOD(EndpointApiTestFixture,
                  "Test requests to endpoint",
                  "[endpoint]")
@@ -205,4 +199,5 @@ TEST_CASE_METHOD(EndpointApiTestFixture,
 
     endpoint.stop();
 }
+*/
 }

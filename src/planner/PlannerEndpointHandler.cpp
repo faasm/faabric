@@ -2,6 +2,7 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
@@ -9,6 +10,11 @@
 namespace faabric::planner {
 
 using header = beast::http::field;
+
+// TODO(schedule): this atomic variable is used to temporarily select which
+// host to forward an execute request to. This is because the planner still
+// does not schedule resources to hosts, just acts as a proxy.
+static std::atomic<int> nextHostIdx = 0;
 
 void PlannerEndpointHandler::onRequest(
   faabric::endpoint::HttpRequestContext&& ctx,
@@ -123,6 +129,77 @@ void PlannerEndpointHandler::onRequest(
                 response.result(beast::http::status::ok);
                 response.body() = faabric::util::execGraphToJson(execGraph);
             }
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_EXECUTE_BATCH: {
+            // in: BatchExecuteRequest
+            // out: BatchExecuteRequestStatus
+            // Parse the message payload
+            SPDLOG_DEBUG("Planner received EXECUTE_BATCH request");
+            faabric::BatchExecuteRequest ber;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &ber);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in request body");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Sanity check the BER
+            // TODO
+            // std::string errorMessage;
+            // if (!faabric::util::isBatchExecuteRequestSane(ber, &errorMessage)) {
+                // response.result(beast::http::status::bad_request);
+                // response.body() = errorMessage;
+            // }
+            ber.set_comesfromplanner(true);
+
+            // Schedule and execute the BER
+            // TODO: make scheduling decision here
+            // FIXME: for the moment, just forward randomly to one node. Note
+            // that choosing the node randomly may yield to uneven load
+            // distributions
+            auto availableHosts = faabric::planner::getPlanner().getAvailableHosts();
+            // Note that hostIdx++ is an atomic increment
+            int hostIdx = nextHostIdx++ % availableHosts.size();
+            faabric::scheduler::getScheduler().getFunctionCallClient(availableHosts.at(hostIdx)->ip())->executeFunctions(std::make_shared<faabric::BatchExecuteRequest>(ber));
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            faabric::BatchExecuteRequestStatus berStatus;
+            berStatus.set_appid(ber.appid());
+            berStatus.set_finished(false);
+            response.body() = faabric::util::messageToJson(berStatus);
+
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_EXECUTE_BATCH_STATUS: {
+            // in: BatchExecuteRequestStatus
+            // out: BatchExecuteRequestStatus
+            // Parse the message payload
+            SPDLOG_DEBUG("Planner received EXECUTE_BATCH_STATUS request");
+            faabric::BatchExecuteRequestStatus berStatus;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &berStatus);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in request body");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Work-out how many message results we have for the requested BER
+            auto actualBerStatus = faabric::planner::getPlanner().getBatchResults(berStatus.appid());
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            // Work-out if it has finished using user-provided flags
+            if (actualBerStatus.messageresults_size() == berStatus.expectednummessages()) {
+                actualBerStatus.set_finished(true);
+            } else {
+                actualBerStatus.set_finished(false);
+            }
+            response.body() = faabric::util::messageToJson(actualBerStatus);
+
             return ctx.sendFunction(std::move(response));
         }
         default: {

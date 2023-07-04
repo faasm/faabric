@@ -47,9 +47,7 @@ TEST_CASE("Test protobuf classes", "[proto]")
     funcCall.set_inputdata(inputData.data(), 100);
     funcCall.set_outputdata(outputData);
 
-    funcCall.set_isasync(true);
     funcCall.set_ispython(true);
-    funcCall.set_isstatusrequest(true);
 
     funcCall.set_type(faabric::Message_MessageType_KILL);
 
@@ -76,9 +74,7 @@ TEST_CASE("Test protobuf classes", "[proto]")
     REQUIRE(pyFunc == newFuncCall.pythonfunction());
     REQUIRE(pyEntry == newFuncCall.pythonentry());
 
-    REQUIRE(newFuncCall.isasync());
     REQUIRE(newFuncCall.ispython());
-    REQUIRE(newFuncCall.isstatusrequest());
 
     REQUIRE(cmdline == newFuncCall.cmdline());
 

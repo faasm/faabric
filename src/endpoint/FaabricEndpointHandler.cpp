@@ -31,16 +31,16 @@ void FaabricEndpointHandler::onRequest(
     // Text response type
     response.set(header::content_type, "text/plain");
 
-    PROF_START(endpointRoundTrip)
-
     // Parse message from JSON in request
     const std::string& requestStr = request.body();
 
     // Handle JSON
-    if (requestStr.empty()) {
+    // PROF_START(endpointRoundTrip)
+    // if (requestStr.empty()) {
         SPDLOG_ERROR("Faabric handler received empty request");
         response.result(beast::http::status::bad_request);
         response.body() = std::string("Empty request");
+    /*
     } else {
         auto req = faabric::util::batchExecFactory();
         req->set_type(req->FUNCTIONS);
@@ -69,11 +69,13 @@ void FaabricEndpointHandler::onRequest(
             return;
         }
     }
-
     PROF_END(endpointRoundTrip)
+    */
+
     ctx.sendFunction(std::move(response));
 }
 
+/*
 void FaabricEndpointHandler::executeFunction(
   HttpRequestContext&& ctx,
   faabric::util::BeastHttpResponse&& response,
@@ -143,4 +145,5 @@ void FaabricEndpointHandler::executeFunction(
     response.body() = result.outputdata();
     return ctx.sendFunction(std::move(response));
 }
+*/
 }

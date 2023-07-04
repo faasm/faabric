@@ -40,6 +40,9 @@ class EndpointHandlerTestFixture
     }
 };
 
+// TODO: add tests for the actual endpoint handler base class
+
+/* TODO: move to planner
 TEST_CASE_METHOD(EndpointHandlerTestFixture,
                  "Test valid calls to endpoint",
                  "[endpoint]")
@@ -178,4 +181,5 @@ TEST_CASE_METHOD(EndpointHandlerTestFixture,
     REQUIRE(actual.first == expectedReturnCode);
     REQUIRE(actual.second == expectedOutput);
 }
+*/
 }

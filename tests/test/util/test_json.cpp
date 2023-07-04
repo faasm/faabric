@@ -23,9 +23,7 @@ class JsonTestFixture
         msg.set_pythonfunction("py func");
         msg.set_pythonentry("py entry");
 
-        msg.set_isasync(true);
         msg.set_ispython(true);
-        msg.set_isstatusrequest(true);
 
         msg.set_ismpi(true);
         msg.set_mpiworldid(1234);
@@ -80,9 +78,7 @@ TEST_CASE_METHOD(JsonTestFixture, "Test JSON contains required keys", "[util]")
     // test ensures that the keywords we use elsewhere are generated as part
     // of the serialisation process
     std::vector<std::string> requiredKeys = { "input_data",
-                                              "async",
                                               "python",
-                                              "status",
                                               "py_user",
                                               "py_func",
                                               "mpi",
