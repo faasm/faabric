@@ -3,6 +3,7 @@ faabric_lib(util
     ExecGraph.cpp
     PeriodicBackgroundThread.cpp
     barrier.cpp
+    batch.cpp
     bytes.cpp
     config.cpp
     clock.cpp
