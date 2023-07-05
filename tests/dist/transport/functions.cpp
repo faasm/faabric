@@ -7,8 +7,8 @@
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointBroker.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/bytes.h>
-#include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/string_tools.h>

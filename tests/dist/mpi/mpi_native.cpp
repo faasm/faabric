@@ -7,6 +7,7 @@
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/ExecGraph.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/compare.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
