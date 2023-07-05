@@ -242,25 +242,38 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     sch.callFunctions(ber);
     auto resultMsg = sch.getFunctionResult(appId, msgId, 1000);
 
-    // Set expectation
-    SECTION("Success") { expectedReturnCode = boost::beast::http::status::ok; }
+    SECTION("Success")
+    {
+        expectedReturnCode = boost::beast::http::status::ok;
+        faabric::util::ExecGraphNode rootNode = { .msg = resultMsg };
+        faabric::util::ExecGraph expectedGraph{ .rootNode = rootNode };
+        expectedResponseBody = faabric::util::execGraphToJson(expectedGraph);
+    }
+
+    // If we can't find the exec. graph, the endpoint will return an error
     SECTION("Failure")
     {
-        expectedReturnCode = beast::http::status::internal_server_error;
         ber->mutable_messages(0)->set_appid(1337);
         msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
+        expectedReturnCode = beast::http::status::internal_server_error;
+        expectedResponseBody = "Failed getting exec. graph!";
     }
-    faabric::util::ExecGraphNode rootNode = { .msg = resultMsg };
-    faabric::util::ExecGraph expectedGraph{ .rootNode = rootNode };
+
+    // The GET_EXEC_GRAPH request requires a serialised Message as
+    // payload, otherwise it will return an error
+    SECTION("Bad request payload")
+    {
+        msg.set_payloadjson("foo bar");
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody = "Bad JSON in request body";
+    }
 
     // Send an HTTP request to get the execution graph
     msgJsonStr = faabric::util::messageToJson(msg);
     std::pair<int, std::string> result = doPost(msgJsonStr);
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             expectedReturnCode);
-    if (expectedReturnCode == boost::beast::http::status::ok) {
-        REQUIRE(result.second == faabric::util::execGraphToJson(expectedGraph));
-    }
+    REQUIRE(result.second == expectedResponseBody);
 }
 
 TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
@@ -274,9 +287,34 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     int appId = ber->appid();
     int msgId = ber->messages(0).id();
     msg.set_payloadjson(faabric::util::messageToJson(*ber));
-    msgJsonStr = faabric::util::messageToJson(msg);
 
-    SECTION("Success") { expectedReturnCode = beast::http::status::ok; }
+    SECTION("Success")
+    {
+        expectedReturnCode = beast::http::status::ok;
+        faabric::BatchExecuteRequestStatus expectedBerStatus;
+        expectedBerStatus.set_appid(appId);
+        expectedBerStatus.set_finished(false);
+        expectedResponseBody = faabric::util::messageToJson(expectedBerStatus);
+    }
+
+    // The EXECUTE_BATCH request requires a serialised BatchExecuteRequest as
+    // payload, otherwise it will return an error
+    SECTION("Bad request payload")
+    {
+        msg.set_payloadjson("foo bar");
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody = "Bad JSON in request body";
+    }
+
+    // Trying to execute a function without any registered hosts should yield
+    // an error
+    SECTION("No registered hosts")
+    {
+        expectedReturnCode = beast::http::status::internal_server_error;
+        expectedResponseBody = "No available hosts";
+        // Remove all registered hosts
+        resetPlanner();
+    }
 
     /*
     SECTION("Bad request body")
@@ -286,9 +324,11 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     */
 
     // Post the message that will trigger a function execution
+    msgJsonStr = faabric::util::messageToJson(msg);
     std::pair<int, std::string> result = doPost(msgJsonStr);
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
 
     auto msgResult = sch.getFunctionResult(appId, msgId, 1000);
     REQUIRE(msgResult.returnvalue() == 0);

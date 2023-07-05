@@ -119,6 +119,7 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = std::string("Bad JSON in request body");
                 return ctx.sendFunction(std::move(response));
             }
+
             auto execGraph = faabric::util::getFunctionExecGraph(payloadMsg);
             // An empty exec graph has one node with all fields null-ed
             if (execGraph.rootNode.msg.id() == 0) {
@@ -169,7 +170,6 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = std::string("No available hosts");
                 return ctx.sendFunction(std::move(response));
             }
-            SPDLOG_INFO("Avail hosts: {}", availableHosts.size());
             // Note that hostIdx++ is an atomic increment
             int hostIdx = nextHostIdx++ % availableHosts.size();
             faabric::scheduler::getScheduler()
