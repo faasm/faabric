@@ -4,6 +4,7 @@
 #include <faabric/planner/planner.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/ExecGraph.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 
@@ -137,24 +138,23 @@ void PlannerEndpointHandler::onRequest(
             // out: BatchExecuteRequestStatus
             // Parse the message payload
             SPDLOG_DEBUG("Planner received EXECUTE_BATCH request");
-            faabric::BatchExecuteRequest ber;
+            faabric::BatchExecuteRequest rawBer;
             try {
-                faabric::util::jsonToMessage(msg.payloadjson(), &ber);
+                faabric::util::jsonToMessage(msg.payloadjson(), &rawBer);
             } catch (faabric::util::JsonSerialisationException e) {
                 response.result(beast::http::status::bad_request);
                 response.body() = std::string("Bad JSON in request body");
                 return ctx.sendFunction(std::move(response));
             }
+            auto ber = std::make_shared<faabric::BatchExecuteRequest>(rawBer);
 
             // Sanity check the BER
-            // TODO
-            // std::string errorMessage;
-            // if (!faabric::util::isBatchExecuteRequestSane(ber,
-            // &errorMessage)) {
-            // response.result(beast::http::status::bad_request);
-            // response.body() = errorMessage;
-            // }
-            ber.set_comesfromplanner(true);
+            if (!faabric::util::isBatchExecRequestValid(ber)) {
+                response.result(beast::http::status::bad_request);
+                response.body() = "Bad BatchExecRequest";
+                return ctx.sendFunction(std::move(response));
+            }
+            ber->set_comesfromplanner(true);
 
             // Schedule and execute the BER
             // TODO: make scheduling decision here
@@ -174,13 +174,12 @@ void PlannerEndpointHandler::onRequest(
             int hostIdx = nextHostIdx++ % availableHosts.size();
             faabric::scheduler::getScheduler()
               .getFunctionCallClient(availableHosts.at(hostIdx)->ip())
-              ->executeFunctions(
-                std::make_shared<faabric::BatchExecuteRequest>(ber));
+              ->executeFunctions(ber);
 
             // Prepare the response
             response.result(beast::http::status::ok);
             faabric::BatchExecuteRequestStatus berStatus;
-            berStatus.set_appid(ber.appid());
+            berStatus.set_appid(ber->appid());
             berStatus.set_finished(false);
             response.body() = faabric::util::messageToJson(berStatus);
 

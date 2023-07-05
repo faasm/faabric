@@ -316,12 +316,28 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
         resetPlanner();
     }
 
-    /*
-    SECTION("Bad request body")
+    // IF the BER does not pass the sanity checks, the endpoint will error
+    SECTION("Bad BER body")
     {
-        expectedReturnCode = beast::http::status::internal_server_error;
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody = "Bad BatchExecRequest";
+
+        SECTION("Bad ber id") { ber->set_appid(1337); }
+
+        SECTION("App ID mismatch")
+        {
+            ber->mutable_messages(0)->set_appid(1337);
+        }
+
+        SECTION("Empty user") { ber->mutable_messages(0)->set_user(""); }
+
+        SECTION("Empty function")
+        {
+            ber->mutable_messages(0)->set_function("");
+        }
+
+        msg.set_payloadjson(faabric::util::messageToJson(*ber));
     }
-    */
 
     // Post the message that will trigger a function execution
     msgJsonStr = faabric::util::messageToJson(msg);

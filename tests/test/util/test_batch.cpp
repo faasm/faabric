@@ -54,6 +54,20 @@ TEST_CASE("Test batch. exec request sanity checks")
         ber->mutable_messages(1)->set_appid(1337);
     }
 
+    // An empty user deems a BER invalid
+    SECTION("Empty user")
+    {
+        isBerValid = false;
+        ber->mutable_messages(0)->set_user("");
+    }
+
+    // An empty function deems a BER invalid
+    SECTION("Empty function")
+    {
+        isBerValid = false;
+        ber->mutable_messages(0)->set_function("");
+    }
+
     // A user mismatch between the messages deems a BER invalid
     SECTION("User mismatch")
     {
