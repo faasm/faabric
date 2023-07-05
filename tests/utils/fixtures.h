@@ -22,9 +22,9 @@
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/transport/PointToPointServer.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
-#include <faabric/util/func.h>
 #include <faabric/util/json.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
