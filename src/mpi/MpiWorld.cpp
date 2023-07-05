@@ -3,8 +3,8 @@
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/ExecGraph.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/environment.h>
-#include <faabric/util/func.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>

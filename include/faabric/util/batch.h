@@ -9,4 +9,6 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
   const std::string& user,
   const std::string& function,
   int count = 1);
+
+bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber);
 }

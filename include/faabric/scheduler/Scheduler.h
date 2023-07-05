@@ -12,7 +12,6 @@
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/dirty.h>
-#include <faabric/util/func.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
 #include <faabric/util/scheduling.h>
