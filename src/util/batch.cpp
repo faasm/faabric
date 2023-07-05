@@ -63,4 +63,20 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
 
     return true;
 }
+
+std::shared_ptr<faabric::BatchExecuteRequestStatus>
+batchExecStatusFactory(int32_t appId)
+{
+    auto berStatus = std::make_shared<faabric::BatchExecuteRequestStatus>();
+    berStatus->set_appid(appId);
+    berStatus->set_finished(false);
+
+    return berStatus;
+}
+
+std::shared_ptr<faabric::BatchExecuteRequestStatus>
+batchExecStatusFactory(std::shared_ptr<faabric::BatchExecuteRequest> ber)
+{
+    return batchExecStatusFactory(ber->appid());
+}
 }

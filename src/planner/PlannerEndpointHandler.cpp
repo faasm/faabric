@@ -178,10 +178,8 @@ void PlannerEndpointHandler::onRequest(
 
             // Prepare the response
             response.result(beast::http::status::ok);
-            faabric::BatchExecuteRequestStatus berStatus;
-            berStatus.set_appid(ber->appid());
-            berStatus.set_finished(false);
-            response.body() = faabric::util::messageToJson(berStatus);
+            auto berStatus = faabric::util::batchExecStatusFactory(ber);
+            response.body() = faabric::util::messageToJson(*berStatus);
 
             return ctx.sendFunction(std::move(response));
         }
@@ -203,16 +201,24 @@ void PlannerEndpointHandler::onRequest(
             auto actualBerStatus =
               faabric::planner::getPlanner().getBatchResults(berStatus.appid());
 
+            // If the result is null, it means that the app id is not
+            // registered in the results map. This is an error
+            if (actualBerStatus == nullptr) {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("App not registered in results");
+                return ctx.sendFunction(std::move(response));
+            }
+
             // Prepare the response
             response.result(beast::http::status::ok);
             // Work-out if it has finished using user-provided flags
-            if (actualBerStatus.messageresults_size() ==
+            if (actualBerStatus->messageresults_size() ==
                 berStatus.expectednummessages()) {
-                actualBerStatus.set_finished(true);
+                actualBerStatus->set_finished(true);
             } else {
-                actualBerStatus.set_finished(false);
+                actualBerStatus->set_finished(false);
             }
-            response.body() = faabric::util::messageToJson(actualBerStatus);
+            response.body() = faabric::util::messageToJson(*actualBerStatus);
 
             return ctx.sendFunction(std::move(response));
         }

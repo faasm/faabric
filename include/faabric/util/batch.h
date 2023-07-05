@@ -3,6 +3,11 @@
 #include <faabric/proto/faabric.pb.h>
 
 namespace faabric::util {
+
+// ----------
+// Batch Execute Requests (BER)
+// ----------
+
 std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory();
 
 std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
@@ -11,4 +16,14 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
   int count = 1);
 
 bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber);
+
+// ----------
+// Batch Execute Requests' Status
+// ----------
+
+std::shared_ptr<faabric::BatchExecuteRequestStatus>
+batchExecStatusFactory(int32_t appId);
+
+std::shared_ptr<faabric::BatchExecuteRequestStatus>
+batchExecStatusFactory(std::shared_ptr<faabric::BatchExecuteRequest> ber);
 }

@@ -1,6 +1,7 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
 #include <faabric/util/environment.h>
@@ -268,21 +269,21 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
     return nullptr;
 }
 
-faabric::BatchExecuteRequestStatus Planner::getBatchResults(int32_t appId)
+std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(int32_t appId)
 {
-    faabric::BatchExecuteRequestStatus berStatus;
-    berStatus.set_appid(appId);
+    auto berStatus = faabric::util::batchExecStatusFactory(appId);
 
     // Acquire a read lock to copy all the results we have for this batch
     {
         faabric::util::SharedLock lock(plannerMx);
 
-        if (state.appResults.contains(appId)) {
-            for (auto msgResultPair : state.appResults.at(appId)) {
-                *berStatus.add_messageresults() = *(msgResultPair.second);
-            }
+        if (!state.appResults.contains(appId)) { return nullptr; }
+
+        for (auto msgResultPair : state.appResults.at(appId)) {
+            *berStatus->add_messageresults() = *(msgResultPair.second);
         }
     }
+
     return berStatus;
 }
 

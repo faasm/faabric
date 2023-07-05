@@ -291,10 +291,8 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     SECTION("Success")
     {
         expectedReturnCode = beast::http::status::ok;
-        faabric::BatchExecuteRequestStatus expectedBerStatus;
-        expectedBerStatus.set_appid(appId);
-        expectedBerStatus.set_finished(false);
-        expectedResponseBody = faabric::util::messageToJson(expectedBerStatus);
+        auto expectedBerStatus = faabric::util::batchExecStatusFactory(appId);
+        expectedResponseBody = faabric::util::messageToJson(*expectedBerStatus);
     }
 
     // The EXECUTE_BATCH request requires a serialised BatchExecuteRequest as
@@ -348,5 +346,54 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
 
     auto msgResult = sch.getFunctionResult(appId, msgId, 1000);
     REQUIRE(msgResult.returnvalue() == 0);
+}
+
+TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
+                 "Check getting the execution status through the endpoint",
+                 "[planner]")
+{
+    // First, prepare an HTTP request to execute a batch
+    int numMessages = 1;
+    HttpMessage msg;
+    msg.set_type(HttpMessage_Type_EXECUTE_BATCH);
+    auto ber = faabric::util::batchExecFactory("foo", "bar", numMessages);
+    int appId = ber->appid();
+    int msgId = ber->messages(0).id();
+    msg.set_payloadjson(faabric::util::messageToJson(*ber));
+
+    // Execute the batch
+    msgJsonStr = faabric::util::messageToJson(msg);
+    std::pair<int, std::string> result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            beast::http::status::ok);
+
+    // Make sure execution has finished and the result is available
+    auto msgResult = sch.getFunctionResult(appId, msgId, 1000);
+    REQUIRE(msgResult.returnvalue() == 0);
+
+    // Second, prepare an HTTP request to get the batch's execution status
+    msg.set_type(HttpMessage_Type_EXECUTE_BATCH_STATUS);
+    auto berStatus = faabric::util::batchExecStatusFactory(appId);
+    berStatus->set_expectednummessages(numMessages);
+
+    // An EXECUTE_BATCH_STATUS request needs to provide a serialised
+    // BatchExecuteRequestStatus in the request's JSON payload
+    SECTION("Success")
+    {
+        expectedReturnCode = beast::http::status::ok;
+        auto expectedBerStatus = faabric::util::batchExecStatusFactory(appId);
+        expectedBerStatus->set_finished(true);
+        expectedResponseBody = faabric::util::messageToJson(*expectedBerStatus);
+    }
+
+    // Post the EXECUTE_BATCH_STATUS request:
+    msgJsonStr = faabric::util::messageToJson(msg);
+    result = doPost(msgJsonStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            beast::http::status::ok);
+
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            expectedReturnCode);
+    REQUIRE(result.second == expectedResponseBody);
 }
 }
