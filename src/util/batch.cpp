@@ -6,7 +6,7 @@ namespace faabric::util {
 std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory()
 {
     auto req = std::make_shared<faabric::BatchExecuteRequest>();
-    req->set_id(generateGid());
+    req->set_appid(faabric::util::generateGid());
     return req;
 }
 
@@ -17,8 +17,8 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
 {
     auto req = batchExecFactory();
 
-    // Force the messages to have the same app ID than the BER
-    int appId = req->id();
+    // Force the messages to have the same app ID
+    uint32_t appId = req->appid();
     for (int i = 0; i < count; i++) {
         *req->add_messages() = messageFactory(user, function);
         req->mutable_messages()->at(i).set_appid(appId);
@@ -34,7 +34,7 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
     }
 
     // An empty BER (thus invalid) will have 0 messages and an id of 0
-    if (ber->messages_size() <= 0 && ber->id() == 0) {
+    if (ber->messages_size() <= 0 && ber->appid() == 0) {
         return false;
     }
 
