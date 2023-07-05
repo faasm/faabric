@@ -31,13 +31,6 @@ std::shared_ptr<faabric::Message> messageFactoryShared(
 faabric::Message messageFactory(const std::string& user,
                                 const std::string& function);
 
-std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory();
-
-std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
-  const std::string& user,
-  const std::string& function,
-  int count = 1);
-
 std::string resultKeyFromMessageId(unsigned int mid);
 
 std::string statusKeyFromMessageId(unsigned int mid);
