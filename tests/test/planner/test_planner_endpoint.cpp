@@ -49,9 +49,7 @@ class PlannerEndpointTestFixture
     }
 };
 
-TEST_CASE_METHOD(PlannerEndpointTestFixture,
-                 "Test planner reset",
-                 "[planner]")
+TEST_CASE_METHOD(PlannerEndpointTestFixture, "Test planner reset", "[planner]")
 {
     expectedReturnCode = boost::beast::http::status::ok;
     expectedResponseBody = "Planner fully reset!";
@@ -211,19 +209,18 @@ class PlannerEndpointExecTestFixture
   , public FunctionCallClientServerFixture
 {
   public:
-    PlannerEndpointExecTestFixture() : sch(faabric::scheduler::getScheduler())
+    PlannerEndpointExecTestFixture()
+      : sch(faabric::scheduler::getScheduler())
     {
-      sch.reset();
+        sch.reset();
+        sch.addHostToGlobalSet();
 
-      std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
-        std::make_shared<faabric::scheduler::DummyExecutorFactory>();
-      faabric::scheduler::setExecutorFactory(fac);
+        std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
+          std::make_shared<faabric::scheduler::DummyExecutorFactory>();
+        faabric::scheduler::setExecutorFactory(fac);
     }
 
-    ~PlannerEndpointExecTestFixture()
-    {
-        sch.shutdown();
-    }
+    ~PlannerEndpointExecTestFixture() { sch.shutdown(); }
 
   protected:
     faabric::scheduler::Scheduler& sch;
@@ -279,10 +276,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     msg.set_payloadjson(faabric::util::messageToJson(*ber));
     msgJsonStr = faabric::util::messageToJson(msg);
 
-    SECTION("Success")
-    {
-        expectedReturnCode = beast::http::status::ok;
-    }
+    SECTION("Success") { expectedReturnCode = beast::http::status::ok; }
 
     /*
     SECTION("Bad request body")

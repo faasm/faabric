@@ -148,9 +148,10 @@ void PlannerEndpointHandler::onRequest(
             // Sanity check the BER
             // TODO
             // std::string errorMessage;
-            // if (!faabric::util::isBatchExecuteRequestSane(ber, &errorMessage)) {
-                // response.result(beast::http::status::bad_request);
-                // response.body() = errorMessage;
+            // if (!faabric::util::isBatchExecuteRequestSane(ber,
+            // &errorMessage)) {
+            // response.result(beast::http::status::bad_request);
+            // response.body() = errorMessage;
             // }
             ber.set_comesfromplanner(true);
 
@@ -159,10 +160,22 @@ void PlannerEndpointHandler::onRequest(
             // FIXME: for the moment, just forward randomly to one node. Note
             // that choosing the node randomly may yield to uneven load
             // distributions
-            auto availableHosts = faabric::planner::getPlanner().getAvailableHosts();
+            auto availableHosts =
+              faabric::planner::getPlanner().getAvailableHosts();
+            if (availableHosts.empty()) {
+                SPDLOG_ERROR("Planner doesn't have any registered hosts to"
+                             " schedule EXECUTE_BATCH request to!");
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("No available hosts");
+                return ctx.sendFunction(std::move(response));
+            }
+            SPDLOG_INFO("Avail hosts: {}", availableHosts.size());
             // Note that hostIdx++ is an atomic increment
             int hostIdx = nextHostIdx++ % availableHosts.size();
-            faabric::scheduler::getScheduler().getFunctionCallClient(availableHosts.at(hostIdx)->ip())->executeFunctions(std::make_shared<faabric::BatchExecuteRequest>(ber));
+            faabric::scheduler::getScheduler()
+              .getFunctionCallClient(availableHosts.at(hostIdx)->ip())
+              ->executeFunctions(
+                std::make_shared<faabric::BatchExecuteRequest>(ber));
 
             // Prepare the response
             response.result(beast::http::status::ok);
@@ -188,12 +201,14 @@ void PlannerEndpointHandler::onRequest(
             }
 
             // Work-out how many message results we have for the requested BER
-            auto actualBerStatus = faabric::planner::getPlanner().getBatchResults(berStatus.appid());
+            auto actualBerStatus =
+              faabric::planner::getPlanner().getBatchResults(berStatus.appid());
 
             // Prepare the response
             response.result(beast::http::status::ok);
             // Work-out if it has finished using user-provided flags
-            if (actualBerStatus.messageresults_size() == berStatus.expectednummessages()) {
+            if (actualBerStatus.messageresults_size() ==
+                berStatus.expectednummessages()) {
                 actualBerStatus.set_finished(true);
             } else {
                 actualBerStatus.set_finished(false);

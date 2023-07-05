@@ -37,9 +37,9 @@ void FaabricEndpointHandler::onRequest(
     // Handle JSON
     // PROF_START(endpointRoundTrip)
     // if (requestStr.empty()) {
-        SPDLOG_ERROR("Faabric handler received empty request");
-        response.result(beast::http::status::bad_request);
-        response.body() = std::string("Empty request");
+    SPDLOG_ERROR("Faabric handler received empty request");
+    response.result(beast::http::status::bad_request);
+    response.body() = std::string("Empty request");
     /*
     } else {
         auto req = faabric::util::batchExecFactory();
