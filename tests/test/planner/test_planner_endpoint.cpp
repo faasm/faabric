@@ -29,9 +29,14 @@ class PlannerEndpointTestFixture
     {
         conf.plannerHost = LOCALHOST;
         endpoint.start(faabric::endpoint::EndpointMode::BG_THREAD);
+        resetPlanner();
     }
 
-    ~PlannerEndpointTestFixture() { endpoint.stop(); }
+    ~PlannerEndpointTestFixture()
+    {
+        resetPlanner();
+        endpoint.stop();
+    }
 
   protected:
     std::string host;
@@ -212,7 +217,7 @@ class PlannerEndpointExecTestFixture
     PlannerEndpointExecTestFixture()
       : sch(faabric::scheduler::getScheduler())
     {
-        sch.reset();
+        sch.shutdown();
         sch.addHostToGlobalSet();
 
         std::shared_ptr<faabric::scheduler::ExecutorFactory> fac =
@@ -220,7 +225,11 @@ class PlannerEndpointExecTestFixture
         faabric::scheduler::setExecutorFactory(fac);
     }
 
-    ~PlannerEndpointExecTestFixture() { sch.shutdown(); }
+    ~PlannerEndpointExecTestFixture()
+    {
+        sch.shutdown();
+        sch.addHostToGlobalSet();
+    }
 
   protected:
     faabric::scheduler::Scheduler& sch;
