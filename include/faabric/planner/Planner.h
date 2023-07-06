@@ -61,7 +61,8 @@ class Planner
       std::shared_ptr<faabric::Message> msg);
 
     // Get all the results recorded for one batch
-    std::shared_ptr<faabric::BatchExecuteRequestStatus> getBatchResults(int32_t appId);
+    std::shared_ptr<faabric::BatchExecuteRequestStatus> getBatchResults(
+      int32_t appId);
 
   private:
     // There's a singleton instance of the planner running, but it must allow

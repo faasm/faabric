@@ -373,25 +373,59 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
 
     // Second, prepare an HTTP request to get the batch's execution status
     msg.set_type(HttpMessage_Type_EXECUTE_BATCH_STATUS);
-    auto berStatus = faabric::util::batchExecStatusFactory(appId);
-    berStatus->set_expectednummessages(numMessages);
-
     // An EXECUTE_BATCH_STATUS request needs to provide a serialised
     // BatchExecuteRequestStatus in the request's JSON payload
+    auto berStatus = faabric::util::batchExecStatusFactory(appId);
+    berStatus->set_expectednummessages(numMessages);
+    msg.set_payloadjson(faabric::util::messageToJson(*berStatus));
+
+    // An EXECUTE_BATCH_STATUS request expects a BatchExecuteRequestStatus
+    // in the response body
     SECTION("Success")
     {
         expectedReturnCode = beast::http::status::ok;
         auto expectedBerStatus = faabric::util::batchExecStatusFactory(appId);
         expectedBerStatus->set_finished(true);
+        *expectedBerStatus->add_messageresults() = msgResult;
         expectedResponseBody = faabric::util::messageToJson(*expectedBerStatus);
+    }
+
+    // If the request JSON payload is not a BER, the endpoint will error
+    SECTION("Malformed request body")
+    {
+        expectedReturnCode = beast::http::status::bad_request;
+        expectedResponseBody = "Bad JSON in request body";
+        msg.set_payloadjson("foo");
+    }
+
+    // If the request JSON payload contains a BER status for a non-existant
+    // BER (i.e. appid not registered), the endpoint will also error out
+    SECTION("Unregistered app id")
+    {
+        expectedReturnCode = beast::http::status::internal_server_error;
+        expectedResponseBody = "App not registered in results";
+        auto otherBerStatus = faabric::util::batchExecStatusFactory(1337);
+        msg.set_payloadjson(faabric::util::messageToJson(*otherBerStatus));
+    }
+
+    // If the request JSON payload contains a BER status for an in-flight BER,
+    // the request will succeed. Depending on the messages we tell the planner
+    // we are expecting, it will either succeed or not
+    SECTION("Success, but not finished")
+    {
+        expectedReturnCode = beast::http::status::ok;
+        auto expectedBerStatus = faabric::util::batchExecStatusFactory(appId);
+        expectedBerStatus->set_finished(false);
+        *expectedBerStatus->add_messageresults() = msgResult;
+        expectedResponseBody = faabric::util::messageToJson(*expectedBerStatus);
+        // Change the expected number of messages
+        berStatus->set_expectednummessages(2);
+        msg.set_payloadjson(faabric::util::messageToJson(*berStatus));
     }
 
     // Post the EXECUTE_BATCH_STATUS request:
     msgJsonStr = faabric::util::messageToJson(msg);
     result = doPost(msgJsonStr);
-    REQUIRE(boost::beast::http::int_to_status(result.first) ==
-            beast::http::status::ok);
-
     REQUIRE(boost::beast::http::int_to_status(result.first) ==
             expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);

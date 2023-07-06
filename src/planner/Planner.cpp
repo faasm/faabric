@@ -269,7 +269,8 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
     return nullptr;
 }
 
-std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(int32_t appId)
+std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
+  int32_t appId)
 {
     auto berStatus = faabric::util::batchExecStatusFactory(appId);
 
@@ -277,7 +278,9 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(int
     {
         faabric::util::SharedLock lock(plannerMx);
 
-        if (!state.appResults.contains(appId)) { return nullptr; }
+        if (!state.appResults.contains(appId)) {
+            return nullptr;
+        }
 
         for (auto msgResultPair : state.appResults.at(appId)) {
             *berStatus->add_messageresults() = *(msgResultPair.second);

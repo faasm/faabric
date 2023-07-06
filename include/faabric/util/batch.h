@@ -21,9 +21,9 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber);
 // Batch Execute Requests' Status
 // ----------
 
-std::shared_ptr<faabric::BatchExecuteRequestStatus>
-batchExecStatusFactory(int32_t appId);
+std::shared_ptr<faabric::BatchExecuteRequestStatus> batchExecStatusFactory(
+  int32_t appId);
 
-std::shared_ptr<faabric::BatchExecuteRequestStatus>
-batchExecStatusFactory(std::shared_ptr<faabric::BatchExecuteRequest> ber);
+std::shared_ptr<faabric::BatchExecuteRequestStatus> batchExecStatusFactory(
+  std::shared_ptr<faabric::BatchExecuteRequest> ber);
 }
