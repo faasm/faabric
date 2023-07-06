@@ -207,6 +207,7 @@ void Scheduler::reset()
     thisHostResources = faabric::HostResources();
     thisHostResources.set_slots(faabric::util::getUsableCores());
     thisHostResources.set_usedslots(0);
+    thisHostUsedSlots.store(0, std::memory_order_release);
 
     // Reset scheduler state
     availableHostsCache.clear();
@@ -1024,7 +1025,7 @@ std::shared_ptr<FunctionCallClient> Scheduler::getFunctionCallClient(
 {
     auto client = functionCallClients.get(otherHost).value_or(nullptr);
     if (client == nullptr) {
-        SPDLOG_WARN("Adding new function call client for {}", otherHost);
+        SPDLOG_DEBUG("Adding new function call client for {}", otherHost);
         client =
           functionCallClients.tryEmplaceShared(otherHost, otherHost).second;
     }
@@ -1149,8 +1150,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 void Scheduler::setMessageResultLocally(std::shared_ptr<faabric::Message> msg)
 {
     faabric::util::UniqueLock lock(plannerResultsMutex);
-
-    SPDLOG_WARN("Setting message result locally for msg: {}", msg->id());
 
     // It may happen that the planner returns the message result before we
     // have had time to prepare the promise. This should happen rarely as it
@@ -1349,7 +1348,6 @@ faabric::Message Scheduler::doGetFunctionResult(
         faabric::util::UniqueLock lock(plannerResultsMutex);
 
         if (plannerResults.find(msgId) == plannerResults.end()) {
-            SPDLOG_WARN("Inserting promise for message: {}", msgId);
             plannerResults.insert(
               { msgId, std::make_shared<MessageResultPromise>() });
         }
