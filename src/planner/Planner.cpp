@@ -151,7 +151,7 @@ bool Planner::registerHost(const Host& hostIn, bool overwrite)
         it->second->set_slots(hostIn.slots());
         it->second->set_usedslots(hostIn.usedslots());
     } else if (it != state.hostMap.end()) {
-        SPDLOG_DEBUG("NOT overwritting host {} with {} slots (used {})",
+        SPDLOG_TRACE("NOT overwritting host {} with {} slots (used {})",
                      hostIn.ip(),
                      hostIn.slots(),
                      hostIn.usedslots());

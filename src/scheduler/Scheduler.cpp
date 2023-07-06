@@ -193,6 +193,11 @@ void Scheduler::reset()
     // Clear the point to point broker
     broker.clear();
 
+    // Clear the clients
+    functionCallClients.clear();
+    snapshotClients.clear();
+    plannerClient.clear();
+
     faabric::util::FullLock lock(mx);
 
     // Ensure host is set correctly
@@ -202,6 +207,7 @@ void Scheduler::reset()
     thisHostResources = faabric::HostResources();
     thisHostResources.set_slots(faabric::util::getUsableCores());
     thisHostResources.set_usedslots(0);
+    thisHostUsedSlots.store(0, std::memory_order_release);
 
     // Reset scheduler state
     availableHostsCache.clear();
