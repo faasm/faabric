@@ -36,7 +36,7 @@ void PlannerEndpointHandler::onRequest(
     response.set(header::content_type, "text/plain");
 
     // Request body contains a string that is formatted as a JSON
-    const std::string& requestStr = request.body();
+    std::string requestStr = request.body();
 
     // Handle JSON
     if (requestStr.empty()) {
@@ -143,7 +143,7 @@ void PlannerEndpointHandler::onRequest(
                 faabric::util::jsonToMessage(msg.payloadjson(), &rawBer);
             } catch (faabric::util::JsonSerialisationException e) {
                 response.result(beast::http::status::bad_request);
-                response.body() = std::string("Bad JSON in request body");
+                response.body() = std::string("Bad JSON in body's payload");
                 return ctx.sendFunction(std::move(response));
             }
             auto ber = std::make_shared<faabric::BatchExecuteRequest>(rawBer);
