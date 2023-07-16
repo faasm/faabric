@@ -310,7 +310,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     {
         msg.set_payloadjson("foo bar");
         expectedReturnCode = beast::http::status::bad_request;
-        expectedResponseBody = "Bad JSON in request body";
+        expectedResponseBody = "Bad JSON in body's payload";
     }
 
     // Trying to execute a function without any registered hosts should yield

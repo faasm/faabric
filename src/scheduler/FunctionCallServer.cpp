@@ -84,7 +84,8 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
         parsedMsg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
     } else {
         // This flag was set by the old endpoint, we temporarily set it here
-        parsedMsg.mutable_messages()->at(0).set_masterhost(faabric::util::getSystemConfig().endpointHost);
+        parsedMsg.mutable_messages()->at(0).set_masterhost(
+          faabric::util::getSystemConfig().endpointHost);
     }
     scheduler.callFunctions(
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
