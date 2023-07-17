@@ -83,7 +83,9 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
     if (!parsedMsg.comesfromplanner()) {
         parsedMsg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
     } else {
-        // This flag was set by the old endpoint, we temporarily set it here
+        // This flags were set by the old endpoint, we temporarily set them here
+        parsedMsg.mutable_messages()->at(0).set_timestamp(
+          faabric::util::getGlobalClock().epochMillis());
         parsedMsg.mutable_messages()->at(0).set_masterhost(
           faabric::util::getSystemConfig().endpointHost);
     }

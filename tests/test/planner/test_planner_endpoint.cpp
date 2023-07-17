@@ -355,6 +355,15 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
 
     auto msgResult = sch.getFunctionResult(appId, msgId, 1000);
     REQUIRE(msgResult.returnvalue() == 0);
+
+    // If the request is succesful, check that the response has the fields
+    // we expect
+    if (expectedReturnCode == beast::http::status::ok) {
+        REQUIRE(msgResult.timestamp() > 0);
+        REQUIRE(msgResult.finishtimestamp() > 0);
+        REQUIRE(!msgResult.executedhost().empty());
+        REQUIRE(!msgResult.masterhost().empty());
+    }
 }
 
 TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
