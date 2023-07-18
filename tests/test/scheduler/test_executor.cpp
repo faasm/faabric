@@ -245,10 +245,10 @@ int32_t TestExecutor::executeTask(
             return 999;
         }
 
-        if (ctx->getBatchRequest()->id() != reqOrig->id()) {
+        if (ctx->getBatchRequest()->appid() != reqOrig->appid()) {
             SPDLOG_ERROR("Context request does not match ({} != {})",
-                         ctx->getBatchRequest()->id(),
-                         reqOrig->id());
+                         ctx->getBatchRequest()->appid(),
+                         reqOrig->appid());
             return 999;
         }
 

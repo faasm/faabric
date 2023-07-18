@@ -39,12 +39,16 @@ message HttpMessage {
         FLUSH_EXECUTORS = 3;
         GET_CONFIG = 4;
         GET_EXEC_GRAPH = 5;
+        EXECUTE_BATCH = 6;
+        EXECUTE_BATCH_STATUS = 7;
     }
 
     Type type = 1 [json_name = "http_type"];
     // Payload parameter to populate with the message body if necessary. The
     // body is only needed for:
     // - GET_EXEC_GRAPH: where the body is a faabric::Message
+    // - EXECUTE_BATCH: where the body is a faabric::BatchExecuteRequest
+    // - EXECUTE_BATCH_STATUS: where the body is a BER too
     string payloadJson = 2 [json_name = "payload"];
 }
 

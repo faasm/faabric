@@ -13,7 +13,7 @@ TEST_CASE("Test batch exec factory", "[util]")
 
     REQUIRE(req->messages().size() == nMessages);
 
-    REQUIRE(req->id() > 0);
+    REQUIRE(req->appid() > 0);
 
     // Expect all messages to have the same app ID by default
     int appId = req->messages().at(0).appid();
@@ -54,6 +54,20 @@ TEST_CASE("Test batch. exec request sanity checks")
         ber->mutable_messages(1)->set_appid(1337);
     }
 
+    // An empty user deems a BER invalid
+    SECTION("Empty user")
+    {
+        isBerValid = false;
+        ber->mutable_messages(0)->set_user("");
+    }
+
+    // An empty function deems a BER invalid
+    SECTION("Empty function")
+    {
+        isBerValid = false;
+        ber->mutable_messages(0)->set_function("");
+    }
+
     // A user mismatch between the messages deems a BER invalid
     SECTION("User mismatch")
     {
@@ -72,5 +86,32 @@ TEST_CASE("Test batch. exec request sanity checks")
     SECTION("Valid BER") { isBerValid = true; }
 
     REQUIRE(isBerValid == isBatchExecRequestValid(ber));
+}
+
+TEST_CASE("Test BER status factory")
+{
+    int appId;
+    std::shared_ptr<faabric::BatchExecuteRequestStatus> berStatus = nullptr;
+
+    // A BER status can be constructed with an appId
+    SECTION("Constructor with app id")
+    {
+        appId = 1337;
+        berStatus = faabric::util::batchExecStatusFactory(appId);
+    }
+
+    // A BER status can also be constructed from a BER
+    SECTION("Constructor from a BER")
+    {
+        auto ber = faabric::util::batchExecFactory("foo", "bar", 1);
+        appId = ber->appid();
+        berStatus = faabric::util::batchExecStatusFactory(ber);
+    }
+
+    // It will have the same appId
+    REQUIRE(berStatus->appid() == appId);
+
+    // And the finished flag will be set to false
+    REQUIRE(berStatus->finished() == false);
 }
 }

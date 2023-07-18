@@ -19,7 +19,8 @@ message EmptyRequest {
 // ---------------------------------------------
 
 message BatchExecuteRequest {
-    int32 id = 1;
+    // Each BatchExecuteRequest has a unique app id
+    int32 appId = 1;
 
     enum BatchExecuteType {
         FUNCTIONS = 0;
@@ -42,6 +43,26 @@ message BatchExecuteRequest {
     // Flag set by the scheduler when this batch is all executing on a single
     // host
     bool singleHost = 8;
+
+    // TODO(planner-schedule): remove me
+    // Temporary flag to indicate the workers that the BER comes from the
+    // planner (i.e. proxy-ed through planner) and so it has not been scheduled
+    // yet. Whenever the planner does scheduling we will be able to remove this
+    bool comesFromPlanner = 9;
+}
+
+message BatchExecuteRequestStatus {
+    // Each BatchExecuteRequest has a unique app id
+    int32 appId = 1;
+
+    bool finished = 2;
+
+    repeated Message messageResults = 3;
+
+    // Batches can dynamically change size throughout execution. This parameter
+    // is a hint provided by the client letting faabric know how many message
+    // results we expect for this BER
+    int32 expectedNumMessages = 4;
 }
 
 message HostResources {
@@ -65,6 +86,8 @@ message FunctionStatusResponse {
 
 message Message {
     int32 id = 1;
+    // The app id indicates which BatchExecuteRequest this message belongs to.
+    // Each BER has a unique app id
     int32 appId = 2;
     int32 appIdx = 3;
     string masterHost = 4;
@@ -96,9 +119,7 @@ message Message {
     string executedHost = 18;
     int64 finishTimestamp = 19 [json_name = "finish_ts"];
 
-    bool isAsync = 20 [json_name = "async"];
     bool isPython = 21 [json_name = "python"];
-    bool isStatusRequest = 22 [json_name = "status"];
 
     string pythonUser = 24 [json_name = "py_user"];
     string pythonFunction = 25 [json_name = "py_func"];

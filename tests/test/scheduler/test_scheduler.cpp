@@ -793,7 +793,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     auto actualReqs = faabric::scheduler::getBatchRequests();
     REQUIRE(actualReqs.size() == 1);
     REQUIRE(actualReqs.at(0).first == otherHost);
-    REQUIRE(actualReqs.at(0).second->id() == req->id());
+    REQUIRE(actualReqs.at(0).second->appid() == req->appid());
 }
 
 TEST_CASE_METHOD(SlowExecutorTestFixture,

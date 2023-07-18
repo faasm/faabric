@@ -2,13 +2,20 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/planner.pb.h>
+#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/ExecGraph.h>
+#include <faabric/util/batch.h>
 #include <faabric/util/json.h>
 #include <faabric/util/logging.h>
 
 namespace faabric::planner {
 
 using header = beast::http::field;
+
+// TODO(schedule): this atomic variable is used to temporarily select which
+// host to forward an execute request to. This is because the planner still
+// does not schedule resources to hosts, just acts as a proxy.
+static std::atomic<int> nextHostIdx = 0;
 
 void PlannerEndpointHandler::onRequest(
   faabric::endpoint::HttpRequestContext&& ctx,
@@ -29,7 +36,7 @@ void PlannerEndpointHandler::onRequest(
     response.set(header::content_type, "text/plain");
 
     // Request body contains a string that is formatted as a JSON
-    const std::string& requestStr = request.body();
+    std::string requestStr = request.body();
 
     // Handle JSON
     if (requestStr.empty()) {
@@ -113,6 +120,7 @@ void PlannerEndpointHandler::onRequest(
                 response.body() = std::string("Bad JSON in request body");
                 return ctx.sendFunction(std::move(response));
             }
+
             auto execGraph = faabric::util::getFunctionExecGraph(payloadMsg);
             // An empty exec graph has one node with all fields null-ed
             if (execGraph.rootNode.msg.id() == 0) {
@@ -123,6 +131,95 @@ void PlannerEndpointHandler::onRequest(
                 response.result(beast::http::status::ok);
                 response.body() = faabric::util::execGraphToJson(execGraph);
             }
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_EXECUTE_BATCH: {
+            // in: BatchExecuteRequest
+            // out: BatchExecuteRequestStatus
+            // Parse the message payload
+            SPDLOG_DEBUG("Planner received EXECUTE_BATCH request");
+            faabric::BatchExecuteRequest rawBer;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &rawBer);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in body's payload");
+                return ctx.sendFunction(std::move(response));
+            }
+            auto ber = std::make_shared<faabric::BatchExecuteRequest>(rawBer);
+
+            // Sanity check the BER
+            if (!faabric::util::isBatchExecRequestValid(ber)) {
+                response.result(beast::http::status::bad_request);
+                response.body() = "Bad BatchExecRequest";
+                return ctx.sendFunction(std::move(response));
+            }
+            ber->set_comesfromplanner(true);
+
+            // Schedule and execute the BER
+            // TODO: make scheduling decision here
+            // FIXME: for the moment, just forward randomly to one node. Note
+            // that choosing the node randomly may yield to uneven load
+            // distributions
+            auto availableHosts =
+              faabric::planner::getPlanner().getAvailableHosts();
+            if (availableHosts.empty()) {
+                SPDLOG_ERROR("Planner doesn't have any registered hosts to"
+                             " schedule EXECUTE_BATCH request to!");
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("No available hosts");
+                return ctx.sendFunction(std::move(response));
+            }
+            // Note that hostIdx++ is an atomic increment
+            int hostIdx = nextHostIdx++ % availableHosts.size();
+            faabric::scheduler::getScheduler()
+              .getFunctionCallClient(availableHosts.at(hostIdx)->ip())
+              ->executeFunctions(ber);
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            auto berStatus = faabric::util::batchExecStatusFactory(ber);
+            response.body() = faabric::util::messageToJson(*berStatus);
+
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_EXECUTE_BATCH_STATUS: {
+            // in: BatchExecuteRequestStatus
+            // out: BatchExecuteRequestStatus
+            // Parse the message payload
+            SPDLOG_DEBUG("Planner received EXECUTE_BATCH_STATUS request");
+            faabric::BatchExecuteRequestStatus berStatus;
+            try {
+                faabric::util::jsonToMessage(msg.payloadjson(), &berStatus);
+            } catch (faabric::util::JsonSerialisationException e) {
+                response.result(beast::http::status::bad_request);
+                response.body() = std::string("Bad JSON in request body");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Work-out how many message results we have for the requested BER
+            auto actualBerStatus =
+              faabric::planner::getPlanner().getBatchResults(berStatus.appid());
+
+            // If the result is null, it means that the app id is not
+            // registered in the results map. This is an error
+            if (actualBerStatus == nullptr) {
+                response.result(beast::http::status::internal_server_error);
+                response.body() = std::string("App not registered in results");
+                return ctx.sendFunction(std::move(response));
+            }
+
+            // Prepare the response
+            response.result(beast::http::status::ok);
+            // Work-out if it has finished using user-provided flags
+            if (actualBerStatus->messageresults_size() ==
+                berStatus.expectednummessages()) {
+                actualBerStatus->set_finished(true);
+            } else {
+                actualBerStatus->set_finished(false);
+            }
+            response.body() = faabric::util::messageToJson(*actualBerStatus);
+
             return ctx.sendFunction(std::move(response));
         }
         default: {
