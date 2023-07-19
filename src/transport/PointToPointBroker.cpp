@@ -511,6 +511,10 @@ void PointToPointBroker::initSequenceCounters(int groupId)
                      currentGroupId,
                      groupId);
     }
+    if (currentGroupId == 0 || groupId == 0) {
+        SPDLOG_ERROR("Zero-ed group Id !? (current: {} - id: {})", currentGroupId, groupId);
+        throw std::runtime_error("WHATTTTTT");
+    }
     currentGroupId = groupId;
     int groupSize = getIdxsRegisteredForGroup(groupId).size();
     // We initialise both counters at the same time, as we only know once per
