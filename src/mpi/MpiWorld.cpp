@@ -7,6 +7,7 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
+#include <faabric/util/queue.h>
 #include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
@@ -1438,18 +1439,28 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
     if (isLocal) {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
+            try {
             SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-            auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+                auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
 
-            // Put the unacked message in the UMB
-            assert(!msgIt->isAcknowledged());
-            msgIt->acknowledge(pendingMsg);
-            msgIt++;
+                // Put the unacked message in the UMB
+                assert(!msgIt->isAcknowledged());
+                msgIt->acknowledge(pendingMsg);
+                msgIt++;
+            } catch (faabric::util::QueueTimeoutException& e) {
+                SPDLOG_ERROR("Timed out with: MPI - pending recv {} -> {}", sendRank, recvRank);
+                throw e;
+            }
         }
 
         // Finally receive the message corresponding to us
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        try {
+            ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        } catch (faabric::util::QueueTimeoutException& e) {
+            SPDLOG_ERROR("Timed out with: MPI - recv {} -> {}", sendRank, recvRank);
+            throw e;
+        }
     } else {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
