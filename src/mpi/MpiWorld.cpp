@@ -74,7 +74,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                                                            int recvRank)
 {
     auto msg =
-          broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+      broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
     PARSE_MSG(MPIMessage, msg.data(), msg.size());
     return std::make_shared<MPIMessage>(parsedMsg);
 }
@@ -271,7 +271,7 @@ void MpiWorld::initLocalRemoteLeaders()
     // keep a record of the opposite mapping, the host that each rank belongs
     // to, as it is queried frequently and asking the ptp broker involves
     // acquiring a lock.
-     if (thisRankMsg == nullptr) {
+    if (thisRankMsg == nullptr) {
         throw std::runtime_error("Rank message not set!");
     }
     int groupId = thisRankMsg->groupid();

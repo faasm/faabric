@@ -289,12 +289,13 @@ void MessageEndpoint::sendMessage(uint8_t header,
     int ec = nng_aio_result(aio);
     nng_aio_free(aio);
     if (ec != 0) {
-        SPDLOG_ERROR("Error {} ({}) when sending messge to {} (seq: {} - ctx: {})",
-                     ec,
-                     nng_strerror(ec),
-                     address,
-                     sequenceNum,
-                     context.has_value());
+        SPDLOG_ERROR(
+          "Error {} ({}) when sending messge to {} (seq: {} - ctx: {})",
+          ec,
+          nng_strerror(ec),
+          address,
+          sequenceNum,
+          context.has_value());
         nng_msg_free(msg); // Owned by the socket if succeeded
         checkNngError(ec, "sendMessage", address);
     }
