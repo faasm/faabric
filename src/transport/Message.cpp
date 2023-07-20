@@ -7,7 +7,7 @@ namespace faabric::transport {
 
 Message::Message(size_t bufferSize)
 {
-    if (int ec = nng_msg_alloc(&nngMsg, bufferSize); ec < 0) {
+    if (int ec = nng_msg_alloc(&nngMsg, bufferSize); ec != 0) {
         SPDLOG_CRITICAL("Error allocating a message of size {}: {}",
                         bufferSize,
                         nng_strerror(ec));
