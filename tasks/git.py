@@ -15,20 +15,32 @@ def get_tag_name(version):
 
 
 @task
-def bump(ctx, ver=None):
+def bump(ctx, patch=False, minor=False, major=False):
     """
-    Bump code version
+    Bump the code version by --patch, --minor, or --major
     """
     old_ver = get_version()
+    new_ver_parts = old_ver.split(".")
 
-    if ver:
-        new_ver = ver
+    if patch:
+        idx = 2
+    elif minor:
+        idx = 1
+    elif major:
+        idx = 0
     else:
-        # Just bump the last minor version part
-        new_ver_parts = old_ver.split(".")
-        new_ver_minor = int(new_ver_parts[-1]) + 1
-        new_ver_parts[-1] = str(new_ver_minor)
-        new_ver = ".".join(new_ver_parts)
+        raise RuntimeError("Must set one in: --[patch,minor,major]")
+
+    # Change the corresponding idx
+    new_ver_parts[idx] = str(int(new_ver_parts[idx]) + 1)
+
+    # Zero-out the following version numbers (i.e. lower priority). This is
+    # because if we tag a new major release, we want to zero-out the minor
+    # and patch versions (e.g. 0.2.0 comes after 0.1.9)
+    for next_idx in range(idx + 1, 3):
+        new_ver_parts[next_idx] = "0"
+
+    new_ver = ".".join(new_ver_parts)
 
     # Replace version in all files
     for f in VERSIONED_FILES:
