@@ -756,7 +756,7 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
             SPDLOG_WARN(
               "Error {} ({}) when awaiting a message ({}:{} seq: {} label: {})",
               static_cast<int>(recvMsg.getResponseCode()),
-              nng_strerror(static_cast<int>(recvMsg.getResponseCode())),
+              MessageResponseCodeText.at(recvMsg.getResponseCode()),
               sendIdx,
               recvIdx,
               expectedSeqNum,

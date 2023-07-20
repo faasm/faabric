@@ -298,6 +298,23 @@ void MpiWorld::initLocalRemoteLeaders()
         std::iter_swap(it.second.begin(),
                        std::min_element(it.second.begin(), it.second.end()));
     }
+
+    SPDLOG_INFO("{}:{}:{} setting local-remote leaders (local leader: {})",
+                thisRankMsg->appid(),
+                thisRankMsg->groupid(),
+                thisRankMsg->groupidx(),
+                localLeader);
+    for (auto it : ranksForHost) {
+        std::string line = fmt::format("{}:", it.first);
+        for (auto h : it.second) {
+            line = fmt::format("{} {}", line, h);
+        }
+        SPDLOG_INFO("{}:{}:{} local-remote-leaders: {}",
+                thisRankMsg->appid(),
+                thisRankMsg->groupid(),
+                thisRankMsg->groupidx(),
+                line);
+    }
 }
 
 void MpiWorld::getCartesianRank(int rank,
@@ -1456,18 +1473,28 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
     if (isLocal) {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
-            SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-            auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+            try {
+                SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
+                auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
 
-            // Put the unacked message in the UMB
-            assert(!msgIt->isAcknowledged());
-            msgIt->acknowledge(pendingMsg);
-            msgIt++;
+                // Put the unacked message in the UMB
+                assert(!msgIt->isAcknowledged());
+                msgIt->acknowledge(pendingMsg);
+                msgIt++;
+            } catch (faabric::util::QueueTimeoutException& e) {
+                SPDLOG_ERROR("Timed out with: MPI - pending recv {} -> {}", sendRank, recvRank);
+                throw e;
+            }
         }
 
         // Finally receive the message corresponding to us
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        try {
+            ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        } catch (faabric::util::QueueTimeoutException& e) {
+            SPDLOG_ERROR("Timed out with: MPI - recv {} -> {}", sendRank, recvRank);
+            throw e;
+        }
     } else {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {

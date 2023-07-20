@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <nng/nng.h>
 #include <span>
 #include <string>
@@ -34,6 +35,13 @@ enum class MessageResponseCode
     TERM,
     TIMEOUT,
     ERROR
+};
+
+static std::map<MessageResponseCode, std::string> MessageResponseCodeText = {
+    { MessageResponseCode::SUCCESS, "Success" },
+    { MessageResponseCode::TERM, "Connection terminated" },
+    { MessageResponseCode::TIMEOUT, "Message timed out" },
+    { MessageResponseCode::ERROR, "Error" },
 };
 
 /**
