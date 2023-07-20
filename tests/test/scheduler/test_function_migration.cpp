@@ -423,7 +423,12 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     // Manually create the world, and trigger a second function invocation in
     // the remote host
     faabric::mpi::MpiWorld world;
-    world.create(*firstMsg, worldId, worldSize);
+    // Note that we deliberately pass a copy of the message. The `world.create`
+    // method modifies the passed message, which can race with the thread pool
+    // thread executing the message. Note that, normally, the thread pool
+    // thread _would_ be calling world.create itself, thus not racing
+    auto firstMsgCopy = req->messages(0);
+    world.create(firstMsgCopy, worldId, worldSize);
 
     // Update host resources so that a migration opportunity appears
     updateLocalResources(4, 2);
