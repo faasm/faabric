@@ -1457,28 +1457,18 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
     if (isLocal) {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
-            try {
             SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-                auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+            auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
 
-                // Put the unacked message in the UMB
-                assert(!msgIt->isAcknowledged());
-                msgIt->acknowledge(pendingMsg);
-                msgIt++;
-            } catch (faabric::util::QueueTimeoutException& e) {
-                SPDLOG_ERROR("Timed out with: MPI - pending recv {} -> {}", sendRank, recvRank);
-                throw e;
-            }
+            // Put the unacked message in the UMB
+            assert(!msgIt->isAcknowledged());
+            msgIt->acknowledge(pendingMsg);
+            msgIt++;
         }
 
         // Finally receive the message corresponding to us
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        try {
-            ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
-        } catch (faabric::util::QueueTimeoutException& e) {
-            SPDLOG_ERROR("Timed out with: MPI - recv {} -> {}", sendRank, recvRank);
-            throw e;
-        }
+        ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
     } else {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
