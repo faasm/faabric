@@ -272,7 +272,7 @@ void MessageEndpoint::sendMessage(uint8_t header,
     std::copy_n(data, dataSize, buffer + HEADER_MSG_SIZE);
 
     nng_aio* aio = nullptr;
-    if (int ec = nng_aio_alloc(&aio, nullptr, nullptr); ec < 0) {
+    if (int ec = nng_aio_alloc(&aio, nullptr, nullptr); ec != 0) {
         nng_msg_free(msg);
         checkNngError(ec, "nng_aio_alloc", address);
     }
