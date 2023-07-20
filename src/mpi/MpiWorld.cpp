@@ -1435,6 +1435,9 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 // Note - the queues themselves perform concurrency control
 void MpiWorld::initLocalQueues()
 {
+    // TODO: iirc we used _not_ to clean stuff here, as it caused races
+    // during migration, so maybe this breaks migration (FIXME)
+    localQueues.clear();
     localQueues.resize(size * size);
     for (const int sendRank : ranksForHost[thisHost]) {
         for (const int recvRank : ranksForHost[thisHost]) {
@@ -1482,7 +1485,12 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
                 msgIt->acknowledge(pendingMsg);
                 msgIt++;
             } catch (faabric::util::QueueTimeoutException& e) {
-                SPDLOG_ERROR("Timed out with: MPI - pending recv {} -> {}", sendRank, recvRank);
+                SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - pending recv {} -> {}",
+                             thisRankMsg->appid(),
+                             thisRankMsg->groupid(),
+                             thisRankMsg->groupidx(),
+                             sendRank,
+                             recvRank);
                 throw e;
             }
         }
@@ -1492,7 +1500,12 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
         try {
             ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
         } catch (faabric::util::QueueTimeoutException& e) {
-            SPDLOG_ERROR("Timed out with: MPI - recv {} -> {}", sendRank, recvRank);
+            SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv {} -> {}",
+                         thisRankMsg->appid(),
+                         thisRankMsg->groupid(),
+                         thisRankMsg->groupidx(),
+                         sendRank,
+                         recvRank);
             throw e;
         }
     } else {
