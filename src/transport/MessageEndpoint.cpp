@@ -272,7 +272,7 @@ void MessageEndpoint::sendMessage(uint8_t header,
     std::copy_n(data, dataSize, buffer + HEADER_MSG_SIZE);
 
     nng_aio* aio = nullptr;
-    if (int ec = nng_aio_alloc(&aio, nullptr, nullptr); ec < 0) {
+    if (int ec = nng_aio_alloc(&aio, nullptr, nullptr); ec != 0) {
         nng_msg_free(msg);
         checkNngError(ec, "nng_aio_alloc", address);
     }
@@ -289,6 +289,13 @@ void MessageEndpoint::sendMessage(uint8_t header,
     int ec = nng_aio_result(aio);
     nng_aio_free(aio);
     if (ec != 0) {
+        SPDLOG_ERROR(
+          "Error {} ({}) when sending messge to {} (seq: {} - ctx: {})",
+          ec,
+          nng_strerror(ec),
+          address,
+          sequenceNum,
+          context.has_value());
         nng_msg_free(msg); // Owned by the socket if succeeded
         checkNngError(ec, "sendMessage", address);
     }

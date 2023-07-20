@@ -60,7 +60,7 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
         throw std::runtime_error("Error serialising message");
     }
     broker.sendMessage(
-      id,
+      thisRankMsg->groupid(),
       sendRank,
       recvRank,
       reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
@@ -72,7 +72,8 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
 std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                                                            int recvRank)
 {
-    auto msg = broker.recvMessage(id, sendRank, recvRank, true);
+    auto msg =
+      broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
     PARSE_MSG(MPIMessage, msg.data(), msg.size());
     return std::make_shared<MPIMessage>(parsedMsg);
 }
@@ -105,8 +106,16 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     user = call.user();
     function = call.function();
     thisRankMsg = &call;
-
     size = newSize;
+
+    // Update the first message to make sure it looks like messages >= 1
+    call.set_ismpi(true);
+    call.set_mpirank(0);
+    call.set_mpiworldid(id);
+    call.set_mpiworldsize(size);
+    call.set_groupid(call.mpiworldid());
+    call.set_groupidx(call.mpirank());
+    call.set_appidx(call.mpirank());
 
     auto& sch = faabric::scheduler::getScheduler();
 
@@ -118,12 +127,12 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         faabric::Message& msg = req->mutable_messages()->at(i);
         msg.set_appid(call.appid());
         msg.set_ismpi(true);
-        msg.set_mpiworldid(id);
+        msg.set_mpiworldid(call.mpiworldid());
         msg.set_mpirank(i + 1);
-        msg.set_mpiworldsize(size);
+        msg.set_mpiworldsize(call.mpiworldsize());
 
         // Set group ids for remote messaging
-        msg.set_groupid(msg.mpiworldid());
+        msg.set_groupid(call.groupid());
         msg.set_groupidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
@@ -209,6 +218,9 @@ void MpiWorld::destroy()
         throw std::runtime_error("Destroying world with outstanding requests");
     }
 
+    // Lastly, clear-out the rank message
+    thisRankMsg = nullptr;
+
     // Clear structures used for mocking
     {
         faabric::util::UniqueLock lock(mockMutex);
@@ -222,6 +234,7 @@ void MpiWorld::initialiseFromMsg(faabric::Message& msg)
     user = msg.user();
     function = msg.function();
     size = msg.mpiworldsize();
+    thisRankMsg = &msg;
 
     // Record which ranks are local to this world, and query for all leaders
     initLocalRemoteLeaders();
@@ -257,14 +270,19 @@ void MpiWorld::initLocalRemoteLeaders()
     // keep a record of the opposite mapping, the host that each rank belongs
     // to, as it is queried frequently and asking the ptp broker involves
     // acquiring a lock.
-    auto rankIds = broker.getIdxsRegisteredForGroup(id);
+    if (thisRankMsg == nullptr) {
+        throw std::runtime_error("Rank message not set!");
+    }
+    int groupId = thisRankMsg->groupid();
+    auto rankIds = broker.getIdxsRegisteredForGroup(groupId);
     if (rankIds.size() != size) {
         SPDLOG_ERROR("rankIds != size ({} != {})", rankIds.size(), size);
+        throw std::runtime_error("MPI Group-World size mismatch!");
     }
     assert(rankIds.size() == size);
     hostForRank.resize(size);
     for (const auto& rankId : rankIds) {
-        std::string host = broker.getHostForReceiver(id, rankId);
+        std::string host = broker.getHostForReceiver(groupId, rankId);
         ranksForHost[host].push_back(rankId);
         hostForRank.at(rankId) = host;
     }

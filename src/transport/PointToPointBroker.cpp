@@ -754,8 +754,9 @@ std::vector<uint8_t> PointToPointBroker::recvMessage(int groupId,
         if (recvMsg.getResponseCode() !=
             faabric::transport::MessageResponseCode::SUCCESS) {
             SPDLOG_WARN(
-              "Error {} when awaiting a message ({}:{} seq: {} label: {})",
+              "Error {} ({}) when awaiting a message ({}:{} seq: {} label: {})",
               static_cast<int>(recvMsg.getResponseCode()),
+              nng_strerror(static_cast<int>(recvMsg.getResponseCode())),
               sendIdx,
               recvIdx,
               expectedSeqNum,
