@@ -31,14 +31,20 @@ void FaabricEndpointHandler::onRequest(
     // Text response type
     response.set(header::content_type, "text/plain");
 
+    // Request body contains a string that is formatted as a JSON
+    std::string requestStr = request.body();
+
+    // Handle JSON
     // TODO: for the moment we keep the endpoint handler, but we are not meant
     // to receive any requests here. Eventually we will delete it
-    SPDLOG_ERROR("Faabric handler received request? (body: {})", request.body());
+    if (requestStr.empty()) {
+        SPDLOG_ERROR("Planner handler received empty request");
+        response.result(beast::http::status::bad_request);
+        response.body() = std::string("Empty request");
+        return ctx.sendFunction(std::move(response));
+    }
+
+    SPDLOG_ERROR("Faabric handler non-empty request? (body: {})", request.body());
     throw std::runtime_error("WHAT?");
-    /*
-    response.result(beast::http::status::bad_request);
-    response.body() = std::string("Empty request");
-    ctx.sendFunction(std::move(response));
-    */
 }
 }
