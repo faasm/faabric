@@ -33,9 +33,12 @@ void FaabricEndpointHandler::onRequest(
 
     // TODO: for the moment we keep the endpoint handler, but we are not meant
     // to receive any requests here. Eventually we will delete it
-    SPDLOG_ERROR("Faabric handler received empty request");
+    SPDLOG_ERROR("Faabric handler received request? (body: {})", request.body());
+    throw std::runtime_error("WHAT?");
+    /*
     response.result(beast::http::status::bad_request);
     response.body() = std::string("Empty request");
     ctx.sendFunction(std::move(response));
+    */
 }
 }
