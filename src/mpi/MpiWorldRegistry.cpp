@@ -67,6 +67,13 @@ MpiWorld& MpiWorldRegistry::getWorld(int worldId)
     return worldMap[worldId];
 }
 
+bool MpiWorldRegistry::worldExists(int worldId)
+{
+    faabric::util::SharedLock lock(registryMutex);
+
+    return worldMap.contains(worldId);
+}
+
 void MpiWorldRegistry::clear()
 {
     faabric::util::FullLock lock(registryMutex);
