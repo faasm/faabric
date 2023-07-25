@@ -60,14 +60,14 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
         throw std::runtime_error("Error serialising message");
     }
     try {
-    broker.sendMessage(
-      thisRankMsg->groupid(),
-      sendRank,
-      recvRank,
-      reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
-      serialisedBuffer.size(),
-      dstHost,
-      true);
+        broker.sendMessage(
+          thisRankMsg->groupid(),
+          sendRank,
+          recvRank,
+          reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
+          serialisedBuffer.size(),
+          dstHost,
+          true);
     } catch (std::runtime_error& e) {
         SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - send {} -> {}",
                      thisRankMsg->appid(),
@@ -93,6 +93,7 @@ std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                      thisRankMsg->groupidx(),
                      sendRank,
                      recvRank);
+        throw e;
     }
     PARSE_MSG(MPIMessage, msg.data(), msg.size());
     return std::make_shared<MPIMessage>(parsedMsg);
@@ -317,23 +318,6 @@ void MpiWorld::initLocalRemoteLeaders()
 
         std::iter_swap(it.second.begin(),
                        std::min_element(it.second.begin(), it.second.end()));
-    }
-
-    SPDLOG_INFO("{}:{}:{} setting local-remote leaders (local leader: {})",
-                thisRankMsg->appid(),
-                thisRankMsg->groupid(),
-                thisRankMsg->groupidx(),
-                localLeader);
-    for (auto it : ranksForHost) {
-        std::string line = fmt::format("{}:", it.first);
-        for (auto h : it.second) {
-            line = fmt::format("{} {}", line, h);
-        }
-        SPDLOG_INFO("{}:{}:{} local-remote-leaders: {}",
-                thisRankMsg->appid(),
-                thisRankMsg->groupid(),
-                thisRankMsg->groupidx(),
-                line);
     }
 }
 
@@ -1455,9 +1439,6 @@ std::shared_ptr<InMemoryMpiQueue> MpiWorld::getLocalQueue(int sendRank,
 // Note - the queues themselves perform concurrency control
 void MpiWorld::initLocalQueues()
 {
-    // TODO: iirc we used _not_ to clean stuff here, as it caused races
-    // during migration, so maybe this breaks migration (FIXME)
-    localQueues.clear();
     localQueues.resize(size * size);
     for (const int sendRank : ranksForHost[thisHost]) {
         for (const int recvRank : ranksForHost[thisHost]) {
