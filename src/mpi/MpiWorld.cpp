@@ -82,8 +82,18 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
 std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                                                            int recvRank)
 {
-    auto msg =
-      broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+    std::vector<uint8_t> msg;
+    try {
+        msg =
+          broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+    } catch (std::runtime_error& e) {
+        SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv (remote) {} -> {}",
+                     thisRankMsg->appid(),
+                     thisRankMsg->groupid(),
+                     thisRankMsg->groupidx(),
+                     sendRank,
+                     recvRank);
+    }
     PARSE_MSG(MPIMessage, msg.data(), msg.size());
     return std::make_shared<MPIMessage>(parsedMsg);
 }

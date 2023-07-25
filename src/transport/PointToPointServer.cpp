@@ -35,6 +35,7 @@ void PointToPointServer::doAsyncRecv(transport::Message& message)
 
             // Send the message locally to the downstream socket, add the
             // sequence number for in-order reception
+            // FIXME: this can sometimes throw an exception
             broker.sendMessage(parsedMsg.groupid(),
                                parsedMsg.sendidx(),
                                parsedMsg.recvidx(),
