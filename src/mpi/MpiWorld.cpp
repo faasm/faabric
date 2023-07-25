@@ -1486,12 +1486,13 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
                 msgIt->acknowledge(pendingMsg);
                 msgIt++;
             } catch (faabric::util::QueueTimeoutException& e) {
-                SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - pending recv {} -> {}",
-                             thisRankMsg->appid(),
-                             thisRankMsg->groupid(),
-                             thisRankMsg->groupidx(),
-                             sendRank,
-                             recvRank);
+                SPDLOG_ERROR(
+                  "{}:{}:{} Timed out with: MPI - pending recv {} -> {}",
+                  thisRankMsg->appid(),
+                  thisRankMsg->groupid(),
+                  thisRankMsg->groupidx(),
+                  sendRank,
+                  recvRank);
                 throw e;
             }
         }

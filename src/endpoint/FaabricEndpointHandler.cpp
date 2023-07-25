@@ -44,7 +44,8 @@ void FaabricEndpointHandler::onRequest(
         return ctx.sendFunction(std::move(response));
     }
 
-    SPDLOG_ERROR("Worker HTTP handler received non-empty request (body: {})", request.body());
+    SPDLOG_ERROR("Worker HTTP handler received non-empty request (body: {})",
+                 request.body());
     throw std::runtime_error("Worker HTTP handler received non-empty request");
 }
 }

@@ -669,7 +669,8 @@ void PointToPointBroker::sendMessage(int groupId,
         try {
             endpoint.send(NO_HEADER, buffer, bufferSize, localSendSeqNum);
         } catch (std::runtime_error& e) {
-            SPDLOG_ERROR("Timed-out with local point-to-point message {}:{}:{} (seq: {}) to {}",
+            SPDLOG_ERROR("Timed-out with local point-to-point message {}:{}:{} "
+                         "(seq: {}) to {}",
                          groupId,
                          sendIdx,
                          recvIdx,
@@ -701,7 +702,8 @@ void PointToPointBroker::sendMessage(int groupId,
         try {
             cli->sendMessage(msg, remoteSendSeqNum);
         } catch (std::runtime_error& e) {
-            SPDLOG_TRACE("Timed-out with remote point-to-point message {}:{}:{} (seq: {}) to {}",
+            SPDLOG_TRACE("Timed-out with remote point-to-point message "
+                         "{}:{}:{} (seq: {}) to {}",
                          groupId,
                          sendIdx,
                          recvIdx,
