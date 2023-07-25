@@ -666,8 +666,17 @@ void PointToPointBroker::sendMessage(int groupId,
                      localSendSeqNum,
                      endpoint.getAddress());
 
-        endpoint.send(NO_HEADER, buffer, bufferSize, localSendSeqNum);
-
+        try {
+            endpoint.send(NO_HEADER, buffer, bufferSize, localSendSeqNum);
+        } catch (std::runtime_error& e) {
+            SPDLOG_ERROR("Timed-out with local point-to-point message {}:{}:{} (seq: {}) to {}",
+                         groupId,
+                         sendIdx,
+                         recvIdx,
+                         localSendSeqNum,
+                         endpoint.getAddress());
+            throw e;
+        }
     } else {
         auto cli = getClient(host);
         faabric::PointToPointMessage msg;
@@ -689,7 +698,16 @@ void PointToPointBroker::sendMessage(int groupId,
                      remoteSendSeqNum,
                      host);
 
-        cli->sendMessage(msg, remoteSendSeqNum);
+        try {
+            cli->sendMessage(msg, remoteSendSeqNum);
+        } catch (std::runtime_error& e) {
+            SPDLOG_TRACE("Timed-out with remote point-to-point message {}:{}:{} (seq: {}) to {}",
+                         groupId,
+                         sendIdx,
+                         recvIdx,
+                         remoteSendSeqNum,
+                         host);
+        }
     }
 }
 

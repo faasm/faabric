@@ -59,6 +59,7 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
     if (!msg->SerializeToString(&serialisedBuffer)) {
         throw std::runtime_error("Error serialising message");
     }
+    try {
     broker.sendMessage(
       thisRankMsg->groupid(),
       sendRank,
@@ -67,6 +68,15 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
       serialisedBuffer.size(),
       dstHost,
       true);
+    } catch (std::runtime_error& e) {
+        SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - send {} -> {}",
+                     thisRankMsg->appid(),
+                     thisRankMsg->groupid(),
+                     thisRankMsg->groupidx(),
+                     sendRank,
+                     recvRank);
+        throw e;
+    }
 }
 
 std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
