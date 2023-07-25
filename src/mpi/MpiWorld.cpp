@@ -59,21 +59,42 @@ void MpiWorld::sendRemoteMpiMessage(std::string dstHost,
     if (!msg->SerializeToString(&serialisedBuffer)) {
         throw std::runtime_error("Error serialising message");
     }
-    broker.sendMessage(
-      thisRankMsg->groupid(),
-      sendRank,
-      recvRank,
-      reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
-      serialisedBuffer.size(),
-      dstHost,
-      true);
+    try {
+        broker.sendMessage(
+          thisRankMsg->groupid(),
+          sendRank,
+          recvRank,
+          reinterpret_cast<const uint8_t*>(serialisedBuffer.data()),
+          serialisedBuffer.size(),
+          dstHost,
+          true);
+    } catch (std::runtime_error& e) {
+        SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - send {} -> {}",
+                     thisRankMsg->appid(),
+                     thisRankMsg->groupid(),
+                     thisRankMsg->groupidx(),
+                     sendRank,
+                     recvRank);
+        throw e;
+    }
 }
 
 std::shared_ptr<MPIMessage> MpiWorld::recvRemoteMpiMessage(int sendRank,
                                                            int recvRank)
 {
-    auto msg =
-      broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+    std::vector<uint8_t> msg;
+    try {
+        msg =
+          broker.recvMessage(thisRankMsg->groupid(), sendRank, recvRank, true);
+    } catch (std::runtime_error& e) {
+        SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv (remote) {} -> {}",
+                     thisRankMsg->appid(),
+                     thisRankMsg->groupid(),
+                     thisRankMsg->groupidx(),
+                     sendRank,
+                     recvRank);
+        throw e;
+    }
     PARSE_MSG(MPIMessage, msg.data(), msg.size());
     return std::make_shared<MPIMessage>(parsedMsg);
 }
@@ -1456,18 +1477,39 @@ std::shared_ptr<MPIMessage> MpiWorld::recvBatchReturnLast(int sendRank,
     if (isLocal) {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {
-            SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
-            auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+            try {
+                SPDLOG_TRACE("MPI - pending recv {} -> {}", sendRank, recvRank);
+                auto pendingMsg = getLocalQueue(sendRank, recvRank)->dequeue();
 
-            // Put the unacked message in the UMB
-            assert(!msgIt->isAcknowledged());
-            msgIt->acknowledge(pendingMsg);
-            msgIt++;
+                // Put the unacked message in the UMB
+                assert(!msgIt->isAcknowledged());
+                msgIt->acknowledge(pendingMsg);
+                msgIt++;
+            } catch (faabric::util::QueueTimeoutException& e) {
+                SPDLOG_ERROR(
+                  "{}:{}:{} Timed out with: MPI - pending recv {} -> {}",
+                  thisRankMsg->appid(),
+                  thisRankMsg->groupid(),
+                  thisRankMsg->groupidx(),
+                  sendRank,
+                  recvRank);
+                throw e;
+            }
         }
 
         // Finally receive the message corresponding to us
         SPDLOG_TRACE("MPI - recv {} -> {}", sendRank, recvRank);
-        ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        try {
+            ourMsg = getLocalQueue(sendRank, recvRank)->dequeue();
+        } catch (faabric::util::QueueTimeoutException& e) {
+            SPDLOG_ERROR("{}:{}:{} Timed out with: MPI - recv {} -> {}",
+                         thisRankMsg->appid(),
+                         thisRankMsg->groupid(),
+                         thisRankMsg->groupidx(),
+                         sendRank,
+                         recvRank);
+            throw e;
+        }
     } else {
         // First receive messages that happened before us
         for (int i = 0; i < batchSize - 1; i++) {

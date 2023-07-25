@@ -70,8 +70,10 @@ void SystemConfig::initialise()
       this->getSystemConfIntParam("STATE_SERVER_THREADS", "2");
     snapshotServerThreads =
       this->getSystemConfIntParam("SNAPSHOT_SERVER_THREADS", "2");
+    // FIXME: temporarily set this value to a higher number to work-around:
+    // https://github.com/faasm/faabric/issues/335
     pointToPointServerThreads =
-      this->getSystemConfIntParam("POINT_TO_POINT_SERVER_THREADS", "2");
+      this->getSystemConfIntParam("POINT_TO_POINT_SERVER_THREADS", "8");
 
     // Dirty tracking
     dirtyTrackingMode = getEnvVar("DIRTY_TRACKING_MODE", "segfault");
