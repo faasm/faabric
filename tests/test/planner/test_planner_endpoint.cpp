@@ -102,7 +102,7 @@ TEST_CASE_METHOD(PlannerEndpointTestFixture,
 
     // Prepare the message
     HttpMessage msg;
-    msg.set_type(HttpMessage_Type_FLUSH_HOSTS);
+    msg.set_type(HttpMessage_Type_FLUSH_AVAILABLE_HOSTS);
     msgJsonStr = faabric::util::messageToJson(msg);
 
     // Send it
@@ -183,6 +183,80 @@ TEST_CASE_METHOD(PlannerEndpointTestFixture,
     faabric::util::setMockMode(false);
     faabric::scheduler::clearMockRequests();
     faabric::scheduler::getScheduler().shutdown();
+}
+
+TEST_CASE_METHOD(PlannerEndpointTestFixture,
+                 "Test getting the available hosts via endpoint",
+                 "[planner]")
+{
+    // First flush the available hosts
+    HttpMessage flushMsg;
+    flushMsg.set_type(HttpMessage_Type_FLUSH_AVAILABLE_HOSTS);
+    std::string flushMsgStr = faabric::util::messageToJson(flushMsg);
+    std::pair<int, std::string> result = doPost(flushMsgStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            boost::beast::http::status::ok);
+
+    AvailableHostsResponse hostsResponse;
+
+    // Now, getting the available hosts should return zero hosts
+    HttpMessage getMsg;
+    getMsg.set_type(HttpMessage_Type_GET_AVAILABLE_HOSTS);
+    std::string getMsgStr = faabric::util::messageToJson(getMsg);
+    result = doPost(getMsgStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            boost::beast::http::status::ok);
+    REQUIRE_NOTHROW(faabric::util::jsonToMessage(result.second, &getMsg));
+    REQUIRE(hostsResponse.hosts().empty());
+
+    // If we register a number of hosts, we are able to retrieve them through
+    // the API
+    AvailableHostsResponse expectedHostsResponse;
+    SECTION("One host")
+    {
+        auto* host = expectedHostsResponse.add_hosts();
+        host->set_ip("foo");
+        host->set_slots(12);
+    }
+
+    SECTION("Multiple hosts")
+    {
+        auto* host = expectedHostsResponse.add_hosts();
+        // The planner will return the hosts in alphabetical order by IP, so
+        // we sort them here too
+        host = expectedHostsResponse.add_hosts();
+        host->set_ip("bar");
+        host->set_slots(4);
+        host = expectedHostsResponse.add_hosts();
+        host->set_ip("baz");
+        host->set_slots(7);
+        host = expectedHostsResponse.add_hosts();
+        host->set_ip("foo");
+        host->set_slots(12);
+    }
+
+    // Register the hosts
+    auto regReq = std::make_shared<faabric::planner::RegisterHostRequest>();
+    PlannerClient cli;
+    for (auto host : expectedHostsResponse.hosts()) {
+        *regReq->mutable_host() = host;
+        cli.registerHost(regReq);
+    }
+
+    // Post HTTP request and check it matches the expectation
+    result = doPost(getMsgStr);
+    REQUIRE(boost::beast::http::int_to_status(result.first) ==
+            boost::beast::http::status::ok);
+    REQUIRE_NOTHROW(
+      faabric::util::jsonToMessage(result.second, &hostsResponse));
+    REQUIRE(hostsResponse.hosts().size() ==
+            expectedHostsResponse.hosts().size());
+    for (int i = 0; i < hostsResponse.hosts().size(); i++) {
+        REQUIRE(hostsResponse.hosts(i).ip() ==
+                expectedHostsResponse.hosts(i).ip());
+        REQUIRE(hostsResponse.hosts(i).slots() ==
+                expectedHostsResponse.hosts(i).slots());
+    }
 }
 
 TEST_CASE_METHOD(PlannerEndpointTestFixture,
