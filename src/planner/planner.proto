@@ -35,12 +35,13 @@ message HttpMessage {
     enum Type {
         NO_TYPE = 0;
         RESET = 1;
-        FLUSH_HOSTS = 2;
+        FLUSH_AVAILABLE_HOSTS = 2;
         FLUSH_EXECUTORS = 3;
-        GET_CONFIG = 4;
-        GET_EXEC_GRAPH = 5;
-        EXECUTE_BATCH = 6;
-        EXECUTE_BATCH_STATUS = 7;
+        GET_AVAILABLE_HOSTS = 4;
+        GET_CONFIG = 5;
+        GET_EXEC_GRAPH = 6;
+        EXECUTE_BATCH = 7;
+        EXECUTE_BATCH_STATUS = 8;
     }
 
     Type type = 1 [json_name = "http_type"];

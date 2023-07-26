@@ -68,8 +68,8 @@ void PlannerEndpointHandler::onRequest(
             }
             return ctx.sendFunction(std::move(response));
         }
-        case faabric::planner::HttpMessage_Type_FLUSH_HOSTS: {
-            SPDLOG_DEBUG("Planner received FLUSH_HOSTS request");
+        case faabric::planner::HttpMessage_Type_FLUSH_AVAILABLE_HOSTS: {
+            SPDLOG_DEBUG("Planner received FLUSH_AVAILABLE_HOSTS request");
             bool success = faabric::planner::getPlanner().flush(
               faabric::planner::FlushType::Hosts);
             if (success) {
@@ -92,6 +92,31 @@ void PlannerEndpointHandler::onRequest(
             } else {
                 response.result(beast::http::status::internal_server_error);
                 response.body() = std::string("Failed flushing executors!");
+            }
+            return ctx.sendFunction(std::move(response));
+        }
+        case faabric::planner::HttpMessage_Type_GET_AVAILABLE_HOSTS: {
+            SPDLOG_DEBUG("Planner received GET_AVAILABLE_HOSTS request");
+
+            // Get the list of available hosts
+            auto availableHosts =
+              faabric::planner::getPlanner().getAvailableHosts();
+            faabric::planner::AvailableHostsResponse hostsResponse;
+            for (auto& host : availableHosts) {
+                *hostsResponse.add_hosts() = *host;
+            }
+
+            // Serialise and prepare the response
+            std::string responseStr;
+            try {
+                responseStr = faabric::util::messageToJson(hostsResponse);
+                response.result(beast::http::status::ok);
+                response.body() = responseStr;
+            } catch (faabric::util::JsonSerialisationException& e) {
+                SPDLOG_ERROR("Error processing GET_AVAILABLE_HOSTS request");
+                response.result(beast::http::status::internal_server_error);
+                response.body() =
+                  std::string("Failed getting available hosts!");
             }
             return ctx.sendFunction(std::move(response));
         }
