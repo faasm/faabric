@@ -19,6 +19,9 @@ add_custom_target(
     DEPENDS ${PLANNER_PB_HEADER_COPIED}
 )
 
+# Build the planner scheduler
+add_subdirectory(scheduler)
+
 faabric_lib(planner
     Planner.cpp
     PlannerClient.cpp
@@ -32,6 +35,7 @@ faabric_lib(planner
 add_dependencies(faabric_common_dependencies planner_pbh_copied)
 
 target_link_libraries(planner PRIVATE
+    faabric::planner_scheduler
     faabric::endpoint
     faabric::transport
     faabric::util
