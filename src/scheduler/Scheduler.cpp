@@ -52,24 +52,6 @@ static faabric::util::
   ConcurrentMap<std::string, std::shared_ptr<faabric::planner::PlannerClient>>
     plannerClient;
 
-MessageLocalResult::MessageLocalResult()
-{
-    eventFd = eventfd(0, EFD_CLOEXEC);
-}
-
-MessageLocalResult::~MessageLocalResult()
-{
-    if (eventFd >= 0) {
-        close(eventFd);
-    }
-}
-
-void MessageLocalResult::setValue(std::unique_ptr<faabric::Message>&& msg)
-{
-    this->promise.set_value(std::move(msg));
-    eventfd_write(this->eventFd, (eventfd_t)1);
-}
-
 Scheduler& getScheduler()
 {
     static Scheduler sch;
