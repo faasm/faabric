@@ -10,7 +10,6 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/batch.h>
-#include <faabric/util/concurrent_map.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
