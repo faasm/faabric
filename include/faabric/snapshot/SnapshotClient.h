@@ -58,4 +58,12 @@ class SnapshotClient final : public faabric::transport::MessageEndpointClient
       const std::string& key,
       const std::vector<faabric::util::SnapshotDiff>& diffs);
 };
+
+// -----------------------------------
+// Static setter/getters
+// -----------------------------------
+
+std::shared_ptr<SnapshotClient> getSnapshotClient(const std::string& otherHost);
+
+void clearSnapshotClients();
 }

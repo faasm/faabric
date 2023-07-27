@@ -108,8 +108,9 @@ void clearMockRequests()
 }
 
 // -----------------------------------
-// Message Client
+// Function Call Client
 // -----------------------------------
+
 FunctionCallClient::FunctionCallClient(const std::string& hostIn)
   : faabric::transport::MessageEndpointClient(hostIn,
                                               FUNCTION_CALL_ASYNC_PORT,
@@ -201,5 +202,31 @@ void FunctionCallClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
         asyncSend(faabric::scheduler::FunctionCalls::SetMessageResult,
                   msg.get());
     }
+}
+
+// -----------------------------------
+// Static setter/getters
+// -----------------------------------
+
+static faabric::util::ConcurrentMap<
+  std::string,
+  std::shared_ptr<faabric::scheduler::FunctionCallClient>>
+  functionCallClients;
+
+std::shared_ptr<FunctionCallClient> getFunctionCallClient(
+  const std::string& otherHost)
+{
+    auto client = functionCallClients.get(otherHost).value_or(nullptr);
+    if (client == nullptr) {
+        SPDLOG_DEBUG("Adding new function call client for {}", otherHost);
+        client =
+          functionCallClients.tryEmplaceShared(otherHost, otherHost).second;
+    }
+    return client;
+}
+
+void clearFunctionCallClients()
+{
+    functionCallClients.clear();
 }
 }

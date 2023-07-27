@@ -6,6 +6,8 @@
 #include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/Scheduler.h>
+#include <faabric/snapshot/SnapshotClient.h>
+#include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/compare.h>
@@ -815,7 +817,8 @@ void mpiMigrationPoint(int entrypointFuncArg)
         std::string snapKey = "migration_" + std::to_string(msg.id());
         auto& reg = faabric::snapshot::getSnapshotRegistry();
         reg.registerSnapshot(snapKey, snap);
-        sch.getSnapshotClient(hostToMigrateTo)->pushSnapshot(snapKey, snap);
+        faabric::snapshot::getSnapshotClient(hostToMigrateTo)
+          ->pushSnapshot(snapKey, snap);
         msg.set_snapshotkey(snapKey);
 
         // Propagate the id's and indices

@@ -1,6 +1,6 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/proto/faabric.pb.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
@@ -77,10 +77,9 @@ void Planner::flushExecutors()
 {
     auto availableHosts = getAvailableHosts();
 
-    auto& sch = faabric::scheduler::getScheduler();
     for (const auto& host : availableHosts) {
         SPDLOG_INFO("Planner sending EXECUTOR flush to {}", host->ip());
-        sch.getFunctionCallClient(host->ip())->sendFlush();
+        faabric::scheduler::getFunctionCallClient(host->ip())->sendFlush();
     }
 }
 
@@ -212,11 +211,11 @@ void Planner::setMessageResult(std::shared_ptr<faabric::Message> msg)
     state.appResults[appId][msgId] = msg;
 
     // Dispatch an async message to all hosts that are waiting
-    auto& sch = faabric::scheduler::getScheduler();
     if (state.appResultWaiters.find(msgId) != state.appResultWaiters.end()) {
         for (const auto& host : state.appResultWaiters[msgId]) {
             SPDLOG_INFO("Sending result to waiting host: {}", host);
-            sch.getFunctionCallClient(host)->setMessageResult(msg);
+            faabric::scheduler::getFunctionCallClient(host)->setMessageResult(
+              msg);
         }
     }
 }

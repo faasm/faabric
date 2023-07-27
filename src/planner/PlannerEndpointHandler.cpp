@@ -2,7 +2,7 @@
 #include <faabric/planner/Planner.h>
 #include <faabric/planner/PlannerEndpointHandler.h>
 #include <faabric/planner/planner.pb.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/scheduler/FunctionCallClient.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/json.h>
@@ -197,8 +197,8 @@ void PlannerEndpointHandler::onRequest(
             }
             // Note that hostIdx++ is an atomic increment
             int hostIdx = nextHostIdx++ % availableHosts.size();
-            faabric::scheduler::getScheduler()
-              .getFunctionCallClient(availableHosts.at(hostIdx)->ip())
+            faabric::scheduler::getFunctionCallClient(
+              availableHosts.at(hostIdx)->ip())
               ->executeFunctions(ber);
 
             // Prepare the response
