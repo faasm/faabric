@@ -1119,7 +1119,6 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Await results on this host
     for (int i = 0; i < nMessages; i++) {
         if (singleHosts[i] == thisHost) {
-            SPDLOG_WARN("Waiting for message {}:{}", appId, msgIds.at(i));
             faabric::Message res =
               plannerCli.getMessageResult(appId, msgIds.at(i), 2000);
 

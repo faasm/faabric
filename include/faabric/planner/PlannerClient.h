@@ -47,9 +47,9 @@ struct PlannerCache
 class PlannerClient final : public faabric::transport::MessageEndpointClient
 {
   public:
-    PlannerClient(PlannerCache& cacheIn);
+    PlannerClient();
 
-    PlannerClient(PlannerCache& cacheIn, const std::string& plannerIp);
+    PlannerClient(const std::string& plannerIp);
 
     void ping();
 
@@ -85,7 +85,7 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
   private:
     std::mutex plannerCacheMx;
-    PlannerCache& cache;
+    PlannerCache cache;
 
     faabric::Message doGetMessageResult(
       std::shared_ptr<faabric::Message> msgPtr,

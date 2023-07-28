@@ -53,7 +53,7 @@ def tests(
         TEST_ENV["LLVM_PROFILE_FILE"] = environ["LLVM_PROFILE_FILE"]
 
     if debug:
-        TEST_ENV["LOG_LEVEL"] = "trace"
+        TEST_ENV["LOG_LEVEL"] = "debug"
 
     if test_case:
         tests_cmd.append("'{}'".format(test_case))

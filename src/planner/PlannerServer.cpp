@@ -127,8 +127,6 @@ std::unique_ptr<google::protobuf::Message> PlannerServer::recvRemoveHost(
 void PlannerServer::recvSetMessageResult(std::span<const uint8_t> buffer)
 {
     PARSE_MSG(Message, buffer.data(), buffer.size());
-
-    SPDLOG_WARN("Planner setting result for msg: {}", parsedMsg.id());
     planner.setMessageResult(std::make_shared<faabric::Message>(parsedMsg));
 }
 

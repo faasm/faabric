@@ -38,21 +38,18 @@ void KeepAliveThread::setRequest(
 // Planner Client
 // -----------------------------------
 
-PlannerClient::PlannerClient(PlannerCache& cacheIn)
+PlannerClient::PlannerClient()
   : faabric::transport::MessageEndpointClient(
       faabric::util::getIPFromHostname(
         faabric::util::getSystemConfig().plannerHost),
       PLANNER_ASYNC_PORT,
       PLANNER_SYNC_PORT)
-  , cache(cacheIn)
 {}
 
-PlannerClient::PlannerClient(PlannerCache& cacheIn,
-                             const std::string& plannerIp)
+PlannerClient::PlannerClient(const std::string& plannerIp)
   : faabric::transport::MessageEndpointClient(plannerIp,
                                               PLANNER_ASYNC_PORT,
                                               PLANNER_SYNC_PORT)
-  , cache(cacheIn)
 {}
 
 void PlannerClient::ping()
@@ -119,7 +116,6 @@ void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
 
 void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
-    SPDLOG_WARN("Setting result for msg: {} (app: {})", msg->id(), msg->appid());
     asyncSend(PlannerCalls::SetMessageResult, msg.get());
 }
 
@@ -233,7 +229,6 @@ faabric::Message PlannerClient::doGetMessageResult(
         auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
         if (status == std::future_status::timeout) {
             msgResult.set_type(faabric::Message_MessageType_EMPTY);
-            SPDLOG_WARN("Timed out :(");
         } else {
             // Acquire a lock to read the value of the promise to avoid data
             // races
@@ -258,14 +253,10 @@ faabric::Message PlannerClient::doGetMessageResult(
 
 PlannerClient& getPlannerClient()
 {
-    // Initialise the cache statically
-    static PlannerCache cache;
-
     auto plannerHost = faabric::util::getIPFromHostname(
       faabric::util::getSystemConfig().plannerHost);
 
-    SPDLOG_ERROR("Initialising planner client to: {}", plannerHost);
-    static thread_local PlannerClient plannerCli(cache, plannerHost);
+    static PlannerClient plannerCli(plannerHost);
 
     return plannerCli;
 }
