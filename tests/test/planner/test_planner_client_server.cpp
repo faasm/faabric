@@ -15,7 +15,7 @@ TEST_CASE_METHOD(PlannerClientServerFixture,
                  "Test sending ping to planner",
                  "[planner]")
 {
-    PlannerClient cli(LOCALHOST);
+    auto& cli = getPlannerClient();
     REQUIRE_NOTHROW(cli.ping());
 }
 

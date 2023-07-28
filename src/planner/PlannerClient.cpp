@@ -16,7 +16,7 @@ namespace faabric::planner {
 
 void KeepAliveThread::doWork()
 {
-    PlannerClient cli;
+    auto& cli = getPlannerClient();
 
     faabric::util::SharedLock lock(keepAliveThreadMx);
 
@@ -38,18 +38,21 @@ void KeepAliveThread::setRequest(
 // Planner Client
 // -----------------------------------
 
-PlannerClient::PlannerClient()
+PlannerClient::PlannerClient(PlannerCache& cacheIn)
   : faabric::transport::MessageEndpointClient(
       faabric::util::getIPFromHostname(
         faabric::util::getSystemConfig().plannerHost),
       PLANNER_ASYNC_PORT,
       PLANNER_SYNC_PORT)
+  , cache(cacheIn)
 {}
 
-PlannerClient::PlannerClient(const std::string& plannerIp)
+PlannerClient::PlannerClient(PlannerCache& cacheIn,
+                             const std::string& plannerIp)
   : faabric::transport::MessageEndpointClient(plannerIp,
                                               PLANNER_ASYNC_PORT,
                                               PLANNER_SYNC_PORT)
+  , cache(cacheIn)
 {}
 
 void PlannerClient::ping()
@@ -116,8 +119,8 @@ void PlannerClient::removeHost(std::shared_ptr<RemoveHostRequest> req)
 
 void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 {
-    faabric::EmptyResponse response;
-    syncSend(PlannerCalls::SetMessageResult, msg.get(), &response);
+    SPDLOG_WARN("Setting result for msg: {} (app: {})", msg->id(), msg->appid());
+    asyncSend(PlannerCalls::SetMessageResult, msg.get());
 }
 
 // This function sets a message result locally. It is invoked as a callback
@@ -126,24 +129,25 @@ void PlannerClient::setMessageResult(std::shared_ptr<faabric::Message> msg)
 void PlannerClient::setMessageResultLocally(
   std::shared_ptr<faabric::Message> msg)
 {
-    faabric::util::UniqueLock lock(plannerResultsMutex);
+    faabric::util::UniqueLock lock(plannerCacheMx);
 
     // It may happen that the planner returns the message result before we
     // have had time to prepare the promise. This should happen rarely as it
     // is an unexpected race condition, thus why we emit a warning
-    if (plannerResults.find(msg->id()) == plannerResults.end()) {
+    if (cache.plannerResults.find(msg->id()) == cache.plannerResults.end()) {
         SPDLOG_WARN(
           "Setting message result before promise is set for (id: {}, app: {})",
           msg->id(),
           msg->appid());
-        plannerResults.insert(
+        cache.plannerResults.insert(
           { msg->id(), std::make_shared<MessageResultPromise>() });
     }
 
-    plannerResults.at(msg->id())->set_value(msg);
+    cache.plannerResults.at(msg->id())->set_value(msg);
 }
 
 // This method actually gets the message result from the planner
+// TODO: potentially make private
 std::shared_ptr<faabric::Message> PlannerClient::getMessageResult(
   std::shared_ptr<faabric::Message> msg)
 {
@@ -164,7 +168,7 @@ faabric::Message PlannerClient::getMessageResult(const faabric::Message& msg,
     // registering interest in the results
     auto msgPtr = std::make_shared<faabric::Message>(msg);
     msgPtr->set_masterhost(faabric::util::getSystemConfig().endpointHost);
-    return doGetFunctionResult(msgPtr, timeoutMs);
+    return doGetMessageResult(msgPtr, timeoutMs);
 }
 
 faabric::Message PlannerClient::getMessageResult(int appId,
@@ -175,7 +179,7 @@ faabric::Message PlannerClient::getMessageResult(int appId,
     msgPtr->set_appid(appId);
     msgPtr->set_id(msgId);
     msgPtr->set_masterhost(faabric::util::getSystemConfig().endpointHost);
-    return doGetFunctionResult(msgPtr, timeoutMs);
+    return doGetMessageResult(msgPtr, timeoutMs);
 }
 
 // This method gets the function result from the planner in a blocking fashion.
@@ -185,13 +189,12 @@ faabric::Message PlannerClient::getMessageResult(int appId,
 // for the result. If its not there, the planner will register this host's
 // interest, and send a function call setting the message result. In the
 // meantime, we wait on a promise
-faabric::Message PlannerClient::doGetFunctionResult(
+faabric::Message PlannerClient::doGetMessageResult(
   std::shared_ptr<faabric::Message> msgPtr,
   int timeoutMs)
 {
     int msgId = msgPtr->id();
-    auto resMsgPtr =
-      faabric::planner::getPlannerClient()->getMessageResult(msgPtr);
+    auto resMsgPtr = getMessageResult(msgPtr);
 
     // If when we first check the message it is there, return. Otherwise, we
     // will have told the planner we want the result
@@ -213,16 +216,16 @@ faabric::Message PlannerClient::doGetFunctionResult(
     // the planner sending the result back
     std::future<std::shared_ptr<faabric::Message>> fut;
     {
-        faabric::util::UniqueLock lock(plannerResultsMutex);
+        faabric::util::UniqueLock lock(plannerCacheMx);
 
-        if (plannerResults.find(msgId) == plannerResults.end()) {
-            plannerResults.insert(
+        if (cache.plannerResults.find(msgId) == cache.plannerResults.end()) {
+            cache.plannerResults.insert(
               { msgId, std::make_shared<MessageResultPromise>() });
         }
 
         // Note that it is deliberately an error for two threads to retrieve
         // the future at the same time
-        fut = plannerResults.at(msgId)->get_future();
+        fut = cache.plannerResults.at(msgId)->get_future();
     }
 
     while (true) {
@@ -230,18 +233,19 @@ faabric::Message PlannerClient::doGetFunctionResult(
         auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
         if (status == std::future_status::timeout) {
             msgResult.set_type(faabric::Message_MessageType_EMPTY);
+            SPDLOG_WARN("Timed out :(");
         } else {
             // Acquire a lock to read the value of the promise to avoid data
             // races
-            faabric::util::UniqueLock lock(plannerResultsMutex);
+            faabric::util::UniqueLock lock(plannerCacheMx);
             msgResult = *fut.get();
         }
 
         {
             // Remove the result promise irrespective of whether we timed out
             // or not, as promises are single-use
-            faabric::util::UniqueLock lock(plannerResultsMutex);
-            plannerResults.erase(msgId);
+            faabric::util::UniqueLock lock(plannerCacheMx);
+            cache.plannerResults.erase(msgId);
         }
 
         return msgResult;
@@ -252,27 +256,17 @@ faabric::Message PlannerClient::doGetFunctionResult(
 // Static setter/getters
 // -----------------------------------
 
-// Even though there's just one planner server, and thus there will only be
-// one client per instance, using a ConcurrentMap gives us the thread-safe
-// wrapper for free
-static faabric::util::
-  ConcurrentMap<std::string, std::shared_ptr<faabric::planner::PlannerClient>>
-    plannerClient;
-
-std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient()
+PlannerClient& getPlannerClient()
 {
+    // Initialise the cache statically
+    static PlannerCache cache;
+
     auto plannerHost = faabric::util::getIPFromHostname(
       faabric::util::getSystemConfig().plannerHost);
-    auto client = plannerClient.get(plannerHost).value_or(nullptr);
-    if (client == nullptr) {
-        SPDLOG_DEBUG("Adding new planner client for {}", plannerHost);
-        client = plannerClient.tryEmplaceShared(plannerHost).second;
-    }
-    return client;
-}
 
-void clearPlannerClient()
-{
-    plannerClient.clear();
+    SPDLOG_ERROR("Initialising planner client to: {}", plannerHost);
+    static thread_local PlannerClient plannerCli(cache, plannerHost);
+
+    return plannerCli;
 }
 }

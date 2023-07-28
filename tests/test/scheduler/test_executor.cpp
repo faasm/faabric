@@ -149,17 +149,17 @@ int32_t TestExecutor::executeTask(
             Scheduler& sch = getScheduler();
             sch.callFunctions(reqThis);
             sch.callFunctions(reqOther);
-            auto plannerCli = faabric::planner::getPlannerClient();
+            auto& plannerCli = faabric::planner::getPlannerClient();
 
             for (const auto& m : reqThis->messages()) {
                 faabric::Message res =
-                  plannerCli->getMessageResult(m, SHORT_TEST_TIMEOUT_MS);
+                  plannerCli.getMessageResult(m, SHORT_TEST_TIMEOUT_MS);
                 assert(res.outputdata() == "chain-check-a successful");
             }
 
             for (const auto& m : reqOther->messages()) {
                 faabric::Message res =
-                  plannerCli->getMessageResult(m, SHORT_TEST_TIMEOUT_MS);
+                  plannerCli.getMessageResult(m, SHORT_TEST_TIMEOUT_MS);
                 assert(res.outputdata() == "chain-check-b successful");
             }
 
@@ -1119,6 +1119,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     // Await results on this host
     for (int i = 0; i < nMessages; i++) {
         if (singleHosts[i] == thisHost) {
+            SPDLOG_WARN("Waiting for message {}:{}", appId, msgIds.at(i));
             faabric::Message res =
               plannerCli.getMessageResult(appId, msgIds.at(i), 2000);
 

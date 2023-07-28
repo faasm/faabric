@@ -155,10 +155,10 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
     ExecGraph expected{ .rootNode = nodeA };
 
     // Wait for the MPI messages to finish
-    auto plannerCli = faabric::planner::getPlannerClient();
-    plannerCli->getMessageResult(msg, 2000);
+    auto& plannerCli = faabric::planner::getPlannerClient();
+    plannerCli.getMessageResult(msg, 2000);
     for (const auto& id : faabric::util::getChainedFunctions(msg)) {
-        plannerCli->getMessageResult(msg.appid(), id, 2000);
+        plannerCli.getMessageResult(msg.appid(), id, 2000);
     }
     ExecGraph actual = getFunctionExecGraph(msg);
 

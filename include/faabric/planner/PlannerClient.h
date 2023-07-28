@@ -30,12 +30,26 @@ class KeepAliveThread : public faabric::util::PeriodicBackgroundThread
     std::shared_mutex keepAliveThreadMx;
 };
 
+/*
+ * Local state associated with the current host, used to cache results and
+ * avoid unnecessary interactions with the planner server.
+ */
+struct PlannerCache
+{
+    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
+};
+
+/*
+ * The planner client is used to communicate with the planner over the network.
+ * To minimise the number of open connections, we have one static instance
+ * of the client per-host. This means that the planner client is reentrant.
+ */
 class PlannerClient final : public faabric::transport::MessageEndpointClient
 {
   public:
-    PlannerClient();
+    PlannerClient(PlannerCache& cacheIn);
 
-    PlannerClient(const std::string& plannerIp);
+    PlannerClient(PlannerCache& cacheIn, const std::string& plannerIp);
 
     void ping();
 
@@ -70,10 +84,10 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
                                       int timeoutMs);
 
   private:
-    // ---- Message results ----
-    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
-    std::mutex plannerResultsMutex;
-    faabric::Message doGetFunctionResult(
+    std::mutex plannerCacheMx;
+    PlannerCache& cache;
+
+    faabric::Message doGetMessageResult(
       std::shared_ptr<faabric::Message> msgPtr,
       int timeoutMs);
 };
@@ -82,7 +96,5 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 // Static setter/getters
 // -----------------------------------
 
-std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
-
-void clearPlannerClient();
+PlannerClient& getPlannerClient();
 }

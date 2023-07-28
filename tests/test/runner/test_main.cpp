@@ -58,7 +58,7 @@ TEST_CASE_METHOD(MainRunnerTestFixture, "Test main runner", "[runner]")
             std::string expected =
               fmt::format("DummyExecutor executed {}", msgId);
             faabric::Message res =
-              faabric::planner::getPlannerClient()->getMessageResult(
+              faabric::planner::getPlannerClient().getMessageResult(
                 appId, msgId, SHORT_TEST_TIMEOUT_MS);
             REQUIRE(res.outputdata() == expected);
         }

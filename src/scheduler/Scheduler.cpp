@@ -65,7 +65,7 @@ Scheduler::~Scheduler()
 std::set<std::string> Scheduler::getAvailableHosts()
 {
     auto availableHosts =
-      faabric::planner::getPlannerClient()->getAvailableHosts();
+      faabric::planner::getPlannerClient().getAvailableHosts();
     std::set<std::string> availableHostsIps;
     for (const auto& host : availableHosts) {
         availableHostsIps.insert(host.ip());
@@ -96,7 +96,7 @@ void Scheduler::addHostToGlobalSet(
     }
 
     int plannerTimeout =
-      faabric::planner::getPlannerClient()->registerHost(req);
+      faabric::planner::getPlannerClient().registerHost(req);
 
     // Once the host is registered, set-up a periodic thread to send a heart-
     // beat to the planner. Note that this method may be called multiple times
@@ -125,7 +125,7 @@ void Scheduler::removeHostFromGlobalSet(const std::string& hostIp)
         req->mutable_host()->set_ip(hostIp);
     }
 
-    faabric::planner::getPlannerClient()->removeHost(req);
+    faabric::planner::getPlannerClient().removeHost(req);
 
     // Clear the keep alive thread
     if (isThisHost) {
@@ -163,7 +163,6 @@ void Scheduler::reset()
     // Clear the clients (do we need to do this here?
     clearFunctionCallClients();
     clearSnapshotClients();
-    faabric::planner::clearPlannerClient();
 
     faabric::util::FullLock lock(mx);
 
@@ -1070,9 +1069,11 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
         removePendingMigration(msg.appid());
     }
 
+    SPDLOG_WARN("Setting result for msg: {} (app: {})", msg.id(), msg.appid());
+
     // Let the planner know this function has finished execution. This will
     // wake any thread waiting on this result
-    faabric::planner::getPlannerClient()->setMessageResult(
+    faabric::planner::getPlannerClient().setMessageResult(
       std::make_shared<faabric::Message>(msg));
 }
 

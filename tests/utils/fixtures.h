@@ -114,7 +114,7 @@ class PlannerClientServerFixture
 {
   public:
     PlannerClientServerFixture()
-      : plannerCli(faabric::util::getSystemConfig().plannerHost)
+      : plannerCli(faabric::planner::getPlannerClient())
     {
         plannerServer.start();
         plannerCli.ping();
@@ -127,7 +127,7 @@ class PlannerClientServerFixture
     }
 
   protected:
-    faabric::planner::PlannerClient plannerCli;
+    faabric::planner::PlannerClient& plannerCli;
     faabric::planner::PlannerServer plannerServer;
 };
 

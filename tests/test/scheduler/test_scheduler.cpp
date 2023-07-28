@@ -659,7 +659,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     for (int i = 0; i < nWaiters; i++) {
         waiterThreads.emplace_back([nWaiterMessages] {
             Scheduler& sch = scheduler::getScheduler();
-            auto plannerCli = faabric::planner::getPlannerClient();
+            auto& plannerCli = faabric::planner::getPlannerClient();
 
             std::shared_ptr<faabric::BatchExecuteRequest> req =
               faabric::util::batchExecFactory("demo", "echo", nWaiterMessages);
@@ -672,7 +672,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
             // Invoke and await
             sch.callFunctions(req);
             for (auto msgId : msgIds) {
-                plannerCli->getMessageResult(appId, msgId, 5000);
+                plannerCli.getMessageResult(appId, msgId, 5000);
             }
         });
     }
