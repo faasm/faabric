@@ -159,9 +159,10 @@ void Scheduler::reset()
     // Clear the point to point broker
     broker.clear();
 
-    // Clear the clients (do we need to do this here?
+    // Clear the clients
     clearFunctionCallClients();
     clearSnapshotClients();
+    faabric::planner::getPlannerClient().clearCache();
 
     faabric::util::FullLock lock(mx);
 

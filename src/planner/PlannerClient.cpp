@@ -77,6 +77,13 @@ void PlannerClient::ping()
     SPDLOG_DEBUG("Succesfully pinged the planner server at {}", expectedIp);
 }
 
+void PlannerClient::clearCache()
+{
+    faabric::util::UniqueLock lock(plannerCacheMx);
+
+    cache.plannerResults.clear();
+}
+
 std::vector<faabric::planner::Host> PlannerClient::getAvailableHosts()
 {
     EmptyRequest req;
