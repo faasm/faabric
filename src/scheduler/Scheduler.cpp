@@ -1069,8 +1069,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
         removePendingMigration(msg.appid());
     }
 
-    SPDLOG_WARN("Setting result for msg: {} (app: {})", msg.id(), msg.appid());
-
     // Let the planner know this function has finished execution. This will
     // wake any thread waiting on this result
     faabric::planner::getPlannerClient().setMessageResult(
