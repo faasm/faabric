@@ -76,7 +76,7 @@ class PointToPointDistTestFixture : public DistTestsFixture
         for (int i = 0; i < nFuncs; i++) {
             faabric::Message& m = req->mutable_messages()->at(i);
 
-            sch.getFunctionResult(m, 2000);
+            plannerCli.getMessageResult(m, 2000);
             REQUIRE(m.returnvalue() == 0);
         }
     }
@@ -160,7 +160,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     REQUIRE(expectedHosts == executedHosts);
 
     // Get result
-    faabric::Message result = sch.getFunctionResult(m, 10000);
+    faabric::Message result = plannerCli.getMessageResult(m, 10000);
     REQUIRE(result.returnvalue() == 0);
 }
 }

@@ -191,7 +191,8 @@ TEST_CASE_METHOD(
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
-    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
+    faabric::Message res =
+      plannerCli.getMessageResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -243,7 +244,8 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
-    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
+    faabric::Message res =
+      plannerCli.getMessageResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -298,7 +300,8 @@ TEST_CASE_METHOD(
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts);
 
-    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
+    faabric::Message res =
+      plannerCli.getMessageResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Check that after the result is set, the app can't be migrated no more
@@ -461,7 +464,8 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     checkPendingMigrationsExpectation(
       expectedMigrations, actualMigrations, hosts, true);
 
-    faabric::Message res = sch.getFunctionResult(appId, msgId, 2 * timeToSleep);
+    faabric::Message res =
+      plannerCli.getMessageResult(appId, msgId, 2 * timeToSleep);
     REQUIRE(res.returnvalue() == 0);
 
     // Clean up

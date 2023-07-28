@@ -50,7 +50,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     for (int i = 0; i < nLocalSlots; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
 
-        sch.getFunctionResult(m, 1000);
+        plannerCli.getMessageResult(m, 1000);
         std::string expected =
           fmt::format("Function {} executed on host {}", m.id(), getMasterIP());
 
@@ -60,7 +60,7 @@ TEST_CASE_METHOD(DistTestsFixture,
     // Check functions executed on the other host
     for (int i = nLocalSlots; i < nFuncs; i++) {
         faabric::Message& m = req->mutable_messages()->at(i);
-        faabric::Message result = sch.getFunctionResult(m, 1000);
+        faabric::Message result = plannerCli.getMessageResult(m, 1000);
 
         std::string expected =
           fmt::format("Function {} executed on host {}", m.id(), getWorkerIP());

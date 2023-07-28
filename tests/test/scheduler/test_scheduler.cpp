@@ -323,7 +323,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         if (isThreads) {
             sch.awaitThreadResult(reqOneMsgIds.at(i));
         } else {
-            sch.getFunctionResult(appId, reqOneMsgIds.at(i), 10000);
+            plannerCli.getMessageResult(appId, reqOneMsgIds.at(i), 10000);
         }
     }
 
@@ -421,7 +421,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         if (isThreads) {
             sch.awaitThreadResult(reqTwoMsgIds.at(i));
         } else {
-            sch.getFunctionResult(appId, reqTwoMsgIds.at(i), 10000);
+            plannerCli.getMessageResult(appId, reqTwoMsgIds.at(i), 10000);
         }
     }
 
@@ -544,7 +544,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         if (execMode == faabric::BatchExecuteRequest::THREADS) {
             sch.awaitThreadResult(msg.id());
         } else {
-            sch.getFunctionResult(msg, 10000);
+            plannerCli.getMessageResult(msg, 10000);
         }
     }
 }
@@ -640,7 +640,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     sch.setFunctionResult(call);
 
     // Check retrieval method gets the same call out again
-    faabric::Message actualCall2 = sch.getFunctionResult(call, 1);
+    faabric::Message actualCall2 = plannerCli.getMessageResult(call, 1);
 
     checkMessageEquality(call, actualCall2);
 }
@@ -659,6 +659,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     for (int i = 0; i < nWaiters; i++) {
         waiterThreads.emplace_back([nWaiterMessages] {
             Scheduler& sch = scheduler::getScheduler();
+            auto plannerCli = faabric::planner::getPlannerClient();
 
             std::shared_ptr<faabric::BatchExecuteRequest> req =
               faabric::util::batchExecFactory("demo", "echo", nWaiterMessages);
@@ -671,7 +672,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
             // Invoke and await
             sch.callFunctions(req);
             for (auto msgId : msgIds) {
-                sch.getFunctionResult(appId, msgId, 5000);
+                plannerCli->getMessageResult(appId, msgId, 5000);
             }
         });
     }
@@ -729,7 +730,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Check status when nothing has been written
-    const faabric::Message result = sch.getFunctionResult(msg, 0);
+    const faabric::Message result = plannerCli.getMessageResult(msg, 0);
 
     REQUIRE(result.returnvalue() == expectedReturnValue);
     REQUIRE(result.type() == expectedType);
@@ -907,8 +908,8 @@ TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
     // Execute a couple of functions
     sch.callFunctions(reqA);
     for (auto msgId : reqAMsgIds) {
-        faabric::Message res =
-          sch.getFunctionResult(msgA.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
+        faabric::Message res = plannerCli.getMessageResult(
+          msgA.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -918,8 +919,8 @@ TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
     // Execute a couple more functions
     sch.callFunctions(reqB);
     for (auto msgId : reqBMsgIds) {
-        faabric::Message res =
-          sch.getFunctionResult(msgB.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
+        faabric::Message res = plannerCli.getMessageResult(
+          msgB.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -1058,7 +1059,7 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
             continue;
         }
 
-        sch.getFunctionResult(appId, msgIds.at(i), 10000);
+        plannerCli.getMessageResult(appId, msgIds.at(i), 10000);
     }
 }
 

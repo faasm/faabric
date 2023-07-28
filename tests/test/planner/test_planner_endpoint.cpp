@@ -323,7 +323,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
 
     // Call a function first, and wait for the result
     sch.callFunctions(ber);
-    auto resultMsg = sch.getFunctionResult(appId, msgId, 1000);
+    auto resultMsg = getPlannerClient()->getMessageResult(appId, msgId, 1000);
 
     SECTION("Success")
     {
@@ -427,7 +427,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
             expectedReturnCode);
     REQUIRE(result.second == expectedResponseBody);
 
-    auto msgResult = sch.getFunctionResult(appId, msgId, 1000);
+    auto msgResult = getPlannerClient()->getMessageResult(appId, msgId, 1000);
     REQUIRE(msgResult.returnvalue() == 0);
 
     // If the request is succesful, check that the response has the fields
@@ -460,7 +460,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
             beast::http::status::ok);
 
     // Make sure execution has finished and the result is available
-    auto msgResult = sch.getFunctionResult(appId, msgId, 1000);
+    auto msgResult = getPlannerClient()->getMessageResult(appId, msgId, 1000);
     REQUIRE(msgResult.returnvalue() == 0);
 
     // Second, prepare an HTTP request to get the batch's execution status

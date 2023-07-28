@@ -1076,28 +1076,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
       std::make_shared<faabric::Message>(msg));
 }
 
-// This function sets a message result locally. It is invoked as a callback
-// from the planner to notify all hosts waiting for a message result that the
-// result is ready
-void Scheduler::setMessageResultLocally(std::shared_ptr<faabric::Message> msg)
-{
-    faabric::util::UniqueLock lock(plannerResultsMutex);
-
-    // It may happen that the planner returns the message result before we
-    // have had time to prepare the promise. This should happen rarely as it
-    // is an unexpected race condition, thus why we emit a warning
-    if (plannerResults.find(msg->id()) == plannerResults.end()) {
-        SPDLOG_WARN(
-          "Setting message result before promise is set for (id: {}, app: {})",
-          msg->id(),
-          msg->appid());
-        plannerResults.insert(
-          { msg->id(), std::make_shared<MessageResultPromise>() });
-    }
-
-    plannerResults.at(msg->id())->set_value(msg);
-}
-
 void Scheduler::registerThread(uint32_t msgId)
 {
     // Here we need to ensure the promise is registered locally so
@@ -1220,97 +1198,6 @@ std::vector<uint32_t> Scheduler::getRegisteredThreads()
 size_t Scheduler::getCachedMessageCount()
 {
     return threadResultMessages.size();
-}
-
-faabric::Message Scheduler::getFunctionResult(const faabric::Message& msg,
-                                              int timeoutMs)
-{
-    // Deliberately make a copy here so that we can set the masterhost when
-    // registering interest in the results
-    auto msgPtr = std::make_shared<faabric::Message>(msg);
-    msgPtr->set_masterhost(thisHost);
-    return doGetFunctionResult(msgPtr, timeoutMs);
-}
-
-faabric::Message Scheduler::getFunctionResult(int appId,
-                                              int msgId,
-                                              int timeoutMs)
-{
-    auto msgPtr = std::make_shared<faabric::Message>();
-    msgPtr->set_appid(appId);
-    msgPtr->set_id(msgId);
-    msgPtr->set_masterhost(thisHost);
-    return doGetFunctionResult(msgPtr, timeoutMs);
-}
-
-// This method gets the function result from the planner in a blocking fashion.
-// Even though the results are stored in the planner, we want to block in the
-// client (i.e. here) and not in the planner. This is to avoid consuming
-// planner threads. This method will first query the planner once
-// for the result. If its not there, the planner will register this host's
-// interest, and send a function call setting the message result. In the
-// meantime, we wait on a promise
-faabric::Message Scheduler::doGetFunctionResult(
-  std::shared_ptr<faabric::Message> msgPtr,
-  int timeoutMs)
-{
-    int msgId = msgPtr->id();
-    auto resMsgPtr =
-      faabric::planner::getPlannerClient()->getMessageResult(msgPtr);
-
-    // If when we first check the message it is there, return. Otherwise, we
-    // will have told the planner we want the result
-    if (resMsgPtr) {
-        return *resMsgPtr;
-    }
-
-    bool isBlocking = timeoutMs > 0;
-    // If the result is not in the planner, and we are not blocking, return
-    if (!isBlocking) {
-        faabric::Message msgResult;
-        msgResult.set_type(faabric::Message_MessageType_EMPTY);
-        return msgResult;
-    }
-
-    // If we are here, we need to wait for the planner to let us know that
-    // the message is ready. To do so, we need to set a promise at the message
-    // id. We do so immediately after returning, so that we don't race with
-    // the planner sending the result back
-    std::future<std::shared_ptr<faabric::Message>> fut;
-    {
-        faabric::util::UniqueLock lock(plannerResultsMutex);
-
-        if (plannerResults.find(msgId) == plannerResults.end()) {
-            plannerResults.insert(
-              { msgId, std::make_shared<MessageResultPromise>() });
-        }
-
-        // Note that it is deliberately an error for two threads to retrieve
-        // the future at the same time
-        fut = plannerResults.at(msgId)->get_future();
-    }
-
-    while (true) {
-        faabric::Message msgResult;
-        auto status = fut.wait_for(std::chrono::milliseconds(timeoutMs));
-        if (status == std::future_status::timeout) {
-            msgResult.set_type(faabric::Message_MessageType_EMPTY);
-        } else {
-            // Acquire a lock to read the value of the promise to avoid data
-            // races
-            faabric::util::UniqueLock lock(plannerResultsMutex);
-            msgResult = *fut.get();
-        }
-
-        {
-            // Remove the result promise irrespective of whether we timed out
-            // or not, as promises are single-use
-            faabric::util::UniqueLock lock(plannerResultsMutex);
-            plannerResults.erase(msgId);
-        }
-
-        return msgResult;
-    }
 }
 
 faabric::HostResources Scheduler::getThisHostResources()

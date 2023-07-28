@@ -149,16 +149,17 @@ int32_t TestExecutor::executeTask(
             Scheduler& sch = getScheduler();
             sch.callFunctions(reqThis);
             sch.callFunctions(reqOther);
+            auto plannerCli = faabric::planner::getPlannerClient();
 
             for (const auto& m : reqThis->messages()) {
                 faabric::Message res =
-                  sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
+                  plannerCli->getMessageResult(m, SHORT_TEST_TIMEOUT_MS);
                 assert(res.outputdata() == "chain-check-a successful");
             }
 
             for (const auto& m : reqOther->messages()) {
                 faabric::Message res =
-                  sch.getFunctionResult(m, SHORT_TEST_TIMEOUT_MS);
+                  plannerCli->getMessageResult(m, SHORT_TEST_TIMEOUT_MS);
                 assert(res.outputdata() == "chain-check-b successful");
             }
 
@@ -358,7 +359,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<std::string> expectedHosts = { conf.endpointHost };
     REQUIRE(actualHosts == expectedHosts);
 
-    faabric::Message result = sch.getFunctionResult(msg, SHORT_TEST_TIMEOUT_MS);
+    faabric::Message result =
+      plannerCli.getMessageResult(msg, SHORT_TEST_TIMEOUT_MS);
     std::string expected = fmt::format("Simple function {} executed", msg.id());
     REQUIRE(result.outputdata() == expected);
 
@@ -382,7 +384,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
         executeWithTestExecutor(req, false);
         faabric::Message result =
-          sch.getFunctionResult(msg, SHORT_TEST_TIMEOUT_MS);
+          plannerCli.getMessageResult(msg, SHORT_TEST_TIMEOUT_MS);
         std::string expected =
           fmt::format("Simple function {} executed", msg.id());
         REQUIRE(result.outputdata() == expected);
@@ -404,7 +406,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<std::string> expectedHosts = { conf.endpointHost };
     REQUIRE(actualHosts == expectedHosts);
 
-    faabric::Message result = sch.getFunctionResult(msg, SHORT_TEST_TIMEOUT_MS);
+    faabric::Message result =
+      plannerCli.getMessageResult(msg, SHORT_TEST_TIMEOUT_MS);
     REQUIRE(result.outputdata() == "All chain checks successful");
 
     // Check that restore has not been called
@@ -546,8 +549,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<std::string> expectedHosts = { conf.endpointHost };
     REQUIRE(actualHosts == expectedHosts);
 
-    auto& sch = faabric::scheduler::getScheduler();
-    faabric::Message res = sch.getFunctionResult(msg, 5000);
+    faabric::Message res = plannerCli.getMessageResult(msg, 5000);
     REQUIRE(res.returnvalue() == 0);
 }
 
@@ -578,7 +580,8 @@ TEST_CASE_METHOD(TestExecutorFixture,
         std::vector<std::string> expectedHosts = { conf.endpointHost };
         REQUIRE(actualHosts == expectedHosts);
 
-        faabric::Message res = sch.getFunctionResult(msg, LONG_TEST_TIMEOUT_MS);
+        faabric::Message res =
+          plannerCli.getMessageResult(msg, LONG_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
 
         sch.reset();
@@ -637,7 +640,7 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test non-zero return code", "[executor]")
 
     executeWithTestExecutor(req, false);
 
-    faabric::Message res = sch.getFunctionResult(msg, 2000);
+    faabric::Message res = plannerCli.getMessageResult(msg, 2000);
     REQUIRE(res.returnvalue() == 1);
 }
 
@@ -649,7 +652,7 @@ TEST_CASE_METHOD(TestExecutorFixture, "Test erroring function", "[executor]")
 
     executeWithTestExecutor(req, false);
 
-    faabric::Message res = sch.getFunctionResult(msg, 2000);
+    faabric::Message res = plannerCli.getMessageResult(msg, 2000);
     REQUIRE(res.returnvalue() == 1);
 
     std::string expectedErrorMsg = fmt::format(
@@ -697,18 +700,18 @@ TEST_CASE_METHOD(TestExecutorFixture,
     sch.callFunctions(reqB);
     sch.callFunctions(reqC);
 
-    faabric::Message resA1 =
-      sch.getFunctionResult(reqA->messages().at(0), SHORT_TEST_TIMEOUT_MS);
-    faabric::Message resA2 =
-      sch.getFunctionResult(reqA->messages().at(1), SHORT_TEST_TIMEOUT_MS);
+    faabric::Message resA1 = plannerCli.getMessageResult(reqA->messages().at(0),
+                                                         SHORT_TEST_TIMEOUT_MS);
+    faabric::Message resA2 = plannerCli.getMessageResult(reqA->messages().at(1),
+                                                         SHORT_TEST_TIMEOUT_MS);
 
-    faabric::Message resB =
-      sch.getFunctionResult(reqB->messages().at(0), SHORT_TEST_TIMEOUT_MS);
+    faabric::Message resB = plannerCli.getMessageResult(reqB->messages().at(0),
+                                                        SHORT_TEST_TIMEOUT_MS);
 
-    faabric::Message resC1 =
-      sch.getFunctionResult(reqC->messages().at(0), SHORT_TEST_TIMEOUT_MS);
-    faabric::Message resC2 =
-      sch.getFunctionResult(reqC->messages().at(1), SHORT_TEST_TIMEOUT_MS);
+    faabric::Message resC1 = plannerCli.getMessageResult(reqC->messages().at(0),
+                                                         SHORT_TEST_TIMEOUT_MS);
+    faabric::Message resC2 = plannerCli.getMessageResult(reqC->messages().at(1),
+                                                         SHORT_TEST_TIMEOUT_MS);
 
     REQUIRE(resA1.outputdata() == "Message A1");
     REQUIRE(resA2.outputdata() == "Message A2");
@@ -785,7 +788,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     REQUIRE(millisC < millisB);
 
     // Wait for execution to finish
-    sch.getFunctionResult(msg, 2000);
+    plannerCli.getMessageResult(msg, 2000);
 
     exec->shutdown();
 }
@@ -1062,7 +1065,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         if (requestType == faabric::BatchExecuteRequest::THREADS) {
             sch.awaitThreadResult(msgId);
         } else {
-            sch.getFunctionResult(appId, msgId, 2000);
+            plannerCli.getMessageResult(appId, msgId, 2000);
         }
     }
 
@@ -1117,7 +1120,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     for (int i = 0; i < nMessages; i++) {
         if (singleHosts[i] == thisHost) {
             faabric::Message res =
-              sch.getFunctionResult(appId, msgIds.at(i), 2000);
+              plannerCli.getMessageResult(appId, msgIds.at(i), 2000);
 
             // Check result as expected
             REQUIRE(res.returnvalue() == expectedResult);
@@ -1138,7 +1141,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     for (int i = 0; i < nMessages; i++) {
         faabric::Message res =
-          sch.getFunctionResult(req->messages().at(i), 2000);
+          plannerCli.getMessageResult(req->messages().at(i), 2000);
 
         REQUIRE(res.returnvalue() == expectedResult);
     }
