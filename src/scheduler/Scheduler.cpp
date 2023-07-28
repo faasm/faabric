@@ -95,8 +95,7 @@ void Scheduler::addHostToGlobalSet(
         req->mutable_host()->set_usedslots(0);
     }
 
-    int plannerTimeout =
-      faabric::planner::getPlannerClient().registerHost(req);
+    int plannerTimeout = faabric::planner::getPlannerClient().registerHost(req);
 
     // Once the host is registered, set-up a periodic thread to send a heart-
     // beat to the planner. Note that this method may be called multiple times

@@ -150,7 +150,8 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
         // Await results
         bool success = true;
         for (const auto& msg : nestedReq->messages()) {
-            faabric::Message res = faabric::planner::getPlannerClient().getMessageResult(msg, 30000);
+            faabric::Message res =
+              faabric::planner::getPlannerClient().getMessageResult(msg, 30000);
             if (res.returnvalue() != 0) {
                 success = false;
             }
