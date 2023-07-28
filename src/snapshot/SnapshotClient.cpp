@@ -1,6 +1,7 @@
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/transport/common.h>
 #include <faabric/transport/macros.h>
+#include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/queue.h>
@@ -235,5 +236,28 @@ void SnapshotClient::pushThreadResult(
         mb.Finish(requestOffset);
         SEND_FB_MSG(SnapshotCalls::ThreadResult, mb);
     }
+}
+
+// -----------------------------------
+// Static setter/getters
+// -----------------------------------
+
+static faabric::util::
+  ConcurrentMap<std::string, std::shared_ptr<faabric::snapshot::SnapshotClient>>
+    snapshotClients;
+
+std::shared_ptr<SnapshotClient> getSnapshotClient(const std::string& otherHost)
+{
+    auto client = snapshotClients.get(otherHost).value_or(nullptr);
+    if (client == nullptr) {
+        SPDLOG_DEBUG("Adding new snapshot client for {}", otherHost);
+        client = snapshotClients.tryEmplaceShared(otherHost, otherHost).second;
+    }
+    return client;
+}
+
+void clearSnapshotClients()
+{
+    snapshotClients.clear();
 }
 }

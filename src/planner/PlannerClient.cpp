@@ -2,6 +2,7 @@
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/transport/common.h>
+#include <faabric/util/concurrent_map.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -130,5 +131,33 @@ std::shared_ptr<faabric::Message> PlannerClient::getMessageResult(
     }
 
     return std::make_shared<faabric::Message>(responseMsg);
+}
+
+// -----------------------------------
+// Static setter/getters
+// -----------------------------------
+
+// Even though there's just one planner server, and thus there will only be
+// one client per instance, using a ConcurrentMap gives us the thread-safe
+// wrapper for free
+static faabric::util::
+  ConcurrentMap<std::string, std::shared_ptr<faabric::planner::PlannerClient>>
+    plannerClient;
+
+std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient()
+{
+    auto plannerHost = faabric::util::getIPFromHostname(
+      faabric::util::getSystemConfig().plannerHost);
+    auto client = plannerClient.get(plannerHost).value_or(nullptr);
+    if (client == nullptr) {
+        SPDLOG_DEBUG("Adding new planner client for {}", plannerHost);
+        client = plannerClient.tryEmplaceShared(plannerHost).second;
+    }
+    return client;
+}
+
+void clearPlannerClient()
+{
+    plannerClient.clear();
 }
 }

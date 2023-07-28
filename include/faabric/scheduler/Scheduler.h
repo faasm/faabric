@@ -318,17 +318,6 @@ class Scheduler
 
     void removePendingMigration(uint32_t appId);
 
-    // ----------------------------------
-    // Clients
-    // ----------------------------------
-    std::shared_ptr<faabric::scheduler::FunctionCallClient>
-    getFunctionCallClient(const std::string& otherHost);
-
-    std::shared_ptr<faabric::snapshot::SnapshotClient> getSnapshotClient(
-      const std::string& otherHost);
-
-    std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
-
   private:
     std::string thisHost;
 

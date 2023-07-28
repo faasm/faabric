@@ -10,7 +10,6 @@
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/batch.h>
-#include <faabric/util/concurrent_map.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/locks.h>
 #include <faabric/util/logging.h>
@@ -35,22 +34,6 @@ using namespace faabric::util;
 using namespace faabric::snapshot;
 
 namespace faabric::scheduler {
-
-static faabric::util::ConcurrentMap<
-  std::string,
-  std::shared_ptr<faabric::scheduler::FunctionCallClient>>
-  functionCallClients;
-
-static faabric::util::
-  ConcurrentMap<std::string, std::shared_ptr<faabric::snapshot::SnapshotClient>>
-    snapshotClients;
-
-// Even though there's just one planner server, and thus there will only be
-// one client per scheduler instance, using a ConcurrentMap gives us the
-// thread-safe wrapper for free
-static faabric::util::
-  ConcurrentMap<std::string, std::shared_ptr<faabric::planner::PlannerClient>>
-    plannerClient;
 
 Scheduler& getScheduler()
 {
@@ -81,7 +64,8 @@ Scheduler::~Scheduler()
 
 std::set<std::string> Scheduler::getAvailableHosts()
 {
-    auto availableHosts = getPlannerClient()->getAvailableHosts();
+    auto availableHosts =
+      faabric::planner::getPlannerClient()->getAvailableHosts();
     std::set<std::string> availableHostsIps;
     for (const auto& host : availableHosts) {
         availableHostsIps.insert(host.ip());
@@ -111,7 +95,8 @@ void Scheduler::addHostToGlobalSet(
         req->mutable_host()->set_usedslots(0);
     }
 
-    int plannerTimeout = getPlannerClient()->registerHost(req);
+    int plannerTimeout =
+      faabric::planner::getPlannerClient()->registerHost(req);
 
     // Once the host is registered, set-up a periodic thread to send a heart-
     // beat to the planner. Note that this method may be called multiple times
@@ -140,7 +125,7 @@ void Scheduler::removeHostFromGlobalSet(const std::string& hostIp)
         req->mutable_host()->set_ip(hostIp);
     }
 
-    getPlannerClient()->removeHost(req);
+    faabric::planner::getPlannerClient()->removeHost(req);
 
     // Clear the keep alive thread
     if (isThisHost) {
@@ -175,10 +160,10 @@ void Scheduler::reset()
     // Clear the point to point broker
     broker.clear();
 
-    // Clear the clients
-    functionCallClients.clear();
-    snapshotClients.clear();
-    plannerClient.clear();
+    // Clear the clients (do we need to do this here?
+    clearFunctionCallClients();
+    clearSnapshotClients();
+    faabric::planner::clearPlannerClient();
 
     faabric::util::FullLock lock(mx);
 
@@ -1002,41 +987,6 @@ std::vector<faabric::Message> Scheduler::getRecordedMessagesLocal()
     return recordedMessagesLocal;
 }
 
-std::shared_ptr<FunctionCallClient> Scheduler::getFunctionCallClient(
-  const std::string& otherHost)
-{
-    auto client = functionCallClients.get(otherHost).value_or(nullptr);
-    if (client == nullptr) {
-        SPDLOG_DEBUG("Adding new function call client for {}", otherHost);
-        client =
-          functionCallClients.tryEmplaceShared(otherHost, otherHost).second;
-    }
-    return client;
-}
-
-std::shared_ptr<SnapshotClient> Scheduler::getSnapshotClient(
-  const std::string& otherHost)
-{
-    auto client = snapshotClients.get(otherHost).value_or(nullptr);
-    if (client == nullptr) {
-        SPDLOG_DEBUG("Adding new snapshot client for {}", otherHost);
-        client = snapshotClients.tryEmplaceShared(otherHost, otherHost).second;
-    }
-    return client;
-}
-
-std::shared_ptr<faabric::planner::PlannerClient> Scheduler::getPlannerClient()
-{
-    auto plannerHost = faabric::util::getIPFromHostname(
-      faabric::util::getSystemConfig().plannerHost);
-    auto client = plannerClient.get(plannerHost).value_or(nullptr);
-    if (client == nullptr) {
-        SPDLOG_DEBUG("Adding new planner client for {}", plannerHost);
-        client = plannerClient.tryEmplaceShared(plannerHost).second;
-    }
-    return client;
-}
-
 std::vector<std::pair<std::string, faabric::Message>>
 Scheduler::getRecordedMessagesShared()
 {
@@ -1122,7 +1072,7 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // Let the planner know this function has finished execution. This will
     // wake any thread waiting on this result
-    getPlannerClient()->setMessageResult(
+    faabric::planner::getPlannerClient()->setMessageResult(
       std::make_shared<faabric::Message>(msg));
 }
 
@@ -1305,7 +1255,8 @@ faabric::Message Scheduler::doGetFunctionResult(
   int timeoutMs)
 {
     int msgId = msgPtr->id();
-    auto resMsgPtr = getPlannerClient()->getMessageResult(msgPtr);
+    auto resMsgPtr =
+      faabric::planner::getPlannerClient()->getMessageResult(msgPtr);
 
     // If when we first check the message it is there, return. Otherwise, we
     // will have told the planner we want the result

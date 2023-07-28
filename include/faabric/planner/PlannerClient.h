@@ -54,4 +54,12 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
     std::shared_ptr<faabric::Message> getMessageResult(
       std::shared_ptr<faabric::Message> msg);
 };
+
+// -----------------------------------
+// Static setter/getters
+// -----------------------------------
+
+std::shared_ptr<faabric::planner::PlannerClient> getPlannerClient();
+
+void clearPlannerClient();
 }
