@@ -163,7 +163,7 @@ void Scheduler::reset()
     // Clear the clients (do we need to do this here?
     clearFunctionCallClients();
     clearSnapshotClients();
-    faabric::planner::getPlannerClient();
+    faabric::planner::clearPlannerClient();
 
     faabric::util::FullLock lock(mx);
 
