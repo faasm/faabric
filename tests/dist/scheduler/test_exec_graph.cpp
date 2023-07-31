@@ -42,7 +42,7 @@ TEST_CASE_METHOD(DistTestsFixture,
         // Wait for the result, and immediately after query for the execution
         // graph
         for (const auto msgId : msgIds) {
-            sch.getFunctionResult(appId, msgId, 1000);
+            plannerCli.getMessageResult(appId, msgId, 1000);
         }
         auto execGraph = faabric::util::getFunctionExecGraph(m);
         REQUIRE(countExecGraphNodes(execGraph) == nFuncs);

@@ -18,7 +18,6 @@
 #include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
 
-#include <future>
 #include <shared_mutex>
 
 #define AVAILABLE_HOST_SET "available_hosts"
@@ -29,8 +28,6 @@ namespace faabric::scheduler {
 typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
                   std::shared_ptr<faabric::util::SchedulingDecision>>
   InFlightPair;
-typedef std::promise<std::shared_ptr<faabric::Message>> MessageResultPromise;
-typedef std::shared_ptr<MessageResultPromise> MessageResultPromisePtr;
 
 class Scheduler;
 
@@ -228,14 +225,10 @@ class Scheduler
     // ----------------------------------
     // Message results
     // ----------------------------------
+
+    // TODO(planner-scheduler): move this method to the planner client once
+    // the planner controls scheduling
     void setFunctionResult(faabric::Message& msg);
-
-    void setMessageResultLocally(std::shared_ptr<faabric::Message> msg);
-
-    faabric::Message getFunctionResult(const faabric::Message& msg,
-                                       int timeoutMs);
-
-    faabric::Message getFunctionResult(int appId, int msgId, int timeoutMs);
 
     void setThreadResult(const faabric::Message& msg,
                          int32_t returnValue,
@@ -339,13 +332,6 @@ class Scheduler
       threadResultMessages;
 
     std::unordered_map<std::string, std::set<std::string>> pushedSnapshotsMap;
-
-    // ---- Message results ----
-    std::unordered_map<uint32_t, MessageResultPromisePtr> plannerResults;
-    std::mutex plannerResultsMutex;
-    faabric::Message doGetFunctionResult(
-      std::shared_ptr<faabric::Message> msgPtr,
-      int timeoutMs);
 
     // ---- Host resources and hosts ----
     faabric::HostResources thisHostResources;

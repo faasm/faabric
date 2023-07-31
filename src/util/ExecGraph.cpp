@@ -36,7 +36,7 @@ ExecGraphNode getFunctionExecGraphNode(int appId, int msgId)
     // Get result without blocking, as we expect the results to have been
     // published already
     faabric::Message resultMsg =
-      faabric::scheduler::getScheduler().getFunctionResult(msg, 0);
+      faabric::planner::getPlannerClient().getMessageResult(msg, 0);
     if (resultMsg.type() == faabric::Message_MessageType_EMPTY) {
         SPDLOG_ERROR(
           "Message result in exec. graph not ready (msg: {} - app: {})",
@@ -70,7 +70,7 @@ std::set<unsigned int> getChainedFunctions(const faabric::Message& msg)
 {
     // Note that we can't get the chained functions until the result for the
     // parent message has been set
-    auto resultMsg = faabric::scheduler::getScheduler().getFunctionResult(
+    auto resultMsg = faabric::planner::getPlannerClient().getMessageResult(
       msg, EXEC_GRAPH_TIMEOUT_MS);
     std::set<unsigned int> chainedIds(
       resultMsg.mutable_chainedmsgids()->begin(),

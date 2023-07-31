@@ -82,8 +82,8 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
     sch.clearRecordedMessages();
 
     // Wait for functions to finish
-    sch.getFunctionResult(msgA, 2000);
-    sch.getFunctionResult(msgB, 2000);
+    plannerCli.getMessageResult(msgA, 2000);
+    plannerCli.getMessageResult(msgB, 2000);
 
     // Check executors present
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 1);
@@ -118,7 +118,7 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
 
     for (const auto& m : req->messages()) {
         // This timeout can be long as it shouldn't fail
-        sch.getFunctionResult(m, 5 * SHORT_TEST_TIMEOUT_MS);
+        plannerCli.getMessageResult(m, 5 * SHORT_TEST_TIMEOUT_MS);
     }
 
     // Check no other hosts have been registered
@@ -241,7 +241,7 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
     // This thread will block waiting for another thread to set the message
     // result
     std::jthread waiterThread{ [&] {
-        auto resultMsg = sch.getFunctionResult(msg, 2000);
+        auto resultMsg = plannerCli.getMessageResult(msg, 2000);
         actualReturnCode = resultMsg.returnvalue();
     } };
 

@@ -130,7 +130,7 @@ FunctionCallServer::recvPendingMigrations(std::span<const uint8_t> buffer)
 void FunctionCallServer::recvSetMessageResult(std::span<const uint8_t> buffer)
 {
     PARSE_MSG(faabric::Message, buffer.data(), buffer.size())
-    scheduler.setMessageResultLocally(
+    faabric::planner::getPlannerClient().setMessageResultLocally(
       std::make_shared<faabric::Message>(parsedMsg));
 }
 }

@@ -16,6 +16,7 @@
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
+#include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>
@@ -323,7 +324,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         if (isThreads) {
             sch.awaitThreadResult(reqOneMsgIds.at(i));
         } else {
-            sch.getFunctionResult(appId, reqOneMsgIds.at(i), 10000);
+            plannerCli.getMessageResult(appId, reqOneMsgIds.at(i), 10000);
         }
     }
 
@@ -421,7 +422,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         if (isThreads) {
             sch.awaitThreadResult(reqTwoMsgIds.at(i));
         } else {
-            sch.getFunctionResult(appId, reqTwoMsgIds.at(i), 10000);
+            plannerCli.getMessageResult(appId, reqTwoMsgIds.at(i), 10000);
         }
     }
 
@@ -544,7 +545,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         if (execMode == faabric::BatchExecuteRequest::THREADS) {
             sch.awaitThreadResult(msg.id());
         } else {
-            sch.getFunctionResult(msg, 10000);
+            plannerCli.getMessageResult(msg, 10000);
         }
     }
 }
@@ -640,7 +641,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     sch.setFunctionResult(call);
 
     // Check retrieval method gets the same call out again
-    faabric::Message actualCall2 = sch.getFunctionResult(call, 1);
+    faabric::Message actualCall2 = plannerCli.getMessageResult(call, 1);
 
     checkMessageEquality(call, actualCall2);
 }
@@ -659,6 +660,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     for (int i = 0; i < nWaiters; i++) {
         waiterThreads.emplace_back([nWaiterMessages] {
             Scheduler& sch = scheduler::getScheduler();
+            auto& plannerCli = faabric::planner::getPlannerClient();
 
             std::shared_ptr<faabric::BatchExecuteRequest> req =
               faabric::util::batchExecFactory("demo", "echo", nWaiterMessages);
@@ -671,7 +673,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
             // Invoke and await
             sch.callFunctions(req);
             for (auto msgId : msgIds) {
-                sch.getFunctionResult(appId, msgId, 5000);
+                plannerCli.getMessageResult(appId, msgId, 5000);
             }
         });
     }
@@ -729,7 +731,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Check status when nothing has been written
-    const faabric::Message result = sch.getFunctionResult(msg, 0);
+    const faabric::Message result = plannerCli.getMessageResult(msg, 1000);
 
     REQUIRE(result.returnvalue() == expectedReturnValue);
     REQUIRE(result.type() == expectedType);
@@ -754,14 +756,18 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     // Check empty initially
     REQUIRE(faabric::util::getChainedFunctions(msg).empty());
 
-    // Log and check this shows up in the result
+    // Log and check this shows up in the result (change the message id as,
+    // technically, messages should be unique, so setting the result a second
+    // time for the same message is undefined behaviour)
+    msg.set_id(faabric::util::generateGid());
     faabric::util::logChainedFunction(msg, chainedMsgA);
     std::set<unsigned int> expected = { (unsigned int)chainedMsgA.id() };
 
     sch.setFunctionResult(msg);
     REQUIRE(faabric::util::getChainedFunctions(msg) == expected);
 
-    // Log some more and check
+    // Log some more and check (update the message id again)
+    msg.set_id(faabric::util::generateGid());
     faabric::util::logChainedFunction(msg, chainedMsgA);
     faabric::util::logChainedFunction(msg, chainedMsgB);
     faabric::util::logChainedFunction(msg, chainedMsgC);
@@ -907,8 +913,8 @@ TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
     // Execute a couple of functions
     sch.callFunctions(reqA);
     for (auto msgId : reqAMsgIds) {
-        faabric::Message res =
-          sch.getFunctionResult(msgA.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
+        faabric::Message res = plannerCli.getMessageResult(
+          msgA.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -918,8 +924,8 @@ TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
     // Execute a couple more functions
     sch.callFunctions(reqB);
     for (auto msgId : reqBMsgIds) {
-        faabric::Message res =
-          sch.getFunctionResult(msgB.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
+        faabric::Message res = plannerCli.getMessageResult(
+          msgB.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
         REQUIRE(res.returnvalue() == 0);
     }
 
@@ -1058,7 +1064,7 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
             continue;
         }
 
-        sch.getFunctionResult(appId, msgIds.at(i), 10000);
+        plannerCli.getMessageResult(appId, msgIds.at(i), 10000);
     }
 }
 
