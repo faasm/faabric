@@ -16,6 +16,7 @@
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/environment.h>
 #include <faabric/util/func.h>
+#include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
 #include <faabric/util/scheduling.h>
@@ -755,14 +756,18 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     // Check empty initially
     REQUIRE(faabric::util::getChainedFunctions(msg).empty());
 
-    // Log and check this shows up in the result
+    // Log and check this shows up in the result (change the message id as,
+    // technically, messages should be unique, so setting the result a second
+    // time for the same message is undefined behaviour)
+    msg.set_id(faabric::util::generateGid());
     faabric::util::logChainedFunction(msg, chainedMsgA);
     std::set<unsigned int> expected = { (unsigned int)chainedMsgA.id() };
 
     sch.setFunctionResult(msg);
     REQUIRE(faabric::util::getChainedFunctions(msg) == expected);
 
-    // Log some more and check
+    // Log some more and check (update the message id again)
+    msg.set_id(faabric::util::generateGid());
     faabric::util::logChainedFunction(msg, chainedMsgA);
     faabric::util::logChainedFunction(msg, chainedMsgB);
     faabric::util::logChainedFunction(msg, chainedMsgC);
