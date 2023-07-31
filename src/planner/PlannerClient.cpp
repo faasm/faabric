@@ -149,9 +149,9 @@ void PlannerClient::setMessageResultLocally(
     cache.plannerResults.at(msg->id())->set_value(msg);
 }
 
-// This method actually gets the message result from the planner
-// TODO: potentially make private
-std::shared_ptr<faabric::Message> PlannerClient::getMessageResult(
+// This internal method method actually gets the message result from the
+// planner
+std::shared_ptr<faabric::Message> PlannerClient::getMessageResultFromPlanner(
   std::shared_ptr<faabric::Message> msg)
 {
     faabric::Message responseMsg;
@@ -197,7 +197,7 @@ faabric::Message PlannerClient::doGetMessageResult(
   int timeoutMs)
 {
     int msgId = msgPtr->id();
-    auto resMsgPtr = getMessageResult(msgPtr);
+    auto resMsgPtr = getMessageResultFromPlanner(msgPtr);
 
     // If when we first check the message it is there, return. Otherwise, we
     // will have told the planner we want the result

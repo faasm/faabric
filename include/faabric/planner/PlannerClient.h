@@ -74,12 +74,6 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
 
     void setMessageResultLocally(std::shared_ptr<faabric::Message> msg);
 
-    // This method actually gets the message result from the planner (i.e.
-    // sends a request to the planner server)
-    std::shared_ptr<faabric::Message> getMessageResult(
-      std::shared_ptr<faabric::Message> msg);
-
-    // Legacy signature kept for backwards-compatibility
     faabric::Message getMessageResult(int appId, int msgId, int timeoutMs);
 
     faabric::Message getMessageResult(const faabric::Message& msg,
@@ -92,6 +86,11 @@ class PlannerClient final : public faabric::transport::MessageEndpointClient
     faabric::Message doGetMessageResult(
       std::shared_ptr<faabric::Message> msgPtr,
       int timeoutMs);
+
+    // This method actually gets the message result from the planner (i.e.
+    // sends a request to the planner server)
+    std::shared_ptr<faabric::Message> getMessageResultFromPlanner(
+      std::shared_ptr<faabric::Message> msg);
 };
 
 // -----------------------------------

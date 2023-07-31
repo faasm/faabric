@@ -100,25 +100,28 @@ TEST_CASE_METHOD(PlannerClientServerFixture,
       faabric::util::messageFactory("foo", "bar"));
 
     // If we try to get the message result before setting it first, nothing
-    // happens
-    auto resultMsgPtr = plannerCli.getMessageResult(msgPtr);
-    REQUIRE(resultMsgPtr == nullptr);
+    // happens (note that we need to pass a 0 timeout to not block)
+    auto resultMsg =
+      plannerCli.getMessageResult(msgPtr->appid(), msgPtr->id(), 0);
+    REQUIRE(resultMsg.type() == faabric::Message_MessageType_EMPTY);
 
-    // If we set the message result, then we can get it
+    // If we set the message result, then we can get it (note that we read it
+    // from the mocked requests)
     int expectedReturnValue = 1337;
     msgPtr->set_returnvalue(expectedReturnValue);
     plannerCli.setMessageResult(msgPtr);
-    resultMsgPtr = plannerCli.getMessageResult(msgPtr);
-    REQUIRE(resultMsgPtr->id() == msgPtr->id());
-    REQUIRE(resultMsgPtr->appid() == msgPtr->appid());
-    REQUIRE(resultMsgPtr->returnvalue() == expectedReturnValue);
+    SLEEP_MS(500);
 
-    // Also, setting the message result triggers the planner to send a
-    // request to the host that tried to get the result before
+    // Read from mocked requests
     auto msgResults = faabric::scheduler::getMessageResults();
     REQUIRE(msgResults.size() == 1);
     REQUIRE(msgResults.at(0).first ==
             faabric::util::getSystemConfig().endpointHost);
+    REQUIRE(msgResults.at(0).second->type() !=
+            faabric::Message_MessageType_EMPTY);
+    REQUIRE(msgResults.at(0).second->id() == msgPtr->id());
+    REQUIRE(msgResults.at(0).second->appid() == msgPtr->appid());
+    REQUIRE(msgResults.at(0).second->returnvalue() == expectedReturnValue);
 
     faabric::scheduler::clearMockRequests();
     faabric::util::setMockMode(false);
