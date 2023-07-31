@@ -731,7 +731,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Check status when nothing has been written
-    const faabric::Message result = plannerCli.getMessageResult(msg, 0);
+    const faabric::Message result = plannerCli.getMessageResult(msg, 1000);
 
     REQUIRE(result.returnvalue() == expectedReturnValue);
     REQUIRE(result.type() == expectedType);
