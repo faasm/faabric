@@ -570,6 +570,27 @@ class BatchSchedulerFixture : public ConfFixture
         return hostMap;
     }
 
+    static faabric::batch_scheduler::InFlightReqs buildInFlightReqs(
+      std::shared_ptr<BatchExecuteRequest> ber,
+      int numMsgsOldBer,
+      std::vector<std::string> hosts)
+    {
+        faabric::batch_scheduler::InFlightReqs inFlightReqs;
+        int appId = ber->appid();
+
+        auto oldBer = faabric::util::batchExecFactory(
+          ber->messages(0).user(), ber->messages(0).function(), numMsgsOldBer);
+        oldBer->set_appid(appId);
+
+        assert(oldBer->messages_size() == hosts.size());
+        inFlightReqs[appId] =
+          std::make_pair(oldBer,
+                         std::make_shared<faabric::util::SchedulingDecision>(
+                           buildExpectedDecision(oldBer, hosts)));
+
+        return inFlightReqs;
+    }
+
     static faabric::util::SchedulingDecision buildExpectedDecision(
       std::shared_ptr<BatchExecuteRequest> ber,
       std::vector<std::string> hosts)

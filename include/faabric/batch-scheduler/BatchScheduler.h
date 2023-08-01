@@ -46,7 +46,8 @@ typedef std::map<std::string, Host> HostMap;
  * 3) A `SCALE_CHANGE` scheduling decision happens when we are scheduling a BER
  * _not_ for the first time, and the BER has a differet number of messages than
  * it had before. This corresponds to a chaining request or a thread/process
- * fork.
+ * fork. IMPORTANT: in a `SCALE_CHANGE` decision, we indicate the NEW number of
+ * messages we want to add to the running request, not the TOTAL
  */
 enum DecisionType
 {

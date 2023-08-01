@@ -42,8 +42,7 @@ DecisionType BatchScheduler::getDecisionType(
         return DecisionType::NEW;
     }
 
-    auto oldReq = inFlightReqs.at(appId).first;
-    if (oldReq->messages_size() == req->messages_size()) {
+    if (req->type() == BatchExecuteRequest_BatchExecuteType_MIGRATION) {
         return DecisionType::DIST_CHANGE;
     }
 

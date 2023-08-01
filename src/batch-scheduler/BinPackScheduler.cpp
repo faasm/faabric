@@ -16,7 +16,7 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
         sortedHosts.push_back(host);
     }
 
-    auto isHostSmaller = [&](const Host& hostA, const Host& hostB) -> bool {
+    auto isFirstHostLarger = [&](const Host& hostA, const Host& hostB) -> bool {
         // The BinPack scheduler sorts hosts by number of available slots
         int nAvailableA = numSlotsAvailable(hostA);
         int nAvailableB = numSlotsAvailable(hostB);
@@ -35,9 +35,62 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
         return getIp(hostA) > getIp(hostB);
     };
 
+    // Helper lambda to get the frequency of messags at each host (useful to
+    // sort hosts maximising locality)
+    auto getHostFreqCount = [inFlightReqs,
+                             req]() -> std::map<std::string, int> {
+        std::map<std::string, int> hostFreqCount;
+
+        auto oldDecision = inFlightReqs.at(req->appid()).second;
+        for (auto host : oldDecision->hosts) {
+            hostFreqCount[host] += 1;
+        }
+
+        return hostFreqCount;
+    };
+
     switch (decisionType) {
         case DecisionType::NEW: {
-            std::sort(sortedHosts.begin(), sortedHosts.end(), isHostSmaller);
+            // For a NEW decision type, the BinPack scheduler just sorts the
+            // hosts in decreasing order of capacity, and bin-packs messages
+            // to hosts in this order
+            std::sort(
+              sortedHosts.begin(), sortedHosts.end(), isFirstHostLarger);
+            break;
+        }
+        case DecisionType::SCALE_CHANGE: {
+            // If we are changing the scale of a running app (i.e. via chaining
+            // or thread/process forking) we want to prioritise co-locating
+            // as much as possible. This means that we will sort first by the
+            // frequency of messages of the running app, and second with the
+            // same criteria than NEW
+            // IMPORTANT: a SCALE_CHANGE request with 4 messages means that we
+            // want to add 4 NEW messages to the running app (not that the new
+            // total count is 4)
+            auto hostFreqCount = getHostFreqCount();
+            std::sort(sortedHosts.begin(),
+                      sortedHosts.end(),
+                      [&](auto hostA, auto hostB) -> bool {
+                          int numInHostA = hostFreqCount.contains(getIp(hostA))
+                                             ? hostFreqCount.at(getIp(hostA))
+                                             : 0;
+                          int numInHostB = hostFreqCount.contains(getIp(hostB))
+                                             ? hostFreqCount.at(getIp(hostB))
+                                             : 0;
+
+                          // If at least one of the hosts has messages for this
+                          // request, return the host with the more messages for
+                          // this request (note that it is possible that this
+                          // host has no available slots at all, in this case we
+                          // will just pack 0 messages here but we still want to
+                          // sort it first nontheless)
+                          if (numInHostA != numInHostB) {
+                              return numInHostA > numInHostB;
+                          }
+
+                          // In case of a tie, use the same criteria than NEW
+                          return isFirstHostLarger(hostA, hostB);
+                      });
             break;
         }
         default: {
@@ -49,6 +102,10 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
     return sortedHosts;
 }
 
+// The BinPack's scheduler decision algorithm is very simple. It first sorts
+// hosts (i.e. bins) in a specific order (depending on the scheduling type),
+// and then starts filling bins from begining to end, until it runs out of
+// messages to schedule
 std::shared_ptr<faabric::util::SchedulingDecision>
 BinPackScheduler::makeSchedulingDecision(
   const HostMap& hostMap,
@@ -63,7 +120,7 @@ BinPackScheduler::makeSchedulingDecision(
     auto decisionType = getDecisionType(inFlightReqs, req);
     auto sortedHosts = getSortedHosts(hostMap, inFlightReqs, req, decisionType);
 
-    // Assign slots from the list
+    // Assign slots from the list (i.e. bin-pack)
     auto it = sortedHosts.begin();
     int numLeftToSchedule = req->messages_size();
     int msgIdx = 0;

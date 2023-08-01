@@ -20,7 +20,7 @@ class BinPackSchedulerTestFixture : public BatchSchedulerFixture
 };
 
 TEST_CASE_METHOD(BinPackSchedulerTestFixture,
-                 "Test scheduling of new requests",
+                 "Test scheduling of new requests with BinPack",
                  "[batch-scheduler]")
 {
     // To mock new requests (i.e. DecisionType::NEW), we always set the
@@ -118,6 +118,165 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
                                                           "foo",
                                                           "bip",
                                                           "bup" });
+    }
+
+    actualDecision = *batchScheduler->makeSchedulingDecision(
+      config.hostMap, config.inFlightReqs, ber);
+    compareSchedulingDecisions(actualDecision, config.expectedDecision);
+}
+
+TEST_CASE_METHOD(BinPackSchedulerTestFixture,
+                 "Test scheduling of scale-change requests with BinPack",
+                 "[batch-scheduler]")
+{
+    // To mock a scale-change request (i.e. DecisionType::SCALE_CHANGE), we
+    // need to have one in-flight request in the map with a different (always
+    // lower) number of messages
+    BatchSchedulerConfig config = {
+        .hostMap = {},
+        .inFlightReqs = {},
+        .expectedDecision = faabric::util::SchedulingDecision(appId, groupId),
+    };
+
+    SECTION("BinPack scheduler gives up if not enough slots are available")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 2, 1 }, { 1, 0 });
+        ber = faabric::util::batchExecFactory("bat", "man", 6);
+        config.inFlightReqs = buildInFlightReqs(ber, 1, { "foo" });
+        config.expectedDecision = NOT_ENOUGH_SLOTS_DECISION;
+    }
+
+    // When scheduling a SCALE_CHANGE request, we always try to colocate as
+    // much as possible
+    SECTION("Scheduling fits in one host")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 3 }, { 1, 0 });
+        ber = faabric::util::batchExecFactory("bat", "man", 3);
+        config.inFlightReqs = buildInFlightReqs(ber, 1, { "foo" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "foo", "foo", "foo" });
+    }
+
+    // We prefer hosts with less capacity if they are already running requests
+    // for the same app
+    SECTION("Scheduling fits in one host and prefers known hosts")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 5, 4 }, { 0, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 3);
+        config.inFlightReqs = buildInFlightReqs(ber, 1, { "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "bar", "bar" });
+    }
+
+    // Like with `NEW` requests, we can also spill to other hosts
+    SECTION("Scheduling spans more than one host")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 3 }, { 0, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        config.inFlightReqs = buildInFlightReqs(ber, 1, { "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "bar", "foo", "foo" });
+    }
+
+    // If two hosts are already executing the app, we pick the one that is
+    // running the largest number of messages
+    SECTION("Scheduler prefers hosts with more running messages")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 3 }, { 1, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 1);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 3, { "bar", "bar", "foo" });
+        config.expectedDecision = buildExpectedDecision(ber, { "bar" });
+    }
+
+    // Again, when picking a new host to spill to, we priorities hosts that
+    // are already running requests for this app
+    SECTION("Scheduling always picks known hosts first")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 4, 3, 2 },
+          { 0, 1, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 5);
+        config.inFlightReqs = buildInFlightReqs(ber, 2, { "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "bar", "baz", "foo", "foo" });
+    }
+
+    // Sometimes the preferred hosts just don't have slots. They will be sorted
+    // first but the scheduler will skip them when bin-packing
+    SECTION("Scheduler ignores preferred but full hosts")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 4, 2, 2 },
+          { 0, 2, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 3);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 3, { "bar", "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "baz", "foo", "foo" });
+    }
+
+    // In case of a tie of the number of runing messages, we revert to `NEW`-
+    // like tie breaking
+    SECTION("In case of a tie of preferred hosts, fall-back to known "
+            "tie-breaks (free slots)")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 4, 3, 2 },
+          { 0, 1, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 3);
+        config.inFlightReqs = buildInFlightReqs(ber, 2, { "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "bar", "baz" });
+    }
+
+    SECTION("In case of a tie of preferred hosts, fall-back to known "
+            "tie-breaks (size)")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 4, 3, 2 },
+          { 0, 2, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 3);
+        config.inFlightReqs = buildInFlightReqs(ber, 2, { "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "baz", "foo" });
+    }
+
+    SECTION("In case of a tie of preferred hosts, fall-back to known "
+            "tie-breaks (alphabetical)")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 4, 2, 2 },
+          { 0, 1, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 3);
+        config.inFlightReqs = buildInFlightReqs(ber, 2, { "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "baz", "bar", "foo" });
     }
 
     actualDecision = *batchScheduler->makeSchedulingDecision(
