@@ -10,6 +10,12 @@ BinPackScheduler::makeSchedulingDecision(
   const InFlightReqs& inFlightReqs,
   std::shared_ptr<BatchExecuteRequest> req)
 {
+    // TODO: think about the group id!
+    auto decision =
+      std::make_shared<faabric::util::SchedulingDecision>(req->appid(), 0);
+
     SPDLOG_INFO("Hello world!");
+
+    return decision;
 }
 }

@@ -5,6 +5,8 @@
 #include "DummyExecutorFactory.h"
 #include "faabric_utils.h"
 
+#include <faabric/batch-scheduler/BatchScheduler.h>
+#include <faabric/batch-scheduler/BinPackScheduler.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/planner/PlannerClient.h>
@@ -25,6 +27,7 @@
 #include <faabric/util/batch.h>
 #include <faabric/util/dirty.h>
 #include <faabric/util/environment.h>
+#include <faabric/util/gids.h>
 #include <faabric/util/json.h>
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
@@ -517,5 +520,82 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
     std::shared_ptr<faabric::util::Latch> testLatch;
 
     faabric::mpi::MpiWorld otherWorld;
+};
+
+class BatchSchedulerFixture : public ConfFixture
+{
+  public:
+    BatchSchedulerFixture()
+      : appId(faabric::util::generateGid())
+      , groupId(0)
+      , actualDecision(appId, groupId)
+    {}
+
+    ~BatchSchedulerFixture()
+    {
+        faabric::batch_scheduler::resetBatchScheduler();
+    }
+
+  protected:
+    int appId;
+    int groupId;
+
+    std::shared_ptr<BatchExecuteRequest> ber;
+    std::shared_ptr<faabric::batch_scheduler::BatchScheduler> batchScheduler;
+    faabric::util::SchedulingDecision actualDecision;
+
+    struct BatchSchedulerConfig
+    {
+        faabric::batch_scheduler::HostMap hostMap;
+        faabric::batch_scheduler::InFlightReqs inFlightReqs;
+        faabric::util::SchedulingDecision expectedDecision;
+    };
+
+    static faabric::batch_scheduler::HostMap buildHostMap(
+      std::vector<std::string> ips,
+      std::vector<int> slots,
+      std::vector<int> usedSlots)
+    {
+        faabric::batch_scheduler::HostMap hostMap;
+
+        assert(ips.size() == slots.size());
+        assert(slots.size() == usedSlots.size());
+
+        for (int i = 0; i < ips.size(); i++) {
+            hostMap[ips.at(i)] =
+              std::make_shared<faabric::batch_scheduler::HostState>(
+                ips.at(i), slots.at(i), usedSlots.at(i));
+        }
+
+        return hostMap;
+    }
+
+    static faabric::util::SchedulingDecision buildExpectedDecision(
+      std::shared_ptr<BatchExecuteRequest> ber,
+      std::vector<std::string> hosts)
+    {
+        faabric::util::SchedulingDecision decision(ber->appid(), 0);
+
+        assert(ber->messages_size() == hosts.size());
+
+        for (int i = 0; i < hosts.size(); i++) {
+            decision.addMessage(hosts.at(i), ber->messages(i));
+        }
+
+        return decision;
+    }
+
+    static void compareSchedulingDecisions(
+      const faabric::util::SchedulingDecision& decisionA,
+      const faabric::util::SchedulingDecision& decisionB)
+    {
+        REQUIRE(decisionA.appId == decisionB.appId);
+        REQUIRE(decisionA.groupId == decisionB.groupId);
+        REQUIRE(decisionA.nFunctions == decisionB.nFunctions);
+        REQUIRE(decisionA.hosts == decisionB.hosts);
+        REQUIRE(decisionA.messageIds == decisionB.messageIds);
+        REQUIRE(decisionA.appIdxs == decisionB.appIdxs);
+        REQUIRE(decisionA.groupIdxs == decisionB.groupIdxs);
+    }
 };
 }

@@ -2,77 +2,50 @@
 
 #include "fixtures.h"
 
-#include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/batch-scheduler/BatchScheduler.h>
+#include <faabric/batch-scheduler/BinPackScheduler.h>
 
-using namespace faabric::scheduler;
+using namespace faabric::batch_scheduler;
 
 namespace tests {
 
-/*
-class SchedulingDecisionTestFixture : public SchedulerFixture
+class BinPackSchedulerTestFixture : public BatchSchedulerFixture
 {
   public:
-    SchedulingDecisionTestFixture()
+    BinPackSchedulerTestFixture()
     {
-        faabric::util::setMockMode(true);
-
-        std::shared_ptr<TestExecutorFactory> fac =
-          std::make_shared<TestExecutorFactory>();
-        setExecutorFactory(fac);
-    }
-
-    ~SchedulingDecisionTestFixture() { faabric::util::setMockMode(false); }
-
-  protected:
-    std::string masterHost = faabric::util::getSystemConfig().endpointHost;
-
-    // Helper struct to configure one scheduling decision
-    struct SchedulingConfig
-    {
-        std::vector<std::string> hosts;
-        std::vector<int> slots;
-        std::vector<int> used;
-        int numReqs;
-        faabric::util::SchedulingTopologyHint topologyHint;
-        std::vector<std::string> expectedHosts;
-    };
-
-    // We test the scheduling decision twice: the first one will follow the
-    // unregistered hosts path, the second one the registerd hosts one.
-    void testActualSchedulingDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      const SchedulingConfig& config)
-    {
-        // Set resources for all hosts
-        setHostResources(config.hosts, config.slots, config.used);
-
-        // The first time we run the batch request, we will follow the
-        // unregistered hosts path
-        faabric::util::SchedulingDecision actualDecision =
-          sch.makeSchedulingDecision(req, config.topologyHint);
-        REQUIRE(actualDecision.hosts == config.expectedHosts);
-
-        // Reestablish host resources
-        setHostResources(config.hosts, config.slots, config.used);
-
-        // Create a new request, preserving the app ID to ensure a repeat
-        // request uses the registered hosts
-        auto repeatReq =
-          faabric::util::batchExecFactory("foo", "baz", req->messages_size());
-        for (int i = 0; i < req->messages_size(); i++) {
-            faabric::Message& msg = repeatReq->mutable_messages()->at(i);
-            msg.set_appid(actualDecision.appId);
-        }
-
-        // The second time we run the batch request, we will follow
-        // the registered hosts path
-        actualDecision =
-          sch.makeSchedulingDecision(repeatReq, config.topologyHint);
-        REQUIRE(actualDecision.hosts == config.expectedHosts);
+        conf.batchSchedulerMode = "bin-pack";
+        batchScheduler = getBatchScheduler();
     }
 };
 
+TEST_CASE_METHOD(BinPackSchedulerTestFixture,
+                 "Test scheduling of new requests",
+                 "[batch-scheduler]")
+{
+    // To mock new requests, we always set the InFlightReqs map to an empty
+    // map
+    BatchSchedulerConfig config = {
+        .hostMap = {},
+        .inFlightReqs = {},
+        .expectedDecision = faabric::util::SchedulingDecision(appId, groupId),
+    };
+
+    // Add many sections here
+    SECTION("Bin-pack scheduler picks larger hosts first")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 3 }, { 0, 0 });
+        ber = faabric::util::batchExecFactory("bat", "man", 6);
+        config.expectedDecision = buildExpectedDecision(
+          ber, { "foo", "foo", "foo", "foo", "bar", "bar" });
+    }
+
+    actualDecision = *batchScheduler->makeSchedulingDecision(
+      config.hostMap, config.inFlightReqs, ber);
+    compareSchedulingDecisions(actualDecision, config.expectedDecision);
+}
+
+/*
 TEST_CASE_METHOD(SchedulingDecisionTestFixture,
                  "Test basic scheduling decision",
                  "[scheduler]")
