@@ -30,6 +30,7 @@ class SystemConfig
     int overrideCpuCount;
     std::string noTopologyHints;
     int noSingleHostOptimisations;
+    std::string batchSchedulerMode;
 
     // Worker-related timeouts
     int globalMessageTimeout;

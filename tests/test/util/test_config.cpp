@@ -24,6 +24,7 @@ TEST_CASE("Test default system config initialisation", "[util]")
     REQUIRE(conf.overrideCpuCount == 0);
     REQUIRE(conf.noTopologyHints == "off");
     REQUIRE(conf.noSingleHostOptimisations == 0);
+    REQUIRE(conf.batchSchedulerMode == "bin-pack");
 
     REQUIRE(conf.globalMessageTimeout == 60000);
     REQUIRE(conf.boundTimeout == 30000);
@@ -85,6 +86,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     REQUIRE(conf.overrideCpuCount == 4);
     REQUIRE(conf.noTopologyHints == "on");
     REQUIRE(conf.noSingleHostOptimisations == 1);
+    REQUIRE(conf.batchSchedulerMode == "foo-bar");
 
     REQUIRE(conf.globalMessageTimeout == 9876);
     REQUIRE(conf.boundTimeout == 6666);

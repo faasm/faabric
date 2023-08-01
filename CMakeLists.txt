@@ -94,6 +94,7 @@ function(faabric_lib lib_name)
     target_link_options(${lib_name} PUBLIC -Wl,--export-dynamic)
 endfunction()
 
+add_subdirectory(src/batch-scheduler)
 add_subdirectory(src/endpoint)
 add_subdirectory(src/flat)
 add_subdirectory(src/mpi)
@@ -118,6 +119,7 @@ endif()
 add_library(faabric
     ${FAABRIC_LIB_TYPE}
     faabric.cpp
+    $<TARGET_OBJECTS:batch_scheduler_obj>
     $<TARGET_OBJECTS:endpoint_obj>
     $<TARGET_OBJECTS:flat_obj>
     $<TARGET_OBJECTS:mpi_obj>

@@ -32,11 +32,13 @@ void SystemConfig::initialise()
     redisPort = getEnvVar("REDIS_PORT", "6379");
 
     // Scheduling
+    // TODO(planner-scheduler): remove some of this
     noScheduler = this->getSystemConfIntParam("NO_SCHEDULER", "0");
     overrideCpuCount = this->getSystemConfIntParam("OVERRIDE_CPU_COUNT", "0");
     noTopologyHints = getEnvVar("NO_TOPOLOGY_HINTS", "off");
     noSingleHostOptimisations =
       this->getSystemConfIntParam("NO_SINGLE_HOST", "0");
+    batchSchedulerMode = getEnvVar("BATCH_SCHEDULER_MODE", "bin-pack");
 
     // Worker-related timeouts (all in seconds)
     globalMessageTimeout =

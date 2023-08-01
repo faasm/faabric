@@ -9,9 +9,7 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
-// TODO(planner-schedule): remove this file as this is already tested in
-// tests/test/batch-scheduler
-
+/*
 class SchedulingDecisionTestFixture : public SchedulerFixture
 {
   public:
@@ -493,4 +491,5 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
       faabric::util::batchExecFactory("foo", "bar", config.numReqs);
     testActualSchedulingDecision(missReq, missConfig);
 }
+*/
 }
