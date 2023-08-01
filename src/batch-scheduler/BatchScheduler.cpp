@@ -31,4 +31,22 @@ void resetBatchScheduler()
 {
     batchScheduler = nullptr;
 }
+
+DecisionType BatchScheduler::getDecisionType(
+  const InFlightReqs& inFlightReqs,
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    int appId = req->appid();
+
+    if (!inFlightReqs.contains(appId)) {
+        return DecisionType::NEW;
+    }
+
+    auto oldReq = inFlightReqs.at(appId).first;
+    if (oldReq->messages_size() == req->messages_size()) {
+        return DecisionType::DIST_CHANGE;
+    }
+
+    return DecisionType::SCALE_CHANGE;
+}
 }

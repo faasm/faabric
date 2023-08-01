@@ -17,5 +17,12 @@ class BinPackScheduler final : public BatchScheduler
       const HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override;
+
+  private:
+    std::vector<Host> getSortedHosts(
+      const HostMap& hostMap,
+      const InFlightReqs& inFlightReqs,
+      std::shared_ptr<faabric::BatchExecuteRequest> req,
+      const DecisionType& decisionType) override;
 };
 }
