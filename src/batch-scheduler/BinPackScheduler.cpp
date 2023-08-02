@@ -168,18 +168,32 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
         return getIp(hostA) > getIp(hostB);
     };
 
-    // Helper lambda to get the frequency of messags at each host (useful to
-    // sort hosts maximising locality)
-    auto getHostFreqCount =
-      [](std::shared_ptr<faabric::util::SchedulingDecision> decision)
-      -> std::map<std::string, int> {
-        std::map<std::string, int> hostFreqCount;
+    auto isFirstHostLargerWithFreq = [&](auto hostA, auto hostB) -> bool {
+        // When updating an existing scheduling decision (SCALE_CHANGE or
+        // DIST_CHANGE), the BinPack scheduler takes into consideration the
+        // existing host-message histogram (i.e. how many messages for this app
+        // does each host _already_ run)
+        auto oldDecision = inFlightReqs.at(req->appid()).second;
+        auto hostFreqCount = getHostFreqCount(oldDecision);
 
-        for (auto host : decision->hosts) {
-            hostFreqCount[host] += 1;
+        int numInHostA = hostFreqCount.contains(getIp(hostA))
+                           ? hostFreqCount.at(getIp(hostA))
+                           : 0;
+        int numInHostB = hostFreqCount.contains(getIp(hostB))
+                           ? hostFreqCount.at(getIp(hostB))
+                           : 0;
+
+        // If at least one of the hosts has messages for this request, return
+        // the host with the more messages for this request (note that it is
+        // possible that this host has no available slots at all, in this case
+        // we will just pack 0 messages here but we still want to sort it first
+        // nontheless)
+        if (numInHostA != numInHostB) {
+            return numInHostA > numInHostB;
         }
 
-        return hostFreqCount;
+        // In case of a tie, use the same criteria than NEW
+        return isFirstHostLarger(hostA, hostB);
     };
 
     switch (decisionType) {
@@ -200,31 +214,9 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
             // IMPORTANT: a SCALE_CHANGE request with 4 messages means that we
             // want to add 4 NEW messages to the running app (not that the new
             // total count is 4)
-            auto oldDecision = inFlightReqs.at(req->appid()).second;
-            auto hostFreqCount = getHostFreqCount(oldDecision);
             std::sort(sortedHosts.begin(),
                       sortedHosts.end(),
-                      [&](auto hostA, auto hostB) -> bool {
-                          int numInHostA = hostFreqCount.contains(getIp(hostA))
-                                             ? hostFreqCount.at(getIp(hostA))
-                                             : 0;
-                          int numInHostB = hostFreqCount.contains(getIp(hostB))
-                                             ? hostFreqCount.at(getIp(hostB))
-                                             : 0;
-
-                          // If at least one of the hosts has messages for this
-                          // request, return the host with the more messages for
-                          // this request (note that it is possible that this
-                          // host has no available slots at all, in this case we
-                          // will just pack 0 messages here but we still want to
-                          // sort it first nontheless)
-                          if (numInHostA != numInHostB) {
-                              return numInHostA > numInHostB;
-                          }
-
-                          // In case of a tie, use the same criteria than NEW
-                          return isFirstHostLarger(hostA, hostB);
-                      });
+                      isFirstHostLargerWithFreq);
             break;
         }
         case DecisionType::DIST_CHANGE: {
@@ -236,29 +228,8 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
             auto hostFreqCount = getHostFreqCount(oldDecision);
             std::sort(sortedHosts.begin(),
                       sortedHosts.end(),
-                      // TODO: this is shared with SCALE_CHANGE, so abstract
-                      // away FIXME
-                      [&](auto hostA, auto hostB) -> bool {
-                          int numInHostA = hostFreqCount.contains(getIp(hostA))
-                                             ? hostFreqCount.at(getIp(hostA))
-                                             : 0;
-                          int numInHostB = hostFreqCount.contains(getIp(hostB))
-                                             ? hostFreqCount.at(getIp(hostB))
-                                             : 0;
+                      isFirstHostLargerWithFreq);
 
-                          // If at least one of the hosts has messages for this
-                          // request, return the host with the more messages for
-                          // this request (note that it is possible that this
-                          // host has no available slots at all, in this case we
-                          // will just pack 0 messages here but we still want to
-                          // sort it first nontheless)
-                          if (numInHostA != numInHostB) {
-                              return numInHostA > numInHostB;
-                          }
-
-                          // In case of a tie, use the same criteria than NEW
-                          return isFirstHostLarger(hostA, hostB);
-                      });
             // Before returning the sorted hosts for dist change, we subtract
             // all slots occupied by the application we want to migrate (note
             // that we want to take into account for the sorting)
