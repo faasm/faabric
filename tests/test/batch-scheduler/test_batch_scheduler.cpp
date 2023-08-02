@@ -63,6 +63,7 @@ TEST_CASE_METHOD(ConfFixture,
     {
         auto decisionPtr =
           std::make_shared<faabric::util::SchedulingDecision>(ber->appid(), 0);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
         inFlightReqs[ber->appid()] = std::make_pair(ber, decisionPtr);
         expectedDecisionType = DecisionType::DIST_CHANGE;
     }
