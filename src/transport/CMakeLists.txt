@@ -12,4 +12,8 @@ faabric_lib(transport
     PointToPointServer.cpp
 )
 
-target_link_libraries(transport PRIVATE faabric::util faabric::proto)
+target_link_libraries(transport PRIVATE
+    faabric::util
+    faabric::proto
+    faabric::scheduling_util
+)

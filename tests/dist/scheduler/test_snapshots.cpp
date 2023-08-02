@@ -6,6 +6,7 @@
 
 #include <sys/mman.h>
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
@@ -14,7 +15,6 @@
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/memory.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 
 namespace tests {
@@ -51,7 +51,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getWorkerIP() };
-    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision decision =
+      sch.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
@@ -100,7 +101,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision decision =
+      sch.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 
@@ -125,7 +127,8 @@ TEST_CASE_METHOD(DistTestsFixture,
     sch.setThisHostResources(res);
 
     std::vector<std::string> expectedHosts = { getMasterIP() };
-    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision decision =
+      sch.callFunctions(req);
     std::vector<std::string> executedHosts = decision.hosts;
     REQUIRE(expectedHosts == executedHosts);
 

@@ -4,6 +4,7 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/redis/Redis.h>
 #include <faabric/scheduler/ExecutorFactory.h>
@@ -19,7 +20,6 @@
 #include <faabric/util/gids.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/testing.h>
 
@@ -288,8 +288,8 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     // Set up the messages
     std::vector<int> reqOneMsgIds;
-    faabric::util::SchedulingDecision expectedDecisionOne(firstMsg.appid(),
-                                                          firstMsg.groupid());
+    faabric::batch_scheduler::SchedulingDecision expectedDecisionOne(
+      firstMsg.appid(), firstMsg.groupid());
     for (int i = 0; i < nCallsOne; i++) {
         // Set snapshot key
         faabric::Message& msg = reqOne->mutable_messages()->at(i);
@@ -313,7 +313,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     reqOne->set_subtype(expectedSubType);
     reqOne->set_contextdata(expectedContextData);
 
-    faabric::util::SchedulingDecision actualDecisionOne =
+    faabric::batch_scheduler::SchedulingDecision actualDecisionOne =
       sch.callFunctions(reqOne);
 
     // Check decision is as expected
@@ -389,8 +389,8 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     std::vector<int> reqTwoMsgIds;
     const faabric::Message& firstMsg2 = reqTwo->messages().at(0);
-    faabric::util::SchedulingDecision expectedDecisionTwo(appId,
-                                                          firstMsg2.groupid());
+    faabric::batch_scheduler::SchedulingDecision expectedDecisionTwo(
+      appId, firstMsg2.groupid());
     for (int i = 0; i < nCallsTwo; i++) {
         faabric::Message& msg = reqTwo->mutable_messages()->at(i);
 
@@ -411,7 +411,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     reqTwo->set_type(execMode);
 
     // Schedule the functions
-    faabric::util::SchedulingDecision actualDecisionTwo =
+    faabric::batch_scheduler::SchedulingDecision actualDecisionTwo =
       sch.callFunctions(reqTwo);
 
     // Check scheduling decision
@@ -507,8 +507,8 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     // Make the request
     req->set_type(execMode);
     const faabric::Message firstMsg = req->messages().at(0);
-    faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
-                                                       firstMsg.groupid());
+    faabric::batch_scheduler::SchedulingDecision expectedDecision(
+      firstMsg.appid(), firstMsg.groupid());
     std::vector<faabric::Message> msgToWait;
     for (int i = 0; i < nCalls; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
@@ -526,7 +526,8 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Submit the request
-    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision decision =
+      sch.callFunctions(req);
     checkSchedulingDecisionEquality(decision, expectedDecision);
 
     // Check status of local queueing
@@ -791,7 +792,8 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
       faabric::util::batchExecFactory("blah", "foo", 1);
     req->mutable_messages()->at(0).set_masterhost(otherHost);
 
-    faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision decision =
+      sch.callFunctions(req);
     REQUIRE(decision.hosts.empty());
     REQUIRE(decision.returnHost == otherHost);
 
@@ -1018,7 +1020,8 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
         expectedHosts = { thisHost, thisHost, thisHost, thisHost };
     }
 
-    faabric::util::SchedulingDecision expectedDecision(appId, groupId);
+    faabric::batch_scheduler::SchedulingDecision expectedDecision(appId,
+                                                                  groupId);
 
     std::vector<int> msgIds;
     for (int i = 0; i < req->messages().size(); i++) {
@@ -1036,7 +1039,8 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
     }
 
     // Schedule and check decision
-    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision actualDecision =
+      sch.callFunctions(req);
     checkSchedulingDecisionEquality(expectedDecision, actualDecision);
 
     // Check mappings set up locally or not

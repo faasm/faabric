@@ -28,7 +28,7 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
     BatchSchedulerConfig config = {
         .hostMap = {},
         .inFlightReqs = {},
-        .expectedDecision = faabric::util::SchedulingDecision(appId, groupId),
+        .expectedDecision = SchedulingDecision(appId, groupId),
     };
 
     SECTION("BinPack scheduler gives up if not enough slots are available")
@@ -135,7 +135,7 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
     BatchSchedulerConfig config = {
         .hostMap = {},
         .inFlightReqs = {},
-        .expectedDecision = faabric::util::SchedulingDecision(appId, groupId),
+        .expectedDecision = SchedulingDecision(appId, groupId),
     };
 
     // The configs in this test must be read as follows:
@@ -302,7 +302,7 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
     BatchSchedulerConfig config = {
         .hostMap = {},
         .inFlightReqs = {},
-        .expectedDecision = faabric::util::SchedulingDecision(appId, groupId),
+        .expectedDecision = SchedulingDecision(appId, groupId),
     };
 
     // The configs in this test must be read as follows:

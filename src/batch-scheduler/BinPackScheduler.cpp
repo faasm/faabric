@@ -1,12 +1,12 @@
 #include <faabric/batch-scheduler/BinPackScheduler.h>
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/logging.h>
-#include <faabric/util/scheduling.h>
 
 namespace faabric::batch_scheduler {
 
 static std::map<std::string, int> getHostFreqCount(
-  std::shared_ptr<faabric::util::SchedulingDecision> decision)
+  std::shared_ptr<SchedulingDecision> decision)
 {
     std::map<std::string, int> hostFreqCount;
     for (auto host : decision->hosts) {
@@ -21,13 +21,12 @@ static std::map<std::string, int> getHostFreqCount(
 // This is, we want to keep as many host-message scheduling in the old decision
 // as possible, and also have the overall locality of the new decision (i.e.
 // the host-message histogram)
-static std::shared_ptr<faabric::util::SchedulingDecision>
-minimiseNumOfMigrations(
-  std::shared_ptr<faabric::util::SchedulingDecision> newDecision,
-  std::shared_ptr<faabric::util::SchedulingDecision> oldDecision)
+static std::shared_ptr<SchedulingDecision> minimiseNumOfMigrations(
+  std::shared_ptr<SchedulingDecision> newDecision,
+  std::shared_ptr<SchedulingDecision> oldDecision)
 {
-    auto decision = std::make_shared<faabric::util::SchedulingDecision>(
-      oldDecision->appId, oldDecision->groupId);
+    auto decision = std::make_shared<SchedulingDecision>(oldDecision->appId,
+                                                         oldDecision->groupId);
 
     // We want to maintain the new decision's host-message histogram
     auto hostFreqCount = getHostFreqCount(newDecision);
@@ -100,12 +99,11 @@ minimiseNumOfMigrations(
 // less hosts. In case of a tie, we calculate the number of cross-VM links
 // (i.e. better locality, or better packing)
 bool BinPackScheduler::isFirstDecisionBetter(
-  std::shared_ptr<faabric::util::SchedulingDecision> decisionA,
-  std::shared_ptr<faabric::util::SchedulingDecision> decisionB)
+  std::shared_ptr<SchedulingDecision> decisionA,
+  std::shared_ptr<SchedulingDecision> decisionB)
 {
     auto getLocalityScore =
-      [](std::shared_ptr<faabric::util::SchedulingDecision> decision)
-      -> std::pair<int, int> {
+      [](std::shared_ptr<SchedulingDecision> decision) -> std::pair<int, int> {
         // First, calculate the host-message histogram (or frequency count)
         std::map<std::string, int> hostFreqCount;
         for (auto host : decision->hosts) {
@@ -253,15 +251,12 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
 // hosts (i.e. bins) in a specific order (depending on the scheduling type),
 // and then starts filling bins from begining to end, until it runs out of
 // messages to schedule
-std::shared_ptr<faabric::util::SchedulingDecision>
-BinPackScheduler::makeSchedulingDecision(
+std::shared_ptr<SchedulingDecision> BinPackScheduler::makeSchedulingDecision(
   const HostMap& hostMap,
   const InFlightReqs& inFlightReqs,
   std::shared_ptr<BatchExecuteRequest> req)
 {
-    // TODO: think about the group id!
-    auto decision =
-      std::make_shared<faabric::util::SchedulingDecision>(req->appid(), 0);
+    auto decision = std::make_shared<SchedulingDecision>(req->appid(), 0);
 
     // Get the sorted list of hosts
     auto decisionType = getDecisionType(inFlightReqs, req);
@@ -296,8 +291,7 @@ BinPackScheduler::makeSchedulingDecision(
 
     // If we still have enough slots to schedule, we are out of slots
     if (numLeftToSchedule > 0) {
-        return std::make_shared<faabric::util::SchedulingDecision>(
-          NOT_ENOUGH_SLOTS_DECISION);
+        return std::make_shared<SchedulingDecision>(NOT_ENOUGH_SLOTS_DECISION);
     }
 
     // In case of a DIST_CHANGE decision (i.e. migration), we want to make sure
@@ -310,8 +304,7 @@ BinPackScheduler::makeSchedulingDecision(
             return minimiseNumOfMigrations(decision, oldDecision);
         }
 
-        return std::make_shared<faabric::util::SchedulingDecision>(
-          DO_NOT_MIGRATE_DECISION);
+        return std::make_shared<SchedulingDecision>(DO_NOT_MIGRATE_DECISION);
     }
 
     return decision;

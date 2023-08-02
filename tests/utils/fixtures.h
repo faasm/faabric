@@ -7,6 +7,8 @@
 
 #include <faabric/batch-scheduler/BatchScheduler.h>
 #include <faabric/batch-scheduler/BinPackScheduler.h>
+#include <faabric/batch-scheduler/DecisionCache.h>
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/planner/PlannerClient.h>
@@ -32,7 +34,6 @@
 #include <faabric/util/latch.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/network.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 #include <sys/mman.h>
@@ -104,13 +105,13 @@ class CachedDecisionTestFixture
 {
   public:
     CachedDecisionTestFixture()
-      : decisionCache(faabric::util::getSchedulingDecisionCache())
+      : decisionCache(faabric::batch_scheduler::getSchedulingDecisionCache())
     {}
 
     ~CachedDecisionTestFixture() { decisionCache.clear(); }
 
   protected:
-    faabric::util::DecisionCache& decisionCache;
+    faabric::batch_scheduler::DecisionCache& decisionCache;
 };
 
 class PlannerClientServerFixture
@@ -542,13 +543,13 @@ class BatchSchedulerFixture : public ConfFixture
 
     std::shared_ptr<BatchExecuteRequest> ber;
     std::shared_ptr<faabric::batch_scheduler::BatchScheduler> batchScheduler;
-    faabric::util::SchedulingDecision actualDecision;
+    faabric::batch_scheduler::SchedulingDecision actualDecision;
 
     struct BatchSchedulerConfig
     {
         faabric::batch_scheduler::HostMap hostMap;
         faabric::batch_scheduler::InFlightReqs inFlightReqs;
-        faabric::util::SchedulingDecision expectedDecision;
+        faabric::batch_scheduler::SchedulingDecision expectedDecision;
     };
 
     static faabric::batch_scheduler::HostMap buildHostMap(
@@ -596,19 +597,19 @@ class BatchSchedulerFixture : public ConfFixture
         oldBer->set_appid(appId);
 
         assert(oldBer->messages_size() == hosts.size());
-        inFlightReqs[appId] =
-          std::make_pair(oldBer,
-                         std::make_shared<faabric::util::SchedulingDecision>(
-                           buildExpectedDecision(oldBer, hosts)));
+        inFlightReqs[appId] = std::make_pair(
+          oldBer,
+          std::make_shared<faabric::batch_scheduler::SchedulingDecision>(
+            buildExpectedDecision(oldBer, hosts)));
 
         return inFlightReqs;
     }
 
-    static faabric::util::SchedulingDecision buildExpectedDecision(
+    static faabric::batch_scheduler::SchedulingDecision buildExpectedDecision(
       std::shared_ptr<BatchExecuteRequest> ber,
       std::vector<std::string> hosts)
     {
-        faabric::util::SchedulingDecision decision(ber->appid(), 0);
+        faabric::batch_scheduler::SchedulingDecision decision(ber->appid(), 0);
 
         assert(ber->messages_size() == hosts.size());
 
@@ -620,8 +621,8 @@ class BatchSchedulerFixture : public ConfFixture
     }
 
     static void compareSchedulingDecisions(
-      const faabric::util::SchedulingDecision& decisionA,
-      const faabric::util::SchedulingDecision& decisionB)
+      const faabric::batch_scheduler::SchedulingDecision& decisionA,
+      const faabric::batch_scheduler::SchedulingDecision& decisionB)
     {
         REQUIRE(decisionA.appId == decisionB.appId);
         REQUIRE(decisionA.groupId == decisionB.groupId);

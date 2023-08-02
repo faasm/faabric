@@ -1,8 +1,8 @@
 #pragma once
 
 #include <faabric/batch-scheduler/BatchScheduler.h>
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/util/batch.h>
-#include <faabric/util/scheduling.h>
 #include <string>
 
 namespace faabric::batch_scheduler {
@@ -10,15 +10,15 @@ namespace faabric::batch_scheduler {
 class BinPackScheduler final : public BatchScheduler
 {
   public:
-    std::shared_ptr<faabric::util::SchedulingDecision> makeSchedulingDecision(
+    std::shared_ptr<SchedulingDecision> makeSchedulingDecision(
       const HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req) override;
 
   private:
     bool isFirstDecisionBetter(
-      std::shared_ptr<faabric::util::SchedulingDecision> decisionA,
-      std::shared_ptr<faabric::util::SchedulingDecision> decisionB) override;
+      std::shared_ptr<SchedulingDecision> decisionA,
+      std::shared_ptr<SchedulingDecision> decisionB) override;
 
     std::vector<Host> getSortedHosts(
       const HostMap& hostMap,

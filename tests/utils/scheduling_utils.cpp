@@ -5,8 +5,8 @@
 namespace tests {
 
 void checkSchedulingDecisionEquality(
-  const faabric::util::SchedulingDecision& decisionA,
-  const faabric::util::SchedulingDecision& decisionB)
+  const faabric::batch_scheduler::SchedulingDecision& decisionA,
+  const faabric::batch_scheduler::SchedulingDecision& decisionB)
 {
     REQUIRE(decisionA.appId == decisionB.appId);
     REQUIRE(decisionA.nFunctions == decisionB.nFunctions);

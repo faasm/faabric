@@ -2,11 +2,11 @@
 
 #include <catch2/catch.hpp>
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/state/State.h>
 #include <faabric/state/StateServer.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/func.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 using namespace faabric;
@@ -81,8 +81,8 @@ void checkMessageEquality(const faabric::Message& msgA,
                           const faabric::Message& msgB);
 
 void checkSchedulingDecisionEquality(
-  const faabric::util::SchedulingDecision& decisionA,
-  const faabric::util::SchedulingDecision& decisionB);
+  const faabric::batch_scheduler::SchedulingDecision& decisionA,
+  const faabric::batch_scheduler::SchedulingDecision& decisionB);
 
 void checkExecGraphNodeEquality(const faabric::util::ExecGraphNode& nodeA,
                                 const faabric::util::ExecGraphNode& nodeB);

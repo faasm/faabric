@@ -10,7 +10,6 @@
 #include <faabric/util/batch.h>
 #include <faabric/util/bytes.h>
 #include <faabric/util/gids.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/string_tools.h>
 
 using namespace faabric::transport;
@@ -144,8 +143,7 @@ int handleDistributedLock(tests::DistTestExecutor* exec,
         }
 
         faabric::scheduler::Scheduler& sch = faabric::scheduler::getScheduler();
-        faabric::util::SchedulingDecision decision =
-          sch.callFunctions(nestedReq);
+        auto decision = sch.callFunctions(nestedReq);
 
         // Await results
         bool success = true;

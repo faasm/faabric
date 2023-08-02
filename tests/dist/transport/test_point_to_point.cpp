@@ -4,12 +4,12 @@
 #include "faabric_utils.h"
 #include "init.h"
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
-#include <faabric/util/scheduling.h>
 
 namespace tests {
 
@@ -38,11 +38,12 @@ class PointToPointDistTestFixture : public DistTestsFixture
         sch.setThisHostResources(res);
     }
 
-    faabric::util::SchedulingDecision prepareRequestReturnDecision(
+    faabric::batch_scheduler::SchedulingDecision prepareRequestReturnDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req)
     {
         // Prepare expected decision
-        faabric::util::SchedulingDecision expectedDecision(appId, groupId);
+        faabric::batch_scheduler::SchedulingDecision expectedDecision(appId,
+                                                                      groupId);
         std::vector<std::string> expectedHosts(nFuncs, getWorkerIP());
         for (int i = 0; i < nLocalSlots; i++) {
             expectedHosts.at(i) = getMasterIP();
@@ -67,8 +68,8 @@ class PointToPointDistTestFixture : public DistTestsFixture
 
     void checkReturnCodesAndSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& expectedDecision,
-      faabric::util::SchedulingDecision& actualDecision)
+      faabric::batch_scheduler::SchedulingDecision& expectedDecision,
+      faabric::batch_scheduler::SchedulingDecision& actualDecision)
     {
         checkSchedulingDecisionEquality(actualDecision, expectedDecision);
 
@@ -98,11 +99,12 @@ TEST_CASE_METHOD(PointToPointDistTestFixture,
     // Set up batch request and scheduling decision
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("ptp", "simple", nFuncs);
-    faabric::util::SchedulingDecision expectedDecision =
+    faabric::batch_scheduler::SchedulingDecision expectedDecision =
       prepareRequestReturnDecision(req);
 
     // Call the functions
-    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision actualDecision =
+      sch.callFunctions(req);
 
     // Check for equality
     checkReturnCodesAndSchedulingDecision(
@@ -118,11 +120,12 @@ TEST_CASE_METHOD(PointToPointDistTestFixture,
     // Set up batch request
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("ptp", "many-msg", nFuncs);
-    faabric::util::SchedulingDecision expectedDecision =
+    faabric::batch_scheduler::SchedulingDecision expectedDecision =
       prepareRequestReturnDecision(req);
 
     // Call the functions
-    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision actualDecision =
+      sch.callFunctions(req);
 
     // Check for equality
     checkReturnCodesAndSchedulingDecision(

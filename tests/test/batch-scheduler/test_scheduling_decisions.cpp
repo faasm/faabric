@@ -3,11 +3,10 @@
 #include "faabric_utils.h"
 #include "fixtures.h"
 
-#include <faabric/util/config.h>
-#include <faabric/util/func.h>
-#include <faabric/util/scheduling.h>
+#include <faabric/batch-scheduler/SchedulingDecision.h>
+#include <faabric/util/batch.h>
 
-using namespace faabric::util;
+using namespace faabric::batch_scheduler;
 
 namespace tests {
 
@@ -20,7 +19,6 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
     std::string hostB = "hostB";
     std::string hostC = "hostC";
 
-    SystemConfig& conf = getSystemConfig();
     std::string thisHost = conf.endpointHost;
 
     bool expectSingleHost = false;
@@ -54,7 +52,7 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
         expectSingleHost = false;
     }
 
-    auto req = batchExecFactory("foo", "bar", 3);
+    auto req = faabric::util::batchExecFactory("foo", "bar", 3);
 
     SchedulingDecision decision(appId, groupId);
 
@@ -118,8 +116,7 @@ TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
     mappingB->set_appidx(appIdxB);
     mappingB->set_groupidx(groupIdxB);
 
-    auto actual =
-      faabric::util::SchedulingDecision::fromPointToPointMappings(mappings);
+    auto actual = SchedulingDecision::fromPointToPointMappings(mappings);
 
     REQUIRE(actual.appId == appId);
     REQUIRE(actual.nFunctions == 2);
@@ -139,7 +136,7 @@ TEST_CASE_METHOD(CachedDecisionTestFixture,
 
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
-    auto req = batchExecFactory("foo", "bar", 5);
+    auto req = faabric::util::batchExecFactory("foo", "bar", 5);
     std::vector<std::string> hosts = {
         "alpha", "alpha", "beta", "gamma", "alpha",
     };
@@ -172,7 +169,7 @@ TEST_CASE_METHOD(CachedDecisionTestFixture,
                  "Test caching invalid decision causes error",
                  "[util]")
 {
-    auto req = batchExecFactory("foo", "bar", 3);
+    auto req = faabric::util::batchExecFactory("foo", "bar", 3);
 
     // Decision with wrong number of hosts
     std::vector<std::string> hosts = { "alpha", "alpha" };
@@ -189,8 +186,8 @@ TEST_CASE_METHOD(CachedDecisionTestFixture,
                  "Test caching multiple decisions for same function",
                  "[util]")
 {
-    auto reqA = batchExecFactory("foo", "bar", 3);
-    auto reqB = batchExecFactory("foo", "bar", 5);
+    auto reqA = faabric::util::batchExecFactory("foo", "bar", 3);
+    auto reqB = faabric::util::batchExecFactory("foo", "bar", 5);
 
     // Decision with wrong number of hosts
     std::vector<std::string> hostsA = { "alpha", "alpha", "beta" };

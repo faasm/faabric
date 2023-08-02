@@ -6,6 +6,7 @@
 
 #include <sys/mman.h>
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/transport/PointToPointServer.h>
@@ -13,7 +14,6 @@
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
 #include <faabric/util/macros.h>
-#include <faabric/util/scheduling.h>
 
 using namespace faabric::transport;
 using namespace faabric::util;
@@ -99,7 +99,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     conf.endpointHost = LOCALHOST;
 
     // Register both indexes on this host
-    faabric::util::SchedulingDecision decision(appId, groupId);
+    faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
 
     faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
     msgA.set_appid(appId);
@@ -192,7 +192,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     conf.endpointHost = LOCALHOST;
 
     // Register both indexes on this host
-    faabric::util::SchedulingDecision decision(appId, groupId);
+    faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
 
     faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
     msgA.set_appid(appId);
@@ -313,7 +313,7 @@ TEST_CASE_METHOD(
     faabric::Message& msgE = req->mutable_messages()->at(4);
     faabric::Message& msgF = req->mutable_messages()->at(5);
 
-    SchedulingDecision decision(appId, groupId);
+    faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
     decision.addMessage(hostB, msgA);
     decision.addMessage(hostA, msgB);
     decision.addMessage(hostC, msgC);
@@ -405,7 +405,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     int groupId = 345;
     std::atomic<int> sharedInt = 5;
 
-    faabric::util::SchedulingDecision decision(appId, groupId);
+    faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
 
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
     msg.set_appid(appId);
@@ -459,7 +459,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     rootMsg.set_groupid(groupId);
     rootMsg.set_groupidx(POINT_TO_POINT_MASTER_IDX);
 
-    faabric::util::SchedulingDecision decision(appId, groupId);
+    faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
     decision.addMessage(thisHost, msg);
     decision.addMessage(thisHost, rootMsg);
 
