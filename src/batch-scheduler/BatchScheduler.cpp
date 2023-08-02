@@ -18,7 +18,7 @@ std::shared_ptr<BatchScheduler> getBatchScheduler()
     std::string mode = faabric::util::getSystemConfig().batchSchedulerMode;
 
     if (mode == "bin-pack") {
-        batchScheduler = std::make_shared<BinPackScheduler>(mode);
+        batchScheduler = std::make_shared<BinPackScheduler>();
     } else {
         SPDLOG_ERROR("Unrecognised batch scheduler mode: {}", mode);
         throw std::runtime_error("Unrecognised batch scheduler mode");

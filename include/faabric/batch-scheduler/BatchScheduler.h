@@ -68,10 +68,6 @@ enum DecisionType
 class BatchScheduler
 {
   public:
-    BatchScheduler(const std::string& modeIn)
-      : mode(modeIn)
-    {}
-
     static DecisionType getDecisionType(
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req);
@@ -83,9 +79,6 @@ class BatchScheduler
       std::shared_ptr<faabric::BatchExecuteRequest> req) = 0;
 
   protected:
-    // TODO: should we use an enum instead?
-    std::string mode;
-
     // ----------
     // Helper Host accessor metods (we encapsulate them to allow changing the
     // underlying `Host` typedef easily)
