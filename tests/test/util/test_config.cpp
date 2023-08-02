@@ -53,6 +53,8 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     std::string overrideCpuCount = setEnvVar("OVERRIDE_CPU_COUNT", "4");
     std::string noTopologyHints = setEnvVar("NO_TOPOLOGY_HINTS", "on");
     std::string noSingleHost = setEnvVar("NO_SINGLE_HOST", "1");
+    std::string batchSchedulerMode =
+      setEnvVar("BATCH_SCHEDULER_MODE", "foo-bar");
 
     std::string globalTimeout = setEnvVar("GLOBAL_MESSAGE_TIMEOUT", "9876");
     std::string boundTimeout = setEnvVar("BOUND_TIMEOUT", "6666");
@@ -119,6 +121,7 @@ TEST_CASE("Test overriding system config initialisation", "[util]")
     setEnvVar("OVERRIDE_CPU_COUNT", overrideCpuCount);
     setEnvVar("USE_TOPOLOGY_HINTS", noTopologyHints);
     setEnvVar("NO_SINGLE_HOST", noSingleHost);
+    setEnvVar("BATCH_SCHEDULER_MODE", batchSchedulerMode);
 
     setEnvVar("GLOBAL_MESSAGE_TIMEOUT", globalTimeout);
     setEnvVar("BOUND_TIMEOUT", boundTimeout);
