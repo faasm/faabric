@@ -578,8 +578,21 @@ class BatchSchedulerFixture : public ConfFixture
         faabric::batch_scheduler::InFlightReqs inFlightReqs;
         int appId = ber->appid();
 
-        auto oldBer = faabric::util::batchExecFactory(
-          ber->messages(0).user(), ber->messages(0).function(), numMsgsOldBer);
+        std::shared_ptr<BatchExecuteRequest> oldBer = nullptr;
+        // If possible, literally copy the messages from the new BER to the
+        // old one (the one in-flight)
+        if (numMsgsOldBer > ber->messages_size()) {
+            oldBer =
+              faabric::util::batchExecFactory(ber->messages(0).user(),
+                                              ber->messages(0).function(),
+                                              numMsgsOldBer);
+        } else {
+            oldBer = faabric::util::batchExecFactory(
+              ber->messages(0).user(), ber->messages(0).function(), 0);
+            for (int i = 0; i < numMsgsOldBer; i++) {
+                *oldBer->add_messages() = *ber->mutable_messages(i);
+            }
+        }
         oldBer->set_appid(appId);
 
         assert(oldBer->messages_size() == hosts.size());

@@ -5,6 +5,9 @@
 
 #include <string>
 
+#define DO_NOT_MIGRATE -98
+#define DO_NOT_MIGRATE_DECISION                                                \
+    faabric::util::SchedulingDecision(DO_NOT_MIGRATE, DO_NOT_MIGRATE)
 #define NOT_ENOUGH_SLOTS -99
 #define NOT_ENOUGH_SLOTS_DECISION                                              \
     faabric::util::SchedulingDecision(NOT_ENOUGH_SLOTS, NOT_ENOUGH_SLOTS)
@@ -42,7 +45,8 @@ typedef std::map<std::string, Host> HostMap;
  * first time.
  * 2) A `DIST_CHANGE` scheduling decision happens when we are scheduling a BER
  * _not_ for the first time, but the BER has the same number of messages that
- * it had before. This corresponds to a request to migrate.
+ * it had before, and is set with the MIGRATION flag. This corresponds to a
+ * request to migrate.
  * 3) A `SCALE_CHANGE` scheduling decision happens when we are scheduling a BER
  * _not_ for the first time, and the BER has a differet number of messages than
  * it had before. This corresponds to a chaining request or a thread/process
@@ -85,6 +89,8 @@ class BatchScheduler
     // ----------
     // Helper Host accessor metods (we encapsulate them to allow changing the
     // underlying `Host` typedef easily)
+    // TODO: consider moving to a separate class, or as members of the Host
+    // wrapper class
     // ----------
 
     static int numSlots(const Host& host) { return host->slots; }
@@ -94,11 +100,26 @@ class BatchScheduler
         return std::max<int>(0, numSlots(host) - host->usedSlots);
     }
 
+    static void claimSlots(Host& host, int numSlotsToClaim)
+    {
+        host->usedSlots =
+          std::min<int>(numSlots(host), host->usedSlots + numSlotsToClaim);
+    }
+
+    static void freeSlots(Host& host, int numSlotsToFree)
+    {
+        host->usedSlots = std::max<int>(0, host->usedSlots - numSlotsToFree);
+    }
+
     static std::string getIp(const Host& host) { return host->ip; }
 
     // ----------
     // Virtual scheduling methods
     // ----------
+
+    virtual bool isFirstDecisionBetter(
+      std::shared_ptr<faabric::util::SchedulingDecision> decisionA,
+      std::shared_ptr<faabric::util::SchedulingDecision> decisionB) = 0;
 
     virtual std::vector<Host> getSortedHosts(
       const HostMap& hostMap,

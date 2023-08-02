@@ -130,8 +130,8 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
                  "[batch-scheduler]")
 {
     // To mock a scale-change request (i.e. DecisionType::SCALE_CHANGE), we
-    // need to have one in-flight request in the map with a different (always
-    // lower) number of messages
+    // need to have one in-flight request in the map with the same app id
+    // (and not of type MIGRATION)
     BatchSchedulerConfig config = {
         .hostMap = {},
         .inFlightReqs = {},
@@ -277,6 +277,49 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
         config.inFlightReqs = buildInFlightReqs(ber, 2, { "bar", "baz" });
         config.expectedDecision =
           buildExpectedDecision(ber, { "baz", "bar", "foo" });
+    }
+
+    actualDecision = *batchScheduler->makeSchedulingDecision(
+      config.hostMap, config.inFlightReqs, ber);
+    compareSchedulingDecisions(actualDecision, config.expectedDecision);
+}
+
+TEST_CASE_METHOD(BinPackSchedulerTestFixture,
+                 "Test scheduling of dist-change requests with BinPack",
+                 "[batch-scheduler]")
+{
+    // To mock a dist-change request (i.e. DecisionType::DIST_CHANGE), we
+    // need to have one in-flight request in the map with the same app id, the
+    // same size (and of type MIGRATION)
+    BatchSchedulerConfig config = {
+        .hostMap = {},
+        .inFlightReqs = {},
+        .expectedDecision = faabric::util::SchedulingDecision(appId, groupId),
+    };
+
+    // The configs in this test must be read as follows:
+    // - the host map's used slots contains the current distribution for the app
+    // - the host map's slots contain the total slots, there is a migration
+    //   opportunity if we can improve the current distribution
+    // - we repeat the distribtution when building the in-flight requests (but
+    //   also the host names)
+
+    // Given a migration (defined by the number of cross-VM links, or
+    // equivalently the host-to-message histogram), the BinPack scheduler will
+    // try to minimise the number of messages to actually be migrated
+    SECTION("BinPack will minimise the number of messages to migrate")
+    {
+        config.hostMap =
+          buildHostMap({ "foo", "bar", "baz" }, { 5, 4, 2 }, { 3, 4, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 9);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs = buildInFlightReqs(
+          ber,
+          9,
+          { "foo", "foo", "foo", "bar", "bar", "bar", "bar", "baz", "baz" });
+        config.expectedDecision = buildExpectedDecision(
+          ber,
+          { "foo", "foo", "foo", "bar", "bar", "bar", "bar", "foo", "foo" });
     }
 
     actualDecision = *batchScheduler->makeSchedulingDecision(
