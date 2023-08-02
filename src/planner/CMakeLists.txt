@@ -32,6 +32,7 @@ faabric_lib(planner
 add_dependencies(faabric_common_dependencies planner_pbh_copied)
 
 target_link_libraries(planner PRIVATE
+    faabric::batch_scheduler
     faabric::endpoint
     faabric::transport
     faabric::util

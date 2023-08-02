@@ -9,6 +9,9 @@ using namespace faabric::scheduler;
 
 namespace tests {
 
+// TODO(planner-schedule): remove this file as this is already tested in
+// tests/test/batch-scheduler
+
 class SchedulingDecisionTestFixture : public SchedulerFixture
 {
   public:

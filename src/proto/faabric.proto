@@ -21,6 +21,8 @@ message EmptyRequest {
 message BatchExecuteRequest {
     // Each BatchExecuteRequest has a unique app id
     int32 appId = 1;
+    // TODO: consider adding user/func to BER
+    // TODO: consider adding the request type: SCALE_CHANGE, DIST_CHANGE, NEW
 
     enum BatchExecuteType {
         FUNCTIONS = 0;
