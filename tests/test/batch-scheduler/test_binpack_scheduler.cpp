@@ -138,6 +138,14 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
         .expectedDecision = faabric::util::SchedulingDecision(appId, groupId),
     };
 
+    // The configs in this test must be read as follows:
+    // - the host map's used slots contains the current distribution for the app
+    //   (i.e. the number of used slots matches the number in in-flight reqs)
+    // - the host map's slots contain the total slots
+    // - the ber contains the NEW messages we are going to add
+    // - the expected decision includes the expected scheduling decision for
+    //   the new messages
+
     SECTION("BinPack scheduler gives up if not enough slots are available")
     {
         config.hostMap = buildHostMap({ "foo", "bar" }, { 2, 1 }, { 1, 0 });
@@ -304,9 +312,146 @@ TEST_CASE_METHOD(BinPackSchedulerTestFixture,
     // - we repeat the distribtution when building the in-flight requests (but
     //   also the host names)
 
-    // Given a migration (defined by the number of cross-VM links, or
-    // equivalently the host-to-message histogram), the BinPack scheduler will
-    // try to minimise the number of messages to actually be migrated
+    SECTION("BinPack returns nothing if there's no opportunity to migrate "
+            "(single host)")
+    {
+        config.hostMap = buildHostMap({ "foo" }, { 4 }, { 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 2);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs = buildInFlightReqs(ber, 2, { "foo", "foo" });
+        config.expectedDecision = DO_NOT_MIGRATE_DECISION;
+    }
+
+    SECTION("BinPack returns nothing if there's no opportunity to migrate "
+            "(multiple hosts)")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 2 }, { 4, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 5);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 5, { "foo", "foo", "foo", "foo", "bar" });
+        config.expectedDecision = DO_NOT_MIGRATE_DECISION;
+    }
+
+    SECTION("BinPack detects opportunities to consolidate to one host")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 2 }, { 2, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "foo", "foo", "foo", "foo" });
+    }
+
+    SECTION(
+      "In case of a tie, it uses the same tie-break than NEW (free slots)")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 5 }, { 2, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "bar", "bar", "bar" });
+    }
+
+    SECTION(
+      "In case of a tie, it uses the same tie-break than NEW (total capacity)")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 5 }, { 2, 3 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "bar", "bar", "bar" });
+    }
+
+    SECTION("In case of a tie, it uses the same tie-break than NEW (larger "
+            "alphabetically)")
+    {
+        config.hostMap = buildHostMap({ "foo", "bar" }, { 4, 4 }, { 2, 2 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "bar" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "foo", "foo", "foo", "foo" });
+    }
+
+    SECTION("BinPack prefers hosts running more messages")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 3, 2, 1 },
+          { 2, 1, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "foo", "foo", "bar", "foo" });
+    }
+
+    SECTION(
+      "BinPack prefers hosts running more messages (even if less free slots)")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 3, 5, 1 },
+          { 2, 1, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 4);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 4, { "foo", "foo", "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "foo", "foo", "bar", "foo" });
+    }
+
+    SECTION("BinPack always prefers consolidating to fewer hosts")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+            "baz",
+          },
+          { 3, 5, 1 },
+          { 1, 1, 1 });
+        ber = faabric::util::batchExecFactory("bat", "man", 3);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs =
+          buildInFlightReqs(ber, 3, { "foo", "bar", "baz" });
+        config.expectedDecision =
+          buildExpectedDecision(ber, { "bar", "bar", "bar" });
+    }
+
+    SECTION("In case of a tie of hosts, it minimises cross-VM links")
+    {
+        config.hostMap = buildHostMap(
+          {
+            "foo",
+            "bar",
+          },
+          { 4, 4 },
+          { 3, 3 });
+        ber = faabric::util::batchExecFactory("bat", "man", 6);
+        ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
+        config.inFlightReqs = buildInFlightReqs(
+          ber, 6, { "foo", "foo", "foo", "bar", "bar", "bar" });
+        config.expectedDecision = buildExpectedDecision(
+          ber, { "foo", "foo", "foo", "bar", "bar", "foo" });
+    }
+
     SECTION("BinPack will minimise the number of messages to migrate")
     {
         config.hostMap =

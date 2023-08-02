@@ -3,11 +3,19 @@
 #include <faabric/util/logging.h>
 #include <faabric/util/scheduling.h>
 
-#include <queue>
-
 namespace faabric::batch_scheduler {
 
-// TODO: decide what to do with this method (i.e. where to place it)
+static std::map<std::string, int> getHostFreqCount(
+  std::shared_ptr<faabric::util::SchedulingDecision> decision)
+{
+    std::map<std::string, int> hostFreqCount;
+    for (auto host : decision->hosts) {
+        hostFreqCount[host] += 1;
+    }
+
+    return hostFreqCount;
+}
+
 // Given a new decision that improves on an old decision (i.e. to migrate), we
 // want to make sure that we minimise the number of migration requests we send.
 // This is, we want to keep as many host-message scheduling in the old decision
@@ -22,17 +30,26 @@ minimiseNumOfMigrations(
       oldDecision->appId, oldDecision->groupId);
 
     // We want to maintain the new decision's host-message histogram
-    std::map<std::string, int> hostFreqCount;
-    for (auto host : newDecision->hosts) {
-        hostFreqCount[host] += 1;
-    }
+    auto hostFreqCount = getHostFreqCount(newDecision);
+
+    // Helper function to find the next host in the histogram with slots
+    auto nextHostWithSlots = [&hostFreqCount]() -> std::string {
+        for (auto [ip, slots] : hostFreqCount) {
+            if (slots > 0) {
+                return ip;
+            }
+        }
+
+        // Unreachable (in this context)
+        throw std::runtime_error("No next host with slots found!");
+    };
 
     assert(newDecision->hosts.size() == oldDecision->hosts.size());
-    std::queue<std::string> skippedHosts;
     for (int i = 0; i < newDecision->hosts.size(); i++) {
         // If both decisions schedule this message to the same host great, as
         // we can keep the old scheduling
-        if (newDecision->hosts.at(i) == oldDecision->hosts.at(i)) {
+        if (newDecision->hosts.at(i) == oldDecision->hosts.at(i) &&
+            hostFreqCount.at(newDecision->hosts.at(i)) > 0) {
             decision->addMessage(oldDecision->hosts.at(i),
                                  oldDecision->messageIds.at(i),
                                  oldDecision->appIdxs.at(i),
@@ -51,11 +68,6 @@ minimiseNumOfMigrations(
                                  oldDecision->appIdxs.at(i),
                                  oldDecision->groupIdxs.at(i));
             hostFreqCount.at(oldDecision->hosts.at(i)) -= 1;
-
-            // For simplicity, keep track of the hosts in the new decision we
-            // have skipped, to use them later
-            skippedHosts.push(newDecision->hosts.at(i));
-
             continue;
         }
 
@@ -64,28 +76,18 @@ minimiseNumOfMigrations(
         // which of the hosts from the new migration we pick (as the new
         // decision is optimal in terms of bin-packing), as long as there are
         // still slots in the histogram
-        while (hostFreqCount.at(skippedHosts.front()) == 0) {
-            skippedHosts.pop();
-        }
-        decision->addMessage(skippedHosts.front(),
+        auto nextHost = nextHostWithSlots();
+        decision->addMessage(nextHost,
                              oldDecision->messageIds.at(i),
                              oldDecision->appIdxs.at(i),
                              oldDecision->groupIdxs.at(i));
-        hostFreqCount.at(skippedHosts.front()) -= 1;
-        skippedHosts.pop();
+        hostFreqCount.at(nextHost) -= 1;
     }
 
     // Assert that we have preserved the new decision's host-message histogram
     // (use the pre-processor macro as we assert repeatedly in the loop, so we
     // want to avoid having an empty loop in non-debug mode)
 #ifndef NDEBUG
-    // First drain the queue
-    while (!skippedHosts.empty()) {
-        assert(hostFreqCount.at(skippedHosts.front()) == 0);
-        skippedHosts.pop();
-    }
-
-    // Second make sure we have achieved the desired host-message histogram
     for (auto [host, freq] : hostFreqCount) {
         assert(freq == 0);
     }
@@ -94,24 +96,25 @@ minimiseNumOfMigrations(
     return decision;
 }
 
-// For the BinPack scheduler, a decision is better than another one if it has
-// a lower number of cross-VM crossings (i.e. better locality, or better
-// packing)
+// For the BinPack scheduler, a decision is better than another one if it spans
+// less hosts. In case of a tie, we calculate the number of cross-VM links
+// (i.e. better locality, or better packing)
 bool BinPackScheduler::isFirstDecisionBetter(
   std::shared_ptr<faabric::util::SchedulingDecision> decisionA,
   std::shared_ptr<faabric::util::SchedulingDecision> decisionB)
 {
     auto getLocalityScore =
-      [](std::shared_ptr<faabric::util::SchedulingDecision> decision) -> int {
+      [](std::shared_ptr<faabric::util::SchedulingDecision> decision)
+      -> std::pair<int, int> {
         // First, calculate the host-message histogram (or frequency count)
         std::map<std::string, int> hostFreqCount;
         for (auto host : decision->hosts) {
             hostFreqCount[host] += 1;
         }
 
-        // If scheduling is single host, return a 0
+        // If scheduling is single host, return one host and 0 cross-host links
         if (hostFreqCount.size() == 1) {
-            return 0;
+            return std::make_pair(1, 0);
         }
 
         // Else, do the product of all entries
@@ -120,11 +123,19 @@ bool BinPackScheduler::isFirstDecisionBetter(
             score = score * freq;
         }
 
-        return score;
+        return std::make_pair(hostFreqCount.size(), score);
     };
 
+    auto scoreA = getLocalityScore(decisionA);
+    auto scoreB = getLocalityScore(decisionB);
+
+    // The first decision is better if it has a LOWER host set size
+    if (scoreA.first != scoreB.first) {
+        return scoreA.first < scoreB.first;
+    }
+
     // The first decision is better if it has a LOWER locality score
-    return getLocalityScore(decisionA) < getLocalityScore(decisionB);
+    return scoreA.second < scoreB.second;
 }
 
 std::vector<Host> BinPackScheduler::getSortedHosts(
@@ -159,12 +170,12 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
 
     // Helper lambda to get the frequency of messags at each host (useful to
     // sort hosts maximising locality)
-    auto getHostFreqCount = [inFlightReqs,
-                             req]() -> std::map<std::string, int> {
+    auto getHostFreqCount =
+      [](std::shared_ptr<faabric::util::SchedulingDecision> decision)
+      -> std::map<std::string, int> {
         std::map<std::string, int> hostFreqCount;
 
-        auto oldDecision = inFlightReqs.at(req->appid()).second;
-        for (auto host : oldDecision->hosts) {
+        for (auto host : decision->hosts) {
             hostFreqCount[host] += 1;
         }
 
@@ -189,7 +200,8 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
             // IMPORTANT: a SCALE_CHANGE request with 4 messages means that we
             // want to add 4 NEW messages to the running app (not that the new
             // total count is 4)
-            auto hostFreqCount = getHostFreqCount();
+            auto oldDecision = inFlightReqs.at(req->appid()).second;
+            auto hostFreqCount = getHostFreqCount(oldDecision);
             std::sort(sortedHosts.begin(),
                       sortedHosts.end(),
                       [&](auto hostA, auto hostB) -> bool {
@@ -220,7 +232,8 @@ std::vector<Host> BinPackScheduler::getSortedHosts(
             // is already in-flight) can be improved according to the bin-pack
             // scheduling logic. This is equivalent to saying that the number
             // of cross-vm links can be reduced (i.e. we improve locality)
-            auto hostFreqCount = getHostFreqCount();
+            auto oldDecision = inFlightReqs.at(req->appid()).second;
+            auto hostFreqCount = getHostFreqCount(oldDecision);
             std::sort(sortedHosts.begin(),
                       sortedHosts.end(),
                       // TODO: this is shared with SCALE_CHANGE, so abstract
