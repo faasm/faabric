@@ -393,7 +393,7 @@ std::string PointToPointBroker::getHostForReceiver(int groupId, int recvIdx)
 
 std::set<std::string>
 PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
-  const faabric::util::SchedulingDecision& decision)
+  const faabric::batch_scheduler::SchedulingDecision& decision)
 {
     int groupId = decision.groupId;
 
@@ -441,7 +441,7 @@ PointToPointBroker::setUpLocalMappingsFromSchedulingDecision(
 }
 
 void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
-  const faabric::util::SchedulingDecision& decision)
+  const faabric::batch_scheduler::SchedulingDecision& decision)
 {
     // Set up locally
     std::set<std::string> otherHosts =

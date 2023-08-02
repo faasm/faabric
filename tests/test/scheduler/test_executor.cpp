@@ -307,7 +307,7 @@ class TestExecutorFixture
 
     std::vector<std::string> executeWithTestExecutorHint(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision hint)
+      faabric::batch_scheduler::SchedulingDecision hint)
     {
         initThreadSnapshot(req);
 
@@ -444,7 +444,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     }
 
     // Set up a hint to force the scheduler to execute single host or not
-    SchedulingDecision hint(123, 345);
+    faabric::batch_scheduler::SchedulingDecision hint(123, 345);
     std::vector<std::string> expectedHosts;
     for (int i = 0; i < nLocally; i++) {
         expectedHosts.emplace_back(thisHost);
@@ -1105,7 +1105,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
         singleHosts[2] = otherHost;
     }
 
-    SchedulingDecision hint(123, 123);
+    faabric::batch_scheduler::SchedulingDecision hint(123, 123);
     for (int i = 0; i < nMessages; i++) {
         hint.addMessage(singleHosts[i], req->messages().at(i));
         msgIds.push_back(req->messages(i).id());

@@ -87,8 +87,9 @@ std::unique_ptr<google::protobuf::Message> PointToPointServer::doRecvMappings(
 {
     PARSE_MSG(faabric::PointToPointMappings, buffer.data(), buffer.size())
 
-    faabric::util::SchedulingDecision decision =
-      faabric::util::SchedulingDecision::fromPointToPointMappings(parsedMsg);
+    faabric::batch_scheduler::SchedulingDecision decision =
+      faabric::batch_scheduler::SchedulingDecision::fromPointToPointMappings(
+        parsedMsg);
 
     SPDLOG_DEBUG("Receiving {} point-to-point mappings", decision.nFunctions);
 

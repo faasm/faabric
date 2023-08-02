@@ -47,7 +47,7 @@ class PointToPointGroupFixture
     {
         req = faabric::util::batchExecFactory("foo", "bar", groupSize);
 
-        faabric::util::SchedulingDecision decision(appId, groupId);
+        faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
 
         for (int i = 0; i < groupSize; i++) {
             auto& msg = req->mutable_messages()->at(i);
@@ -102,7 +102,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     int groupId = 345;
     int groupIdx = 1;
 
-    faabric::util::SchedulingDecision decision(appId, groupId);
+    faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
 
     faabric::Message msgA = faabric::util::messageFactory("foo", "bar");
     msgA.set_appid(appId);

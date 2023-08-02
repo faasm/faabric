@@ -1,3 +1,4 @@
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/ExecutorContext.h>
@@ -16,7 +17,6 @@
 #include <faabric/util/macros.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/string_tools.h>
 #include <faabric/util/timing.h>
@@ -126,8 +126,9 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Get the scheduling decision
-    faabric::util::SchedulingDecision decision = sch.makeSchedulingDecision(
-      req, faabric::util::SchedulingTopologyHint::CACHED);
+    faabric::batch_scheduler::SchedulingDecision decision =
+      sch.makeSchedulingDecision(
+        req, faabric::batch_scheduler::SchedulingTopologyHint::CACHED);
     bool isSingleHost = decision.isSingleHost();
 
     // Do snapshotting if not on a single host

@@ -1,9 +1,9 @@
 #pragma once
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/transport/PointToPointClient.h>
 #include <faabric/util/config.h>
 #include <faabric/util/locks.h>
-#include <faabric/util/scheduling.h>
 
 #include <atomic>
 #include <condition_variable>
@@ -93,10 +93,10 @@ class PointToPointBroker
     std::string getHostForReceiver(int groupId, int recvIdx);
 
     std::set<std::string> setUpLocalMappingsFromSchedulingDecision(
-      const faabric::util::SchedulingDecision& decision);
+      const faabric::batch_scheduler::SchedulingDecision& decision);
 
     void setAndSendMappingsFromSchedulingDecision(
-      const faabric::util::SchedulingDecision& decision);
+      const faabric::batch_scheduler::SchedulingDecision& decision);
 
     void waitForMappingsOnThisHost(int groupId);
 

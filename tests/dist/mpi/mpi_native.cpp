@@ -844,7 +844,8 @@ void mpiMigrationPoint(int entrypointFuncArg)
                      hostToMigrateTo);
 
         // Build decision and send
-        faabric::util::SchedulingDecision decision(msg.appid(), msg.groupid());
+        faabric::batch_scheduler::SchedulingDecision decision(msg.appid(),
+                                                              msg.groupid());
         decision.addMessage(hostToMigrateTo, msg);
         sch.callFunctions(req, decision);
 

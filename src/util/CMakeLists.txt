@@ -22,7 +22,6 @@ faabric_lib(util
     network.cpp
     queue.cpp
     random.cpp
-    scheduling.cpp
     snapshot.cpp
     state.cpp
     string_tools.cpp

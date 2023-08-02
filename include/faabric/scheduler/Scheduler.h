@@ -1,5 +1,6 @@
 #pragma once
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
@@ -14,7 +15,6 @@
 #include <faabric/util/dirty.h>
 #include <faabric/util/memory.h>
 #include <faabric/util/queue.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/snapshot.h>
 #include <faabric/util/timing.h>
 
@@ -26,7 +26,7 @@
 namespace faabric::scheduler {
 
 typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
-                  std::shared_ptr<faabric::util::SchedulingDecision>>
+                  std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>>
   InFlightPair;
 
 class Scheduler;
@@ -186,17 +186,17 @@ class Scheduler
 
     ~Scheduler();
 
-    faabric::util::SchedulingDecision makeSchedulingDecision(
+    faabric::batch_scheduler::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingTopologyHint topologyHint =
-        faabric::util::SchedulingTopologyHint::NONE);
+      faabric::batch_scheduler::SchedulingTopologyHint topologyHint =
+        faabric::batch_scheduler::SchedulingTopologyHint::NONE);
 
-    faabric::util::SchedulingDecision callFunctions(
+    faabric::batch_scheduler::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    faabric::util::SchedulingDecision callFunctions(
+    faabric::batch_scheduler::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& hint);
+      faabric::batch_scheduler::SchedulingDecision& hint);
 
     void reset();
 
@@ -351,15 +351,15 @@ class Scheduler
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
 
-    faabric::util::SchedulingDecision doSchedulingDecision(
+    faabric::batch_scheduler::SchedulingDecision doSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingTopologyHint topologyHint);
+      faabric::batch_scheduler::SchedulingTopologyHint topologyHint);
 
-    faabric::util::SchedulingDecision doCallFunctions(
+    faabric::batch_scheduler::SchedulingDecision doCallFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& decision,
+      faabric::batch_scheduler::SchedulingDecision& decision,
       faabric::util::FullLock& lock,
-      faabric::util::SchedulingTopologyHint topologyHint);
+      faabric::batch_scheduler::SchedulingTopologyHint topologyHint);
 
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,
@@ -386,15 +386,15 @@ class Scheduler
 
     std::vector<std::shared_ptr<faabric::PendingMigrations>>
     doCheckForMigrationOpportunities(
-      faabric::util::MigrationStrategy migrationStrategy =
-        faabric::util::MigrationStrategy::BIN_PACK);
+      faabric::batch_scheduler::MigrationStrategy migrationStrategy =
+        faabric::batch_scheduler::MigrationStrategy::BIN_PACK);
 
     void broadcastPendingMigrations(
       std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
 
     void doStartFunctionMigrationThread(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::util::SchedulingDecision& decision);
+      faabric::batch_scheduler::SchedulingDecision& decision);
 };
 
 }

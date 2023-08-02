@@ -128,6 +128,7 @@ add_library(faabric
     $<TARGET_OBJECTS:redis_obj>
     $<TARGET_OBJECTS:runner_obj>
     $<TARGET_OBJECTS:scheduler_obj>
+    $<TARGET_OBJECTS:scheduling_util_obj>
     $<TARGET_OBJECTS:snapshot_obj>
     $<TARGET_OBJECTS:state_obj>
     $<TARGET_OBJECTS:transport_obj>

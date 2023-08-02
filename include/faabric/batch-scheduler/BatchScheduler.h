@@ -1,24 +1,21 @@
 #pragma once
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/util/batch.h>
-#include <faabric/util/scheduling.h>
 
 #include <string>
 
 #define DO_NOT_MIGRATE -98
 #define DO_NOT_MIGRATE_DECISION                                                \
-    faabric::util::SchedulingDecision(DO_NOT_MIGRATE, DO_NOT_MIGRATE)
+    SchedulingDecision(DO_NOT_MIGRATE, DO_NOT_MIGRATE)
 #define NOT_ENOUGH_SLOTS -99
 #define NOT_ENOUGH_SLOTS_DECISION                                              \
-    faabric::util::SchedulingDecision(NOT_ENOUGH_SLOTS, NOT_ENOUGH_SLOTS)
+    SchedulingDecision(NOT_ENOUGH_SLOTS, NOT_ENOUGH_SLOTS)
 
 namespace faabric::batch_scheduler {
 
-// TODO: move BatchExecuteRequest here
-
-// TODO: move SchedulingDecision here?
 typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
-                  std::shared_ptr<faabric::util::SchedulingDecision>>
+                  std::shared_ptr<SchedulingDecision>>
   InFlightPair;
 
 typedef std::map<int32_t, InFlightPair> InFlightReqs;
@@ -72,8 +69,7 @@ class BatchScheduler
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req);
 
-    virtual std::shared_ptr<faabric::util::SchedulingDecision>
-    makeSchedulingDecision(
+    virtual std::shared_ptr<SchedulingDecision> makeSchedulingDecision(
       const HostMap& hostMap,
       const InFlightReqs& inFlightReqs,
       std::shared_ptr<faabric::BatchExecuteRequest> req) = 0;
@@ -111,8 +107,8 @@ class BatchScheduler
     // ----------
 
     virtual bool isFirstDecisionBetter(
-      std::shared_ptr<faabric::util::SchedulingDecision> decisionA,
-      std::shared_ptr<faabric::util::SchedulingDecision> decisionB) = 0;
+      std::shared_ptr<SchedulingDecision> decisionA,
+      std::shared_ptr<SchedulingDecision> decisionB) = 0;
 
     virtual std::vector<Host> getSortedHosts(
       const HostMap& hostMap,

@@ -4,12 +4,12 @@
 #include "faabric_utils.h"
 #include "init.h"
 
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/func.h>
 #include <faabric/util/logging.h>
-#include <faabric/util/scheduling.h>
 
 namespace tests {
 
@@ -33,15 +33,16 @@ TEST_CASE_METHOD(DistTestsFixture,
 
     // Set up the expectation
     const faabric::Message firstMsg = req->messages().at(0);
-    faabric::util::SchedulingDecision expectedDecision(firstMsg.appid(),
-                                                       firstMsg.groupid());
+    faabric::batch_scheduler::SchedulingDecision expectedDecision(
+      firstMsg.appid(), firstMsg.groupid());
     expectedDecision.addMessage(thisHost, req->messages().at(0));
     expectedDecision.addMessage(thisHost, req->messages().at(1));
     expectedDecision.addMessage(otherHost, req->messages().at(2));
     expectedDecision.addMessage(otherHost, req->messages().at(3));
 
     // Call the functions
-    faabric::util::SchedulingDecision actualDecision = sch.callFunctions(req);
+    faabric::batch_scheduler::SchedulingDecision actualDecision =
+      sch.callFunctions(req);
 
     // Check decision is as expected
     checkSchedulingDecisionEquality(actualDecision, expectedDecision);

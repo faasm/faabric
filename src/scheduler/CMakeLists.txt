@@ -8,6 +8,7 @@ faabric_lib(scheduler
 )
 
 target_link_libraries(scheduler PRIVATE
+    faabric::scheduling_util
     faabric::snapshot
     faabric::state
     faabric::redis

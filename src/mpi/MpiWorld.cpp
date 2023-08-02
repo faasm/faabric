@@ -1,3 +1,4 @@
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.pb.h>
 #include <faabric/scheduler/Scheduler.h>
@@ -7,7 +8,6 @@
 #include <faabric/util/environment.h>
 #include <faabric/util/gids.h>
 #include <faabric/util/macros.h>
-#include <faabric/util/scheduling.h>
 #include <faabric/util/testing.h>
 
 // Each MPI rank runs in a separate thread, thus we use TLS to maintain the
@@ -180,12 +180,13 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     // As a result of the call to the scheduler, a point-to-point communcation
     // group will have been created with id equal to the MPI world's id.
     if (size > 1) {
-        faabric::util::SchedulingDecision decision = sch.callFunctions(req);
+        faabric::batch_scheduler::SchedulingDecision decision =
+          sch.callFunctions(req);
         assert(decision.hosts.size() == size - 1);
     } else {
         // If world has size one, create the communication group (of size one)
         // manually.
-        faabric::util::SchedulingDecision decision(id, id);
+        faabric::batch_scheduler::SchedulingDecision decision(id, id);
         call.set_groupidx(0);
         decision.addMessage(thisHost, call);
         broker.setAndSendMappingsFromSchedulingDecision(decision);

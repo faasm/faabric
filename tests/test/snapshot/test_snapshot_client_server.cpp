@@ -47,7 +47,7 @@ class SnapshotClientServerTestFixture
 {
     void setUpFunctionGroup(int appId, int groupId)
     {
-        SchedulingDecision decision(appId, groupId);
+        faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
         faabric::Message msg = messageFactory("foo", "bar");
         msg.set_appid(appId);
         msg.set_groupid(groupId);

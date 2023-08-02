@@ -1,6 +1,7 @@
 #include <faabric/batch-scheduler/BatchScheduler.h>
 #include <faabric/batch-scheduler/BinPackScheduler.h>
 #include <faabric/util/config.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::batch_scheduler {
 

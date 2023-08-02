@@ -62,7 +62,7 @@ TEST_CASE_METHOD(ConfFixture,
     SECTION("Dist-change decision")
     {
         auto decisionPtr =
-          std::make_shared<faabric::util::SchedulingDecision>(ber->appid(), 0);
+          std::make_shared<SchedulingDecision>(ber->appid(), 0);
         ber->set_type(BatchExecuteRequest_BatchExecuteType_MIGRATION);
         inFlightReqs[ber->appid()] = std::make_pair(ber, decisionPtr);
         expectedDecisionType = DecisionType::DIST_CHANGE;
@@ -71,7 +71,7 @@ TEST_CASE_METHOD(ConfFixture,
     SECTION("Scale-change decision")
     {
         auto decisionPtr =
-          std::make_shared<faabric::util::SchedulingDecision>(ber->appid(), 0);
+          std::make_shared<SchedulingDecision>(ber->appid(), 0);
         auto newBer = faabric::util::batchExecFactory("foo", "bar", 1);
         newBer->set_appid(ber->appid());
         inFlightReqs[newBer->appid()] = std::make_pair(newBer, decisionPtr);
