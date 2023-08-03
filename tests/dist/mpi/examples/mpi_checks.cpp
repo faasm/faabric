@@ -51,28 +51,28 @@ int checks()
 
         // Check response count (although will have hung if it's wrong)
         if (responseCount != worldSize - 1) {
-            printf("Did not get enough responses back to master (got %i)\n",
+            printf("Did not get enough responses back to main (got %i)\n",
                    responseCount);
             return 1;
-        } else {
-            printf("Got expected responses in master (%i)\n", responseCount);
         }
 
+        printf("Got expected responses in main (%i)\n", responseCount);
+
     } else if (rank > 0) {
-        // Check message from master
+        // Check message from main
         int receivedNumber = 0;
         int expectedNumber = -100 - rank;
         MPI_Recv(
           &receivedNumber, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         if (receivedNumber != expectedNumber) {
-            printf("Got unexpected number from master (got %i, expected %i)\n",
+            printf("Got unexpected number from main (got %i, expected %i)\n",
                    receivedNumber,
                    expectedNumber);
             return 1;
         }
-        printf("Got expected number from master %i\n", receivedNumber);
+        printf("Got expected number from main %i\n", receivedNumber);
 
-        // Send success message back to master
+        // Send success message back to main
         MPI_Send(&rank, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
     }
 

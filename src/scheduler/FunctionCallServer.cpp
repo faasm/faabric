@@ -86,7 +86,7 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
         // This flags were set by the old endpoint, we temporarily set them here
         parsedMsg.mutable_messages()->at(0).set_timestamp(
           faabric::util::getGlobalClock().epochMillis());
-        parsedMsg.mutable_messages()->at(0).set_masterhost(
+        parsedMsg.mutable_messages()->at(0).set_mainhost(
           faabric::util::getSystemConfig().endpointHost);
     }
     scheduler.callFunctions(

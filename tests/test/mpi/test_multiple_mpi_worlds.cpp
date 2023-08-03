@@ -100,7 +100,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
         }
     }
 
-    // Check that this host is registered as the master
+    // Check that this host is registered as the main
     const std::string actualHostA = worldA.getHostForRank(0);
     const std::string actualHostB = worldB.getHostForRank(0);
     REQUIRE(actualHostA == faabric::util::getSystemConfig().endpointHost);

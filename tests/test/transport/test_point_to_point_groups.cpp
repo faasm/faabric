@@ -372,7 +372,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
     auto group = setUpGroup(appId, groupId, nThreads);
 
-    // Run threads in background to force a wait from the master
+    // Run threads in background to force a wait from the main
     std::vector<std::jthread> threads;
     for (int i = 1; i < nThreads; i++) {
         threads.emplace_back([&group, i, &actual] {

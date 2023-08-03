@@ -44,7 +44,7 @@ int order()
         }
         printf("MPI order check successful\n");
     } else if (rank > 0 && rank <= 3) {
-        // Echo message back to master
+        // Echo message back to main
         int receivedNumber = 0;
         MPI_Recv(
           &receivedNumber, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);

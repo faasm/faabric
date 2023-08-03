@@ -55,7 +55,7 @@ class InMemoryStateKeyValue final : public StateKeyValue
 
   private:
     const std::string thisIP;
-    const std::string masterIP;
+    const std::string mainIP;
     InMemoryStateKeyStatus status;
 
     InMemoryStateRegistry& stateRegistry;

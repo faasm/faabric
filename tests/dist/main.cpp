@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
     // another function).
     int result;
     {
-        SPDLOG_INFO("Starting distributed test server on master");
+        SPDLOG_INFO("Starting distributed test server on main");
         faabric::runner::FaabricMain m(fac);
         m.startBackground();
 

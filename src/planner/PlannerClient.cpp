@@ -167,10 +167,10 @@ std::shared_ptr<faabric::Message> PlannerClient::getMessageResultFromPlanner(
 faabric::Message PlannerClient::getMessageResult(const faabric::Message& msg,
                                                  int timeoutMs)
 {
-    // Deliberately make a copy here so that we can set the masterhost when
+    // Deliberately make a copy here so that we can set the main host when
     // registering interest in the results
     auto msgPtr = std::make_shared<faabric::Message>(msg);
-    msgPtr->set_masterhost(faabric::util::getSystemConfig().endpointHost);
+    msgPtr->set_mainhost(faabric::util::getSystemConfig().endpointHost);
     return doGetMessageResult(msgPtr, timeoutMs);
 }
 
@@ -181,7 +181,7 @@ faabric::Message PlannerClient::getMessageResult(int appId,
     auto msgPtr = std::make_shared<faabric::Message>();
     msgPtr->set_appid(appId);
     msgPtr->set_id(msgId);
-    msgPtr->set_masterhost(faabric::util::getSystemConfig().endpointHost);
+    msgPtr->set_mainhost(faabric::util::getSystemConfig().endpointHost);
     return doGetMessageResult(msgPtr, timeoutMs);
 }
 

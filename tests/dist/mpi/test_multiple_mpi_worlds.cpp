@@ -10,7 +10,7 @@
 namespace tests {
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
-                 "Test concurrent MPI applications with same master host",
+                 "Test concurrent MPI applications with same main host",
                  "[mpi]")
 {
     // Prepare both requests
@@ -36,7 +36,7 @@ TEST_CASE_METHOD(MpiDistTestsFixture,
 }
 
 TEST_CASE_METHOD(MpiDistTestsFixture,
-                 "Test concurrent MPI applications with different master host",
+                 "Test concurrent MPI applications with different main host",
                  "[mpi]")
 {
     // Prepare the first request (local): 2 ranks locally, 2 remotely

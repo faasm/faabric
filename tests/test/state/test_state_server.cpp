@@ -157,7 +157,7 @@ TEST_CASE_METHOD(SimpleStateServerTestFixture,
     // Create a key-value locally
     auto localKv = getKv(userA, keyA, dataA.size());
 
-    // Check this host is the master
+    // Check this host is the main
     REQUIRE(localKv->isMaster());
 
     // Set the data and push, check nothing breaks
@@ -195,7 +195,7 @@ TEST_CASE_METHOD(SimpleStateServerTestFixture,
 }
 
 TEST_CASE_METHOD(SimpleStateServerTestFixture,
-                 "Test state server with local master",
+                 "Test state server with local main",
                  "[state]")
 {
     // Set and push

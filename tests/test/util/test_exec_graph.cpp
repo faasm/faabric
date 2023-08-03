@@ -140,7 +140,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test MPI execution graph", "[scheduler]")
 
     world.create(msg, worldId, worldSize);
 
-    // Update the result for the master message
+    // Update the result for the main message
     sch.setFunctionResult(msg);
 
     // Build expected graph

@@ -62,7 +62,7 @@ int sendMany()
         int sentNumber = 100 - rank;
         int receivedNumber = 0;
 
-        // Receive message from master
+        // Receive message from main
         for (int i = 0; i < numMsg; i++) {
             MPI_Recv(&receivedNumber,
                      1,
@@ -73,7 +73,7 @@ int sendMany()
                      MPI_STATUS_IGNORE);
             if (receivedNumber != expectedNumber) {
                 printf(
-                  "Got unexpected number from master (got %i, expected %i)\n",
+                  "Got unexpected number from main (got %i, expected %i)\n",
                   receivedNumber,
                   expectedNumber);
                 return 1;

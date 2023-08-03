@@ -808,8 +808,8 @@ void mpiMigrationPoint(int entrypointFuncArg)
 
         // Take snapshot of function and send it to the host we are migrating
         // to. Note that the scheduler only pushes snapshots as part of function
-        // chaining from the master host of the app, and
-        // we are most likely migrating from a non-master host. Thus, we must
+        // chaining from the main host of the app, and
+        // we are most likely migrating from a non-main host. Thus, we must
         // take and push the snapshot manually.
         auto* exec = faabric::scheduler::ExecutorContext::get()->getExecutor();
         auto snap =

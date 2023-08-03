@@ -134,16 +134,16 @@ PointToPointGroup::PointToPointGroup(int appIdIn,
 
 void PointToPointGroup::lock(int groupIdx, bool recursive)
 {
-    std::string masterHost =
-      ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
+    std::string mainHost =
+      ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MAIN_IDX);
     std::string lockerHost = ptpBroker.getHostForReceiver(groupId, groupIdx);
 
-    bool masterIsLocal = masterHost == conf.endpointHost;
+    bool mainIsLocal = mainHost == conf.endpointHost;
     bool lockerIsLocal = lockerHost == conf.endpointHost;
 
-    // If we're on the master, we need to try and acquire the lock, otherwise we
+    // If we're on the main, we need to try and acquire the lock, otherwise we
     // send a remote request
-    if (masterIsLocal) {
+    if (mainIsLocal) {
         bool acquiredLock = false;
         {
             faabric::util::FullLock lock(mx);
@@ -197,7 +197,7 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
                   recursive);
 
                 ptpBroker.recvMessage(
-                  groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+                  groupId, POINT_TO_POINT_MAIN_IDX, groupIdx);
             } else {
                 // Notify remote locker that they've acquired the lock
                 SPDLOG_TRACE(
@@ -205,28 +205,28 @@ void PointToPointGroup::lock(int groupIdx, bool recursive)
                   groupIdx,
                   lockerHost,
                   groupId,
-                  masterHost,
+                  mainHost,
                   recursive);
             }
         }
     } else {
-        auto cli = getClient(masterHost);
+        auto cli = getClient(mainHost);
         faabric::PointToPointMessage msg;
         msg.set_groupid(groupId);
         msg.set_sendidx(groupIdx);
-        msg.set_recvidx(POINT_TO_POINT_MASTER_IDX);
+        msg.set_recvidx(POINT_TO_POINT_MAIN_IDX);
 
         SPDLOG_TRACE("Remote lock {}:{}:{} to {}",
                      groupId,
                      groupIdx,
-                     POINT_TO_POINT_MASTER_IDX,
-                     masterHost);
+                     POINT_TO_POINT_MAIN_IDX,
+                     mainHost);
 
         // Send the remote request and await the message saying it's been
         // acquired
         cli->groupLock(appId, groupId, groupIdx, recursive);
 
-        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MAIN_IDX, groupIdx);
     }
 }
 
@@ -243,7 +243,7 @@ bool PointToPointGroup::localTryLock()
 void PointToPointGroup::unlock(int groupIdx, bool recursive)
 {
     std::string host =
-      ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MASTER_IDX);
+      ptpBroker.getHostForReceiver(groupId, POINT_TO_POINT_MAIN_IDX);
 
     if (host == conf.endpointHost) {
         faabric::util::FullLock lock(mx);
@@ -282,12 +282,12 @@ void PointToPointGroup::unlock(int groupIdx, bool recursive)
         faabric::PointToPointMessage msg;
         msg.set_groupid(groupId);
         msg.set_sendidx(groupIdx);
-        msg.set_recvidx(POINT_TO_POINT_MASTER_IDX);
+        msg.set_recvidx(POINT_TO_POINT_MAIN_IDX);
 
         SPDLOG_TRACE("Remote unlock {}:{}:{} to {}",
                      groupId,
                      groupIdx,
-                     POINT_TO_POINT_MASTER_IDX,
+                     POINT_TO_POINT_MAIN_IDX,
                      host);
 
         cli->groupUnlock(appId, groupId, groupIdx, recursive);
@@ -304,46 +304,46 @@ void PointToPointGroup::notifyLocked(int groupIdx)
     std::vector<uint8_t> data(1, 0);
 
     ptpBroker.sendMessage(
-      groupId, POINT_TO_POINT_MASTER_IDX, groupIdx, data.data(), data.size());
+      groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
 }
 
 void PointToPointGroup::barrier(int groupIdx)
 {
-    // TODO more efficient barrier implementation to avoid load on the master
-    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
+    // TODO more efficient barrier implementation to avoid load on the main
+    if (groupIdx == POINT_TO_POINT_MAIN_IDX) {
         // Receive from all
         for (int i = 1; i < groupSize; i++) {
-            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MASTER_IDX);
+            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MAIN_IDX);
         }
 
         // Reply to all
         std::vector<uint8_t> data(1, 0);
         for (int i = 1; i < groupSize; i++) {
             ptpBroker.sendMessage(
-              groupId, POINT_TO_POINT_MASTER_IDX, i, data.data(), data.size());
+              groupId, POINT_TO_POINT_MAIN_IDX, i, data.data(), data.size());
         }
     } else {
         // Do the send
         std::vector<uint8_t> data(1, 0);
         ptpBroker.sendMessage(groupId,
                               groupIdx,
-                              POINT_TO_POINT_MASTER_IDX,
+                              POINT_TO_POINT_MAIN_IDX,
                               data.data(),
                               data.size());
 
         // Await the response
-        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MASTER_IDX, groupIdx);
+        ptpBroker.recvMessage(groupId, POINT_TO_POINT_MAIN_IDX, groupIdx);
     }
 }
 
 void PointToPointGroup::notify(int groupIdx)
 {
-    if (groupIdx == POINT_TO_POINT_MASTER_IDX) {
+    if (groupIdx == POINT_TO_POINT_MAIN_IDX) {
         for (int i = 1; i < groupSize; i++) {
             SPDLOG_TRACE(
               "Master group {} waiting for notify from index {}", groupId, i);
 
-            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MASTER_IDX);
+            ptpBroker.recvMessage(groupId, i, POINT_TO_POINT_MAIN_IDX);
 
             SPDLOG_TRACE("Master group {} notified by index {}", groupId, i);
         }
@@ -352,7 +352,7 @@ void PointToPointGroup::notify(int groupIdx)
         SPDLOG_TRACE("Notifying group {} from index {}", groupId, groupIdx);
         ptpBroker.sendMessage(groupId,
                               groupIdx,
-                              POINT_TO_POINT_MASTER_IDX,
+                              POINT_TO_POINT_MAIN_IDX,
                               data.data(),
                               data.size());
     }

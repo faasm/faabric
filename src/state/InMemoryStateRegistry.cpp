@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#define MASTER_KEY_PREFIX "master_"
+#define MAIN_KEY_PREFIX "main_"
 
 namespace faabric::state {
 InMemoryStateRegistry& getInMemoryStateRegistry()
@@ -19,8 +19,8 @@ InMemoryStateRegistry& getInMemoryStateRegistry()
 
 static std::string getMasterKey(const std::string& user, const std::string& key)
 {
-    std::string masterKey = MASTER_KEY_PREFIX + user + "_" + key;
-    return masterKey;
+    std::string mainKey = MAIN_KEY_PREFIX + user + "_" + key;
+    return mainKey;
 }
 
 std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
@@ -30,68 +30,68 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
 {
     std::string lookupKey = faabric::util::keyForUser(user, key);
 
-    // See if we already have the master
+    // See if we already have the main
     {
-        faabric::util::SharedLock lock(masterMapMutex);
-        if (masterMap.count(lookupKey) > 0) {
-            return masterMap[lookupKey];
+        faabric::util::SharedLock lock(mainMapMutex);
+        if (mainMap.count(lookupKey) > 0) {
+            return mainMap[lookupKey];
         }
     }
 
-    // No master found, need to establish
+    // No main found, need to establish
 
     // Acquire lock
-    faabric::util::FullLock lock(masterMapMutex);
+    faabric::util::FullLock lock(mainMapMutex);
 
     // Double check condition
-    if (masterMap.count(lookupKey) > 0) {
-        return masterMap[lookupKey];
+    if (mainMap.count(lookupKey) > 0) {
+        return mainMap[lookupKey];
     }
 
-    SPDLOG_TRACE("Checking master for state {}", lookupKey);
+    SPDLOG_TRACE("Checking main for state {}", lookupKey);
 
     // Query Redis
-    const std::string masterKey = getMasterKey(user, key);
+    const std::string mainKey = getMasterKey(user, key);
     redis::Redis& redis = redis::Redis::getState();
-    std::vector<uint8_t> masterIPBytes = redis.get(masterKey);
+    std::vector<uint8_t> mainIPBytes = redis.get(mainKey);
 
-    if (masterIPBytes.empty() && !claim) {
-        // No master found and not claiming
-        SPDLOG_TRACE("No master found for {}", lookupKey);
-        throw StateKeyValueException("Found no master for state " + masterKey);
+    if (mainIPBytes.empty() && !claim) {
+        // No main found and not claiming
+        SPDLOG_TRACE("No main found for {}", lookupKey);
+        throw StateKeyValueException("Found no main for state " + mainKey);
     }
 
-    // If no master and we want to claim, attempt to do so
-    if (masterIPBytes.empty()) {
-        uint32_t masterLockId = StateKeyValue::waitOnRedisRemoteLock(masterKey);
-        if (masterLockId == 0) {
-            SPDLOG_ERROR("Unable to acquire remote lock for {}", masterKey);
+    // If no main and we want to claim, attempt to do so
+    if (mainIPBytes.empty()) {
+        uint32_t mainLockId = StateKeyValue::waitOnRedisRemoteLock(mainKey);
+        if (mainLockId == 0) {
+            SPDLOG_ERROR("Unable to acquire remote lock for {}", mainKey);
             throw std::runtime_error("Unable to get remote lock");
         }
 
         SPDLOG_DEBUG(
-          "Claiming master for {} (this host {})", lookupKey, thisIP);
+          "Claiming main for {} (this host {})", lookupKey, thisIP);
 
-        // Check there's still no master, if so, claim
-        masterIPBytes = redis.get(masterKey);
-        if (masterIPBytes.empty()) {
-            masterIPBytes = faabric::util::stringToBytes(thisIP);
-            redis.set(masterKey, masterIPBytes);
+        // Check there's still no main, if so, claim
+        mainIPBytes = redis.get(mainKey);
+        if (mainIPBytes.empty()) {
+            mainIPBytes = faabric::util::stringToBytes(thisIP);
+            redis.set(mainKey, mainIPBytes);
         }
 
-        redis.releaseLock(masterKey, masterLockId);
+        redis.releaseLock(mainKey, mainLockId);
     }
 
     // Cache the result locally
-    std::string masterIP = faabric::util::bytesToString(masterIPBytes);
-    SPDLOG_DEBUG("Caching master for {} as {} (this host {})",
+    std::string mainIP = faabric::util::bytesToString(mainIPBytes);
+    SPDLOG_DEBUG("Caching main for {} as {} (this host {})",
                  lookupKey,
-                 masterIP,
+                 mainIP,
                  thisIP);
 
-    masterMap[lookupKey] = masterIP;
+    mainMap[lookupKey] = mainIP;
 
-    return masterIP;
+    return mainIP;
 }
 
 std::string InMemoryStateRegistry::getMasterIPForOtherMaster(
@@ -99,25 +99,25 @@ std::string InMemoryStateRegistry::getMasterIPForOtherMaster(
   const std::string& keyIn,
   const std::string& thisIP)
 {
-    // Get the master IP
-    std::string masterIP = getMasterIP(userIn, keyIn, thisIP, false);
+    // Get the main IP
+    std::string mainIP = getMasterIP(userIn, keyIn, thisIP, false);
 
-    // Sanity check that the master is *not* this machine
-    if (masterIP == thisIP) {
-        SPDLOG_ERROR("Attempting to pull state size on master ({}/{} on {})",
+    // Sanity check that the main is *not* this machine
+    if (mainIP == thisIP) {
+        SPDLOG_ERROR("Attempting to pull state size on main ({}/{} on {})",
                      userIn,
                      keyIn,
                      thisIP);
-        throw std::runtime_error("Attempting to pull state size on master");
+        throw std::runtime_error("Attempting to pull state size on main");
     }
 
-    return masterIP;
+    return mainIP;
 }
 
 void InMemoryStateRegistry::clear()
 {
-    faabric::util::FullLock lock(masterMapMutex);
-    masterMap.clear();
+    faabric::util::FullLock lock(mainMapMutex);
+    mainMap.clear();
 }
 
 }

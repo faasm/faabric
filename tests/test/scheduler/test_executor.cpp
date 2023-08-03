@@ -589,7 +589,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test thread results returned on non-master",
+                 "Test thread results returned on non-main",
                  "[executor]")
 {
     faabric::util::setMockMode(true);
@@ -603,7 +603,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_masterhost(otherHost);
+        msg.set_mainhost(otherHost);
 
         messageIds.emplace_back(msg.id());
     }
@@ -794,7 +794,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 }
 
 TEST_CASE_METHOD(TestExecutorFixture,
-                 "Test snapshot diffs returned to master",
+                 "Test snapshot diffs returned to main",
                  "[executor]")
 {
     int nThreads = 4;
@@ -816,11 +816,11 @@ TEST_CASE_METHOD(TestExecutorFixture,
     std::string mainThreadSnapshotKey =
       faabric::util::getMainThreadSnapshotKey(req->mutable_messages()->at(0));
 
-    // Set up some messages executing with a different master host
+    // Set up some messages executing with a different main host
     std::vector<uint32_t> messageIds;
     for (int i = 0; i < nThreads; i++) {
         faabric::Message& msg = req->mutable_messages()->at(i);
-        msg.set_masterhost(otherHost);
+        msg.set_mainhost(otherHost);
         msg.set_appidx(i);
 
         messageIds.emplace_back(msg.id());
@@ -828,11 +828,11 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     executeWithTestExecutor(req, true);
 
-    // Results aren't set on this host as it's not the master, so we have to
+    // Results aren't set on this host as it's not the main, so we have to
     // wait
     REQUIRE_RETRY({}, faabric::snapshot::getThreadResults().size() == nThreads);
 
-    // Check results have been sent back to the master host
+    // Check results have been sent back to the main host
     auto actualResults = faabric::snapshot::getThreadResults();
     REQUIRE(actualResults.size() == nThreads);
 
@@ -1052,7 +1052,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
     int appId = msg.appid();
     std::vector<int> msgIds;
     for (auto& m : *req->mutable_messages()) {
-        m.set_masterhost(hostOverride);
+        m.set_mainhost(hostOverride);
         msgIds.push_back(m.id());
     }
 
