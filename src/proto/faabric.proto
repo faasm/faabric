@@ -21,8 +21,13 @@ message EmptyRequest {
 message BatchExecuteRequest {
     // Each BatchExecuteRequest has a unique app id
     int32 appId = 1;
-    // TODO: consider adding user/func to BER
-    // TODO: consider adding the request type: SCALE_CHANGE, DIST_CHANGE, NEW
+
+    // The group id may change during a migration
+    int32 groupId = 2;
+
+    // All messages in a BER have the same user/function
+    string user = 3;
+    string function = 4;
 
     enum BatchExecuteType {
         FUNCTIONS = 0;
@@ -31,26 +36,26 @@ message BatchExecuteRequest {
         MIGRATION = 3;
     }
 
-    BatchExecuteType type = 2;
+    BatchExecuteType type = 5;
 
     // Shared snapshot used for threads
-    string snapshotKey = 3;
+    string snapshotKey = 6;
 
-    repeated Message messages = 5;
+    repeated Message messages = 7;
 
     // Arbitrary context for this batch
-    int32 subType = 6;
-    bytes contextData = 7;
+    int32 subType = 8;
+    bytes contextData = 9;
 
     // Flag set by the scheduler when this batch is all executing on a single
     // host
-    bool singleHost = 8;
+    bool singleHost = 10;
 
     // TODO(planner-schedule): remove me
     // Temporary flag to indicate the workers that the BER comes from the
     // planner (i.e. proxy-ed through planner) and so it has not been scheduled
     // yet. Whenever the planner does scheduling we will be able to remove this
-    bool comesFromPlanner = 9;
+    bool comesFromPlanner = 11;
 }
 
 message BatchExecuteRequestStatus {

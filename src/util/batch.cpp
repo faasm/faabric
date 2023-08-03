@@ -16,6 +16,8 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
   int count)
 {
     auto req = batchExecFactory();
+    req->set_user(user);
+    req->set_function(function);
 
     // Force the messages to have the same app ID than the BER
     int appId = req->appid();
@@ -38,22 +40,17 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
         return false;
     }
 
-    std::string user = ber->messages(0).user();
-    std::string func = ber->messages(0).function();
-    int appId = ber->messages(0).appid();
+    std::string user = ber->user();
+    std::string func = ber->function();
+    int appId = ber->appid();
 
     // If the user or func are empty, the BER is invalid
     if (user.empty() || func.empty()) {
         return false;
     }
 
-    // The BER and all messages must have the same appid
-    if (ber->appid() != appId) {
-        return false;
-    }
-
     // All messages in the BER must have the same app id, user, and function
-    for (int i = 1; i < ber->messages_size(); i++) {
+    for (int i = 0; i < ber->messages_size(); i++) {
         auto msg = ber->messages(i);
         if (msg.user() != user || msg.function() != func ||
             msg.appid() != appId) {
