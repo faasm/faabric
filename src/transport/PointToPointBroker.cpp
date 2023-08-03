@@ -442,7 +442,14 @@ void PointToPointBroker::setAndSendMappingsFromSchedulingDecision(
       setUpLocalMappingsFromSchedulingDecision(decision);
 
     // Send out to other hosts
-    for (const auto& host : otherHosts) {
+    sendMappingsFromSchedulingDecision(decision, otherHosts);
+}
+
+void PointToPointBroker::sendMappingsFromSchedulingDecision(
+  const faabric::batch_scheduler::SchedulingDecision& decision,
+  const std::set<std::string>& hostList)
+{
+    for (const auto& host : hostList) {
         faabric::PointToPointMappings msg;
         msg.set_appid(decision.appId);
         msg.set_groupid(decision.groupId);

@@ -186,6 +186,7 @@ class Scheduler
 
     ~Scheduler();
 
+    /*
     faabric::batch_scheduler::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::batch_scheduler::SchedulingTopologyHint topologyHint =
@@ -197,6 +198,7 @@ class Scheduler
     faabric::batch_scheduler::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::batch_scheduler::SchedulingDecision& hint);
+    */
 
     void reset();
 

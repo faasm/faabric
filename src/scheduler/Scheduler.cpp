@@ -355,6 +355,7 @@ void Scheduler::vacateSlot()
     thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
 }
 
+/*
 faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -404,6 +405,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::makeSchedulingDecision(
 
     return doSchedulingDecision(req, topologyHint);
 }
+*/
 
 faabric::batch_scheduler::SchedulingDecision Scheduler::doSchedulingDecision(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
@@ -646,6 +648,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doSchedulingDecision(
     return decision;
 }
 
+/*
 faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,
   faabric::batch_scheduler::SchedulingDecision& hint)
@@ -654,6 +657,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
     return doCallFunctions(
       req, hint, lock, faabric::batch_scheduler::SchedulingTopologyHint::NONE);
 }
+*/
 
 faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req,

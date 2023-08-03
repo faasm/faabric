@@ -1,6 +1,9 @@
+#include <faabric/batch-scheduler/BatchScheduler.h>
+#include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/Planner.h>
 #include <faabric/proto/faabric.pb.h>
 #include <faabric/scheduler/FunctionCallClient.h>
+#include <faabric/transport/PointToPointBroker.h>
 #include <faabric/util/batch.h>
 #include <faabric/util/clock.h>
 #include <faabric/util/config.h>
@@ -287,6 +290,234 @@ std::shared_ptr<faabric::BatchExecuteRequestStatus> Planner::getBatchResults(
     }
 
     return berStatus;
+}
+
+static faabric::batch_scheduler::HostMap convertToBatchSchedHostMap(
+  std::map<std::string, std::shared_ptr<Host>> hostMapIn)
+{
+    faabric::batch_scheduler::HostMap hostMap;
+
+    for (const auto& [ip, host] : hostMapIn) {
+        hostMap[ip] = std::make_shared<faabric::batch_scheduler::HostState>(
+          host->ip(), host->slots(), host->usedslots());
+    }
+
+    return hostMap;
+}
+
+std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>
+Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
+{
+    int appId = req->appid();
+
+    // Acquire a full lock to make the scheduling decision and update the
+    // in-filght map if necessary
+    faabric::util::FullLock lock(plannerMx);
+
+    auto batchScheduler = faabric::batch_scheduler::getBatchScheduler();
+
+    // First, make scheduling decision
+#ifndef NDEBUG
+#endif
+    // TODO: remove this copy once we finalise on one Host abstraction
+    auto hostMapCopy = convertToBatchSchedHostMap(state.hostMap);
+    auto decision = batchScheduler->makeSchedulingDecision(
+      hostMapCopy, state.inFlightReqs, req);
+#ifndef NDEBUG
+    // Here we make sure the state hasn't changed here (we pass const, but they
+    // are const pointers)
+    // NOTE: maybe it is a good idea to force us to make a copy into the right
+    // hostMap type, to make sure we don't modify our state here
+#endif
+
+    // A scheduling decision will create a new PTP mapping and, as a
+    // consequence, a new group ID
+    int newGroupId = faabric::util::generateGid();
+    decision->groupId = newGroupId;
+    faabric::util::updateBatchExecGroupId(req, newGroupId);
+
+    // Handle failures to schedule work
+    if (*decision == NOT_ENOUGH_SLOTS_DECISION) {
+        SPDLOG_ERROR(
+          "Not enough free slots to schedule app: {} (requested: {})",
+          appId,
+          req->messages_size());
+        return decision;
+    }
+
+    if (*decision == DO_NOT_MIGRATE_DECISION) {
+        SPDLOG_DEBUG("Decided to not migrate app: {}", appId);
+        return decision;
+    }
+
+    // Given a scheduling decision, depending on the decision type, we want to:
+    // 1. Update the host-map to reflect the new host occupation
+    // 2. Update the in-flight map to include the new request
+    // 3. Send the PTP mappings to all the hosts involved
+    auto decisionType =
+      batchScheduler->getDecisionType(state.inFlightReqs, req);
+    auto& broker = faabric::transport::getPointToPointBroker();
+    switch (decisionType) {
+        case faabric::batch_scheduler::DecisionType::NEW: {
+            // 1. For a scale change request, we only need to update the hosts
+            // with the new messages being scheduled
+            for (int i = 0; i < decision->hosts.size(); i++) {
+                // TODO: re-factor into something nicer
+                state.hostMap.at(decision->hosts.at(i))
+                  ->set_usedslots(
+                    state.hostMap.at(decision->hosts.at(i))->usedslots() + 1);
+                assert(state.hostMap.at(decision->hosts.at(i))->usedslots() <=
+                       state.hostMap.at(decision->hosts.at(i))->slots());
+            }
+
+            // 2. For a new decision, we just add it to the in-flight map
+            state.inFlightReqs[appId] = std::make_pair(req, decision);
+
+            // 3. We send the mappings to all the hosts involved
+            broker.sendMappingsFromSchedulingDecision(*decision,
+                                                      decision->uniqueHosts());
+
+            break;
+        }
+        case faabric::batch_scheduler::DecisionType::SCALE_CHANGE: {
+            // 1. For a scale change request, we only need to update the hosts
+            // with the _new_ messages being scheduled
+            for (int i = 0; i < decision->hosts.size(); i++) {
+                // TODO: re-factor into something nicer
+                state.hostMap.at(decision->hosts.at(i))
+                  ->set_usedslots(
+                    state.hostMap.at(decision->hosts.at(i))->usedslots() + 1);
+                assert(state.hostMap.at(decision->hosts.at(i))->usedslots() <=
+                       state.hostMap.at(decision->hosts.at(i))->slots());
+            }
+
+            // 2. For a scale change request, we want to update the BER with the
+            // _new_ messages we are adding
+            auto oldReq = state.inFlightReqs.at(appId).first;
+            auto oldDec = state.inFlightReqs.at(appId).second;
+            faabric::util::updateBatchExecGroupId(oldReq, newGroupId);
+
+            for (int i = 0; i < req->messages_size(); i++) {
+                *oldReq->add_messages() = req->messages(i);
+                oldDec->addMessage(decision->hosts.at(i), req->messages(i));
+            }
+
+            // 3. We want to send the mappings for the _updated_ decision,
+            // including _all_ the messages (not just the ones that are being
+            // added)
+            broker.sendMappingsFromSchedulingDecision(*oldDec,
+                                                      oldDec->uniqueHosts());
+
+            break;
+        }
+        case faabric::batch_scheduler::DecisionType::DIST_CHANGE: {
+            auto oldReq = state.inFlightReqs.at(appId).first;
+            auto oldDec = state.inFlightReqs.at(appId).second;
+            // Work out the total working set of the hosts involved in the
+            // migration
+            // TODO: can we make this cleaner?
+            std::vector<std::string> allInvolvedHostsVec;
+            std::set_union(decision->uniqueHosts().cbegin(),
+                           decision->uniqueHosts().cend(),
+                           oldDec->uniqueHosts().cbegin(),
+                           oldDec->uniqueHosts().cend(),
+                           std::back_inserter(allInvolvedHostsVec));
+            std::set<std::string> allInvolvedHosts(allInvolvedHostsVec.begin(),
+                                                   allInvolvedHostsVec.end());
+
+            // 1. We only need to update the hosts where both decisions differ
+            assert(decision->hosts.size() == oldDec->hosts.size());
+            for (int i = 0; i < decision->hosts.size(); i++) {
+                if (decision->hosts.at(i) == oldDec->hosts.at(i)) {
+                    continue;
+                }
+                // TODO: re-factor into something nicer
+                state.hostMap.at(oldDec->hosts.at(i))
+                  ->set_usedslots(
+                    state.hostMap.at(oldDec->hosts.at(i))->usedslots() - 1);
+                assert(state.hostMap.at(oldDec->hosts.at(i))->usedslots() >= 0);
+                state.hostMap.at(decision->hosts.at(i))
+                  ->set_usedslots(
+                    state.hostMap.at(decision->hosts.at(i))->usedslots() + 1);
+                assert(state.hostMap.at(decision->hosts.at(i))->usedslots() <=
+                       state.hostMap.at(decision->hosts.at(i))->slots());
+            }
+
+            // 2. For a DIST_CHANGE request (migration), we want to replace the
+            // exsiting decision with the new one
+            state.inFlightReqs.at(appId) = std::make_pair(req, decision);
+
+            // 3. We want to sent the new scheduling decision to all the hosts
+            // involved in the migration (even the ones that are evicted)
+            broker.sendMappingsFromSchedulingDecision(*decision,
+                                                      allInvolvedHosts);
+
+            break;
+        }
+        default: {
+            SPDLOG_ERROR("Unrecognised decision type: {} (app: {})",
+                         decisionType,
+                         req->appid());
+            throw std::runtime_error("Unrecognised decision type");
+        }
+    }
+
+    // Sanity-checks before actually dispatching functions for execution
+    assert(req->messages_size() == decision->hosts.size());
+    assert(req->appid() == decision->appId);
+    assert(req->groupid() == decision->groupId);
+
+    // Lastly, asynchronously dispatch the decision to the corresponding hosts
+    // (we may not need the lock here anymore, but we are eager to make the
+    // whole function atomic)
+    dispatchSchedulingDecision(req, decision);
+
+    return decision;
+}
+
+void Planner::dispatchSchedulingDecision(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> decision)
+{
+    std::map<std::string, std::shared_ptr<faabric::BatchExecuteRequest>>
+      hostRequests;
+
+    assert(req->messages_size() == decision->hosts.size());
+
+    // First we build all the BatchExecuteRequests for all the different hosts.
+    // We need to keep a map as the hosts may not be contiguous in the decision
+    // (i.e. we may have (hostA, hostB, hostA)
+    for (int i = 0; i < req->messages_size(); i++) {
+        auto msg = req->messages().at(i);
+
+        // Initialise the BER if it is not there
+        std::string thisHost = decision->hosts.at(i);
+        if (hostRequests.find(thisHost) == hostRequests.end()) {
+            hostRequests[thisHost] = faabric::util::batchExecFactory();
+            hostRequests[thisHost]->set_appid(decision->appId);
+            hostRequests[thisHost]->set_groupid(decision->groupId);
+            hostRequests[thisHost]->set_user(msg.user());
+            hostRequests[thisHost]->set_function(msg.function());
+            hostRequests[thisHost]->set_snapshotkey(req->snapshotkey());
+            hostRequests[thisHost]->set_type(req->type());
+            hostRequests[thisHost]->set_subtype(req->subtype());
+            hostRequests[thisHost]->set_contextdata(req->contextdata());
+        }
+
+        *hostRequests[thisHost]->add_messages() = msg;
+    }
+
+    for (const auto& [hostIp, hostReq] : hostRequests) {
+        SPDLOG_DEBUG("Dispatching {} messages to host {} for execution",
+                     hostReq->messages_size(),
+                     hostIp);
+        assert(faabric::util::isBatchExecRequestValid(hostReq));
+        faabric::scheduler::getFunctionCallClient(hostIp)->executeFunctions(
+          hostReq);
+    }
+
+    SPDLOG_DEBUG("Finished dispatching {} messages for execution",
+                 req->messages_size());
 }
 
 Planner& getPlanner()

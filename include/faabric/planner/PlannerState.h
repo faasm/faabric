@@ -1,5 +1,6 @@
 #pragma once
 
+#include <faabric/batch-scheduler/BatchScheduler.h>
 #include <faabric/planner/planner.pb.h>
 #include <faabric/proto/faabric.pb.h>
 
@@ -23,5 +24,8 @@ struct PlannerState
     // Map holding the hosts that have registered interest in getting an app
     // result
     std::map<int, std::vector<std::string>> appResultWaiters;
+
+    // Map keeping track of the requests that are in-flight
+    faabric::batch_scheduler::InFlightReqs inFlightReqs;
 };
 }

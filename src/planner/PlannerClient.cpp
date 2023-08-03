@@ -254,6 +254,36 @@ faabric::Message PlannerClient::doGetMessageResult(
     }
 }
 
+faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
+  std::shared_ptr<faabric::BatchExecuteRequest> req)
+{
+    faabric::PointToPointMappings response;
+    syncSend(PlannerCalls::CallBatch, req.get(), &response);
+
+    auto decision =
+      faabric::batch_scheduler::SchedulingDecision::fromPointToPointMappings(
+        response);
+
+    // The planner decision sets a group id for PTP communication. Make sure we
+    // propagate the group id to the messages in the request. The group idx
+    // is set when creating the request
+
+    req->set_groupid(decision.groupId);
+    for (auto& msg : *req->mutable_messages()) {
+        msg.set_groupid(decision.groupId);
+    }
+
+    return decision;
+}
+
+faabric::batch_scheduler::SchedulingDecision PlannerClient::callFunctions(
+  std::shared_ptr<faabric::BatchExecuteRequest> req,
+  faabric::batch_scheduler::SchedulingDecision& hint)
+{
+    SPDLOG_ERROR("Ignoring hints just for the minute...");
+    return callFunctions(req);
+}
+
 // -----------------------------------
 // Static setter/getters
 // -----------------------------------

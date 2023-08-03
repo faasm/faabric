@@ -13,5 +13,6 @@ enum PlannerCalls
     // Scheduling calls
     SetMessageResult = 8,
     GetMessageResult = 9,
+    CallBatch = 10,
 };
 }
