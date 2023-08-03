@@ -62,8 +62,8 @@ InMemoryStateKeyValue::InMemoryStateKeyValue(const std::string& userIn,
   : StateKeyValue(userIn, keyIn, sizeIn)
   , thisIP(thisIPIn)
   , mainIP(getInMemoryStateRegistry().getMasterIP(user, key, thisIP, true))
-  , status(mainIP == thisIP ? InMemoryStateKeyStatus::MASTER
-                              : InMemoryStateKeyStatus::NOT_MASTER)
+  , status(mainIP == thisIP ? InMemoryStateKeyStatus::MAIN
+                              : InMemoryStateKeyStatus::NOT_MAIN)
   , stateRegistry(getInMemoryStateRegistry())
 {
     SPDLOG_TRACE("Creating in-memory state key-value for {}/{} size {} (this "
@@ -83,7 +83,7 @@ InMemoryStateKeyValue::InMemoryStateKeyValue(const std::string& userIn,
 
 bool InMemoryStateKeyValue::isMaster()
 {
-    return status == InMemoryStateKeyStatus::MASTER;
+    return status == InMemoryStateKeyStatus::MAIN;
 }
 
 // ----------------------------------------
@@ -92,7 +92,7 @@ bool InMemoryStateKeyValue::isMaster()
 
 void InMemoryStateKeyValue::pullFromRemote()
 {
-    if (status == InMemoryStateKeyStatus::MASTER) {
+    if (status == InMemoryStateKeyStatus::MAIN) {
         return;
     }
 
@@ -103,7 +103,7 @@ void InMemoryStateKeyValue::pullFromRemote()
 
 void InMemoryStateKeyValue::pullChunkFromRemote(long offset, size_t length)
 {
-    if (status == InMemoryStateKeyStatus::MASTER) {
+    if (status == InMemoryStateKeyStatus::MAIN) {
         return;
     }
 
@@ -115,7 +115,7 @@ void InMemoryStateKeyValue::pullChunkFromRemote(long offset, size_t length)
 
 void InMemoryStateKeyValue::pushToRemote()
 {
-    if (status == InMemoryStateKeyStatus::MASTER) {
+    if (status == InMemoryStateKeyStatus::MAIN) {
         return;
     }
 
@@ -127,7 +127,7 @@ void InMemoryStateKeyValue::pushToRemote()
 void InMemoryStateKeyValue::pushPartialToRemote(
   const std::vector<StateChunk>& chunks)
 {
-    if (status == InMemoryStateKeyStatus::MASTER) {
+    if (status == InMemoryStateKeyStatus::MAIN) {
         // Nothing to be done
     } else {
         StateClient cli(user, key, mainIP);
@@ -137,7 +137,7 @@ void InMemoryStateKeyValue::pushPartialToRemote(
 
 void InMemoryStateKeyValue::appendToRemote(const uint8_t* data, size_t length)
 {
-    if (status == InMemoryStateKeyStatus::MASTER) {
+    if (status == InMemoryStateKeyStatus::MAIN) {
         // Create new memory region to hold data
         auto dataCopy = std::make_unique<uint8_t[]>(length);
         std::copy(data, data + length, dataCopy.get());
@@ -154,7 +154,7 @@ void InMemoryStateKeyValue::pullAppendedFromRemote(uint8_t* data,
                                                    size_t length,
                                                    long nValues)
 {
-    if (status == InMemoryStateKeyStatus::MASTER) {
+    if (status == InMemoryStateKeyStatus::MAIN) {
         // Copy all appended data into buffer locally
         size_t offset = 0;
         for (int i = 0; i < nValues; i++) {
@@ -171,7 +171,7 @@ void InMemoryStateKeyValue::pullAppendedFromRemote(uint8_t* data,
 
 void InMemoryStateKeyValue::clearAppendedFromRemote()
 {
-    if (status == InMemoryStateKeyStatus::MASTER) {
+    if (status == InMemoryStateKeyStatus::MAIN) {
         // Clear appended locally
         appendedData.clear();
     } else {

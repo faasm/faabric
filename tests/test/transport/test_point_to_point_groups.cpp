@@ -133,7 +133,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
         // Prepare response
         broker.sendMessage(groupId,
-                           POINT_TO_POINT_MASTER_IDX,
+                           POINT_TO_POINT_MAIN_IDX,
                            groupIdx,
                            data.data(),
                            data.size());
@@ -148,7 +148,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
         // Prepare response
         broker.sendMessage(groupId,
-                           POINT_TO_POINT_MASTER_IDX,
+                           POINT_TO_POINT_MAIN_IDX,
                            groupIdx,
                            data.data(),
                            data.size());
@@ -183,7 +183,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     REQUIRE(req.appid() == appId);
     REQUIRE(req.groupid() == groupId);
     REQUIRE(req.sendidx() == groupIdx);
-    REQUIRE(req.recvidx() == POINT_TO_POINT_MASTER_IDX);
+    REQUIRE(req.recvidx() == POINT_TO_POINT_MAIN_IDX);
 }
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
@@ -302,7 +302,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     }
 
     for (int i = 0; i < nSums; i++) {
-        group->barrier(POINT_TO_POINT_MASTER_IDX);
+        group->barrier(POINT_TO_POINT_MAIN_IDX);
         REQUIRE(sharedSums.at(i).load() == (i + 1) * (nThreads - 1));
     }
 
@@ -385,7 +385,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
     // Master thread to await, should only go through once all threads have
     // finished
-    group->notify(POINT_TO_POINT_MASTER_IDX);
+    group->notify(POINT_TO_POINT_MAIN_IDX);
 
     for (int i = 0; i < nThreads; i++) {
         REQUIRE(actual[i] == i);

@@ -11,8 +11,8 @@
 namespace faabric::state {
 enum InMemoryStateKeyStatus
 {
-    NOT_MASTER,
-    MASTER,
+    NOT_MAIN,
+    MAIN,
 };
 
 class AppendedInMemoryState
