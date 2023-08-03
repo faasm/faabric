@@ -325,11 +325,8 @@ void PointToPointGroup::barrier(int groupIdx)
     } else {
         // Do the send
         std::vector<uint8_t> data(1, 0);
-        ptpBroker.sendMessage(groupId,
-                              groupIdx,
-                              POINT_TO_POINT_MAIN_IDX,
-                              data.data(),
-                              data.size());
+        ptpBroker.sendMessage(
+          groupId, groupIdx, POINT_TO_POINT_MAIN_IDX, data.data(), data.size());
 
         // Await the response
         ptpBroker.recvMessage(groupId, POINT_TO_POINT_MAIN_IDX, groupIdx);
@@ -350,11 +347,8 @@ void PointToPointGroup::notify(int groupIdx)
     } else {
         std::vector<uint8_t> data(1, 0);
         SPDLOG_TRACE("Notifying group {} from index {}", groupId, groupIdx);
-        ptpBroker.sendMessage(groupId,
-                              groupIdx,
-                              POINT_TO_POINT_MAIN_IDX,
-                              data.data(),
-                              data.size());
+        ptpBroker.sendMessage(
+          groupId, groupIdx, POINT_TO_POINT_MAIN_IDX, data.data(), data.size());
     }
 }
 

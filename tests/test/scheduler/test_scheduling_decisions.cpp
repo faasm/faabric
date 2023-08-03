@@ -295,23 +295,21 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
     {
         config.slots = { 2, 2, 2, 2 };
         config.expectedHosts = { mainHost, mainHost, "hostA", "hostA",
-                                 "hostB",    "hostB",    "hostC", "hostC" };
+                                 "hostB",  "hostB",  "hostC", "hostC" };
     }
 
     SECTION("Uneven slot ditribution across hosts")
     {
         config.slots = { 3, 2, 2, 1 };
         config.expectedHosts = { mainHost, mainHost, mainHost, "hostA",
-                                 "hostA",    "hostB",    "hostB",    "hostC" };
+                                 "hostA",  "hostB",  "hostB",  "hostC" };
     }
 
     SECTION("Very uneven slot distribution across hosts")
     {
         config.slots = { 1, 0, 0, 0 };
-        config.expectedHosts = {
-            mainHost, mainHost, mainHost, mainHost,
-            mainHost, mainHost, mainHost, mainHost
-        };
+        config.expectedHosts = { mainHost, mainHost, mainHost, mainHost,
+                                 mainHost, mainHost, mainHost, mainHost };
     }
 
     SECTION("Decreasing to one and increasing slot distribution")
@@ -322,10 +320,8 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         {
             config.topologyHint =
               faabric::batch_scheduler::SchedulingTopologyHint::NONE;
-            config.expectedHosts = {
-                mainHost, mainHost, "hostA", "hostA",
-                "hostB",    "hostC",    "hostC", mainHost
-            };
+            config.expectedHosts = { mainHost, mainHost, "hostA", "hostA",
+                                     "hostB",  "hostC",  "hostC", mainHost };
         }
 
         SECTION("Never alone topology hint")
@@ -333,7 +329,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
             config.topologyHint =
               faabric::batch_scheduler::SchedulingTopologyHint::NEVER_ALONE;
             config.expectedHosts = { mainHost, mainHost, "hostA", "hostA",
-                                     "hostC",    "hostC",    "hostC", "hostC" };
+                                     "hostC",  "hostC",  "hostC", "hostC" };
         }
     }
 
@@ -406,7 +402,7 @@ TEST_CASE_METHOD(SchedulingDecisionTestFixture,
         config.slots = { 2, 3, 1 };
         config.used = { 0, 0, 0 };
         config.expectedHosts = { mainHost, mainHost, "hostA",
-                                 "hostA",    "hostA",    "hostA" };
+                                 "hostA",  "hostA",  "hostA" };
         req = faabric::util::batchExecFactory("foo", "bar", config.numReqs);
     }
 

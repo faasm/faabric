@@ -63,7 +63,7 @@ InMemoryStateKeyValue::InMemoryStateKeyValue(const std::string& userIn,
   , thisIP(thisIPIn)
   , mainIP(getInMemoryStateRegistry().getMasterIP(user, key, thisIP, true))
   , status(mainIP == thisIP ? InMemoryStateKeyStatus::MAIN
-                              : InMemoryStateKeyStatus::NOT_MAIN)
+                            : InMemoryStateKeyStatus::NOT_MAIN)
   , stateRegistry(getInMemoryStateRegistry())
 {
     SPDLOG_TRACE("Creating in-memory state key-value for {}/{} size {} (this "

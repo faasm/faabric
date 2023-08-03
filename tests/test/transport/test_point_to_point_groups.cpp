@@ -132,11 +132,8 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         op = PointToPointCall::LOCK_GROUP;
 
         // Prepare response
-        broker.sendMessage(groupId,
-                           POINT_TO_POINT_MAIN_IDX,
-                           groupIdx,
-                           data.data(),
-                           data.size());
+        broker.sendMessage(
+          groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
 
         group->lock(groupIdx, false);
     }
@@ -147,11 +144,8 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         recursive = true;
 
         // Prepare response
-        broker.sendMessage(groupId,
-                           POINT_TO_POINT_MAIN_IDX,
-                           groupIdx,
-                           data.data(),
-                           data.size());
+        broker.sendMessage(
+          groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
 
         group->lock(groupIdx, recursive);
     }

@@ -69,8 +69,7 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
             throw std::runtime_error("Unable to get remote lock");
         }
 
-        SPDLOG_DEBUG(
-          "Claiming main for {} (this host {})", lookupKey, thisIP);
+        SPDLOG_DEBUG("Claiming main for {} (this host {})", lookupKey, thisIP);
 
         // Check there's still no main, if so, claim
         mainIPBytes = redis.get(mainKey);
@@ -84,10 +83,8 @@ std::string InMemoryStateRegistry::getMasterIP(const std::string& user,
 
     // Cache the result locally
     std::string mainIP = faabric::util::bytesToString(mainIPBytes);
-    SPDLOG_DEBUG("Caching main for {} as {} (this host {})",
-                 lookupKey,
-                 mainIP,
-                 thisIP);
+    SPDLOG_DEBUG(
+      "Caching main for {} as {} (this host {})", lookupKey, mainIP, thisIP);
 
     mainMap[lookupKey] = mainIP;
 
