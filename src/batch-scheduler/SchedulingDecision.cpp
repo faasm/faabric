@@ -52,4 +52,9 @@ SchedulingDecision SchedulingDecision::fromPointToPointMappings(
 
     return decision;
 }
+
+std::set<std::string> SchedulingDecision::uniqueHosts()
+{
+    return std::set<std::string>(hosts.begin(), hosts.end());
+}
 }
