@@ -457,7 +457,7 @@ TEST_CASE_METHOD(PointToPointClientServerFixture,
     rootMsg.set_appid(appId);
     rootMsg.set_groupsize(groupSize);
     rootMsg.set_groupid(groupId);
-    rootMsg.set_groupidx(POINT_TO_POINT_MASTER_IDX);
+    rootMsg.set_groupidx(POINT_TO_POINT_MAIN_IDX);
 
     faabric::batch_scheduler::SchedulingDecision decision(appId, groupId);
     decision.addMessage(thisHost, msg);

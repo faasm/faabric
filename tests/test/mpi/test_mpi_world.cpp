@@ -41,7 +41,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test world creation", "[mpi]")
         REQUIRE(actualCall.mpiworldsize() == worldSize);
     }
 
-    // Check that this host is registered as the master
+    // Check that this host is registered as the main
     const std::string actualHost = world.getHostForRank(0);
     REQUIRE(actualHost == faabric::util::getSystemConfig().endpointHost);
 

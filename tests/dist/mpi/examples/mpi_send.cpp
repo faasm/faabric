@@ -59,11 +59,11 @@ int send()
         int sentNumber = 100 - rank;
         int receivedNumber = 0;
 
-        // Receive message from master
+        // Receive message from main
         MPI_Recv(
           &receivedNumber, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         if (receivedNumber != expectedNumber) {
-            printf("Got unexpected number from master (got %i, expected %i)\n",
+            printf("Got unexpected number from main (got %i, expected %i)\n",
                    receivedNumber,
                    expectedNumber);
             return 1;

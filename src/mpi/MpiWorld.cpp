@@ -140,7 +140,7 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
 
     auto& sch = faabric::scheduler::getScheduler();
 
-    // Dispatch all the chained calls. With the master being rank zero, we want
+    // Dispatch all the chained calls. With the main being rank zero, we want
     // to spawn (size - 1) new functions starting with rank 1
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory(user, function, size - 1);
@@ -724,7 +724,7 @@ void MpiWorld::broadcast(int sendRank,
         }
     } else {
         // If we are neither the sending rank nor a local leader, we receive
-        // from either our leader master if the broadcast originated in a
+        // from either our local leader if the broadcast originated in a
         // different host, or the sending rank itself if we are on the same host
         int sendingRank =
           getHostForRank(sendRank) == thisHost ? sendRank : localLeader;

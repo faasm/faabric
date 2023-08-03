@@ -781,7 +781,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 }
 
 TEST_CASE_METHOD(SlowExecutorTestFixture,
-                 "Test non-master batch request returned to master",
+                 "Test non-main batch request returned to main",
                  "[scheduler]")
 {
     faabric::util::setMockMode(true);
@@ -790,14 +790,14 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("blah", "foo", 1);
-    req->mutable_messages()->at(0).set_masterhost(otherHost);
+    req->mutable_messages()->at(0).set_mainhost(otherHost);
 
     faabric::batch_scheduler::SchedulingDecision decision =
       sch.callFunctions(req);
     REQUIRE(decision.hosts.empty());
     REQUIRE(decision.returnHost == otherHost);
 
-    // Check forwarded to master
+    // Check forwarded to main
     auto actualReqs = faabric::scheduler::getBatchRequests();
     REQUIRE(actualReqs.size() == 1);
     REQUIRE(actualReqs.at(0).first == otherHost);
@@ -865,7 +865,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     faabric::util::setMockMode(true);
 
     faabric::Message msg = faabric::util::messageFactory("foo", "bar");
-    msg.set_masterhost("otherHost");
+    msg.set_mainhost("otherHost");
 
     // Set the thread result
     int returnValue = 123;

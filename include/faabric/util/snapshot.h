@@ -156,9 +156,9 @@ class SnapshotMergeRegion
 };
 
 /*
- * Calculates a diff value that can later be merged into the master copy of the
+ * Calculates a diff value that can later be merged into the main copy of the
  * given snapshot. It will be used on remote hosts to calculate the diffs that
- * are to be sent back to the master host.
+ * are to be sent back to the main host.
  */
 template<typename T>
 inline bool calculateDiffValue(const uint8_t* original,
@@ -210,7 +210,7 @@ inline bool calculateDiffValue(const uint8_t* original,
 }
 
 /*
- * Applies a diff value to the master copy of a snapshot, where the diff has
+ * Applies a diff value to the main copy of a snapshot, where the diff has
  * been calculated based on a change made to another copy of the same snapshot.
  */
 template<typename T>

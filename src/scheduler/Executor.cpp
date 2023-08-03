@@ -226,7 +226,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string thisHost = faabric::util::getSystemConfig().endpointHost;
 
-    bool isMaster = firstMsg.masterhost() == thisHost;
+    bool isMaster = firstMsg.mainhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
     bool isSingleHost = req->singlehost();
     std::string snapshotKey = firstMsg.snapshotkey();
@@ -287,7 +287,7 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
             // Here all threads are still executing, so we have to overload.
             // If any tasks are blocking we risk a deadlock, and can no
             // longer guarantee the application will finish. In general if
-            // we're on the master host and this is a thread, we should
+            // we're on the main host and this is a thread, we should
             // avoid the zeroth and first pool threads as they are likely to
             // be the main thread and the zeroth in the communication group,
             // so will be blocking.

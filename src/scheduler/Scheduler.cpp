@@ -240,7 +240,7 @@ int Scheduler::reapStaleExecutors()
         faabric::Message& firstMsg = execs.back()->getBoundMessage();
         std::string user = firstMsg.user();
         std::string function = firstMsg.function();
-        std::string masterHost = firstMsg.masterhost();
+        std::string mainHost = firstMsg.mainhost();
 
         for (auto exec : execs) {
             long millisSinceLastExec = exec->getMillisSinceLastExec();
@@ -279,18 +279,18 @@ int Scheduler::reapStaleExecutors()
         }
 
         // Unregister this host if no more executors remain on this host, and
-        // it's not the master
+        // it's not the main
         if (execs.empty()) {
             SPDLOG_TRACE("No remaining executors for {}", key);
 
-            bool isMaster = thisHost == masterHost;
+            bool isMaster = thisHost == mainHost;
             if (!isMaster) {
                 faabric::UnregisterRequest req;
                 req.set_host(thisHost);
                 req.set_user(user);
                 req.set_function(function);
 
-                getFunctionCallClient(masterHost)->unregister(req);
+                getFunctionCallClient(mainHost)->unregister(req);
             }
 
             keysToRemove.emplace_back(key);
@@ -359,9 +359,9 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
   std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     // We assume all the messages are for the same function and have the
-    // same master host
+    // same main host
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string masterHost = firstMsg.masterhost();
+    std::string mainHost = firstMsg.mainhost();
 
     // Get topology hint from message
     faabric::batch_scheduler::SchedulingTopologyHint topologyHint =
@@ -374,16 +374,16 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
       topologyHint ==
       faabric::batch_scheduler::SchedulingTopologyHint::FORCE_LOCAL;
 
-    // If we're not the master host, we need to forward the request back to the
-    // master host. This will only happen if a nested batch execution happens.
-    if (!isForceLocal && masterHost != thisHost) {
+    // If we're not the main host, we need to forward the request back to the
+    // main host. This will only happen if a nested batch execution happens.
+    if (!isForceLocal && mainHost != thisHost) {
         std::string funcStr = faabric::util::funcToString(firstMsg, false);
-        SPDLOG_DEBUG("Forwarding {} back to master {}", funcStr, masterHost);
+        SPDLOG_DEBUG("Forwarding {} back to main {}", funcStr, mainHost);
 
-        getFunctionCallClient(masterHost)->executeFunctions(req);
+        getFunctionCallClient(mainHost)->executeFunctions(req);
         faabric::batch_scheduler::SchedulingDecision decision(
           firstMsg.appid(), firstMsg.groupid());
-        decision.returnHost = masterHost;
+        decision.returnHost = mainHost;
         return decision;
     }
 
@@ -477,7 +477,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doSchedulingDecision(
             hosts.push_back(thisHost);
         }
     } else {
-        // At this point we know we're the master host, and we've not been
+        // At this point we know we're the main host, and we've not been
         // asked to force full local execution.
 
         // Work out how many we can handle locally
@@ -664,7 +664,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     std::string funcStr = faabric::util::funcToString(firstMsg, false);
     int nMessages = req->messages_size();
-    bool isMaster = thisHost == firstMsg.masterhost();
+    bool isMaster = thisHost == firstMsg.mainhost();
     bool isMigration = req->type() == faabric::BatchExecuteRequest::MIGRATION;
 
     if (decision.hosts.size() != nMessages) {
@@ -676,14 +676,14 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
         throw std::runtime_error("Invalid scheduler hint for messages");
     }
 
-    if (firstMsg.masterhost().empty()) {
-        SPDLOG_ERROR("Request {} has no master host", funcStr);
-        throw std::runtime_error("Message with no master host");
+    if (firstMsg.mainhost().empty()) {
+        SPDLOG_ERROR("Request {} has no main host", funcStr);
+        throw std::runtime_error("Message with no main host");
     }
 
     // Send out point-to-point mappings if necessary (unless being forced to
     // execute locally, in which case they will be transmitted from the
-    // master)
+    // main)
     bool isForceLocal =
       topologyHint ==
       faabric::batch_scheduler::SchedulingTopologyHint::FORCE_LOCAL;
@@ -1076,8 +1076,8 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
 
     // Remove the app from in-flight map if still there, and this host is the
-    // master host for the message
-    if (msg.masterhost() == thisHost) {
+    // main host for the message
+    if (msg.mainhost() == thisHost) {
         removePendingMigration(msg.appid());
     }
 
@@ -1100,11 +1100,11 @@ void Scheduler::setThreadResult(
   const std::string& key,
   const std::vector<faabric::util::SnapshotDiff>& diffs)
 {
-    bool isMaster = msg.masterhost() == conf.endpointHost;
+    bool isMaster = msg.mainhost() == conf.endpointHost;
     if (isMaster) {
         if (!diffs.empty()) {
-            // On master we queue the diffs locally directly, on a remote
-            // host we push them back to master
+            // On main we queue the diffs locally directly, on a remote
+            // host we push them back to main
             SPDLOG_DEBUG("Queueing {} diffs for {} to snapshot {} (group {})",
                          diffs.size(),
                          faabric::util::funcToString(msg, false),
@@ -1123,7 +1123,7 @@ void Scheduler::setThreadResult(
         setThreadResultLocally(msg.id(), returnValue);
     } else {
         // Push thread result and diffs together
-        getSnapshotClient(msg.masterhost())
+        getSnapshotClient(msg.mainhost())
           ->pushThreadResult(msg.id(), returnValue, key, diffs);
     }
 }

@@ -192,7 +192,7 @@ class SchedulerFixture
 
             sch.addHostToGlobalSet(hosts.at(i));
 
-            // If setting resources for the master host, update the scheduler.
+            // If setting resources for the main host, update the scheduler.
             // Otherwise, queue the resource response
             if (i == 0) {
                 sch.setThisHostResources(resources);
@@ -496,7 +496,7 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         // Update message
         msg.set_mpiworldsize(worldSize);
 
-        // Set up the first world, holding the master rank (which already takes
+        // Set up the first world, holding the main rank (which already takes
         // one slot).
         // Note that any excess ranks will also be allocated to this world when
         // the scheduler is overloaded.

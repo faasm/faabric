@@ -92,7 +92,7 @@ message Message {
     // Each BER has a unique app id
     int32 appId = 2;
     int32 appIdx = 3;
-    string masterHost = 4;
+    string mainHost = 4;
 
     enum MessageType {
         CALL = 0;

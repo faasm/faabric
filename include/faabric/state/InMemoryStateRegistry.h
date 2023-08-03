@@ -22,8 +22,8 @@ class InMemoryStateRegistry
     void clear();
 
   private:
-    std::unordered_map<std::string, std::string> masterMap;
-    std::shared_mutex masterMapMutex;
+    std::unordered_map<std::string, std::string> mainMap;
+    std::shared_mutex mainMapMutex;
 };
 
 InMemoryStateRegistry& getInMemoryStateRegistry();

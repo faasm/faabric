@@ -152,7 +152,7 @@ faabric::HostResources FunctionCallClient::getResources()
     return response;
 }
 
-// This function call is used by the master host of an application to let know
+// This function call is used by the main host of an application to let know
 // other hosts running functions of the same application that a migration
 // opportunity has been found.
 void FunctionCallClient::sendPendingMigrations(

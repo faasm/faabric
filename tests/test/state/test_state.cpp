@@ -27,7 +27,7 @@ class StateServerTestFixture
 {
   public:
     // Set up a local server with a *different* state instance to the main
-    // thread. This way we can fake the master/ non-master setup
+    // thread. This way we can fake the main/ non-main setup
     StateServerTestFixture()
       : remoteState(LOCALHOST)
       , stateServer(remoteState)
@@ -62,16 +62,16 @@ class StateServerTestFixture
             std::shared_ptr<InMemoryStateKeyValue> inMemKv =
               std::static_pointer_cast<InMemoryStateKeyValue>(kv);
 
-            // Check this kv "thinks" it's master
+            // Check this kv "thinks" it's main
             if (!inMemKv->isMaster()) {
-                SPDLOG_ERROR("Dummy state server not master for data");
+                SPDLOG_ERROR("Dummy state server not main for data");
                 throw std::runtime_error("Dummy state server failed");
             }
 
             // Set the data
             kv->set(dummyData.data());
             SPDLOG_DEBUG(
-              "Finished setting master for test {}/{}", kv->user, kv->key);
+              "Finished setting main for test {}/{}", kv->user, kv->key);
 
             conf.endpointHost = originalHost;
         }
@@ -945,7 +945,7 @@ TEST_CASE_METHOD(
 }
 
 TEST_CASE_METHOD(StateServerTestFixture,
-                 "Test state server as remote master",
+                 "Test state server as remote main",
                  "[state]")
 {
     REQUIRE(state.getKVCount() == 0);
@@ -963,7 +963,7 @@ TEST_CASE_METHOD(StateServerTestFixture,
     size_t actualSize = state.getStateSize(userA, keyA);
     REQUIRE(actualSize == dataA.size());
 
-    // Access locally and check not master
+    // Access locally and check not main
     auto localKv = getLocalKv();
     auto localStateKv =
       std::static_pointer_cast<InMemoryStateKeyValue>(localKv);

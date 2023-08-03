@@ -5,13 +5,13 @@
 namespace faabric::batch_scheduler {
 // Scheduling topology hints help the scheduler decide which host to assign new
 // requests in a batch.
-//  - NONE: bin-packs requests to slots in hosts starting from the master
-//          host, and overloadds the master if it runs out of resources.
+//  - NONE: bin-packs requests to slots in hosts starting from the main
+//          host, and overloadds the main if it runs out of resources.
 //  - FORCE_LOCAL: force local execution irrespective of the available
 //                 resources.
-//  - NEVER_ALONE: never allocates a single (non-master) request to a host
+//  - NEVER_ALONE: never allocates a single (non-main) request to a host
 //                 without other requests of the batch.
-//  - UNDERFULL: schedule up to 50% of the master hosts' capacity to force
+//  - UNDERFULL: schedule up to 50% of the main hosts' capacity to force
 //               migration opportunities to appear.
 enum SchedulingTopologyHint
 {
@@ -82,7 +82,7 @@ class SchedulingDecision
     /**
      * Work out if this decision is all on this host. If the decision is
      * completely on *another* host, we still count it as not being on a single
-     * host, as this host will be the master.
+     * host, as this host will be the main.
      *
      * Will always return false if single host optimisations are switched off.
      */

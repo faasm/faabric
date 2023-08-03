@@ -436,7 +436,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
         REQUIRE(msgResult.timestamp() > 0);
         REQUIRE(msgResult.finishtimestamp() > 0);
         REQUIRE(!msgResult.executedhost().empty());
-        REQUIRE(!msgResult.masterhost().empty());
+        REQUIRE(!msgResult.mainhost().empty());
     }
 }
 

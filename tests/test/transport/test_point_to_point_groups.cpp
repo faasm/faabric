@@ -132,11 +132,8 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         op = PointToPointCall::LOCK_GROUP;
 
         // Prepare response
-        broker.sendMessage(groupId,
-                           POINT_TO_POINT_MASTER_IDX,
-                           groupIdx,
-                           data.data(),
-                           data.size());
+        broker.sendMessage(
+          groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
 
         group->lock(groupIdx, false);
     }
@@ -147,11 +144,8 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
         recursive = true;
 
         // Prepare response
-        broker.sendMessage(groupId,
-                           POINT_TO_POINT_MASTER_IDX,
-                           groupIdx,
-                           data.data(),
-                           data.size());
+        broker.sendMessage(
+          groupId, POINT_TO_POINT_MAIN_IDX, groupIdx, data.data(), data.size());
 
         group->lock(groupIdx, recursive);
     }
@@ -183,7 +177,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     REQUIRE(req.appid() == appId);
     REQUIRE(req.groupid() == groupId);
     REQUIRE(req.sendidx() == groupIdx);
-    REQUIRE(req.recvidx() == POINT_TO_POINT_MASTER_IDX);
+    REQUIRE(req.recvidx() == POINT_TO_POINT_MAIN_IDX);
 }
 
 TEST_CASE_METHOD(PointToPointGroupFixture,
@@ -302,7 +296,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
     }
 
     for (int i = 0; i < nSums; i++) {
-        group->barrier(POINT_TO_POINT_MASTER_IDX);
+        group->barrier(POINT_TO_POINT_MAIN_IDX);
         REQUIRE(sharedSums.at(i).load() == (i + 1) * (nThreads - 1));
     }
 
@@ -372,7 +366,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
     auto group = setUpGroup(appId, groupId, nThreads);
 
-    // Run threads in background to force a wait from the master
+    // Run threads in background to force a wait from the main
     std::vector<std::jthread> threads;
     for (int i = 1; i < nThreads; i++) {
         threads.emplace_back([&group, i, &actual] {
@@ -385,7 +379,7 @@ TEST_CASE_METHOD(PointToPointGroupFixture,
 
     // Master thread to await, should only go through once all threads have
     // finished
-    group->notify(POINT_TO_POINT_MASTER_IDX);
+    group->notify(POINT_TO_POINT_MAIN_IDX);
 
     for (int i = 0; i < nThreads; i++) {
         REQUIRE(actual[i] == i);

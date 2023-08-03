@@ -47,7 +47,7 @@ class DistTestsFixture
 
   private:
     std::string workerIP;
-    std::string masterIP;
+    std::string mainIP;
 };
 
 class MpiDistTestsFixture : public DistTestsFixture
@@ -105,7 +105,7 @@ class MpiDistTestsFixture : public DistTestsFixture
         for (int i = 0; i < allocateRemotely; i++) {
             expecedHosts.push_back(remoteIp);
         }
-        // Lastly, overload the master with all the ranks we haven't been able
+        // Lastly, overload the main with all the ranks we haven't been able
         // to allocate anywhere
         int overloadMaster = worldSize - nLocalSlots - allocateRemotely;
         for (int i = 0; i < overloadMaster; i++) {

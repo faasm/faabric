@@ -17,7 +17,7 @@
 
 #define DEFAULT_DISTRIBUTED_TIMEOUT_MS 30000
 
-#define POINT_TO_POINT_MASTER_IDX 0
+#define POINT_TO_POINT_MAIN_IDX 0
 
 namespace faabric::transport {
 
@@ -63,7 +63,7 @@ class PointToPointGroup
   private:
     faabric::util::SystemConfig& conf;
 
-    std::string masterHost;
+    std::string mainHost;
     int appId = 0;
     int groupId = 0;
     int groupSize = 0;

@@ -36,7 +36,7 @@ class FunctionMigrationTestFixture : public SchedulerFixture
 
   protected:
     FunctionMigrationThread migrationThread;
-    std::string masterHost = faabric::util::getSystemConfig().endpointHost;
+    std::string mainHost = faabric::util::getSystemConfig().endpointHost;
 
     // Helper method to set the available hosts and slots per host prior to
     // making a scheduling decision
@@ -53,7 +53,7 @@ class FunctionMigrationTestFixture : public SchedulerFixture
             resources.set_slots(slotsPerHost.at(i));
             resources.set_usedslots(usedSlotsPerHost.at(i));
 
-            // If setting resources for the master host, update the scheduler.
+            // If setting resources for the main host, update the scheduler.
             // Otherwise, queue the resource response
             if (i == 0) {
                 sch.setThisHostResources(resources);
@@ -151,7 +151,7 @@ TEST_CASE_METHOD(
 {
     // First set resources before calling the functions: one will be allocated
     // locally, another one in the remote host
-    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<std::string> hosts = { mainHost, "hostA" };
     std::vector<int> slots = { 1, 1 };
     std::vector<int> usedSlots = { 0, 0 };
     setHostResources(hosts, slots, usedSlots);
@@ -204,7 +204,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
                  "Test checking for migration opportunities",
                  "[scheduler]")
 {
-    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<std::string> hosts = { mainHost, "hostA" };
     std::vector<int> slots = { 1, 1 };
     std::vector<int> usedSlots = { 0, 0 };
     setHostResources(hosts, slots, usedSlots);
@@ -260,7 +260,7 @@ TEST_CASE_METHOD(
 {
     // First set resources before calling the functions: one request will be
     // allocated to each host
-    std::vector<std::string> hosts = { masterHost, "hostA", "hostB", "hostC" };
+    std::vector<std::string> hosts = { mainHost, "hostA", "hostB", "hostC" };
     std::vector<int> slots = { 1, 1, 1, 1 };
     std::vector<int> usedSlots = { 0, 0, 0, 0 };
     setHostResources(hosts, slots, usedSlots);
@@ -316,7 +316,7 @@ TEST_CASE_METHOD(
   "Test function migration thread detects migration opportunities",
   "[scheduler][.]")
 {
-    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<std::string> hosts = { mainHost, "hostA" };
     std::vector<int> slots = { 1, 1 };
     std::vector<int> usedSlots = { 0, 0 };
     setHostResources(hosts, slots, usedSlots);
@@ -376,7 +376,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
 {
     auto req = faabric::util::batchExecFactory("foo", "sleep", 2);
     uint32_t appId = req->messages().at(0).appid();
-    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<std::string> hosts = { mainHost, "hostA" };
     std::vector<std::pair<int, int>> migrations = { { 1, 0 } };
     auto expectedMigrations =
       buildPendingMigrationsExpectation(req, hosts, migrations);
@@ -396,7 +396,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
                  "[scheduler]")
 {
     // Set up host resources
-    std::vector<std::string> hosts = { masterHost, "hostA" };
+    std::vector<std::string> hosts = { mainHost, "hostA" };
     std::vector<int> slots = { 2, 2 };
     std::vector<int> usedSlots = { 0, 0 };
     setHostResources(hosts, slots, usedSlots);

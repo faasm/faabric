@@ -245,9 +245,9 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
 
     // If we are here, it means that we have not found the message result, so
     // we register the calling-host's interest if the calling-host has
-    // provided a masterhost. The masterhost is set when dispatching a message
+    // provided a main host. The main host is set when dispatching a message
     // within faabric, but not when sending an HTTP request
-    if (!msg->masterhost().empty()) {
+    if (!msg->mainhost().empty()) {
         faabric::util::FullLock lock(plannerMx);
 
         // Check again if the result is not set, as it could have been set
@@ -260,9 +260,9 @@ std::shared_ptr<faabric::Message> Planner::getMessageResult(
         // Definately the message result is not set, so we add the host to the
         // waiters list
         SPDLOG_DEBUG("Adding host {} on the waiting list for message {}",
-                     msg->masterhost(),
+                     msg->mainhost(),
                      msgId);
-        state.appResultWaiters[msgId].push_back(msg->masterhost());
+        state.appResultWaiters[msgId].push_back(msg->mainhost());
     }
 
     return nullptr;
