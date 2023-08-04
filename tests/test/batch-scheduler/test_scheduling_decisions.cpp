@@ -20,9 +20,10 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
     std::string hostC = "hostC";
 
     std::string thisHost = conf.endpointHost;
+    std::set<std::string> expectedUniqueHosts;
 
     bool expectSingleHost = false;
-    SECTION("Multi-host") {}
+    SECTION("Multi-host") { expectedUniqueHosts = { hostA, hostB, hostC }; }
 
     SECTION("Only remote hosts")
     {
@@ -30,6 +31,7 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
         hostC = "hostA";
 
         expectSingleHost = false;
+        expectedUniqueHosts = { "hostA" };
     }
 
     SECTION("All this host")
@@ -39,6 +41,7 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
         hostC = thisHost;
 
         expectSingleHost = true;
+        expectedUniqueHosts = { thisHost };
     }
 
     SECTION("All this host single host optimisations off")
@@ -50,6 +53,7 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
         hostC = thisHost;
 
         expectSingleHost = false;
+        expectedUniqueHosts = { thisHost };
     }
 
     auto req = faabric::util::batchExecFactory("foo", "bar", 3);
@@ -75,8 +79,15 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
     REQUIRE(decision.nFunctions == 3);
     REQUIRE(decision.messageIds == expectedMsgIds);
     REQUIRE(decision.hosts == expectedHosts);
+    REQUIRE(decision.uniqueHosts() == expectedUniqueHosts);
     REQUIRE(decision.appIdxs == expectedAppIdxs);
     REQUIRE(decision.isSingleHost() == expectSingleHost);
+
+    // We can compare decisions with the == operator
+    auto newDecision = decision;
+    REQUIRE(newDecision == decision);
+    newDecision.groupId = 1338;
+    REQUIRE(newDecision != decision);
 }
 
 TEST_CASE("Test converting point-to-point mappings to scheduling decisions",

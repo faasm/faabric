@@ -63,6 +63,8 @@ class SchedulingDecision
 
     SchedulingDecision(uint32_t appIdIn, int32_t groupIdIn);
 
+    bool operator==(const SchedulingDecision& rhs) const = default;
+
     uint32_t appId = 0;
 
     int32_t groupId = 0;
@@ -96,6 +98,8 @@ class SchedulingDecision
                     int32_t messageId,
                     int32_t appIdx,
                     int32_t groupIdx);
+
+    std::set<std::string> uniqueHosts();
 };
 
 }
