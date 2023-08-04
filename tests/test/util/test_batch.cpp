@@ -88,6 +88,21 @@ TEST_CASE("Test batch. exec request sanity checks")
     REQUIRE(isBerValid == isBatchExecRequestValid(ber));
 }
 
+TEST_CASE("Test updating the group ID of a BER")
+{
+    int nMessages = 4;
+    std::shared_ptr<faabric::BatchExecuteRequest> ber =
+      batchExecFactory("demo", "echo", nMessages);
+
+    // By default the BER is valid
+    REQUIRE(isBatchExecRequestValid(ber));
+
+    int newGroupId = 1337;
+    updateBatchExecGroupId(ber, newGroupId);
+    REQUIRE(isBatchExecRequestValid(ber));
+    REQUIRE(ber->groupid() == newGroupId);
+}
+
 TEST_CASE("Test BER status factory")
 {
     int appId;

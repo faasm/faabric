@@ -17,6 +17,9 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
 
 bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber);
 
+void updateBatchExecGroupId(std::shared_ptr<faabric::BatchExecuteRequest> ber,
+                            int newGroupId);
+
 // ----------
 // Batch Execute Requests' Status
 // ----------
