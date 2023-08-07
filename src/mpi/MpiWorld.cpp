@@ -1,7 +1,7 @@
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/mpi.pb.h>
-#include <faabric/scheduler/Scheduler.h>
+#include <faabric/planner/PlannerClient.h>
 #include <faabric/transport/macros.h>
 #include <faabric/util/ExecGraph.h>
 #include <faabric/util/batch.h>
@@ -134,11 +134,10 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     call.set_mpirank(0);
     call.set_mpiworldid(id);
     call.set_mpiworldsize(size);
-    call.set_groupid(call.mpiworldid());
+    // This doesn't really matter anymore does it?
+    // call.set_groupid(call.mpiworldid());
     call.set_groupidx(call.mpirank());
     call.set_appidx(call.mpirank());
-
-    auto& sch = faabric::scheduler::getScheduler();
 
     // Dispatch all the chained calls. With the main being rank zero, we want
     // to spawn (size - 1) new functions starting with rank 1
@@ -153,7 +152,8 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
         msg.set_mpiworldsize(call.mpiworldsize());
 
         // Set group ids for remote messaging
-        msg.set_groupid(call.groupid());
+        // TODO: this will be set by the planner
+        // msg.set_groupid(call.groupid());
         msg.set_groupidx(msg.mpirank());
         if (thisRankMsg != nullptr) {
             // Set message fields to allow for function migration
@@ -178,10 +178,11 @@ void MpiWorld::create(faabric::Message& call, int newId, int newSize)
     }
 
     // As a result of the call to the scheduler, a point-to-point communcation
-    // group will have been created with id equal to the MPI world's id.
+    // group will have been created. We update our recorded message group id
+    // to use the new PTP group
     if (size > 1) {
-        faabric::batch_scheduler::SchedulingDecision decision =
-          sch.callFunctions(req);
+        auto decision = faabric::planner::getPlannerClient().callFunctions(req);
+        thisRankMsg->set_groupid(decision.groupId);
         assert(decision.hosts.size() == size - 1);
     } else {
         // If world has size one, create the communication group (of size one)
@@ -1410,14 +1411,6 @@ void MpiWorld::barrier(int thisRank)
 
     if (thisRank == localLeader && hasBeenMigrated) {
         hasBeenMigrated = false;
-        if (thisRankMsg != nullptr) {
-            faabric::scheduler::getScheduler().removePendingMigration(
-              thisRankMsg->appid());
-        } else {
-            SPDLOG_ERROR("App has been migrated but rank ({}) message not set",
-                         thisRank);
-            throw std::runtime_error("App migrated but rank message not set");
-        }
     }
 
     // Rank 0 broadcasts that the barrier is done (the others block here)

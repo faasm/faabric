@@ -126,9 +126,8 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Get the scheduling decision
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.makeSchedulingDecision(
-        req, faabric::batch_scheduler::SchedulingTopologyHint::CACHED);
+    // TODO: this is WRONG FIXME
+    auto decision = faabric::planner::getPlannerClient().callFunctions(req);
     bool isSingleHost = decision.isSingleHost();
 
     // Do snapshotting if not on a single host
@@ -174,7 +173,7 @@ std::vector<std::pair<uint32_t, int32_t>> Executor::executeThreads(
     }
 
     // Invoke threads and await
-    sch.callFunctions(req, decision);
+    faabric::planner::getPlannerClient().callFunctions(req, decision);
     std::vector<std::pair<uint32_t, int32_t>> results =
       sch.awaitThreadResults(req);
 
