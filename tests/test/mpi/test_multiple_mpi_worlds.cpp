@@ -61,6 +61,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     int worldSizeA = 3;
     auto reqA = faabric::util::batchExecFactory(userA, funcA, 1);
     auto& msgA = *reqA->mutable_messages(0);
+    msgA.set_ismpi(true);
     msgA.set_mpiworldid(worldIdA);
     msgA.set_mpiworldsize(worldSizeA);
     plannerCli.callFunctions(reqA);
@@ -73,6 +74,7 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
     int worldSizeB = 6;
     auto reqB = faabric::util::batchExecFactory(userB, funcB, 1);
     auto& msgB = *reqB->mutable_messages(0);
+    msgB.set_ismpi(true);
     msgB.set_mpiworldid(worldIdB);
     msgB.set_mpiworldsize(worldSizeB);
     plannerCli.callFunctions(reqB);
@@ -90,6 +92,9 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Test creating two MPI worlds", "[mpi]")
 
     // Check that chained function calls are made as expected
     auto actual = sch.getRecordedMessagesAll();
+    // The first recorded message is sent as part of the test fixture, so we
+    // remove it
+    actual.erase(actual.begin());
     int expectedMsgCount = worldSizeA + worldSizeB;
     REQUIRE(actual.size() == expectedMsgCount);
 

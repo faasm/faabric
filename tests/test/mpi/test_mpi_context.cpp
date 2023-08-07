@@ -108,7 +108,8 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
 
     auto chainedMsgs = faabric::util::getChainedFunctions(msgA);
     REQUIRE(chainedMsgs.size() == worldSize - 1);
-    auto msgB = plannerCli.getMessageResult(msgA.appid(), *chainedMsgs.begin(), 500);
+    auto msgB =
+      plannerCli.getMessageResult(msgA.appid(), *chainedMsgs.begin(), 500);
 
     // Create another context and make sure it's not initialised
     MpiContext cB;

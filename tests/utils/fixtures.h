@@ -515,10 +515,8 @@ class RemoteMpiTestFixture : public MpiBaseTestFixture
         // Set up the other world and add it to the global set of hosts
         faabric::HostResources otherResources;
         otherResources.set_slots(ranksOtherWorld);
-        sch.addHostToGlobalSet(otherHost);
-
-        // Queue the resource response for this other host
-        faabric::scheduler::queueResourceResponse(otherHost, otherResources);
+        sch.addHostToGlobalSet(
+          otherHost, std::make_shared<faabric::HostResources>(otherResources));
     }
 
   protected:
