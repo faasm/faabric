@@ -438,6 +438,10 @@ class MpiBaseTestFixture
 
         msg.set_mpiworldid(worldId);
         msg.set_mpiworldsize(worldSize);
+
+        // Call the request, so that we have the original message recorded
+        // in the planner
+        plannerCli.callFunctions(req);
     }
 
     ~MpiBaseTestFixture()

@@ -86,18 +86,29 @@ TEST_CASE_METHOD(MpiBaseTestFixture, "Check joining world", "[mpi]")
     const std::string expectedHost =
       faabric::util::getSystemConfig().endpointHost;
 
-    faabric::Message msgA = faabric::util::messageFactory("mpi", "hellompi");
+    // faabric::Message msgA = faabric::util::messageFactory("mpi", "hellompi");
+    auto reqA = faabric::util::batchExecFactory("mpi", "hellompi", 1);
+    auto& msgA = *reqA->mutable_messages(0);
     int worldSize = 6;
     msgA.set_mpiworldsize(worldSize);
+    msgA.set_recordexecgraph(true);
+
+    // Call the request before creating the MPI world
+    plannerCli.callFunctions(reqA);
 
     // Use one context to create the world
     MpiContext cA;
     cA.createWorld(msgA);
     int worldId = cA.getWorldId();
 
-    // Get one message formed by world creation
+    // Set the function result to have access to the chained messages
+    SLEEP_MS(500);
     Scheduler& sch = getScheduler();
-    faabric::Message msgB = sch.getRecordedMessagesAll().at(0);
+    sch.setFunctionResult(msgA);
+
+    auto chainedMsgs = faabric::util::getChainedFunctions(msgA);
+    REQUIRE(chainedMsgs.size() == worldSize - 1);
+    auto msgB = plannerCli.getMessageResult(msgA.appid(), *chainedMsgs.begin(), 500);
 
     // Create another context and make sure it's not initialised
     MpiContext cB;
