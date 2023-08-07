@@ -26,10 +26,6 @@
 
 namespace faabric::scheduler {
 
-typedef std::pair<std::shared_ptr<BatchExecuteRequest>,
-                  std::shared_ptr<faabric::batch_scheduler::SchedulingDecision>>
-  InFlightPair;
-
 class Scheduler;
 
 Scheduler& getScheduler();
@@ -159,17 +155,6 @@ class Executor
 };
 
 /**
- * Background thread that periodically checks if there are migration
- * opportunities for in-flight apps that have opted in to being checked for
- * migrations.
- */
-class FunctionMigrationThread : public faabric::util::PeriodicBackgroundThread
-{
-  public:
-    void doWork() override;
-};
-
-/**
  * Background thread that periodically checks to see if any executors have
  * become stale (i.e. not handled any requests in a given timeout). If any are
  * found, they are removed.
@@ -277,14 +262,6 @@ class Scheduler
 
     void removeHostFromGlobalSet(const std::string& host);
 
-    void removeRegisteredHost(const std::string& host,
-                              const std::string& user,
-                              const std::string& function);
-
-    void addRegisteredHost(const std::string& host,
-                           const std::string& user,
-                           const std::string& function);
-
     faabric::HostResources getThisHostResources();
 
     void setThisHostResources(faabric::HostResources& res);
@@ -304,14 +281,9 @@ class Scheduler
     // ----------------------------------
     // Function Migration
     // ----------------------------------
-    void checkForMigrationOpportunities();
-
-    std::shared_ptr<faabric::PendingMigrations> getPendingAppMigrations(
-      uint32_t appId);
-
-    void addPendingMigration(std::shared_ptr<faabric::PendingMigrations> msg);
-
-    void removePendingMigration(uint32_t appId);
+    std::shared_ptr<faabric::PendingMigration> checkForMigrationOpportunities(
+      faabric::Message& msg,
+      int overwriteNewGroupId = 0);
 
   private:
     std::string thisHost;
@@ -341,8 +313,6 @@ class Scheduler
 
     void updateHostResources();
 
-    faabric::HostResources getHostResources(const std::string& host);
-
     // ---- Planner----
     faabric::planner::KeepAliveThread keepAliveThread;
 
@@ -352,16 +322,6 @@ class Scheduler
     std::set<std::string> availableHostsCache;
 
     std::unordered_map<std::string, std::set<std::string>> registeredHosts;
-
-    faabric::batch_scheduler::SchedulingDecision doSchedulingDecision(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::batch_scheduler::SchedulingTopologyHint topologyHint);
-
-    faabric::batch_scheduler::SchedulingDecision doCallFunctions(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::batch_scheduler::SchedulingDecision& decision,
-      faabric::util::FullLock& lock,
-      faabric::batch_scheduler::SchedulingTopologyHint topologyHint);
 
     std::shared_ptr<Executor> claimExecutor(
       faabric::Message& msg,
@@ -379,24 +339,6 @@ class Scheduler
 
     // ---- Point-to-point ----
     faabric::transport::PointToPointBroker& broker;
-
-    // ---- Function migration ----
-    FunctionMigrationThread functionMigrationThread;
-    std::unordered_map<uint32_t, InFlightPair> inFlightRequests;
-    std::unordered_map<uint32_t, std::shared_ptr<faabric::PendingMigrations>>
-      pendingMigrations;
-
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-    doCheckForMigrationOpportunities(
-      faabric::batch_scheduler::MigrationStrategy migrationStrategy =
-        faabric::batch_scheduler::MigrationStrategy::BIN_PACK);
-
-    void broadcastPendingMigrations(
-      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
-
-    void doStartFunctionMigrationThread(
-      std::shared_ptr<faabric::BatchExecuteRequest> req,
-      faabric::batch_scheduler::SchedulingDecision& decision);
 };
 
 }

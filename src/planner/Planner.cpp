@@ -315,14 +315,27 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     faabric::util::FullLock lock(plannerMx);
 
     auto batchScheduler = faabric::batch_scheduler::getBatchScheduler();
+    auto decisionType =
+      batchScheduler->getDecisionType(state.inFlightReqs, req);
 
     // First, make scheduling decision
 #ifndef NDEBUG
 #endif
     // TODO: remove this copy once we finalise on one Host abstraction
     auto hostMapCopy = convertToBatchSchedHostMap(state.hostMap);
-    auto decision = batchScheduler->makeSchedulingDecision(
-      hostMapCopy, state.inFlightReqs, req);
+
+    // For a DIST_CHANGE decision (i.e. migration) we want to try to imrpove
+    // on the old decision (we don't care the one we send)
+    // TODO: alternatively we could make sure the ExecutorContext is always set?
+    std::shared_ptr<faabric::batch_scheduler::SchedulingDecision> decision;
+    if (decisionType == faabric::batch_scheduler::DecisionType::DIST_CHANGE) {
+        auto oldReq = state.inFlightReqs.at(appId).first;
+        decision = batchScheduler->makeSchedulingDecision(
+          hostMapCopy, state.inFlightReqs, oldReq);
+    } else {
+        decision = batchScheduler->makeSchedulingDecision(
+          hostMapCopy, state.inFlightReqs, req);
+    }
 #ifndef NDEBUG
     // Here we make sure the state hasn't changed here (we pass const, but they
     // are const pointers)
@@ -354,8 +367,6 @@ Planner::callBatch(std::shared_ptr<BatchExecuteRequest> req)
     // 1. Update the host-map to reflect the new host occupation
     // 2. Update the in-flight map to include the new request
     // 3. Send the PTP mappings to all the hosts involved
-    auto decisionType =
-      batchScheduler->getDecisionType(state.inFlightReqs, req);
     auto& broker = faabric::transport::getPointToPointBroker();
     switch (decisionType) {
         case faabric::batch_scheduler::DecisionType::NEW: {

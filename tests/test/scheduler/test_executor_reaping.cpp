@@ -13,6 +13,7 @@ namespace tests {
 
 class SchedulerReapingTestFixture
   : public SchedulerFixture
+  , public FunctionCallClientServerFixture
   , public ConfFixture
 {
   public:
@@ -60,6 +61,7 @@ TEST_CASE_METHOD(SchedulerReapingTestFixture,
     auto req = faabric::util::batchExecFactory("foo", "bar", nMsgs);
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
     plannerCli.callFunctions(req);
+    plannerCli.getMessageResult(firstMsg, 500);
 
     // Check executor count
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);

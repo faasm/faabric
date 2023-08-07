@@ -201,9 +201,7 @@ class MpiWorld
 
     /* Function Migration */
 
-    void prepareMigration(
-      int thisRank,
-      std::shared_ptr<faabric::PendingMigrations> pendingMigrations);
+    void prepareMigration(int thisRank);
 
   private:
     int id = -1;

@@ -1,6 +1,7 @@
 #include <faabric/util/batch.h>
 #include <faabric/util/func.h>
 #include <faabric/util/gids.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::util {
 std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory()
@@ -32,11 +33,15 @@ std::shared_ptr<faabric::BatchExecuteRequest> batchExecFactory(
 bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
 {
     if (ber == nullptr) {
+        SPDLOG_ERROR("Ber points to null!");
         return false;
     }
 
     // An empty BER (thus invalid) will have 0 messages and an id of 0
     if (ber->messages_size() <= 0 && ber->appid() == 0) {
+        SPDLOG_ERROR("Invalid (uninitialised) BER (size: {} - app id: {})",
+                     ber->messages_size(),
+                     ber->appid());
         return false;
     }
 
@@ -46,6 +51,7 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
 
     // If the user or func are empty, the BER is invalid
     if (user.empty() || func.empty()) {
+        SPDLOG_ERROR("Unset user ({}) or func ({}) in BER!", user, func);
         return false;
     }
 
@@ -54,6 +60,9 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
         auto msg = ber->messages(i);
         if (msg.user() != user || msg.function() != func ||
             msg.appid() != appId) {
+            SPDLOG_ERROR("Malformed message in BER");
+            SPDLOG_ERROR("Got: (id: {} - user: {} - func: {} - app: {})", msg.id(), msg.user(), msg.function(), msg.appid());
+            SPDLOG_ERROR("Expected: (id: {} - user: {} - func: {} - app: {})", msg.id(), user, func, appId);
             return false;
         }
     }

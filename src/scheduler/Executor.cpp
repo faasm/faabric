@@ -205,12 +205,11 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
                             std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     const std::string funcStr = faabric::util::funcToString(req);
-    SPDLOG_TRACE("{} executing {}/{} tasks of {} (single-host={})",
+    SPDLOG_TRACE("{} executing {}/{} tasks of {}",
                  id,
                  msgIdxs.size(),
                  req->messages_size(),
-                 funcStr,
-                 req->singlehost());
+                 funcStr);
 
     // Note that this lock is specific to this executor, so will only block
     // when multiple threads are trying to schedule tasks. This will only
@@ -227,13 +226,16 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
     bool isMaster = firstMsg.mainhost() == thisHost;
     bool isThreads = req->type() == faabric::BatchExecuteRequest::THREADS;
-    bool isSingleHost = req->singlehost();
+    // TODO: isSingleHost should always be true for threads now
+    // bool isSingleHost = req->singlehost();
     std::string snapshotKey = firstMsg.snapshotkey();
 
     // Threads on a single host don't need to do anything with snapshots, as
     // they all share a single executor. Threads not on a single host need to
     // restore from the main thread snapshot. Non-threads need to restore from
     // a snapshot if they are given a snapshot key.
+    /*
+     * TODO: remove?
     if (isThreads && !isSingleHost) {
         // Check we get a valid memory view
         std::span<uint8_t> memView = getMemoryView();
@@ -255,17 +257,17 @@ void Executor::executeTasks(std::vector<int> msgIdxs,
 
         // Prepare list of lists for dirty pages from each thread
         threadLocalDirtyRegions.resize(req->messages_size());
-    } else if (!isThreads && !firstMsg.snapshotkey().empty()) {
+    */
+    if (!isThreads && !firstMsg.snapshotkey().empty()) {
         // Restore from snapshot if provided
         std::string snapshotKey = firstMsg.snapshotkey();
         SPDLOG_DEBUG("Restoring {} from snapshot {}", funcStr, snapshotKey);
         restore(snapshotKey);
     } else {
-        SPDLOG_TRACE("Not restoring {}. threads={}, key={}, single={}",
+        SPDLOG_TRACE("Not restoring {}. threads={}, key={}",
                      funcStr,
                      isThreads,
-                     snapshotKey,
-                     isSingleHost);
+                     snapshotKey);
     }
 
     // Initialise batch counter
@@ -423,10 +425,11 @@ void Executor::threadPoolThread(std::stop_token st, int threadPoolIdx)
           task.req->mutable_messages()->at(task.messageIndex);
 
         // Start dirty tracking if executing threads across hosts
-        bool isSingleHost = task.req->singlehost();
+        // bool isSingleHost = task.req->singlehost();
         bool isThreads =
           task.req->type() == faabric::BatchExecuteRequest::THREADS;
-        bool doDirtyTracking = isThreads && !isSingleHost;
+        // TODO: do we never need to do dirty tracking now?
+        bool doDirtyTracking = false; // isThreads && !isSingleHost;
         if (doDirtyTracking) {
             // If tracking is thread local, start here as it will happen for
             // each thread

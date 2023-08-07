@@ -327,11 +327,6 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
         }
     }
 
-    // Check resource requests have been made to other host
-    auto resRequestsOne = faabric::scheduler::getResourceRequests();
-    REQUIRE(resRequestsOne.size() == 1);
-    REQUIRE(resRequestsOne.at(0).first == otherHost);
-
     // Check snapshots have been pushed
     auto snapshotPushes = faabric::snapshot::getSnapshotPushes();
     if (expectedSnapshot.empty()) {
@@ -423,11 +418,6 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
             plannerCli.getMessageResult(appId, reqTwoMsgIds.at(i), 10000);
         }
     }
-
-    // Check resource request made again
-    auto resRequestsTwo = faabric::scheduler::getResourceRequests();
-    REQUIRE(resRequestsTwo.size() == 1);
-    REQUIRE(resRequestsTwo.at(0).first == otherHost);
 
     // Check no other functions have been scheduled on this host
     REQUIRE(sch.getRecordedMessagesLocal().size() == (2 * thisCores));
@@ -546,48 +536,6 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
             plannerCli.getMessageResult(msg, 10000);
         }
     }
-}
-
-TEST_CASE_METHOD(SlowExecutorTestFixture,
-                 "Test unregistering host",
-                 "[scheduler]")
-{
-    faabric::util::setMockMode(true);
-
-    std::string thisHost = faabric::util::getSystemConfig().endpointHost;
-    std::string otherHost = "foobar";
-    sch.addHostToGlobalSet(otherHost);
-
-    int nCores = 5;
-    faabric::HostResources res;
-    res.set_slots(nCores);
-    sch.setThisHostResources(res);
-
-    // Set up capacity for other host
-    faabric::scheduler::queueResourceResponse(otherHost, res);
-
-    std::shared_ptr<faabric::BatchExecuteRequest> req =
-      faabric::util::batchExecFactory("foo", "bar", nCores + 1);
-    plannerCli.callFunctions(req);
-    faabric::Message msg = req->messages().at(0);
-
-    // Check other host is added
-    const std::set<std::string>& expectedHosts = { otherHost };
-    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
-            expectedHosts);
-    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
-
-    // Remove host for another function and check host isn't removed
-    faabric::Message otherMsg = faabric::util::messageFactory("foo", "qux");
-    sch.removeRegisteredHost(otherHost, otherMsg.user(), otherMsg.function());
-    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()) ==
-            expectedHosts);
-    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
-
-    // Remove host
-    sch.removeRegisteredHost(otherHost, msg.user(), msg.function());
-    REQUIRE(sch.getFunctionRegisteredHosts(msg.user(), msg.function()).empty());
-    REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 0);
 }
 
 TEST_CASE_METHOD(SlowExecutorTestFixture, "Check test mode", "[scheduler]")

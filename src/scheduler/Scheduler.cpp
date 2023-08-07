@@ -144,9 +144,6 @@ void Scheduler::reset()
     SPDLOG_DEBUG("Resetting scheduler");
     resetThreadLocalCache();
 
-    // Stop the function migration thread
-    functionMigrationThread.stop();
-
     // Stop the reaper thread
     reaperThread.stop();
 
@@ -184,10 +181,6 @@ void Scheduler::reset()
     threadResultMessages.clear();
 
     pushedSnapshotsMap.clear();
-
-    // Reset function migration tracking
-    inFlightRequests.clear();
-    pendingMigrations.clear();
 
     // Records
     recordedMessagesAll.clear();
@@ -290,8 +283,6 @@ int Scheduler::reapStaleExecutors()
                 req.set_host(thisHost);
                 req.set_user(user);
                 req.set_function(function);
-
-                getFunctionCallClient(mainHost)->unregister(req);
             }
 
             keysToRemove.emplace_back(key);
@@ -334,79 +325,10 @@ const std::set<std::string>& Scheduler::getFunctionRegisteredHosts(
     return registeredHosts[key];
 }
 
-void Scheduler::removeRegisteredHost(const std::string& host,
-                                     const std::string& user,
-                                     const std::string& function)
-{
-    faabric::util::FullLock lock(mx);
-    std::string key = user + "/" + function;
-    registeredHosts[key].erase(host);
-}
-
-void Scheduler::addRegisteredHost(const std::string& host,
-                                  const std::string& user,
-                                  const std::string& function)
-{
-    std::string key = user + "/" + function;
-    registeredHosts[key].insert(host);
-}
-
 void Scheduler::vacateSlot()
 {
     thisHostUsedSlots.fetch_sub(1, std::memory_order_acq_rel);
 }
-
-/*
-faabric::batch_scheduler::SchedulingDecision Scheduler::callFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req)
-{
-    // We assume all the messages are for the same function and have the
-    // same main host
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    std::string mainHost = firstMsg.mainhost();
-
-    // Get topology hint from message
-    faabric::batch_scheduler::SchedulingTopologyHint topologyHint =
-      firstMsg.topologyhint().empty()
-        ? faabric::batch_scheduler::SchedulingTopologyHint::NONE
-        : faabric::batch_scheduler::strToTopologyHint.at(
-            firstMsg.topologyhint());
-
-    bool isForceLocal =
-      topologyHint ==
-      faabric::batch_scheduler::SchedulingTopologyHint::FORCE_LOCAL;
-
-    // If we're not the main host, we need to forward the request back to the
-    // main host. This will only happen if a nested batch execution happens.
-    if (!isForceLocal && mainHost != thisHost) {
-        std::string funcStr = faabric::util::funcToString(firstMsg, false);
-        SPDLOG_DEBUG("Forwarding {} back to main {}", funcStr, mainHost);
-
-        getFunctionCallClient(mainHost)->executeFunctions(req);
-        faabric::batch_scheduler::SchedulingDecision decision(
-          firstMsg.appid(), firstMsg.groupid());
-        decision.returnHost = mainHost;
-        return decision;
-    }
-
-    faabric::util::FullLock lock(mx);
-
-    faabric::batch_scheduler::SchedulingDecision decision =
-      doSchedulingDecision(req, topologyHint);
-
-    // Pass decision as hint
-    return doCallFunctions(req, decision, lock, topologyHint);
-}
-
-faabric::batch_scheduler::SchedulingDecision Scheduler::makeSchedulingDecision(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingTopologyHint topologyHint)
-{
-    faabric::util::FullLock lock(mx);
-
-    return doSchedulingDecision(req, topologyHint);
-}
-*/
 
 void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
@@ -506,8 +428,10 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
     // For threads we only need one executor, for anything else we want
     // one Executor per function in flight.
 
+    // TODO: can we do this without a lock, or can we put the lock
+    // elsewhere?
+    faabric::util::FullLock lock(mx);
     if (isThreads) {
-        /* TODO: thread execution
         // Threads use the existing executor. We assume there's only
         // one running at a time.
         std::vector<std::shared_ptr<Executor>>& thisExecutors =
@@ -531,16 +455,15 @@ void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
         assert(e != nullptr);
 
         // Execute the tasks
+        // TODO: make the default of executeTasks take all messages in req?
+        std::vector<int> thisHostIdxs(req->messages_size());
+        std::iota(thisHostIdxs.begin(), thisHostIdxs.end(), 0);
         e->executeTasks(thisHostIdxs, req);
-        */
     } else {
         // Non-threads require one executor per task
         for (int i = 0; i < nMessages; i++) {
             faabric::Message& localMsg = req->mutable_messages()->at(i);
 
-            // TODO: can we do this without a lock, or can we put the lock
-            // elsewhere?
-            faabric::util::FullLock lock(mx);
             std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
             e->executeTasks({ i }, req);
         }
@@ -694,6 +617,7 @@ void Scheduler::flushLocally()
     getExecutorFactory()->flushHost();
 }
 
+// TODO(scheduler-cleanup): move this to the planner completely
 void Scheduler::setFunctionResult(faabric::Message& msg)
 {
     // Record which host did the execution
@@ -701,13 +625,6 @@ void Scheduler::setFunctionResult(faabric::Message& msg)
 
     // Set finish timestamp
     msg.set_finishtimestamp(faabric::util::getGlobalClock().epochMillis());
-
-    // Remove the app from in-flight map if still there, and this host is the
-    // main host for the message
-    // TODO: remove me
-    if (msg.mainhost() == thisHost) {
-        removePendingMigration(msg.appid());
-    }
 
     // Let the planner know this function has finished execution. This will
     // wake any thread waiting on this result
@@ -858,12 +775,6 @@ void Scheduler::setThisHostResources(faabric::HostResources& res)
     this->thisHostUsedSlots.store(res.usedslots(), std::memory_order_release);
 }
 
-faabric::HostResources Scheduler::getHostResources(const std::string& host)
-{
-    SPDLOG_TRACE("Requesting resources from {}", host);
-    return getFunctionCallClient(host)->getResources();
-}
-
 // --------------------------------------------
 // EXECUTION GRAPH
 // --------------------------------------------
@@ -878,256 +789,63 @@ std::string getChainedKey(unsigned int msgId)
 // MIGRATION
 // ----------------------------------------
 
-void FunctionMigrationThread::doWork()
+// To check for migration opportunities, we request a scheduling decision for
+// the same batch execute request
+std::shared_ptr<faabric::PendingMigration>
+Scheduler::checkForMigrationOpportunities(faabric::Message& msg,
+                                          int overwriteNewGroupId)
 {
-    getScheduler().checkForMigrationOpportunities();
-}
+    int appId = msg.appid();
+    int groupId = msg.groupid();
+    int groupIdx = msg.groupidx();
+    SPDLOG_DEBUG("Message {}:{}:{} checking for migration opportunities",
+                 appId,
+                 groupId,
+                 groupIdx);
 
-void Scheduler::checkForMigrationOpportunities()
-{
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-      tmpPendingMigrations;
+    // TODO: maybe we could move this into a broker-specific function?
+    int newGroupId = 0;
+    if (groupIdx == 0) {
+        auto req =
+          faabric::util::batchExecFactory(msg.user(), msg.function(), 1);
+        faabric::util::updateBatchExecAppId(req, msg.appid());
+        faabric::util::updateBatchExecGroupId(req, msg.groupid());
+        req->set_type(faabric::BatchExecuteRequest::MIGRATION);
+        auto decision = planner::getPlannerClient().callFunctions(req);
+        newGroupId = decision.groupId;
 
-    {
-        // Acquire a shared lock to read from the in-flight requests map
-        faabric::util::SharedLock lock(mx);
-
-        tmpPendingMigrations = doCheckForMigrationOpportunities();
-    }
-
-    // If we find migration opportunites
-    if (tmpPendingMigrations.size() > 0) {
-        // Acquire full lock to write to the pending migrations map
-        faabric::util::FullLock lock(mx);
-
-        for (auto msgPtr : tmpPendingMigrations) {
-            // First, broadcast the pending migrations to other hosts
-            broadcastPendingMigrations(msgPtr);
-            // Second, update our local records
-            pendingMigrations[msgPtr->appid()] = std::move(msgPtr);
+        // Send the new group id to all the members of the group
+        auto groupIdxs = broker.getIdxsRegisteredForGroup(groupId);
+        groupIdxs.erase(0);
+        for (const auto& recvIdx : groupIdxs) {
+            broker.sendMessage(
+              groupId, 0, recvIdx, BYTES_CONST(&newGroupId), sizeof(int));
         }
+    } else if (overwriteNewGroupId == 0) {
+        std::vector<uint8_t> bytes = broker.recvMessage(groupId, 0, groupIdx);
+        newGroupId = faabric::util::bytesToInt(bytes);
+    } else {
+        // In some settings, like tests, we already know the new group id, so
+        // we can set it here
+        newGroupId = overwriteNewGroupId;
     }
-}
 
-void Scheduler::broadcastPendingMigrations(
-  std::shared_ptr<faabric::PendingMigrations> pendingMigrations)
-{
-    // Get all hosts for the to-be migrated app
-    auto msg = pendingMigrations->migrations().at(0).msg();
-    const std::set<std::string>& thisRegisteredHosts =
-      getFunctionRegisteredHosts(msg.user(), msg.function(), false);
-
-    // Remove this host from the set
-    registeredHosts.erase(thisHost);
-
-    // Send pending migrations to all involved hosts
-    for (auto& otherHost : thisRegisteredHosts) {
-        getFunctionCallClient(otherHost)->sendPendingMigrations(
-          pendingMigrations);
-    }
-}
-
-std::shared_ptr<faabric::PendingMigrations> Scheduler::getPendingAppMigrations(
-  uint32_t appId)
-{
-    faabric::util::SharedLock lock(mx);
-
-    if (pendingMigrations.find(appId) == pendingMigrations.end()) {
+    bool appMustMigrate = newGroupId != groupId;
+    if (!appMustMigrate) {
         return nullptr;
     }
 
-    return pendingMigrations[appId];
-}
+    msg.set_groupid(newGroupId);
+    broker.waitForMappingsOnThisHost(newGroupId);
+    std::string newHost = broker.getHostForReceiver(newGroupId, groupIdx);
 
-void Scheduler::addPendingMigration(
-  std::shared_ptr<faabric::PendingMigrations> pMigration)
-{
-    faabric::util::FullLock lock(mx);
+    auto migration = std::make_shared<faabric::PendingMigration>();
+    migration->set_appid(appId);
+    migration->set_groupid(newGroupId);
+    migration->set_groupidx(groupIdx);
+    migration->set_srchost(thisHost);
+    migration->set_dsthost(newHost);
 
-    auto msg = pMigration->migrations().at(0).msg();
-    if (pendingMigrations.find(msg.appid()) != pendingMigrations.end()) {
-        SPDLOG_ERROR("Received remote request to add a pending migration for "
-                     "app {}, but already recorded another migration request"
-                     " for the same app.",
-                     msg.appid());
-        throw std::runtime_error("Remote request for app already there");
-    }
-
-    pendingMigrations[msg.appid()] = pMigration;
-}
-
-void Scheduler::removePendingMigration(uint32_t appId)
-{
-    faabric::util::FullLock lock(mx);
-
-    inFlightRequests.erase(appId);
-    pendingMigrations.erase(appId);
-}
-
-std::vector<std::shared_ptr<faabric::PendingMigrations>>
-Scheduler::doCheckForMigrationOpportunities(
-  faabric::batch_scheduler::MigrationStrategy migrationStrategy)
-{
-    std::vector<std::shared_ptr<faabric::PendingMigrations>>
-      pendingMigrationsVec;
-
-    // For each in-flight request that has opted in to be migrated,
-    // check if there is an opportunity to migrate
-    for (const auto& app : inFlightRequests) {
-        auto req = app.second.first;
-        auto originalDecision = *app.second.second;
-
-        // If we have already recorded a pending migration for this req,
-        // skip
-        if (getPendingAppMigrations(originalDecision.appId) != nullptr) {
-            SPDLOG_TRACE("Skipping app {} as migration opportunity has "
-                         "already been recorded",
-                         originalDecision.appId);
-            continue;
-        }
-
-        faabric::PendingMigrations msg;
-        msg.set_appid(originalDecision.appId);
-
-        if (migrationStrategy ==
-            faabric::batch_scheduler::MigrationStrategy::BIN_PACK) {
-            // We assume the batch was originally scheduled using
-            // bin-packing, thus the scheduling decision has at the begining
-            // (left) the hosts with the most allocated requests, and at the
-            // end (right) the hosts with the fewest. To check for migration
-            // oportunities, we compare a pointer to the possible
-            // destination of the migration (left), with one to the possible
-            // source of the migration (right). NOTE - this is a slight
-            // simplification, but makes the code simpler.
-            auto left = originalDecision.hosts.begin();
-            auto right = originalDecision.hosts.end() - 1;
-            faabric::HostResources r = (*left == thisHost)
-                                         ? getThisHostResources()
-                                         : getHostResources(*left);
-            auto nAvailable = [&r]() -> int {
-                return r.slots() - r.usedslots();
-            };
-            auto claimSlot = [&r]() {
-                int currentUsedSlots = r.usedslots();
-                r.set_usedslots(currentUsedSlots + 1);
-            };
-            while (left < right) {
-                // If both pointers point to the same host, no migration
-                // opportunity, and must check another possible source of
-                // the migration
-                if (*left == *right) {
-                    --right;
-                    continue;
-                }
-
-                // If the left pointer (possible destination of the
-                // migration) is out of available resources, no migration
-                // opportunity, and must check another possible destination
-                // of migration
-                if (nAvailable() == 0) {
-                    auto oldHost = *left;
-                    ++left;
-                    if (*left != oldHost) {
-                        r = (*left == thisHost) ? getThisHostResources()
-                                                : getHostResources(*left);
-                    }
-                    continue;
-                }
-
-                // If each pointer points to a request scheduled in a
-                // different host, and the possible destination has slots,
-                // there is a migration opportunity
-                auto* migration = msg.add_migrations();
-                migration->set_srchost(*right);
-                migration->set_dsthost(*left);
-
-                faabric::Message* msgPtr =
-                  &(*(req->mutable_messages()->begin() +
-                      std::distance(originalDecision.hosts.begin(), right)));
-                auto* migrationMsgPtr = migration->mutable_msg();
-                *migrationMsgPtr = *msgPtr;
-                // Decrement by one the availability, and check for more
-                // possible sources of migration
-                claimSlot();
-                --right;
-            }
-        } else {
-            SPDLOG_ERROR("Unrecognised migration strategy: {}",
-                         migrationStrategy);
-            throw std::runtime_error("Unrecognised migration strategy.");
-        }
-
-        if (msg.migrations_size() > 0) {
-            pendingMigrationsVec.emplace_back(
-              std::make_shared<faabric::PendingMigrations>(msg));
-            SPDLOG_DEBUG("Detected migration opportunity for app: {}",
-                         msg.appid());
-        } else {
-            SPDLOG_DEBUG("No migration opportunity detected for app: {}",
-                         msg.appid());
-        }
-    }
-
-    return pendingMigrationsVec;
-}
-
-// Start the function migration thread if necessary
-// NOTE: ideally, instead of allowing the applications to specify a check
-// period, we would have a default one (overwritable through an env.
-// variable), and apps would just opt in/out of being migrated. We set
-// the actual check period instead to ease with experiments.
-void Scheduler::doStartFunctionMigrationThread(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingDecision& decision)
-{
-    bool startMigrationThread = inFlightRequests.size() == 0;
-    faabric::Message& firstMsg = req->mutable_messages()->at(0);
-
-    if (inFlightRequests.find(decision.appId) != inFlightRequests.end()) {
-        // MPI applications are made up of two different requests: the
-        // original one (with one message) and the second one (with
-        // world size - 1 messages) created during world creation time.
-        // Thus, to correctly track migration opportunities we must merge
-        // both. We append the batch request to the original one (instead
-        // of the other way around) not to affect the rest of this methods
-        // functionality.
-        if (firstMsg.ismpi()) {
-            startMigrationThread = false;
-            auto originalReq = inFlightRequests[decision.appId].first;
-            auto originalDecision = inFlightRequests[decision.appId].second;
-            assert(req->messages_size() == firstMsg.mpiworldsize() - 1);
-            for (int i = 0; i < firstMsg.mpiworldsize() - 1; i++) {
-                // Append message to original request
-                auto* newMsgPtr = originalReq->add_messages();
-                *newMsgPtr = req->messages().at(i);
-
-                // Append message to original decision
-                originalDecision->addMessage(decision.hosts.at(i),
-                                             req->messages().at(i));
-            }
-        } else {
-            SPDLOG_ERROR("There is already an in-flight request for app {}",
-                         firstMsg.appid());
-            throw std::runtime_error("App already in-flight");
-        }
-    } else {
-        auto decisionPtr =
-          std::make_shared<faabric::batch_scheduler::SchedulingDecision>(
-            decision);
-        inFlightRequests[decision.appId] = std::make_pair(req, decisionPtr);
-    }
-
-    // Decide wether we have to start the migration thread or not
-    if (startMigrationThread) {
-        functionMigrationThread.start(firstMsg.migrationcheckperiod());
-    } else if (firstMsg.migrationcheckperiod() !=
-               functionMigrationThread.getIntervalSeconds()) {
-        SPDLOG_WARN("Ignoring migration check period for app {} as the"
-                    "migration thread is already running with a different"
-                    " check period (provided: {}, current: {})",
-                    firstMsg.appid(),
-                    firstMsg.migrationcheckperiod(),
-                    functionMigrationThread.getIntervalSeconds());
-    }
+    return migration;
 }
 }
