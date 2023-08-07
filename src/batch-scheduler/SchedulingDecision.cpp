@@ -1,5 +1,6 @@
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/util/config.h>
+#include <faabric/util/logging.h>
 
 namespace faabric::batch_scheduler {
 
@@ -56,5 +57,23 @@ SchedulingDecision SchedulingDecision::fromPointToPointMappings(
 std::set<std::string> SchedulingDecision::uniqueHosts()
 {
     return std::set<std::string>(hosts.begin(), hosts.end());
+}
+
+void SchedulingDecision::print()
+{
+    SPDLOG_DEBUG("-------------- Decision for App: {} ----------------", appId);
+    SPDLOG_DEBUG("MsgId\tAppId\tGroupId\tGrIdx\tHostIp");
+    // Modulo a big number so that we can get the UUIDs to fit within one tab
+    int formatBase = 1e6;
+    for (int i = 0; i < hosts.size(); i++) {
+        SPDLOG_DEBUG("{}\t{}\t{}\t{}\t{}",
+                     messageIds.at(i) % formatBase,
+                     appId % formatBase,
+                     groupId % formatBase,
+                     groupIdxs.at(i),
+                     hosts.at(i));
+    }
+    SPDLOG_DEBUG("------------- End Decision for App {} ---------------",
+                 appId);
 }
 }
