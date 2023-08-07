@@ -61,12 +61,24 @@ bool isBatchExecRequestValid(std::shared_ptr<faabric::BatchExecuteRequest> ber)
     return true;
 }
 
+void updateBatchExecAppId(std::shared_ptr<faabric::BatchExecuteRequest> ber,
+                          int newAppId)
+{
+    ber->set_appid(newAppId);
+    for (int i = 0; i < ber->messages_size(); i++) {
+        ber->mutable_messages(i)->set_appid(newAppId);
+    }
+
+    // Sanity-check in debug mode
+    assert(isBatchExecRequestValid(ber));
+}
+
 void updateBatchExecGroupId(std::shared_ptr<faabric::BatchExecuteRequest> ber,
                             int newGroupId)
 {
     ber->set_groupid(newGroupId);
-    for (auto msg : *ber->mutable_messages()) {
-        msg.set_groupid(newGroupId);
+    for (int i = 0; i < ber->messages_size(); i++) {
+        ber->mutable_messages(i)->set_groupid(newGroupId);
     }
 
     // Sanity-check in debug mode
