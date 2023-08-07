@@ -5,7 +5,6 @@
 
 #include <faabric/mpi/MpiWorld.h>
 #include <faabric/mpi/MpiWorldRegistry.h>
-#include <faabric/scheduler/Scheduler.h>
 #include <faabric/util/config.h>
 #include <faabric/util/testing.h>
 
@@ -179,7 +178,7 @@ TEST_CASE_METHOD(
           buildPendingMigrationsExpectation(req, hosts, migrations);
     }
 
-    auto decision = sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
 
     // Update host resources so that a migration opportunity appears, but will
     // only be detected if migration check period is set.
@@ -219,7 +218,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     // opting in to be considered for migration
     req->mutable_messages()->at(0).set_migrationcheckperiod(2);
 
-    auto decision = sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
 
     std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
 
@@ -274,7 +273,7 @@ TEST_CASE_METHOD(
     // Opt in to be considered for migration
     req->mutable_messages()->at(0).set_migrationcheckperiod(2);
 
-    auto decision = sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
 
     // Set up expectations
     std::shared_ptr<faabric::PendingMigrations> expectedMigrations;
@@ -421,7 +420,7 @@ TEST_CASE_METHOD(FunctionMigrationTestFixture,
     uint32_t msgId = req->messages().at(0).id();
 
     // Call function that wil just sleep
-    auto decision = sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
 
     // Manually create the world, and trigger a second function invocation in
     // the remote host

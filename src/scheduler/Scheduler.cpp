@@ -1,3 +1,4 @@
+// TODO: re-visit includes after re-factor
 #include <faabric/batch-scheduler/DecisionCache.h>
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/PlannerClient.h>
@@ -407,11 +408,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::makeSchedulingDecision(
 }
 */
 
-faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
-  std::shared_ptr<faabric::BatchExecuteRequest> req,
-  faabric::batch_scheduler::SchedulingDecision& decision,
-  faabric::util::FullLock& lock,
-  faabric::batch_scheduler::SchedulingTopologyHint topologyHint)
+void Scheduler::executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req)
 {
     // -------------------------------------------
     // THREADS TODO FIXME
@@ -488,6 +485,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
     // -------------------------------------------
     // EXECUTION
     // -------------------------------------------
+    int nMessages = req->messages_size();
 
     // Records for tests - copy messages before execution to avoid racing on msg
     size_t recordedMessagesOffset = recordedMessagesAll.size();
@@ -497,28 +495,15 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
         }
     }
 
+    auto funcStr = faabric::util::funcToString(req);
+
     // -------------------------------------------
     // LOCAL EXECTUION
     // -------------------------------------------
     // For threads we only need one executor, for anything else we want
     // one Executor per function in flight.
 
-    if (thisHostIdxs.empty()) {
-        SPDLOG_DEBUG("Not scheduling any calls to {} out of {} locally",
-                     funcStr,
-                     nMessages);
-        continue;
-    }
-
-    SPDLOG_DEBUG("Scheduling {}/{} calls to {} locally",
-                 thisHostIdxs.size(),
-                 nMessages,
-                 funcStr);
-
-    // Update slots
-    this->thisHostUsedSlots.fetch_add(thisHostIdxs.size(),
-                                      std::memory_order_acquire);
-
+    /* TODO: threads
     if (isThreads) {
         // Threads use the existing executor. We assume there's only
         // one running at a time.
@@ -528,7 +513,7 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
         std::shared_ptr<Executor> e = nullptr;
         if (thisExecutors.empty()) {
             // Create executor if not exists
-            e = claimExecutor(firstMsg, lock);
+            e = claimExecutor(*req->mutable_messages(0), lock);
         } else if (thisExecutors.size() == 1) {
             // Use existing executor if exists
             e = thisExecutors.back();
@@ -546,18 +531,19 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
         e->executeTasks(thisHostIdxs, req);
     } else {
         // Non-threads require one executor per task
-        for (auto i : thisHostIdxs) {
+        for (int i = 0; i < nMessages; i++) {
             faabric::Message& localMsg = req->mutable_messages()->at(i);
 
             std::shared_ptr<Executor> e = claimExecutor(localMsg, lock);
             e->executeTasks({ i }, req);
         }
     }
+    */
 
     // Records for tests
     if (faabric::util::isTestMode()) {
         for (int i = 0; i < nMessages; i++) {
-            std::string executedHost = decision.hosts.at(i);
+            std::string executedHost = thisHost;
             const faabric::Message& msg =
               recordedMessagesAll.at(recordedMessagesOffset + i);
 
@@ -569,8 +555,6 @@ faabric::batch_scheduler::SchedulingDecision Scheduler::doCallFunctions(
             }
         }
     }
-
-    return decision;
 }
 
 std::vector<std::string> Scheduler::getUnregisteredHosts(

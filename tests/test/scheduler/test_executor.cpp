@@ -9,7 +9,6 @@
 #include <faabric/scheduler/ExecutorContext.h>
 #include <faabric/scheduler/ExecutorFactory.h>
 #include <faabric/scheduler/FunctionCallClient.h>
-#include <faabric/scheduler/Scheduler.h>
 #include <faabric/snapshot/SnapshotClient.h>
 #include <faabric/snapshot/SnapshotRegistry.h>
 #include <faabric/util/config.h>
@@ -146,10 +145,9 @@ int32_t TestExecutor::executeTask(
             std::shared_ptr<faabric::BatchExecuteRequest> reqOther =
               faabric::util::batchExecFactory("dummy", "chain-check-b", 1);
 
-            Scheduler& sch = getScheduler();
-            sch.callFunctions(reqThis);
-            sch.callFunctions(reqOther);
             auto& plannerCli = faabric::planner::getPlannerClient();
+            plannerCli.callFunctions(reqThis);
+            plannerCli.callFunctions(reqOther);
 
             for (const auto& m : reqThis->messages()) {
                 faabric::Message res =
@@ -314,7 +312,7 @@ class TestExecutorFixture
         conf.overrideCpuCount = 10;
         conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
-        return sch.callFunctions(req, hint).hosts;
+        return plannerCli.callFunctions(req, hint).hosts;
     }
 
     std::vector<std::string> executeWithTestExecutor(
@@ -329,7 +327,7 @@ class TestExecutorFixture
             req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
         }
 
-        return sch.callFunctions(req).hosts;
+        return plannerCli.callFunctions(req).hosts;
     }
 
     void initThreadSnapshot(std::shared_ptr<faabric::BatchExecuteRequest> req)
@@ -696,9 +694,9 @@ TEST_CASE_METHOD(TestExecutorFixture,
     conf.boundTimeout = SHORT_TEST_TIMEOUT_MS;
 
     // Execute all the functions
-    sch.callFunctions(reqA);
-    sch.callFunctions(reqB);
-    sch.callFunctions(reqC);
+    plannerCli.callFunctions(reqA);
+    plannerCli.callFunctions(reqB);
+    plannerCli.callFunctions(reqC);
 
     faabric::Message resA1 = plannerCli.getMessageResult(reqA->messages().at(0),
                                                          SHORT_TEST_TIMEOUT_MS);
@@ -1058,7 +1056,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
 
     // Call functions and force to execute locally
     req->mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     // Await execution
     for (auto msgId : msgIds) {
@@ -1137,7 +1135,7 @@ TEST_CASE_METHOD(TestExecutorFixture,
       faabric::util::batchExecFactory("dummy", "context-check", nMessages);
     int expectedResult = 123;
 
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     for (int i = 0; i < nMessages; i++) {
         faabric::Message res =

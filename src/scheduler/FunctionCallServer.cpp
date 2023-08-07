@@ -80,16 +80,12 @@ void FunctionCallServer::recvExecuteFunctions(std::span<const uint8_t> buffer)
     // This host has now been told to execute these functions no matter what
     // TODO(planner-schedule): this if is only here because, temporarily, the
     // planner doesn't take any scheduling decisions
-    if (!parsedMsg.comesfromplanner()) {
-        parsedMsg.mutable_messages()->at(0).set_topologyhint("FORCE_LOCAL");
-    } else {
-        // This flags were set by the old endpoint, we temporarily set them here
-        parsedMsg.mutable_messages()->at(0).set_timestamp(
-          faabric::util::getGlobalClock().epochMillis());
-        parsedMsg.mutable_messages()->at(0).set_mainhost(
-          faabric::util::getSystemConfig().endpointHost);
-    }
-    scheduler.callFunctions(
+    parsedMsg.mutable_messages()->at(0).set_timestamp(
+      faabric::util::getGlobalClock().epochMillis());
+    parsedMsg.mutable_messages()->at(0).set_mainhost(
+      faabric::util::getSystemConfig().endpointHost);
+    // TODO: consider moving the logic from the scheduler here?
+    scheduler.executeBatch(
       std::make_shared<faabric::BatchExecuteRequest>(parsedMsg));
 }
 

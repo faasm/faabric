@@ -1,5 +1,6 @@
 #pragma once
 
+// TODO: re-visit includes after re-factor
 #include <faabric/batch-scheduler/SchedulingDecision.h>
 #include <faabric/planner/PlannerClient.h>
 #include <faabric/proto/faabric.pb.h>
@@ -186,14 +187,13 @@ class Scheduler
 
     ~Scheduler();
 
+    void executeBatch(std::shared_ptr<faabric::BatchExecuteRequest> req);
+
     /*
     faabric::batch_scheduler::SchedulingDecision makeSchedulingDecision(
       std::shared_ptr<faabric::BatchExecuteRequest> req,
       faabric::batch_scheduler::SchedulingTopologyHint topologyHint =
         faabric::batch_scheduler::SchedulingTopologyHint::NONE);
-
-    faabric::batch_scheduler::SchedulingDecision callFunctions(
-      std::shared_ptr<faabric::BatchExecuteRequest> req);
 
     faabric::batch_scheduler::SchedulingDecision callFunctions(
       std::shared_ptr<faabric::BatchExecuteRequest> req,

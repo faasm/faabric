@@ -157,7 +157,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     REQUIRE(sch.getThisHostResources().slots() == nCores);
 
     // Make calls with one extra that should be sent to the other host
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     REQUIRE(sch.getFunctionExecutorCount(msg) == nCores);
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
@@ -313,8 +313,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     reqOne->set_subtype(expectedSubType);
     reqOne->set_contextdata(expectedContextData);
 
-    faabric::batch_scheduler::SchedulingDecision actualDecisionOne =
-      sch.callFunctions(reqOne);
+    auto actualDecisionOne = plannerCli.callFunctions(reqOne);
 
     // Check decision is as expected
     checkSchedulingDecisionEquality(actualDecisionOne, expectedDecisionOne);
@@ -411,8 +410,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     reqTwo->set_type(execMode);
 
     // Schedule the functions
-    faabric::batch_scheduler::SchedulingDecision actualDecisionTwo =
-      sch.callFunctions(reqTwo);
+    auto actualDecisionTwo = plannerCli.callFunctions(reqTwo);
 
     // Check scheduling decision
     checkSchedulingDecisionEquality(actualDecisionTwo, expectedDecisionTwo);
@@ -526,8 +524,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     }
 
     // Submit the request
-    faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+    auto decision = plannerCli.callFunctions(req);
     checkSchedulingDecisionEquality(decision, expectedDecision);
 
     // Check status of local queueing
@@ -571,7 +568,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
 
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("foo", "bar", nCores + 1);
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
     faabric::Message msg = req->messages().at(0);
 
     // Check other host is added
@@ -606,7 +603,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture, "Check test mode", "[scheduler]")
     {
         faabric::util::setTestMode(false);
 
-        sch.callFunctions(reqA);
+        plannerCli.callFunctions(reqA);
         REQUIRE(sch.getRecordedMessagesAll().empty());
     }
 
@@ -614,9 +611,9 @@ TEST_CASE_METHOD(SlowExecutorTestFixture, "Check test mode", "[scheduler]")
     {
         faabric::util::setTestMode(true);
 
-        sch.callFunctions(reqA);
-        sch.callFunctions(reqB);
-        sch.callFunctions(reqC);
+        plannerCli.callFunctions(reqA);
+        plannerCli.callFunctions(reqB);
+        plannerCli.callFunctions(reqC);
 
         std::vector<int> expectedIds = { msgA.id(), msgB.id(), msgC.id() };
         std::vector<faabric::Message> actual = sch.getRecordedMessagesAll();
@@ -672,7 +669,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
                           [&msgIds](auto msg) { msgIds.push_back(msg.id()); });
 
             // Invoke and await
-            sch.callFunctions(req);
+            plannerCli.callFunctions(req);
             for (auto msgId : msgIds) {
                 plannerCli.getMessageResult(appId, msgId, 5000);
             }
@@ -793,7 +790,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     req->mutable_messages()->at(0).set_mainhost(otherHost);
 
     faabric::batch_scheduler::SchedulingDecision decision =
-      sch.callFunctions(req);
+      plannerCli.callFunctions(req);
     REQUIRE(decision.hosts.empty());
     REQUIRE(decision.returnHost == otherHost);
 
@@ -836,7 +833,7 @@ TEST_CASE_METHOD(SlowExecutorTestFixture,
     std::shared_ptr<faabric::BatchExecuteRequest> req =
       faabric::util::batchExecFactory("foo", "bar", nRequests);
 
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     // Check other hosts are added
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 2);
@@ -913,7 +910,7 @@ TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
     faabric::Message msgB = reqB->mutable_messages()->at(0);
 
     // Execute a couple of functions
-    sch.callFunctions(reqA);
+    plannerCli.callFunctions(reqA);
     for (auto msgId : reqAMsgIds) {
         faabric::Message res = plannerCli.getMessageResult(
           msgA.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
@@ -924,7 +921,7 @@ TEST_CASE_METHOD(DummyExecutorTestFixture, "Test executor reuse", "[scheduler]")
     REQUIRE(sch.getFunctionExecutorCount(msgA) == 2);
 
     // Execute a couple more functions
-    sch.callFunctions(reqB);
+    plannerCli.callFunctions(reqB);
     for (auto msgId : reqBMsgIds) {
         faabric::Message res = plannerCli.getMessageResult(
           msgB.appid(), msgId, SHORT_TEST_TIMEOUT_MS);
@@ -1039,8 +1036,7 @@ TEST_CASE_METHOD(DummyExecutorTestFixture,
     }
 
     // Schedule and check decision
-    faabric::batch_scheduler::SchedulingDecision actualDecision =
-      sch.callFunctions(req);
+    auto actualDecision = plannerCli.callFunctions(req);
     checkSchedulingDecisionEquality(expectedDecision, actualDecision);
 
     // Check mappings set up locally or not

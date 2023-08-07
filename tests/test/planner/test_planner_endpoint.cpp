@@ -322,7 +322,7 @@ TEST_CASE_METHOD(PlannerEndpointExecTestFixture,
     msg.set_payloadjson(faabric::util::messageToJson(ber->messages(0)));
 
     // Call a function first, and wait for the result
-    sch.callFunctions(ber);
+    plannerCli.callFunctions(ber);
     auto resultMsg = getPlannerClient().getMessageResult(appId, msgId, 1000);
 
     SECTION("Success")

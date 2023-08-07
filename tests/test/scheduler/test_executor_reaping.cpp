@@ -59,7 +59,7 @@ TEST_CASE_METHOD(SchedulerReapingTestFixture,
     int nMsgs = 10;
     auto req = faabric::util::batchExecFactory("foo", "bar", nMsgs);
     faabric::Message& firstMsg = req->mutable_messages()->at(0);
-    sch.callFunctions(req);
+    plannerCli.callFunctions(req);
 
     // Check executor count
     REQUIRE(sch.getFunctionExecutorCount(firstMsg) == nMsgs);

@@ -71,8 +71,8 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
     auto msgA = reqA->messages(0);
     auto reqB = faabric::util::batchExecFactory("dummy", "bar", 1);
     auto msgB = reqB->messages(0);
-    sch.callFunctions(reqA);
-    sch.callFunctions(reqB);
+    plannerCli.callFunctions(reqA);
+    plannerCli.callFunctions(reqB);
 
     // Check messages passed
     std::vector<faabric::Message> msgs = sch.getRecordedMessagesAll();
@@ -191,7 +191,7 @@ TEST_CASE_METHOD(FunctionClientServerTestFixture,
     auto funcReq = faabric::util::batchExecFactory("foo", "bar", 1);
     auto& msg = *funcReq->mutable_messages(0);
     sch.addHostToGlobalSet(otherHost);
-    sch.callFunctions(funcReq);
+    plannerCli.callFunctions(funcReq);
 
     REQUIRE(sch.getFunctionRegisteredHostCount(msg) == 1);
 
