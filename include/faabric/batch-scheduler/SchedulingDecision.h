@@ -100,6 +100,8 @@ class SchedulingDecision
                     int32_t groupIdx);
 
     std::set<std::string> uniqueHosts();
+
+    void print();
 };
 
 }

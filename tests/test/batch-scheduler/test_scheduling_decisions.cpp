@@ -88,6 +88,9 @@ TEST_CASE_METHOD(ConfFixture, "Test building scheduling decisions", "[util]")
     REQUIRE(newDecision == decision);
     newDecision.groupId = 1338;
     REQUIRE(newDecision != decision);
+
+    // We can print scheduling decisions
+    REQUIRE_NOTHROW(decision.print());
 }
 
 TEST_CASE("Test converting point-to-point mappings to scheduling decisions",
